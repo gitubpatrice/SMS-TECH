@@ -654,11 +654,20 @@ class ThreadViewModel @Inject constructor(
         _events.tryEmit(Event.OpenDialer(addr))
     }
 
-    fun blockSenders() {
+    /**
+     * Blocks every address of the current conversation AND deletes the conversation locally.
+     * v1.2.5 fix: previously only the block call ran — the conversation stayed in the list
+     * showing past history of the now-blocked number, which is not what the user expects when
+     * they explicitly tap "Block" from inside a conversation. The list-level Block action
+     * stays unchanged (block-only) so users keeping history have a path.
+     */
+    fun blockSenders(onDone: () -> Unit = {}) {
         val addresses = _state.value.conversation?.addresses ?: return
         viewModelScope.launch {
             for (addr in addresses) blockNumber.invoke(addr.raw)
+            toggleConvState.delete(conversationId)
             _events.tryEmit(Event.ShowSnackbar("Numéro(s) bloqué(s)"))
+            onDone()
         }
     }
 

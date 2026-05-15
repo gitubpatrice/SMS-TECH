@@ -85,20 +85,6 @@ fun AboutScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clickable { tapCount++ },
             )
-            // v1.2.3 audit U16: subtle build-type badge so QA can tell at a glance whether the
-            // installed APK is the release or a debug variant. Hidden on release builds — no
-            // visual noise for end users.
-            if (BuildConfig.DEBUG) {
-                Spacer(Modifier.size(4.dp))
-                androidx.compose.material3.AssistChip(
-                    onClick = {},
-                    label = { Text("DEBUG") },
-                    colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        labelColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    ),
-                )
-            }
             if (tapCount >= 7) {
                 Spacer(Modifier.size(4.dp))
                 Text(text = "✨ Merci à toutes celles et ceux qui prennent soin de leur vie privée. ✨", style = MaterialTheme.typography.labelSmall)

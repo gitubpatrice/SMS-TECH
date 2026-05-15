@@ -35,7 +35,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = gitCommitCount.coerceAtLeast(1)
-        versionName = "1.2.4"
+        versionName = "1.2.5"
 
         testInstrumentationRunner = "com.filestech.sms.HiltTestRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -68,7 +68,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            // `versionNameSuffix` removed — the user-facing version string stays "1.2.4" no
+            // `versionNameSuffix` removed — the user-facing version string stays "1.2.5" no
             // matter the build type. Distinguishing debug from release is still possible via
             // `applicationIdSuffix` (different package id, both can be installed in parallel)
             // and via `BuildConfig.LOG_ENABLED`.

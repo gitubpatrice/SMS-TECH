@@ -34,8 +34,11 @@ internal val BubbleIncomingDark = Color(0xFF37414F)
  * share the same pair: a confirmation toast always reads against this stable identity, no
  * matter the user's theme.
  */
-internal val SnackbarBg = Color(0xFF3D85D6) // brighter sky-blue per user request — pairs with dark text
-internal val SnackbarOn = Color(0xFF0A1F3F) // deep navy, ~6.6:1 contrast on the new bg (WCAG AA pass)
+// Snackbar palette mirrors the BrandDanger of the delete button per user request — strong
+// signal toast in the same identity as the destructive dialog buttons. White text on this red
+// gives ~5.5:1 contrast (WCAG AA pass for normal text).
+internal val SnackbarBg = BrandDanger
+internal val SnackbarOn = Color.White
 
 private val LightPalette = lightColorScheme(
     primary = BrandBlue,

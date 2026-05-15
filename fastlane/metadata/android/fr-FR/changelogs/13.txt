@@ -1,0 +1,6 @@
+v1.2.5 — Polish identité + ergonomie
+• Boutons Supprimer / Bloquer : rouge fort + texte blanc (fini le rose pastel)
+• Snackbar : fond rouge brand + texte blanc, cohérent avec les boutons
+• Ouverture d'une conversation : atterrissage au dernier message (régression v1.2.4 corrigée)
+• Bloquer depuis le détail = bloquer + supprimer la conversation + retour à la liste
+• Badge DEBUG retiré de À propos

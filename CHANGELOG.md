@@ -3,6 +3,36 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.5] — 2026-05-15
+
+Identity + ergonomics polish from on-device testing. Reverts the v1.2.3 switch to the
+Material 3 `errorContainer` token (which resolved to pastel pink in light theme), fixes a
+regression in v1.2.4's scroll preservation that landed the thread at the top instead of the
+bottom on first open, and tightens the "Block from inside a conversation" flow.
+
+### Fixed
+- **Destructive buttons in confirm dialogs** (delete message, delete conversation): back to
+  the solid brand-danger red (`#C62828`) with white text. v1.2.3 had switched these to
+  `errorContainer`/`onErrorContainer` which is a pastel pink in light theme — visually too
+  soft for a destructive action.
+- **Thread initial scroll** (regression of v1.2.4 U12): opening an old conversation now lands
+  on the most recent message again. The "preserve scroll position when a new message arrives
+  while reading higher up" behaviour stays in place for subsequent updates — tracked via an
+  `initialScrollDone` flag so the two cases are discriminated cleanly.
+- **Block from the conversation detail** now also deletes the conversation locally and
+  navigates back to the list. Previously only the block call ran, leaving the user staring
+  at the very thread they just blocked. The list-level Block (long-press bottom sheet) keeps
+  its previous block-only behaviour for users wanting to retain the history.
+
+### Changed
+- **Snackbar palette**: `inverseSurface` now resolves to BrandDanger (`#C62828`) with white
+  text (`inverseOnSurface = Color.White`). Aligns the toast identity with the destructive
+  buttons. Contrast ≈ 5.5:1, WCAG AA pass for normal text.
+- **About screen**: the `DEBUG` chip added in v1.2.3 is removed.
+
+### Notes
+- No DB schema change, no `.enc`/`.pdu` format change. APK arm64 ~46 MB.
+
 ## [1.2.4] — 2026-05-15
 
 Performance + maintainability pass. Closes the remaining v1.2.2-audit deltas: the duplicated

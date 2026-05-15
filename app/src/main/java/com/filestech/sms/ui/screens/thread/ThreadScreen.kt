@@ -154,10 +154,11 @@ fun ThreadScreen(
     var askDelete by remember { mutableStateOf(false) }
     var attachmentSheetOpen by remember { mutableStateOf(false) }
 
-    // v1.2.4 audit U12: only force-scroll if the user is already at (or near) the bottom of
-    // the thread. Otherwise we yank them away from whatever they were reading higher up the
-    // history every time a new message arrives. `derivedStateOf` keeps the read off the
-    // recomposition critical path.
+    // v1.2.4 audit U12: scroll-to-bottom on new messages only when the user is already at
+    // the bottom — preserves their reading position higher up the thread. The first paint
+    // is a special case: opening a conversation must land on the most recent message, not
+    // the start. We track `initialScrollDone` to discriminate the two.
+    var initialScrollDone by remember { mutableStateOf(false) }
     val isAtBottom by remember {
         androidx.compose.runtime.derivedStateOf {
             val li = listState.layoutInfo.visibleItemsInfo.lastOrNull()
@@ -165,7 +166,13 @@ fun ThreadScreen(
         }
     }
     LaunchedEffect(state.messages.size) {
-        if (state.messages.isNotEmpty() && isAtBottom) {
+        if (state.messages.isEmpty()) return@LaunchedEffect
+        if (!initialScrollDone) {
+            // Non-animated for first paint — animateScrollToItem from index 0 with hundreds
+            // of items is visibly choppy.
+            listState.scrollToItem(state.messages.lastIndex)
+            initialScrollDone = true
+        } else if (isAtBottom) {
             listState.animateScrollToItem(state.messages.lastIndex)
         }
     }
@@ -456,8 +463,11 @@ fun ThreadScreen(
             confirmLabel = stringResource(R.string.action_block),
             onConfirm = {
                 askBlock = false
-                viewModel.blockSenders()
-                onBack()
+                // v1.2.5: block-from-detail now also removes the conversation so the user is
+                // not left staring at the very thread they just blocked. List-level Block
+                // (bottom sheet) keeps the block-only behaviour for users wanting to keep
+                // the history.
+                viewModel.blockSenders { onBack() }
             },
             onDismiss = { askBlock = false },
         )
@@ -657,11 +667,10 @@ private fun DestructiveConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val cs = MaterialTheme.colorScheme
-    // v1.2.3 audit U3: autofocus the Cancel button (conservative default for destructive
-    // actions, aligned with Pass Tech v2.4.4 U2 and Notes Tech v1.0.9 U3) + use the theme's
-    // `errorContainer` token rather than the hardcoded BrandDanger fill so the dialog adapts
-    // to Dark Tech contrast.
+    // v1.2.5: revert to the solid BrandDanger fill — the Material 3 `errorContainer` token
+    // resolves to a pastel pink in the light scheme, which the user explicitly didn't want
+    // for a destructive confirm. Strong red + white text matches the brand identity used by
+    // the delete button on conversation rows and the snackbar background.
     val cancelFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         runCatching { cancelFocus.requestFocus() }
@@ -674,8 +683,8 @@ private fun DestructiveConfirmDialog(
             FilledTonalButton(
                 onClick = onConfirm,
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = cs.errorContainer,
-                    contentColor = cs.onErrorContainer,
+                    containerColor = BrandDanger,
+                    contentColor = Color.White,
                 ),
             ) { Text(confirmLabel) }
         },

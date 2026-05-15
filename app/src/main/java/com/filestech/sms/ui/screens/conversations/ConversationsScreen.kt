@@ -501,9 +501,11 @@ private fun SwipeableConversationRow(
                         pendingDelete = false
                         onDelete()
                     },
+                    // v1.2.5: solid BrandDanger fill + white text — `errorContainer` is pastel
+                    // pink in light theme and didn't read as a destructive action.
                     colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                        containerColor = cs.errorContainer,
-                        contentColor = cs.onErrorContainer,
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
                     ),
                 ) { Text(stringResource(R.string.action_delete)) }
             },

@@ -1,0 +1,6 @@
+v1.2.5 — Identity + ergonomics polish
+• Delete / Block buttons: strong red + white text (no more pastel pink)
+• Snackbar: brand-red background + white text, consistent with the buttons
+• Opening a conversation lands on the most recent message (v1.2.4 regression fixed)
+• Block from the conversation detail = block + delete + back to list
+• DEBUG chip removed from About screen
