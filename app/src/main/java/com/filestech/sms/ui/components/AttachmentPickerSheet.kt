@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
@@ -30,7 +31,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -175,11 +175,23 @@ private fun AttachmentTile(
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // v1.2.3 audit U8: hit area widened to ≥64 dp so the touch target meets WCAG 2.5.5 even
+    // for the "Contact" tile (~60 dp wide label). Semantics expose the role + the label so
+    // TalkBack announces "Photo, bouton" instead of just "Photo".
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .widthIn(min = 64.dp)
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .clickable(
+                onClickLabel = label,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    onClick()
+                },
+            )
             .padding(8.dp),
     ) {
         Box(
@@ -204,6 +216,3 @@ private fun AttachmentTile(
         )
     }
 }
-
-/** Filler companion holding the brand tile color when we need to tint a single accent. */
-private val UnusedAccent = Color.Unspecified

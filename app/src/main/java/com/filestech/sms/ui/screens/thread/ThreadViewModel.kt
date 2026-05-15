@@ -678,6 +678,11 @@ class ThreadViewModel @Inject constructor(
         recorderJob?.cancel()
         voiceRecorder.cancel()
         playbackController.stop()
+        // v1.2.3 audit F13: an attachment staged in `media_outgoing/` but never confirmed or
+        // cancelled (Activity recreated, user backed out) leaks until the TelephonySyncWorker's
+        // 24 h prune sweeps it. Clean up the in-memory staged file synchronously here so the
+        // common path (rotate, back-out) never leaves a trail.
+        _state.value.pendingAttachment?.let { p -> runCatching { p.file.delete() } }
     }
 
     private companion object {

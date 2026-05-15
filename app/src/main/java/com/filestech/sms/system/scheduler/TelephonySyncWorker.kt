@@ -151,7 +151,12 @@ class TelephonySyncWorker @AssistedInject constructor(
      */
     private fun pruneStaleOutboundCaches(context: Context) {
         val cutoff = System.currentTimeMillis() - STALE_CACHE_AGE_MS
-        val dirs = listOf(File(context.cacheDir, "mms_outgoing"))
+        // v1.2.3 audit F13: also sweep `media_outgoing/` where the ViewModel stages user-picked
+        // attachments before dispatch. Files leak when the user backs out without confirm/cancel.
+        val dirs = listOf(
+            File(context.cacheDir, "mms_outgoing"),
+            File(context.cacheDir, "media_outgoing"),
+        )
         for (dir in dirs) {
             if (!dir.exists()) continue
             runCatching {

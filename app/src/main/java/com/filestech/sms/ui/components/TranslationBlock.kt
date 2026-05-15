@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.filestech.sms.R
 
@@ -118,10 +117,14 @@ fun TranslationBlock(
                 )
             }
 
+            // v1.2.3 audit U19: italic on the translation body felt fatiguing on long messages.
+            // Italic stayed on the label/header for the "this is meta-content" cue; the body
+            // itself is now regular so the user can read the translation as comfortably as the
+            // original.
             is TranslationDisplayState.Ready -> Text(
                 text = state.translated,
                 color = bodyColor,
-                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 2.dp),
             )
 

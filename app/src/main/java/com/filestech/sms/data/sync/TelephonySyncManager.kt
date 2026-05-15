@@ -142,14 +142,14 @@ class TelephonySyncManager @Inject constructor(
             // from the debug-suffixed package to the release package, the SMS cursor in the
             // release DataStore was populated by a previous install while Room is fresh).
             // Idempotent: telephony_uri UNIQUE + OnConflictStrategy.IGNORE.
-            val roomMmsCount = runCatching { messageDao.countMms() }.getOrDefault(0)
-            val needsMmsImport = isFirstRun || roomMmsCount == 0
+            val hasAnyMms = runCatching { messageDao.hasAnyMms() }.getOrDefault(false)
+            val needsMmsImport = isFirstRun || !hasAnyMms
             if (needsMmsImport) {
                 runCatching {
                     val mmsRows = telephonyReader.readAllMms()
                     if (mmsRows.isNotEmpty()) {
                         mirror.bulkImportMmsFromTelephony(mmsRows)
-                        Timber.i("runSync(%s) imported %d MMS rows (firstRun=%b roomMms=%d)", reason, mmsRows.size, isFirstRun, roomMmsCount)
+                        Timber.i("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, mmsRows.size, isFirstRun, hasAnyMms)
                     } else {
                         Timber.i("runSync(%s) MMS import: 0 rows in system provider", reason)
                     }

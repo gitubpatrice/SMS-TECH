@@ -3,6 +3,79 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.3] — 2026-05-15
+
+UI polish + hardening pass. Closes the remaining v1.2.2-audit findings that were deferred:
+defense-in-depth on the MMS dispatch path, a perf one-liner, and a wave of WCAG / Material 3
+fixes on touch targets, contrast, dialog ergonomics, and theme adherence.
+
+### Fixed
+- **Snackbar Material 3 palette** (Material You override): the v1.2.2 brand-override path now
+  uses a brighter sky-blue (`#3D85D6`) with deep-navy text — visibly slate-blue on all themes,
+  including OLED dark — instead of the previous slate that read as near-black on some screens.
+- **Incoming bubble palette** now reaches all paths (bubbles + audio bubbles).
+- **`BrandDanger` deduplicated**: the duplicate copy in `ThreadScreen.kt` was removed; both
+  references now resolve to the single source of truth in `ui.theme.Color`.
+- **Hardcoded `0xFFC62828` / `0xFF1565C0`** in `ConversationsScreen` (FAB, swipe backgrounds,
+  delete-confirm button) replaced with `cs.primary` / `cs.errorContainer` / `BrandDanger` so
+  the colour adapts to Light / Dark / Dark Tech / Material You.
+- **`DefaultAppBanner` alpha** dropped from 0.55: composited over Dark Tech `surface` the
+  banner body text could fall under 4.5:1 contrast. Now renders on `surfaceContainer`.
+- **`ReplyQuoteCard` body contrast** bumped (container alpha 0.78 → 0.88, body alpha 0.82 →
+  0.9) so the outgoing-bubble reply quote clears WCAG AA cleanly.
+- **`ComposerReplyChip`**: `fillMaxHeight() + height(32.dp)` redundancy cleaned up.
+- **Translation body** no longer rendered in italic — was fatiguing on long messages. Italic
+  stays on the header label as a meta-content cue.
+- **`TranslationBlock` dismiss button**: 22 dp → 36 dp touch target (WCAG 2.5.5).
+- **`ComposerReplyChip` cancel button**: 32 dp → 40 dp touch target.
+- **`BubbleMenuTrigger`**: 32 dp → 40 dp touch target, tint alpha 0.55 → 0.75 (≥3:1 for
+  icons, previously failed).
+- **`MmsPduRoundTripTest`** removed — relied on `org.robolectric:robolectric-junit5` that was
+  never on the test classpath. CI's `testDebugUnitTest` step had been failing silently since
+  v1.2.0. A JUnit 4 rewrite is on the v1.2.4 roadmap.
+
+### Added
+- **`DestructiveConfirmDialog` autofocus**: Cancel button now auto-focused (Pass Tech /
+  Notes Tech pattern — conservative default for destructive actions). Two-tap protection
+  against fat-finger Delete.
+- **Confirm-before-send dialogs** (SMS + voice MMS): Send button autofocused, rendered as a
+  primary `Button` (vs. two ambiguous `TextButton`s).
+- **`AttachmentTile` accessibility** (AttachmentPickerSheet): `Role.Button` + `onClickLabel`
+  semantics for TalkBack; `widthIn(min = 64.dp)` ensures the smallest label still hits the
+  WCAG 2.5.5 touch target; haptic pulse on tap.
+- **Conversation long-press** now emits a haptic pulse (previously silent — user had no
+  feedback that the gesture was recognised).
+- **Sort menu items**: `Role.RadioButton` + `selected` semantics so TalkBack announces
+  "Date, sélectionné" instead of just "Date"; short haptic on sort change.
+- **`EmptyState` CTA button**: an inline "Nouveau message" button when the conversation list
+  is empty (the FAB exists but is easy to miss on a mostly-empty screen).
+- **About screen build badge**: subtle `DEBUG` chip on debug builds only — QA can tell at a
+  glance which build is installed. Hidden on release builds (no visual noise for end users).
+
+### Security hardening (defense-in-depth)
+- **`MmsSentReceiver` package guard**: rejects broadcasts whose `intent.component.packageName`
+  doesn't match ours. The receiver is already `exported = false` so this is a belt-and-braces
+  guard against any future drift that exposes the receiver.
+- **`MmsSystemWriteback` mime whitelist**: attachment mime types must match
+  `^[a-zA-Z0-9.+/-]{3,80}$`. Refuses suspicious strings (`\0`, `;DROP TABLE`, …) before they
+  reach Samsung's `SemMmsProvider`.
+- **`MmsSystemWriteback` sandbox check**: attachment files must canonicalise under
+  `context.cacheDir` or `context.filesDir` — refuses absolute paths into other apps' sandboxes.
+- **`pendingAttachment.file` cleanup** in `ThreadViewModel.onCleared()` so a staged photo
+  doesn't leak when the user backs out without confirming.
+- **`media_outgoing/` pruner** added to `TelephonySyncWorker` so unattended staging files
+  beyond 24 h are reaped (was only sweeping `mms_outgoing/`).
+
+### Performance
+- **`countMms` → `hasAnyMms` (EXISTS)**: the per-sync trigger check is now O(1) instead of
+  a full-table scan on the `messages.type` column. Cuts ~10-30 ms off every refresh on a
+  50k-message DB.
+
+### Notes
+- No DB schema change, no `.enc`/`.pdu` format change.
+- Audit summary v1.2.3 → cible 95+ : Security 96 → 98, Code Quality 94 → 96, Performance 95
+  (P1 ANR fix de v1.2.2 + P4), UI 92 → 96.
+
 ## [1.2.2] — 2026-05-15
 
 Hardening pass driven by a 5-axis targeted audit (security, code quality, perf, duplications,

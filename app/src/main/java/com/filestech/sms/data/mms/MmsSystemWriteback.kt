@@ -58,6 +58,37 @@ class MmsSystemWriteback @Inject constructor(
             .toHashSet()
 
     /**
+     * Rejects mime types that fail a strict shape check OR attachment files that escape the
+     * app's private cache. Both are defense-in-depth — today's callers only stage files under
+     * `cache/voice_mms/` or `cache/media_outgoing/` and pick mime types from
+     * `ContentResolver.getType`, but a future feature (share-from-other-app, ACTION_SEND) could
+     * pass arbitrary input. Without these guards an exotic mime string can crash Samsung's
+     * `SemMmsProvider` and a `File("/data/data/<other>/secret")` would be streamed into our row.
+     */
+    private fun attachmentsAreSafe(attachments: List<MmsBuilder.MmsAttachment>): Boolean {
+        val mimeRegex = Regex("^[a-zA-Z0-9.+/-]{3,80}$")
+        val sandboxRoots = listOf(
+            runCatching { context.cacheDir.canonicalPath }.getOrNull(),
+            runCatching { context.filesDir.canonicalPath }.getOrNull(),
+        ).filterNotNull()
+        for (a in attachments) {
+            if (!mimeRegex.matches(a.mimeType)) {
+                Timber.w("MmsSystemWriteback: rejecting suspicious mimeType '%s'", a.mimeType)
+                return false
+            }
+            val canonical = runCatching { a.file.canonicalPath }.getOrNull() ?: run {
+                Timber.w("MmsSystemWriteback: cannot canonicalise attachment path '%s'", a.file.path)
+                return false
+            }
+            if (sandboxRoots.none { canonical.startsWith(it) }) {
+                Timber.w("MmsSystemWriteback: attachment escapes sandbox: %s", canonical)
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
      * Inserts a full outgoing MMS into `content://mms` with its address rows + part rows.
      * Returns the system `_id` so the caller can update / delete the row from the result
      * callback. Returns `null` on any failure.
@@ -77,6 +108,7 @@ class MmsSystemWriteback @Inject constructor(
         textBody: String?,
     ): Long? = withContext(io) {
         if (recipients.isEmpty()) return@withContext null
+        if (!attachmentsAreSafe(attachments)) return@withContext null
 
         val nowSec = System.currentTimeMillis() / 1000L
 

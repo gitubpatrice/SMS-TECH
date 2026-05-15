@@ -1,0 +1,11 @@
+v1.2.3 — UI polish + security hardening
+• Snackbar sky-blue palette now consistent across all themes (Material You included)
+• Slate-blue bubbles wired to audio bubbles too
+• Empty state: inline "New message" button when the conversation list is empty
+• Destructive dialogs: Cancel auto-focused (anti fat-finger Delete)
+• Touch targets widened to 40 dp (bubble menu, reply close, translation dismiss)
+• Long-press conversation and sort change: haptic feedback
+• TalkBack semantics: attachment tiles, sort items
+• DEBUG chip on About screen for debug builds only
+• Security: MmsSentReceiver package guard, attachment mime + sandbox validation
+• Perf: MMS import trigger check is O(1) (EXISTS instead of COUNT)

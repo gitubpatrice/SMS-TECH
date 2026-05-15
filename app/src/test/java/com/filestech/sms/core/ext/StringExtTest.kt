@@ -6,7 +6,10 @@ import org.junit.jupiter.api.Test
 class StringExtTest {
 
     @Test fun `normalizePhone keeps leading plus, digits, star, hash`() {
-        assertThat("+33 (6) 12-34 56*78#9".normalizePhone()).isEqualTo("+33612345678*#9")
+        // Function preserves the original ordering of allowed characters — it strips spaces,
+        // parentheses and dashes but does NOT re-sort. Expected value reflects the actual
+        // behaviour after dropping " ", "(", ")", "-": +,33,6,12,34,56,*,78,#,9.
+        assertThat("+33 (6) 12-34 56*78#9".normalizePhone()).isEqualTo("+336123456*78#9")
     }
 
     @Test fun `normalizePhone strips a leading plus when not first`() {

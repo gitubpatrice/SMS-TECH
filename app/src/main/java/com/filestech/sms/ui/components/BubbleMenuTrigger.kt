@@ -50,14 +50,17 @@ fun BubbleMenuTrigger(
 ) {
     var expanded by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box(modifier = modifier) {
+        // v1.2.3 audit U5: 40 dp touch target (WCAG 2.5.5) and 0.75 alpha tint
+        // (previously 0.55 ≈ 2.3:1 — failed WCAG 3:1 for icons). The trigger sits in the row
+        // gutter beside the bubble, so it renders against `surface`, not the bubble fill.
         IconButton(
             onClick = { expanded = true },
-            modifier = Modifier.size(32.dp),
+            modifier = Modifier.size(40.dp),
         ) {
             Icon(
                 imageVector = Icons.Outlined.MoreVert,
                 contentDescription = stringResource(R.string.action_message_actions),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 modifier = Modifier.size(20.dp),
             )
         }

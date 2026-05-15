@@ -35,6 +35,16 @@ class MmsSentReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != MmsSender.ACTION_MMS_SENT) return
+        // v1.2.3 audit F5: defense-in-depth. The PendingIntent is built with explicit
+        // `setClass()` and the receiver is `exported = false`, so an external broadcast
+        // already cannot reach us. We still verify that the resolved component package
+        // matches ours — guards against any future drift where the receiver gets exported
+        // accidentally and a forged broadcast could mutate row state via mmsSystemId.
+        val component = intent.component
+        if (component != null && component.packageName != context.packageName) {
+            Timber.w("MmsSentReceiver: rejecting broadcast for foreign package %s", component.packageName)
+            return
+        }
         val localId = intent.getLongExtra(MmsSender.EXTRA_LOCAL_ID, -1L)
         val pduPath = intent.getStringExtra(MmsSender.EXTRA_PDU_FILE)
         val mmsSystemId = intent.getLongExtra(MmsSender.EXTRA_MMS_SYSTEM_ID, -1L)

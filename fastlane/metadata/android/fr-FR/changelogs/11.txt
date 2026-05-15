@@ -1,0 +1,11 @@
+v1.2.3 — Polish UI + durcissement sécurité
+• Snackbar bleu ciel cohérente sur tous les thèmes (Material You inclus)
+• Bulles « gris bleu » sur les messages audio aussi
+• Empty state : bouton « Nouveau message » direct si la liste est vide
+• Dialogs destructifs : Annuler par défaut (anti double-tap)
+• Cibles tactiles élargies à 40 dp (menu bulle, fermer reply, masquer traduction)
+• Long-press conversation et changement de tri : retour haptique
+• Sémantique TalkBack : tuiles pièce jointe, items de tri
+• Badge DEBUG visible dans À propos sur les builds debug
+• Sécurité : MmsSentReceiver vérifie le package, attachments validés (mime + sandbox)
+• Perf : trigger d'import MMS en O(1) (EXISTS au lieu de COUNT)

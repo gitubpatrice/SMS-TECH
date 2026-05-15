@@ -56,6 +56,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -254,10 +259,13 @@ fun ConversationsScreen(
             )
         },
         floatingActionButton = {
+            // v1.2.3 audit U6: use the theme's primary (which auto-adapts to Dark Tech /
+            // Material You / Light) rather than a hardcoded blue that desaturated wrong on
+            // the deep-slate Dark Tech palette.
             FloatingActionButton(
                 onClick = onCompose,
-                containerColor = androidx.compose.ui.graphics.Color(0xFF1565C0),
-                contentColor = androidx.compose.ui.graphics.Color.White,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
                 Icon(
                     Icons.Outlined.Edit,
@@ -283,7 +291,11 @@ fun ConversationsScreen(
             when {
                 state.isImporting -> ImportingPlaceholder(count = state.importedCount)
                 state.isLoading -> Unit
-                state.conversations.isEmpty() -> EmptyState(archived = archived, filtered = state.filtered)
+                state.conversations.isEmpty() -> EmptyState(
+                    archived = archived,
+                    filtered = state.filtered,
+                    onCompose = onCompose,
+                )
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 96.dp),
@@ -341,9 +353,12 @@ private fun SearchField(
 @Composable
 private fun DefaultAppBanner(onSetDefault: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    // v1.2.3 audit U13: dropping the 0.55 alpha — composited over the dark surface of Dark
+    // Tech it could fall below 4.5:1 contrast for the body text. Material 3 `surfaceContainer`
+    // is the native "subtle tint" surface and stays consistent across schemes.
     androidx.compose.material3.Surface(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-        color = cs.primaryContainer.copy(alpha = 0.55f),
+        color = cs.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -355,14 +370,14 @@ private fun DefaultAppBanner(onSetDefault: () -> Unit) {
             Icon(
                 imageVector = Icons.Outlined.Info,
                 contentDescription = null,
-                tint = cs.onPrimaryContainer,
+                tint = cs.primary,
                 modifier = Modifier.size(22.dp),
             )
             androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
             Text(
                 text = stringResource(R.string.error_not_default_app),
                 style = MaterialTheme.typography.bodyMedium,
-                color = cs.onPrimaryContainer,
+                color = cs.onSurface,
                 modifier = Modifier.weight(1f),
             )
             androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
@@ -388,6 +403,7 @@ private fun SwipeableConversationRow(
     onBlock: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var pendingDelete by remember { mutableStateOf(false) }
     var pendingBlock by remember { mutableStateOf(false) }
     var actionsSheetOpen by remember { mutableStateOf(false) }
@@ -415,12 +431,14 @@ private fun SwipeableConversationRow(
         enableDismissFromStartToEnd = true,
         enableDismissFromEndToStart = true,
         backgroundContent = {
+            // v1.2.3 audit U6: use the brand/error tokens so swipe backgrounds adapt to the
+            // current theme. Hardcoded 0xFFC62828 / 0xFF1565C0 broke on Dark Tech.
             val dir = dismissState.dismissDirection
             val (bg, icon, align) = when (dir) {
                 androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd ->
-                    Triple(androidx.compose.ui.graphics.Color(0xFFC62828), Icons.Outlined.Delete, Alignment.CenterStart)
+                    Triple(com.filestech.sms.ui.theme.BrandDanger, Icons.Outlined.Delete, Alignment.CenterStart)
                 androidx.compose.material3.SwipeToDismissBoxValue.EndToStart ->
-                    Triple(androidx.compose.ui.graphics.Color(0xFF1565C0), Icons.AutoMirrored.Outlined.Reply, Alignment.CenterEnd)
+                    Triple(cs.primary, Icons.AutoMirrored.Outlined.Reply, Alignment.CenterEnd)
                 else -> Triple(cs.surface, Icons.Outlined.Delete, Alignment.Center)
             }
             Box(
@@ -448,8 +466,12 @@ private fun SwipeableConversationRow(
                 previewLines = previewLines,
                 // Long-press opens a contextual sheet with Block / Delete. The previous flow
                 // (long-press → straight delete dialog) didn't expose the block action that
-                // already lived deeper in the menu hierarchy.
-                onLongClick = { actionsSheetOpen = true },
+                // already lived deeper in the menu hierarchy. v1.2.3 audit U9: emit a haptic
+                // pulse so the user knows the gesture was recognised — Material guideline.
+                onLongClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    actionsSheetOpen = true
+                },
             )
         }
     }
@@ -480,8 +502,8 @@ private fun SwipeableConversationRow(
                         onDelete()
                     },
                     colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                        containerColor = androidx.compose.ui.graphics.Color(0xFFC62828),
-                        contentColor = androidx.compose.ui.graphics.Color.White,
+                        containerColor = cs.errorContainer,
+                        contentColor = cs.onErrorContainer,
                     ),
                 ) { Text(stringResource(R.string.action_delete)) }
             },
@@ -614,7 +636,7 @@ private fun ImportingPlaceholder(count: Int) {
  * + supportive body underneath. Replaces the previous two-line text dump.
  */
 @Composable
-private fun EmptyState(archived: Boolean, filtered: Boolean) {
+private fun EmptyState(archived: Boolean, filtered: Boolean, onCompose: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val emblemIcon = when {
         filtered -> Icons.Outlined.SearchOff
@@ -669,6 +691,19 @@ private fun EmptyState(archived: Boolean, filtered: Boolean) {
                 color = cs.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            // v1.2.3 audit U7: empty state previously had no action button, leaving a fresh
+            // user with nothing to click. The bottom-right FAB exists but is easy to miss on a
+            // mostly-empty screen. Inline CTA mirrors what Notes Tech v1.0.9 shipped (U9).
+            Spacer(Modifier.size(20.dp))
+            androidx.compose.material3.FilledTonalButton(onClick = onCompose) {
+                Icon(
+                    imageVector = Icons.Outlined.Edit,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.action_new_message))
+            }
         }
     }
 }
@@ -679,6 +714,10 @@ private fun EmptyState(archived: Boolean, filtered: Boolean) {
  */
 @Composable
 private fun SortMenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // v1.2.3 audit U22: Semantics expose the radio-button role + selected state so TalkBack
+    // reads "Date, sélectionné" instead of just "Date". U14: short haptic when the user
+    // changes the sort mode (Material guideline for state-change feedback).
     DropdownMenuItem(
         leadingIcon = {
             if (selected) {
@@ -688,6 +727,14 @@ private fun SortMenuItem(label: String, selected: Boolean, onClick: () -> Unit) 
             }
         },
         text = { Text(label) },
-        onClick = onClick,
+        onClick = {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            onClick()
+        },
+        modifier = Modifier.semantics {
+            this.selected = selected
+            role = Role.RadioButton
+            contentDescription = label
+        },
     )
 }

@@ -78,6 +78,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,6 +101,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.data.voice.VoicePlaybackController
+import com.filestech.sms.ui.theme.BrandDanger
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.ui.components.AttachmentPickerSheet
 import com.filestech.sms.ui.components.AudioMessageBubble
@@ -117,8 +119,8 @@ import kotlinx.coroutines.launch
 import java.util.Date
 import kotlin.math.max
 
-/** Brand danger color used for swipe-to-delete background + destructive dialog confirm button. */
-private val BrandDanger = Color(0xFFC62828)
+// v1.2.3 audit U21: BrandDanger is defined once in `com.filestech.sms.ui.theme.Color`.
+// References below resolve via the file-level import.
 
 /** Compact human-readable file size — "284 KB", "1.2 MB", etc. Used by the attachment dialog. */
 private fun formatFileSize(bytes: Long): String {
@@ -465,12 +467,21 @@ fun ThreadScreen(
     // everywhere. Toggle ON → this dialog (for text), the voice confirm below, and the
     // attachment confirm at the bottom of the file. Three dialogs, one setting, consistent.
     state.pendingSend?.let { body ->
+        // v1.2.3 audit U10: Send is the positive primary action — autofocus + Button (heavier
+        // weight) instead of two ambiguous TextButtons. Material 3 confirm-flow guideline.
+        val sendFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            runCatching { sendFocus.requestFocus() }
+        }
         AlertDialog(
             onDismissRequest = { viewModel.cancelPendingSend() },
             title = { Text(stringResource(R.string.settings_confirm_send_title)) },
             text = { Text(body) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmPendingSend() }) {
+                androidx.compose.material3.Button(
+                    onClick = { viewModel.confirmPendingSend() },
+                    modifier = Modifier.focusRequester(sendFocus),
+                ) {
                     Text(stringResource(R.string.action_send))
                 }
             },
@@ -483,12 +494,19 @@ fun ThreadScreen(
     }
 
     if (state.pendingVoiceConfirm) {
+        val sendFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            runCatching { sendFocus.requestFocus() }
+        }
         AlertDialog(
             onDismissRequest = { viewModel.cancelPendingVoice() },
             title = { Text(stringResource(R.string.voice_confirm_title)) },
             text = { Text(stringResource(R.string.voice_confirm_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmPendingVoice() }) {
+                androidx.compose.material3.Button(
+                    onClick = { viewModel.confirmPendingVoice() },
+                    modifier = Modifier.focusRequester(sendFocus),
+                ) {
                     Text(stringResource(R.string.action_send))
                 }
             },
@@ -627,6 +645,15 @@ private fun DestructiveConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val cs = MaterialTheme.colorScheme
+    // v1.2.3 audit U3: autofocus the Cancel button (conservative default for destructive
+    // actions, aligned with Pass Tech v2.4.4 U2 and Notes Tech v1.0.9 U3) + use the theme's
+    // `errorContainer` token rather than the hardcoded BrandDanger fill so the dialog adapts
+    // to Dark Tech contrast.
+    val cancelFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        runCatching { cancelFocus.requestFocus() }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -635,13 +662,16 @@ private fun DestructiveConfirmDialog(
             FilledTonalButton(
                 onClick = onConfirm,
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = BrandDanger,
-                    contentColor = Color.White,
+                    containerColor = cs.errorContainer,
+                    contentColor = cs.onErrorContainer,
                 ),
             ) { Text(confirmLabel) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.focusRequester(cancelFocus),
+            ) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,14 +64,17 @@ fun ReplyQuoteCard(
     // structure: tinted variants on incoming (surfaceContainerHighest), primary-toned on
     // outgoing. The accent stripe uses the complementary tone — never error red — so the
     // information stays calm.
+    // v1.2.3 audit U17: alpha 0.78f on primary + onPrimary body alpha 0.82f composited to
+    // ~5.5:1, right at the WCAG AA edge. Bumping container alpha to 0.88f gets us cleanly above
+    // the 4.5:1 threshold for body text on outgoing bubbles.
     val containerColor = if (isOutgoingHost) {
-        cs.primary.copy(alpha = 0.78f)
+        cs.primary.copy(alpha = 0.88f)
     } else {
         cs.surfaceContainerHighest
     }
     val stripeColor = if (isOutgoingHost) cs.onPrimary else cs.primary
     val labelColor = if (isOutgoingHost) cs.onPrimary else cs.onSurface
-    val bodyColor = if (isOutgoingHost) cs.onPrimary.copy(alpha = 0.82f) else cs.onSurfaceVariant
+    val bodyColor = if (isOutgoingHost) cs.onPrimary.copy(alpha = 0.9f) else cs.onSurfaceVariant
 
     Row(
         modifier = modifier
@@ -136,7 +138,6 @@ fun ComposerReplyChip(
             Box(
                 modifier = Modifier
                     .width(3.dp)
-                    .fillMaxHeight()
                     .height(32.dp)
                     .background(cs.primary),
             )
@@ -158,7 +159,8 @@ fun ComposerReplyChip(
                 )
             }
         }
-        IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
+        // 40 dp touch target (WCAG 2.5.5) — visual icon stays at 18 dp.
+        IconButton(onClick = onCancel, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = Icons.Outlined.Close,
                 contentDescription = stringResource(R.string.action_cancel_reply),
