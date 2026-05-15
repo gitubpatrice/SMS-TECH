@@ -40,6 +40,9 @@
     <string name="attach_preview_cancel">Annuler</string>
     <string name="attach_size_warning">%1$s — les pièces volumineuses peuvent être refusées par l\'opérateur</string>
     <string name="attach_unsupported">Pièce jointe non prise en charge</string>
+    <string name="attach_confirm_title">Envoyer cette pièce jointe ?</string>
+    <string name="attach_confirm_size">%1$s — %2$s</string>
+    <string name="attach_confirm_send">Envoyer</string>
     <string name="settings_app_lock">Verrouillage de l\'app</string>
     <string name="settings_app_lock_desc">Demande un code à chaque ouverture de l\'application.</string>
     <string name="lock_mode_off">Aucun</string>

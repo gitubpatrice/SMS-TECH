@@ -120,6 +120,15 @@ import kotlin.math.max
 /** Brand danger color used for swipe-to-delete background + destructive dialog confirm button. */
 private val BrandDanger = Color(0xFFC62828)
 
+/** Compact human-readable file size — "284 KB", "1.2 MB", etc. Used by the attachment dialog. */
+private fun formatFileSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return "%.0f KB".format(kb)
+    val mb = kb / 1024.0
+    return "%.1f MB".format(mb)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThreadScreen(
@@ -375,6 +384,35 @@ fun ThreadScreen(
             onDismiss = { attachmentSheetOpen = false },
             onAttachmentPicked = { uri, kind ->
                 viewModel.onAttachmentPicked(uri, kind)
+            },
+        )
+    }
+
+    // Attachment confirmation dialog — v1.2.1 UX fix. The picker drops the file into the
+    // staging slot, and the user explicitly validates here before any MMS dispatch. Cancel
+    // deletes the cached copy.
+    state.pendingAttachment?.let { pending ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.cancelPendingAttachment() },
+            title = { Text(stringResource(R.string.attach_confirm_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.attach_confirm_size,
+                        pending.displayName,
+                        formatFileSize(pending.sizeBytes),
+                    ),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = { viewModel.confirmPendingAttachment() },
+                ) { Text(stringResource(R.string.attach_confirm_send)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelPendingAttachment() }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             },
         )
     }

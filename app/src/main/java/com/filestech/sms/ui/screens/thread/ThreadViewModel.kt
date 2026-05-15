@@ -117,6 +117,20 @@ class ThreadViewModel @Inject constructor(
          * on whichever bubbles they care about, which avoids exporting ML output to backups.
          */
         val translations: Map<Long, TranslationState> = emptyMap(),
+        /**
+         * Attachment staged for the user to confirm before dispatch (v1.2.1 UX fix). The picker
+         * lands here first; the user sees a preview dialog and only the explicit "Envoyer" tap
+         * triggers the actual MMS dispatch. Cancelling deletes the cached file.
+         */
+        val pendingAttachment: PendingAttachment? = null,
+    )
+
+    /** Staged attachment awaiting user confirmation in the composer. */
+    data class PendingAttachment(
+        val file: java.io.File,
+        val mimeType: String,
+        val displayName: String,
+        val sizeBytes: Long,
     )
 
     /** UI projection of an in-flight or completed translation for a single bubble. */
@@ -307,20 +321,50 @@ class ThreadViewModel @Inject constructor(
         uri: android.net.Uri,
         kind: com.filestech.sms.ui.components.AttachmentKind,
     ) {
-        val conv = _state.value.conversation ?: return
+        if (_state.value.conversation == null) return
         viewModelScope.launch {
-            val mime = context.contentResolver.getType(uri) ?: when (kind) {
+            val cr = context.contentResolver
+            val mime = cr.getType(uri) ?: when (kind) {
                 com.filestech.sms.ui.components.AttachmentKind.PHOTO -> "image/jpeg"
                 com.filestech.sms.ui.components.AttachmentKind.VIDEO -> "video/mp4"
                 com.filestech.sms.ui.components.AttachmentKind.CONTACT -> "text/x-vcard"
                 else -> "application/octet-stream"
             }
+            // Resolve the user-facing name via OpenableColumns when possible — Android's
+            // PickVisualMedia / OpenDocument both expose it. Falls back to the cached filename
+            // (auto-generated, so always visually ugly, hence the lookup).
+            val displayName = resolveDisplayName(uri) ?: "Pièce jointe"
             val file = copyAttachmentToCache(uri, mime)
             if (file == null) {
                 _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_COPY_FAILED))
                 return@launch
             }
-            val payload = SendMediaMmsUseCase.AttachmentPayload(file = file, mimeType = mime)
+            // Auto-compress images bigger than the carrier cap. Most photos pickers hand back
+            // a 2-4 MB JPEG; we don't want to reject every photo, so we re-encode quality 75 →
+            // 50 → 30 + downscale until it fits.
+            val finalFile = if (mime.startsWith("image/") && file.length() > IMAGE_COMPRESS_THRESHOLD_BYTES) {
+                compressImage(file) ?: file
+            } else file
+            _state.update {
+                it.copy(
+                    pendingAttachment = PendingAttachment(
+                        file = finalFile,
+                        mimeType = mime,
+                        displayName = displayName,
+                        sizeBytes = finalFile.length(),
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Confirms and dispatches the staged attachment. Cleans up on failure. */
+    fun confirmPendingAttachment() {
+        val pending = _state.value.pendingAttachment ?: return
+        val conv = _state.value.conversation ?: return
+        _state.update { it.copy(pendingAttachment = null) }
+        viewModelScope.launch {
+            val payload = SendMediaMmsUseCase.AttachmentPayload(file = pending.file, mimeType = pending.mimeType)
             when (val res = sendMediaMms.invoke(
                 recipients = conv.addresses,
                 attachments = listOf(payload),
@@ -332,12 +376,73 @@ class ThreadViewModel @Inject constructor(
                     _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_SENT))
                 }
                 is Outcome.Failure -> {
-                    runCatching { file.delete() }
+                    runCatching { pending.file.delete() }
                     _events.tryEmit(Event.SendError(res.error))
                 }
             }
         }
     }
+
+    /** Discards the staged attachment without sending. Deletes the cached file. */
+    fun cancelPendingAttachment() {
+        val pending = _state.value.pendingAttachment ?: return
+        _state.update { it.copy(pendingAttachment = null) }
+        runCatching { pending.file.delete() }
+    }
+
+    /** Resolves OpenableColumns.DISPLAY_NAME for a content URI. */
+    private suspend fun resolveDisplayName(uri: android.net.Uri): String? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) c.getString(0) else null
+                }
+            }.getOrNull()
+        }
+
+    /**
+     * Re-encodes the picked image as JPEG until it fits under [CARRIER_PAYLOAD_CAP_BYTES],
+     * trying decreasing quality and downscaling once if needed. Returns the re-encoded file
+     * (new file in the same dir) or null if everything failed.
+     */
+    private suspend fun compressImage(src: java.io.File): java.io.File? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val opts = android.graphics.BitmapFactory.Options()
+            opts.inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+            val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, opts) }
+                .getOrNull() ?: return@withContext null
+            val maxDim = 1600
+            val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
+                val ratio = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
+                android.graphics.Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * ratio).toInt(),
+                    (bitmap.height * ratio).toInt(),
+                    true,
+                ).also { if (it != bitmap) bitmap.recycle() }
+            } else bitmap
+
+            val out = java.io.File(src.parentFile, src.nameWithoutExtension + "-compressed.jpg")
+            for (quality in intArrayOf(75, 60, 45, 30)) {
+                try {
+                    out.outputStream().use { os ->
+                        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, os)
+                    }
+                    if (out.length() in 1..CARRIER_PAYLOAD_CAP_BYTES) {
+                        scaled.recycle()
+                        // Drop the source — we only keep the compressed copy from here on.
+                        runCatching { src.delete() }
+                        return@withContext out
+                    }
+                } catch (t: Throwable) {
+                    timber.log.Timber.w(t, "JPEG compress quality=%d failed", quality)
+                }
+            }
+            scaled.recycle()
+            // Last-resort: hand the original back, the use-case will fail the size check and
+            // the user sees an explicit "trop volumineux" snackbar instead of a silent black hole.
+            null
+        }
 
     /**
      * Copies the content-URI handed back by the system picker into our private cache so the
@@ -546,6 +651,11 @@ class ThreadViewModel @Inject constructor(
         const val SNACK_TRANSLATE_FAILED: String = "Échec de la traduction"
         const val SNACK_ATTACH_SENT: String = "Pièce jointe envoyée"
         const val SNACK_ATTACH_COPY_FAILED: String = "Impossible de lire la pièce jointe"
+
+        // Image compression knobs. The first threshold says "do nothing for tiny images";
+        // the second is the hard target used by the quality loop.
+        const val IMAGE_COMPRESS_THRESHOLD_BYTES: Long = 250L * 1024L
+        const val CARRIER_PAYLOAD_CAP_BYTES: Long = 280L * 1024L
         const val SNACK_VOICE_SENT: String = "Message vocal envoyé"
     }
 }

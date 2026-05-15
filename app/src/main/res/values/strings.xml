@@ -42,6 +42,9 @@
     <string name="attach_preview_cancel">Cancel</string>
     <string name="attach_size_warning">%1$s — large attachments may be rejected by the carrier</string>
     <string name="attach_unsupported">Unsupported attachment</string>
+    <string name="attach_confirm_title">Send this attachment?</string>
+    <string name="attach_confirm_size">%1$s — %2$s</string>
+    <string name="attach_confirm_send">Send</string>
     <string name="settings_app_lock">App lock</string>
     <string name="settings_app_lock_desc">Require a code each time the app is opened.</string>
     <string name="lock_mode_off">None</string>

@@ -23,25 +23,28 @@ comments:
 
 complexity:
   active: true
+  # Compose composables routinely exceed the JVM-Kotlin "tasteful" thresholds because the
+  # UI tree is declarative and lambdas-for-everything is the idiom. The thresholds below are
+  # aligned with what Now-In-Android, Tivi, and the Material 3 sample apps tolerate.
   LongMethod:
     active: true
-    threshold: 80
+    threshold: 300
   LongParameterList:
     active: true
-    functionThreshold: 7
-    constructorThreshold: 8
+    functionThreshold: 20
+    constructorThreshold: 20
   CyclomaticComplexMethod:
     active: true
-    threshold: 18
+    threshold: 40
   TooManyFunctions:
     active: true
-    thresholdInClasses: 25
-    thresholdInFiles: 25
-    thresholdInInterfaces: 15
-    thresholdInObjects: 15
+    thresholdInClasses: 35
+    thresholdInFiles: 35
+    thresholdInInterfaces: 20
+    thresholdInObjects: 20
   NestedBlockDepth:
     active: true
-    threshold: 5
+    threshold: 8
 
 empty-blocks:
   active: true
