@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="fr">
+
+    <string name="app_name">SMS Tech</string>
+    <string name="app_tagline">Privé. Sobre. À vous.</string>
+
+    <string name="action_send">Envoyer</string>
+    <string name="action_cancel">Annuler</string>
+    <string name="action_confirm">Confirmer</string>
+    <string name="action_save">Enregistrer</string>
+    <string name="action_delete">Supprimer</string>
+    <string name="action_archive">Archiver</string>
+    <string name="action_unarchive">Désarchiver</string>
+    <string name="action_pin">Épingler</string>
+    <string name="action_unpin">Désépingler</string>
+    <string name="action_mute">Mettre en sourdine</string>
+    <string name="action_unmute">Réactiver le son</string>
+    <string name="action_block">Bloquer</string>
+    <string name="action_unblock">Débloquer</string>
+    <string name="action_more">Plus</string>
+    <string name="action_message_actions">Actions sur le message</string>
+    <string name="action_reply">Répondre</string>
+    <string name="action_translate">Traduire</string>
+    <string name="thread_reply_to">Réponse à %1$s</string>
+    <string name="thread_reply_to_you">Réponse à vous-même</string>
+    <string name="thread_reply_deleted">Message d\'origine supprimé</string>
+    <string name="action_cancel_reply">Annuler la réponse</string>
+    <string name="action_dismiss_translation">Masquer la traduction</string>
+    <string name="translation_in_progress">Traduction…</string>
+    <string name="translation_failed">Échec de la traduction</string>
+    <string name="translation_label">Traduction</string>
+    <string name="chat_you">Vous</string>
+    <string name="attach_photo">Photo</string>
+    <string name="attach_video">Vidéo</string>
+    <string name="attach_file">Fichier</string>
+    <string name="attach_contact">Contact</string>
+    <string name="attach_sheet_title">Ajouter au message</string>
+    <string name="attach_sheet_subtitle">Envoyé comme MMS</string>
+    <string name="attach_preview_send">Envoyer</string>
+    <string name="attach_preview_cancel">Annuler</string>
+    <string name="attach_size_warning">%1$s — les pièces volumineuses peuvent être refusées par l\'opérateur</string>
+    <string name="attach_unsupported">Pièce jointe non prise en charge</string>
+    <string name="settings_app_lock">Verrouillage de l\'app</string>
+    <string name="settings_app_lock_desc">Demande un code à chaque ouverture de l\'application.</string>
+    <string name="lock_mode_off">Aucun</string>
+    <string name="lock_mode_pin">Code PIN</string>
+    <string name="pin_setup_title">Définir un code PIN</string>
+    <string name="pin_setup_field">PIN (4 à 12 chiffres)</string>
+    <string name="pin_setup_confirm">Confirmer le PIN</string>
+    <string name="pin_setup_mismatch">Les codes ne correspondent pas</string>
+    <string name="pin_setup_too_short">Minimum 4 chiffres</string>
+    <string name="pin_setup_digits_only">Chiffres uniquement</string>
+    <string name="lock_mode_dialog_title">Choisir le mode de verrouillage</string>
+    <string name="conversation_actions_title">Actions sur la conversation</string>
+    <string name="conversation_block_confirm_title">Bloquer cette conversation ?</string>
+    <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. Vous pourrez les débloquer plus tard dans les Réglages.</string>
+    <string name="conversation_block_done">Conversation bloquée</string>
+    <string name="settings_purge_blocked">Purger les conversations bloquées</string>
+    <string name="settings_purge_blocked_desc">Supprime définitivement toutes les conversations dont les participants sont sur la liste de blocage système.</string>
+    <string name="settings_purge_blocked_result">%1$d conversation(s) supprimée(s)</string>
+    <string name="settings_purge_blocked_none">Aucune conversation bloquée à purger</string>
+    <string name="lock_mode_biometric">Biométrie + PIN de secours</string>
+    <string name="lock_biometric_title">Déverrouiller SMS Tech</string>
+    <string name="lock_biometric_subtitle">Utilisez votre empreinte ou votre visage</string>
+    <string name="lock_use_pin">Utiliser le PIN</string>
+    <string name="lock_biometric_unavailable">Biométrie indisponible sur cet appareil — définissez d\'abord un PIN</string>
+    <string name="lock_biometric_invalidated">La biométrie a changé — réactivez-la dans les Réglages</string>
+    <string name="sort_section">Trier les conversations</string>
+    <string name="sort_date">Plus récent d\'abord</string>
+    <string name="sort_unread">Non lus d\'abord</string>
+    <string name="sort_pinned">Épinglés d\'abord</string>
+    <string name="action_search">Rechercher</string>
+    <string name="action_back">Retour</string>
+    <string name="action_share">Partager</string>
+    <string name="action_copy">Copier</string>
+    <string name="action_forward">Transférer</string>
+    <string name="action_retry">Réessayer</string>
+    <string name="action_select_all">Tout sélectionner</string>
+    <string name="action_open">Ouvrir</string>
+    <string name="action_close">Fermer</string>
+    <string name="action_continue">Continuer</string>
+    <string name="action_export_pdf">Exporter en PDF</string>
+    <string name="action_voice_input">Dictée vocale</string>
+    <string name="action_attach">Joindre</string>
+    <string name="action_schedule">Programmer</string>
+    <string name="action_new_message">Nouveau message</string>
+    <string name="action_call">Appeler</string>
+    <string name="conversations_search_hint">Rechercher un numéro, un contact, un message…</string>
+    <string name="conversations_no_match">Aucune conversation correspondante.</string>
+    <string name="action_add_contact">Enregistrer le contact</string>
+    <string name="action_details">Détails de la conversation</string>
+
+    <string name="thread_details_messages">%1$d messages</string>
+    <string name="thread_details_first">Premier message : %1$s</string>
+    <string name="thread_details_last">Dernier message : %1$s</string>
+    <string name="thread_details_participants">Participants : %1$d</string>
+
+    <string name="tab_conversations">Conversations</string>
+    <string name="tab_archived">Archivées</string>
+    <string name="tab_vault">Coffre-fort</string>
+    <string name="tab_blocked">Bloqués</string>
+
+    <string name="onboarding_welcome_title">Bienvenue dans SMS Tech</string>
+    <string name="onboarding_welcome_body">Une appli SMS et MMS moderne et privée. Pas de pub, pas de tracker, pas d\'analytique. Vos conversations restent sur votre appareil.</string>
+    <string name="onboarding_permissions_title">Quelques autorisations</string>
+    <string name="onboarding_permissions_body">SMS, MMS, contacts et notifications nous sont nécessaires. Chaque permission est expliquée.</string>
+    <string name="onboarding_default_title">Devenir l\'application SMS par défaut</string>
+    <string name="onboarding_default_body">Android n\'autorise qu\'une seule application à envoyer et recevoir des SMS. Vous pourrez changer d\'avis à tout moment.</string>
+    <string name="onboarding_language_title">Langue &amp; thème</string>
+    <string name="onboarding_language_body">Choisissez votre langue et votre apparence. Modifiable depuis les réglages.</string>
+    <string name="onboarding_done">C\'est parti</string>
+
+    <string name="conversations_empty_title">Aucune conversation</string>
+    <string name="conversations_empty_body">Dès qu\'un message arrive ou est envoyé, il s\'affichera ici.</string>
+    <string name="conversations_archived_empty">Aucune conversation archivée.</string>
+    <string name="conversations_importing_title">Importation de vos messages</string>
+    <string name="conversations_importing_body">Lecture de vos SMS existants — opération unique.</string>
+    <string name="conversations_importing_count">%1$d messages importés…</string>
+    <string name="conversations_delete_confirm_title">Supprimer cette conversation ?</string>
+    <string name="conversations_delete_confirm_body">Tous les messages de cette conversation seront définitivement supprimés de cet appareil. Les autres conversations ne sont pas affectées.</string>
+    <string name="conversations_pinned_label">Épinglées</string>
+    <string name="conversations_count">%1$d conversations</string>
+    <string name="conversations_draft_prefix">Brouillon : %1$s</string>
+
+    <string name="thread_compose_placeholder">Écrire un message…</string>
+    <string name="thread_segments_indicator">%1$d / %2$d • %3$d seg.</string>
+    <string name="thread_status_pending">Envoi…</string>
+    <string name="thread_status_sent">Envoyé</string>
+    <string name="thread_status_delivered">Remis</string>
+    <string name="thread_status_failed">Échec — appuyer pour réessayer</string>
+    <string name="date_today">Aujourd\'hui</string>
+    <string name="date_yesterday">Hier</string>
+    <string name="thread_status_received">Reçu</string>
+    <string name="thread_long_press_options">Actions sur le message</string>
+    <string name="thread_confirm_delete_message">Supprimer ce message ? Action irréversible.</string>
+    <string name="thread_export_in_progress">Génération du PDF…</string>
+    <string name="thread_export_success">PDF enregistré (%1$d pages)</string>
+
+    <!-- Composeur de message vocal MMS -->
+    <string name="voice_action_record">Enregistrer un message vocal</string>
+    <string name="voice_action_stop">Arrêter l\'enregistrement</string>
+    <string name="voice_action_cancel">Annuler l\'enregistrement</string>
+    <string name="voice_action_discard">Supprimer l\'enregistrement</string>
+    <string name="voice_action_send">Envoyer le message vocal</string>
+    <string name="voice_action_play">Lire</string>
+    <string name="voice_action_pause">Pause</string>
+    <string name="voice_recording_label">Enregistrement…</string>
+    <string name="voice_max_duration_reached">Limite de 60 s atteinte</string>
+    <string name="voice_permission_rationale">L\'accès au micro est nécessaire pour enregistrer un message vocal.</string>
+    <string name="voice_permission_denied">Autorisation du micro refusée. Ouvrez les Paramètres pour l\'activer.</string>
+    <string name="voice_sending">Envoi en cours…</string>
+    <string name="voice_duration_format">%1$d:%2$02d</string>
+
+    <string name="compose_to_label">À :</string>
+    <string name="compose_search_contact">Chercher un contact ou un numéro</string>
+    <string name="compose_broadcast_explanation">Diffusion : un SMS distinct par destinataire (privé).</string>
+    <string name="compose_group_explanation">MMS de groupe : une seule conversation avec tout le monde.</string>
+    <string name="compose_send_mode_broadcast">Diffusion</string>
+    <string name="compose_send_mode_group">MMS de groupe</string>
+
+    <string name="blocked_title">Numéros bloqués</string>
+    <string name="blocked_empty">Aucun numéro bloqué.</string>
+    <string name="blocked_add">Ajouter un numéro</string>
+    <string name="blocked_confirm_unblock">Débloquer %1$s ?</string>
+
+    <string name="vault_title">Coffre-fort</string>
+    <string name="vault_empty">Le coffre-fort est vide.</string>
+    <string name="vault_unlock_required">Déverrouillez l\'application pour accéder au coffre-fort.</string>
+    <string name="vault_explanation_title">Qu\'est-ce que le coffre-fort ?</string>
+    <string name="vault_explanation_body">Les conversations placées ici sont masquées de la liste principale. Elles restent sur votre appareil (chiffrées via SQLCipher). À noter : le SMS n\'est pas chiffré sur le réseau opérateur. Pour un chiffrement de bout en bout, utilisez Signal ou Matrix.</string>
+    <string name="vault_move_in">Déplacer dans le coffre</string>
+    <string name="vault_move_out">Sortir du coffre</string>
+
+    <!-- Backup / restore -->
+    <string name="backup_explainer">La sauvegarde chiffrée utilise AES-256-GCM et PBKDF2-HMAC-SHA512. Choisissez une phrase de passe solide — sans elle le fichier est irrécupérable.</string>
+    <string name="backup_passphrase_title">Phrase de passe de sauvegarde</string>
+    <string name="backup_passphrase_explain">Choisissez une phrase pour chiffrer la sauvegarde. Au minimum 8 caractères. À conserver précieusement — aucune récupération possible.</string>
+    <string name="backup_passphrase">Phrase de passe</string>
+    <string name="backup_passphrase_repeat">Confirmer la phrase</string>
+    <string name="backup_passphrase_mismatch">Les phrases ne correspondent pas.</string>
+    <string name="backup_export_success">Sauvegarde enregistrée.</string>
+    <string name="backup_export_failed">Échec de la sauvegarde.</string>
+    <string name="backup_restore_coming_v11">La restauration depuis fichier chiffré arrive en v1.1 — l\'export actuel produit déjà un fichier autoportant.</string>
+
+    <!-- Migration -->
+    <string name="migration_title">Importer les SMS existants</string>
+    <string name="migration_body">Lit le fournisseur SMS système et copie les messages dans la base chiffrée. SMS Tech doit déjà être l\'application SMS par défaut.</string>
+    <string name="migration_run">Lancer l\'import</string>
+    <string name="migration_rerun">Relancer</string>
+    <string name="migration_imported">Importés : %1$d</string>
+
+    <!-- About -->
+    <string name="about_easter_egg">✨ Merci à toutes celles et ceux qui prennent soin de leur vie privée. ✨</string>
+
+    <string name="lock_title">SMS Tech est verrouillée</string>
+    <string name="lock_pin_hint">Saisir votre code PIN</string>
+    <string name="lock_attempts_left">%1$d tentative(s) restante(s)</string>
+    <string name="lock_lockout_message">Trop d\'essais. Nouvelle tentative dans %1$d s.</string>
+
+    <string name="settings_title">Réglages</string>
+    <string name="settings_search">Rechercher dans les réglages…</string>
+
+    <string name="settings_section_appearance">Apparence</string>
+    <string name="settings_theme_mode">Thème</string>
+    <string name="settings_theme_label">Thème</string>
+    <string name="settings_theme_system">Système</string>
+    <string name="settings_theme_light">Clair</string>
+    <string name="settings_theme_dark">Sombre</string>
+    <string name="settings_theme_dark_tech">Dark Tech</string>
+    <string name="settings_theme_dark_tech_desc">Palette sombre pour développeurs. Désactive les couleurs dynamiques et le mode AMOLED.</string>
+    <string name="settings_dynamic_colors">Couleurs dynamiques (Android 12+)</string>
+    <string name="settings_custom_accent">Couleur d\'accent personnalisée</string>
+    <string name="settings_amoled">AMOLED noir pur</string>
+    <string name="settings_text_scale">Taille du texte</string>
+    <string name="settings_density">Densité de la liste</string>
+
+    <string name="settings_section_locale">Langue &amp; région</string>
+    <string name="settings_language">Langue de l\'application</string>
+    <string name="settings_first_day_of_week">Premier jour de la semaine</string>
+
+    <string name="settings_section_conversations">Conversations</string>
+    <string name="settings_sort_mode">Trier par</string>
+    <string name="settings_preview_lines">Lignes d\'aperçu</string>
+    <string name="settings_show_avatars">Afficher les avatars</string>
+    <string name="settings_group_archived">Grouper les archivées</string>
+    <string name="settings_signature">Signature automatique</string>
+
+    <string name="settings_section_sending">Envoi</string>
+    <string name="settings_confirm_broadcast">Confirmer avant envoi</string>
+    <string name="settings_confirm_send_title">Envoyer ce message ?</string>
+    <string name="settings_confirm_send_body">%1$s</string>
+    <string name="settings_convert_mms_after">Convertir en MMS au-delà de N segments</string>
+    <string name="settings_mms_quality">Qualité d\'image MMS</string>
+    <string name="settings_delivery_reports">Accusés de réception</string>
+    <string name="settings_retry_failed">Réessayer automatiquement les échecs</string>
+
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_notifications_enabled">Activer les notifications</string>
+    <string name="settings_notifications_style">Style</string>
+    <string name="settings_notifications_preview">Aperçu du contenu</string>
+    <string name="settings_inline_reply">Répondre depuis la notification</string>
+    <string name="settings_notification_sound">Son par défaut</string>
+    <string name="settings_vibrate">Vibration</string>
+    <string name="settings_led_color">Couleur de la LED</string>
+    <string name="settings_bubbles">Bulles (Android 11+)</string>
+
+    <string name="settings_section_security">Sécurité &amp; confidentialité</string>
+    <string name="settings_lock_mode">Verrouillage</string>
+    <string name="settings_auto_lock">Délai d\'auto-verrouillage</string>
+    <string name="settings_flag_secure">Masquer l\'aperçu dans les Récents</string>
+    <string name="settings_flag_secure_desc">Cache le contenu des conversations dans le sélecteur de tâches Android et bloque les captures / enregistrements d\'écran tant que l\'application est ouverte.</string>
+    <string name="settings_lock_vault_on_leave">Verrouiller le coffre à la sortie</string>
+    <string name="settings_lock_vault_on_leave_desc">Verrouille automatiquement le coffre chiffré dès que l\'application passe en arrière-plan. Une nouvelle authentification sera nécessaire au retour.</string>
+    <string name="settings_panic_code">PIN de secours (mode panique)</string>
+    <string name="settings_auto_delete_days">Effacer les messages de plus de (jours)</string>
+    <string name="settings_privacy_policy">Politique de confidentialité</string>
+
+    <string name="settings_section_blocking">Blocage</string>
+    <string name="settings_block_unknown">Bloquer les numéros inconnus</string>
+    <string name="settings_block_short">Bloquer les numéros courts</string>
+    <string name="settings_manage_blocked">Gérer la liste des bloqués</string>
+
+    <string name="settings_section_backup">Sauvegarde</string>
+    <string name="settings_backup_now">Sauvegarder maintenant</string>
+    <string name="settings_auto_backup">Sauvegarde automatique</string>
+    <string name="settings_backup_destination">Dossier de destination</string>
+    <string name="settings_backup_encrypt">Chiffrer les sauvegardes</string>
+    <string name="settings_backup_keep">Conserver N dernières sauvegardes</string>
+    <string name="settings_restore">Restaurer depuis un fichier</string>
+    <string name="settings_backup_format">Format de sauvegarde</string>
+
+    <string name="settings_section_advanced">Avancé</string>
+    <string name="settings_default_sms_app">App SMS par défaut</string>
+    <string name="settings_set_default">Définir par défaut</string>
+    <string name="settings_is_default">SMS Tech est l\'application SMS par défaut.</string>
+    <string name="settings_default_sim">SIM par défaut</string>
+    <string name="settings_mms_roaming">Télécharger automatiquement les MMS en itinérance</string>
+    <string name="settings_app_log">Journal de l\'application</string>
+    <string name="settings_reset_all">Réinitialiser tous les réglages</string>
+    <string name="settings_nuke_data">Supprimer toutes mes données</string>
+    <string name="settings_nuke_confirm">Toutes les conversations et tous les réglages seront effacés. Cette opération est irréversible.</string>
+
+    <string name="about_title">À propos</string>
+    <string name="about_tagline_short">SMS &amp; MMS moderne et privé pour Android.</string>
+    <string name="about_values_title">Pourquoi cette application</string>
+    <string name="about_value_private">Vie privée d\'abord</string>
+    <string name="about_value_private_body">Aucune pub, aucune analytique, aucun SDK tiers.</string>
+    <string name="about_value_quiet">Design sobre</string>
+    <string name="about_value_quiet_body">Material 3, couleurs dynamiques, AMOLED. Rien de tape-à-l\'œil.</string>
+    <string name="about_value_local">Tout en local</string>
+    <string name="about_value_local_body">Vos données restent chez vous. La base est chiffrée au repos.</string>
+    <string name="about_value_open">Open source</string>
+    <string name="about_value_open_body">Apache 2.0. Auditable. Contributions bienvenues.</string>
+    <string name="about_permissions_title">Permissions utilisées</string>
+    <string name="about_security_title">Sécurité &amp; limites</string>
+    <string name="about_security_body">SMS et MMS circulent en clair sur le réseau opérateur — c\'est une limite du protocole, pas un choix. SMS Tech ne protège que ce qui est stocké sur l\'appareil. Pour du chiffrement de bout en bout, utilisez Signal ou Matrix.</string>
+    <string name="about_credits_title">Crédits</string>
+    <string name="about_credits_body">Créée par %1$s. UI inspirée des principes de motion Material 3. Construite avec Kotlin, Compose, Hilt, Room et SQLCipher.</string>
+    <string name="about_legal_title">Mentions légales</string>
+    <string name="about_legal_body">© %1$s %2$s. Publiée sous licence Apache 2.0.</string>
+    <string name="about_source_code">Code source</string>
+    <string name="about_report_issue">Signaler un problème</string>
+    <string name="about_website">Site web</string>
+    <string name="about_license">Licence</string>
+    <string name="about_privacy">Politique de confidentialité</string>
+    <string name="about_rate">Noter l\'application</string>
+    <string name="about_version">Version %1$s (%2$d)</string>
+
+    <string name="channel_incoming_label">Messages entrants</string>
+    <string name="channel_incoming_desc">Notifications des SMS et MMS reçus.</string>
+    <string name="channel_sent_label">Messages envoyés</string>
+    <string name="channel_sent_desc">État des messages envoyés.</string>
+    <string name="channel_failed_label">Messages en échec</string>
+    <string name="channel_failed_desc">Erreurs et suggestions de réessai.</string>
+    <string name="channel_background_label">Tâches en arrière-plan</string>
+    <string name="channel_background_desc">Imports, sauvegardes, envois programmés.</string>
+
+    <string name="notif_reply_label">Répondre</string>
+    <string name="notif_mark_read_label">Marquer comme lu</string>
+    <string name="notif_preview_hidden_content">Nouveau message</string>
+
+    <string name="pdf_header_subtitle">Exporté le %1$s • %2$d participant(s)</string>
+    <string name="pdf_footer">Page %1$d — SMS Tech</string>
+
+    <string name="error_generic">Une erreur est survenue.</string>
+    <string name="error_no_permission">Autorisation refusée.</string>
+    <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
+    <string name="error_send_failed">Échec de l\'envoi du message.</string>
+    <string name="error_invalid_recipient">Destinataire invalide.</string>
+    <string name="error_empty_message">Le message est vide.</string>
+
+</resources>

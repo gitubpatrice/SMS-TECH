@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Audit F14: restrict the FileProvider scope to exactly the two app-owned subdirectories
+    that we actually share (MMS attachments and conversation PDFs / backup exports).
+    Previously `files-path name="files" path="."` exposed the whole `files/` tree, including
+    `files/db/master.key` (which is wrapped, but still a needless leak surface).
+-->
+<paths>
+    <files-path name="attachments" path="mms_attachments/" />
+    <files-path name="exports" path="exports/" />
+    <!-- Cache subfolders shared with the OS: outgoing MMS PDU file handed to SmsManager,
+         incoming MMS PDU file SmsManager writes to, recorded voice clips, and the audio bytes
+         extracted from incoming MMS that the AttachmentEntity references via absolute path. -->
+    <cache-path name="mms_outgoing" path="mms_outgoing/" />
+    <cache-path name="mms_incoming" path="mms_incoming/" />
+    <cache-path name="mms_incoming_audio" path="mms_incoming_audio/" />
+    <cache-path name="voice_mms" path="voice_mms/" />
+</paths>

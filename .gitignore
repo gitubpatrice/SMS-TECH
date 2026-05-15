@@ -1,0 +1,50 @@
+# IDE / OS
+*.iml
+*.ipr
+*.iws
+/.idea/
+.DS_Store
+
+# Gradle
+.gradle/
+build/
+/local.properties
+/captures
+.externalNativeBuild
+.cxx/
+
+# App build outputs (apk/aab + per-flavor folders)
+/app/release/
+/app/debug/
+*.apk
+*.aab
+
+# Signing
+keystore.properties
+*.keystore
+*.jks
+
+# Kotlin
+.kotlin/
+
+# build-log.ps1 outputs (generated locally for diagnostics, never committed)
+/build.log
+/build_errors.log
+replay_pid*.log
+
+# Claude / agent local files
+.claude/
+CLAUDE.md
+ONBOARDING.md
+
+# Crash dumps
+*.hprof
+hs_err_pid*.log
+hs_err_pid*.mdmp
+
+# KSP output (regenerated each build)
+ksp_output.log
+
+# Build agent / Android Studio caches
+.checkov.cache
+.cache/

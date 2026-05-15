@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Branding -->
+    <color name="brand_blue">#FF2460AB</color>
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+
+    <!-- M3 light defaults (used by the splash window before Compose loads) -->
+    <color name="md_theme_light_primary">#FF2460AB</color>
+    <color name="md_theme_light_onPrimary">#FFFFFFFF</color>
+    <color name="md_theme_light_background">#FFFDFCFF</color>
+    <color name="md_theme_light_onBackground">#FF1B1B1F</color>
+
+    <color name="md_theme_dark_primary">#FFA9C7FF</color>
+    <color name="md_theme_dark_onPrimary">#FF00315E</color>
+    <color name="md_theme_dark_background">#FF1B1B1F</color>
+    <color name="md_theme_dark_onBackground">#FFE3E2E6</color>
+
+    <color name="amoled_true_black">#FF000000</color>
+</resources>
