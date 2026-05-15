@@ -1,0 +1,6 @@
+v1.2.4 — MMS import perf + refactor + UX scroll
+• MMS import is now paged — RSS divided by 3-4 on a 500+ MMS history
+• Grouped per-conversation insert — 20 updates instead of 500
+• MMS dispatch code refactored: single shared engine, duplication gone
+• Thread no longer yanks to bottom when a new message arrives while you read higher up
+• Slide-to-cancel gesture: smooth animated colour feedback

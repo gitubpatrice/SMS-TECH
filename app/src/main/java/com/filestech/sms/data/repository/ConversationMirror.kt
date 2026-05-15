@@ -344,7 +344,7 @@ class ConversationMirror @Inject constructor(
     }
 
     /**
-     * Mirror every row returned by [com.filestech.sms.data.sms.TelephonyReader.readAllMms]
+     * Mirror every row returned by [com.filestech.sms.data.sms.TelephonyReader.readMmsBatched]
      * into Room. MMS rows live in `content://mms` (separate from `content://sms`), and without
      * this method they vanish from the UI after a re-install — system rows survive, but our
      * SQLCipher mirror is wiped and the SMS-only sync never picks them up.
@@ -356,52 +356,68 @@ class ConversationMirror @Inject constructor(
      */
     suspend fun bulkImportMmsFromTelephony(rows: List<com.filestech.sms.data.sms.TelephonyReader.MmsImportRow>) = withContext(io) {
         if (rows.isEmpty()) return@withContext
+        // v1.2.4 audit P2: group by AOSP `thread_id` so each conversation gets exactly one
+        // `findById + update` (= one `touchConversation`) per chunk instead of one per row.
+        // For 500 MMS across 20 threads that's 20 SQLCipher updates instead of 500. Mirrors
+        // the per-thread aggregation already used by `bulkImportFromTelephony` (SMS path).
+        val byThread = rows.groupBy { it.threadId }
         database.withTransaction {
-            for (row in rows) {
+            for ((_, group) in byThread) {
+                val first = group.first()
                 val convId = ensureConversationByThread(
-                    systemThreadId = row.threadId,
-                    addresses = listOf(PhoneAddress.of(row.address)),
+                    systemThreadId = first.threadId,
+                    addresses = listOf(PhoneAddress.of(first.address)),
                 )
-                val msg = MessageEntity(
-                    conversationId = convId,
-                    telephonyUri = "content://mms/${row.telephonyId}",
-                    address = row.address,
-                    body = row.textBody,
-                    type = MessageType.MMS,
-                    direction = row.direction,
-                    date = row.dateMs,
-                    dateSent = row.dateMs,
-                    read = row.read,
-                    starred = false,
-                    status = row.status,
-                    errorCode = null,
-                    subId = row.subId,
-                    scheduledAt = null,
-                    attachmentsCount = row.attachments.size,
-                )
-                val insertedId = messageDao.insert(msg)
-                // Insert id < 0 → conflict, row already mirrored; skip part insertion.
-                if (insertedId <= 0L) continue
-                for (part in row.attachments) {
-                    attachmentDao.insert(
-                        AttachmentEntity(
-                            messageId = insertedId,
-                            mimeType = part.contentType,
-                            fileName = part.filename ?: "part_${part.partId}",
-                            sizeBytes = 0L,
-                            // The system keeps the binary payload on disk and serves it through
-                            // this URI — no need to copy bytes into our cache. Coil / MediaPlayer
-                            // both accept `content://mms/part/…` directly.
-                            localUri = "content://mms/part/${part.partId}",
-                            width = null,
-                            height = null,
-                            durationMs = null,
-                        ),
+                var maxDate = 0L
+                var lastPreview = ""
+                var unreadDelta = 0
+                for (row in group) {
+                    val msg = MessageEntity(
+                        conversationId = convId,
+                        telephonyUri = "content://mms/${row.telephonyId}",
+                        address = row.address,
+                        body = row.textBody,
+                        type = MessageType.MMS,
+                        direction = row.direction,
+                        date = row.dateMs,
+                        dateSent = row.dateMs,
+                        read = row.read,
+                        starred = false,
+                        status = row.status,
+                        errorCode = null,
+                        subId = row.subId,
+                        scheduledAt = null,
+                        attachmentsCount = row.attachments.size,
                     )
+                    val insertedId = messageDao.insert(msg)
+                    // Insert id < 0 → conflict, row already mirrored; skip part insertion.
+                    if (insertedId <= 0L) continue
+                    for (part in row.attachments) {
+                        attachmentDao.insert(
+                            AttachmentEntity(
+                                messageId = insertedId,
+                                mimeType = part.contentType,
+                                fileName = part.filename ?: "part_${part.partId}",
+                                sizeBytes = 0L,
+                                // The system keeps the binary payload on disk and serves it through
+                                // this URI — no need to copy bytes into our cache. Coil / MediaPlayer
+                                // both accept `content://mms/part/…` directly.
+                                localUri = "content://mms/part/${part.partId}",
+                                width = null,
+                                height = null,
+                                durationMs = null,
+                            ),
+                        )
+                    }
+                    if (row.dateMs > maxDate) {
+                        maxDate = row.dateMs
+                        lastPreview = row.textBody.ifBlank { firstAttachmentPreviewLabel(row.attachments) }
+                    }
+                    if (row.direction == MessageDirection.INCOMING && !row.read) unreadDelta++
                 }
-                val preview = row.textBody.ifBlank { firstAttachmentPreviewLabel(row.attachments) }
-                val unreadDelta = if (row.direction == MessageDirection.INCOMING && !row.read) 1 else 0
-                touchConversation(convId, row.dateMs, preview, deltaUnread = unreadDelta)
+                if (maxDate > 0L) {
+                    touchConversation(convId, maxDate, lastPreview, deltaUnread = unreadDelta)
+                }
             }
         }
     }

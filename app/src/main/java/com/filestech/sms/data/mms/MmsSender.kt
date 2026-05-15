@@ -3,6 +3,7 @@ package com.filestech.sms.data.mms
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
@@ -29,6 +30,11 @@ import javax.inject.Singleton
  *   3. wire a [PendingIntent] that funnels the result back to [MmsSentReceiver]
  *
  * The PDU file is short-lived — [MmsSentReceiver] deletes it on dispatch completion.
+ *
+ * v1.2.4 refactor: the voice + media send paths used to be two near-identical 70-line blocks
+ * of cleanup-on-each-failure. They now share a single [dispatchMms] private engine — public
+ * `sendVoiceMms` / `sendMediaMms` are thin wrappers that differ only in input validation and
+ * which `MmsBuilder` overload they pick for PDU encoding.
  */
 @Singleton
 class MmsSender @Inject constructor(
@@ -57,80 +63,31 @@ class MmsSender @Inject constructor(
         if (!audioFile.exists() || audioFile.length() == 0L) {
             return@withContext Outcome.Failure(AppError.Validation("audio file missing"))
         }
-
-        // v1.2.2 writeback: insert the system row + parts BEFORE dispatch so the MMS survives
-        // an app reinstall even if the result-broadcast never fires. Failure to write back is
-        // not fatal — we keep the dispatch going.
-        val voiceAttachment = MmsBuilder.MmsAttachment(audioFile, mimeType, MmsBuilder.MmsAttachment.Kind.AUDIO)
-        val mmsSystemId = systemWriteback.insertOutbox(
+        val attachments = listOf(
+            MmsBuilder.MmsAttachment(audioFile, mimeType, MmsBuilder.MmsAttachment.Kind.AUDIO),
+        )
+        dispatchMms(
+            localMessageId = localMessageId,
             recipients = recipients,
-            attachments = listOf(voiceAttachment),
+            attachments = attachments,
             textBody = null,
-        ) ?: -1L
-
-        // 1) Encode the PDU
-        val pdu = builder.buildVoiceSendReq(
-            audioFile = audioFile,
-            mimeType = mimeType,
-            recipients = recipients,
-            requestDeliveryReport = requestDeliveryReport,
-        ) ?: run {
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
-            return@withContext Outcome.Failure(AppError.Telephony("PDU encoding failed"))
-        }
-
-        // 2) Persist to disk in the FileProvider-mapped folder
-        val pduDir = File(context.cacheDir, MMS_OUT_DIR).apply { mkdirs() }
-        val pduFile = File(pduDir, "send-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.pdu")
-        try {
-            pduFile.writeBytes(pdu)
-        } catch (t: Throwable) {
-            Timber.w(t, "Writing MMS PDU file failed")
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
-            return@withContext Outcome.Failure(AppError.Storage(t))
-        }
-
-        val pduUri = try {
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pduFile)
-        } catch (t: Throwable) {
-            pduFile.delete()
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
-            Timber.w(t, "FileProvider URI build failed")
-            return@withContext Outcome.Failure(AppError.Storage(t))
-        }
-
-        // 3) Wire the result PendingIntent — also carries the PDU file path so the receiver can
-        //    delete it after dispatch. **Explicit Intent**: we target `MmsSentReceiver` directly
-        //    via `setClass`, so we don't depend on an `<intent-filter>` in the manifest. This
-        //    is required because (a) Samsung One UI's static-receiver routing is finicky with
-        //    custom-action implicit intents inside a package and (b) Android 12+ tightens
-        //    rules around exported receivers — an explicit-component PendingIntent keeps the
-        //    receiver `exported=false` while still being reachable.
-        val pi = buildSentIntent(localMessageId, pduFile, mmsSystemId)
-
-        // 4) Dispatch
-        try {
-            val sm = subscriptionAwareManager(subId)
-            sm.sendMultimediaMessage(context, pduUri, null, null, pi)
-            Outcome.Success(Unit)
-        } catch (t: Throwable) {
-            Timber.w(t, "SmsManager.sendMultimediaMessage failed")
-            pduFile.delete()
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
-            Outcome.Failure(AppError.Telephony("sendMultimediaMessage failed", t))
-        }
+            subId = subId,
+            encodePdu = {
+                builder.buildVoiceSendReq(
+                    audioFile = audioFile,
+                    mimeType = mimeType,
+                    recipients = recipients,
+                    requestDeliveryReport = requestDeliveryReport,
+                )
+            },
+        )
     }
 
     /**
-     * Generic media-MMS dispatch (v1.2.1) — same pipeline as [sendVoiceMms] but works with any
-     * combination of audio / image / video / arbitrary parts + an optional text body. Calls into
-     * [MmsBuilder.buildMultipartSendReq] which already knows how to encode the multipart SMIL
-     * for non-voice MIME types and which uses reflection compat for Samsung One UI 6+.
-     *
-     * The same explicit-intent and PDU-cache cleanup contracts as the voice path apply: PDU bytes
-     * are written to `cache/mms_outgoing/`, handed to the OS as a FileProvider URI, deleted by
-     * [com.filestech.sms.system.receiver.MmsSentReceiver] once the system reports the dispatch
-     * outcome.
+     * Generic media-MMS dispatch — works with any combination of audio / image / video / file
+     * parts + an optional text body. Calls into [MmsBuilder.buildMultipartSendReq] which already
+     * knows how to encode the multipart SMIL for non-voice MIME types and which uses reflection
+     * compat for Samsung One UI 6+.
      */
     suspend fun sendMediaMms(
         localMessageId: Long,
@@ -149,57 +106,104 @@ class MmsSender @Inject constructor(
                 return@withContext Outcome.Failure(AppError.Validation("attachment file missing: ${a.file.name}"))
             }
         }
+        dispatchMms(
+            localMessageId = localMessageId,
+            recipients = recipients,
+            attachments = attachments,
+            textBody = textBody,
+            subId = subId,
+            encodePdu = {
+                builder.buildMultipartSendReq(
+                    attachments = attachments,
+                    textBody = textBody,
+                    recipients = recipients,
+                    requestDeliveryReport = requestDeliveryReport,
+                )
+            },
+        )
+    }
 
-        // v1.2.2 writeback: same rationale as sendVoiceMms — persist a system-provider row up
-        // front so the outgoing media MMS survives a reinstall. The receiver flips to SENT or
-        // deletes on the result-broadcast.
+    /**
+     * The shared dispatch engine for both send paths. Lifecycle:
+     *
+     *  1. Mirror the outbox row into `content://mms` so the message survives a reinstall even
+     *     if the result broadcast never fires (Samsung One UI does not writeback on its own).
+     *  2. Encode the PDU via the provided [encodePdu] closure (voice vs multipart).
+     *  3. Persist the PDU bytes to a FileProvider-mapped cache file.
+     *  4. Build the FileProvider URI that the OS reads from.
+     *  5. Wire the result PendingIntent (explicit-class so the receiver stays `exported=false`).
+     *  6. Hand off to `SmsManager.sendMultimediaMessage`.
+     *
+     * Every failure path rolls back: deletes the cache file if it was created, deletes the
+     * system OUTBOX row if we inserted one. Caller gets a typed [Outcome.Failure].
+     */
+    private suspend fun dispatchMms(
+        localMessageId: Long,
+        recipients: List<String>,
+        attachments: List<MmsBuilder.MmsAttachment>,
+        textBody: String?,
+        subId: Int?,
+        encodePdu: () -> ByteArray?,
+    ): Outcome<Unit> {
         val mmsSystemId = systemWriteback.insertOutbox(
             recipients = recipients,
             attachments = attachments,
             textBody = textBody,
         ) ?: -1L
 
-        val pdu = builder.buildMultipartSendReq(
-            attachments = attachments,
-            textBody = textBody,
-            recipients = recipients,
-            requestDeliveryReport = requestDeliveryReport,
-        ) ?: run {
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
-            return@withContext Outcome.Failure(AppError.Telephony("PDU encoding failed"))
+        val pdu = encodePdu() ?: run {
+            rollback(mmsSystemId, pduFile = null)
+            return Outcome.Failure(AppError.Telephony("PDU encoding failed"))
         }
 
-        val pduDir = File(context.cacheDir, MMS_OUT_DIR).apply { mkdirs() }
-        val pduFile = File(pduDir, "send-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.pdu")
-        try {
-            pduFile.writeBytes(pdu)
-        } catch (t: Throwable) {
+        val pduFile = writePduFile(pdu).getOrElse { t ->
             Timber.w(t, "Writing MMS PDU file failed")
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
-            return@withContext Outcome.Failure(AppError.Storage(t))
+            rollback(mmsSystemId, pduFile = null)
+            return Outcome.Failure(AppError.Storage(t))
         }
 
-        val pduUri = try {
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pduFile)
-        } catch (t: Throwable) {
-            pduFile.delete()
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
+        val pduUri = pduFileProviderUri(pduFile).getOrElse { t ->
             Timber.w(t, "FileProvider URI build failed")
-            return@withContext Outcome.Failure(AppError.Storage(t))
+            rollback(mmsSystemId, pduFile)
+            return Outcome.Failure(AppError.Storage(t))
         }
 
         val pi = buildSentIntent(localMessageId, pduFile, mmsSystemId)
 
-        try {
+        return try {
             val sm = subscriptionAwareManager(subId)
             sm.sendMultimediaMessage(context, pduUri, null, null, pi)
             Outcome.Success(Unit)
         } catch (t: Throwable) {
-            Timber.w(t, "SmsManager.sendMultimediaMessage (media) failed")
-            pduFile.delete()
-            if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
+            Timber.w(t, "SmsManager.sendMultimediaMessage failed")
+            rollback(mmsSystemId, pduFile)
             Outcome.Failure(AppError.Telephony("sendMultimediaMessage failed", t))
         }
+    }
+
+    /** Best-effort rollback of any side-effect we may have already produced. */
+    private suspend fun rollback(mmsSystemId: Long, pduFile: File?) {
+        pduFile?.let { runCatching { it.delete() } }
+        if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
+    }
+
+    /**
+     * Writes [pdu] bytes to a uniquely-named cache file under `mms_outgoing/`. Caller is
+     * responsible for deleting the returned [File] on any subsequent failure (handled by the
+     * dispatch engine).
+     */
+    private fun writePduFile(pdu: ByteArray): Result<File> {
+        return runCatching {
+            val pduDir = File(context.cacheDir, MMS_OUT_DIR).apply { mkdirs() }
+            val pduFile = File(pduDir, "send-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.pdu")
+            pduFile.writeBytes(pdu)
+            pduFile
+        }
+    }
+
+    /** Builds the FileProvider URI the OS will use to read the PDU bytes back. */
+    private fun pduFileProviderUri(pduFile: File): Result<Uri> = runCatching {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pduFile)
     }
 
     /**

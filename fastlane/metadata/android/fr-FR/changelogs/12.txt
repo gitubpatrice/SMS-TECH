@@ -1,0 +1,6 @@
+v1.2.4 — Perf import MMS + refactor + UX scroll
+• Import MMS paginé : RSS divisée par 3-4 sur un historique de 500+ MMS
+• Insertion groupée par conversation : 20 mises à jour au lieu de 500
+• Refactor envoi MMS : code unifié, plus de duplication
+• Le fil de conversation ne saute plus en bas si tu lis plus haut quand un message arrive
+• Geste « glisser pour annuler » : feedback couleur fluide

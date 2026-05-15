@@ -154,8 +154,20 @@ fun ThreadScreen(
     var askDelete by remember { mutableStateOf(false) }
     var attachmentSheetOpen by remember { mutableStateOf(false) }
 
+    // v1.2.4 audit U12: only force-scroll if the user is already at (or near) the bottom of
+    // the thread. Otherwise we yank them away from whatever they were reading higher up the
+    // history every time a new message arrives. `derivedStateOf` keeps the read off the
+    // recomposition critical path.
+    val isAtBottom by remember {
+        androidx.compose.runtime.derivedStateOf {
+            val li = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            li == null || li.index >= state.messages.lastIndex - 1
+        }
+    }
     LaunchedEffect(state.messages.size) {
-        if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex)
+        if (state.messages.isNotEmpty() && isAtBottom) {
+            listState.animateScrollToItem(state.messages.lastIndex)
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -892,12 +904,19 @@ private fun RecordingStrip(
         if (history.size > WAVE_BARS) history.removeAt(0)
     }
 
+    // v1.2.4 audit U15: animate the cancel-hint background so the swipe-towards-cancel
+    // gesture has a continuous color cue instead of the previous abrupt flip.
+    val cancelBg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (cancelHinted) danger.copy(alpha = 0.12f) else cs.surfaceContainerHigh,
+        label = "rec-cancel-bg",
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(if (cancelHinted) danger.copy(alpha = 0.12f) else cs.surfaceContainerHigh)
+            .background(cancelBg)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.CenterStart,
     ) {

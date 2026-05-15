@@ -297,12 +297,18 @@ class TelephonyReader @Inject constructor(
     )
 
     /**
-     * Snapshots every MMS row in the system provider, resolved with addresses + parts. Used by
-     * [com.filestech.sms.data.sync.TelephonySyncManager] at first boot (or after a re-install)
-     * to rebuild the local mirror from `content://mms`.
+     * Paged MMS reader — invokes [onPage] for every chunk of up to [pageSize] resolved rows.
+     * The cursor over `content://mms` stays open for the whole walk; addresses + parts are
+     * resolved row-by-row (N+1 queries are inherent to the AOSP MMS schema), but we no longer
+     * hold the entire result list + bytes-bearing part list in RAM before yielding the first
+     * row to the importer. v1.2.4 audit P3.
+     *
+     * Marked `suspend` so [onPage] can call into Room (which is suspend-only). Caller must
+     * already be in a coroutine context (typically `Dispatchers.IO` via `withContext`).
      */
-    fun readAllMms(): List<MmsImportRow> {
-        val out = ArrayList<MmsImportRow>(128)
+    suspend fun readMmsBatched(pageSize: Int, onPage: suspend (List<MmsImportRow>) -> Unit) {
+        if (pageSize <= 0) return
+        val buf = ArrayList<MmsImportRow>(pageSize)
         resolver.query(
             Uri.parse("content://mms"),
             arrayOf("_id", "thread_id", "date", "read", "msg_box", "sub_id"),
@@ -330,11 +336,9 @@ class TelephonyReader @Inject constructor(
 
                 val address = readMmsAddress(mmsId, direction).takeIf { it.isNotBlank() } ?: continue
                 val (textBody, attachments) = readMmsParts(mmsId)
-                // Drop pure-text rows that came in as MMS (carrier converted a long SMS) with no
-                // body either — they're noise and would just clutter the UI.
                 if (textBody.isBlank() && attachments.isEmpty()) continue
 
-                out += MmsImportRow(
+                buf += MmsImportRow(
                     telephonyId = mmsId,
                     threadId = threadId,
                     dateMs = dateSec * 1000L,
@@ -346,9 +350,13 @@ class TelephonyReader @Inject constructor(
                     textBody = textBody,
                     attachments = attachments,
                 )
+                if (buf.size >= pageSize) {
+                    onPage(buf.toList())
+                    buf.clear()
+                }
             }
         }
-        return out
+        if (buf.isNotEmpty()) onPage(buf.toList())
     }
 
     /**

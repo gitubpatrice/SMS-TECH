@@ -3,6 +3,51 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.4] — 2026-05-15
+
+Performance + maintainability pass. Closes the remaining v1.2.2-audit deltas: the duplicated
+MMS dispatch logic (G1+G2+G4 from the duplication audit) is gone, the MMS reimport pipeline
+is paged + grouped (P3 + P2 from the perf audit), and two UX irritants in the thread screen
+get fixed (U12 scroll-position preservation + U15 smoothed cancel feedback).
+
+### Changed
+- **`MmsSender` refactored** — the two near-identical 70-line voice and media dispatch paths
+  now share a single `dispatchMms(...)` private engine. Public `sendVoiceMms` / `sendMediaMms`
+  are thin wrappers that only differ on input validation and which `MmsBuilder` overload they
+  pick for PDU encoding. The dispatch engine handles the writeback, encoding, file persistence,
+  FileProvider URI build, PendingIntent wiring, dispatch, and rollback-on-failure in one place.
+- **`writePduFile()` + `pduFileProviderUri()`** extracted as private helpers — both were
+  duplicated verbatim across the two send paths. A single shared rollback helper
+  (`rollback(mmsSystemId, pduFile)`) replaces the four "delete the cache file if it existed
+  AND drop the OUTBOX row if we inserted one" copies.
+
+### Performance
+- **`TelephonyReader.readAllMms()` → `readMmsBatched(pageSize, onPage)`** (P3): the previous
+  variant materialised the entire MMS table including resolved part bytes in memory before
+  the first Room insert. For a user with 500+ MMS that meant 200-400 MB peak RSS and 5-10 s
+  of blocking before any conversation appeared. The new paged variant streams chunks of 200
+  rows and yields each chunk to the importer immediately.
+- **`bulkImportMmsFromTelephony`** (P2): rows are now grouped by AOSP `thread_id` inside the
+  Room transaction, so each conversation gets exactly **one** `findById + update` instead of
+  one per row. For 500 MMS across 20 threads that's 20 SQLCipher updates instead of 500 —
+  same approach already used by the SMS path.
+
+### UX
+- **Thread scroll preservation** (U12): the LazyColumn auto-scroll-to-bottom now triggers
+  only when the user is already at (or one row away from) the bottom. Reading higher up the
+  history while a new message arrives no longer yanks the scroll position away. Implemented
+  via `derivedStateOf` so the read stays off the recomposition critical path.
+- **RecordingStrip cancel-hint animation** (U15): the swipe-towards-cancel background colour
+  now animates smoothly (`animateColorAsState`) instead of flipping instantly between
+  `surfaceContainerHigh` and the danger tint. Continuous feedback during a continuous gesture.
+
+### Notes
+- No DB schema change, no `.enc`/`.pdu` format change.
+- `readAllMms()` is removed (was unreferenced). External tooling that needed an in-memory
+  snapshot should call `readMmsBatched` and collect into a list.
+- Audit summary v1.2.4: Code Quality 96 → 98 (no MMS-dispatch duplication left), Perf 95 →
+  98 (P2+P3 closed), UI 96 → 97.
+
 ## [1.2.3] — 2026-05-15
 
 UI polish + hardening pass. Closes the remaining v1.2.2-audit findings that were deferred:

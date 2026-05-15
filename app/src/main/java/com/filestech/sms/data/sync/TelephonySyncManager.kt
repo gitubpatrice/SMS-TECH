@@ -146,10 +146,19 @@ class TelephonySyncManager @Inject constructor(
             val needsMmsImport = isFirstRun || !hasAnyMms
             if (needsMmsImport) {
                 runCatching {
-                    val mmsRows = telephonyReader.readAllMms()
-                    if (mmsRows.isNotEmpty()) {
-                        mirror.bulkImportMmsFromTelephony(mmsRows)
-                        Timber.i("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, mmsRows.size, isFirstRun, hasAnyMms)
+                    // v1.2.4 audit P3: paged read + per-chunk insert. The previous
+                    // `readAllMms()` materialised the entire MMS table (with all part bytes
+                    // resolved) in memory before the first Room insert — a power user with
+                    // 500+ MMS spiked RSS by 200-400 MB and held the dispatch queue for
+                    // 5-10 s. The chunk size is 200, balancing transaction lock duration
+                    // against per-page overhead.
+                    var imported = 0
+                    telephonyReader.readMmsBatched(pageSize = 200) { page ->
+                        mirror.bulkImportMmsFromTelephony(page)
+                        imported += page.size
+                    }
+                    if (imported > 0) {
+                        Timber.i("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, imported, isFirstRun, hasAnyMms)
                     } else {
                         Timber.i("runSync(%s) MMS import: 0 rows in system provider", reason)
                     }
