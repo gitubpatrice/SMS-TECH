@@ -208,27 +208,20 @@ class ThreadViewModel @Inject constructor(
     fun send() {
         val body = _state.value.draft.trim()
         if (body.isEmpty()) return
-        viewModelScope.launch {
-            val confirm = settings.flow.first().sending.confirmBeforeBroadcast
-            if (confirm) {
-                _state.update { it.copy(pendingSend = body) }
-            } else {
-                doSend(body)
-            }
-        }
-    }
-
-    /** Called from the UI when the user accepts the "Send this message?" confirmation. */
-    fun confirmPendingSend() {
-        val body = _state.value.pendingSend ?: return
-        _state.update { it.copy(pendingSend = null) }
+        // v1.2.1 UX: SMS / MMS text + voice send is instantaneous — no confirmation dialog.
+        // Matches the Google Messages pattern; only **attachments** (photo / video / file /
+        // contact) go through `pendingAttachment` → `confirmPendingAttachment()`. The legacy
+        // `confirmBeforeBroadcast` setting is intentionally ignored here.
         viewModelScope.launch { doSend(body) }
     }
 
-    /** Dismisses the pending-send confirmation without sending. */
-    fun cancelPendingSend() {
-        _state.update { it.copy(pendingSend = null) }
-    }
+    /**
+     * Legacy compatibility no-ops. The "confirm before broadcast" dialog was removed for
+     * SMS / MMS text in v1.2.1 (Google-Messages-style behaviour). The ThreadScreen still has
+     * a reference to these to keep its existing wiring stable; both are inert.
+     */
+    fun confirmPendingSend() = Unit
+    fun cancelPendingSend() = Unit
 
     private suspend fun doSend(body: String) {
         val conv = _state.value.conversation ?: return

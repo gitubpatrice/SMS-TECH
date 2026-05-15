@@ -453,23 +453,10 @@ fun ThreadScreen(
             onDismiss = { askDelete = false },
         )
     }
-    state.pendingSend?.let { body ->
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelPendingSend() },
-            title = { Text(stringResource(R.string.settings_confirm_send_title)) },
-            text = { Text(body) },
-            confirmButton = {
-                TextButton(onClick = { viewModel.confirmPendingSend() }) {
-                    Text(stringResource(R.string.action_send))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.cancelPendingSend() }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
-        )
-    }
+    // v1.2.1: the "confirm before broadcast" dialog for SMS / MMS text has been removed —
+    // Google Messages doesn't show one and our field test confirmed the friction is real.
+    // Only attachments (file / photo / video / contact card) still go through a confirm
+    // step via `state.pendingAttachment` ↓.
 }
 
 @Composable
