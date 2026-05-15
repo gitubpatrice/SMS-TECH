@@ -68,7 +68,10 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
+            // `versionNameSuffix` removed — the user-facing version string stays "1.2.1" no
+            // matter the build type. Distinguishing debug from release is still possible via
+            // `applicationIdSuffix` (different package id, both can be installed in parallel)
+            // and via `BuildConfig.LOG_ENABLED`.
             isMinifyEnabled = false
             isDebuggable = true
             buildConfigField("boolean", "LOG_ENABLED", "true")
