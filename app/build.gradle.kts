@@ -35,7 +35,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = gitCommitCount.coerceAtLeast(1)
-        versionName = "1.2.0"
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "com.filestech.sms.HiltTestRunner"
         vectorDrawables { useSupportLibrary = true }

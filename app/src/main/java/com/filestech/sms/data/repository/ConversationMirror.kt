@@ -191,6 +191,80 @@ class ConversationMirror @Inject constructor(
     }
 
     /**
+     * Generic outgoing-MMS mirror for **non-voice** attachments (photo, video, PDF, contact card,
+     * arbitrary file). Same transaction guarantees as [upsertOutgoingMms] but accepts a list of
+     * [MediaAttachmentSpec] so a single multipart MMS surfaces as **one** message row in the UI
+     * with N attachments — matching what `bulkImportMmsFromTelephony` does on the import side.
+     *
+     * The preview line is the user's text body if any, otherwise an emoji + filename fallback so
+     * the conversation list still shows something meaningful.
+     */
+    suspend fun upsertOutgoingMediaMms(
+        address: String,
+        attachments: List<MediaAttachmentSpec>,
+        textBody: String,
+        date: Long,
+        subId: Int? = null,
+    ): Long = withContext(io) {
+        require(attachments.isNotEmpty()) { "upsertOutgoingMediaMms requires at least one attachment" }
+        val preview = textBody.ifBlank { mediaPreviewLabel(attachments.first()) }
+        database.withTransaction {
+            val convId = ensureConversation(listOf(PhoneAddress.of(address)))
+            val msg = MessageEntity(
+                conversationId = convId,
+                telephonyUri = null,
+                address = address,
+                body = preview,
+                type = MessageType.MMS,
+                direction = MessageDirection.OUTGOING,
+                date = date,
+                dateSent = null,
+                read = true,
+                starred = false,
+                status = MessageStatus.PENDING,
+                errorCode = null,
+                subId = subId,
+                scheduledAt = null,
+                attachmentsCount = attachments.size,
+            )
+            val msgId = messageDao.insert(msg)
+            for (a in attachments) {
+                attachmentDao.insert(
+                    AttachmentEntity(
+                        messageId = msgId,
+                        mimeType = a.mimeType,
+                        fileName = a.file.name,
+                        sizeBytes = a.file.length(),
+                        localUri = a.file.absolutePath,
+                        width = a.width,
+                        height = a.height,
+                        durationMs = a.durationMs,
+                    ),
+                )
+            }
+            touchConversation(convId, date, preview, deltaUnread = 0)
+            msgId
+        }
+    }
+
+    /** Caller-supplied description of one outgoing MMS attachment. */
+    data class MediaAttachmentSpec(
+        val file: File,
+        val mimeType: String,
+        val width: Int? = null,
+        val height: Int? = null,
+        val durationMs: Long? = null,
+    )
+
+    private fun mediaPreviewLabel(a: MediaAttachmentSpec): String = when {
+        a.mimeType.startsWith("image/") -> "🖼️ " + a.file.name
+        a.mimeType.startsWith("video/") -> "🎞️ " + a.file.name
+        a.mimeType.startsWith("audio/") -> "🎤 " + a.file.name
+        a.mimeType == "text/x-vcard" || a.mimeType == "text/vcard" -> "👤 " + a.file.name
+        else -> "📎 " + a.file.name
+    }
+
+    /**
      * Mirrors an incoming MMS retrieved through [com.google.android.mms.pdu.PduParser]. The
      * caller is responsible for having already written the audio bytes to disk and passed the
      * absolute file path here.

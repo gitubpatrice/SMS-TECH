@@ -3,6 +3,38 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.1] — 2026-05-15
+
+Bug-fix + feature-complete release rounding out v1.2.0. Wires the **non-voice MMS dispatch
+pipeline** that was scaffolded but disconnected in v1.2.0.
+
+### Added
+- **`MmsSender.sendMediaMms`** — generic multipart dispatch for image / video / file / contact
+  card payloads (anything that isn't the dedicated voice path). Same explicit-intent contract
+  as the voice path, same Samsung One UI reflection compat, same PDU-cache cleanup.
+- **`ConversationMirror.upsertOutgoingMediaMms`** — inserts the MMS row + N `AttachmentEntity`
+  rows in a single Room transaction. Preview line is the user's text body if any, otherwise
+  an emoji + filename fallback (🖼️ photo / 🎞️ video / 👤 vcard / 📎 other).
+- **`SendMediaMmsUseCase`** — orchestrates the per-recipient dispatch with blocked-number
+  guard, default-SMS-app guard, 300 KB total payload cap (Free MMSC is the tightest), text
+  body + 1..N attachments.
+- **`ThreadViewModel.onAttachmentPicked`** rewritten — the previous v1.2.0 stub showed a
+  snackbar and stopped. v1.2.1 reads the system content URI via `ContentResolver`, copies the
+  bytes into private `cache/media_outgoing/` (the system grant can revoke the moment the
+  picker activity dies), then routes through `SendMediaMmsUseCase`. Snackbar on success
+  ("Pièce jointe envoyée") or on the typed failure surface.
+
+### Changed
+- The `AttachmentPickerSheet` (paperclip in the composer) is now **functional**, not a
+  preview. Photo / Vidéo / Fichier / Contact all dispatch through the new pipeline.
+
+### Known limits
+- **Payload cap = 300 KB total**. Photos > 300 KB are rejected with an explicit Validation
+  error. Future v1.2.x will add on-device JPEG re-encoding to fit the cap automatically.
+- **Carrier validation is per-network.** Free Mobile FR is the tightest MMSC; Orange / SFR /
+  Sosh / Bouygues handle up to ~1 MB but we keep the conservative cap to avoid silent rejects.
+- **APKs in this release stay debug-signed.** Production keystore setup is the next milestone.
+
 ## [1.2.0] — 2026-05-15
 
 Major feature + UX release on top of v1.1.1. Adds contextual reply, on-device translation,

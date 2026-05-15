@@ -20,6 +20,7 @@ import com.filestech.sms.domain.usecase.ExportConversationPdfUseCase
 import com.filestech.sms.domain.usecase.MarkConversationReadUseCase
 import com.filestech.sms.domain.usecase.RetrySendUseCase
 import com.filestech.sms.domain.usecase.SendSmsUseCase
+import com.filestech.sms.domain.usecase.SendMediaMmsUseCase
 import com.filestech.sms.domain.usecase.SendVoiceMmsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -41,6 +42,7 @@ class ThreadViewModel @Inject constructor(
     private val repo: ConversationRepository,
     private val sendSms: SendSmsUseCase,
     private val sendVoiceMms: SendVoiceMmsUseCase,
+    private val sendMediaMms: SendMediaMmsUseCase,
     private val retrySend: RetrySendUseCase,
     private val markRead: MarkConversationReadUseCase,
     private val segCounter: SmsSegmentCounter,
@@ -52,6 +54,7 @@ class ThreadViewModel @Inject constructor(
     private val toggleConvState: com.filestech.sms.domain.usecase.ToggleConversationStateUseCase,
     private val contactRepo: com.filestech.sms.domain.repository.ContactRepository,
     private val translator: TranslationService,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     /** Live playback state, surfaced for the composer's preview UI. */
@@ -288,22 +291,74 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
-     * Receives an attachment uri from [com.filestech.sms.ui.components.AttachmentPickerSheet] (#2).
+     * Receives an attachment URI from [com.filestech.sms.ui.components.AttachmentPickerSheet]
+     * (#2) and dispatches it as a multipart MMS via [SendMediaMmsUseCase].
      *
-     * For v1.1.x we acknowledge the pick + display the file name + tee up the next session for
-     * the actual MMS-multipart dispatch (MmsBuilder.buildMultipartSendReq is already ready, the
-     * pipeline needs operator validation on Free / Orange / SFR / Sosh before going live —
-     * MMS image rejection rates vary wildly with carrier APN settings).
+     * v1.2.1 — the URI is read through `ContentResolver`, copied into a private cache file
+     * (`cache/media_outgoing/`) so the system content URI is no longer needed past the call,
+     * then handed to the use case. The use case caps payload at 300 KB total (Free MMSC is
+     * the tightest French carrier).
      *
-     * The function stays in the VM (not the screen) so the snackbar event surfaces through the
-     * existing [Event] channel and survives configuration changes.
+     * Photo / Video / Contact card / arbitrary file are all routed through the same path; the
+     * MIME type is detected from the content resolver, with a fallback per [kind] for cases
+     * where the system doesn't expose it.
      */
     fun onAttachmentPicked(
-        @Suppress("UNUSED_PARAMETER") uri: android.net.Uri,
-        @Suppress("UNUSED_PARAMETER") kind: com.filestech.sms.ui.components.AttachmentKind,
+        uri: android.net.Uri,
+        kind: com.filestech.sms.ui.components.AttachmentKind,
     ) {
-        _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_RECEIVED))
+        val conv = _state.value.conversation ?: return
+        viewModelScope.launch {
+            val mime = context.contentResolver.getType(uri) ?: when (kind) {
+                com.filestech.sms.ui.components.AttachmentKind.PHOTO -> "image/jpeg"
+                com.filestech.sms.ui.components.AttachmentKind.VIDEO -> "video/mp4"
+                com.filestech.sms.ui.components.AttachmentKind.CONTACT -> "text/x-vcard"
+                else -> "application/octet-stream"
+            }
+            val file = copyAttachmentToCache(uri, mime)
+            if (file == null) {
+                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_COPY_FAILED))
+                return@launch
+            }
+            val payload = SendMediaMmsUseCase.AttachmentPayload(file = file, mimeType = mime)
+            when (val res = sendMediaMms.invoke(
+                recipients = conv.addresses,
+                attachments = listOf(payload),
+                textBody = _state.value.draft,
+            )) {
+                is Outcome.Success -> {
+                    _state.update { it.copy(draft = "", segments = segCounter.count("")) }
+                    repo.setDraft(conversationId, null)
+                    _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_SENT))
+                }
+                is Outcome.Failure -> {
+                    runCatching { file.delete() }
+                    _events.tryEmit(Event.SendError(res.error))
+                }
+            }
+        }
     }
+
+    /**
+     * Copies the content-URI handed back by the system picker into our private cache so the
+     * MMS dispatch path can read it as a regular file (the system URI can revoke its grant
+     * the moment the picker activity finishes). Returns `null` on IO error or empty content.
+     */
+    private suspend fun copyAttachmentToCache(uri: android.net.Uri, mime: String): java.io.File? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val ext = mime.substringAfter('/', "bin").take(8).replace(Regex("[^A-Za-z0-9]"), "")
+            val dir = java.io.File(context.cacheDir, "media_outgoing").apply { mkdirs() }
+            val target = java.io.File(
+                dir,
+                "${System.currentTimeMillis()}-${java.util.UUID.randomUUID().toString().take(8)}.${ext.ifBlank { "bin" }}",
+            )
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    target.outputStream().use { input.copyTo(it) }
+                } ?: return@runCatching null
+                target.takeIf { it.exists() && it.length() > 0L }
+            }.getOrNull()
+        }
 
     fun retry(messageId: Long) {
         viewModelScope.launch { retrySend.invoke(messageId) }
@@ -489,7 +544,8 @@ class ThreadViewModel @Inject constructor(
     private companion object {
         const val SNACK_MAX_DURATION: String = "Limite de 60 s atteinte"
         const val SNACK_TRANSLATE_FAILED: String = "Échec de la traduction"
-        const val SNACK_ATTACH_RECEIVED: String = "Pièce jointe reçue — envoi MMS multipart en cours d’activation (v1.2)"
+        const val SNACK_ATTACH_SENT: String = "Pièce jointe envoyée"
+        const val SNACK_ATTACH_COPY_FAILED: String = "Impossible de lire la pièce jointe"
         const val SNACK_VOICE_SENT: String = "Message vocal envoyé"
     }
 }
