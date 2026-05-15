@@ -1,0 +1,30 @@
+SMS Tech est une application SMS / MMS pour Android, sans publicité ni traceur. Elle remplace l'app de messagerie installée par défaut en gardant chaque message sur votre appareil — pas de cloud, pas d'analytics, pas de SDK tiers envoyant vos données ailleurs.
+
+Fonctionnalités
+===============
+
+• SMS et MMS — support complet en tant qu'application SMS par défaut, sur Android 8 (API 26) à 15+
+• Messages vocaux — enregistrement push-to-talk envoyé en vrai MMS (compatible avec tout correspondant qui reçoit les MMS)
+• Coffre chiffré — masquez les conversations sensibles derrière SQLCipher + Keystore Android. Option "Verrouiller le coffre à la sortie" pour re-verrouiller chaque fois que l'app passe en arrière-plan
+• Code panique — un second code de déverrouillage qui ouvre l'app en mode leurre, où le coffre reste invisible et inaccessible
+• Déverrouillage biométrique — empreinte ou visage, avec PIN de secours obligatoire
+• Réponse contextuelle — appui long sur un message, "Répondre" → le composer affiche une mini-citation que voit le destinataire
+• Traduction locale — traduisez n'importe quel message dans votre langue via les modèles Google ML Kit téléchargés localement. Aucun texte n'est jamais envoyé sur un serveur
+• Numéros bloqués au niveau système — au premier lancement, SMS Tech importe la liste des numéros bloqués (app Téléphone, Samsung Messages) et supprime rétroactivement les conversations correspondantes
+• Sélecteur de pièce jointe — Photo, Vidéo, Fichier, Carte de contact. Les photos sont automatiquement ré-encodées en JPEG pour passer sous les limites MMS opérateur
+• Recherche plein texte (FTS4) sur toutes vos conversations
+• Export d'une conversation en PDF pour archive
+• Sauvegarde locale chiffrée avec une passphrase distincte du PIN
+• Thèmes — Clair / Sombre / AMOLED / "Dark Tech" ardoise bleutée
+• Interface en français et en anglais
+• Option dans Réglages → Envoi → "Confirmer avant envoi" pour demander une confirmation avant tout SMS, MMS ou pièce jointe
+
+Confidentialité
+===============
+
+• Pas d'analytics, pas de rapports de plantage, pas de SDK tiers
+• Seules connexions réseau : MMSC de votre opérateur (pour le transport des MMS) et serveurs Google ML Kit (une fois, lors de la première traduction, pour télécharger le modèle linguistique)
+• Licence Apache 2.0 — code source sur https://github.com/gitubpatrice/SMS-TECH
+• Modèle de sécurité détaillé sur https://github.com/gitubpatrice/SMS-TECH/blob/main/SECURITY.md
+
+Site officiel : https://files-tech.com/sms-tech.php

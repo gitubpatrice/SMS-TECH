@@ -1,0 +1,35 @@
+Categories:
+  - Internet
+  - Phone & SMS
+License: Apache-2.0
+AuthorName: Patrice Haltaya
+AuthorEmail: contact@files-tech.com
+WebSite: https://files-tech.com/sms-tech.php
+SourceCode: https://github.com/gitubpatrice/SMS-TECH
+IssueTracker: https://github.com/gitubpatrice/SMS-TECH/issues
+Changelog: https://github.com/gitubpatrice/SMS-TECH/blob/HEAD/CHANGELOG.md
+
+AutoName: SMS Tech
+
+RepoType: git
+Repo: https://github.com/gitubpatrice/SMS-TECH.git
+
+Builds:
+  - versionName: 1.2.1
+    versionCode: 7
+    commit: v1.2.1
+    subdir: app
+    gradle:
+      - yes
+    rm:
+      - app/lint-baseline.xml
+    prebuild:
+      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
+      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
+      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+UpdateCheckData: 'app/build.gradle.kts|versionName\s*=\s*"(.*?)"|.|versionCode\s*=\s*(\d+)'
+CurrentVersion: 1.2.1
+CurrentVersionCode: 7

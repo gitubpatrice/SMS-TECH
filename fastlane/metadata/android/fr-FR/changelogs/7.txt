@@ -1,0 +1,5 @@
+v1.2.1 — Envoi MMS photo/vidéo/fichier câblé
+• Dialog de confirmation pièce jointe (case dans Réglages → Envoi)
+• Compression JPEG auto pour les photos (décode → 1600 px max → qualité 75/60/45/30 jusqu'à passer)
+• Sender MMS générique (image / vidéo / fichier / vcard) basé sur le builder PDU v1.2.0
+• Audit sécurité 3 axes passé : P0-1 bypass coffre fermé, P0-2 fuite PDU en clair fermée

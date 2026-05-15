@@ -1,0 +1,30 @@
+SMS Tech is an ad-free, tracker-free SMS / MMS app for Android. It replaces the stock messaging app while keeping every message on your device — no cloud, no analytics, no third-party SDK shipping your data anywhere.
+
+Features
+========
+
+• SMS and MMS — full default-SMS-app support on Android 8 (API 26) through 15+
+• Voice messages — push-to-talk recording, sent as a real MMS (compatible with every recipient that has MMS)
+• Encrypted vault — hide sensitive conversations behind SQLCipher + Android Keystore. Toggle "Lock vault on leave" to re-lock the vault every time the app goes to background
+• Panic code — a second unlock PIN that opens the app in a decoy view where the vault stays invisible and inaccessible
+• Biometric unlock — fingerprint or face, with a PIN fallback you set yourself
+• Contextual reply — long-press a message, pick "Reply" and your composer shows a mini-quote so the recipient sees what you are answering
+• On-device translation — translate any message to your locale using Google ML Kit models cached locally. No text is ever sent to any server
+• OS-wide blocked numbers — at first launch, SMS Tech mirrors the system blocklist (Phone app, Samsung Messages) and retroactively deletes the conversations that match
+• Attachment picker — Photo, Video, File, Contact card. Photos are automatically re-encoded as JPEG to fit MMS carrier caps
+• Full-text search across every conversation, with FTS4 indexing
+• Export a conversation as a PDF for archival
+• Encrypted local backup using a passphrase distinct from your unlock PIN
+• Themes — Light / Dark / AMOLED / "Dark Tech" slate-blue accent
+• French and English UI
+• Confirmation toggle in Settings → Send → "Confirm before send" lets you require a confirmation dialog before any SMS, MMS or attachment is dispatched
+
+Privacy
+=======
+
+• No analytics, no crash reporters, no third-party tracking SDK
+• Only network usage: your carrier MMSC (for MMS transport) and Google ML Kit servers (one-time, on first translation, to download the language model)
+• Apache License 2.0 — source code at https://github.com/gitubpatrice/SMS-TECH
+• Security model documented at https://github.com/gitubpatrice/SMS-TECH/blob/main/SECURITY.md
+
+Project home: https://files-tech.com/sms-tech.php

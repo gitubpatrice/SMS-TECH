@@ -45,6 +45,8 @@
     <string name="attach_confirm_title">Send this attachment?</string>
     <string name="attach_confirm_size">%1$s — %2$s</string>
     <string name="attach_confirm_send">Send</string>
+    <string name="voice_confirm_title">Send this voice message?</string>
+    <string name="voice_confirm_body">Recorded clip will be sent as an MMS to the recipient.</string>
     <string name="settings_app_lock">App lock</string>
     <string name="settings_app_lock_desc">Require a code each time the app is opened.</string>
     <string name="lock_mode_off">None</string>

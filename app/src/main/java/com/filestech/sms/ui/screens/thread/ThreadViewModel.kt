@@ -123,6 +123,8 @@ class ThreadViewModel @Inject constructor(
          * triggers the actual MMS dispatch. Cancelling deletes the cached file.
          */
         val pendingAttachment: PendingAttachment? = null,
+        /** Voice MMS staged for confirmation (toggle "Confirmer avant envoi" ON). */
+        val pendingVoiceConfirm: Boolean = false,
     )
 
     /** Staged attachment awaiting user confirmation in the composer. */
@@ -208,20 +210,27 @@ class ThreadViewModel @Inject constructor(
     fun send() {
         val body = _state.value.draft.trim()
         if (body.isEmpty()) return
-        // v1.2.1 UX: SMS / MMS text + voice send is instantaneous — no confirmation dialog.
-        // Matches the Google Messages pattern; only **attachments** (photo / video / file /
-        // contact) go through `pendingAttachment` → `confirmPendingAttachment()`. The legacy
-        // `confirmBeforeBroadcast` setting is intentionally ignored here.
+        viewModelScope.launch {
+            val confirm = settings.flow.first().sending.confirmBeforeBroadcast
+            if (confirm) {
+                _state.update { it.copy(pendingSend = body) }
+            } else {
+                doSend(body)
+            }
+        }
+    }
+
+    /** Called from the UI when the user accepts the "Send this message?" confirmation. */
+    fun confirmPendingSend() {
+        val body = _state.value.pendingSend ?: return
+        _state.update { it.copy(pendingSend = null) }
         viewModelScope.launch { doSend(body) }
     }
 
-    /**
-     * Legacy compatibility no-ops. The "confirm before broadcast" dialog was removed for
-     * SMS / MMS text in v1.2.1 (Google-Messages-style behaviour). The ThreadScreen still has
-     * a reference to these to keep its existing wiring stable; both are inert.
-     */
-    fun confirmPendingSend() = Unit
-    fun cancelPendingSend() = Unit
+    /** Dismisses the pending-send confirmation without sending. */
+    fun cancelPendingSend() {
+        _state.update { it.copy(pendingSend = null) }
+    }
 
     private suspend fun doSend(body: String) {
         val conv = _state.value.conversation ?: return
@@ -338,15 +347,46 @@ class ThreadViewModel @Inject constructor(
             val finalFile = if (mime.startsWith("image/") && file.length() > IMAGE_COMPRESS_THRESHOLD_BYTES) {
                 compressImage(file) ?: file
             } else file
-            _state.update {
-                it.copy(
-                    pendingAttachment = PendingAttachment(
-                        file = finalFile,
-                        mimeType = mime,
-                        displayName = displayName,
-                        sizeBytes = finalFile.length(),
-                    ),
-                )
+
+            // v1.2.1: the `confirmBeforeBroadcast` setting now drives the **attachment** dialog
+            // exclusively (SMS / MMS text always sends directly). When OFF, the user wants the
+            // Google-Messages flow: pick a photo, off it goes. When ON, the staging dialog
+            // with filename + size is shown so they can sanity-check before dispatch.
+            val confirmFirst = settings.flow.first().sending.confirmBeforeBroadcast
+            if (confirmFirst) {
+                _state.update {
+                    it.copy(
+                        pendingAttachment = PendingAttachment(
+                            file = finalFile,
+                            mimeType = mime,
+                            displayName = displayName,
+                            sizeBytes = finalFile.length(),
+                        ),
+                    )
+                }
+            } else {
+                dispatchAttachment(finalFile, mime)
+            }
+        }
+    }
+
+    /** Internal: actually dispatches a (compressed-if-needed) attachment file. */
+    private suspend fun dispatchAttachment(file: java.io.File, mime: String) {
+        val conv = _state.value.conversation ?: return
+        val payload = SendMediaMmsUseCase.AttachmentPayload(file = file, mimeType = mime)
+        when (val res = sendMediaMms.invoke(
+            recipients = conv.addresses,
+            attachments = listOf(payload),
+            textBody = _state.value.draft,
+        )) {
+            is Outcome.Success -> {
+                _state.update { it.copy(draft = "", segments = segCounter.count("")) }
+                repo.setDraft(conversationId, null)
+                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_SENT))
+            }
+            is Outcome.Failure -> {
+                runCatching { file.delete() }
+                _events.tryEmit(Event.SendError(res.error))
             }
         }
     }
@@ -354,26 +394,8 @@ class ThreadViewModel @Inject constructor(
     /** Confirms and dispatches the staged attachment. Cleans up on failure. */
     fun confirmPendingAttachment() {
         val pending = _state.value.pendingAttachment ?: return
-        val conv = _state.value.conversation ?: return
         _state.update { it.copy(pendingAttachment = null) }
-        viewModelScope.launch {
-            val payload = SendMediaMmsUseCase.AttachmentPayload(file = pending.file, mimeType = pending.mimeType)
-            when (val res = sendMediaMms.invoke(
-                recipients = conv.addresses,
-                attachments = listOf(payload),
-                textBody = _state.value.draft,
-            )) {
-                is Outcome.Success -> {
-                    _state.update { it.copy(draft = "", segments = segCounter.count("")) }
-                    repo.setDraft(conversationId, null)
-                    _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_SENT))
-                }
-                is Outcome.Failure -> {
-                    runCatching { pending.file.delete() }
-                    _events.tryEmit(Event.SendError(res.error))
-                }
-            }
-        }
+        viewModelScope.launch { dispatchAttachment(pending.file, pending.mimeType) }
     }
 
     /** Discards the staged attachment without sending. Deletes the cached file. */
@@ -561,30 +583,49 @@ class ThreadViewModel @Inject constructor(
      * to the AttachmentEntity and the composer returns to Idle.
      */
     fun sendVoiceMms() {
+        if (_state.value.conversation == null) return
+        if (_state.value.voice !is VoiceState.Reviewing) return
+        if (_state.value.isSendingVoice) return
+        viewModelScope.launch {
+            val confirm = settings.flow.first().sending.confirmBeforeBroadcast
+            if (confirm) {
+                _state.update { it.copy(pendingVoiceConfirm = true) }
+            } else {
+                doSendVoice()
+            }
+        }
+    }
+
+    /** Confirms and actually dispatches the staged voice recording. */
+    fun confirmPendingVoice() {
+        if (!_state.value.pendingVoiceConfirm) return
+        _state.update { it.copy(pendingVoiceConfirm = false) }
+        viewModelScope.launch { doSendVoice() }
+    }
+
+    /** Dismisses the voice confirm dialog without sending — the recording stays in Reviewing. */
+    fun cancelPendingVoice() {
+        _state.update { it.copy(pendingVoiceConfirm = false) }
+    }
+
+    private suspend fun doSendVoice() {
         val conv = _state.value.conversation ?: return
         val reviewing = _state.value.voice as? VoiceState.Reviewing ?: return
-        if (_state.value.isSendingVoice) return
         _state.update { it.copy(isSendingVoice = true) }
-        viewModelScope.launch {
-            playbackController.stop()
-            when (val res = sendVoiceMms.invoke(
-                recipients = conv.addresses,
-                audioFile = reviewing.file,
-                mimeType = reviewing.mimeType,
-                durationMs = reviewing.durationMs,
-            )) {
-                is Outcome.Success -> {
-                    _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }
-                    // Confirmation snackbar — important on Samsung One UI which often parks the
-                    // app in background while `MmsService` does the MMSC upload. The user sees
-                    // an explicit "sent" cue on return instead of wondering whether the dispatch
-                    // even completed.
-                    _events.tryEmit(Event.ShowSnackbar(SNACK_VOICE_SENT))
-                }
-                is Outcome.Failure -> {
-                    _state.update { it.copy(isSendingVoice = false) }
-                    _events.tryEmit(Event.SendError(res.error))
-                }
+        playbackController.stop()
+        when (val res = sendVoiceMms.invoke(
+            recipients = conv.addresses,
+            audioFile = reviewing.file,
+            mimeType = reviewing.mimeType,
+            durationMs = reviewing.durationMs,
+        )) {
+            is Outcome.Success -> {
+                _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }
+                _events.tryEmit(Event.ShowSnackbar(SNACK_VOICE_SENT))
+            }
+            is Outcome.Failure -> {
+                _state.update { it.copy(isSendingVoice = false) }
+                _events.tryEmit(Event.SendError(res.error))
             }
         }
     }

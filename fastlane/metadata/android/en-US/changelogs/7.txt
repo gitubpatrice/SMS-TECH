@@ -1,0 +1,5 @@
+v1.2.1 — Photo/video/file MMS dispatch wired
+• Attachment confirm dialog (toggle in Settings → Send)
+• Auto JPEG compression for photos (decode → 1600 px max → quality 75/60/45/30 until fit)
+• Generic MMS sender (image / video / file / vcard) on top of the v1.2.0 PDU builder
+• 3-axis security audit passed: P0-1 vault bypass closed, P0-2 PDU plaintext leak closed

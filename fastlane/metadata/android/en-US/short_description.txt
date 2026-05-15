@@ -1,0 +1,1 @@
+Private SMS / MMS app with voice messages, encrypted vault, biometric unlock.

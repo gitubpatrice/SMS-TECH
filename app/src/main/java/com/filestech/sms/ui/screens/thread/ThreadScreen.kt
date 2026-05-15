@@ -453,10 +453,45 @@ fun ThreadScreen(
             onDismiss = { askDelete = false },
         )
     }
-    // v1.2.1: the "confirm before broadcast" dialog for SMS / MMS text has been removed —
-    // Google Messages doesn't show one and our field test confirmed the friction is real.
-    // Only attachments (file / photo / video / contact card) still go through a confirm
-    // step via `state.pendingAttachment` ↓.
+    // v1.2.1: the "Confirm before broadcast" setting (Réglages → Envoi) drives every
+    // outgoing path — SMS text, MMS voice, and MMS attachments. Toggle OFF → instant send
+    // everywhere. Toggle ON → this dialog (for text), the voice confirm below, and the
+    // attachment confirm at the bottom of the file. Three dialogs, one setting, consistent.
+    state.pendingSend?.let { body ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelPendingSend() },
+            title = { Text(stringResource(R.string.settings_confirm_send_title)) },
+            text = { Text(body) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmPendingSend() }) {
+                    Text(stringResource(R.string.action_send))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelPendingSend() }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (state.pendingVoiceConfirm) {
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelPendingVoice() },
+            title = { Text(stringResource(R.string.voice_confirm_title)) },
+            text = { Text(stringResource(R.string.voice_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmPendingVoice() }) {
+                    Text(stringResource(R.string.action_send))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelPendingVoice() }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
