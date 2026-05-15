@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.di.ApplicationScope
@@ -55,6 +56,7 @@ class TelephonySyncManager @Inject constructor(
     private val settings: SettingsRepository,
     private val telephonyReader: TelephonyReader,
     private val mirror: ConversationMirror,
+    private val messageDao: MessageDao,
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
     @ApplicationScope private val appScope: CoroutineScope,
@@ -133,16 +135,23 @@ class TelephonySyncManager @Inject constructor(
             _state.value = State.Running(isFirstRun = isFirstRun, importedSoFar = 0)
             Timber.i("runSync(%s) starting; cursor=%d firstRun=%b", reason, current, isFirstRun)
 
-            // MMS import is one-shot: the SMS-cursor delta (below) doesn't catch `content://mms`
-            // rows, and re-reading the entire MMS table on every sync would be wasteful. We
-            // trigger it on the very first run (cursor == 0L, fresh install or panic-wipe) only.
-            // The receiver path (`MmsDownloadedReceiver` + `MmsSentReceiver`) covers live arrivals.
-            if (isFirstRun) {
+            // MMS import : the SMS-cursor delta (below) doesn't catch `content://mms` rows
+            // and re-reading the entire MMS table on every sync would be wasteful. We trigger
+            // it when EITHER the cursor is still zero (first install) OR Room currently has
+            // zero MMS rows (reinstall under a different package id — typical when switching
+            // from the debug-suffixed package to the release package, the SMS cursor in the
+            // release DataStore was populated by a previous install while Room is fresh).
+            // Idempotent: telephony_uri UNIQUE + OnConflictStrategy.IGNORE.
+            val roomMmsCount = runCatching { messageDao.countMms() }.getOrDefault(0)
+            val needsMmsImport = isFirstRun || roomMmsCount == 0
+            if (needsMmsImport) {
                 runCatching {
                     val mmsRows = telephonyReader.readAllMms()
                     if (mmsRows.isNotEmpty()) {
                         mirror.bulkImportMmsFromTelephony(mmsRows)
-                        Timber.i("runSync(%s) imported %d historical MMS rows", reason, mmsRows.size)
+                        Timber.i("runSync(%s) imported %d MMS rows (firstRun=%b roomMms=%d)", reason, mmsRows.size, isFirstRun, roomMmsCount)
+                    } else {
+                        Timber.i("runSync(%s) MMS import: 0 rows in system provider", reason)
                     }
                 }.onFailure { Timber.w(it, "MMS import failed") }
             }

@@ -77,7 +77,7 @@ fun AudioMessageBubble(
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
-    val bgColor = if (isOut) cs.primary else cs.surfaceContainerHigh
+    val bgColor = if (isOut) cs.primary else com.filestech.sms.ui.theme.bubbleIncomingColor(cs)
     val controlColor = if (isOut) cs.onPrimary else cs.primary
     val sliderActive = if (isOut) cs.onPrimary else cs.primary
     val sliderInactive = (if (isOut) cs.onPrimary else cs.onSurfaceVariant).copy(alpha = 0.3f)

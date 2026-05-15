@@ -75,6 +75,16 @@ interface MessageDao {
     @Query("SELECT * FROM messages ORDER BY conversation_id ASC, date ASC")
     suspend fun listAll(): List<MessageEntity>
 
+    /**
+     * Count of MMS rows in the mirror. Used by [com.filestech.sms.data.sync.TelephonySyncManager]
+     * to decide whether the historical MMS import from `content://mms` is needed — first-run
+     * (`lastSyncedSmsId == 0`) used to be the only trigger, but reinstalling over a different
+     * package (release vs. debug) leaves the SMS cursor populated while Room is freshly empty.
+     * Querying both numbers lets the manager catch every case.
+     */
+    @Query("SELECT COUNT(*) FROM messages WHERE type = 1")
+    suspend fun countMms(): Int
+
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun delete(id: Long)
 

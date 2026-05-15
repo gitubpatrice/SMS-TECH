@@ -37,7 +37,8 @@ fun SmsTechTheme(
     val baseScheme: ColorScheme = when {
         isDarkTech -> darkTechScheme()
         dynamicAvailable && useDark -> dynamicDarkColorScheme(ctx).maybeAmoled(appearance.amoledTrueBlack)
-        dynamicAvailable && !useDark -> dynamicLightColorScheme(ctx)
+            .withBrandSnackbar()
+        dynamicAvailable && !useDark -> dynamicLightColorScheme(ctx).withBrandSnackbar()
         useDark -> darkScheme(appearance.amoledTrueBlack)
         else -> lightScheme()
     }
@@ -69,3 +70,13 @@ fun SmsTechTheme(
 
 private fun ColorScheme.maybeAmoled(amoled: Boolean): ColorScheme =
     if (amoled) copy(background = Color.Black, surface = Color.Black) else this
+
+/**
+ * Forces our brand slate-blue `Snackbar` palette onto a Material You / dynamic-color scheme.
+ * Without this, `dynamicDarkColorScheme` / `dynamicLightColorScheme` derive `inverseSurface`
+ * from the wallpaper, which on Samsung One UI commonly resolves to near-black — turning what
+ * should be a brand-coloured slate-blue toast into a "black Material 3 default" indistinguishable
+ * from the OS shell. Reported as v1.2.2 UX regression.
+ */
+private fun ColorScheme.withBrandSnackbar(): ColorScheme =
+    copy(inverseSurface = SnackbarBg, inverseOnSurface = SnackbarOn)

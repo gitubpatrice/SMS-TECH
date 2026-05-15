@@ -1,0 +1,7 @@
+v1.2.2 — MMS hardening + Snackbar + bubbles
+• Sent MMS now survive an uninstall / reinstall cycle
+• Incoming bubbles use the intended slate-blue palette (light + dark); Snackbar honours the brand sky-blue on Material You devices
+• Translation: visible feedback during model download + explicit failure indicator
+• ANR fix: MMS dispatch pipeline moved to a background dispatcher
+• 15 min system-side watchdog: cleans up ghost OUTBOX rows after crash / force-stop
+• Recipients canonicalised before thread resolution: no more "+33 …" vs "06…" duplicate conversations

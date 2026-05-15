@@ -484,7 +484,12 @@ class ConversationMirror @Inject constructor(
                 threadId = systemThreadId,
                 addressesCsv = csv,
                 displayName = resolved,
-                lastMessageAt = System.currentTimeMillis(),
+                // Sentinel 0L — the **next** [touchConversation] call (which always follows an
+                // ensure*) sets `lastMessageAt = maxOf(date, 0)` = the real message date. The
+                // previous `System.currentTimeMillis()` default was a bug: importing 6-month-old
+                // MMS would silently set lastMessageAt = now via the `maxOf(now, oldDate) = now`
+                // clamp, scrambling the conversation list order during bulk import.
+                lastMessageAt = 0L,
                 lastMessagePreview = null,
                 unreadCount = 0,
             ),
@@ -508,7 +513,8 @@ class ConversationMirror @Inject constructor(
                 threadId = 0L,
                 addressesCsv = csv,
                 displayName = resolved,
-                lastMessageAt = System.currentTimeMillis(),
+                // Same sentinel as `ensureConversationByThread` — see comment there.
+                lastMessageAt = 0L,
                 lastMessagePreview = null,
                 unreadCount = 0,
             ),

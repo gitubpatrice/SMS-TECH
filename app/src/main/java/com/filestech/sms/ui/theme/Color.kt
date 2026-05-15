@@ -34,8 +34,8 @@ internal val BubbleIncomingDark = Color(0xFF37414F)
  * share the same pair: a confirmation toast always reads against this stable identity, no
  * matter the user's theme.
  */
-internal val SnackbarBg = Color(0xFF3D4A5C) // medium slate-blue, brand-adjacent
-internal val SnackbarOn = Color(0xFFE6ECF3) // near-white with a hint of blue, WCAG AA ≥ 8:1
+internal val SnackbarBg = Color(0xFF3D85D6) // brighter sky-blue per user request — pairs with dark text
+internal val SnackbarOn = Color(0xFF0A1F3F) // deep navy, ~6.6:1 contrast on the new bg (WCAG AA pass)
 
 private val LightPalette = lightColorScheme(
     primary = BrandBlue,

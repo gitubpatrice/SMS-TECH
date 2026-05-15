@@ -344,7 +344,12 @@ fun ThreadScreen(
                     )
                 } else {
                     val translation = state.translations[msg.id]
-                    val translatedBody = (translation as? ThreadViewModel.TranslationState.Ready)?.translated
+                    val translationDisplay = when (translation) {
+                        is ThreadViewModel.TranslationState.Pending -> com.filestech.sms.ui.components.TranslationDisplayState.Pending
+                        is ThreadViewModel.TranslationState.Ready -> com.filestech.sms.ui.components.TranslationDisplayState.Ready(translation.translated)
+                        is ThreadViewModel.TranslationState.Failed -> com.filestech.sms.ui.components.TranslationDisplayState.Failed
+                        null -> null
+                    }
                     MessageBubble(
                         message = msg,
                         showTimestamp = showTimestamp,
@@ -356,8 +361,10 @@ fun ThreadScreen(
                             { viewModel.translateMessage(msg.id) }
                         } else null,
                         repliedToPreview = previewFor(msg),
-                        translatedBody = translatedBody,
-                        onDismissTranslation = if (translatedBody != null) {
+                        translationState = translationDisplay,
+                        // Dismiss is exposed for every non-null state so user can collapse a
+                        // stuck Pending or a Failed state, not just a Ready translation.
+                        onDismissTranslation = if (translation != null) {
                             { viewModel.dismissTranslation(msg.id) }
                         } else null,
                     )

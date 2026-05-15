@@ -16,6 +16,7 @@ import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.MessageDao
+import com.filestech.sms.data.mms.MmsSystemWriteback
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.data.voice.VoiceRecorder
@@ -51,6 +52,7 @@ class TelephonySyncWorker @AssistedInject constructor(
     private val messageDao: MessageDao,
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
+    private val mmsSystemWriteback: MmsSystemWriteback,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -74,6 +76,16 @@ class TelephonySyncWorker @AssistedInject constructor(
                 val promoted = messageDao.timeoutStalePending(cutoff)
                 if (promoted > 0) Timber.i("Watchdog: %d stale PENDING -> FAILED", promoted)
             }.onFailure { Timber.w(it, "PENDING watchdog failed") }
+            // v1.2.2 audit F1: companion watchdog for the system-provider OUTBOX. The local
+            // PENDING watchdog above flips our Room mirror, but a row inserted by
+            // MmsSystemWriteback whose MmsSentReceiver never fired (process killed, force-stop,
+            // Doze + reboot) would remain `msg_box = 4` in `content://mms` forever — polluting
+            // the conversation in other SMS apps AND coming back as a phantom MMS at the next
+            // reimport. Same 15 min threshold for symmetry.
+            runCatching {
+                val deleted = mmsSystemWriteback.purgeStaleOutbox(PENDING_TIMEOUT_MS)
+                if (deleted > 0) Timber.i("Watchdog: %d stale system OUTBOX rows purged", deleted)
+            }.onFailure { Timber.w(it, "OUTBOX system watchdog failed") }
             Result.success()
         } catch (t: Throwable) {
             Timber.w(t, "TelephonySyncWorker failed")

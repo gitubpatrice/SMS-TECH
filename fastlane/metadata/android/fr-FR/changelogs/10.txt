@@ -1,0 +1,7 @@
+v1.2.2 — Hardening MMS + Snackbar + bulles
+• MMS envoyés survivent maintenant à une désinstallation/réinstallation
+• Bulles « gris bleu » à la réception (clair + sombre), Snackbar bleu ciel cohérente sur Material You
+• Traduction : feedback visible pendant le téléchargement du modèle + état d'erreur
+• Fix ANR potentiel : pipeline d'envoi MMS basculé en arrière-plan
+• Watchdog 15 min côté système : nettoie les envois fantômes après crash
+• Numéros résolus en forme canonique : plus de doublons de conversation entre +33 / 06…

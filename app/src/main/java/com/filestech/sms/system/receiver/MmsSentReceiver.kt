@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.mms.MmsSender
+import com.filestech.sms.data.mms.MmsSystemWriteback
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.di.ApplicationScope
 import dagger.hilt.android.AndroidEntryPoint
@@ -18,20 +19,25 @@ import javax.inject.Inject
 /**
  * Receives the dispatch result of an outgoing MMS sent via [SmsManager.sendMultimediaMessage].
  *
- * Two responsibilities:
+ * Three responsibilities:
  *  1. Update the matching Room row to SENT or FAILED based on the resultCode.
- *  2. Delete the transient PDU file we wrote in the cache (the OS no longer needs it).
+ *  2. Flip the system-provider outbox row to SENT (or delete it on failure) so the MMS shows
+ *     up correctly in other SMS apps AND survives an SMS Tech reinstall — Samsung One UI's
+ *     `SmsManager.sendMultimediaMessage` does NOT writeback to `content://mms` on its own.
+ *  3. Delete the transient PDU file we wrote in the cache (the OS no longer needs it).
  */
 @AndroidEntryPoint
 class MmsSentReceiver : BroadcastReceiver() {
 
     @Inject lateinit var mirror: ConversationMirror
+    @Inject lateinit var systemWriteback: MmsSystemWriteback
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != MmsSender.ACTION_MMS_SENT) return
         val localId = intent.getLongExtra(MmsSender.EXTRA_LOCAL_ID, -1L)
         val pduPath = intent.getStringExtra(MmsSender.EXTRA_PDU_FILE)
+        val mmsSystemId = intent.getLongExtra(MmsSender.EXTRA_MMS_SYSTEM_ID, -1L)
         val rc = resultCode
         val pending = goAsync()
         scope.launch {
@@ -39,9 +45,17 @@ class MmsSentReceiver : BroadcastReceiver() {
                 if (localId >= 0) {
                     if (rc == Activity.RESULT_OK) {
                         mirror.updateOutgoingStatus(localId, MessageStatus.SENT)
+                        if (mmsSystemId > 0L) {
+                            runCatching { systemWriteback.markSent(mmsSystemId) }
+                                .onFailure { Timber.w(it, "markSent(%d) failed", mmsSystemId) }
+                        }
                     } else {
                         Timber.w("MMS sent failed for id=%d resultCode=%d", localId, rc)
                         mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc)
+                        if (mmsSystemId > 0L) {
+                            runCatching { systemWriteback.delete(mmsSystemId) }
+                                .onFailure { Timber.w(it, "delete(%d) failed", mmsSystemId) }
+                        }
                     }
                 }
                 // The OS keeps a copy of the PDU through its own pipeline; ours is no longer needed.

@@ -47,7 +47,7 @@ fun MessageBubble(
     onReply: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
     repliedToPreview: ReplyQuotePreview? = null,
-    translatedBody: String? = null,
+    translationState: TranslationDisplayState? = null,
     onDismissTranslation: (() -> Unit)? = null,
 ) {
     val isOut = message.isOutgoing
@@ -99,7 +99,7 @@ fun MessageBubble(
                     .clip(shape)
                     .then(
                         if (isOut) Modifier.drawBehind { drawRect(outgoingBrush) }
-                        else Modifier.background(cs.surfaceContainerHigh),
+                        else Modifier.background(com.filestech.sms.ui.theme.bubbleIncomingColor(cs)),
                     )
                     // Tap → retry (handled by parent on FAILED rows). Delete is now driven by
                     // the bubble's overflow menu (see [BubbleMenuTrigger]) so the bubble area
@@ -113,9 +113,9 @@ fun MessageBubble(
                     color = textColor,
                 )
             }
-            if (translatedBody != null) {
+            if (translationState != null) {
                 TranslationBlock(
-                    translated = translatedBody,
+                    state = translationState,
                     isOutgoingHost = isOut,
                     onDismiss = onDismissTranslation,
                     modifier = Modifier.padding(top = 2.dp),

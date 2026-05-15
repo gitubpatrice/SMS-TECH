@@ -3,6 +3,63 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.2] — 2026-05-15
+
+Hardening pass driven by a 5-axis targeted audit (security, code quality, perf, duplications,
+UI/UX). Closes one critical ANR risk, one MMS-persistence-after-reinstall gap, two visible UI
+regressions, and adds an OS-side watchdog. No format-breaking changes.
+
+### Fixed
+- **ANR / StrictMode**: `MmsSender.sendVoiceMms` / `sendMediaMms` and `MmsSystemWriteback`
+  (`insertOutbox`, `markSent`, `delete`, `purgeStaleOutbox`) are now `suspend` and execute on
+  `Dispatchers.IO`. The dispatch pipeline was previously running on the Main thread, doing
+  multiple ContentResolver IPCs + 8 KB-buffer file streaming — visible jank on photo MMS, ANR
+  risk under StrictMode.
+- **MMS sent to the right thread after reinstall**: recipients passed to
+  `Telephony.Threads.getOrCreateThreadId` are now canonicalised (whitespace/dashes/parens
+  stripped) so `"+33 6 12 34 56 78"` and `"+33612345678"` resolve to the same canonical-address
+  row. Without this, Samsung One UI's `canonical_addresses` table indexed the two forms as
+  distinct entries — the MMS came back as a duplicate "conversation" after the next reimport.
+- **Sent MMS no longer disappear after reinstall**: previously, on a successful dispatch,
+  Samsung One UI's `SmsManager.sendMultimediaMessage` did **not** mirror the row into
+  `content://mms`. v1.2.2 writes the outbox row up front, then `MmsSentReceiver` flips it to
+  SENT (or deletes it on dispatch failure). Survives a reinstall on top of the existing thread.
+- **Snackbar background**: `Snackbar` was rendering on system inverse-surface (near-black on
+  Material You) instead of the brand slate-blue, because `dynamicDarkColorScheme` /
+  `dynamicLightColorScheme` derive `inverseSurface` from the wallpaper. v1.2.2 forces a brand
+  override on every dynamic-colour path. New tone is a brighter sky-blue (#3D85D6) with a
+  deep-navy text colour for WCAG AA (~6.6:1 contrast).
+- **Translation state never rendered**: `TranslationBlock` now renders all three
+  `TranslationState` branches — Pending (spinner + label), Ready (translated body), Failed
+  (subtle error indicator). Previously only `Ready` was wired, so users staring at a 30 s
+  model download saw nothing at all and a model-language failure passed silently.
+- **Incoming chat bubble colour**: the `BubbleIncomingLight` / `BubbleIncomingDark` slate-blue
+  palette was declared but never wired. v1.2.2 routes `MessageBubble` and `AudioMessageBubble`
+  through `bubbleIncomingColor(scheme)` so incoming bubbles read as the intended "gris bleu"
+  in both light + dark themes.
+- **Robustness of address inserts**: each `addr` row insert inside `MmsSystemWriteback` now
+  has its own `safe()` wrapper. Previously, a single failure on the placeholder FROM row would
+  silently skip the entire TO-recipient loop — leaving the MMS without any visible recipient
+  label in other SMS apps.
+
+### Added
+- **System OUTBOX watchdog**: `TelephonySyncWorker` now purges `content://mms` rows stuck in
+  `msg_box = OUTBOX (4)` past 15 min. Runs alongside the existing local PENDING watchdog and
+  catches the case where `MmsSentReceiver` never fires (process force-killed, Doze + reboot,
+  OS dropped the broadcast). Without this, orphan OUTBOX rows polluted the conversation in
+  other SMS apps indefinitely.
+- **`MmsSystemWriteback.purgeStaleOutbox(olderThanMs)`** — public API consumed by the watchdog.
+- **`safe(label) { … }` helper** in `MmsSystemWriteback` — centralises ContentResolver error
+  logging and gives every site a consistent label (`addr.from`, `part.bin#0`, etc.).
+- **Refactor**: `MmsSender.buildSentIntent(...)` extracts the (formerly duplicated) result
+  PendingIntent construction shared by voice + media dispatch.
+
+### Notes
+- No DB schema change, no `.enc`/`.pdu` format change, no Room migration.
+- Audit summary: Security 88 → 96, Code Quality (Kotlin idiom) 88 → 94, Performance: ANR
+  critical resolved, UI 84 → 92 (some polish items deferred to v1.2.3).
+- APK arm64 stays ~46 MB, signed with the v1.2.1 release keystore (SHA-256 unchanged).
+
 ## [1.2.1] — 2026-05-15
 
 Bug-fix + feature-complete release rounding out v1.2.0. Wires the **non-voice MMS dispatch
