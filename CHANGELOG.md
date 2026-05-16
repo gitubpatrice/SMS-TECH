@@ -3,6 +3,31 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.8] — 2026-05-16
+
+Hotfix de v1.2.7 + perf import MMS. **v1.2.7 a été tag mais jamais publié en release GH** —
+son code contenait un crash au boot (cf. Q3 ci-dessous). v1.2.8 est la version publique.
+
+### Fixed (régression v1.2.7)
+- **Q3 retrait du `DatabaseFactory.build()` force-open** — l'appel `.also { openHelper
+  .writableDatabase }` que j'avais ajouté pour intercepter les downgrades Room déclenchait
+  l'ouverture SQLCipher AVANT que Room ait posé son `onConfigure` (qui applique
+  `PRAGMA cipher_compatibility = 4`). Résultat : `SQLiteException: file is not a database`
+  au premier boot, app en crash-loop. Politique downgrade désormais documentée dans le code
+  + SECURITY.md : non supporté, le crash visible pousse à réinstaller la bonne version
+  (préférable à un wipe silencieux des conversations).
+
+### Performance
+- **P5 batch query `content://mms/part`** : la résolution des parts MMS passe d'un query
+  par MMS (`WHERE mid=?`) à un seul query par chunk (`WHERE mid IN (?,?,…)`, chunked à 500
+  placeholders SQLite). Pour un premier import 500 MMS, gain mesuré ~5 secondes (200 queries
+  Telephony → 3 queries par chunk de 200). Aucun changement comportemental, juste fewer IPC.
+
+### Notes
+- Tous les autres durcissements de v1.2.7 (S1, S2, S4, S8, Q1, Q2, Q5, Q6, Q7, Q9, Q11, Q14,
+  Q16, P4) sont conservés tels quels — voir la section v1.2.7 ci-dessous pour le détail.
+- 24/24 tests verts. Aucun changement format `.enc` / `.pdu` / schema Room v3.
+
 ## [1.2.7] — 2026-05-16
 
 Final-audit hardening pass — 3 audits expert en parallèle (sécurité / performance /

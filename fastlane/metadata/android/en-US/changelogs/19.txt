@@ -1,0 +1,4 @@
+v1.2.8 — Boot crash hotfix + faster MMS import
+• Fixes a boot crash introduced in v1.2.7 (SQLCipher open ordering bug)
+• Faster MMS import : batched parts query (~5 s saved on 500 MMS)
+• Keeps all v1.2.7 hardening (idempotent retry, late-broadcast guard, MSISDN validation, etc.)

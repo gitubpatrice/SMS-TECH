@@ -1,0 +1,4 @@
+v1.2.8 — Hotfix crash + perf import MMS
+• Correction du crash au boot (v1.2.7 introduisait un bug d'ouverture SQLCipher)
+• Import MMS plus rapide : query parts en batch (gain ~5 s sur 500 MMS)
+• Conserve tous les durcissements v1.2.7 (retry idempotent, anti-broadcast tardif, validation MSISDN, etc.)
