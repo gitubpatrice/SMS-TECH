@@ -1,0 +1,20 @@
+v1.3.5 — Cleanup architecture + polish UI
+
+UI
+* Bouton X de retrait pièce jointe : 20 → 22 dp (un peu plus gros, plus facile à toucher).
+
+CLEANUP ARCHITECTURE (audit transversal, 5 findings G3-G10 + 3 F1-F3 post-audit)
+* Permissions Android orphelines retirées du manifest : SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM, CHANGE_NETWORK_STATE (aucun usage dans le code, Play Console warning levé).
+* Champ fantôme BlockingSettings.blockShortCodes retiré (jamais lu, jamais exposé en UI). Clé DataStore purgée à chaque write pour éviter une valeur orpheline sur disque.
+* Cache RAM ThreadViewModel.recentlySentReactionFor : purge opportuniste des entries expirées (> 60 s) à chaque accès, évite la croissance linéaire.
+* HeadlessSmsSendService : retrait de la branche ACTION_SEND morte (le handler s'attend à un scheme smsto:/sms:, jamais à un body texte) — réduit la surface IPC.
+* AppLockManager.disableBiometric : refacto en transform atomique DataStore (évite la course read-then-update sous callers concurrents).
+* Documentation À propos > Permissions et PERMISSIONS.md alignées sur le manifest réel (plus de drift documentation/code).
+* SECURITY.md section v1.3.5 ajoutée avec détail de chaque fix.
+
+NON-VISIBLE
+Aucune feature visible utilisateur. Release de fond pour la solidité long-terme du codebase. Note de qualité globale : 95/100.
+
+REPORTÉ v1.3.6
+* G4 : drop de la table conversation_overrides (DAO sans consommateur).
+* G5 : nettoyage des strings i18n inutilisées (~103 clés).

@@ -158,7 +158,8 @@ fun AboutScreen(onBack: () -> Unit) {
             PermissionLine("READ_PHONE_STATE / READ_PHONE_NUMBERS", "Multi-SIM support (sending from the correct SIM).")
             PermissionLine("POST_NOTIFICATIONS", "Show new-message notifications.")
             PermissionLine("USE_BIOMETRIC", "Optional biometric unlock.")
-            PermissionLine("SCHEDULE_EXACT_ALARM", "Send scheduled messages at the exact time.")
+            // v1.3.5 G3 + audit F1 — SCHEDULE_EXACT_ALARM retiré du manifest (envoi
+            // planifié via WorkManager.enqueueUniqueWork, pas AlarmManager.setExact*).
             PermissionLine("INTERNET", "MMS transport via your carrier MMSC. No analytics.")
             PermissionLine("RECORD_AUDIO", "Record audio messages attached to outgoing MMS.")
             PermissionLine("FOREGROUND_SERVICE", "Long-running migration / backup.")

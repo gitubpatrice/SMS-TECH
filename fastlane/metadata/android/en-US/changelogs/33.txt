@@ -1,0 +1,20 @@
+v1.3.5 — Architecture cleanup + UI polish
+
+UI
+* Attachment remove X button: 20 → 22 dp (slightly bigger, easier tap).
+
+ARCHITECTURE CLEANUP (transversal audit, 5 G3-G10 findings + 3 F1-F3 post-audit)
+* Orphan Android permissions dropped from manifest: SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM, CHANGE_NETWORK_STATE (no code usage, Play Console warning gone).
+* Phantom field BlockingSettings.blockShortCodes removed (never read, never exposed in UI). DataStore key actively purged on each write to prevent orphan persisted value.
+* ThreadViewModel.recentlySentReactionFor RAM cache: opportunistic eviction of expired entries (> 60 s) on each access, prevents linear growth.
+* HeadlessSmsSendService: dropped dead ACTION_SEND branch (handler expects smsto:/sms: scheme, never raw text body) — reduces IPC surface.
+* AppLockManager.disableBiometric: refactored to atomic DataStore transform (avoids read-then-update race under concurrent callers).
+* About > Permissions screen and PERMISSIONS.md aligned with the real manifest (no more doc/code drift).
+* SECURITY.md v1.3.5 section added detailing each fix.
+
+INVISIBLE
+No user-visible feature. Deep release for long-term codebase soundness. Global quality score: 95/100.
+
+DEFERRED to v1.3.6
+* G4: drop conversation_overrides table (DAO with no consumer).
+* G5: i18n strings cleanup (~103 unused keys).

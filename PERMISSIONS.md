@@ -15,9 +15,7 @@ permissions "just in case", and degrades gracefully if any of them is refused.
 | `READ_PHONE_STATE` / `READ_PHONE_NUMBERS`    | Detect dual-SIM and let you choose which SIM to send from.                      |
 | `POST_NOTIFICATIONS` (API 33+)               | Show new-message notifications (no notifications without your consent).         |
 | `USE_BIOMETRIC`                              | Optional biometric unlock.                                                      |
-| `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`   | Send scheduled messages at the exact time (fallback to inexact if denied).      |
 | `INTERNET` + `ACCESS_NETWORK_STATE`          | MMS transport via your carrier MMSC, on demand. No analytics, no update check.  |
-| `CHANGE_NETWORK_STATE`                       | Force the MMS network when sending an MMS, as required by some carriers.        |
 | `FOREGROUND_SERVICE` (+ `DATA_SYNC` type)    | Long-running migration and backup jobs.                                         |
 | `RECEIVE_BOOT_COMPLETED`                     | Reschedule pending scheduled messages after a reboot.                           |
 | `USE_FULL_SCREEN_INTENT`                     | Reserved for future incoming-call-style critical notifications. Off by default. |

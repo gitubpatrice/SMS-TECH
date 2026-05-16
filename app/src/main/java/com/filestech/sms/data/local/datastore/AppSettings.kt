@@ -126,7 +126,11 @@ enum class AutoLockDelay { IMMEDIATE, FIFTEEN_SECONDS, ONE_MINUTE, FIVE_MINUTES,
 
 data class BlockingSettings(
     val blockUnknown: Boolean = false,
-    val blockShortCodes: Boolean = false,
+    // v1.3.5 G6 audit fix — `blockShortCodes` retiré (champ fantôme : aucun caller
+    // ne le lisait pour filtrer les short codes côté SmsDeliverReceiver, et l'UI
+    // ne l'exposait pas. Si la feature est re-demandée plus tard, ré-implémenter
+    // proprement via une colonne `BlockedNumberEntity.scope` plutôt qu'un boolean
+    // global. La clé DataStore reste lue pour migration (sera supprimée v1.3.6+).
 )
 
 data class BackupSettings(

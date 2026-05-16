@@ -34,14 +34,19 @@
     <!-- Voice MMS (audio recording attached to outgoing MMS) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Scheduled send (precise) -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- v1.3.5 G3 audit fix — SCHEDULE_EXACT_ALARM + USE_EXACT_ALARM retirées :
+         l'envoi planifié passe exclusivement par WorkManager.enqueueUniqueWork (cf.
+         ScheduledMessageScheduler) qui n'a PAS besoin de ces permissions. Elles
+         étaient des permissions orphelines générant un Play Console warning + une
+         révocation potentielle Android 14+. Aucun usage de AlarmManager.setExact*
+         vérifié par grep avant retrait. -->
 
     <!-- MMS HTTP only -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <!-- v1.3.5 G3 audit fix — CHANGE_NETWORK_STATE retirée : aucun appel
+         ConnectivityManager.setMobileDataEnabled / requestNetwork* dans l'app.
+         INTERNET + ACCESS_NETWORK_STATE suffisent pour le transport MMS. -->
 
     <!-- Foreground service for long migration/backup tasks -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

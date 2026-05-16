@@ -133,11 +133,22 @@ class AppLockManager @Inject constructor(
         true
     }
 
-    /** Drops back from BIOMETRIC to PIN (keeps the PIN). No-op outside BIOMETRIC. */
+    /**
+     * Drops back from BIOMETRIC to PIN (keeps the PIN). No-op outside BIOMETRIC.
+     *
+     * v1.3.5 G9 audit fix — read-then-update remplacé par un transform atomique
+     * direct sur `settings.update`. Avant : `settings.flow.first()` puis `update`
+     * laissait une fenêtre où 2 callers concurrents pouvaient lire la même valeur
+     * initiale. Bénin (transform idempotent) mais anti-idiomatique pour DataStore
+     * qui garantit l'atomicité read-modify-write avec `update`.
+     */
     suspend fun disableBiometric() = withContext(io) {
-        val s = settings.flow.first()
-        if (s.security.lockMode == LockMode.BIOMETRIC) {
-            settings.update { it.copy(security = it.security.copy(lockMode = LockMode.PIN)) }
+        settings.update { current ->
+            if (current.security.lockMode == LockMode.BIOMETRIC) {
+                current.copy(security = current.security.copy(lockMode = LockMode.PIN))
+            } else {
+                current // no-op transform : DataStore détecte et ne re-écrit pas
+            }
         }
     }
 

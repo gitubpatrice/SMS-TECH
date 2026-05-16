@@ -444,6 +444,11 @@ class ThreadViewModel @Inject constructor(
      */
     private suspend fun dispatchReactionSms(messageId: Long, emoji: String): DispatchOutcome {
         val now = System.currentTimeMillis()
+        // v1.3.5 G7 audit fix — purge opportuniste des entries expirées AVANT lecture
+        // (la map croîtrait sinon linéairement avec le nb de messages réagis pendant
+        // la vie du ViewModel). Coût O(N) acceptable car N est borné par la fenêtre
+        // de dedup et l'activité utilisateur (typiquement < 50 entries).
+        recentlySentReactionFor.entries.removeAll { now - it.value > REACTION_DEDUP_WINDOW_MS }
         val last = recentlySentReactionFor[messageId]
         if (last != null && now - last < REACTION_DEDUP_WINDOW_MS) {
             timber.log.Timber.d("dispatchReactionSms: dedup re-send on %d within %ds", messageId, REACTION_DEDUP_WINDOW_MS / 1000)

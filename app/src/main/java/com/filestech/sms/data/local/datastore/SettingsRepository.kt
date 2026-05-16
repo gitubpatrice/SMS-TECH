@@ -85,7 +85,6 @@ class SettingsRepository @Inject constructor(
             ),
             blocking = BlockingSettings(
                 blockUnknown = p[K.blockUnknown] ?: false,
-                blockShortCodes = p[K.blockShort] ?: false,
             ),
             backup = BackupSettings(
                 autoBackup = enumOr(p, K.autoBackup, AutoBackupFrequency.OFF, AutoBackupFrequency::valueOf),
@@ -148,7 +147,11 @@ class SettingsRepository @Inject constructor(
         s.security.lastAutoPurgeAt?.let { this[K.lastAutoPurgeAt] = it } ?: remove(K.lastAutoPurgeAt)
 
         this[K.blockUnknown] = s.blocking.blockUnknown
-        this[K.blockShort] = s.blocking.blockShortCodes
+        // v1.3.5 G6 + audit F3 — `blockShortCodes` retiré (champ fantôme, voir
+        // [BlockingSettings]). On purge ACTIVEMENT la clé orpheline pour ne pas
+        // laisser la valeur user persister à jamais sur disque sans consommateur.
+        // Le `remove` est idempotent ; appelé à chaque write c'est négligeable.
+        remove(K.blockShort)
 
         this[K.autoBackup] = s.backup.autoBackup.name
         s.backup.destinationUri?.let { this[K.backupUri] = it } ?: remove(K.backupUri)

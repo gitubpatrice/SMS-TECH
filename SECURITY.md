@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.4** (2026-05-16)
+Current release : **v1.3.5** (2026-05-16)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -326,6 +326,45 @@ Audit M (post-fix) — 4 findings, all fixed before tag :
   risks Int collision crash on edge cases, and `onRemove(index: Int)` was
   vulnerable to index shift on add/remove race. Switched to stable
   `String` id (= absolute path) + remove by id.
+
+### v1.3.5 (this release) — Architecture cleanup + UI polish
+
+Polish release closing 5 findings from the v1.3.3 global audit (G3, G6,
+G7, G8, G9) plus a user UI tweak. No new feature. Aims to keep the
+codebase tidy heading into v1.4.x.
+
+User-facing :
+- X attachment-remove button : 20 → 22 dp (slightly bigger, easier tap).
+
+Cleanup :
+- **G3 (MEDIUM)** : dropped 3 orphan permissions from manifest
+  (`SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `CHANGE_NETWORK_STATE`) —
+  unused by the code, generated Play Console warnings + could be revoked
+  on Android 14+. Scheduled message dispatch goes via `WorkManager
+  .enqueueUniqueWork`, no need for exact alarms ; MMS transport uses
+  `INTERNET + ACCESS_NETWORK_STATE`, no `CHANGE_NETWORK_STATE` calls.
+- **G6 (MEDIUM)** : removed phantom field `BlockingSettings
+  .blockShortCodes` — never read anywhere, never exposed in UI. If
+  short-code filtering is ever re-requested, re-implement via a
+  `BlockedNumberEntity.scope` column rather than a global boolean.
+- **G7 (MEDIUM)** : `ThreadViewModel.recentlySentReactionFor` now purges
+  expired entries (> 60 s window) at each access. Was a slow growth
+  during ViewModel lifetime (negligible but unnecessary).
+- **G8 (MEDIUM)** : `HeadlessSmsSendService` dropped `Intent.ACTION_SEND`
+  from its action whitelist — the body extractor relied on
+  `intent.data.schemeSpecificPart` which is empty for true `ACTION_SEND`
+  intents (`EXTRA_TEXT`-based). Dead branch + needlessly opened IPC
+  surface.
+- **G9 (MEDIUM)** : `AppLockManager.disableBiometric` switched from
+  read-then-update to atomic `settings.update { transform }`. DataStore
+  guarantees atomicity ; the previous pattern was anti-idiomatic and
+  bordered on race-conditional under concurrent callers.
+
+Deferred to v1.3.6+ (need more careful work) :
+- G4 : `ConversationOverrideDao` + entity + table : entirely dead. To be
+  dropped via a `MIGRATION_5_6 { DROP TABLE conversation_overrides }`.
+- G5 : ~103 i18n strings unused. To be cleaned via the new
+  `android-i18n-strings-cleaner` agent.
 
 ### v1.2.0 — 3-axis audit
 

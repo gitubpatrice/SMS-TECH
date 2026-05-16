@@ -160,7 +160,7 @@ private fun AttachmentChip(
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .size(20.dp)
+                .size(22.dp)
                 .clip(CircleShape)
                 .background(cs.error)
                 .clickable(onClick = onRemove),
@@ -170,7 +170,7 @@ private fun AttachmentChip(
                 imageVector = Icons.Outlined.Close,
                 contentDescription = stringResource(R.string.attachment_remove_label),
                 tint = cs.onError,
-                modifier = Modifier.size(12.dp),
+                modifier = Modifier.size(14.dp),
             )
         }
     }

@@ -40,10 +40,15 @@ class HeadlessSmsSendService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        // v1.3.5 G8 audit fix — ACTION_SEND retiré : le handler `handleSendTo` extrait
+        // les numéros via `intent.data.schemeSpecificPart` qui n'est rempli QUE pour
+        // les schemes `smsto:/sms:/mmsto:/mms:` (donc ACTION_SENDTO + ACTION_VIEW).
+        // Sur un véritable ACTION_SEND (avec EXTRA_TEXT au lieu de scheme), la liste
+        // numbers serait vide → no-op silencieux. Cette branche morte ouvrait
+        // inutilement une surface IPC au pattern `SEND_RESPOND_VIA_MESSAGE`.
         when (intent.action) {
             Intent.ACTION_SENDTO,
-            Intent.ACTION_VIEW,
-            Intent.ACTION_SEND -> handleSendTo(intent, startId)
+            Intent.ACTION_VIEW -> handleSendTo(intent, startId)
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY
