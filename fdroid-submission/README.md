@@ -32,7 +32,7 @@ cp /j/applications/sms_tech/fdroid-submission/com.filestech.sms.yml metadata/
 ### 4. Test the build locally (optional but recommended)
 
 ```bash
-fdroid build --verbose com.filestech.sms:7
+fdroid build --verbose com.filestech.sms:13
 ```
 
 This compiles SMS Tech inside the F-Droid reproducible build environment. It should produce
@@ -59,9 +59,9 @@ Open the MR via the GitLab UI:
 ## New app submission: SMS Tech
 
 **Package**: com.filestech.sms
-**Version**: 1.2.1 (versionCode 7)
+**Version**: 1.2.5 (versionCode 13)
 **Repo**: https://github.com/gitubpatrice/SMS-TECH
-**Tag**: v1.2.1
+**Tag**: v1.2.5
 **License**: Apache-2.0
 **Website**: https://files-tech.com/sms-tech.php
 
@@ -84,8 +84,9 @@ translation (ML Kit), retroactive purge of system-blocked conversations.
 
 ### Security audit
 
-A 3-axis audit (security / quality / duplications) was applied immediately before v1.2.1.
-Report inline in the source via `Audit P0-1`, `Audit P1-5`, etc. comments. Full notes at
+A 5-axis expert audit (security / code quality / performance / duplication / UI) was applied
+between v1.2.2 and v1.2.4. Report inline in the source via `audit F1-F13`, `audit P1-P4`,
+`audit U1-U22` comments. Full notes at
 https://github.com/gitubpatrice/SMS-TECH/blob/main/SECURITY.md.
 ```
 
