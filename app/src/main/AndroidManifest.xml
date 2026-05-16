@@ -23,8 +23,10 @@
     <!-- Notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"
-        tools:ignore="ProtectedPermissions" />
+    <!-- v1.2.7 audit S8 : USE_FULL_SCREEN_INTENT retiré (privilégiée Android 14+,
+         auto-révoquée par Play Console hors cas calling/alarms, et aucune utilisation
+         côté code — vérifié par grep, aucun setFullScreenIntent appelé). -->
+
 
     <!-- Biometric -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />

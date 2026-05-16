@@ -14,7 +14,10 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
@@ -139,6 +142,19 @@ class MmsSender @Inject constructor(
      * Every failure path rolls back: deletes the cache file if it was created, deletes the
      * system OUTBOX row if we inserted one. Caller gets a typed [Outcome.Failure].
      */
+    /**
+     * v1.2.7 audit Q1 — Mutex par `localMessageId`. Sérialise les `dispatchMms` concurrents
+     * pour un même message Room (cas double-tap "Retry" rapide). Sans ce mutex, deux retries
+     * pouvaient lire le même `mmsSystemId` stale, supprimer la même row, et créer deux nouvelles
+     * rows OUTBOX dans `content://mms` (la 1ère devenant alors orpheline indélétable). Une
+     * `ConcurrentHashMap` parce que `computeIfAbsent` y est atomique ; les entrées ne sont
+     * jamais supprimées (faible empreinte : 1 Mutex par message en cours de dispatch).
+     */
+    private val perMessageLocks = ConcurrentHashMap<Long, Mutex>()
+
+    private fun lockFor(localMessageId: Long): Mutex =
+        perMessageLocks.computeIfAbsent(localMessageId) { Mutex() }
+
     private suspend fun dispatchMms(
         localMessageId: Long,
         recipients: List<String>,
@@ -146,11 +162,10 @@ class MmsSender @Inject constructor(
         textBody: String?,
         subId: Int?,
         encodePdu: () -> ByteArray?,
-    ): Outcome<Unit> {
-        // v1.2.6 audit F2 idempotence retry — delete-before-insert. Si ce message Room a déjà
-        // été dispatché et a échoué, on a stocké le `_id` `content://mms` de la tentative
-        // précédente. Avant d'insérer une nouvelle row, on supprime la précédente pour ne
-        // jamais laisser deux rows visibles côté autres apps SMS, même brièvement.
+    ): Outcome<Unit> = lockFor(localMessageId).withLock {
+        // v1.2.6 audit F2 idempotence retry + v1.2.7 audit Q2 atomicité — délimité par le mutex
+        // au-dessus : un retry concurrent attend la fin de la séquence (find → delete → insert
+        // → setMmsSystemId) avant de lire à son tour.
         runCatching { messageDao.findMmsSystemId(localMessageId) }
             .getOrNull()
             ?.takeIf { it > 0L }
@@ -165,34 +180,40 @@ class MmsSender @Inject constructor(
             textBody = textBody,
         ) ?: -1L
 
-        // v1.2.6 audit F2 — persister le nouvel `_id` system dès qu'on l'a. Si le dispatch
-        // échoue plus loin et est rollback, on remet `null` via setMmsSystemId(localId, null)
-        // dans `rollback()`. Sinon on garde la valeur pour la prochaine itération de retry.
+        // v1.2.7 audit Q11 — si la persistance échoue (DB locked, SQLCipher closed), on ne
+        // peut PAS continuer en silence : un retry futur ne saurait pas qu'il faut supprimer
+        // la row qu'on vient d'insérer, et créerait un doublon. On rollback et on échoue.
         if (mmsSystemId > 0L) {
-            runCatching { messageDao.setMmsSystemId(localMessageId, mmsSystemId) }
-                .onFailure { Timber.w(it, "dispatchMms: setMmsSystemId(%d, %d) failed", localMessageId, mmsSystemId) }
+            val persisted = runCatching { messageDao.setMmsSystemId(localMessageId, mmsSystemId) }
+            if (persisted.isFailure) {
+                Timber.w(persisted.exceptionOrNull(), "dispatchMms: setMmsSystemId(%d, %d) failed — rolling back", localMessageId, mmsSystemId)
+                systemWriteback.delete(mmsSystemId)
+                return@withLock Outcome.Failure(AppError.Storage(
+                    persisted.exceptionOrNull() ?: IllegalStateException("setMmsSystemId failed"),
+                ))
+            }
         }
 
         val pdu = encodePdu() ?: run {
             rollback(localMessageId, mmsSystemId, pduFile = null)
-            return Outcome.Failure(AppError.Telephony("PDU encoding failed"))
+            return@withLock Outcome.Failure(AppError.Telephony("PDU encoding failed"))
         }
 
         val pduFile = writePduFile(pdu).getOrElse { t ->
             Timber.w(t, "Writing MMS PDU file failed")
             rollback(localMessageId, mmsSystemId, pduFile = null)
-            return Outcome.Failure(AppError.Storage(t))
+            return@withLock Outcome.Failure(AppError.Storage(t))
         }
 
         val pduUri = pduFileProviderUri(pduFile).getOrElse { t ->
             Timber.w(t, "FileProvider URI build failed")
             rollback(localMessageId, mmsSystemId, pduFile)
-            return Outcome.Failure(AppError.Storage(t))
+            return@withLock Outcome.Failure(AppError.Storage(t))
         }
 
         val pi = buildSentIntent(localMessageId, pduFile, mmsSystemId)
 
-        return try {
+        try {
             val sm = subscriptionAwareManager(subId)
             sm.sendMultimediaMessage(context, pduUri, null, null, pi)
             Outcome.Success(Unit)

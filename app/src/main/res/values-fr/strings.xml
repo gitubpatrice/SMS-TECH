@@ -246,6 +246,8 @@
     <string name="settings_my_number_detect">Détecter depuis la SIM</string>
     <string name="settings_my_number_not_set">Non renseigné</string>
     <string name="settings_my_number_detect_failed">Numéro SIM illisible — saisissez-le à la main</string>
+    <string name="settings_my_number_detect_no_perm">Permission lecture numéro non accordée — saisissez-le à la main</string>
+    <string name="settings_my_number_invalid">Doit être un numéro valide (+ et chiffres)</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Activer les notifications</string>

@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.mms.MmsSystemWriteback
@@ -14,6 +15,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
@@ -41,6 +43,7 @@ class MmsSentReceiver : BroadcastReceiver() {
 
     @Inject lateinit var mirror: ConversationMirror
     @Inject lateinit var systemWriteback: MmsSystemWriteback
+    @Inject lateinit var messageDao: MessageDao
     @Inject lateinit var settings: SettingsRepository
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
@@ -83,6 +86,17 @@ class MmsSentReceiver : BroadcastReceiver() {
     }
 
     private suspend fun handleOk(localId: Long, mmsSystemId: Long) {
+        // v1.2.7 audit Q5 — anti-broadcast-tardif. Sous Doze ou throttling Samsung One UI, un
+        // result-broadcast d'une PREMIÈRE tentative peut arriver APRÈS qu'un retry a déjà
+        // succès et que Room pointe sur un autre mmsSystemId. Sans ce check, on flippe SENT
+        // → FAILED (ou pire) en se basant sur une row historique. On confronte l'mmsSystemId
+        // du broadcast à celui actuellement persisté en Room : pas match = broadcast obsolète,
+        // on ignore silencieusement.
+        if (mmsSystemId > 0L && !matchesCurrentRow(localId, mmsSystemId)) {
+            Timber.i("handleOk(local=%d, sys=%d) skipped — stale broadcast vs current Room row", localId, mmsSystemId)
+            return
+        }
+
         mirror.updateOutgoingStatus(localId, MessageStatus.SENT)
         if (mmsSystemId <= 0L) return
 
@@ -92,14 +106,48 @@ class MmsSentReceiver : BroadcastReceiver() {
         // Audit F4 (v1.2.6) — replace the FROM placeholder with the user-configured MSISDN
         // if one was provided in Settings. No-op silencieux sinon — la convention AOSP de
         // skipper le token à l'import couvre déjà le cas dégradé.
-        val msisdn = runCatching { settings.flow.first().sending.userMsisdn }.getOrNull()
+        //
+        // v1.2.7 audit Q9 : DataStore peut stall plusieurs secondes au boot froid. Le receiver
+        // a un budget de 10 s avant que le system reaper le kill ; on cap à 3 s pour cette
+        // lecture non-critique et on skip silencieusement si timeout — pas de finalize, mais
+        // le MMS reste correctement SENT.
+        val msisdn = withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
+            runCatching { settings.flow.first().sending.userMsisdn }.getOrNull()
+        }
         if (!msisdn.isNullOrBlank()) {
             runCatching { systemWriteback.finalizeFromAddress(mmsSystemId, msisdn) }
                 .onFailure { Timber.w(it, "finalizeFromAddress(%d) failed", mmsSystemId) }
         }
     }
 
+    /**
+     * v1.2.7 audit Q5 — compare l'`mmsSystemId` reçu par broadcast à la valeur actuellement
+     * persistée dans Room. Si différentes, le broadcast vient d'une tentative antérieure et
+     * doit être ignoré (la row Room a été reprise par un retry ultérieur). Retourne `true` si
+     * on peut traiter (id matche ou Room n'a plus de valeur → broadcast peut être traité).
+     */
+    private suspend fun matchesCurrentRow(localId: Long, broadcastSystemId: Long): Boolean {
+        val current = runCatching { messageDao.findMmsSystemId(localId) }.getOrNull()
+        // current == null : la row Room n'a plus de mmsSystemId (rollback ou clear panic).
+        //   Dans ce cas on ne devrait pas mettre à jour, donc on retourne false.
+        // current == broadcastSystemId : match, on peut traiter.
+        return current != null && current == broadcastSystemId
+    }
+
+    private companion object {
+        /** Budget anti-ANR pour lire le `userMsisdn` du DataStore (audit Q9). */
+        const val SETTINGS_READ_TIMEOUT_MS: Long = 3_000L
+    }
+
     private suspend fun handleFailure(localId: Long, mmsSystemId: Long, rc: Int) {
+        // v1.2.7 audit Q5 — même garde que handleOk. Un broadcast FAILED retardé venant d'une
+        // tentative ancienne ne doit pas flipper l'état actuel (qui peut être déjà SENT pour
+        // un retry plus récent).
+        if (mmsSystemId > 0L && !matchesCurrentRow(localId, mmsSystemId)) {
+            Timber.i("handleFailure(local=%d, sys=%d, rc=%d) skipped — stale broadcast", localId, mmsSystemId, rc)
+            return
+        }
+
         Timber.w("MMS sent failed for id=%d resultCode=%d", localId, rc)
         mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc)
         if (mmsSystemId > 0L) {

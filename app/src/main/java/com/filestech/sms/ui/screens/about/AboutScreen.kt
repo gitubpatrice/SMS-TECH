@@ -42,12 +42,10 @@ import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -578,10 +576,8 @@ private data class PrivacyBadge(val icon: ImageVector, val label: String, val co
 private val PRIVACY_BADGES = listOf(
     PrivacyBadge(Icons.Outlined.Block, "Aucune publicité", Color(0xFFE53935)),
     PrivacyBadge(Icons.Outlined.VisibilityOff, "Aucun tracker", Color(0xFFFF7043)),
-    PrivacyBadge(Icons.Outlined.WifiOff, "Hors ligne (vault)", Color(0xFF43A047)),
     PrivacyBadge(Icons.Outlined.Security, "Aucune collecte", Color(0xFF1976D2)),
     PrivacyBadge(Icons.Outlined.PrivacyTip, "Zéro partage", Color(0xFF7B1FA2)),
-    PrivacyBadge(Icons.Outlined.Storefront, "Sans Play Store", Color(0xFF00897B)),
 )
 
 private data class Feature(val icon: ImageVector, val label: String, val desc: String)

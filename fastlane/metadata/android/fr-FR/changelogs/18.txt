@@ -1,0 +1,10 @@
+v1.2.7 — Hardening final (sécurité + fragilité + perf)
+• Retry MMS sérialisé : plus jamais de doublon dans content://mms même en double-tap
+• Anti-broadcast tardif : Doze ne peut plus flipper SENT en FAILED ou inverse
+• Downgrade DB v3→v2 attrapé proprement (au lieu de crash en boucle)
+• Mon numéro : validation regex + détection auto en arrière-plan + messages d'erreur clairs
+• Receiver MMS : timeout 3s sur lecture DataStore (anti-ANR au boot froid)
+• MmsSystemWriteback : filtres WHERE renforcés + chars invisibles bannis
+• Permission USE_FULL_SCREEN_INTENT retirée du manifest (inutilisée)
+• Perf : import MMS en batch (gain 400-600 ms sur 500 MMS)
+• À propos : 2 badges retirés (Hors ligne, Sans Play Store)

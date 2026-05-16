@@ -257,6 +257,8 @@
     <string name="settings_my_number_detect">Auto-detect from SIM</string>
     <string name="settings_my_number_not_set">Not set</string>
     <string name="settings_my_number_detect_failed">Cannot read the SIM number — enter it manually</string>
+    <string name="settings_my_number_detect_no_perm">Phone-numbers permission not granted — enter it manually</string>
+    <string name="settings_my_number_invalid">Must be a valid phone number (+ and digits)</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>

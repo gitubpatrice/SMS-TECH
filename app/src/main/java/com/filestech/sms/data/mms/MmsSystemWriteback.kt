@@ -6,6 +6,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.provider.Telephony
+import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -53,6 +54,11 @@ class MmsSystemWriteback @Inject constructor(
      */
     private fun canonicalRecipients(raw: Collection<String>): Set<String> =
         raw.asSequence()
+            // v1.2.7 audit S2 : strip d'abord les chars bidi/zero-width (RLO, LRE, BOM…)
+            // pour ne pas hit un thread_id distinct côté Samsung canonical_addresses pour le
+            // même destinataire visuel — sinon un caller fournissant `"+33‮6 12…"` peut
+            // créer une conversation fantôme.
+            .map { it.stripInvisibleChars() }
             .map { it.replace(Regex("[\\s\\-()]"), "") }
             .filter { it.isNotBlank() }
             .toHashSet()
@@ -247,15 +253,33 @@ class MmsSystemWriteback @Inject constructor(
         if (mmsSystemId <= 0L || msisdn.isNullOrBlank()) return@withContext false
         val addrUri = Uri.parse("content://mms/$mmsSystemId/addr")
         val values = ContentValues().apply { put("address", msisdn) }
+        // v1.2.7 audit S1+Q14 : defense-in-depth.
+        //  - `AND mid=?` : double sécurité au cas où l'URI scoping serveur-side serait laxiste
+        //    sur certaines ROM (l'URI `content://mms/{id}/addr` est censée scoper par mid mais
+        //    on ne lui fait pas confiance aveugle).
+        //  - Premier essai : on ne touche que les rows portant exactement le placeholder.
+        //    Deuxième essai (Free Mobile FR, certaines MVNO) : si l'OS a remplacé le
+        //    placeholder par `NULL` au lieu de notre MSISDN, on accepte ce cas dégradé aussi —
+        //    la sélection reste bornée à `type=FROM AND mid=this row`, donc on ne risque pas
+        //    d'écraser une vraie adresse d'une autre MMS.
         safe("finalizeFromAddress($mmsSystemId)") {
-            // Only update rows still bearing the placeholder — never overwrite a real address
-            // that the OS may have written in the meantime (defense-in-depth).
-            resolver.update(
+            val updated = resolver.update(
                 addrUri,
                 values,
-                "type=? AND address=?",
-                arrayOf(ADDR_TYPE_FROM.toString(), "insert-address-token"),
-            ) > 0
+                "type=? AND mid=? AND address=?",
+                arrayOf(ADDR_TYPE_FROM.toString(), mmsSystemId.toString(), "insert-address-token"),
+            )
+            if (updated > 0) {
+                true
+            } else {
+                // Fallback : OS a déjà nullé le placeholder. Tenter d'écrire si address IS NULL.
+                resolver.update(
+                    addrUri,
+                    values,
+                    "type=? AND mid=? AND address IS NULL",
+                    arrayOf(ADDR_TYPE_FROM.toString(), mmsSystemId.toString()),
+                ) > 0
+            }
         } ?: false
     }
 

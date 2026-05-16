@@ -70,6 +70,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -849,35 +850,60 @@ private fun SectionCard(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Reads the MSISDN of the default SMS subscription via [android.telephony.SubscriptionManager].
- * Returns `null` on the (very common on Samsung One UI / Free Mobile FR) case where the OS
- * does not expose the number — the user has to type it manually then.
+ * Result d'une tentative de détection automatique du MSISDN du SIM par défaut.
+ *  - [Success] : un numéro a été trouvé.
+ *  - [PermissionDenied] : `READ_PHONE_NUMBERS` n'est pas accordée — message dédié à l'UI.
+ *  - [Unavailable] : permission OK mais l'OS ne connaît pas le numéro (Free Mobile FR, MVNO).
+ */
+private sealed interface MsisdnDetection {
+    data class Success(val msisdn: String) : MsisdnDetection
+    data object PermissionDenied : MsisdnDetection
+    data object Unavailable : MsisdnDetection
+}
+
+/**
+ * Lit le MSISDN via `SubscriptionManager`. Discrimine "permission révoquée" vs "OS ne sait pas"
+ * pour pouvoir afficher un message d'aide ciblé. Pas de magie : si la perm n'est pas accordée,
+ * on ne fait pas l'appel système (évite `SecurityException` silencieusement attrapée v1.2.6).
  *
- * Requires `READ_PHONE_NUMBERS` (declared in the manifest, granted at first launch).
+ * v1.2.7 audits S4 (checkSelfPermission strict) + Q6 (l'appel doit être fait sur Dispatchers.IO
+ * par le caller — `getSystemService` + `activeSubscriptionInfoList` font un binder IPC qui peut
+ * geler le main thread sur Samsung).
  */
 @android.annotation.SuppressLint("MissingPermission")
-private fun detectMsisdn(context: android.content.Context): String? {
+private fun detectMsisdn(context: android.content.Context): MsisdnDetection {
+    // v1.2.7 audit S4 : check runtime permission AVANT l'appel binder. On rate l'appel propre
+    // au lieu de le faire crasher silencieusement dans le catch.
+    val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+        context,
+        android.Manifest.permission.READ_PHONE_NUMBERS,
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    if (!granted) return MsisdnDetection.PermissionDenied
+
     val sm = context.getSystemService(android.content.Context.TELEPHONY_SUBSCRIPTION_SERVICE)
-        as? android.telephony.SubscriptionManager ?: return null
+        as? android.telephony.SubscriptionManager ?: return MsisdnDetection.Unavailable
     val defaultId = android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId()
-    if (defaultId == android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) return null
+    if (defaultId == android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+        return MsisdnDetection.Unavailable
+    }
     return try {
-        // Walk the active list and find the entry matching the default-SMS subId. Avoids the
+        // Walk the active list to find the entry matching the default-SMS subId. Avoids the
         // `getActiveSubscriptionInfoForSubscriptionId` overload which the AGP/Kotlin combo
         // reports as unresolved on our current AGP 8.13 + Kotlin 2.0.21 setup.
         val info: android.telephony.SubscriptionInfo? =
             sm.activeSubscriptionInfoList?.firstOrNull { it.subscriptionId == defaultId }
-        // `SubscriptionInfo.number` is deprecated since API 30 but it still returns the SIM
-        // MSISDN when one is known to the platform — and there is no permission-less public
-        // alternative on AOSP. Suppression is scoped to this single call.
         @Suppress("DEPRECATION")
         val number = info?.number
-        number?.takeIf { it.isNotBlank() }
+        if (number.isNullOrBlank()) MsisdnDetection.Unavailable
+        else MsisdnDetection.Success(number)
     } catch (t: Throwable) {
         timber.log.Timber.w(t, "detectMsisdn failed")
-        null
+        MsisdnDetection.Unavailable
     }
 }
+
+/** v1.2.7 audit Q7 : regex de validation MSISDN — autorise +, digits, espaces, tirets, parens. */
+private val MSISDN_PATTERN = Regex("^\\+?[0-9 ()\\-]{4,20}$")
 
 @Composable
 private fun MyNumberRow(current: String?, onChange: (String?) -> Unit) {
@@ -926,9 +952,15 @@ private fun MyNumberDialog(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     var value by remember { mutableStateOf(initial) }
+    // v1.2.7 audit Q16 : le précédent SnackbarHost imbriqué dans `AlertDialog.text` ne
+    // s'affichait jamais (le host n'a pas de surface dans le content slot du dialog). On
+    // remplace par un message inline placé sous le bouton "Détecter".
+    var detectFeedback by remember { mutableStateOf<MsisdnDetection?>(null) }
     val cs = MaterialTheme.colorScheme
+
+    // v1.2.7 audit Q7 : la valeur est valide si vide (= clear) OU matche le pattern MSISDN.
+    val canSubmit = value.isBlank() || MSISDN_PATTERN.matches(value)
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -946,6 +978,10 @@ private fun MyNumberDialog(
                     onValueChange = { value = it.trim() },
                     placeholder = { Text(stringResource(R.string.settings_my_number_placeholder)) },
                     singleLine = true,
+                    isError = value.isNotBlank() && !MSISDN_PATTERN.matches(value),
+                    supportingText = if (value.isNotBlank() && !MSISDN_PATTERN.matches(value)) {
+                        { Text(stringResource(R.string.settings_my_number_invalid)) }
+                    } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone,
                     ),
@@ -954,14 +990,18 @@ private fun MyNumberDialog(
                 Spacer(Modifier.size(8.dp))
                 androidx.compose.material3.TextButton(
                     onClick = {
-                        val detected = detectMsisdn(context)
-                        if (detected != null) {
-                            value = detected
-                        } else {
-                            scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    context.getString(R.string.settings_my_number_detect_failed),
-                                )
+                        // v1.2.7 audit Q6 : detectMsisdn fait un binder IPC ; on l'exécute
+                        // sur Dispatchers.IO pour ne pas geler le main thread.
+                        scope.launch {
+                            val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                detectMsisdn(context)
+                            }
+                            when (result) {
+                                is MsisdnDetection.Success -> {
+                                    value = result.msisdn
+                                    detectFeedback = null
+                                }
+                                else -> detectFeedback = result
                             }
                         }
                     },
@@ -974,11 +1014,28 @@ private fun MyNumberDialog(
                     Spacer(Modifier.size(8.dp))
                     Text(stringResource(R.string.settings_my_number_detect))
                 }
-                androidx.compose.material3.SnackbarHost(snackbarHostState)
+                detectFeedback?.let { fb ->
+                    val msgRes = when (fb) {
+                        MsisdnDetection.PermissionDenied -> R.string.settings_my_number_detect_no_perm
+                        MsisdnDetection.Unavailable -> R.string.settings_my_number_detect_failed
+                        is MsisdnDetection.Success -> null // jamais ici
+                    }
+                    if (msgRes != null) {
+                        Text(
+                            text = stringResource(msgRes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.error,
+                            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp),
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
-            androidx.compose.material3.Button(onClick = { onConfirm(value) }) {
+            androidx.compose.material3.Button(
+                onClick = { onConfirm(value) },
+                enabled = canSubmit,
+            ) {
                 Text(stringResource(R.string.action_save))
             }
         },

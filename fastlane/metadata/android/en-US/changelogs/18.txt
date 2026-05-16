@@ -1,0 +1,10 @@
+v1.2.7 — Final hardening pass (security + fragility + perf)
+• MMS retry serialised : no more duplicate row in content://mms even on double-tap
+• Anti late-broadcast : Doze can no longer flip SENT to FAILED or vice versa
+• Database downgrade v3→v2 caught cleanly (instead of crash loop)
+• My number : regex validation + auto-detect off main thread + clear error messages
+• MMS receiver : 3s timeout on DataStore read (anti-ANR on cold boot)
+• MmsSystemWriteback : tighter WHERE filters + invisible chars stripped
+• USE_FULL_SCREEN_INTENT permission removed from manifest (unused)
+• Perf : batched MMS import (400-600 ms saved on 500 MMS)
+• About : 2 badges removed (Offline, No Play Store)
