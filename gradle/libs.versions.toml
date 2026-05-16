@@ -50,7 +50,7 @@ mlkit-language-id = "17.0.6"
 # Tests
 junit = "4.13.2"
 junit5 = "5.11.3"
-mockk = "1.13.13"
+mockk = "1.14.9"
 turbine = "1.2.0"
 truth = "1.4.4"
 robolectric = "4.13"
