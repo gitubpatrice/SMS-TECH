@@ -1,0 +1,7 @@
+v1.2.6 — Idempotent retry + My number + unified visual identity
+• MMS retry no longer leaves a duplicate row in content://mms (additive Room 2→3 migration, transparent)
+• Settings → Sending → My number: optional field + SIM auto-detect, replaces the Samsung placeholder
+• About screen redesigned to match the PDF Tech identity (privacy badges, feature cards, help recipes)
+• Settings: bigger section titles + tighter rows + slightly scaled-down Switch
+• Outgoing voice bubble: no background, blue border, blue play disc with white arrow
+• Conversations list: redundant Blocked icon removed (accessible via Settings)

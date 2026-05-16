@@ -3,6 +3,67 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.6] — 2026-05-16
+
+Retry idempotence + Samsung MSISDN + UI identity unification. Closes the last two findings
+deferred from the v1.2.2 audit (F2 + F4) and brings the in-app About screen in line with the
+PDF Tech visual design — same big section titles, badge palette, feature cards, help recipes.
+
+### Added
+- **Room schema v3** (`MIGRATION_2_3`, additive — `ALTER TABLE messages ADD COLUMN
+  mms_system_id INTEGER` + matching index). Stores the `_id` of the `content://mms` row that
+  `MmsSystemWriteback.insertOutbox` returned for an outgoing MMS, so the retry path can
+  delete the stale row before re-inserting a fresh one. SQLCipher passphrase unchanged.
+- **`MessageDao.setMmsSystemId` / `findMmsSystemId`** — DAO surface used by the dispatch
+  engine + rollback helper.
+- **Settings → Envoi → Mon numéro** (F4) : optional text field for the user's MSISDN, with a
+  "Detect from SIM" helper (`SubscriptionManager.activeSubscriptionInfoList`). When set,
+  `MmsSentReceiver.handleOk` calls `MmsSystemWriteback.finalizeFromAddress` to replace the
+  AOSP `"insert-address-token"` placeholder in the outgoing-MMS sender chain. Helps when
+  Samsung One UI doesn't overwrite the placeholder itself.
+
+### Changed
+- **`MmsSender.dispatchMms`** (F2 idempotent retry) :
+  - Before `insertOutbox`, reads any previously stored `mmsSystemId` from Room — if non-null,
+    deletes that stale system-provider row first. Result: a 2nd dispatch attempt for the same
+    Room message id never leaves two rows visible in other SMS apps, not even briefly.
+  - After a successful `insertOutbox`, persists the new `mmsSystemId` to the Room row.
+  - The `rollback` helper now also clears the persisted `mmsSystemId` to `null` so the next
+    retry won't try to delete a row that was already collapsed by the rollback.
+- **`MmsSentReceiver` flattened** (Q10) : `onReceive` is now a thin dispatcher delegating to
+  `handleOk(localId, mmsSystemId)` and `handleFailure(localId, mmsSystemId, rc)`. Same
+  externally-observable behaviour, much easier to reason about. The package guard (audit F5
+  v1.2.3) stays in place.
+- **`MmsSystemWriteback.insertOutbox` KDoc** trimmed (Q11) — the WHAT is obvious from the
+  code, only the WHY (Samsung One UI doesn't writeback) and the AOSP conventions remain.
+
+### UI
+- **About screen redesigned** to mirror the PDF Tech identity: centered icon header with a
+  version pill, "Confidentialité" card with six coloured privacy badges, "Fonctionnalités"
+  cards (14 entries), "Auteur" card with avatar, "Aide rapide" recipes (6 cards), security
+  card, permissions list, links, credits + copyright. Section titles in the same big
+  `titleMedium` SemiBold primary blue as the Settings screen.
+- **Settings section titles** : bumped from `labelLarge` (~14 sp) to `titleMedium` SemiBold
+  (~16 sp), icon 18 → 22 dp. Visual alignment with the new About screen.
+- **Settings rows** tightened : custom Row replaces Material 3 `ListItem` (which forced
+  56–72 dp min-height). Vertical padding 4–8 dp + `heightIn(min = 48 dp)` for WCAG 2.5.5
+  touch target. `Switch` scaled to 0.85f visually — hit area unchanged.
+- **Audio bubble (outgoing) without background** : the dark blue fill is replaced by a
+  1.5 dp `cs.primary` border around the bubble silhouette. Play button : disc filled
+  `cs.primary` (same colour as the border for visual coherence) + white `onPrimary` icon.
+  Incoming audio bubble is unchanged.
+- **Conversation list** : the redundant "Blocked numbers" icon button is removed from the
+  top app bar (the entry remains accessible via Réglages → Numéros bloqués).
+- **About** : DEBUG chip removed (was added in v1.2.3, removed by user request in v1.2.5,
+  noted here for clarity).
+
+### Notes / deferred
+- `MmsPduRoundTripTest` not yet recreated — requires adding `junit-vintage-engine` to make
+  JUnit 4 + Robolectric work alongside the project's JUnit Jupiter platform. Reported to
+  v1.2.7 as a low-priority test reinforcement.
+- No `.enc` / `.pdu` format change. Schema migration v2 → v3 is strictly additive — DBs
+  created under v1.2.5 upgrade transparently at the next app launch, no user action needed.
+
 ## [1.2.5] — 2026-05-15
 
 Identity + ergonomics polish from on-device testing. Reverts the v1.2.3 switch to the

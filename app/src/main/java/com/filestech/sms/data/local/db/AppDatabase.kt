@@ -44,7 +44,11 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         const val DATABASE_NAME = "smstech.db"
         // v2 (2026-05-15): adds `messages.reply_to_message_id` + matching index for the
-        // contextual-reply feature (#8). Migration is in `Migrations.kt`.
-        const val SCHEMA_VERSION = 2
+        //   contextual-reply feature (#8). Migration in `Migrations.kt`.
+        // v3 (2026-05-16, v1.2.6 audit F2): adds `messages.mms_system_id` (nullable Long) +
+        //   matching index. Lets the retry path delete the stale `content://mms` row from the
+        //   previous attempt before inserting a fresh outbox row — guarantees one MMS = one
+        //   system-provider row visible across all SMS apps, even during retry windows.
+        const val SCHEMA_VERSION = 3
     }
 }

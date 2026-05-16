@@ -238,6 +238,14 @@
     <string name="settings_mms_quality">Qualité d\'image MMS</string>
     <string name="settings_delivery_reports">Accusés de réception</string>
     <string name="settings_retry_failed">Réessayer automatiquement les échecs</string>
+    <string name="settings_my_number">Mon numéro</string>
+    <string name="settings_my_number_desc">Affiché comme expéditeur de vos MMS dans les autres apps SMS</string>
+    <string name="settings_my_number_dialog_title">Votre numéro de téléphone</string>
+    <string name="settings_my_number_dialog_body">Optionnel. Si renseigné, ce numéro remplace le placeholder AOSP \"insert-address-token\" dans la chaîne d\'expéditeur des MMS sortants — les autres apps SMS vous affichent alors correctement.</string>
+    <string name="settings_my_number_placeholder">+33 6 XX XX XX XX</string>
+    <string name="settings_my_number_detect">Détecter depuis la SIM</string>
+    <string name="settings_my_number_not_set">Non renseigné</string>
+    <string name="settings_my_number_detect_failed">Numéro SIM illisible — saisissez-le à la main</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Activer les notifications</string>

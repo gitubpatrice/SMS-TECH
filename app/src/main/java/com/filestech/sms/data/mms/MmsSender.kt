@@ -10,6 +10,7 @@ import android.telephony.SubscriptionManager
 import androidx.core.content.FileProvider
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -41,6 +42,7 @@ class MmsSender @Inject constructor(
     @ApplicationContext private val context: Context,
     private val builder: MmsBuilder,
     private val systemWriteback: MmsSystemWriteback,
+    private val messageDao: MessageDao,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -145,26 +147,46 @@ class MmsSender @Inject constructor(
         subId: Int?,
         encodePdu: () -> ByteArray?,
     ): Outcome<Unit> {
+        // v1.2.6 audit F2 idempotence retry — delete-before-insert. Si ce message Room a déjà
+        // été dispatché et a échoué, on a stocké le `_id` `content://mms` de la tentative
+        // précédente. Avant d'insérer une nouvelle row, on supprime la précédente pour ne
+        // jamais laisser deux rows visibles côté autres apps SMS, même brièvement.
+        runCatching { messageDao.findMmsSystemId(localMessageId) }
+            .getOrNull()
+            ?.takeIf { it > 0L }
+            ?.let { previous ->
+                Timber.i("dispatchMms: deleting previous system row %d before retry of local=%d", previous, localMessageId)
+                systemWriteback.delete(previous)
+            }
+
         val mmsSystemId = systemWriteback.insertOutbox(
             recipients = recipients,
             attachments = attachments,
             textBody = textBody,
         ) ?: -1L
 
+        // v1.2.6 audit F2 — persister le nouvel `_id` system dès qu'on l'a. Si le dispatch
+        // échoue plus loin et est rollback, on remet `null` via setMmsSystemId(localId, null)
+        // dans `rollback()`. Sinon on garde la valeur pour la prochaine itération de retry.
+        if (mmsSystemId > 0L) {
+            runCatching { messageDao.setMmsSystemId(localMessageId, mmsSystemId) }
+                .onFailure { Timber.w(it, "dispatchMms: setMmsSystemId(%d, %d) failed", localMessageId, mmsSystemId) }
+        }
+
         val pdu = encodePdu() ?: run {
-            rollback(mmsSystemId, pduFile = null)
+            rollback(localMessageId, mmsSystemId, pduFile = null)
             return Outcome.Failure(AppError.Telephony("PDU encoding failed"))
         }
 
         val pduFile = writePduFile(pdu).getOrElse { t ->
             Timber.w(t, "Writing MMS PDU file failed")
-            rollback(mmsSystemId, pduFile = null)
+            rollback(localMessageId, mmsSystemId, pduFile = null)
             return Outcome.Failure(AppError.Storage(t))
         }
 
         val pduUri = pduFileProviderUri(pduFile).getOrElse { t ->
             Timber.w(t, "FileProvider URI build failed")
-            rollback(mmsSystemId, pduFile)
+            rollback(localMessageId, mmsSystemId, pduFile)
             return Outcome.Failure(AppError.Storage(t))
         }
 
@@ -176,15 +198,26 @@ class MmsSender @Inject constructor(
             Outcome.Success(Unit)
         } catch (t: Throwable) {
             Timber.w(t, "SmsManager.sendMultimediaMessage failed")
-            rollback(mmsSystemId, pduFile)
+            rollback(localMessageId, mmsSystemId, pduFile)
             Outcome.Failure(AppError.Telephony("sendMultimediaMessage failed", t))
         }
     }
 
-    /** Best-effort rollback of any side-effect we may have already produced. */
-    private suspend fun rollback(mmsSystemId: Long, pduFile: File?) {
+    /**
+     * Best-effort rollback of any side-effect we may have already produced. Called on every
+     * failure branch of [dispatchMms]. Idempotent — safe to invoke even when nothing was
+     * created (e.g. `mmsSystemId == -1L`, `pduFile == null`).
+     *
+     * v1.2.6 audit F2 — clears the persisted mmsSystemId from Room as well so the **next**
+     * retry doesn't mistake the just-deleted system row for a stale one to re-delete.
+     */
+    private suspend fun rollback(localMessageId: Long, mmsSystemId: Long, pduFile: File?) {
         pduFile?.let { runCatching { it.delete() } }
-        if (mmsSystemId > 0L) systemWriteback.delete(mmsSystemId)
+        if (mmsSystemId > 0L) {
+            systemWriteback.delete(mmsSystemId)
+            runCatching { messageDao.setMmsSystemId(localMessageId, null) }
+                .onFailure { Timber.w(it, "rollback: setMmsSystemId(%d, null) failed", localMessageId) }
+        }
     }
 
     /**

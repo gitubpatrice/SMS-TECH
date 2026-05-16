@@ -1,0 +1,7 @@
+v1.2.6 — Retry idempotent + Mon numéro + identité visuelle unifiée
+• Retry MMS sans doublon dans content://mms (migration Room 2→3 additive, transparente)
+• Réglages → Envoi → Mon numéro : champ optionnel + détection auto SIM, remplace le placeholder Samsung
+• À propos refondu au style PDF Tech (badges confidentialité, cards fonctionnalités, aide rapide)
+• Réglages : titres plus gros + lignes resserrées + Switch légèrement réduit
+• Bulle vocale envoyée : sans fond, contour bleu, bouton play bleu et flèche blanche
+• Liste des conversations : icône Bloqués retirée (accessible via Réglages)

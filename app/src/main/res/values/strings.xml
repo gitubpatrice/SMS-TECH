@@ -249,6 +249,14 @@
     <string name="settings_mms_quality">MMS image quality</string>
     <string name="settings_delivery_reports">Delivery reports</string>
     <string name="settings_retry_failed">Retry failed messages automatically</string>
+    <string name="settings_my_number">My phone number</string>
+    <string name="settings_my_number_desc">Used as the sender address of outgoing MMS in other SMS apps</string>
+    <string name="settings_my_number_dialog_title">Your phone number</string>
+    <string name="settings_my_number_dialog_body">Optional. If set, this number replaces the AOSP placeholder \"insert-address-token\" in the sender address of outgoing MMS, so other SMS apps display you correctly.</string>
+    <string name="settings_my_number_placeholder">+44 7XXX XXX XXX</string>
+    <string name="settings_my_number_detect">Auto-detect from SIM</string>
+    <string name="settings_my_number_not_set">Not set</string>
+    <string name="settings_my_number_detect_failed">Cannot read the SIM number — enter it manually</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>

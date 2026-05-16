@@ -89,18 +89,16 @@ class MmsSystemWriteback @Inject constructor(
     }
 
     /**
-     * Inserts a full outgoing MMS into `content://mms` with its address rows + part rows.
-     * Returns the system `_id` so the caller can update / delete the row from the result
-     * callback. Returns `null` on any failure.
+     * Mirrors an outgoing MMS into `content://mms` *before* dispatch, returning the system
+     * `_id` so the receiver can flip it to SENT or delete it on failure. Returns `null` if we
+     * are not the default SMS app (provider refuses the insert).
      *
-     * Behaviour:
-     *  - Row goes into `msg_box = OUTBOX (4)` so other SMS apps showing the conversation see
-     *    a "Sending…" state until the receiver flips it to `SENT (2)`.
-     *  - `date` / `date_sent` are stored in **seconds** (AOSP convention for `Telephony.Mms`).
-     *  - Each attachment file is streamed through `openOutputStream` on the part URI rather
-     *    than copied via `_data` — Android 10+ refuses raw filesystem paths in the column.
-     *  - A text body (caption) is inserted as a `text/plain` part next to the binary parts so
-     *    it survives the round trip cleanly.
+     * **Why** : `SmsManager.sendMultimediaMessage` does not writeback to `content://mms` on
+     * Samsung One UI — without this, sent MMS disappear at reinstall and other SMS apps never
+     * see them. Inline AOSP conventions in the code:
+     *  - date in seconds, msg_box = OUTBOX (4)
+     *  - attachment bytes streamed via `openOutputStream` (Android 10+ rejects `_data`)
+     *  - text body added as a `text/plain` part alongside binary parts.
      */
     suspend fun insertOutbox(
         recipients: List<String>,
@@ -230,6 +228,34 @@ class MmsSystemWriteback @Inject constructor(
         val uri = ContentUris.withAppendedId(Telephony.Mms.CONTENT_URI, mmsSystemId)
         safe("delete($mmsSystemId)") {
             resolver.delete(uri, null, null) > 0
+        } ?: false
+    }
+
+    /**
+     * v1.2.6 audit F4 — remplace le placeholder `"insert-address-token"` posé par
+     * [insertOutbox] sur la row FROM par le vrai MSISDN du SIM, dès qu'on a une valeur
+     * fiable (passée par le caller, typiquement le receiver sur `RESULT_OK` après que le
+     * système ait potentiellement complété la row). Sur les ROM (Samsung One UI surtout)
+     * qui n'écrasent pas le placeholder elles-mêmes, ça évite que la chaîne `addr` de la
+     * MMS sortante affiche littéralement `"insert-address-token"` côté autres apps SMS.
+     *
+     * No-op silencieux si `msisdn` est null/blank, ou si la row n'a plus de FROM placeholder
+     * (l'OS l'a déjà remplacé). Pas fatal — la convention AOSP de skipper le token à
+     * l'import (voir `TelephonyReader.readMmsAddress`) couvre déjà le cas dégradé.
+     */
+    suspend fun finalizeFromAddress(mmsSystemId: Long, msisdn: String?): Boolean = withContext(io) {
+        if (mmsSystemId <= 0L || msisdn.isNullOrBlank()) return@withContext false
+        val addrUri = Uri.parse("content://mms/$mmsSystemId/addr")
+        val values = ContentValues().apply { put("address", msisdn) }
+        safe("finalizeFromAddress($mmsSystemId)") {
+            // Only update rows still bearing the placeholder — never overwrite a real address
+            // that the OS may have written in the meantime (defense-in-depth).
+            resolver.update(
+                addrUri,
+                values,
+                "type=? AND address=?",
+                arrayOf(ADDR_TYPE_FROM.toString(), "insert-address-token"),
+            ) > 0
         } ?: false
     }
 

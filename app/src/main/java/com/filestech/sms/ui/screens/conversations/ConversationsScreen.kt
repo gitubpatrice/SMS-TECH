@@ -185,12 +185,8 @@ fun ConversationsScreen(
                                 contentDescription = stringResource(R.string.tab_archived),
                             )
                         }
-                        IconButton(onClick = onOpenBlocked) {
-                            Icon(
-                                Icons.Outlined.Block,
-                                contentDescription = stringResource(R.string.tab_blocked),
-                            )
-                        }
+                        // v1.2.6 polish : icône Numéros bloqués retirée du topbar (redondante).
+                        // L'accès se fait via Réglages → Numéros bloqués (NavigationRow déjà câblée).
                     }
                     IconButton(onClick = { overflowOpen = true }) {
                         Icon(

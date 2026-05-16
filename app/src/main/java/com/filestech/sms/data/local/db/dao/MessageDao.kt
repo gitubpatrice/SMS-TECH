@@ -46,6 +46,18 @@ interface MessageDao {
     suspend fun updateStatus(id: Long, status: Int, errorCode: Int? = null)
 
     /**
+     * v1.2.6 audit F2 : stocke l'`_id` `content://mms` que `MmsSystemWriteback.insertOutbox`
+     * a renvoyé pour ce message Room. Permet à la prochaine tentative (retry après échec) de
+     * détecter et supprimer la row OUTBOX/FAILED précédente avant d'en insérer une nouvelle.
+     */
+    @Query("UPDATE messages SET mms_system_id = :mmsSystemId WHERE id = :id")
+    suspend fun setMmsSystemId(id: Long, mmsSystemId: Long?)
+
+    /** Inverse de [setMmsSystemId] — utilisé par le retry pour récupérer la row à purger. */
+    @Query("SELECT mms_system_id FROM messages WHERE id = :id")
+    suspend fun findMmsSystemId(id: Long): Long?
+
+    /**
      * Audit M-5 + M-1: stalls-watchdog. Bulk-promotes outgoing messages stuck in `PENDING`
      * (status 0) past [olderThanMs] to `FAILED` (status 3) **and tags them with the
      * dedicated `error_code = -2` (WATCHDOG_TIMEOUT) sentinel** to distinguish them from

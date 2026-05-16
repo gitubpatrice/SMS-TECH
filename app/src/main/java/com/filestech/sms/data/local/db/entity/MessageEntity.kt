@@ -27,6 +27,10 @@ import kotlinx.serialization.Serializable
         // Schema v2 (#8 contextual reply). Index the FK so loading a thread and resolving
         // "this message replied to which one?" stays an O(log n) lookup even on long threads.
         Index(value = ["reply_to_message_id"]),
+        // Schema v3 (v1.2.6 audit F2 idempotence retry). Indexed because the retry path looks
+        // up the previous system-provider row id by Room message id, and (future) the watchdog
+        // may reconcile Room ↔ content://mms via mmsSystemId.
+        Index(value = ["mms_system_id"]),
     ],
 )
 data class MessageEntity(
@@ -59,6 +63,17 @@ data class MessageEntity(
      * falls back to a "Message supprimé" placeholder rather than cascading the delete.
      */
     @ColumnInfo(name = "reply_to_message_id") val replyToMessageId: Long? = null,
+    /**
+     * Schema v3 — `_id` of the row we inserted into `content://mms` for this outgoing MMS
+     * (v1.2.6 audit F2 idempotence retry). NULL for SMS rows, for incoming MMS, and for
+     * outgoing MMS where the system writeback never succeeded (e.g. we were not default SMS
+     * app at the time of dispatch).
+     *
+     * Used by [com.filestech.sms.data.mms.MmsSender] to delete the previous OUTBOX/FAILED
+     * row before re-inserting a fresh one on retry, so we never leave two system-provider
+     * rows for the same Room message even briefly.
+     */
+    @ColumnInfo(name = "mms_system_id") val mmsSystemId: Long? = null,
 )
 
 /** Companion-style constants kept on file scope to avoid object boxing in Room. */

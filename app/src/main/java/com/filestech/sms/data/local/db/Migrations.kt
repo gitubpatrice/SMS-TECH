@@ -32,6 +32,23 @@ internal object Migrations {
         }
     }
 
+    /**
+     * v2 → v3 (2026-05-16, v1.2.6 audit F2 idempotence retry).
+     *
+     *  - Adds `messages.mms_system_id INTEGER` (nullable). NULL for legacy rows; the new
+     *    [com.filestech.sms.data.mms.MmsSender] populates it after a successful writeback.
+     *  - Adds the matching index so the retry-path lookup "previous mms_system_id for this
+     *    Room message" stays O(log n).
+     *
+     * Strictly additive — legacy rows are not touched.
+     */
+    val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE messages ADD COLUMN mms_system_id INTEGER")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_mms_system_id ON messages(mms_system_id)")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

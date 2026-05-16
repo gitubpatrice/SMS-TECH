@@ -51,6 +51,16 @@ data class SendingSettings(
     val deliveryReports: Boolean = false,
     val retryFailedAutomatically: Boolean = true,
     val defaultSubId: Int? = null,
+    /**
+     * v1.2.6 audit F4 — MSISDN saisi par l'utilisateur quand la détection automatique via
+     * `SubscriptionManager.getActiveSubscriptionInfoForSubscriptionId(subId).number` retourne
+     * `null` (Free Mobile FR, MVNO, certaines configs Samsung One UI). Utilisé par
+     * `MmsSentReceiver.finalizeFromAddress` pour remplacer le placeholder `"insert-address-token"`
+     * de la row FROM dans `content://mms` après dispatch réussi.
+     *
+     * `null` = pas configuré ; on tente la détection auto puis on laisse le placeholder.
+     */
+    val userMsisdn: String? = null,
 )
 
 enum class MmsImageQuality { HIGH, BALANCED, ECONOMY }

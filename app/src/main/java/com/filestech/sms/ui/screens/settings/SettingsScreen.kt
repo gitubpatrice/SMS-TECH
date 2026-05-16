@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Shield
@@ -52,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -169,6 +173,15 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_confirm_broadcast),
                     value = state.sending.confirmBeforeBroadcast,
                     onChange = { v -> viewModel.update { it.copy(sending = it.sending.copy(confirmBeforeBroadcast = v)) } },
+                )
+                // v1.2.6 audit F4 — saisie facultative du MSISDN. Sans cette valeur, les MMS
+                // envoyés peuvent afficher "insert-address-token" comme expéditeur dans
+                // d'autres apps SMS sur certaines ROM Samsung One UI.
+                MyNumberRow(
+                    current = state.sending.userMsisdn,
+                    onChange = { v ->
+                        viewModel.update { it.copy(sending = it.sending.copy(userMsisdn = v?.takeIf { s -> s.isNotBlank() })) }
+                    },
                 )
             }
 
@@ -547,13 +560,34 @@ private fun ToggleRow(
     onChange: (Boolean) -> Unit,
     description: String? = null,
 ) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = description?.let { { Text(it) } },
-        trailingContent = { Switch(checked = value, onCheckedChange = onChange) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable { onChange(!value) },
-    )
+    // v1.2.6 polish : Row compact à la place du `ListItem` (qui forçait min-height 56/72 dp et
+    // un Switch pleine taille). On garde un touch target ≥ 48 dp via `heightIn` tout en
+    // resserrant les paddings verticaux. Switch légèrement scaled-down (0.85f) pour qu'il
+    // pèse moins dans l'œil — purement visuel, le hit-area natif reste intact.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onChange(!value) }
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(
+            checked = value,
+            onCheckedChange = onChange,
+            modifier = Modifier.scale(0.85f),
+        )
+    }
 }
 
 @Composable
@@ -563,18 +597,35 @@ private fun NavigationRow(
     destructive: Boolean = false,
     description: String? = null,
 ) {
-    ListItem(
-        headlineContent = {
+    // Aligné sur ToggleRow ci-dessus pour une densité visuelle homogène dans les SectionCard.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Text(
                 title,
+                style = MaterialTheme.typography.bodyLarge,
                 color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
-        },
-        supportingContent = description?.let { { Text(it) } },
-        trailingContent = { Icon(Icons.Outlined.ChevronRight, contentDescription = null) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-    )
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Icon(
+            Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /**
@@ -770,12 +821,16 @@ private fun SectionCard(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(22.dp),
             )
-            Spacer(Modifier.size(8.dp))
+            Spacer(Modifier.size(10.dp))
+            // v1.2.6 polish : grossi titleMedium + SemiBold pour les en-têtes de section.
+            // Anciennement labelLarge ~14sp qui se perdait visuellement dans la page.
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                ),
                 color = MaterialTheme.colorScheme.primary,
             )
         }
@@ -789,3 +844,148 @@ private fun SectionCard(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  v1.2.6 audit F4 — "Mon numéro" row + dialog + auto-detection helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reads the MSISDN of the default SMS subscription via [android.telephony.SubscriptionManager].
+ * Returns `null` on the (very common on Samsung One UI / Free Mobile FR) case where the OS
+ * does not expose the number — the user has to type it manually then.
+ *
+ * Requires `READ_PHONE_NUMBERS` (declared in the manifest, granted at first launch).
+ */
+@android.annotation.SuppressLint("MissingPermission")
+private fun detectMsisdn(context: android.content.Context): String? {
+    val sm = context.getSystemService(android.content.Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+        as? android.telephony.SubscriptionManager ?: return null
+    val defaultId = android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId()
+    if (defaultId == android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) return null
+    return try {
+        // Walk the active list and find the entry matching the default-SMS subId. Avoids the
+        // `getActiveSubscriptionInfoForSubscriptionId` overload which the AGP/Kotlin combo
+        // reports as unresolved on our current AGP 8.13 + Kotlin 2.0.21 setup.
+        val info: android.telephony.SubscriptionInfo? =
+            sm.activeSubscriptionInfoList?.firstOrNull { it.subscriptionId == defaultId }
+        // `SubscriptionInfo.number` is deprecated since API 30 but it still returns the SIM
+        // MSISDN when one is known to the platform — and there is no permission-less public
+        // alternative on AOSP. Suppression is scoped to this single call.
+        @Suppress("DEPRECATION")
+        val number = info?.number
+        number?.takeIf { it.isNotBlank() }
+    } catch (t: Throwable) {
+        timber.log.Timber.w(t, "detectMsisdn failed")
+        null
+    }
+}
+
+@Composable
+private fun MyNumberRow(current: String?, onChange: (String?) -> Unit) {
+    var dialogOpen by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { dialogOpen = true }
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(stringResource(R.string.settings_my_number), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = current?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.settings_my_number_not_set),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (current.isNullOrBlank()) cs.onSurfaceVariant else cs.primary,
+            )
+        }
+        Icon(
+            Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = cs.onSurfaceVariant,
+        )
+    }
+    if (dialogOpen) {
+        MyNumberDialog(
+            initial = current.orEmpty(),
+            onDismiss = { dialogOpen = false },
+            onConfirm = { value ->
+                dialogOpen = false
+                onChange(value)
+            },
+        )
+    }
+}
+
+@Composable
+private fun MyNumberDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    var value by remember { mutableStateOf(initial) }
+    val cs = MaterialTheme.colorScheme
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_my_number_dialog_title)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.settings_my_number_dialog_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                )
+                Spacer(Modifier.size(12.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it.trim() },
+                    placeholder = { Text(stringResource(R.string.settings_my_number_placeholder)) },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.size(8.dp))
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        val detected = detectMsisdn(context)
+                        if (detected != null) {
+                            value = detected
+                        } else {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.settings_my_number_detect_failed),
+                                )
+                            }
+                        }
+                    },
+                ) {
+                    Icon(
+                        Icons.Outlined.PhoneAndroid,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.settings_my_number_detect))
+                }
+                androidx.compose.material3.SnackbarHost(snackbarHostState)
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.Button(onClick = { onConfirm(value) }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}

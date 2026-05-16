@@ -2,6 +2,7 @@ package com.filestech.sms.ui.components
 
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -77,11 +78,17 @@ fun AudioMessageBubble(
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
+    // v1.2.6 design : la bulle vocale de l'expéditeur (outgoing) est désormais sans fond,
+    // juste un contour `cs.primary` pour garder la silhouette. La bulle entrante reste
+    // inchangée (fill slate-blue + contrôles primary).
     val bgColor = if (isOut) cs.primary else com.filestech.sms.ui.theme.bubbleIncomingColor(cs)
-    val controlColor = if (isOut) cs.onPrimary else cs.primary
-    val sliderActive = if (isOut) cs.onPrimary else cs.primary
-    val sliderInactive = (if (isOut) cs.onPrimary else cs.onSurfaceVariant).copy(alpha = 0.3f)
-    val labelColor = if (isOut) cs.onPrimary.copy(alpha = 0.85f) else cs.onSurfaceVariant
+    // Sans fond plein côté outgoing, on ne peut plus utiliser `onPrimary` (blanc) pour les
+    // contrôles : ils deviendraient invisibles sur la surface du thème. Bascule en `primary`
+    // pour les deux directions (l'incoming, sur fond slate-blue, reste lisible aussi).
+    val controlColor = cs.primary
+    val sliderActive = cs.primary
+    val sliderInactive = cs.onSurfaceVariant.copy(alpha = 0.3f)
+    val labelColor = cs.onSurfaceVariant
 
     // `derivedStateOf` blocks recomposition unless the *projected* slice changes — so a tick
     // that only moves `positionMs` on a non-active bubble emits the same `LocalPlayback.None`
@@ -141,26 +148,40 @@ fun AudioMessageBubble(
                 modifier = Modifier
                     .widthIn(min = 220.dp, max = 320.dp)
                     .clip(shape)
-                    .background(bgColor)
-                    // Bubble background is non-interactive — playback uses the play button +
-                    // slider, deletion now goes through the overflow menu on the side.
+                    // v1.2.6 design : outgoing → border seul (allégé). Incoming → fond
+                    // slate-blue comme avant.
+                    .then(
+                        if (isOut) Modifier.border(width = 1.5.dp, color = bgColor, shape = shape)
+                        else Modifier.background(bgColor),
+                    )
                     .padding(horizontal = 6.dp, vertical = 6.dp),
             ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // v1.2.6 : disque Play différencié par direction.
+                //  - outgoing : rond rempli avec **exactement la même couleur** que le contour
+                //    de la bulle (`bgColor`), pour cohérence visuelle. Icône blanche pleine.
+                //  - incoming : disque primary 15 % + icône primary (inchangé).
+                val playBg = if (isOut) bgColor else controlColor.copy(alpha = 0.15f)
+                val playTint = if (isOut) cs.onPrimary else controlColor
+                // Note : `Icons.Outlined.PlayArrow` / `Icons.Outlined.Pause` sont rendues
+                // pleines visuellement par Material (forme triangle/bâtonnets sans contour
+                // creux), donc une flèche `onPrimary` (blanche) sur fond bleu apparaît bien
+                // pleine — pas besoin de basculer vers `Filled.*`.
+                val playIcon = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(controlColor.copy(alpha = 0.15f)),
+                        .background(playBg),
                     contentAlignment = Alignment.Center,
                 ) {
                     IconButton(onClick = onTogglePlay, modifier = Modifier.size(36.dp)) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                            imageVector = playIcon,
                             contentDescription = stringResource(
                                 if (isPlaying) R.string.voice_action_pause else R.string.voice_action_play,
                             ),
-                            tint = controlColor,
+                            tint = playTint,
                         )
                     }
                 }
