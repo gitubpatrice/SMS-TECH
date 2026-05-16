@@ -1,0 +1,4 @@
+v1.2.9 — Détection auto du numéro qui marche enfin sur Samsung
+• Réglages → Envoi → Mon numéro : tap « Détecter depuis la SIM » demande automatiquement la permission Android
+• 3 sources testées dans l'ordre (SubscriptionManager.getPhoneNumber, SubscriptionInfo, TelephonyManager.line1Number)
+• Trouve le numéro sur Samsung One UI 6 et la plupart des configs où l'ancienne méthode rendait vide

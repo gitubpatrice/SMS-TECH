@@ -1,0 +1,4 @@
+v1.2.9 — SIM number auto-detect now works on Samsung
+• Settings → Sending → My number: tapping "Detect from SIM" requests the Android permission automatically
+• 3 sources tried in order (SubscriptionManager.getPhoneNumber, SubscriptionInfo, TelephonyManager.line1Number)
+• Returns a value on Samsung One UI 6 and most configs where the previous single source returned null

@@ -3,6 +3,28 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.2.9] — 2026-05-16
+
+UX fix sur l'auto-détection du MSISDN dans **Réglages → Envoi → Mon numéro**.
+
+### Fixed
+- **Demande automatique de la permission `READ_PHONE_NUMBERS`** quand l'utilisateur tap
+  "Détecter depuis la SIM" pour la première fois. Auparavant la fonction affichait juste
+  "Permission non accordée" en dur sans demander, donc l'utilisateur restait coincé. Au
+  refus, le message inline reste visible et la saisie manuelle est toujours possible.
+- **3 sources tentées dans l'ordre pour lire le MSISDN** au lieu de la seule
+  `SubscriptionInfo.number` (qui rend null sur Samsung One UI 6 / Free Mobile FR / la
+  plupart des MVNO) :
+  1. `SubscriptionManager.getPhoneNumber(subId)` (API 33+, méthode officielle moderne qui
+     agrège SIM + carrier + IMS)
+  2. `SubscriptionInfo.number` (chemin historique deprecated mais encore fonctionnel)
+  3. `TelephonyManager.createForSubscriptionId(subId).line1Number` (fallback ROM)
+  La première qui rend une valeur non vide gagne. Si les 3 rendent vide, log Timber explicite
+  (`detectMsisdn: no source returned a number`) et l'utilisateur saisit à la main.
+
+### Notes
+- Aucun changement format / schema. 24/24 tests verts.
+
 ## [1.2.8] — 2026-05-16
 
 Hotfix de v1.2.7 + perf import MMS. **v1.2.7 a été tag mais jamais publié en release GH** —

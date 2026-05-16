@@ -886,19 +886,45 @@ private fun detectMsisdn(context: android.content.Context): MsisdnDetection {
     if (defaultId == android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
         return MsisdnDetection.Unavailable
     }
-    return try {
-        // Walk the active list to find the entry matching the default-SMS subId. Avoids the
-        // `getActiveSubscriptionInfoForSubscriptionId` overload which the AGP/Kotlin combo
-        // reports as unresolved on our current AGP 8.13 + Kotlin 2.0.21 setup.
-        val info: android.telephony.SubscriptionInfo? =
-            sm.activeSubscriptionInfoList?.firstOrNull { it.subscriptionId == defaultId }
-        @Suppress("DEPRECATION")
-        val number = info?.number
-        if (number.isNullOrBlank()) MsisdnDetection.Unavailable
-        else MsisdnDetection.Success(number)
-    } catch (t: Throwable) {
-        timber.log.Timber.w(t, "detectMsisdn failed")
+    // v1.2.8 : la lecture du MSISDN est notoirement capricieuse sur Samsung One UI 6 /
+    // Free Mobile FR / MVNO. On essaie 3 sources dans l'ordre, et la première qui rend une
+    // valeur non vide gagne :
+    //   1. `SubscriptionManager.getPhoneNumber(subId)` (API 33+) — méthode officielle moderne,
+    //      ajoutée précisément pour résoudre ce problème ; agrège SIM / carrier / IMS.
+    //   2. `SubscriptionInfo.number` (API 22+, deprecated API 30+) — historique.
+    //   3. `TelephonyManager.createForSubscriptionId(subId).line1Number` (API 22+) — fallback
+    //      ROM/carrier qui répond parfois quand les deux autres rendent vide.
+    val candidates = sequence {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            runCatching { sm.getPhoneNumber(defaultId) }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { yield(it) }
+        }
+        runCatching {
+            val info = sm.activeSubscriptionInfoList?.firstOrNull { it.subscriptionId == defaultId }
+            @Suppress("DEPRECATION")
+            info?.number
+        }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { yield(it) }
+        runCatching {
+            val tm = context.getSystemService(android.telephony.TelephonyManager::class.java)
+                ?.createForSubscriptionId(defaultId)
+            @Suppress("DEPRECATION")
+            tm?.line1Number
+        }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { yield(it) }
+    }
+    val number = candidates.firstOrNull()
+    return if (number.isNullOrBlank()) {
+        timber.log.Timber.w("detectMsisdn: no source returned a number (subId=%d)", defaultId)
         MsisdnDetection.Unavailable
+    } else {
+        MsisdnDetection.Success(number)
     }
 }
 
@@ -959,6 +985,28 @@ private fun MyNumberDialog(
     var detectFeedback by remember { mutableStateOf<MsisdnDetection?>(null) }
     val cs = MaterialTheme.colorScheme
 
+    // v1.2.8 : si la permission READ_PHONE_NUMBERS n'est pas accordée au moment de tap
+    // "Détecter", on la demande automatiquement au lieu d'afficher juste un message d'erreur.
+    // Si l'utilisateur accepte, on relance la détection ; sinon on affiche le feedback.
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            scope.launch {
+                val result = withContext(kotlinx.coroutines.Dispatchers.IO) { detectMsisdn(context) }
+                when (result) {
+                    is MsisdnDetection.Success -> {
+                        value = result.msisdn
+                        detectFeedback = null
+                    }
+                    else -> detectFeedback = result
+                }
+            }
+        } else {
+            detectFeedback = MsisdnDetection.PermissionDenied
+        }
+    }
+
     // v1.2.7 audit Q7 : la valeur est valide si vide (= clear) OU matche le pattern MSISDN.
     val canSubmit = value.isBlank() || MSISDN_PATTERN.matches(value)
 
@@ -992,6 +1040,16 @@ private fun MyNumberDialog(
                     onClick = {
                         // v1.2.7 audit Q6 : detectMsisdn fait un binder IPC ; on l'exécute
                         // sur Dispatchers.IO pour ne pas geler le main thread.
+                        // v1.2.8 : si la permission n'est pas encore accordée, on la demande
+                        // d'abord — le callback du launcher relance la détection.
+                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.READ_PHONE_NUMBERS,
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if (!granted) {
+                            permissionLauncher.launch(android.Manifest.permission.READ_PHONE_NUMBERS)
+                            return@TextButton
+                        }
                         scope.launch {
                             val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
                                 detectMsisdn(context)
