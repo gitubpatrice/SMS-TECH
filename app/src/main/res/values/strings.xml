@@ -260,6 +260,37 @@
     <string name="settings_my_number_detect_no_perm">Phone-numbers permission not granted — enter it manually</string>
     <string name="settings_my_number_invalid">Must be a valid phone number (+ and digits)</string>
 
+    <string name="settings_auto_delete_title">History cleanup</string>
+    <string name="settings_auto_delete_desc">Deletes SMS, MMS and voice messages older than the chosen age. Automatic cleanup runs at most once a month; you can also trigger a manual cleanup at any time. Starred messages are never deleted.</string>
+    <string name="settings_auto_delete_explainer">Auto runs once a month. Starred messages are never deleted.</string>
+    <string name="settings_auto_delete_off">Off — delete nothing</string>
+    <string name="settings_auto_delete_30">Delete messages older than 30 days</string>
+    <string name="settings_auto_delete_60">Delete messages older than 60 days</string>
+    <string name="settings_auto_delete_180">Delete messages older than 180 days</string>
+    <string name="settings_auto_delete_n_days">Delete messages older than %1$d days</string>
+    <string name="settings_auto_delete_status_off">Off</string>
+    <string name="settings_auto_delete_status_30">Deletes messages older than 30 days</string>
+    <string name="settings_auto_delete_status_60">Deletes messages older than 60 days</string>
+    <string name="settings_auto_delete_status_180">Deletes messages older than 180 days</string>
+    <string name="settings_auto_delete_status_n_days">Deletes messages older than %1$d days</string>
+    <string name="settings_auto_delete_purge_now">Clean up now</string>
+    <string name="settings_auto_delete_purge_now_disabled">Pick a duration to enable</string>
+    <string name="settings_auto_delete_purge_confirm_title">Confirm cleanup</string>
+    <string name="settings_auto_delete_purge_confirm_zero">No messages to delete for this duration.</string>
+    <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) older than %2$d days will be deleted. Starred messages are kept. This cannot be undone.</string>
+    <string name="settings_auto_delete_purge_done">%1$d message(s) deleted.</string>
+    <string name="action_delete_now">Delete</string>
+    <string name="settings_resync_title">Resync from phone</string>
+    <string name="settings_resync_desc">Re-imports all SMS from the Android system. Useful to recover history deleted by mistake. No duplicates.</string>
+    <string name="settings_resync_started">Resync started in background.</string>
+
+    <string name="action_react">React</string>
+    <string name="reaction_picker_other">Other emoji</string>
+    <string name="reaction_picker_other_title">Custom emoji</string>
+    <string name="reaction_picker_other_body">Type or paste an emoji</string>
+    <string name="reaction_picker_other_hint">😀</string>
+    <string name="reaction_picker_remove">Remove reaction</string>
+
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>
     <string name="settings_notifications_style">Style</string>

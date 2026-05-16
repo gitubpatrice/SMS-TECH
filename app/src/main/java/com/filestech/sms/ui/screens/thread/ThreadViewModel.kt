@@ -307,6 +307,18 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
+     * v1.3.0 — pose / retire la réaction emoji locale d'un message. `emoji = null` retire.
+     * Pas d'envoi côté SMS/MMS (réactions non standardisées en SMS) ; le ConversationRepository
+     * observe la table `messages` via Flow et la bulle se recompose automatiquement.
+     */
+    fun setReaction(messageId: Long, emoji: String?) {
+        viewModelScope.launch {
+            runCatching { repo.setReaction(messageId, emoji) }
+                .onFailure { timber.log.Timber.w(it, "setReaction(%d, %s) failed", messageId, emoji) }
+        }
+    }
+
+    /**
      * Receives an attachment URI from [com.filestech.sms.ui.components.AttachmentPickerSheet]
      * (#2) and dispatches it as a multipart MMS via [SendMediaMmsUseCase].
      *
@@ -695,7 +707,9 @@ class ThreadViewModel @Inject constructor(
     }
 
     private companion object {
-        const val SNACK_MAX_DURATION: String = "Limite de 60 s atteinte"
+        // v1.3.0 audit Q8 — calculé depuis `VoiceRecorder.MAX_DURATION_MS` pour qu'un futur
+        // changement du cap soit reflété sans drift dans le snack utilisateur.
+        val SNACK_MAX_DURATION: String = "Limite de ${VoiceRecorder.MAX_DURATION_MS / 1000} s atteinte"
         const val SNACK_TRANSLATE_FAILED: String = "Échec de la traduction"
         const val SNACK_ATTACH_SENT: String = "Pièce jointe envoyée"
         const val SNACK_ATTACH_COPY_FAILED: String = "Impossible de lire la pièce jointe"

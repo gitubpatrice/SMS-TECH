@@ -49,6 +49,12 @@ abstract class AppDatabase : RoomDatabase() {
         //   matching index. Lets the retry path delete the stale `content://mms` row from the
         //   previous attempt before inserting a fresh outbox row — guarantees one MMS = one
         //   system-provider row visible across all SMS apps, even during retry windows.
-        const val SCHEMA_VERSION = 3
+        // v4 (2026-05-16, v1.3.0): adds `messages.reaction_emoji` (nullable TEXT) for the
+        //   per-message local emoji reaction feature. Pas d'index (jamais filtré dessus).
+        // v5 (2026-05-16, v1.3.0 audit P1): adds `index_messages_date` so the auto-purge
+        //   `WHERE date < cutoff` (TelephonySyncWorker tick) ne fait plus de full scan
+        //   SQLCipher. Bump séparé de v4 pour absorber proprement les users qui ont
+        //   reçu un build v1.3.0 intermédiaire avec migration v3→v4 sans index.
+        const val SCHEMA_VERSION = 5
     }
 }

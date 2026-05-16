@@ -86,6 +86,47 @@ class TelephonySyncWorker @AssistedInject constructor(
                 val deleted = mmsSystemWriteback.purgeStaleOutbox(PENDING_TIMEOUT_MS)
                 if (deleted > 0) Timber.i("Watchdog: %d stale system OUTBOX rows purged", deleted)
             }.onFailure { Timber.w(it, "OUTBOX system watchdog failed") }
+            // v1.3.0 — auto-nettoyage de l'historique, cadence mensuelle. Le worker
+            // s'exécute toutes les 12 h pour d'autres raisons (sync SMS, watchdogs) ; on
+            // gate la purge sur `now - lastAutoPurgeAt >= AUTO_PURGE_INTERVAL_MS` pour
+            // qu'elle ne tourne qu'une fois par mois. `safetyNet` côté Kotlin protège
+            // toujours les 5 derniers jours (anti-misconfig) ; pour les rétentions exposées
+            // (30/60/180 j) il est strictement plus large donc neutre. Favoris (starred=1)
+            // épargnés au niveau du DAO.
+            runCatching {
+                val sec = settings.flow.first().security
+                val days = sec.autoDeleteOlderThanDays
+                if (days != null && days > 0) {
+                    val now = System.currentTimeMillis()
+                    val last = sec.lastAutoPurgeAt
+                    if (last == null) {
+                        // FIX critique : à la première activation par l'utilisateur, `last` est
+                        // null. Sans ce garde, `now - 0 >= 30 j` est vrai → purge déclenchée
+                        // IMMÉDIATEMENT, ce qui n'est pas l'attente utilisateur ("1 fois par
+                        // mois"). On ancre `lastAutoPurgeAt = now` au tout premier passage et
+                        // on attend l'intervalle réel avant de purger pour la première fois.
+                        settings.update {
+                            it.copy(security = it.security.copy(lastAutoPurgeAt = now))
+                        }
+                        Timber.i("Auto-purge: first run, anchor set; first purge in %d days", AUTO_PURGE_INTERVAL_MS / MS_PER_DAY)
+                    } else if (now - last >= AUTO_PURGE_INTERVAL_MS) {
+                        val retentionCutoff = now - days.toLong() * MS_PER_DAY
+                        val safetyNetCutoff = now - SAFETY_NET_DAYS * MS_PER_DAY
+                        val cutoff = minOf(retentionCutoff, safetyNetCutoff)
+                        val purged = messageDao.purgeOlderThan(cutoff)
+                        settings.update {
+                            it.copy(security = it.security.copy(lastAutoPurgeAt = now))
+                        }
+                        Timber.i(
+                            "Auto-purge: %d messages older than %d days (safety net %d d, next in %d d)",
+                            purged, days, SAFETY_NET_DAYS, AUTO_PURGE_INTERVAL_MS / MS_PER_DAY,
+                        )
+                    } else {
+                        val nextInDays = (AUTO_PURGE_INTERVAL_MS - (now - last)) / MS_PER_DAY
+                        Timber.d("Auto-purge: skipped (next in ~%d days)", nextInDays)
+                    }
+                }
+            }.onFailure { Timber.w(it, "Auto-purge failed") }
             Result.success()
         } catch (t: Throwable) {
             Timber.w(t, "TelephonySyncWorker failed")
@@ -172,6 +213,21 @@ class TelephonySyncWorker @AssistedInject constructor(
         const val ONE_SHOT_NAME = "telephony_sync_oneshot"
         private const val STALE_CACHE_AGE_MS = 24L * 60L * 60L * 1_000L
         private const val PENDING_TIMEOUT_MS = 15L * 60L * 1_000L
+        /** v1.3.0 — millisecondes / jour, partagé entre les calculs de purge. */
+        private const val MS_PER_DAY: Long = 24L * 60L * 60L * 1_000L
+        /**
+         * v1.3.0 — safety net auto-purge : aucun message des N derniers jours n'est jamais
+         * supprimé, quel que soit le setting de rétention choisi par l'utilisateur. Un
+         * seul site de définition (ici) pour faciliter un changement futur.
+         */
+        private const val SAFETY_NET_DAYS: Long = 5L
+        /**
+         * v1.3.0 — cadence de l'auto-nettoyage. Le worker tourne toutes les 12 h pour
+         * d'autres raisons (sync SMS, watchdogs PENDING / OUTBOX) mais on gate la purge
+         * sur 30 jours pour matcher l'attente utilisateur ("1 fois par mois"). Le bouton
+         * "Effacer maintenant" du dialog réglages bypass complètement ce gate.
+         */
+        private const val AUTO_PURGE_INTERVAL_MS: Long = 30L * MS_PER_DAY
 
         /**
          * Enqueues the recurring 12 h job. Uses [ExistingPeriodicWorkPolicy.KEEP] so repeated

@@ -23,4 +23,27 @@ interface ConversationRepository {
     suspend fun delete(id: Long)
     suspend fun deleteMessage(messageId: Long)
     suspend fun search(query: String): List<Message>
+
+    /**
+     * v1.3.0 — pose ([emoji] non-null) ou retire ([emoji] = null) une réaction emoji locale
+     * sur le message [messageId]. Aucun écho réseau (pas de send-side-effect — les réactions
+     * ne sont pas standardisées en SMS/MMS, c'est purement côté Room). No-op silencieux si le
+     * message n'existe plus (ex. : purgé par l'auto-purge, supprimé concurrently).
+     */
+    suspend fun setReaction(messageId: Long, emoji: String?)
+
+    /**
+     * v1.3.0 — compte combien de messages seraient effacés par un nettoyage manuel à la
+     * profondeur [olderThanDays] (jours). Utilisé par le dialog réglages avant confirmation.
+     * Ne touche jamais aux favoris ni aux 5 derniers jours (filet interne).
+     */
+    suspend fun countMessagesToPurge(olderThanDays: Int): Int
+
+    /**
+     * v1.3.0 — efface MAINTENANT les messages plus vieux que [olderThanDays] jours, en
+     * appliquant le filet interne 5 jours et en épargnant les favoris. Ne touche pas au
+     * cycle auto-mensuel (le `lastAutoPurgeAt` n'est pas mis à jour). Retourne le nombre
+     * de rows effacées pour feedback UI.
+     */
+    suspend fun purgeHistoryNow(olderThanDays: Int): Int
 }

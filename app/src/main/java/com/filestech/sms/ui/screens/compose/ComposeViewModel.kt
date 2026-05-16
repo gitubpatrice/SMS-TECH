@@ -77,10 +77,14 @@ class ComposeViewModel @Inject constructor(
     fun filteredContacts(): List<Contact> {
         val q = _state.value.query.trim()
         if (q.isEmpty()) return _state.value.results
+        // v1.2.10 fix : si `q` est du texte pur (ex. "Patrice"), `normalizePhone()` rend "" et
+        // `contains("")` est toujours vrai → le filtre passait sur TOUS les contacts. Guard
+        // `n.isNotBlank()` pour ne tenter le match phone que si l'utilisateur tape des chiffres.
         val n = q.normalizePhone()
         return _state.value.results.filter { c ->
-            (c.displayName?.contains(q, ignoreCase = true) == true) ||
-                c.phones.any { p -> p.normalized.contains(n) }
+            val nameMatch = c.displayName?.contains(q, ignoreCase = true) == true
+            val phoneMatch = n.isNotBlank() && c.phones.any { p -> p.normalized.contains(n) }
+            nameMatch || phoneMatch
         }
     }
 }

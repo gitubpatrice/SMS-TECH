@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.DropdownMenu
@@ -46,6 +47,7 @@ fun BubbleMenuTrigger(
     onDelete: () -> Unit,
     onReply: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
+    onReact: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -95,6 +97,23 @@ fun BubbleMenuTrigger(
                     onClick = {
                         expanded = false
                         onTranslate()
+                    },
+                )
+            }
+            // v1.3.0 — entrée "Réagir" : ouvre le picker emoji côté ThreadScreen. Placée
+            // avant Delete pour respecter le pattern "destructive en dernier".
+            if (onReact != null) {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.EmojiEmotions,
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(stringResource(R.string.action_react)) },
+                    onClick = {
+                        expanded = false
+                        onReact()
                     },
                 )
             }

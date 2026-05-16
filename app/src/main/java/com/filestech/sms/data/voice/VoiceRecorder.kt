@@ -25,9 +25,9 @@ import javax.inject.Singleton
  * every Android 5+ device); no third-party library is used.
  *
  * Hard caps:
- *   - duration: [MAX_DURATION_MS] (60 s)
- *   - file size: [MAX_SIZE_BYTES] (300 KB) — keeps the resulting MMS comfortably below the
- *     ~300 KB ceiling that most carrier MMSCs enforce.
+ *   - duration: [MAX_DURATION_MS] (120 s)
+ *   - file size: [MAX_SIZE_BYTES] (450 KB) — keeps the resulting MMS comfortably below the
+ *     ~600 KB total ceiling that most carrier MMSCs (FR Free/Orange/SFR/Bouygues) enforce.
  *
  * Concurrency: only one recording at a time. A second [record] call while one is active emits
  * [Event.Failed] with [AppError.Telephony] "recorder busy" and closes immediately.
@@ -284,14 +284,21 @@ class VoiceRecorder @Inject constructor(
     companion object {
         const val MIME_AUDIO_M4A: String = "audio/mp4"
 
-        /** Hard duration cap. MMS clips longer than this are uncomfortable to send and to listen. */
-        const val MAX_DURATION_MS: Int = 60_000
+        /**
+         * Hard duration cap. v1.3.0 : 60 s → 120 s. À 16 kHz mono AAC 24 kbps (paramètres
+         * MediaRecorder ci-dessus), 120 s génère ~360 KB encodé (24_000 b/s × 120 s = 360 000 B
+         * de payload + ~5 KB d'overhead conteneur MP4 / esds / moov), ce qui reste sous la
+         * limite [MAX_SIZE_BYTES] ; sans ça MediaRecorder coupe à ~102 s pour cause de taille,
+         * pas de durée — la promesse "120 s" serait alors mensongère.
+         */
+        const val MAX_DURATION_MS: Int = 120_000
 
         /**
-         * Hard size cap. Most carrier MMSCs accept ~300 KB; some restrict to 600 KB total
-         * (audio + headers + SMIL). 300 KB of payload leaves headroom for both.
+         * Hard size cap. Carrier MMSCs FR (Free, Orange, SFR, Bouygues) acceptent ~600 KB
+         * total (audio + headers + SMIL). 450 KB de payload laisse ~150 KB de headroom pour
+         * le wrap MMS et permet à AAC 24 kbps × 120 s (~360 KB) de tenir sans clipping.
          */
-        const val MAX_SIZE_BYTES: Long = 300L * 1024L
+        const val MAX_SIZE_BYTES: Long = 450L * 1024L
 
         const val SAMPLE_RATE_HZ: Int = 16_000
         const val BITRATE_BPS: Int = 24_000

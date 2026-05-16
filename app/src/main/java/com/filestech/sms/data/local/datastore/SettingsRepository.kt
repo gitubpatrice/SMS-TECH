@@ -79,6 +79,7 @@ class SettingsRepository @Inject constructor(
                 lockVaultOnLeave = p[K.lockVault] ?: true,
                 panicCodeEnabled = p[K.panicCode] ?: false,
                 autoDeleteOlderThanDays = p[K.autoDeleteDays],
+                lastAutoPurgeAt = p[K.lastAutoPurgeAt],
             ),
             blocking = BlockingSettings(
                 blockUnknown = p[K.blockUnknown] ?: false,
@@ -140,6 +141,7 @@ class SettingsRepository @Inject constructor(
         this[K.lockVault] = s.security.lockVaultOnLeave
         this[K.panicCode] = s.security.panicCodeEnabled
         s.security.autoDeleteOlderThanDays?.let { this[K.autoDeleteDays] = it } ?: remove(K.autoDeleteDays)
+        s.security.lastAutoPurgeAt?.let { this[K.lastAutoPurgeAt] = it } ?: remove(K.lastAutoPurgeAt)
 
         this[K.blockUnknown] = s.blocking.blockUnknown
         this[K.blockShort] = s.blocking.blockShortCodes
@@ -194,6 +196,7 @@ class SettingsRepository @Inject constructor(
         val lockVault = booleanPreferencesKey("security.lockVault")
         val panicCode = booleanPreferencesKey("security.panic")
         val autoDeleteDays = intPreferencesKey("security.autoDeleteDays")
+        val lastAutoPurgeAt = longPreferencesKey("security.lastAutoPurgeAt")
         val blockUnknown = booleanPreferencesKey("block.unknown")
         val blockShort = booleanPreferencesKey("block.short")
         val autoBackup = stringPreferencesKey("backup.auto")

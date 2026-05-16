@@ -90,7 +90,19 @@ data class SecuritySettings(
     val flagSecure: Boolean = true,
     val lockVaultOnLeave: Boolean = true,
     val panicCodeEnabled: Boolean = false,
+    /**
+     * Profondeur de l'auto-nettoyage : NULL ou 0 = désactivé, sinon nombre de jours
+     * au-delà duquel les messages sont effacés. L'auto-nettoyage tourne au plus une fois
+     * par mois (voir [lastAutoPurgeAt]) ; le bouton "Effacer maintenant" du dialog
+     * applique la même profondeur sans toucher au cycle auto.
+     */
     val autoDeleteOlderThanDays: Int? = null,
+    /**
+     * Timestamp epoch ms du dernier passage de l'auto-nettoyage (manuel ou auto). NULL =
+     * jamais. Le worker compare `now - lastAutoPurgeAt >= AUTO_PURGE_INTERVAL_MS`
+     * (30 jours) avant de re-purger, pour éviter le spam toutes les 12 h.
+     */
+    val lastAutoPurgeAt: Long? = null,
 )
 
 enum class LockMode { OFF, PIN, PATTERN, BIOMETRIC }

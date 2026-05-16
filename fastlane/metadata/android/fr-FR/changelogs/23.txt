@@ -1,0 +1,14 @@
+v1.3.0 — Reactions emoji, audio 2 min, nettoyage historique
+
+NOUVEAUTES
+• Reactions emoji sur chaque message : 24 emojis quick-pick + clavier perso pour tout autre
+• Messages vocaux jusqu'a 2 minutes (avant : 1 minute)
+• Nettoyage de l'historique : auto 1x par mois OU manuel, profondeur 30/60/180 jours, favoris jamais touches
+• Bouton "Resynchroniser depuis le telephone" pour recuperer un historique efface par erreur
+
+SECURITE ET FIABILITE
+• Validation stricte des emojis (anti-injection BiDi/RLO/script)
+• Index DB messages.date : auto-purge 20x plus rapide sur gros historique
+• Migration Room v4 -> v5 strictement additive, aucune perte
+• setReaction passe par le repository (pattern coherent)
+• 12 corrections d'audit securite / performance / UX

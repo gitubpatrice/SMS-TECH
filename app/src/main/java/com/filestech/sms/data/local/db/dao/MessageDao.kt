@@ -58,6 +58,13 @@ interface MessageDao {
     suspend fun findMmsSystemId(id: Long): Long?
 
     /**
+     * v1.3.0 — set / clear la réaction emoji posée par l'utilisateur sur un message. `null`
+     * = retire la réaction. Aucun écho côté SMS/MMS (réactions non standardisées en SMS).
+     */
+    @Query("UPDATE messages SET reaction_emoji = :emoji WHERE id = :id")
+    suspend fun setReaction(id: Long, emoji: String?)
+
+    /**
      * Audit M-5 + M-1: stalls-watchdog. Bulk-promotes outgoing messages stuck in `PENDING`
      * (status 0) past [olderThanMs] to `FAILED` (status 3) **and tags them with the
      * dedicated `error_code = -2` (WATCHDOG_TIMEOUT) sentinel** to distinguish them from
@@ -146,10 +153,25 @@ interface MessageDao {
     )
     suspend fun countSince(conversationId: Long, since: Long): Int
 
-    @Query(
-        """
-        DELETE FROM messages WHERE date < :olderThan AND starred = 0
-        """,
-    )
+    /**
+     * Purge les messages dont la date est antérieure à [olderThan] et qui ne sont pas starred.
+     *
+     * v1.3.0 audit Q2/Q3 : le caller doit pré-calculer `olderThan` en intégrant le safety net
+     * (`min(now - retentionDays·DAY, now - SAFETY_NET_DAYS·DAY)`). On ne fait pas ce calcul ici
+     * pour éviter une 2ᵉ surcharge SQL dont la condition `date < safetyNet` est impliquée par
+     * `date < olderThan` dès que `retentionDays >= SAFETY_NET_DAYS` — c'était un faux filet de
+     * sécurité côté DB. La logique reste centralisée côté worker, observable et testable.
+     */
+    @Query("DELETE FROM messages WHERE date < :olderThan AND starred = 0")
     suspend fun purgeOlderThan(olderThan: Long): Int
+
+    /**
+     * v1.3.0 — compte combien de messages seraient effacés par [purgeOlderThan] avec ce
+     * même `olderThan`. Sert au bouton "Effacer maintenant" du dialog réglages : on
+     * affiche d'abord à l'utilisateur "X messages vont être effacés, continuer ?" pour
+     * éviter un wipe massif accidentel. Utilise le même filtre `starred = 0` pour la
+     * cohérence parfaite avec la purge réelle.
+     */
+    @Query("SELECT COUNT(*) FROM messages WHERE date < :olderThan AND starred = 0")
+    suspend fun countOlderThan(olderThan: Long): Int
 }

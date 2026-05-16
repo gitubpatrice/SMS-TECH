@@ -46,6 +46,8 @@ fun MessageBubble(
     onDelete: () -> Unit = {},
     onReply: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
+    onReact: (() -> Unit)? = null,
+    onRemoveReaction: () -> Unit = {},
     repliedToPreview: ReplyQuotePreview? = null,
     translationState: TranslationDisplayState? = null,
     onDismissTranslation: (() -> Unit)? = null,
@@ -79,6 +81,7 @@ fun MessageBubble(
             BubbleMenuTrigger(
                 onReply = onReply,
                 onTranslate = onTranslate,
+                onReact = onReact,
                 onDelete = onDelete,
             )
         }
@@ -93,25 +96,33 @@ fun MessageBubble(
                     modifier = Modifier.padding(bottom = 2.dp),
                 )
             }
-            Box(
-                modifier = Modifier
-                    .widthIn(min = 32.dp, max = 320.dp)
-                    .clip(shape)
-                    .then(
-                        if (isOut) Modifier.drawBehind { drawRect(outgoingBrush) }
-                        else Modifier.background(com.filestech.sms.ui.theme.bubbleIncomingColor(cs)),
-                    )
-                    // Tap → retry (handled by parent on FAILED rows). Delete is now driven by
-                    // the bubble's overflow menu (see [BubbleMenuTrigger]) so the bubble area
-                    // itself only handles taps.
-                    .clickable(onClick = onTap)
-                    .padding(PaddingValues(horizontal = 14.dp, vertical = 10.dp)),
+            // v1.3.0 — wrap dans BubbleReactionOverlay : no-op si pas de réaction (early
+            // return interne), sinon affiche le cercle emoji en chevauchement.
+            BubbleReactionOverlay(
+                reactionEmoji = message.reactionEmoji,
+                isOutgoing = isOut,
+                onRemoveReaction = onRemoveReaction,
             ) {
-                Text(
-                    text = message.body,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = textColor,
-                )
+                Box(
+                    modifier = Modifier
+                        .widthIn(min = 32.dp, max = 320.dp)
+                        .clip(shape)
+                        .then(
+                            if (isOut) Modifier.drawBehind { drawRect(outgoingBrush) }
+                            else Modifier.background(com.filestech.sms.ui.theme.bubbleIncomingColor(cs)),
+                        )
+                        // Tap → retry (handled by parent on FAILED rows). Delete is now driven by
+                        // the bubble's overflow menu (see [BubbleMenuTrigger]) so the bubble area
+                        // itself only handles taps.
+                        .clickable(onClick = onTap)
+                        .padding(PaddingValues(horizontal = 14.dp, vertical = 10.dp)),
+                ) {
+                    Text(
+                        text = message.body,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = textColor,
+                    )
+                }
             }
             if (translationState != null) {
                 TranslationBlock(
@@ -127,6 +138,7 @@ fun MessageBubble(
             BubbleMenuTrigger(
                 onReply = onReply,
                 onTranslate = onTranslate,
+                onReact = onReact,
                 onDelete = onDelete,
             )
         }

@@ -49,6 +49,41 @@ internal object Migrations {
         }
     }
 
+    /**
+     * v3 → v4 (2026-05-16, v1.3.0).
+     *
+     *  - Ajoute `messages.reaction_emoji TEXT` (nullable). NULL pour les legacy rows.
+     *  - Pas d'index — la colonne n'est jamais filtrée. L'index `index_messages_date`
+     *    nécessaire à l'auto-purge a été extrait dans une migration v4→v5 dédiée pour
+     *    absorber proprement les users qui ont reçu un build v1.3.0 intermédiaire avec
+     *    schema v4 sans cet index.
+     *
+     * Strictement additive — `ALTER TABLE ADD COLUMN`, aucune row touchée.
+     */
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE messages ADD COLUMN reaction_emoji TEXT")
+        }
+    }
+
+    /**
+     * v4 → v5 (2026-05-16, v1.3.0 audit P1).
+     *
+     *  - Crée `index_messages_date` pour que l'auto-purge `WHERE date < cutoff` (tick
+     *    `TelephonySyncWorker`) ne fasse plus de full scan SQLCipher (~1 s sur 50 k rows
+     *    chiffrés). L'index composite existant `(conversation_id, date)` est inopérant ici
+     *    puisque la purge est inter-conversations.
+     *  - `IF NOT EXISTS` rend l'opération idempotente : un user qui aurait reçu une variante
+     *    intermédiaire ayant déjà créé cet index voit la migration ne rien faire, sans crash.
+     *
+     * Strictement additive — pas de row touchée.
+     */
+    val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_date ON messages(date)")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }

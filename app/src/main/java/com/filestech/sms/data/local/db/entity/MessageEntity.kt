@@ -31,6 +31,11 @@ import kotlinx.serialization.Serializable
         // up the previous system-provider row id by Room message id, and (future) the watchdog
         // may reconcile Room ↔ content://mms via mmsSystemId.
         Index(value = ["mms_system_id"]),
+        // Schema v4 (v1.3.0 audit P1). Auto-purge filtre par `date < cutoff` sur l'ensemble
+        // de la table ; sans index dédié, SQLCipher fait un full scan + déchiffrement page par
+        // page (~1 s pour 50 k rows). L'index composite (conversation_id, date) est inopérant
+        // ici puisque la purge est inter-conversations. Coût ~8 B / row, négligeable.
+        Index(value = ["date"]),
     ],
 )
 data class MessageEntity(
@@ -74,6 +79,12 @@ data class MessageEntity(
      * rows for the same Room message even briefly.
      */
     @ColumnInfo(name = "mms_system_id") val mmsSystemId: Long? = null,
+    /**
+     * Schema v4 — réaction emoji locale posée par l'utilisateur sur ce message (v1.3.0).
+     * `null` = pas de réaction. Une seule réaction par message (la mienne), pas envoyée
+     * par SMS — c'est purement local côté Room, pas standardisé en SMS/MMS.
+     */
+    @ColumnInfo(name = "reaction_emoji") val reactionEmoji: String? = null,
 )
 
 /** Companion-style constants kept on file scope to avoid object boxing in Room. */

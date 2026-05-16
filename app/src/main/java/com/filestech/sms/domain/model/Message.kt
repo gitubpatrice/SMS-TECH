@@ -28,6 +28,12 @@ data class Message(
      * loaded list — a dangling reference (quoted message deleted) renders a fallback placeholder.
      */
     val replyToMessageId: Long? = null,
+    /**
+     * v1.3.0 — réaction emoji locale posée par l'utilisateur. `null` = pas de réaction.
+     * Une seule réaction par message (la mienne), pas standardisée en SMS donc pas envoyée
+     * — purement local pour annoter son propre fil.
+     */
+    val reactionEmoji: String? = null,
 ) {
     enum class Type { SMS, MMS }
     enum class Direction { INCOMING, OUTGOING }
@@ -66,4 +72,5 @@ fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message
     scheduledAt = scheduledAt,
     attachments = attachments,
     replyToMessageId = replyToMessageId,
+    reactionEmoji = reactionEmoji,
 )

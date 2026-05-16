@@ -73,6 +73,8 @@ fun AudioMessageBubble(
     onSeekTo: (Int) -> Unit,
     onDelete: () -> Unit = {},
     onReply: (() -> Unit)? = null,
+    onReact: (() -> Unit)? = null,
+    onRemoveReaction: () -> Unit = {},
     repliedToPreview: ReplyQuotePreview? = null,
     showTimestamp: Boolean = false,
 ) {
@@ -133,7 +135,7 @@ fun AudioMessageBubble(
         horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isOut) BubbleMenuTrigger(onReply = onReply, onDelete = onDelete)
+        if (isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onDelete = onDelete)
         androidx.compose.foundation.layout.Column(
             horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
         ) {
@@ -144,70 +146,77 @@ fun AudioMessageBubble(
                     modifier = Modifier.padding(bottom = 2.dp),
                 )
             }
-            Box(
-                modifier = Modifier
-                    .widthIn(min = 220.dp, max = 320.dp)
-                    .clip(shape)
-                    // v1.2.6 design : outgoing → border seul (allégé). Incoming → fond
-                    // slate-blue comme avant.
-                    .then(
-                        if (isOut) Modifier.border(width = 1.5.dp, color = bgColor, shape = shape)
-                        else Modifier.background(bgColor),
-                    )
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
+            // v1.3.0 — wrap dans BubbleReactionOverlay (no-op sans réaction).
+            BubbleReactionOverlay(
+                reactionEmoji = message.reactionEmoji,
+                isOutgoing = isOut,
+                onRemoveReaction = onRemoveReaction,
             ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // v1.2.6 : disque Play différencié par direction.
-                //  - outgoing : rond rempli avec **exactement la même couleur** que le contour
-                //    de la bulle (`bgColor`), pour cohérence visuelle. Icône blanche pleine.
-                //  - incoming : disque primary 15 % + icône primary (inchangé).
-                val playBg = if (isOut) bgColor else controlColor.copy(alpha = 0.15f)
-                val playTint = if (isOut) cs.onPrimary else controlColor
-                // Note : `Icons.Outlined.PlayArrow` / `Icons.Outlined.Pause` sont rendues
-                // pleines visuellement par Material (forme triangle/bâtonnets sans contour
-                // creux), donc une flèche `onPrimary` (blanche) sur fond bleu apparaît bien
-                // pleine — pas besoin de basculer vers `Filled.*`.
-                val playIcon = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(playBg),
-                    contentAlignment = Alignment.Center,
+                        .widthIn(min = 220.dp, max = 320.dp)
+                        .clip(shape)
+                        // v1.2.6 design : outgoing → border seul (allégé). Incoming → fond
+                        // slate-blue comme avant.
+                        .then(
+                            if (isOut) Modifier.border(width = 1.5.dp, color = bgColor, shape = shape)
+                            else Modifier.background(bgColor),
+                        )
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                 ) {
-                    IconButton(onClick = onTogglePlay, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            imageVector = playIcon,
-                            contentDescription = stringResource(
-                                if (isPlaying) R.string.voice_action_pause else R.string.voice_action_play,
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // v1.2.6 : disque Play différencié par direction.
+                        //  - outgoing : rond rempli avec **exactement la même couleur** que le contour
+                        //    de la bulle (`bgColor`), pour cohérence visuelle. Icône blanche pleine.
+                        //  - incoming : disque primary 15 % + icône primary (inchangé).
+                        val playBg = if (isOut) bgColor else controlColor.copy(alpha = 0.15f)
+                        val playTint = if (isOut) cs.onPrimary else controlColor
+                        // Note : `Icons.Outlined.PlayArrow` / `Icons.Outlined.Pause` sont rendues
+                        // pleines visuellement par Material (forme triangle/bâtonnets sans contour
+                        // creux), donc une flèche `onPrimary` (blanche) sur fond bleu apparaît bien
+                        // pleine — pas besoin de basculer vers `Filled.*`.
+                        val playIcon = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(playBg),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            IconButton(onClick = onTogglePlay, modifier = Modifier.size(36.dp)) {
+                                Icon(
+                                    imageVector = playIcon,
+                                    contentDescription = stringResource(
+                                        if (isPlaying) R.string.voice_action_pause else R.string.voice_action_play,
+                                    ),
+                                    tint = playTint,
+                                )
+                            }
+                        }
+                        Slider(
+                            value = sliderValue.coerceIn(0f, 1f),
+                            onValueChange = { f ->
+                                if (totalMs > 0) onSeekTo((f * totalMs).toInt())
+                            },
+                            enabled = totalMs > 0,
+                            colors = SliderDefaults.colors(
+                                thumbColor = sliderActive,
+                                activeTrackColor = sliderActive,
+                                inactiveTrackColor = sliderInactive,
                             ),
-                            tint = playTint,
+                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                        )
+                        Text(
+                            text = formatBubbleDuration(if (isPlaying && positionMs > 0) positionMs.toLong() else totalMs.toLong()),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = labelColor,
+                            modifier = Modifier.padding(end = 4.dp),
                         )
                     }
                 }
-                Slider(
-                    value = sliderValue.coerceIn(0f, 1f),
-                    onValueChange = { f ->
-                        if (totalMs > 0) onSeekTo((f * totalMs).toInt())
-                    },
-                    enabled = totalMs > 0,
-                    colors = SliderDefaults.colors(
-                        thumbColor = sliderActive,
-                        activeTrackColor = sliderActive,
-                        inactiveTrackColor = sliderInactive,
-                    ),
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-                )
-                Text(
-                    text = formatBubbleDuration(if (isPlaying && positionMs > 0) positionMs.toLong() else totalMs.toLong()),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = labelColor,
-                    modifier = Modifier.padding(end = 4.dp),
-                )
-            }
             }
         }
-        if (!isOut) BubbleMenuTrigger(onReply = onReply, onDelete = onDelete)
+        if (!isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onDelete = onDelete)
     }
 
     if (showTimestamp || message.status == Message.Status.FAILED) {

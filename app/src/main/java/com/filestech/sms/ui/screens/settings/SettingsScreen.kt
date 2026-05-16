@@ -85,6 +85,8 @@ fun SettingsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showNuke by remember { mutableStateOf(false) }
     var lockModePickerOpen by remember { mutableStateOf(false) }
+    var autoDeletePickerOpen by remember { mutableStateOf(false) }
+    var autoDeletePurgeConfirmOpen by remember { mutableStateOf(false) }
     var pinSetupOpen by remember { mutableStateOf(false) }
 
     val defaultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* no-op */ }
@@ -99,6 +101,14 @@ fun SettingsScreen(
                         ctx.getString(R.string.settings_purge_blocked_result, e.count)
                     } else ctx.getString(R.string.settings_purge_blocked_none)
                     snackbarHost.showSnackbar(msg)
+                }
+                is SettingsViewModel.Event.HistoryPurged -> {
+                    snackbarHost.showSnackbar(
+                        ctx.getString(R.string.settings_auto_delete_purge_done, e.count),
+                    )
+                }
+                SettingsViewModel.Event.ResyncRequested -> {
+                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_resync_started))
                 }
             }
         }
@@ -240,6 +250,15 @@ fun SettingsScreen(
                     description = stringResource(R.string.settings_purge_blocked_desc),
                     onClick = { viewModel.purgeBlockedConversations() },
                 )
+                // v1.3.0 — auto-purge historique selon rétention choisie. Description sur
+                // 2 lignes : statut courant + rappel du filet de sécurité 5 j + favoris.
+                val currentRetentionLabel = retentionLabel(state.security.autoDeleteOlderThanDays)
+                val explainer = stringResource(R.string.settings_auto_delete_explainer)
+                NavigationRow(
+                    title = stringResource(R.string.settings_auto_delete_title),
+                    description = "$currentRetentionLabel\n$explainer",
+                    onClick = { autoDeletePickerOpen = true },
+                )
             }
 
             SectionCard(
@@ -288,6 +307,14 @@ fun SettingsScreen(
                 // Audit U15: label said "Archived" but the row opened the Blocked screen. Removed —
                 // archived conversations are reached from the Conversations top bar (icon Inventory2),
                 // and the Blocked list has its own dedicated row right above.
+                // v1.3.0 — re-sync complète depuis le content provider Android. Utile pour
+                // récupérer un historique purgé par erreur (le system provider conserve les SMS
+                // indépendamment de l'app). Le re-import dedup via l'index UNIQUE telephony_uri.
+                NavigationRow(
+                    title = stringResource(R.string.settings_resync_title),
+                    description = stringResource(R.string.settings_resync_desc),
+                    onClick = { viewModel.forceResyncFromTelephony() },
+                )
                 NavigationRow(stringResource(R.string.settings_reset_all), onClick = { viewModel.resetAll() })
                 NavigationRow(
                     stringResource(R.string.settings_nuke_data),
@@ -382,6 +409,40 @@ fun SettingsScreen(
             },
             onDismiss = { lockModePickerOpen = false },
         )
+    }
+
+    if (autoDeletePickerOpen) {
+        AutoDeleteDialog(
+            current = state.security.autoDeleteOlderThanDays,
+            onSelect = { days ->
+                // Persist mais on NE ferme PAS le dialog : l'utilisateur peut vouloir
+                // enchaîner sur "Effacer maintenant" avec la nouvelle profondeur.
+                viewModel.update { it.copy(security = it.security.copy(autoDeleteOlderThanDays = days)) }
+            },
+            onPurgeNow = { /* delegated to confirm dialog */ },
+            onRequestConfirm = { autoDeletePurgeConfirmOpen = true },
+            onDismiss = { autoDeletePickerOpen = false },
+        )
+    }
+
+    if (autoDeletePurgeConfirmOpen) {
+        val days = state.security.autoDeleteOlderThanDays ?: 0
+        if (days > 0) {
+            PurgeNowConfirmDialog(
+                days = days,
+                countLoader = { viewModel.countHistoryToPurge(days) },
+                onConfirm = {
+                    viewModel.purgeHistoryNow(days)
+                    autoDeletePurgeConfirmOpen = false
+                    autoDeletePickerOpen = false
+                },
+                onDismiss = { autoDeletePurgeConfirmOpen = false },
+            )
+        } else {
+            // Cas sentinelle : `days = 0` ne devrait pas arriver car le bouton est
+            // disabled, mais on ferme proprement si on y est tombé via une race.
+            autoDeletePurgeConfirmOpen = false
+        }
     }
 
     if (pinSetupOpen) {
@@ -1099,6 +1160,161 @@ private fun MyNumberDialog(
         },
         dismissButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  v1.3.0 — Auto-suppression historique (rétention 30/60/180 jours + safety 5 j)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Label statut affiché en sous-titre de la `NavigationRow` Réglages → Sécurité →
+ * Nettoyage de l'historique. Wording centré sur ce qui est CONSERVÉ pour lever toute
+ * ambiguïté ("On garde les 30 derniers jours" plutôt que "Après 30 jours"). Composable
+ * car les libellés sont localisés (FR/EN) via `stringResource`.
+ */
+@Composable
+private fun retentionLabel(days: Int?): String = when (days) {
+    null, 0 -> stringResource(R.string.settings_auto_delete_status_off)
+    30 -> stringResource(R.string.settings_auto_delete_status_30)
+    60 -> stringResource(R.string.settings_auto_delete_status_60)
+    180 -> stringResource(R.string.settings_auto_delete_status_180)
+    else -> stringResource(R.string.settings_auto_delete_status_n_days, days)
+}
+
+/**
+ * Dialog "Nettoyage de l'historique". Combine :
+ *  - un sélecteur radio 4 options (Désactivé / 30 / 60 / 180 j) qui pilote l'auto mensuel ;
+ *  - un bouton "Effacer maintenant" qui applique IMMÉDIATEMENT la même profondeur, après
+ *    un sous-dialog de confirmation montrant le nombre de messages concernés (pour éviter
+ *    un wipe massif accidentel).
+ *
+ * v1.3.0 : la sélection est persistée à chaque tap radio via [onSelect] ; le dialog ne
+ * ferme pas tant que l'utilisateur ne clique pas Close ou Effacer. Le bouton manuel est
+ * désactivé tant que `current` vaut null/0 (rien à effacer sans profondeur choisie).
+ */
+@Composable
+private fun AutoDeleteDialog(
+    current: Int?,
+    onSelect: (Int?) -> Unit,
+    onPurgeNow: () -> Unit,
+    onRequestConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val options: List<Pair<Int?, String>> = listOf(
+        null to stringResource(R.string.settings_auto_delete_off),
+        30 to stringResource(R.string.settings_auto_delete_30),
+        60 to stringResource(R.string.settings_auto_delete_60),
+        180 to stringResource(R.string.settings_auto_delete_180),
+    )
+    val purgeEnabled = (current ?: 0) > 0
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_auto_delete_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.settings_auto_delete_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                )
+                Spacer(Modifier.size(12.dp))
+                options.forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(value) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = current == value,
+                            onClick = { onSelect(value) },
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                Spacer(Modifier.size(8.dp))
+                // Bouton manuel : déclenche d'abord [onRequestConfirm] pour afficher
+                // le sous-dialog (qui appelle [onPurgeNow] si l'utilisateur confirme).
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onRequestConfirm,
+                    enabled = purgeEnabled,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = if (purgeEnabled) {
+                            stringResource(R.string.settings_auto_delete_purge_now)
+                        } else {
+                            stringResource(R.string.settings_auto_delete_purge_now_disabled)
+                        },
+                    )
+                }
+                // `onPurgeNow` est passé au parent pour la composition du sous-dialog ;
+                // on l'utilise ici aussi pour empêcher le linter "unused parameter".
+                @Suppress("UNUSED_EXPRESSION") onPurgeNow
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_close))
+            }
+        },
+    )
+}
+
+/**
+ * v1.3.0 — sous-dialog de confirmation du bouton "Effacer maintenant". Affiche le nombre
+ * de messages concernés (lu via [countLoader]) avant de laisser l'utilisateur valider.
+ * Si zéro message ne correspond, le bouton de confirmation est désactivé et le corps est
+ * remplacé par un message neutre.
+ */
+@Composable
+private fun PurgeNowConfirmDialog(
+    days: Int,
+    countLoader: suspend () -> Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var count by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(days) {
+        count = runCatching { countLoader() }.getOrDefault(0)
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_auto_delete_purge_confirm_title)) },
+        text = {
+            val resolved = count
+            val body = when {
+                resolved == null -> stringResource(R.string.settings_auto_delete_purge_confirm_body, 0, days)
+                resolved == 0 -> stringResource(R.string.settings_auto_delete_purge_confirm_zero)
+                else -> stringResource(R.string.settings_auto_delete_purge_confirm_body, resolved, days)
+            }
+            Text(body, color = cs.onSurfaceVariant)
+        },
+        confirmButton = {
+            androidx.compose.material3.FilledTonalButton(
+                onClick = onConfirm,
+                enabled = (count ?: 0) > 0,
+                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                    containerColor = cs.errorContainer,
+                    contentColor = cs.onErrorContainer,
+                ),
+            ) {
+                Text(stringResource(R.string.action_delete_now))
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.focusRequester(remember { FocusRequester() }),
+            ) {
                 Text(stringResource(R.string.action_cancel))
             }
         },

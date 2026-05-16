@@ -249,6 +249,37 @@
     <string name="settings_my_number_detect_no_perm">Permission lecture numéro non accordée — saisissez-le à la main</string>
     <string name="settings_my_number_invalid">Doit être un numéro valide (+ et chiffres)</string>
 
+    <string name="settings_auto_delete_title">Nettoyage de l\'historique</string>
+    <string name="settings_auto_delete_desc">Supprime les SMS, MMS et messages vocaux plus vieux que la durée choisie. Le nettoyage automatique s\'exécute au plus une fois par mois ; vous pouvez aussi déclencher un nettoyage manuel à tout moment. Les favoris (étoile) ne sont jamais supprimés.</string>
+    <string name="settings_auto_delete_explainer">Auto 1 fois par mois. Les favoris ne sont jamais supprimés.</string>
+    <string name="settings_auto_delete_off">Désactivé — ne rien supprimer</string>
+    <string name="settings_auto_delete_30">Supprimer après 30 jours d\'ancienneté</string>
+    <string name="settings_auto_delete_60">Supprimer après 60 jours d\'ancienneté</string>
+    <string name="settings_auto_delete_180">Supprimer après 180 jours d\'ancienneté</string>
+    <string name="settings_auto_delete_n_days">Supprimer après %1$d jours d\'ancienneté</string>
+    <string name="settings_auto_delete_status_off">Désactivé</string>
+    <string name="settings_auto_delete_status_30">Supprime après 30 jours d\'ancienneté</string>
+    <string name="settings_auto_delete_status_60">Supprime après 60 jours d\'ancienneté</string>
+    <string name="settings_auto_delete_status_180">Supprime après 180 jours d\'ancienneté</string>
+    <string name="settings_auto_delete_status_n_days">Supprime après %1$d jours d\'ancienneté</string>
+    <string name="settings_auto_delete_purge_now">Effacer maintenant</string>
+    <string name="settings_auto_delete_purge_now_disabled">Choisissez une durée pour activer</string>
+    <string name="settings_auto_delete_purge_confirm_title">Confirmer le nettoyage</string>
+    <string name="settings_auto_delete_purge_confirm_zero">Aucun message à effacer pour cette durée.</string>
+    <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) plus vieux que %2$d jours vont être effacés. Les favoris sont conservés. Cette action est irréversible.</string>
+    <string name="settings_auto_delete_purge_done">%1$d message(s) effacé(s).</string>
+    <string name="action_delete_now">Effacer</string>
+    <string name="settings_resync_title">Resynchroniser depuis le téléphone</string>
+    <string name="settings_resync_desc">Réimporte tous les SMS depuis le système Android. Utile pour récupérer un historique effacé par erreur. Sans doublons.</string>
+    <string name="settings_resync_started">Resynchronisation lancée en arrière-plan.</string>
+
+    <string name="action_react">Réagir</string>
+    <string name="reaction_picker_other">Autre emoji</string>
+    <string name="reaction_picker_other_title">Emoji personnalisé</string>
+    <string name="reaction_picker_other_body">Tape ou colle un emoji</string>
+    <string name="reaction_picker_other_hint">😀</string>
+    <string name="reaction_picker_remove">Retirer la réaction</string>
+
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Activer les notifications</string>
     <string name="settings_notifications_style">Style</string>

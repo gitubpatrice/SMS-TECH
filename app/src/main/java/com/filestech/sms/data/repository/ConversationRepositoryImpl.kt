@@ -195,6 +195,44 @@ class ConversationRepositoryImpl @Inject constructor(
         messageDao.delete(messageId)
     }
 
+    override suspend fun setReaction(messageId: Long, emoji: String?) = withContext(io) {
+        // v1.3.0 audit Q1 — passe par le repo (cohérence pattern domain/data) plutôt que de
+        // laisser le ViewModel toucher directement au DAO. Audit F4 — court-circuit no-op si
+        // la valeur est déjà la même : évite le churn FTS4 (DELETE+INSERT trigger pour `body`
+        // et `address` à chaque tap, alors que ces colonnes ne changent pas) et évite un
+        // round-trip Flow inutile. `findById` est suspend + indexé sur PRIMARY KEY,
+        // négligeable. No-op silencieux si le message a été purgé/supprimé concurrently.
+        val current = messageDao.findById(messageId) ?: return@withContext
+        if (current.reactionEmoji == emoji) return@withContext
+        messageDao.setReaction(messageId, emoji)
+    }
+
+    override suspend fun countMessagesToPurge(olderThanDays: Int): Int = withContext(io) {
+        if (olderThanDays <= 0) return@withContext 0
+        val cutoff = purgeCutoffMs(olderThanDays)
+        messageDao.countOlderThan(cutoff)
+    }
+
+    override suspend fun purgeHistoryNow(olderThanDays: Int): Int = withContext(io) {
+        if (olderThanDays <= 0) return@withContext 0
+        val cutoff = purgeCutoffMs(olderThanDays)
+        messageDao.purgeOlderThan(cutoff)
+    }
+
+    /**
+     * v1.3.0 — calcule le cutoff effectif pour la purge : `min(now - days·DAY, now - 5j)`.
+     * Le filet 5 jours interne (anti-misconfig) est plus large que tout choix exposé
+     * (30/60/180 j), donc neutre en pratique mais conserve une garantie défensive si une
+     * future option agressive (ou clé dev) descend sous 5 jours.
+     */
+    private fun purgeCutoffMs(days: Int): Long {
+        val now = System.currentTimeMillis()
+        val msPerDay = 24L * 60L * 60L * 1_000L
+        val retentionCutoff = now - days.toLong() * msPerDay
+        val safetyNetCutoff = now - SAFETY_NET_DAYS * msPerDay
+        return minOf(retentionCutoff, safetyNetCutoff)
+    }
+
     /**
      * Deletes a single SMS / MMS row from the system content provider, identified by the URI we
      * captured at insert/import time. No-op when [telephonyUri] is null (e.g. drafts created
@@ -238,5 +276,15 @@ class ConversationRepositoryImpl @Inject constructor(
             .map { it.replace(Regex("[\"*^():+\\-]"), "") }
             .filter { it.isNotBlank() }
             .joinToString(separator = " ") { "${it}*" }
+    }
+
+    private companion object {
+        /**
+         * v1.3.0 — filet de sécurité interne du nettoyage historique : aucun message des
+         * N derniers jours n'est jamais effacé, quel que soit le réglage utilisateur. Sert
+         * de garde-fou défensif au cas où une future option agressive ou une clé dev
+         * descendrait sous ce seuil. Source unique partagée avec [TelephonySyncWorker].
+         */
+        const val SAFETY_NET_DAYS: Long = 5L
     }
 }

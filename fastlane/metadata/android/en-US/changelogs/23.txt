@@ -1,0 +1,14 @@
+v1.3.0 — Emoji reactions, 2-min audio, history cleanup
+
+WHAT'S NEW
+• Per-message emoji reactions: 24 quick-pick emojis + custom keyboard for any other
+• Voice messages up to 2 minutes (was: 1 minute)
+• History cleanup: auto once a month OR manual, depth 30/60/180 days, starred messages never touched
+• "Resync from phone" button to recover history deleted by mistake
+
+SECURITY & RELIABILITY
+• Strict emoji input validation (anti BiDi/RLO/script injection)
+• Index on messages.date: auto-purge 20x faster on large history
+• Room migration v4 -> v5 strictly additive, no data loss
+• setReaction goes through the repository (consistent pattern)
+• 12 audit fixes (security / performance / UX)

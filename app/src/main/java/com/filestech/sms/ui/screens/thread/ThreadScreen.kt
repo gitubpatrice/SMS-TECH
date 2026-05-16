@@ -151,6 +151,11 @@ fun ThreadScreen(
     var detailsOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Message?>(null) }
     var askBlock by remember { mutableStateOf(false) }
+    // v1.3.0 — état des dialogs/sheets de réaction emoji.
+    //   `pickingReactionFor` non-null = bottom-sheet quick-pick affiché pour ce message.
+    //   `customReactionFor` non-null = dialog TextField "Plus" affiché pour ce message.
+    var pickingReactionFor by remember { mutableStateOf<Long?>(null) }
+    var customReactionFor by remember { mutableStateOf<Long?>(null) }
     var askDelete by remember { mutableStateOf(false) }
     var attachmentSheetOpen by remember { mutableStateOf(false) }
 
@@ -360,6 +365,8 @@ fun ThreadScreen(
                         onSeekTo = viewModel::seekPlaybackTo,
                         onDelete = { pendingDelete = msg },
                         onReply = { viewModel.startReply(msg) },
+                        onReact = { pickingReactionFor = msg.id },
+                        onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         showTimestamp = showTimestamp,
                     )
@@ -381,6 +388,8 @@ fun ThreadScreen(
                         onTranslate = if (msg.body.isNotBlank() && translation !is ThreadViewModel.TranslationState.Ready) {
                             { viewModel.translateMessage(msg.id) }
                         } else null,
+                        onReact = { pickingReactionFor = msg.id },
+                        onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         translationState = translationDisplay,
                         // Dismiss is exposed for every non-null state so user can collapse a
@@ -392,6 +401,31 @@ fun ThreadScreen(
                 }
             }
         }
+    }
+
+    // v1.3.0 — Emoji reaction quick-pick sheet
+    pickingReactionFor?.let { msgId ->
+        com.filestech.sms.ui.components.EmojiReactionPickerSheet(
+            onPicked = { emoji ->
+                viewModel.setReaction(msgId, emoji)
+                pickingReactionFor = null
+            },
+            onOpenCustom = {
+                pickingReactionFor = null
+                customReactionFor = msgId
+            },
+            onDismiss = { pickingReactionFor = null },
+        )
+    }
+    // v1.3.0 — Emoji reaction custom dialog (bouton "Plus")
+    customReactionFor?.let { msgId ->
+        com.filestech.sms.ui.components.EmojiCustomDialog(
+            onPicked = { emoji ->
+                viewModel.setReaction(msgId, emoji)
+                customReactionFor = null
+            },
+            onDismiss = { customReactionFor = null },
+        )
     }
 
     pendingDelete?.let { msg ->
