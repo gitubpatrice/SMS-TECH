@@ -1,0 +1,3 @@
+Correctif d'envoi des messages vocaux MMS qui échouait sur certains téléphones (Redmi 9A notamment) chez Orange et SFR : le format audio passe de AAC à AMR-NB, universellement accepté par tous les opérateurs et toutes les versions d'Android.
+
+Nouveau réglage « Format compact (emoji seul) » dans Réglages → Envoi → Réactions : utile si votre correspondant utilise une vieille app SMS qui n'affiche pas la bulle réaction native (Mi Messages, Samsung anciens). Désactivé par défaut pour préserver la fusion bulle sur iPhone et Google Messages récents.

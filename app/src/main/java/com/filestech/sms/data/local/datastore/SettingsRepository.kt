@@ -62,6 +62,7 @@ class SettingsRepository @Inject constructor(
                 userMsisdn = p[K.userMsisdn],
                 sendReactionsToRecipient = p[K.sendReactionsToRecipient] ?: true,
                 reactionConfirmDismissed = p[K.reactionConfirmDismissed] ?: false,
+                reactionEmojiOnly = p[K.reactionEmojiOnly] ?: false,
             ),
             notifications = NotificationSettings(
                 enabled = p[K.notifEnabled] ?: true,
@@ -127,6 +128,7 @@ class SettingsRepository @Inject constructor(
         s.sending.userMsisdn?.takeIf { it.isNotBlank() }?.let { this[K.userMsisdn] = it } ?: remove(K.userMsisdn)
         this[K.sendReactionsToRecipient] = s.sending.sendReactionsToRecipient
         this[K.reactionConfirmDismissed] = s.sending.reactionConfirmDismissed
+        this[K.reactionEmojiOnly] = s.sending.reactionEmojiOnly
 
         this[K.notifEnabled] = s.notifications.enabled
         this[K.notifStyle] = s.notifications.style.name
@@ -190,6 +192,7 @@ class SettingsRepository @Inject constructor(
         val userMsisdn = stringPreferencesKey("send.userMsisdn")
         val sendReactionsToRecipient = booleanPreferencesKey("send.reactions.toRecipient")
         val reactionConfirmDismissed = booleanPreferencesKey("send.reactions.confirmDismissed")
+        val reactionEmojiOnly = booleanPreferencesKey("send.reactions.emojiOnly")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")

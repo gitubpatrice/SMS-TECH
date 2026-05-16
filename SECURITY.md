@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.5** (2026-05-16)
+Current release : **v1.3.6** (2026-05-16)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -327,7 +327,94 @@ Audit M (post-fix) — 4 findings, all fixed before tag :
   vulnerable to index shift on add/remove race. Switched to stable
   `String` id (= absolute path) + remove by id.
 
-### v1.3.5 (this release) — Architecture cleanup + UI polish
+### v1.3.6 (this release) — Voice MMS universal codec + reaction format toggle
+
+Two user-driven fixes after field reports on Xiaomi Redmi 9A (Android 10 Go
++ Orange/SFR). No new feature surface ; minimal touch, audited delta.
+
+**Fix 1 — Voice MMS codec switched to AMR-NB / 3GP** (`VoiceRecorder.kt`
+only) :
+- `audio/mp4` (AAC encoder, MP4 container) → `audio/3gpp` (AMR-NB encoder,
+  3GP container). AAC was being silently rejected by the carrier MMSC on
+  certain ROM × carrier combinations (Redmi 9A Android 10 Go + Orange and
+  SFR observed 2026-05-16) — the local bubble appeared but the PDU upload
+  came back `RESULT_ERROR_GENERIC_FAILURE` and the message stayed at "send
+  failed". AMR-NB is the historical universal MMS audio codec (RFC 3267,
+  OMA-MMS since 2002) accepted without exception by every MMSC and every
+  Android ROM. It is the format used by Mi Messages, legacy Google
+  Messages, Samsung Messages. Slight bitrate reduction (12.2 kbps fixed,
+  mono 8 kHz) compensated by universal compatibility ; voice intelligibility
+  remains identical to the GSM-FR 2G phone codec.
+- Renamed constant `MIME_AUDIO_M4A` → `MIME_AUDIO_3GPP`.
+- File extension `.m4a` → `.3gp`. `MmsDownloadedReceiver.mimeExtension`
+  already handled `audio/3gpp` for the receive path, no consumer-side
+  change needed.
+- `MAX_SIZE_BYTES` cap (280 KB) kept unchanged : AMR-NB at 12.2 kbps for
+  120 s = ~183 KB, comfortable margin for future unknown MMSCs.
+
+**Fix 2 — User-facing toggle for reaction SMS format** (5 files +
+i18n FR/EN) :
+- New `SendingSettings.reactionEmojiOnly: Boolean = false`. When `true`,
+  the reaction SMS contains just the bare emoji (e.g. `"❤️"`). When `false`
+  (default), the Apple/Google Tapback wrapping introduced in v1.3.2 stays
+  in effect (`"Reacted ❤️ to «preview»"`).
+- Rationale : on legacy SMS apps (Mi Messages, older Samsung) that do not
+  parse Tapback, the wrapping shows as raw text — visually noisy. The new
+  option lets users targeting legacy recipients send the cleaner bare
+  emoji. Default is left at `false` to preserve the native reaction-bubble
+  rendering on iPhone iMessage and recent Google Messages, where the
+  Tapback parsing is what produces the merged bubble under the original
+  message.
+- UI : new `ToggleRow` in `SettingsScreen` → Sending section, shown only
+  when `sendReactionsToRecipient` is enabled (consistency : you can only
+  set the format if you are actually sending).
+- Use-case path : `SendReactionUseCase.invoke()` gains an `emojiOnly:
+  Boolean = false` parameter (defaulted for backward compat with existing
+  callers / tests). The guards F1/F2/F3/X1 remain unchanged and execute
+  before the branching `body = if (emojiOnly) emoji else buildTapbackBody
+  (...)`.
+- DataStore key : `send.reactions.emojiOnly` (boolean). No migration, no
+  schema bump — first read returns `false` on installs that pre-date the
+  release.
+
+**Pre-tag audit found 1 HIGH + 5 MEDIUM ; HIGH + 1 MEDIUM (P1) fixed
+inline, 4 MEDIUM deferred to v1.3.7 (TalkBack semantic merges that affect
+all existing `ToggleRow`s, not just this delta) :**
+
+- **S1 (HIGH)** : `dispatchReactionSms` originally added a 2nd
+  `settings.flow.first()` read on every reaction send (in addition to the
+  one already in `setReaction`). Refactored to pass `emojiOnly: Boolean`
+  as a parameter from the caller's existing snapshot — zero extra
+  DataStore reads, no suspend-point introduced where the in-flight emoji
+  value could drift. Eliminates the original concern (no-timeout flow
+  collection on a critical send path) entirely.
+- **S2 (MEDIUM)** : `versionName` bumped `"1.3.5"` → `"1.3.6"` in
+  `app/build.gradle.kts` (line 38) plus the related comment on line 71.
+  Required for manifest / F-Droid yml coherence.
+- **P1 (MEDIUM)** : same as S1 — refactored `dispatchReactionSms(messageId,
+  emoji, emojiOnly)` and updated both call sites (`setReaction` post-
+  observer path + `confirmReactionSend` post-dialog path) to read the
+  `sending` snapshot once and pass `emojiOnly` down.
+
+Deferred to v1.3.7 (not specific to this delta, applies to **all**
+existing `ToggleRow`s) :
+- **P2** : wrap conditional `ToggleRow`s in `AnimatedVisibility` for
+  smoother layout transitions.
+- **U1** : `Modifier.semantics(mergeDescendants = true) {}` on `ToggleRow`
+  Row + `onCheckedChange = null` on the inner `Switch` to fuse TalkBack
+  into a single a11y node. Affects every toggle in `SettingsScreen`, not
+  just the new one.
+- **U2** : add a `stateDescription` to parent toggles whose value gates
+  the visibility of a child toggle, so TalkBack users know the child is
+  hidden because the parent is OFF (rather than navigation skipping
+  silently).
+
+No regression in the existing 60+ unit tests (compileRelease + tests
+green). No file format change. Voice clips recorded by v1.3.5 (AAC `.m4a`)
+remain readable — `MmsDownloadedReceiver.mimeExtension` handles both
+`audio/mp4` (legacy received) and `audio/3gpp` (new sent + received).
+
+### v1.3.5 — Architecture cleanup + UI polish
 
 Polish release closing 5 findings from the v1.3.3 global audit (G3, G6,
 G7, G8, G9) plus a user UI tweak. No new feature. Aims to keep the

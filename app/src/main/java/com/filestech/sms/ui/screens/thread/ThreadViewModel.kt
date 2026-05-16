@@ -374,7 +374,7 @@ class ThreadViewModel @Inject constructor(
                 if (!sending.sendReactionsToRecipient) return@runCatching
 
                 if (sending.reactionConfirmDismissed) {
-                    dispatchReactionSms(result.messageId, result.emoji)
+                    dispatchReactionSms(result.messageId, result.emoji, sending.reactionEmojiOnly)
                 } else {
                     _events.tryEmit(Event.RequestReactionConfirm(result.messageId, result.emoji))
                 }
@@ -415,7 +415,12 @@ class ThreadViewModel @Inject constructor(
                 // skip sans que l'utilisateur ait jamais validé qu'un SMS partait. Idem si
                 // dédup-skippé : l'utilisateur n'a pas vu l'envoi réel, donc on garde le
                 // dialog pour la prochaine fois. Seul un Sent confirme le contrat user.
-                val outcome = dispatchReactionSms(messageId, emoji)
+                //
+                // v1.3.6 audit P1 — lit le snapshot sending une seule fois et passe
+                // `reactionEmojiOnly` au dispatcher (au lieu d'un second `settings.flow.first()`
+                // dans le dispatcher lui-même → 2 lectures DataStore par envoi).
+                val emojiOnly = settings.flow.first().sending.reactionEmojiOnly
+                val outcome = dispatchReactionSms(messageId, emoji, emojiOnly)
                 if (outcome == DispatchOutcome.Sent && neverAskAgain) {
                     settings.update {
                         it.copy(sending = it.sending.copy(reactionConfirmDismissed = true))
@@ -441,8 +446,17 @@ class ThreadViewModel @Inject constructor(
      *   - [DispatchOutcome.DedupSkipped] : dans la fenêtre, rien tenté
      *   - [DispatchOutcome.Sent] : le use case a renvoyé [Outcome.Success]
      *   - [DispatchOutcome.Failed] : tentative effectuée mais échouée (snack émis)
+     *
+     * @param emojiOnly v1.3.6 audit P1 — passé par le caller qui a déjà lu le snapshot
+     *   `sending` une fois ; évite une 2e lecture DataStore par envoi de réaction. `false`
+     *   = format Tapback "Reacted ❤️ to «aperçu»" (compat iPhone/Google récent), `true` =
+     *   emoji seul (plus propre legacy).
      */
-    private suspend fun dispatchReactionSms(messageId: Long, emoji: String): DispatchOutcome {
+    private suspend fun dispatchReactionSms(
+        messageId: Long,
+        emoji: String,
+        emojiOnly: Boolean,
+    ): DispatchOutcome {
         val now = System.currentTimeMillis()
         // v1.3.5 G7 audit fix — purge opportuniste des entries expirées AVANT lecture
         // (la map croîtrait sinon linéairement avec le nb de messages réagis pendant
@@ -455,7 +469,7 @@ class ThreadViewModel @Inject constructor(
             return DispatchOutcome.DedupSkipped
         }
         recentlySentReactionFor[messageId] = now
-        return when (val res = sendReaction(messageId, emoji)) {
+        return when (val res = sendReaction(messageId, emoji, emojiOnly)) {
             is Outcome.Success -> DispatchOutcome.Sent
             is Outcome.Failure -> {
                 _events.tryEmit(Event.SendError(res.error))

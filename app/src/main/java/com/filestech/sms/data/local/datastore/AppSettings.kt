@@ -77,6 +77,20 @@ data class SendingSettings(
      * envoi de réaction ouvre le dialog ; quand `true`, l'envoi est silencieux et direct.
      */
     val reactionConfirmDismissed: Boolean = false,
+    /**
+     * v1.3.6 — format du SMS envoyé au correspondant lors d'une réaction emoji.
+     *
+     *   - `false` (défaut) : format **Apple/Google Tapback** "Reacted ❤️ to «aperçu»".
+     *     Détecté nativement par iMessage (iPhone) et Google Messages récent qui
+     *     l'affichent comme une bulle réaction visuelle attachée au message d'origine.
+     *     Sur les apps SMS legacy (Mi Messages, Samsung anciens), le texte brut s'affiche.
+     *   - `true` (compact) : **emoji seul** (ex. "❤️"). Plus propre sur apps legacy mais
+     *     casse l'affichage bulle natif sur iPhone / Google Messages récent — chez eux
+     *     l'emoji apparaît comme un nouveau message isolé, pas fusionné sous le message.
+     *
+     * Trade-off documenté dans le toggle UI ([R.string.settings_reaction_format_desc]).
+     */
+    val reactionEmojiOnly: Boolean = false,
 )
 
 enum class MmsImageQuality { HIGH, BALANCED, ECONOMY }

@@ -205,6 +205,21 @@ fun SettingsScreen(
                         viewModel.update { it.copy(sending = it.sending.copy(sendReactionsToRecipient = v)) }
                     },
                 )
+                // v1.3.6 — format du SMS de réaction. OFF (défaut) = format Tapback complet
+                // "Reacted ❤️ to «aperçu»" (iPhone et Google Messages récent affichent la
+                // bulle réaction native). ON = emoji seul (plus propre côté apps SMS legacy
+                // type Mi Messages mais on perd la fusion bulle native sur iPhone/Google).
+                // Affiché uniquement si l'envoi des réactions est activé (cohérence UX).
+                if (state.sending.sendReactionsToRecipient) {
+                    ToggleRow(
+                        title = stringResource(R.string.settings_reaction_format_title),
+                        description = stringResource(R.string.settings_reaction_format_desc),
+                        value = state.sending.reactionEmojiOnly,
+                        onChange = { v ->
+                            viewModel.update { it.copy(sending = it.sending.copy(reactionEmojiOnly = v)) }
+                        },
+                    )
+                }
             }
 
             SectionCard(

@@ -49,8 +49,17 @@ class SendReactionUseCase @Inject constructor(
      *     vide/invalide, ou si [emoji] est vide.
      *   - Le [Outcome] de [SendSmsUseCase] (Success avec l'id Room du SMS envoyé, ou
      *     Failure propagée).
+     *
+     * @param emojiOnly v1.3.6 — si `true`, envoie l'emoji seul (ex. "❤️") au lieu du
+     *   format Apple/Google Tapback "Reacted ❤️ to «aperçu»". Voir
+     *   [com.filestech.sms.data.local.datastore.SendingSettings.reactionEmojiOnly] pour
+     *   le trade-off (compat iPhone/Google récent vs propreté legacy).
      */
-    suspend operator fun invoke(messageId: Long, emoji: String): Outcome<List<Long>> {
+    suspend operator fun invoke(
+        messageId: Long,
+        emoji: String,
+        emojiOnly: Boolean = false,
+    ): Outcome<List<Long>> {
         if (emoji.isBlank()) return Outcome.Failure(AppError.Validation("empty reaction emoji"))
 
         val message = conversationRepo.findMessageById(messageId)
@@ -94,7 +103,13 @@ class SendReactionUseCase @Inject constructor(
             // automatiquement par iMessage (iPhone) et Google Messages récent qui
             // l'affichent comme une bulle réaction visuelle attachée au message d'origine.
             // Les autres apps SMS affichent le texte brut, qui reste compréhensible.
-            body = buildTapbackBody(emoji, message.body),
+            //
+            // v1.3.6 — quand [emojiOnly], on envoie l'emoji nu (ex. "❤️") à la place :
+            // plus propre côté apps legacy (Mi Messages, vieux Samsung) mais on perd la
+            // fusion bulle native sur iPhone/Google récent — chez eux l'emoji apparaît
+            // comme un message isolé suivant le message d'origine. Choix exposé en
+            // Réglages → Envoi → "Format des réactions".
+            body = if (emojiOnly) emoji else buildTapbackBody(emoji, message.body),
             // F3 — pas de signature pour une réaction.
             appendSignature = false,
             // Pas de réponse contextuelle (la réaction est ponctuelle, ajouter un

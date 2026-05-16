@@ -274,6 +274,8 @@
     <string name="settings_resync_started">Resynchronisation lancée en arrière-plan.</string>
     <string name="settings_send_reactions_title">Envoyer mes réactions au correspondant</string>
     <string name="settings_send_reactions_desc">Quand vous posez une réaction emoji (cœur, pouce…), un SMS contenant uniquement l\'emoji est envoyé au correspondant. Cela compte comme un SMS normal au tarif de votre forfait. Le retrait ou le changement d\'une réaction ne renvoie rien.</string>
+    <string name="settings_reaction_format_title">Format compact (emoji seul)</string>
+    <string name="settings_reaction_format_desc">Par défaut, format Apple/Google « X a réagi ❤️ à «aperçu» » — sur iPhone et Google Messages récents, le destinataire voit directement une bulle réaction sous votre message d\'origine (le texte est masqué). Activez pour envoyer juste l\'emoji nu : plus propre sur les anciens téléphones Xiaomi/Samsung qui n\'affichent pas la bulle native, mais on perd la fusion sur iPhone et Google Messages récents.</string>
     <string name="reaction_send_confirm_title">Envoyer la réaction ?</string>
     <string name="reaction_send_confirm_body">Un SMS contenant uniquement cet emoji sera envoyé à votre correspondant. Cela compte comme un SMS normal (tarif forfait). Vous pouvez désactiver cet envoi dans Réglages → Envoi.</string>
     <string name="reaction_send_confirm_never_ask">Ne plus demander, envoyer directement</string>

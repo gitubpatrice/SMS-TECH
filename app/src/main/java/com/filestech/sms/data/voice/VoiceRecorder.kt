@@ -20,15 +20,25 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Records a single voice clip to an AAC/M4A file in the app's private cache, suitable for
- * attaching to an outgoing MMS. The encoder is the system AAC encoder (hardware-accelerated on
- * every Android 5+ device); no third-party library is used.
+ * Records a single voice clip to an AMR-NB / 3GP file in the app's private cache, suitable for
+ * attaching to an outgoing MMS. The encoder is the system AMR-NB encoder (mandated by every
+ * Android version since 2.0); no third-party library is used.
+ *
+ * **v1.3.6** — format basculé AAC/MP4 (audio/mp4) → AMR-NB/3GP (audio/3gpp). Le format AAC,
+ * pourtant techniquement supporté par les MMSC, était silencieusement rejeté par certaines
+ * combinaisons (observé sur Redmi 9A Android 10 Go + Orange/SFR, 2026-05-16) : la bulle locale
+ * s'affichait mais le PDU était refusé côté serveur, statut "non envoyé". AMR-NB est le codec
+ * audio MMS historique universel (RFC 3267, OMA-MMS depuis 2002), accepté sans exception par
+ * tous les MMSC + toutes les ROMs Android — c'est le codec utilisé par Mi Messages, Google
+ * Messages legacy, Samsung Messages. Légère baisse de qualité (8 kHz mono 12.2 kbps fixe)
+ * compensée par la compatibilité universelle ; reste totalement intelligible pour la voix
+ * (référence : GSM-FR codec téléphonique standard 12.2 kbps).
  *
  * Hard caps:
  *   - duration: [MAX_DURATION_MS] (120 s)
  *   - file size: [MAX_SIZE_BYTES] (280 KB) — empirically the tightest cap shared by all
- *     French MMSCs (Free, Orange, SFR, Bouygues). The v1.3.0 → v1.3.2 cap of 450 KB caused
- *     dispatch failures on SFR (observed user report 2026-05-16) for clips > ~90 s @ 24 kbps.
+ *     French MMSCs (Free, Orange, SFR, Bouygues). AMR-NB 12.2 kbps × 120 s ≈ 183 KB,
+ *     confortablement sous le cap.
  *
  * Concurrency: only one recording at a time. A second [record] call while one is active emits
  * [Event.Failed] with [AppError.Telephony] "recorder busy" and closes immediately.
@@ -101,14 +111,20 @@ class VoiceRecorder @Inject constructor(
         }
 
         val dir = recordingsDir().also { it.mkdirs() }
-        val file = File(dir, "voice-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.m4a")
+        val file = File(dir, "voice-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.3gp")
 
         val recorder = newMediaRecorder()
         try {
             recorder.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                // v1.3.6 : 3GP container + AMR-NB codec — format MMS audio universel.
+                // Les setAudio{SamplingRate,EncodingBitRate} sont des hints documentaires :
+                // AMR-NB est fixé par spec à 8 kHz mono 12.2 kbps (mode 7, le plus haut),
+                // l'encoder ignore les autres valeurs. On les passe explicitement pour rendre
+                // l'intention lisible et éviter qu'un futur refactor déduise un format différent
+                // depuis l'absence d'appel.
+                setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
                 setAudioChannels(1)
                 setAudioSamplingRate(SAMPLE_RATE_HZ)
                 setAudioEncodingBitRate(BITRATE_BPS)
@@ -193,7 +209,7 @@ class VoiceRecorder @Inject constructor(
     }
 
     /**
-     * Asks the active recording to stop cleanly. Finalises the M4A file and emits
+     * Asks the active recording to stop cleanly. Finalises the 3GP file and emits
      * [Event.Completed] on the active Flow, then closes it. No-op if no session is active.
      */
     fun stop() {
@@ -249,7 +265,7 @@ class VoiceRecorder @Inject constructor(
             file = session.file,
             durationMs = durationMs,
             sizeBytes = session.file.length(),
-            mimeType = MIME_AUDIO_M4A,
+            mimeType = MIME_AUDIO_3GPP,
         )
         session.channel.trySend(Event.Completed(result, cappedByLimit))
         session.channel.close()
@@ -283,14 +299,18 @@ class VoiceRecorder @Inject constructor(
     }
 
     companion object {
-        const val MIME_AUDIO_M4A: String = "audio/mp4"
+        /**
+         * **v1.3.6** : audio/3gpp (conteneur 3GP + codec AMR-NB) — format MMS audio
+         * historique universel (RFC 3267, OMA-MMS depuis 2002). Précédemment audio/mp4
+         * (AAC) de v1.1 à v1.3.5, silencieusement rejeté par certaines combinaisons
+         * MMSC × ROM (cf. KDoc en tête de fichier).
+         */
+        const val MIME_AUDIO_3GPP: String = "audio/3gpp"
 
         /**
-         * Hard duration cap. v1.3.0 : 60 s → 120 s. À 16 kHz mono AAC [BITRATE_BPS]
-         * (16 kbps depuis v1.3.3), 120 s génère ~240 KB encodé (16_000 b/s × 120 s =
-         * 240 000 B de payload + ~5 KB d'overhead conteneur MP4 / esds / moov), ce qui
-         * reste sous la limite [MAX_SIZE_BYTES] ; sans ça MediaRecorder couperait avant
-         * 120 s pour cause de taille, et la promesse "120 s" serait mensongère.
+         * Hard duration cap. v1.3.0 : 60 s → 120 s. AMR-NB à 12.2 kbps mono 8 kHz génère
+         * ~183 KB pour 120 s (12_200 b/s × 120 s = 183 000 B + ~3 KB d'overhead 3GP),
+         * confortablement sous [MAX_SIZE_BYTES].
          */
         const val MAX_DURATION_MS: Int = 120_000
 
@@ -299,19 +319,24 @@ class VoiceRecorder @Inject constructor(
          * MMSCs FR (Free, Orange, SFR, Bouygues). Le cap antérieur (450 KB v1.3.0–v1.3.2)
          * provoquait des `RESULT_ERROR_GENERIC_FAILURE` côté radio SFR (~300 KB limite
          * observée 2026-05-16). 280 KB laisse une marge pour les headers MMS + SMIL
-         * sous le ceiling carrier le plus strict.
+         * sous le ceiling carrier le plus strict. Conservé en v1.3.6 malgré la baisse de
+         * payload AMR-NB : marge de sécurité supplémentaire pour futurs MMSC inconnus.
          */
         const val MAX_SIZE_BYTES: Long = 280L * 1024L
 
-        const val SAMPLE_RATE_HZ: Int = 16_000
+        /**
+         * AMR-NB est fixé par spec à 8 kHz. Passé en hint à MediaRecorder pour documenter
+         * l'intention (l'encoder ignore les autres valeurs pour AMR_NB).
+         */
+        const val SAMPLE_RATE_HZ: Int = 8_000
 
         /**
-         * **v1.3.3** : 24 kbps → 16 kbps. Qualité voix mono à 16 kHz AAC reste totalement
-         * intelligible (référence : WhatsApp push-to-talk ≈ 16 kbps, GSM AMR ≈ 12.2 kbps).
-         * Permet 120 s sous 240 KB → marge confortable sous [MAX_SIZE_BYTES] (280 KB) →
-         * envoi MMS qui ne risque PLUS le `RESULT_ERROR_GENERIC_FAILURE` chez SFR & co.
+         * **v1.3.6** : AMR-NB mode 7 (le plus haut des 8 modes de la spec) — 12.2 kbps.
+         * Fixé par RFC 3267, passé en hint à MediaRecorder pour documenter. Qualité voix
+         * mono identique au codec GSM-FR du téléphone fixe / mobile 2G — totalement
+         * intelligible. Précédemment 16 kbps AAC v1.3.3-v1.3.5.
          */
-        const val BITRATE_BPS: Int = 16_000
+        const val BITRATE_BPS: Int = 12_200
 
         const val TICK_INTERVAL_MS: Long = 100L
 

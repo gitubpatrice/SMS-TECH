@@ -1,0 +1,3 @@
+Fix for voice MMS sending that was failing on certain phones (notably Redmi 9A) with Orange and SFR: the audio format moves from AAC to AMR-NB, universally accepted by every carrier and every Android version.
+
+New "Compact format (emoji only)" setting in Settings → Sending → Reactions: useful when your recipient uses a legacy SMS app that doesn't render the native reaction bubble (Mi Messages, older Samsung). Off by default to preserve the merged bubble rendering on iPhone and recent Google Messages.

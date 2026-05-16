@@ -285,6 +285,8 @@
     <string name="settings_resync_started">Resync started in background.</string>
     <string name="settings_send_reactions_title">Send my reactions to recipient</string>
     <string name="settings_send_reactions_desc">When you post an emoji reaction (heart, thumbs-up…), a SMS containing only the emoji is sent to the recipient. Counts as a normal SMS at your plan\'s rate. Removing or changing a reaction does not resend anything.</string>
+    <string name="settings_reaction_format_title">Compact format (emoji only)</string>
+    <string name="settings_reaction_format_desc">Default: Apple/Google Tapback format "Reacted ❤️ to «preview»" — on iPhone and recent Google Messages, the recipient sees a reaction bubble directly under your original message (the text stays hidden). Turn on to send just the bare emoji: cleaner on older Xiaomi/Samsung phones that don\'t render the native bubble, but you lose the merged bubble effect on iPhone and recent Google Messages.</string>
     <string name="reaction_send_confirm_title">Send reaction?</string>
     <string name="reaction_send_confirm_body">An SMS containing only this emoji will be sent to your recipient. Counts as a regular SMS (plan rate). You can disable this in Settings → Sending.</string>
     <string name="reaction_send_confirm_never_ask">Don\'t ask again, send directly</string>
