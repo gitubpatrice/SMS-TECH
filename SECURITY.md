@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.3** (2026-05-16)
+Current release : **v1.3.4** (2026-05-16)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -277,6 +277,55 @@ Global audit — 2 high findings caught :
 
 Other audit findings (G3–G10) deferred to v1.3.4 (dead code cleanup, doc
 sync, settings polish — non-blocking).
+
+### v1.3.4 (this release) — Multi-attach in composer
+
+Refactor of the attachment staging UX following user feedback ("immediate
+send is not practical, I want to stack several images / files in one
+message"). Replaces the modal confirmation dialog (v1.2.1) by an
+in-composer staging bar. Single MMS multipart dispatch for the whole
+batch + optional text body.
+
+Architecture :
+
+- `UiState.pendingAttachment: PendingAttachment?` → `pendingAttachments:
+  List<PendingAttachment>` ; cleanup of all staged files in `onCleared`.
+- `onAttachmentPicked` **appends** to the list with a live cap check
+  (`sum(file sizes) + draft.length > CARRIER_PAYLOAD_CAP_BYTES` =
+  280 KB) — refuses the new pick + snack + deletes the tmp cache copy.
+- `removePendingAttachment(fileAbsolutePath: String)` removes by stable
+  path id (not by index, anti-race) + deletes cache file.
+- `clearAllPendingAttachments()` flush + delete-all (used by future
+  routes if needed).
+- `dispatchPendingAttachments()` is the new MMS multipart path : single
+  `SendMediaMmsUseCase.invoke(recipients, payloads, textBody)` call.
+- `send()` routes : if `pendingAttachments.isNotEmpty()` →
+  `dispatchPendingAttachments` ; else → text-only SMS via `doSend`.
+- Modal `AlertDialog(pendingAttachment)` removed from `ThreadScreen`.
+- New `PendingAttachmentsBar` Composable : `LazyRow` of 72 dp chips,
+  thumbnail Coil for images / icon for video/file, small red X
+  (16 dp circle + `cs.error` background + `cs.onError` cross) in top-right
+  to remove (destructive color reserved per the v1.3.3 user rule).
+- `ComposerBar` / `ComposingRow` get `hasPendingAttachments: Boolean`
+  param that flips the mic button to the Send button when the user has
+  staged attachments but no text yet (M1 audit fix — without this, the
+  feature was unusable for "just send a photo" cases).
+
+Audit M (post-fix) — 4 findings, all fixed before tag :
+
+- **M1 (HIGH)** : Send button unreachable when draft empty + attachments
+  staged. Fixed by propagating `hasPendingAttachments` flag.
+- **M2 (MEDIUM)** : race between dispatch (1-5 s) and concurrent
+  attachment add wipes the late add. Switched to snapshot/diff pattern
+  (`val dispatched = pending` then `filterNot { it in dispatched }`).
+- **M3 (MEDIUM)** : the cap check at `onAttachmentPicked` didn't cover
+  the case where the user added text *after* staging — could submit a
+  payload > 280 KB to MMSC. Added re-check at `dispatchPendingAttachments`
+  entry.
+- **M4 (MEDIUM)** : `LazyRow` key derived from `absolutePath.hashCode().toLong()`
+  risks Int collision crash on edge cases, and `onRemove(index: Int)` was
+  vulnerable to index shift on add/remove race. Switched to stable
+  `String` id (= absolute path) + remove by id.
 
 ### v1.2.0 — 3-axis audit
 

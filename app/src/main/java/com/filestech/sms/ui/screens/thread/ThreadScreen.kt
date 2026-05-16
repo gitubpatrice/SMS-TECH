@@ -327,12 +327,30 @@ fun ThreadScreen(
                         onCancel = viewModel::cancelReply,
                     )
                 }
+                // v1.3.4 — bande staging des pièces jointes empilées (image / vidéo /
+                // fichier). Affichée si non vide. Chaque chip a un X pour retirer la
+                // PJ + supprimer son fichier cache. Tap sur Envoyer dans le composer
+                // ci-dessous = 1 MMS multipart (texte + toutes les PJ).
+                if (state.pendingAttachments.isNotEmpty()) {
+                    com.filestech.sms.ui.components.PendingAttachmentsBar(
+                        pending = state.pendingAttachments.map { p ->
+                            com.filestech.sms.ui.components.PendingAttachmentChipData(
+                                id = p.file.absolutePath, // String stable (M4)
+                                file = p.file,
+                                mimeType = p.mimeType,
+                                displayName = p.displayName,
+                            )
+                        },
+                        onRemove = { id -> viewModel.removePendingAttachment(id) },
+                    )
+                }
                 ComposerBar(
                     voice = state.voice,
                     playback = playbackState,
                     draft = state.draft,
                     segments = state.segments,
                     isSendingVoice = state.isSendingVoice,
+                    hasPendingAttachments = state.pendingAttachments.isNotEmpty(),
                     onDraftChanged = viewModel::updateDraft,
                     onSendText = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -552,60 +570,11 @@ fun ThreadScreen(
     // Attachment confirmation dialog — v1.2.1 UX fix. The picker drops the file into the
     // staging slot, and the user explicitly validates here before any MMS dispatch. Cancel
     // deletes the cached copy.
-    //
-    // v1.3.3 bug #3 — affiche un **thumbnail preview** (Coil) pour les images, et une
-    // icône grosse + nom pour les autres types. L'utilisateur voit exactement ce qu'il
-    // s'apprête à envoyer avant le tap Envoyer.
-    state.pendingAttachment?.let { pending ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { viewModel.cancelPendingAttachment() },
-            title = { Text(stringResource(R.string.attach_confirm_title)) },
-            text = {
-                androidx.compose.foundation.layout.Column(
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                ) {
-                    if (pending.mimeType.startsWith("image/", ignoreCase = true)) {
-                        // Preview thumbnail pleine largeur, hauteur max 220 dp pour rester
-                        // sous le pli du dialog sur petits écrans.
-                        coil.compose.AsyncImage(
-                            model = coil.request.ImageRequest.Builder(context)
-                                .data(pending.file)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = pending.displayName,
-                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                            modifier = androidx.compose.ui.Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 220.dp)
-                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
-                        )
-                        androidx.compose.foundation.layout.Spacer(
-                            androidx.compose.ui.Modifier.height(12.dp),
-                        )
-                    }
-                    Text(
-                        stringResource(
-                            R.string.attach_confirm_size,
-                            pending.displayName,
-                            formatFileSize(pending.sizeBytes),
-                        ),
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            },
-            confirmButton = {
-                androidx.compose.material3.Button(
-                    onClick = { viewModel.confirmPendingAttachment() },
-                ) { Text(stringResource(R.string.attach_confirm_send)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.cancelPendingAttachment() }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
-        )
-    }
+    // v1.3.4 — le dialog modal `pendingAttachment` (v1.2.1) est SUPPRIMÉ au profit
+    // d'une bande staging dans le composer (cf. `PendingAttachmentsBar` ci-dessous,
+    // affichée dans `bottomBar` au-dessus du champ texte). L'utilisateur empile autant
+    // de PJ qu'il veut, écrit éventuellement du texte, et tape Envoyer une seule fois
+    // pour tout dispatcher en 1 MMS multipart.
 
     if (detailsOpen) {
         ConversationDetailsDialog(
@@ -871,6 +840,8 @@ private fun ComposerBar(
     draft: String,
     segments: com.filestech.sms.data.sms.SmsSegmentCounter.Stats,
     isSendingVoice: Boolean,
+    /** v1.3.4 M1 audit fix — flag pour basculer mic → send button quand des PJ sont stagées. */
+    hasPendingAttachments: Boolean,
     onDraftChanged: (String) -> Unit,
     onSendText: () -> Unit,
     onStartRecording: () -> Unit,
@@ -908,6 +879,7 @@ private fun ComposerBar(
                 draft = draft,
                 segments = segments,
                 permissionGranted = permissionGranted,
+                hasPendingAttachments = hasPendingAttachments,
                 onDraftChanged = onDraftChanged,
                 onSendText = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -955,6 +927,9 @@ private fun ComposingRow(
     draft: String,
     segments: com.filestech.sms.data.sms.SmsSegmentCounter.Stats,
     permissionGranted: Boolean,
+    /** v1.3.4 M1 — quand `true`, force l'affichage du bouton Send au lieu du mic même
+     *  si `draft.isBlank()` (l'user a juste empilé des PJ et veut les envoyer sans texte). */
+    hasPendingAttachments: Boolean,
     onDraftChanged: (String) -> Unit,
     onSendText: () -> Unit,
     onRequestPermission: () -> Unit,
@@ -965,7 +940,9 @@ private fun ComposingRow(
     onAttachClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val showMic = isRecording || draft.isBlank()
+    // v1.3.4 M1 — afficher le Mic seulement si pas de PJ stagées ; sinon l'utilisateur
+    // doit pouvoir envoyer les PJ via le bouton Send même sans texte.
+    val showMic = isRecording || (draft.isBlank() && !hasPendingAttachments)
 
     // Live cancel hint: true once the finger has dragged past the cancel threshold while pressing.
     var cancelHinted by remember { mutableStateOf(false) }

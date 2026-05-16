@@ -1,0 +1,20 @@
+v1.3.4 — Multi-attach in composer (send several images in 1 MMS)
+
+WHAT'S NEW
+* Stage multiple attachments before sending: pick image 1, then image 2, then a document, type your text, tap Send = 1 multipart MMS.
+* Staging bar above the text field: thumbnail (image) or icon (video/file) with small red X in top-right corner to remove an attachment.
+* No more pre-send modal dialog: the user has full visibility directly in the composer.
+* Live 280 KB total cap (sum of attachments + text). Snack if exceeded.
+
+RELIABILITY
+* Re-check cap at the moment of Send tap (in case you type more text after staging attachments).
+* Snapshot/diff at dispatch: if you add an attachment while the send is in-flight, it is preserved.
+* Send button visible even without text as soon as at least 1 attachment is staged.
+* Stable id per file path (not by hash) to avoid index confusion on the remove button.
+
+UI
+* Attachment remove circle: compact (16 dp), red background, white cross (obvious destructive action).
+
+DEFERRED to v1.3.5
+* G3 drop orphan permissions (SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM, CHANGE_NETWORK_STATE).
+* G4-G8 dead code cleanup (ConversationOverrideDao, BlockingSettings.blockShortCodes, unused i18n strings, dedup map purge).

@@ -123,11 +123,15 @@ class ThreadViewModel @Inject constructor(
          */
         val translations: Map<Long, TranslationState> = emptyMap(),
         /**
-         * Attachment staged for the user to confirm before dispatch (v1.2.1 UX fix). The picker
-         * lands here first; the user sees a preview dialog and only the explicit "Envoyer" tap
-         * triggers the actual MMS dispatch. Cancelling deletes the cached file.
+         * v1.3.4 — pièces jointes stagées dans le composer (passé du dialog modal singleton
+         * v1.2.1 à une liste affichée comme une bande horizontale au-dessus du champ texte).
+         * L'utilisateur empile autant de PJ qu'il veut (cap par taille totale 280 KB,
+         * pas par nombre), peut en retirer une via le X sur le chip, écrit éventuellement
+         * du texte, puis tap Envoyer = un seul MMS multipart (texte + N PJ).
+         *
+         * État vide = `emptyList()`. Le composer reste fonctionnel pour les SMS texte purs.
          */
-        val pendingAttachment: PendingAttachment? = null,
+        val pendingAttachments: List<PendingAttachment> = emptyList(),
         /** Voice MMS staged for confirmation (toggle "Confirmer avant envoi" ON). */
         val pendingVoiceConfirm: Boolean = false,
     )
@@ -223,8 +227,17 @@ class ThreadViewModel @Inject constructor(
 
     fun send() {
         val body = _state.value.draft.trim()
-        if (body.isEmpty()) return
+        val hasAttachments = _state.value.pendingAttachments.isNotEmpty()
+        // v1.3.4 — 3 chemins :
+        //   (a) PJ stagées + texte optionnel → 1 MMS multipart via dispatchPendingAttachments
+        //   (b) texte seul → flow SMS classique (avec confirm dialog si broadcast multi-dest)
+        //   (c) rien → no-op
+        if (!hasAttachments && body.isEmpty()) return
         viewModelScope.launch {
+            if (hasAttachments) {
+                dispatchPendingAttachments()
+                return@launch
+            }
             val confirm = settings.flow.first().sending.confirmBeforeBroadcast
             if (confirm) {
                 _state.update { it.copy(pendingSend = body) }
@@ -499,61 +512,112 @@ class ThreadViewModel @Inject constructor(
                 compressImage(file) ?: file
             } else file
 
-            // v1.2.1: the `confirmBeforeBroadcast` setting now drives the **attachment** dialog
-            // exclusively (SMS / MMS text always sends directly). When OFF, the user wants the
-            // Google-Messages flow: pick a photo, off it goes. When ON, the staging dialog
-            // with filename + size is shown so they can sanity-check before dispatch.
-            val confirmFirst = settings.flow.first().sending.confirmBeforeBroadcast
-            if (confirmFirst) {
-                _state.update {
-                    it.copy(
-                        pendingAttachment = PendingAttachment(
-                            file = finalFile,
-                            mimeType = mime,
-                            displayName = displayName,
-                            sizeBytes = finalFile.length(),
-                        ),
-                    )
-                }
-            } else {
-                dispatchAttachment(finalFile, mime)
+            // v1.3.4 — la PJ est AJOUTÉE à la liste `pendingAttachments` (vs setter unique
+            // v1.2.1 derrière dialog modal). L'utilisateur visualise tout dans la bande
+            // staging du composer et tap Envoyer quand il a fini d'empiler.
+            //
+            // Cap dynamique 280 KB (carrier MMSC FR le plus strict, cf. VoiceRecorder.kt).
+            // Si l'ajout ferait dépasser le cap : on refuse + snack + delete fichier
+            // temporaire pour ne pas leaker en cache.
+            val currentTotal = _state.value.pendingAttachments.sumOf { it.sizeBytes }
+            val draftLen = _state.value.draft.length.toLong()
+            val projected = currentTotal + finalFile.length() + draftLen
+            if (projected > CARRIER_PAYLOAD_CAP_BYTES) {
+                runCatching { finalFile.delete() }
+                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_CAP_REACHED))
+                return@launch
+            }
+            _state.update {
+                it.copy(
+                    pendingAttachments = it.pendingAttachments + PendingAttachment(
+                        file = finalFile,
+                        mimeType = mime,
+                        displayName = displayName,
+                        sizeBytes = finalFile.length(),
+                    ),
+                )
             }
         }
     }
 
-    /** Internal: actually dispatches a (compressed-if-needed) attachment file. */
-    private suspend fun dispatchAttachment(file: java.io.File, mime: String) {
+    /**
+     * v1.3.4 — envoie en UN SEUL MMS multipart le texte du draft + toutes les PJ
+     * actuellement stagées. Vide le draft et la liste pendingAttachments en cas de
+     * succès. En cas d'échec : on garde les PJ stagées pour permettre un retry sans
+     * re-pick (les fichiers ne sont PAS supprimés).
+     *
+     * Si `pendingAttachments` est vide ET draft non vide : route vers le SMS texte
+     * standard (pas via cette méthode — `doSend` est l'autre chemin pour texte pur).
+     */
+    private suspend fun dispatchPendingAttachments() {
+        // v1.3.4 M2 — snapshot des PJ au moment du send. Si l'user ajoute une N+1ᵉ PJ
+        // pendant que le dispatch est in-flight (1-5 s), elle ne sera PAS wipée par
+        // le clear post-Success — on filtre uniquement les PJ effectivement envoyées.
+        val pending = _state.value.pendingAttachments
+        if (pending.isEmpty()) return
         val conv = _state.value.conversation ?: return
-        val payload = SendMediaMmsUseCase.AttachmentPayload(file = file, mimeType = mime)
+        val textBody = _state.value.draft
+
+        // v1.3.4 M3 audit fix — re-check cap au moment du send (le check à
+        // `onAttachmentPicked` ne couvre PAS le cas où l'user ajoute du texte APRÈS
+        // les PJ et fait dépasser le total).
+        val totalBytes = pending.sumOf { it.sizeBytes } + textBody.length.toLong()
+        if (totalBytes > CARRIER_PAYLOAD_CAP_BYTES) {
+            _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_CAP_REACHED))
+            return
+        }
+
+        val payloads = pending.map { p ->
+            SendMediaMmsUseCase.AttachmentPayload(file = p.file, mimeType = p.mimeType)
+        }
         when (val res = sendMediaMms.invoke(
             recipients = conv.addresses,
-            attachments = listOf(payload),
-            textBody = _state.value.draft,
+            attachments = payloads,
+            textBody = textBody,
         )) {
             is Outcome.Success -> {
-                _state.update { it.copy(draft = "", segments = segCounter.count("")) }
+                // M2 audit fix — filter, not wipe, pour préserver les PJ ajoutées
+                // pendant le dispatch async.
+                val dispatchedSet = pending.toSet()
+                _state.update {
+                    it.copy(
+                        draft = "",
+                        segments = segCounter.count(""),
+                        pendingAttachments = it.pendingAttachments.filterNot { p -> p in dispatchedSet },
+                    )
+                }
                 repo.setDraft(conversationId, null)
                 _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_SENT))
             }
             is Outcome.Failure -> {
-                runCatching { file.delete() }
+                // Garde les PJ stagées pour retry, ne supprime pas les fichiers cache.
                 _events.tryEmit(Event.SendError(res.error))
             }
         }
     }
 
-    /** Confirms and dispatches the staged attachment. Cleans up on failure. */
-    fun confirmPendingAttachment() {
-        val pending = _state.value.pendingAttachment ?: return
-        _state.update { it.copy(pendingAttachment = null) }
-        viewModelScope.launch { dispatchAttachment(pending.file, pending.mimeType) }
+    /**
+     * v1.3.4 — retire UNE PJ de la bande staging (clic sur le X du chip) + supprime
+     * son fichier cache. M4 audit fix : matching par **path absolu du fichier**
+     * (id stable) au lieu d'index numérique → résistant aux races add/remove qui
+     * pourraient sinon viser la mauvaise PJ après un shift d'index.
+     */
+    fun removePendingAttachment(fileAbsolutePath: String) {
+        val current = _state.value.pendingAttachments
+        val removed = current.firstOrNull { it.file.absolutePath == fileAbsolutePath } ?: return
+        _state.update { it.copy(pendingAttachments = current - removed) }
+        runCatching { removed.file.delete() }
     }
 
-    /** Discards the staged attachment without sending. Deletes the cached file. */
-    fun cancelPendingAttachment() {
-        val pending = _state.value.pendingAttachment ?: return
-        _state.update { it.copy(pendingAttachment = null) }
-        runCatching { pending.file.delete() }
+    /**
+     * v1.3.4 — vide la bande staging + supprime tous les fichiers cache. Appelé sur
+     * quitter de la conversation, ou bouton "Tout supprimer" si exposé.
+     */
+    fun clearAllPendingAttachments() {
+        val current = _state.value.pendingAttachments
+        if (current.isEmpty()) return
+        _state.update { it.copy(pendingAttachments = emptyList()) }
+        current.forEach { runCatching { it.file.delete() } }
     }
 
     /** Resolves OpenableColumns.DISPLAY_NAME for a content URI. */
@@ -889,7 +953,8 @@ class ThreadViewModel @Inject constructor(
         // cancelled (Activity recreated, user backed out) leaks until the TelephonySyncWorker's
         // 24 h prune sweeps it. Clean up the in-memory staged file synchronously here so the
         // common path (rotate, back-out) never leaves a trail.
-        _state.value.pendingAttachment?.let { p -> runCatching { p.file.delete() } }
+        // v1.3.4 — cleanup TOUS les fichiers cache des PJ stagées non-envoyées.
+        _state.value.pendingAttachments.forEach { p -> runCatching { p.file.delete() } }
     }
 
     private companion object {
@@ -899,6 +964,8 @@ class ThreadViewModel @Inject constructor(
         const val SNACK_TRANSLATE_FAILED: String = "Échec de la traduction"
         const val SNACK_ATTACH_SENT: String = "Pièce jointe envoyée"
         const val SNACK_ATTACH_COPY_FAILED: String = "Impossible de lire la pièce jointe"
+        const val SNACK_ATTACH_CAP_REACHED: String =
+            "Limite MMS atteinte (280 Ko). Retirez une pièce jointe ou réduisez le texte."
 
         // Image compression knobs. The first threshold says "do nothing for tiny images";
         // the second is the hard target used by the quality loop.

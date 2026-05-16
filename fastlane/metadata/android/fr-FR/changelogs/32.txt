@@ -1,0 +1,20 @@
+v1.3.4 — Multi-attach dans le composer (envoi groupe d'images en 1 MMS)
+
+NOUVEAUTE
+* Empilez plusieurs pieces jointes avant d'envoyer : choisissez une image, puis une 2e, puis un document, ecrivez votre texte, tap envoyer = 1 seul MMS multipart.
+* Bande de PJ stagees au-dessus du champ texte : thumbnail (image) ou icone (video/fichier) avec petite croix rouge en haut a droite pour retirer une PJ.
+* Plus de dialog modal d'avant-envoi : l'utilisateur a toujours la visibilite directement dans le composer.
+* Cap total 280 Ko applique en temps reel (somme PJ + texte). Snack si on depasse.
+
+FIABILITE
+* Re-check du cap au moment du tap Envoyer (si on tape du texte apres avoir empile des PJ).
+* Snapshot/diff au dispatch : si on ajoute une PJ pendant que l'envoi est en cours, elle est preservee.
+* Bouton Envoyer visible meme sans texte des qu'au moins 1 PJ est stagee.
+* Id stable par chemin fichier (pas par hash) pour eviter toute confusion d'index sur le bouton retirer.
+
+UI
+* Cercle de retrait PJ : compact (16 dp), fond rouge, croix blanche (action destructive evidente).
+
+REPORTE v1.3.5
+* G3 retrait permissions orphelines (SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM, CHANGE_NETWORK_STATE).
+* G4-G8 nettoyage dead code (ConversationOverrideDao, BlockingSettings.blockShortCodes, strings i18n inutilisees, dedup map purge).

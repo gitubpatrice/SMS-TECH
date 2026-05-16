@@ -282,6 +282,7 @@
     <string name="attachment_video_label">Vidéo</string>
     <string name="attachment_file_label">Fichier</string>
     <string name="bubble_sender_self">Vous</string>
+    <string name="attachment_remove_label">Retirer la pièce jointe</string>
 
     <string name="action_react">Réagir</string>
     <string name="reaction_picker_other">Autre emoji</string>
