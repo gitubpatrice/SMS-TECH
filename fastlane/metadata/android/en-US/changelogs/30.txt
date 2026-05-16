@@ -1,0 +1,19 @@
+v1.3.3 — 7 critical fixes (voice SFR, dup convs, notifs, MMS, share)
+
+CRITICAL FIXES
+* Voice send works again on SFR (bitrate 24 -> 16 kbps, cap 280 KB): 120 s fit in 1 MMS segment without carrier rejection.
+* No more duplicate empty conversations on SMS receive: 8-digit suffix matching identifies 1-to-1 convs across national/international number formats.
+* System notifications cleared when opening a conversation from the app (before: they kept stacking until explicit tap on the notification).
+* SMS Tech now appears in the system "Share" menu (Gallery, browser, files). Received attachments openable by tap on the bubble (image / video / file).
+* Image thumbnail preview in the confirmation dialog before send.
+
+UI
+* "You" / contact name bold label above the first bubble of each burst.
+* Vertical spacing between bubbles increased (3 dp -> 8 dp at boundaries).
+* Snackbar in neutral color (red reserved for destructive actions only).
+
+RELIABILITY & SECURITY
+* Auto-refresh of conversation previews after auto-purge (anti privacy leak: purged content no longer visible on the list).
+* 60 s TTL on incoming shares + clear if app is reopened other than via Share (anti involuntary attachment to wrong conv).
+* Notifications: switch to tag-based cancel (OneUI/MIUI compat).
+* Strict MIME whitelist on Share (image/video/audio/pdf/vcard/text-plain) instead of overly broad text/* / application/* patterns.

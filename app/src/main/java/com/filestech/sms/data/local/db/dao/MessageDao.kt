@@ -166,6 +166,36 @@ interface MessageDao {
     suspend fun purgeOlderThan(olderThan: Long): Int
 
     /**
+     * v1.3.3 G1 audit fix — après une purge, refresh `last_message_at` +
+     * `last_message_preview` de TOUTES les conversations (post-purge sur 1 transaction).
+     * Sans ça, les conv dont tous les messages ont été purgés gardent l'ancien preview en
+     * clair (leak privacy : le contenu purgé reste visible sur l'écran de liste).
+     *
+     * Logique :
+     *  - Si une conv n'a plus aucun message : `last_message_at = 0`, `preview = NULL`.
+     *  - Sinon : recalcul depuis le message le plus récent restant.
+     *
+     * O(N) sur le nombre de conversations (typiquement <500), exécuté UNIQUEMENT après une
+     * purge effective. Pas d'impact perf en steady state.
+     */
+    @Query(
+        """
+        UPDATE conversations
+        SET
+          last_message_at = COALESCE(
+              (SELECT MAX(date) FROM messages WHERE conversation_id = conversations.id),
+              0
+          ),
+          last_message_preview = (
+              SELECT body FROM messages
+              WHERE conversation_id = conversations.id
+              ORDER BY date DESC LIMIT 1
+          )
+        """,
+    )
+    suspend fun refreshAllConversationPreviewsAfterPurge(): Int
+
+    /**
      * v1.3.0 — compte combien de messages seraient effacés par [purgeOlderThan] avec ce
      * même `olderThan`. Sert au bouton "Effacer maintenant" du dialog réglages : on
      * affiche d'abord à l'utilisateur "X messages vont être effacés, continuer ?" pour

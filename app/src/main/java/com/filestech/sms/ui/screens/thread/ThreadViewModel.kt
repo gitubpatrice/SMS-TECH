@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import javax.inject.Inject
 
@@ -57,6 +58,7 @@ class ThreadViewModel @Inject constructor(
     private val contactRepo: com.filestech.sms.domain.repository.ContactRepository,
     private val translator: TranslationService,
     private val sendReaction: SendReactionUseCase,
+    private val incomingShare: com.filestech.sms.system.share.IncomingShareHolder,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
@@ -829,6 +831,53 @@ class ThreadViewModel @Inject constructor(
 
     fun onConversationOpened() {
         viewModelScope.launch { markRead.invoke(conversationId) }
+        // v1.3.3 bug #4 — auto-consume du partage entrant. Z3 audit fix : on ATTEND
+        // que la conversation soit hydratée (state.conversation != null) avant
+        // d'appeler onAttachmentPicked, qui sinon retourne early sans rien attacher
+        // et le holder serait vidé pour rien.
+        consumeIncomingShareIfAny()
+    }
+
+    /**
+     * v1.3.3 bug #4 — auto-attach d'un partage entrant. Pas de routing dédié pour
+     * v1.3.3 ; l'user choisit lui-même la conversation cible parmi sa liste après
+     * tap sur SMS Tech dans le chooser système. Le 1ᵉʳ URI du partage est attaché ;
+     * les éventuels suivants (ACTION_SEND_MULTIPLE) sont ignorés cette release (v1.3.4
+     * gérera le multi-attach). Le texte EXTRA_TEXT est préchargé dans le draft.
+     *
+     * Z3 audit fix : on suspend jusqu'à hydration de `state.conversation`. Sans ça
+     * la course `onConversationOpened` ⇆ flow Room peut faire échouer silencieusement
+     * `onAttachmentPicked` qui guarde `if (_state.value.conversation == null) return`.
+     */
+    private fun consumeIncomingShareIfAny() {
+        viewModelScope.launch {
+            // Attente bornée : si la conv n'arrive pas en 5 s (cas extrême purge
+            // concurrente), on abandonne pour ne pas leaker le holder en RAM.
+            val hydrated = withTimeoutOrNull(5_000L) {
+                _state.first { it.conversation != null }
+            }
+            if (hydrated == null) {
+                timber.log.Timber.w("consumeIncomingShareIfAny: conversation never hydrated, share ignored")
+                return@launch
+            }
+            val pending = incomingShare.consume() ?: return@launch
+            // 1) Texte → draft si encore vide.
+            if (!pending.text.isNullOrBlank() && _state.value.draft.isBlank()) {
+                updateDraft(pending.text)
+            }
+            // 2) Premier URI → attachement via le pipeline standard.
+            val firstUri = pending.uris.firstOrNull() ?: return@launch
+            val kind = when {
+                pending.mimeType?.startsWith("image/") == true ->
+                    com.filestech.sms.ui.components.AttachmentKind.PHOTO
+                pending.mimeType?.startsWith("video/") == true ->
+                    com.filestech.sms.ui.components.AttachmentKind.VIDEO
+                pending.mimeType == "text/x-vcard" || pending.mimeType == "text/vcard" ->
+                    com.filestech.sms.ui.components.AttachmentKind.CONTACT
+                else -> com.filestech.sms.ui.components.AttachmentKind.FILE
+            }
+            onAttachmentPicked(firstUri, kind)
+        }
     }
 
     override fun onCleared() {

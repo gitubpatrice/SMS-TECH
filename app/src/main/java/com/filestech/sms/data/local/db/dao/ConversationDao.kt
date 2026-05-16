@@ -57,6 +57,20 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE addresses_csv = :csv LIMIT 1")
     suspend fun findByAddressesCsv(csv: String): ConversationEntity?
 
+    /**
+     * v1.3.3 — snapshot des conv **1-to-1** (zéro `;` dans `addresses_csv`, donc une seule
+     * adresse stockée). Sert au fallback de matching par suffix 8 chiffres dans
+     * [com.filestech.sms.data.repository.ConversationMirror.ensureConversation] : un SMS
+     * reçu en format national (`0612…`) doit retrouver la conversation existante créée
+     * lors de l'import système en format international (`+33612…`), et inversement.
+     *
+     * On évite un `LIKE '%suffix'` SQL imprécis sur le CSV : ici on filtre les 1-to-1 puis
+     * le matching exact se fait en mémoire via `phoneSuffix8()`. Volume négligeable (qq
+     * centaines de conv max sur usage normal).
+     */
+    @Query("SELECT * FROM conversations WHERE addresses_csv NOT LIKE '%;%'")
+    suspend fun snapshotOneToOneConversations(): List<ConversationEntity>
+
     @Query("SELECT * FROM conversations WHERE display_name IS NULL OR display_name = ''")
     suspend fun findMissingDisplayName(): List<ConversationEntity>
 

@@ -289,6 +289,10 @@
     <string name="reaction_send_confirm_body">An SMS containing only this emoji will be sent to your recipient. Counts as a regular SMS (plan rate). You can disable this in Settings → Sending.</string>
     <string name="reaction_send_confirm_never_ask">Don\'t ask again, send directly</string>
     <string name="reaction_send_confirm_fallback_recipient">this contact</string>
+    <string name="attachment_image_label">Image</string>
+    <string name="attachment_video_label">Video</string>
+    <string name="attachment_file_label">File</string>
+    <string name="bubble_sender_self">You</string>
 
     <string name="action_react">React</string>
     <string name="reaction_picker_other">Other emoji</string>

@@ -77,6 +77,8 @@ fun AudioMessageBubble(
     onRemoveReaction: () -> Unit = {},
     repliedToPreview: ReplyQuotePreview? = null,
     showTimestamp: Boolean = false,
+    /** v1.3.3 #7 — étiquette d'expéditeur ; voir [MessageBubble] pour la sémantique. */
+    senderLabel: String? = null,
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
@@ -164,6 +166,21 @@ fun AudioMessageBubble(
                         )
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                 ) {
+                  androidx.compose.foundation.layout.Column {
+                    if (!senderLabel.isNullOrBlank()) {
+                        // Z5 audit fix — utiliser une couleur à haut contraste avec le
+                        // fond de la bulle (cf. MessageBubble.textColor). `labelColor`
+                        // (cs.onSurfaceVariant) tombait sous WCAG AA sur fond `primary`
+                        // pour les bulles outgoing.
+                        val senderColor = if (isOut) cs.onPrimary else cs.onSurface
+                        Text(
+                            text = senderLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = senderColor,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 6.dp, top = 2.dp, bottom = 2.dp),
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // v1.2.6 : disque Play différencié par direction.
                         //  - outgoing : rond rempli avec **exactement la même couleur** que le contour
@@ -213,6 +230,7 @@ fun AudioMessageBubble(
                             modifier = Modifier.padding(end = 4.dp),
                         )
                     }
+                  } // ferme Column senderLabel + Row
                 }
             }
         }

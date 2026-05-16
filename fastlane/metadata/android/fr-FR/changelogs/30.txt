@@ -1,0 +1,19 @@
+v1.3.3 — 7 fixes critiques (vocal SFR, doublons conv, notifs, MMS, partager)
+
+CORRECTIONS CRITIQUES
+* Envoi vocal a nouveau fiable chez SFR (bitrate 24 -> 16 kbps, cap 280 KB) : 120 s tiennent en 1 segment MMS sans rejet operateur.
+* Plus de conversation dupliquee vide a la reception : matching par suffix 8 chiffres pour identifier les conv 1-to-1 entre formats national et international.
+* Notifications systeme effacees a l'ouverture d'une conversation depuis l'app (avant : restaient cumulees jusqu'au tap explicite sur la notif).
+* SMS Tech apparait dans le menu "Partager" du systeme (Galerie, navigateur, fichiers). Pieces jointes ouvrables (image / video / fichier) par tap sur la bulle.
+* Preview thumbnail des images dans le dialog de confirmation avant envoi.
+
+UI
+* Titre "Vous" / nom du contact en gras au-dessus de la 1ere bulle de chaque suite de messages.
+* Espacement vertical entre bulles augmente (3 dp -> 8 dp aux frontieres).
+* Snackbar en couleur neutre (le rouge reste reserve aux actions destructives uniquement).
+
+FIABILITE ET SECURITE
+* Refresh automatique du preview des conversations apres auto-purge (anti-leak privacy : plus de contenu purge visible sur la liste).
+* TTL 60s sur les partages entrants + clear si l'app est rouverte autrement que par Partager (anti-attachement involontaire a la mauvaise conv).
+* Notifications: bascule sur cancel tag-based (compat OneUI/MIUI).
+* Whitelist MIME stricte sur Partager (image/video/audio/pdf/vcard/text-plain) au lieu de patterns text/*/application/* trop larges.

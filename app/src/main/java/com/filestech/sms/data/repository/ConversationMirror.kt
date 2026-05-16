@@ -11,6 +11,7 @@ import com.filestech.sms.data.local.db.entity.MessageDirection
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.local.db.entity.MessageType
+import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
@@ -523,16 +524,47 @@ class ConversationMirror @Inject constructor(
 
     private suspend fun ensureConversation(addresses: List<PhoneAddress>): Long {
         val csv = addresses.sortedBy { it.normalized }.toCsv()
-        val existing = conversationDao.findByAddressesCsv(csv)
         val resolved = resolveDisplayName(addresses.first().raw)
-        if (existing != null) {
-            // Back-fill the contact name if it wasn't available when the row was first created
-            // (e.g. READ_CONTACTS not yet granted at import time, or contact added afterwards).
+
+        // 1) Exact-CSV match — chemin rapide, couvre la majorité des cas (même format
+        //    d'adresse stocké et présenté).
+        conversationDao.findByAddressesCsv(csv)?.let { existing ->
             if (existing.displayName == null && resolved != null) {
                 conversationDao.update(existing.copy(displayName = resolved))
             }
             return existing.id
         }
+
+        // 2) v1.3.3 — FALLBACK matching par suffix 8 chiffres pour les conversations
+        //    1-to-1. Sans ce fallback, un SMS reçu en format national `0612345678` créerait
+        //    une 2ᵉ conversation alors qu'une conv existe déjà en format international
+        //    `+33612345678` (importée du système). Bug user-visible : liste des
+        //    conversations qui se remplit de doublons VIDES à chaque SMS reçu (les
+        //    messages tombent dans la conv "broadcast" pendant que la conv "import"
+        //    historique reste figée).
+        //
+        //    Restreint aux conv 1-to-1 (`snapshotOneToOneConversations` filtre déjà les
+        //    groupes). Pour les groupes, le matching CSV strict reste la bonne approche :
+        //    deux participants partiels ne doivent PAS être confondus avec un autre
+        //    groupe via suffix.
+        if (addresses.size == 1) {
+            val incomingSuffix = addresses.first().raw.phoneSuffix8()
+            if (incomingSuffix.length == 8) {
+                val oneToOne = conversationDao.snapshotOneToOneConversations()
+                val match = oneToOne.firstOrNull { conv ->
+                    val convAddress = PhoneAddress.list(conv.addressesCsv).firstOrNull()
+                    convAddress != null && convAddress.raw.phoneSuffix8() == incomingSuffix
+                }
+                if (match != null) {
+                    if (match.displayName == null && resolved != null) {
+                        conversationDao.update(match.copy(displayName = resolved))
+                    }
+                    return match.id
+                }
+            }
+        }
+
+        // 3) Vraiment nouvelle conversation — création.
         return conversationDao.upsert(
             ConversationEntity(
                 threadId = 0L,

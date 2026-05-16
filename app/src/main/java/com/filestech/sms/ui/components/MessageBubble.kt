@@ -51,6 +51,14 @@ fun MessageBubble(
     repliedToPreview: ReplyQuotePreview? = null,
     translationState: TranslationDisplayState? = null,
     onDismissTranslation: (() -> Unit)? = null,
+    /**
+     * v1.3.3 #7 — étiquette d'expéditeur intégrée dans la bulle ("Vous" pour les
+     * messages sortants, nom du contact pour les messages reçus). `null` = pas
+     * d'étiquette (cas des bulles "Middle" et "Last" dans un burst). Le caller
+     * ([com.filestech.sms.ui.screens.thread.ThreadScreen]) ne passe l'étiquette
+     * que sur la 1ʳᵉ bulle d'un burst pour ne pas surcharger visuellement.
+     */
+    senderLabel: String? = null,
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
@@ -127,18 +135,31 @@ fun MessageBubble(
                     // selon le device. On désactive la linkification dans ce cas — l'UX
                     // "tap pour réessayer" reste sans ambiguïté. L'URL reste visible en
                     // texte brut ; l'utilisateur peut copier-coller ou retry puis cliquer.
-                    if (message.status == com.filestech.sms.domain.model.Message.Status.FAILED) {
-                        Text(
-                            text = message.body,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = textColor,
-                        )
-                    } else {
-                        MessageTextWithLinks(
-                            text = message.body,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = textColor,
-                        )
+                    Column {
+                        if (!senderLabel.isNullOrBlank()) {
+                            // v1.3.3 #7 — étiquette en gras + couleur de contraste ; padding-bottom
+                            // 2dp pour aérer sans agrandir trop la bulle.
+                            Text(
+                                text = senderLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = textColor,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 2.dp),
+                            )
+                        }
+                        if (message.status == com.filestech.sms.domain.model.Message.Status.FAILED) {
+                            Text(
+                                text = message.body,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = textColor,
+                            )
+                        } else {
+                            MessageTextWithLinks(
+                                text = message.body,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = textColor,
+                            )
+                        }
                     }
                 }
             }
@@ -225,8 +246,14 @@ private fun bubbleShape(isOut: Boolean, position: BurstPosition): RoundedCornerS
     }
 }
 
-/** 1 dp between burst neighbours, 4 dp around solo / boundaries — gives bursts visible cohesion. */
+/**
+ * v1.3.3 #7 — espacement vertical entre bulles.
+ *  - 2 dp à l'intérieur d'un burst (`Middle`) pour serrer les messages consécutifs du
+ *    même expéditeur (lecture rapide).
+ *  - 8 dp aux frontières (`Solo`, `First`, `Last`) pour séparer visuellement les bursts.
+ *  - Avant v1.3.3 : 3 dp partout (trop serré aux frontières) ; user-feedback du 2026-05-16.
+ */
 private fun bubbleVerticalSpacing(position: BurstPosition) = when (position) {
-    BurstPosition.Solo, BurstPosition.First, BurstPosition.Last -> 3.dp
-    BurstPosition.Middle -> 1.dp
+    BurstPosition.Solo, BurstPosition.First, BurstPosition.Last -> 8.dp
+    BurstPosition.Middle -> 2.dp
 }

@@ -114,6 +114,12 @@ class TelephonySyncWorker @AssistedInject constructor(
                         val safetyNetCutoff = now - SAFETY_NET_DAYS * MS_PER_DAY
                         val cutoff = minOf(retentionCutoff, safetyNetCutoff)
                         val purged = messageDao.purgeOlderThan(cutoff)
+                        if (purged > 0) {
+                            // v1.3.3 G1 audit fix — refresh preview/last_message_at après
+                            // purge auto pour éviter qu'une conv vidée garde l'ancien
+                            // preview en clair sur la liste (leak privacy).
+                            messageDao.refreshAllConversationPreviewsAfterPurge()
+                        }
                         settings.update {
                             it.copy(security = it.security.copy(lastAutoPurgeAt = now))
                         }

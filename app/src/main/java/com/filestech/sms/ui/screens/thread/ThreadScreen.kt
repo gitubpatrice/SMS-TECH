@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -299,7 +300,22 @@ fun ThreadScreen(
                 },
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHost) },
+        snackbarHost = {
+            // v1.3.3 — règle user "rouge UNIQUEMENT pour important/suppression" : on
+            // force le rendering de chaque Snackbar en couleurs neutres (inverseSurface
+            // = gris-bleu foncé Material 3). Les vraies destructives passent par des
+            // dialogs (`DestructiveConfirmDialog`) ou par des snacks dédiées via couleur
+            // `errorContainer` explicite — pas par défaut. Cohérent avec le pattern
+            // projet (Notes Tech U2, Pass Tech U2, PDF Tech U1).
+            SnackbarHost(hostState = snackbarHost) { data ->
+                androidx.compose.material3.Snackbar(
+                    snackbarData = data,
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    actionColor = MaterialTheme.colorScheme.inversePrimary,
+                )
+            }
+        },
         bottomBar = {
             Column {
                 // #8 contextual reply chip — renders above the composer when a reply is armed.
@@ -369,6 +385,24 @@ fun ThreadScreen(
 
                 val burstPosition = computeBurstPosition(prev, msg, next)
                 val audio = msg.audioAttachment
+                // v1.3.3 bug #2 — pour les pièces jointes NON-audio (image/video/file),
+                // on délègue à MediaAttachmentBubble qui ajoute le tap-to-view (ACTION_VIEW
+                // via FileProvider). Sans ce dispatch, l'attachment était silencieusement
+                // ignoré au rendu (juste le body "🖼️ filename.jpg" en texte décoratif).
+                val mediaAttachment = msg.attachments.firstOrNull { !it.isAudio }
+                // v1.3.3 #7 — étiquette d'expéditeur uniquement sur la 1ʳᵉ bulle d'un
+                // burst (Solo ou First) pour ne pas surcharger visuellement les suites
+                // consécutives du même expéditeur.
+                val senderLabel: String? = if (
+                    burstPosition == com.filestech.sms.ui.components.BurstPosition.Solo ||
+                    burstPosition == com.filestech.sms.ui.components.BurstPosition.First
+                ) {
+                    if (msg.isOutgoing) {
+                        stringResource(R.string.bubble_sender_self)
+                    } else {
+                        state.conversation?.displayName?.takeIf { it.isNotBlank() } ?: msg.address
+                    }
+                } else null
                 if (audio != null) {
                     // Audit P-P1-2: pass the playback state as a **lambda**, not the value.
                     // The bubble re-reads it only inside its own `derivedStateOf`, so the 5 Hz
@@ -391,6 +425,24 @@ fun ThreadScreen(
                         onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         showTimestamp = showTimestamp,
+                        senderLabel = senderLabel,
+                    )
+                } else if (mediaAttachment != null) {
+                    // v1.3.3 bug #2 — image / vidéo / fichier rendu avec thumbnail/icône
+                    // cliquable. Tap ouvre la PJ dans l'app système (Galerie, lecteur vidéo,
+                    // chooser pour autres types) via FileProvider URI.
+                    com.filestech.sms.ui.components.MediaAttachmentBubble(
+                        message = msg,
+                        attachment = mediaAttachment,
+                        showTimestamp = showTimestamp,
+                        onDelete = { pendingDelete = msg },
+                        onReply = { viewModel.startReply(msg) },
+                        onReact = if (msg.isIncoming) {
+                            { pickingReactionFor = msg.id }
+                        } else null,
+                        onRemoveReaction = { viewModel.setReaction(msg.id, null) },
+                        repliedToPreview = previewFor(msg),
+                        senderLabel = senderLabel,
                     )
                 } else {
                     val translation = state.translations[msg.id]
@@ -423,6 +475,7 @@ fun ThreadScreen(
                         onDismissTranslation = if (translation != null) {
                             { viewModel.dismissTranslation(msg.id) }
                         } else null,
+                        senderLabel = senderLabel,
                     )
                 }
             }
@@ -499,18 +552,47 @@ fun ThreadScreen(
     // Attachment confirmation dialog — v1.2.1 UX fix. The picker drops the file into the
     // staging slot, and the user explicitly validates here before any MMS dispatch. Cancel
     // deletes the cached copy.
+    //
+    // v1.3.3 bug #3 — affiche un **thumbnail preview** (Coil) pour les images, et une
+    // icône grosse + nom pour les autres types. L'utilisateur voit exactement ce qu'il
+    // s'apprête à envoyer avant le tap Envoyer.
     state.pendingAttachment?.let { pending ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { viewModel.cancelPendingAttachment() },
             title = { Text(stringResource(R.string.attach_confirm_title)) },
             text = {
-                Text(
-                    stringResource(
-                        R.string.attach_confirm_size,
-                        pending.displayName,
-                        formatFileSize(pending.sizeBytes),
-                    ),
-                )
+                androidx.compose.foundation.layout.Column(
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                ) {
+                    if (pending.mimeType.startsWith("image/", ignoreCase = true)) {
+                        // Preview thumbnail pleine largeur, hauteur max 220 dp pour rester
+                        // sous le pli du dialog sur petits écrans.
+                        coil.compose.AsyncImage(
+                            model = coil.request.ImageRequest.Builder(context)
+                                .data(pending.file)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = pending.displayName,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = androidx.compose.ui.Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 220.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+                        )
+                        androidx.compose.foundation.layout.Spacer(
+                            androidx.compose.ui.Modifier.height(12.dp),
+                        )
+                    }
+                    Text(
+                        stringResource(
+                            R.string.attach_confirm_size,
+                            pending.displayName,
+                            formatFileSize(pending.sizeBytes),
+                        ),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    )
+                }
             },
             confirmButton = {
                 androidx.compose.material3.Button(

@@ -26,8 +26,9 @@ import javax.inject.Singleton
  *
  * Hard caps:
  *   - duration: [MAX_DURATION_MS] (120 s)
- *   - file size: [MAX_SIZE_BYTES] (450 KB) — keeps the resulting MMS comfortably below the
- *     ~600 KB total ceiling that most carrier MMSCs (FR Free/Orange/SFR/Bouygues) enforce.
+ *   - file size: [MAX_SIZE_BYTES] (280 KB) — empirically the tightest cap shared by all
+ *     French MMSCs (Free, Orange, SFR, Bouygues). The v1.3.0 → v1.3.2 cap of 450 KB caused
+ *     dispatch failures on SFR (observed user report 2026-05-16) for clips > ~90 s @ 24 kbps.
  *
  * Concurrency: only one recording at a time. A second [record] call while one is active emits
  * [Event.Failed] with [AppError.Telephony] "recorder busy" and closes immediately.
@@ -285,23 +286,32 @@ class VoiceRecorder @Inject constructor(
         const val MIME_AUDIO_M4A: String = "audio/mp4"
 
         /**
-         * Hard duration cap. v1.3.0 : 60 s → 120 s. À 16 kHz mono AAC 24 kbps (paramètres
-         * MediaRecorder ci-dessus), 120 s génère ~360 KB encodé (24_000 b/s × 120 s = 360 000 B
-         * de payload + ~5 KB d'overhead conteneur MP4 / esds / moov), ce qui reste sous la
-         * limite [MAX_SIZE_BYTES] ; sans ça MediaRecorder coupe à ~102 s pour cause de taille,
-         * pas de durée — la promesse "120 s" serait alors mensongère.
+         * Hard duration cap. v1.3.0 : 60 s → 120 s. À 16 kHz mono AAC [BITRATE_BPS]
+         * (16 kbps depuis v1.3.3), 120 s génère ~240 KB encodé (16_000 b/s × 120 s =
+         * 240 000 B de payload + ~5 KB d'overhead conteneur MP4 / esds / moov), ce qui
+         * reste sous la limite [MAX_SIZE_BYTES] ; sans ça MediaRecorder couperait avant
+         * 120 s pour cause de taille, et la promesse "120 s" serait mensongère.
          */
         const val MAX_DURATION_MS: Int = 120_000
 
         /**
-         * Hard size cap. Carrier MMSCs FR (Free, Orange, SFR, Bouygues) acceptent ~600 KB
-         * total (audio + headers + SMIL). 450 KB de payload laisse ~150 KB de headroom pour
-         * le wrap MMS et permet à AAC 24 kbps × 120 s (~360 KB) de tenir sans clipping.
+         * Hard size cap. **v1.3.3** : 280 KB — cap empirique compatible avec **tous** les
+         * MMSCs FR (Free, Orange, SFR, Bouygues). Le cap antérieur (450 KB v1.3.0–v1.3.2)
+         * provoquait des `RESULT_ERROR_GENERIC_FAILURE` côté radio SFR (~300 KB limite
+         * observée 2026-05-16). 280 KB laisse une marge pour les headers MMS + SMIL
+         * sous le ceiling carrier le plus strict.
          */
-        const val MAX_SIZE_BYTES: Long = 450L * 1024L
+        const val MAX_SIZE_BYTES: Long = 280L * 1024L
 
         const val SAMPLE_RATE_HZ: Int = 16_000
-        const val BITRATE_BPS: Int = 24_000
+
+        /**
+         * **v1.3.3** : 24 kbps → 16 kbps. Qualité voix mono à 16 kHz AAC reste totalement
+         * intelligible (référence : WhatsApp push-to-talk ≈ 16 kbps, GSM AMR ≈ 12.2 kbps).
+         * Permet 120 s sous 240 KB → marge confortable sous [MAX_SIZE_BYTES] (280 KB) →
+         * envoi MMS qui ne risque PLUS le `RESULT_ERROR_GENERIC_FAILURE` chez SFR & co.
+         */
+        const val BITRATE_BPS: Int = 16_000
 
         const val TICK_INTERVAL_MS: Long = 100L
 

@@ -34,7 +34,12 @@ class IncomingMessageNotifier @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
-    suspend fun notifyIncomingSms(address: String, body: String, messageId: Long) = withContext(io) {
+    suspend fun notifyIncomingSms(
+        address: String,
+        body: String,
+        messageId: Long,
+        conversationId: Long,
+    ) = withContext(io) {
         // Resolve the contact name so the notification shows "Marie" instead of "+33612345678".
         // Falls back gracefully if READ_CONTACTS is denied or no match exists.
         val senderName = runCatching { contacts.lookupByPhone(address)?.displayName }.getOrNull()
@@ -92,6 +97,12 @@ class IncomingMessageNotifier @Inject constructor(
             .setAutoCancel(true)
             .setContentIntent(openIntent)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            // v1.3.3 bug #6 — Z4 audit fix : on N'utilise PAS `setGroup(...)` (qui peut
+            // créer un summary phantome sur OneUI/MIUI et complique le cleanup). À la
+            // place, on poste les notifs avec un TAG dérivé du conversationId. Lookup
+            // côté [cancelAllForConversation] = `for (sbn in activeNotifications)
+            // if (sbn.tag == tag) nm.cancel(tag, sbn.id)`. Simple, fiable, pas de
+            // summary à gérer.
             .also { b ->
                 if (s.notifications.inlineReply) {
                     b.addAction(buildReplyAction(address, messageId, notificationId))
@@ -99,7 +110,13 @@ class IncomingMessageNotifier @Inject constructor(
                 b.addAction(buildMarkReadAction(address, messageId, notificationId))
             }
             .build()
-        NotificationManagerCompat.from(context).notify(notificationId, notif)
+        // Z4 audit fix — tag-based notif : permet à `cancelAllForConversation` de
+        // tout cancel via `nm.cancel(tag, id)` sans toucher à un éventuel summary.
+        NotificationManagerCompat.from(context).notify(
+            conversationTag(conversationId),
+            notificationId,
+            notif,
+        )
     }
 
     /**
@@ -173,6 +190,42 @@ class IncomingMessageNotifier @Inject constructor(
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)
             ?.cancel(stableNotificationId(messageId))
     }
+
+    /**
+     * v1.3.3 bug #6 — cancel TOUTES les notifications affichées qui appartiennent à la
+     * conversation [conversationId]. Appelé depuis `ConversationRepositoryImpl.markRead`
+     * pour que l'ouverture de la thread depuis l'app efface le pavé de notifs cumulées
+     * (qui n'était précédemment effacé QUE par les actions Reply / MarkAsRead émises
+     * directement depuis la notif).
+     *
+     * Z4 audit fix — implémentation **tag-based** : chaque notif est postée avec
+     * `tag = conversationTag(id)`. Cancel = itère `activeNotifications`, filtre par
+     * tag, `nm.cancel(tag, id)`. Pas de `setGroup` → pas de risque de summary phantome
+     * non-cancellé sur OneUI/MIUI. Pas de cache RAM (qui se viderait au kill process
+     * et raterait les notifs déposées en background) — on demande au système la liste
+     * à chaque appel.
+     */
+    fun cancelAllForConversation(conversationId: Long) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?
+            ?: return
+        val tag = conversationTag(conversationId)
+        runCatching {
+            for (sbn in nm.activeNotifications) {
+                if (sbn.tag == tag) {
+                    nm.cancel(sbn.tag, sbn.id)
+                }
+            }
+        }
+    }
+
+    /**
+     * v1.3.3 — tag stable pour toutes les notifs d'une conversation donnée. Inclut le
+     * préfixe `com.filestech.sms.conv.` pour rendre le tag auto-explicatif dans les
+     * outils debug (`dumpsys notification`) et éviter toute collision avec d'éventuels
+     * tags posés par d'autres composants futurs.
+     */
+    private fun conversationTag(conversationId: Long): String =
+        "com.filestech.sms.conv.$conversationId"
 
     companion object {
         const val KEY_REPLY = "key_reply_text"

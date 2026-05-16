@@ -22,6 +22,7 @@ import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +42,7 @@ class ConversationRepositoryImpl @Inject constructor(
     private val attachmentDao: AttachmentDao,
     private val appLock: AppLockManager,
     private val blockedRepo: BlockedNumberRepository,
+    private val notifier: IncomingMessageNotifier,
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ConversationRepository {
@@ -177,6 +179,12 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun markRead(id: Long) = withContext(io) {
         messageDao.markConversationRead(id)
         conversationDao.clearUnread(id)
+        // v1.3.3 bug #6 — efface aussi les notifications encore affichées dans la
+        // barre système pour cette conversation. Sans ça, ouvrir une thread depuis l'app
+        // (et non depuis la notif elle-même) laissait les notifs s'accumuler dans le
+        // shade. `cancelAllForConversation` itère sur les notifs actives filtrées par
+        // groupe `com.filestech.sms.conv.<id>`.
+        notifier.cancelAllForConversation(id)
     }
     override suspend fun delete(id: Long) = withContext(io) {
         // Propagate to the system SMS/MMS content provider before dropping the local rows.
@@ -231,7 +239,13 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun purgeHistoryNow(olderThanDays: Int): Int = withContext(io) {
         if (olderThanDays <= 0) return@withContext 0
         val cutoff = purgeCutoffMs(olderThanDays)
-        messageDao.purgeOlderThan(cutoff)
+        val purged = messageDao.purgeOlderThan(cutoff)
+        if (purged > 0) {
+            // v1.3.3 G1 audit fix — refresh preview/last_message_at après purge pour
+            // éviter qu'une conv vidée garde l'ancien preview en clair (leak privacy).
+            messageDao.refreshAllConversationPreviewsAfterPurge()
+        }
+        purged
     }
 
     /**

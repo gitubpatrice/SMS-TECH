@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.2** (2026-05-16)
+Current release : **v1.3.3** (2026-05-16)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -197,6 +197,86 @@ A second-pass audit found 7 issues, all fixed before tag :
 Tests added in v1.3.2 : `SendReactionUseCaseTest` (10 cases including the
 new Y1/Y2/Y3 anti-regression guards), `MessageTextWithLinksTest` (11
 cases). All pass.
+
+### v1.3.3 (this release) — Critical bug fixes + share-target IPC surface
+
+Triggered by user-reported regressions after v1.3.2. Seven fixes (5
+critical, 2 high) plus a global audit that caught 2 additional issues
+fixed before tag.
+
+User-facing fixes :
+
+- **Bug #5 (CRITICAL)** : duplicate empty conversation on SMS receive.
+  `ConversationMirror.ensureConversation` now falls back to **8-digit
+  suffix matching** for 1-to-1 conversations when the exact CSV match
+  fails. Prevents a system-imported conv in international format
+  (`+33612345678`) from spawning a duplicate when a broadcast SMS arrives
+  in national format (`0612345678`).
+- **Bug #6 (CRITICAL)** : notifications kept stacking. Notifier now posts
+  with a **tag** (`com.filestech.sms.conv.<id>`) ; `markRead` calls
+  `cancelAllForConversation` which iterates `activeNotifications` filtered
+  by tag. Effective even when the app is opened directly (no longer
+  requires tapping the notification).
+- **Bug #1 (HIGH)** : voice send failed on SFR. `BITRATE_BPS` 24 → 16
+  kbps + `MAX_SIZE_BYTES` 450 → 280 KB. 120 s now fits in one MMS segment
+  for all French carriers.
+- **Bug #4 (MEDIUM)** : SMS Tech absent from system Share chooser. Added
+  `<intent-filter ACTION_SEND>` to MainActivity with **strict MIME
+  whitelist** (`image/*`, `video/*`, `audio/*`, `text/plain`,
+  `text/x-vcard`, `text/vcard`, `application/pdf`). New `IncomingShareHolder`
+  singleton + parsing in MainActivity. `ThreadViewModel` consumes the holder
+  after `state.conversation` hydrates (Z3 audit fix).
+- **Bug #2 (MEDIUM)** : received images / files not openable. New
+  `MediaAttachmentBubble` Composable with tap → `Intent.ACTION_VIEW` via
+  scheme-aware URI resolution (Z1 audit fix : detects `content://mms/part/N`
+  for system-imported MMS vs file paths for app-cache attachments —
+  blanket `File(localUri)` would have crashed on legacy MMS).
+- **Feature #3** : image thumbnail preview in the attachment confirmation
+  dialog (Coil with same scheme-aware URI handling).
+- **UI #7** : `senderLabel` ("You" / contact name) bold above the first
+  bubble of each burst ; vertical spacing 3 dp → 8 dp at boundaries.
+  Snackbar custom in `inverseSurface` (per user spec : red reserved for
+  destructive actions only).
+
+Audit Z (post-fix) — 7 findings, all fixed before tag :
+
+- **Z1 (CRITICAL)** : `MediaAttachmentBubble` was opening every attachment
+  with `File(localUri)` regardless of scheme. `content://mms/part/N`
+  attachments (all system-imported MMS) would silently fail. Fixed with
+  `toShareableUri(context)` helper that branches on scheme.
+- **Z3 (HIGH)** : `consumeIncomingShareIfAny` was racing with the
+  conversation hydration flow ; `onAttachmentPicked` returned early if
+  `state.conversation == null` and the holder was already consumed —
+  losing the share. Fixed by suspending on `_state.first { it.conversation
+  != null }` with a 5 s timeout.
+- **Z4 (HIGH)** : `setGroup(...)` without a posted `groupSummary` creates
+  phantom group headers on OneUI/MIUI that are not cancelled by per-notif
+  cancel. Switched to **tag-based** notify/cancel (`nm.notify(tag, id,
+  notif)` / `nm.cancel(tag, id)`).
+- **Z5 (MEDIUM)** : `senderLabel` color on outgoing AudioMessageBubble used
+  `cs.onSurfaceVariant` over `cs.primary` background = ~2:1 contrast (WCAG
+  AA fail). Switched to `cs.onPrimary` for outgoing.
+- **Z6 (MEDIUM)** : intent-filter MIME whitelist tightened (removed
+  `text/*` and `application/*` catch-alls).
+
+Global audit — 2 high findings caught :
+
+- **G1 (HIGH, privacy)** : after `purgeOlderThan`, conversations whose every
+  message was deleted retained their original `last_message_preview` in
+  clear on the list screen. New `refreshAllConversationPreviewsAfterPurge`
+  DAO query recomputes preview + `last_message_at` from the surviving
+  rows. Called by both `purgeHistoryNow` (manual) and `TelephonySyncWorker`
+  (auto monthly).
+- **G2 (HIGH, UX)** : an `IncomingShareHolder` left posted from an
+  abandoned Share could attach the file to the wrong conversation when
+  the user later opened a thread via notification tap.
+  `IncomingShareHolder.Pending` now carries a `postedAt` timestamp ;
+  `consume()` returns `null` if past `PENDING_TTL_MS = 60 s`. MainActivity
+  also `clear()`s the holder on any non-SEND intent (launcher, deep-link,
+  notification-open).
+
+Other audit findings (G3–G10) deferred to v1.3.4 (dead code cleanup, doc
+sync, settings polish — non-blocking).
 
 ### v1.2.0 — 3-axis audit
 

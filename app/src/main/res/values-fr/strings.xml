@@ -278,6 +278,10 @@
     <string name="reaction_send_confirm_body">Un SMS contenant uniquement cet emoji sera envoyé à votre correspondant. Cela compte comme un SMS normal (tarif forfait). Vous pouvez désactiver cet envoi dans Réglages → Envoi.</string>
     <string name="reaction_send_confirm_never_ask">Ne plus demander, envoyer directement</string>
     <string name="reaction_send_confirm_fallback_recipient">ce contact</string>
+    <string name="attachment_image_label">Image</string>
+    <string name="attachment_video_label">Vidéo</string>
+    <string name="attachment_file_label">Fichier</string>
+    <string name="bubble_sender_self">Vous</string>
 
     <string name="action_react">Réagir</string>
     <string name="reaction_picker_other">Autre emoji</string>

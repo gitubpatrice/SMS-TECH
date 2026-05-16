@@ -3,7 +3,6 @@ package com.filestech.sms.system.notifications
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.ApplicationScope
@@ -38,7 +37,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val address = intent.getStringExtra(EXTRA_ADDRESS) ?: return
-        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
         val pending = goAsync()
         scope.launch {
             try {
@@ -52,6 +50,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     Timber.i("NotificationActionReceiver: refused while app is locked")
                     return@launch
                 }
+                // v1.3.3 Z4 audit fix — la fermeture de la notif passe désormais
+                // exclusivement par `markRead` → `cancelAllForConversation` (tag-based).
+                // `findOrCreate` retourne la conv (la même qu'à la réception) ; `markRead`
+                // efface l'unread count + clear toutes les notifs taggées pour cette conv.
+                // Pas de cancel manuel ici → cohérence avec le pattern ouverture-depuis-app.
                 when (intent.action) {
                     ACTION_REPLY -> {
                         val text = RemoteInput.getResultsFromIntent(intent)
@@ -60,19 +63,24 @@ class NotificationActionReceiver : BroadcastReceiver() {
                             ?.takeIf { it.isNotBlank() }
                             ?: return@launch
                         sendSms.invoke(listOf(PhoneAddress.of(address)), text)
-                        if (notificationId >= 0) NotificationManagerCompat.from(context).cancel(notificationId)
+                        // Marquer comme lu (et donc clear notifs via le notifier câblé
+                        // dans markRead). Cohérent : répondre = avoir vu le message.
+                        markReadAndCancelNotifs(address)
                     }
                     ACTION_MARK_READ -> {
-                        val conv = conversationRepo.findOrCreate(listOf(PhoneAddress.of(address)))
-                        if (conv is Outcome.Success) {
-                            conversationRepo.markRead(conv.value.id)
-                        }
-                        if (notificationId >= 0) NotificationManagerCompat.from(context).cancel(notificationId)
+                        markReadAndCancelNotifs(address)
                     }
                 }
             } finally {
                 pending.finish()
             }
+        }
+    }
+
+    private suspend fun markReadAndCancelNotifs(address: String) {
+        val conv = conversationRepo.findOrCreate(listOf(PhoneAddress.of(address)))
+        if (conv is Outcome.Success) {
+            conversationRepo.markRead(conv.value.id)
         }
     }
 

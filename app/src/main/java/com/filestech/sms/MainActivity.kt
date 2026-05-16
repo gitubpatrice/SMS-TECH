@@ -1,5 +1,8 @@
 package com.filestech.sms
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
@@ -17,6 +20,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.system.share.IncomingShareHolder
 import com.filestech.sms.ui.AppRoot
 import com.filestech.sms.ui.theme.SmsTechTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -39,6 +43,7 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var appLock: AppLockManager
+    @Inject lateinit var incomingShare: IncomingShareHolder
 
     private val initialSettings = MutableStateFlow<AppSettings?>(null)
 
@@ -47,6 +52,11 @@ class MainActivity : FragmentActivity() {
         // Hilt injects @Inject lateinit properties inside super.onCreate via the @AndroidEntryPoint
         // bytecode transform. We must call super FIRST before touching `settings` or `appLock`.
         super.onCreate(savedInstanceState)
+
+        // v1.3.3 bug #4 — partage entrant ACTION_SEND / ACTION_SEND_MULTIPLE depuis le
+        // chooser système (Galerie, navigateur, fichiers…). On parse l'intent et on stocke
+        // dans le holder ; AppRoot l'observe pour basculer en mode "pick to share".
+        handleSharedIntent(intent)
 
         // Audit P-P0-5: the previous `runBlocking(IO) { settings.flow.first() }` blocked the main
         // thread 50-200 ms on DataStore to know whether to apply FLAG_SECURE. We now apply it
@@ -100,4 +110,84 @@ class MainActivity : FragmentActivity() {
         if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
+
+    /**
+     * v1.3.3 bug #4 — l'activité est `launchMode="singleTask"`, donc un partage
+     * entrant alors qu'une instance existe déjà arrive via [onNewIntent] et PAS
+     * [onCreate]. On câble les deux pour ne jamais rater un share.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSharedIntent(intent)
+    }
+
+    /**
+     * v1.3.3 bug #4 — parse [Intent.ACTION_SEND] / [Intent.ACTION_SEND_MULTIPLE] et
+     * pose le résultat dans [IncomingShareHolder]. L'UI (AppRoot) prend le relais pour
+     * naviguer vers le picker de conversation. No-op pour tout autre type d'intent.
+     *
+     * Sécurité :
+     *   - Lecture d'URIs uniquement (jamais d'exec, jamais d'écriture en aveugle).
+     *   - Le `type` (MIME) est purement indicatif : la dispatch finale revalide
+     *     l'extension / le contenu via le pipeline existant SendMediaMmsUseCase
+     *     (qui caps déjà à 280 KB et inspecte le header image — audit F5 PDF Tech
+     *     style).
+     */
+    private fun handleSharedIntent(intent: Intent?) {
+        if (intent == null) return
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val uri = intent.extraStream()
+                val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+                if (uri != null || !text.isNullOrBlank()) {
+                    incomingShare.set(
+                        IncomingShareHolder.Pending(
+                            uris = listOfNotNull(uri),
+                            mimeType = intent.type,
+                            text = text,
+                        ),
+                    )
+                }
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val uris = intent.extraStreamList()
+                if (uris.isNotEmpty()) {
+                    incomingShare.set(
+                        IncomingShareHolder.Pending(
+                            uris = uris,
+                            mimeType = intent.type,
+                            text = intent.getStringExtra(Intent.EXTRA_TEXT),
+                        ),
+                    )
+                }
+            }
+            else -> {
+                // v1.3.3 G2 audit fix — l'app a été relancée via un intent NON-SEND
+                // (icône launcher, tap notif `OPEN_CONVERSATION`, deep-link sms:…).
+                // Si un partage attend depuis une session précédente, on l'efface :
+                // l'intention de l'utilisateur a changé, pas question d'attacher
+                // une PJ oubliée à la conversation qu'il vient d'ouvrir.
+                incomingShare.clear()
+            }
+        }
+    }
+
+    /** v1.3.3 — récupère `EXTRA_STREAM` avec API moderne (Android 13+) + legacy fallback. */
+    @Suppress("DEPRECATION")
+    private fun Intent.extraStream(): Uri? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+
+    /** v1.3.3 — récupère la liste d'URIs pour ACTION_SEND_MULTIPLE. */
+    @Suppress("DEPRECATION")
+    private fun Intent.extraStreamList(): List<Uri> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+        } else {
+            getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+        }
 }
