@@ -1,0 +1,68 @@
+# v1.3.2 — Dependabot : alertes + PR automatiques sur les vulnérabilités des
+# dépendances et sur les versions obsolètes. Le seul fait d'avoir ce fichier
+# active les Dependabot version-update PRs (la partie "alertes de sécurité"
+# nécessite en plus le toggle "Dependabot alerts" dans Settings → Code security
+# du repo — geste manuel one-shot).
+
+version: 2
+
+updates:
+  # Gradle dependencies (libs.versions.toml + build.gradle.kts)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    # Group minor + patch bumps into a single PR per ecosystem to reduce noise.
+    # Major bumps stay individual (breaking changes need careful review).
+    groups:
+      kotlin-and-compose:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "androidx.compose*"
+          - "androidx.activity*"
+        update-types:
+          - "minor"
+          - "patch"
+      androidx-core:
+        patterns:
+          - "androidx.core*"
+          - "androidx.lifecycle*"
+          - "androidx.work*"
+          - "androidx.room*"
+        update-types:
+          - "minor"
+          - "patch"
+      tests:
+        patterns:
+          - "org.junit*"
+          - "*truth*"
+          - "*mockito*"
+          - "*robolectric*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+
+  # GitHub Actions used in .github/workflows/*.yml (codeql, android, etc.)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
