@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.1** (2026-05-16)
+Current release : **v1.3.2** (2026-05-16)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -115,6 +115,88 @@ Tests `AppSettingsTest.v1_3_1_reaction_send_defaults_are_explicit` +
 `SetReactionResultTest` lock the new defaults and sealed-class semantics so
 any future refactor that drops `messageId` from `First` or flips the
 default toggle to `false` fails CI.
+
+### v1.3.2 (this release) — Apple/Google Tapback format + clickable URLs
+
+Two UX refinements building on v1.3.1 :
+
+- **Tapback format** : the reaction SMS body is now
+  `"Reacted <emoji> to «<preview>»"` (e.g. `"Reacted ❤️ to «See you tomorrow?»"`).
+  This **exact** ASCII wrapping is what iMessage (iPhone) and recent Google
+  Messages parse to display a **native attached reaction bubble** on the
+  original message — instead of a free-standing `❤️` text bubble. Other apps
+  show the raw text, which remains contextually clear.
+  - `SendReactionUseCase.buildTapbackBody` is extracted as a top-level
+    `internal` function for direct JUnit testing without instantiating the
+    use case.
+  - Body sanitization : control characters (CR/LF/NUL/BEL, U+0000–U+001F,
+    U+007F–U+009F) are replaced by a single space, then whitespace runs are
+    collapsed. Prevents a malicious incoming SMS from injecting line breaks
+    that would split our outgoing tapback into multiple PDUs or fake a
+    different sender prefix on the receiver's parser.
+  - Preview truncated at 50 chars + "…" to fit comfortably inside one UCS-2
+    SMS segment (70 chars cap) with the wrapping + emoji ; avoids the silent
+    billing surprise of a 2-segment SMS.
+  - Empty body (MMS image-only) → `"Reacted <emoji>"` fallback (still parsed
+    by Apple/Google).
+- **Clickable URLs in message bubbles** : `MessageTextWithLinks` Composable
+  uses Compose 1.7+ `LinkAnnotation.Url` with `Patterns.WEB_URL` (Android's
+  battle-tested regex used by every system app). Detected URLs are styled
+  underlined + medium weight, inherit the parent text color (legible in
+  both light/dark themes), and open via the system `UriHandler` →
+  `Intent.ACTION_VIEW`.
+  - Scheme normalization : bare domains (`google.com`) are wrapped as
+    `https://google.com` before opening. Existing `http(s)://` URLs are
+    preserved as-is. **No other scheme is ever generated** (no `tel:`,
+    `file:`, `content:`, etc.) — eliminates the entire class of "click a
+    URL, open a weird intent" exploits.
+  - Trailing punctuation strip (`.`, `,`, `;`, `:`, `!`, `?`, `)`, `]`, `}`,
+    `»`, `"`, `'`) so `Hello google.com.` opens `https://google.com` and
+    leaves the trailing period outside the link.
+  - `remember(text)` caches the `AnnotatedString` so the WEB_URL regex
+    doesn't re-run on every recomposition of the bubble list.
+
+New test `SendReactionUseCaseTest` locks the exact Apple/Google Tapback
+wording, the control-character sanitization, the truncation boundary, and
+the empty-body fallback. Any future refactor that changes
+`"Reacted X to «Y»"` wording would fail CI immediately.
+
+A second-pass audit found 7 issues, all fixed before tag :
+
+- **Y1 (HIGH)** : extend the body-sanitization regex to strip U+2028/U+2029
+  (Line/Paragraph separators), U+200E/U+200F + U+202A–U+202E + U+2066–U+2069
+  (Bidi controls — a `‮` RLO in a received malicious SMS would
+  visually flip the rendered Tapback on the recipient's screen and break
+  the iMessage parser), and U+FEFF (BOM).
+- **Y2 (HIGH)** : `String.take(n)` operates on UTF-16 code units and can
+  cut in the middle of a surrogate pair (emoji 4-byte) or a ZWJ cluster
+  (family emoji). A new `safeTake()` walks back to a clean boundary so the
+  outgoing SMS never carries an orphan surrogate / corrupted glyph.
+- **Y3 (MEDIUM)** : preview budget is now computed dynamically from
+  `SMS_UCS2_SEGMENT_CAP (70) - TAPBACK_WRAP_LENGTH (15) - emoji.length`,
+  guaranteeing the whole tapback fits in **one** UCS-2 SMS segment even
+  with a 4-UTF-16-unit flag emoji or an 11-UTF-16-unit family emoji.
+- **Y4 (MEDIUM)** : URL whitelist via `toSafeHttpsTargetOrNull()`. Only
+  `http://` and `https://` are turned into `LinkAnnotation.Url`. Any other
+  scheme (`javascript:`, `data:`, `intent:`, `file:`, `content:`, `tel:`,
+  custom app schemes) is rendered as plain text — the system `UriHandler`
+  is never asked to resolve a hostile intent.
+- **Y5 (MEDIUM)** : `buildLinkifiedText` short-circuits when the input
+  exceeds `LINKIFY_INPUT_CAP = 2000` chars. Anti-ReDoS on the
+  `Patterns.WEB_URL` regex (java.util.regex NFA can degrade on
+  pathological inputs).
+- **Y6 (MEDIUM)** : `MessageBubble` skips the linkified renderer on
+  messages whose status is `FAILED` — the bubble's outer `clickable`
+  retry-tap stays unambiguous, no gesture conflict with the link.
+- **Y7 (MEDIUM)** : new `MessageTextWithLinksTest` (11 cases) locks the
+  scheme whitelist behavior (case-insensitive http/https accepted, every
+  other scheme rejected, bare domain normalized to `https://`, path-colon
+  edge case correctly classified as non-scheme). Patterns-dependent cases
+  deferred to v1.3.3 with Robolectric.
+
+Tests added in v1.3.2 : `SendReactionUseCaseTest` (10 cases including the
+new Y1/Y2/Y3 anti-regression guards), `MessageTextWithLinksTest` (11
+cases). All pass.
 
 ### v1.2.0 — 3-axis audit
 

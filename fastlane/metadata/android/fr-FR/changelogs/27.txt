@@ -1,0 +1,14 @@
+v1.3.2 — Reactions iMessage/Google Messages + URLs cliquables
+
+NOUVEAUTES
+* Format Apple/Google Tapback : vos reactions emoji sont envoyees au format "Reacted X to «message»" et apparaissent comme une vraie bulle reaction visuelle attachee chez les correspondants sur iPhone / Google Messages recents.
+* URLs cliquables dans les bulles de messages : tap sur un lien ouvre le navigateur systeme. Detection auto, scheme normalise en https://, ponctuation finale strippee.
+
+SECURITE ET FIABILITE (7 corrections d'audit)
+* Sanitization etendue du corps de reaction : controle C0/C1 + line separators Unicode + RLO/LRO Bidi (anti-spoofing visuel cote destinataire) + BOM.
+* Troncature grapheme-safe : aucun emoji coupe en deux dans le SMS sortant (drapeaux, familles ZWJ).
+* Cap dynamique 1 segment SMS UCS-2 (70 chars) : pas de basculement multi-part facture x2.
+* Whitelist scheme stricte : seuls http(s) sont rendus cliquables. javascript: / data: / intent: / file: / content: / tel: refuses.
+* Cap input 2000 chars pour la regex URL (anti-ReDoS sur message forge).
+* URLs non-linkifiees sur message FAILED (le tap reste un retry sans ambiguite de geste).
+* 2 nouveaux fichiers de tests (21 cas) verrouillent le format Tapback exact + le whitelist scheme.

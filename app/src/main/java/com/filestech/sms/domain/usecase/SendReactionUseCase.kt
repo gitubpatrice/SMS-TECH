@@ -90,7 +90,11 @@ class SendReactionUseCase @Inject constructor(
 
         return sendSms(
             recipients = listOf(target),
-            body = emoji,
+            // v1.3.2 — format Apple/Google Tapback : "Reacted ❤️ to «aperçu»". Détecté
+            // automatiquement par iMessage (iPhone) et Google Messages récent qui
+            // l'affichent comme une bulle réaction visuelle attachée au message d'origine.
+            // Les autres apps SMS affichent le texte brut, qui reste compréhensible.
+            body = buildTapbackBody(emoji, message.body),
             // F3 — pas de signature pour une réaction.
             appendSignature = false,
             // Pas de réponse contextuelle (la réaction est ponctuelle, ajouter un
@@ -98,6 +102,7 @@ class SendReactionUseCase @Inject constructor(
             replyToMessageId = null,
         )
     }
+
 
     /**
      * X1 — vrai numéro téléphonique dialable. Refuse :
@@ -125,4 +130,115 @@ class SendReactionUseCase @Inject constructor(
         // pour ne pas exclure des numéros internationaux courts légitimes (exotiques).
         return count { it.isDigit() } >= 4
     }
+
+}
+
+/**
+ * v1.3.2 — cap UCS-2 d'un segment SMS unique. Les guillemets typographiques «» forcent
+ * l'encodage UCS-2 (cap 70 chars/segment vs 160 GSM-7). Au-delà, le SMS bascule en
+ * multi-part = facturation ×2 chez certains opérateurs et perte du parsing Apple/Google
+ * qui attend une seule trame.
+ */
+private const val SMS_UCS2_SEGMENT_CAP = 70
+
+/** v1.3.2 — wrap fixe `"Reacted "` (8) + `" to «"` (5) + `"»"` (1) + `"…"` éventuel (1). */
+private const val TAPBACK_WRAP_LENGTH = 8 + 5 + 1 + 1
+
+/**
+ * v1.3.2 — borne SUPÉRIEURE stricte de l'aperçu, indépendante de l'emoji. Limite
+ * conservatrice : un emoji multi-codepoint (drapeau composé = 4 UTF-16 units) ne doit
+ * jamais faire déborder le segment. On calcule le cap réel via [previewBudget].
+ */
+private const val PREVIEW_HARD_MAX = 50
+
+/**
+ * v1.3.2 — caractères Unicode strippés du body avant injection dans le tapback :
+ *
+ *   - **C0/C1 controls** (` -`, `-`) : CR/LF/NUL/BEL etc.
+ *     pourraient splitter la trame SMS ou injecter un préfixe trompeur.
+ *   - **Line/Paragraph separators** (` `, ` `) : sauts de ligne Unicode
+ *     que `\\s+` ne capturait pas seul.
+ *   - **Bidi controls** (`‎`/`‏`, `‪-‮`, `⁦-⁩`) : un
+ *     `‮` RLO injecté inverse visuellement le rendu — `Reacted ❤️ to «‮Hello»`
+ *     s'affiche `«olleH»` côté correspondant, défaisant le parsing iMessage.
+ *   - **BOM** (`﻿`) : zero-width invisible.
+ */
+private val FORBIDDEN_BODY_CHARS = Regex(
+    "[\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]"
+)
+
+/**
+ * v1.3.2 — construit le corps SMS au format Apple/Google Tapback. Fonction top-level
+ * pour être testable sans instancier [SendReactionUseCase] (dont les dépendances
+ * nécessiteraient des mocks). `internal` pour rester invisible hors du module.
+ *
+ * Garanties :
+ *
+ *   - Si [originalBody] est vide (cas MMS image pure), fallback compact
+ *     `Reacted <emoji>` — la chaîne reste détectable par les parseurs Apple/Google.
+ *   - Les caractères dangereux (cf. [FORBIDDEN_BODY_CHARS] : C0/C1, line separators
+ *     Unicode, bidi controls RLO/LRO, BOM) sont remplacés par un espace simple ;
+ *     les espaces consécutifs sont ensuite compressés (rendu propre).
+ *   - L'aperçu est tronqué à un budget calculé dynamiquement
+ *     (`SMS_UCS2_SEGMENT_CAP - TAPBACK_WRAP_LENGTH - emoji.length`, plafonné à
+ *     [PREVIEW_HARD_MAX]) — assure 1 segment SMS UCS-2 même avec un emoji multi-
+ *     codepoint (drapeau, famille ZWJ).
+ *   - La troncature est **grapheme-safe** : si l'index de coupe tombe sur un high
+ *     surrogate ou en plein cluster ZWJ, on recule jusqu'à un boundary propre pour
+ *     ne jamais émettre un caractère corrompu côté correspondant.
+ *   - Le format texte est ASCII pur côté wrap (`Reacted` / `to`) pour matcher
+ *     EXACTEMENT la signature parsée par Apple/Google ; traduire en français
+ *     casserait la détection automatique côté iPhone.
+ */
+internal fun buildTapbackBody(emoji: String, originalBody: String): String {
+    val sanitized = originalBody
+        .replace(FORBIDDEN_BODY_CHARS, " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+    if (sanitized.isEmpty()) {
+        return "Reacted $emoji"
+    }
+    val budget = previewBudget(emoji)
+    val preview = if (sanitized.length <= budget) {
+        sanitized
+    } else {
+        sanitized.safeTake(budget).trimEnd() + "…"
+    }
+    return "Reacted $emoji to «$preview»"
+}
+
+/**
+ * v1.3.2 — budget chars UTF-16 pour l'aperçu, calculé pour que le SMS final tienne
+ * dans 1 segment UCS-2. Plafonné à [PREVIEW_HARD_MAX] pour préserver une marge
+ * sécurité même si un futur emoji descendrait `emoji.length` à 0.
+ */
+private fun previewBudget(emoji: String): Int =
+    (SMS_UCS2_SEGMENT_CAP - TAPBACK_WRAP_LENGTH - emoji.length)
+        .coerceAtMost(PREVIEW_HARD_MAX)
+        .coerceAtLeast(8) // garantie absolue de garder un peu de contexte
+
+/**
+ * v1.3.2 — `String.take` grapheme-safe : recule l'index si on coupe en plein milieu
+ * d'un surrogate pair (emoji 4-byte) ou immédiatement après un ZWJ (cluster non
+ * terminé). Évite de produire un `�` ou un emoji visuellement cassé côté
+ * destinataire — ce qui ferait basculer le SMS en 2 segments ET ferait échouer le
+ * parsing iMessage qui attend une trame intacte.
+ */
+private fun String.safeTake(maxChars: Int): String {
+    if (length <= maxChars) return this
+    var cut = maxChars
+    // 1) si on coupe pile entre les deux moitiés d'un surrogate pair, recule d'1.
+    if (cut > 0 && Character.isHighSurrogate(this[cut - 1])) cut--
+    // 2) si le dernier caractère est un ZWJ ou un Variation Selector, le cluster
+    //    n'est pas terminé — recule jusqu'à un boundary propre (au pire, 4 cran).
+    var safetyHops = 0
+    while (cut > 0 && safetyHops < 4) {
+        val ch = this[cut - 1]
+        val code = ch.code
+        val isJoinerOrSelector = code == 0x200D || code in 0xFE00..0xFE0F
+        if (!isJoinerOrSelector) break
+        cut--
+        safetyHops++
+    }
+    return substring(0, cut)
 }

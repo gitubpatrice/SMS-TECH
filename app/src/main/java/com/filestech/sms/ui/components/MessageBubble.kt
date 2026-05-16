@@ -117,11 +117,29 @@ fun MessageBubble(
                         .clickable(onClick = onTap)
                         .padding(PaddingValues(horizontal = 14.dp, vertical = 10.dp)),
                 ) {
-                    Text(
-                        text = message.body,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = textColor,
-                    )
+                    // v1.3.2 — URLs détectées et rendues cliquables (ouvre le navigateur
+                    // système via UriHandler). Fallback texte brut si pas d'URL.
+                    //
+                    // Y6 audit : sur message FAILED, le tap sur la bulle entière déclenche
+                    // un retry ([onTap] ligne ci-dessus). Linkifier les URLs créerait un
+                    // conflit de gestes : un tap sur une URL au milieu du body pourrait
+                    // soit ouvrir le browser, soit déclencher le retry, voire les deux
+                    // selon le device. On désactive la linkification dans ce cas — l'UX
+                    // "tap pour réessayer" reste sans ambiguïté. L'URL reste visible en
+                    // texte brut ; l'utilisateur peut copier-coller ou retry puis cliquer.
+                    if (message.status == com.filestech.sms.domain.model.Message.Status.FAILED) {
+                        Text(
+                            text = message.body,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = textColor,
+                        )
+                    } else {
+                        MessageTextWithLinks(
+                            text = message.body,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = textColor,
+                        )
+                    }
                 }
             }
             if (translationState != null) {
