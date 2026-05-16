@@ -14,10 +14,15 @@ AutoName: SMS Tech
 RepoType: git
 Repo: https://github.com/gitubpatrice/SMS-TECH.git
 
+# Reproducible build pinned to the upstream-signed GitHub release APKs.
+# F-Droid will build from source at the exact commit hash below and verify the
+# resulting APK byte-for-byte against the GitHub asset referenced in Binaries.
+Binaries: https://github.com/gitubpatrice/SMS-TECH/releases/download/v%v/app-%a-release.apk
+
 Builds:
-  - versionName: 1.2.1
-    versionCode: 7
-    commit: v1.2.1
+  - versionName: 1.3.2
+    versionCode: 27
+    commit: b2ed706fbbbb4cd201b45e38e53828cfbcf1e4f4
     subdir: app
     gradle:
       - yes
@@ -28,128 +33,14 @@ Builds:
       - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
       - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
 
-  - versionName: 1.2.2
-    versionCode: 10
-    commit: v1.2.2
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  - versionName: 1.2.3
-    versionCode: 11
-    commit: v1.2.3
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  - versionName: 1.2.4
-    versionCode: 12
-    commit: v1.2.4
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  - versionName: 1.2.5
-    versionCode: 13
-    commit: v1.2.5
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  - versionName: 1.2.6
-    versionCode: 16
-    commit: v1.2.6
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  # v1.2.7 a été tag mais jamais publié — bug ouverture SQLCipher au boot.
-  # F-Droid skip directement à v1.2.8 (hotfix + audit hardening).
-
-  - versionName: 1.2.8
-    versionCode: 18
-    commit: v1.2.8
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  - versionName: 1.2.9
-    versionCode: 21
-    commit: v1.2.9
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  - versionName: 1.3.0
-    versionCode: 23
-    commit: v1.3.0
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
-
-  - versionName: 1.3.1
-    versionCode: 25
-    commit: v1.3.1
-    subdir: app
-    gradle:
-      - yes
-    rm:
-      - app/lint-baseline.xml
-    prebuild:
-      - sed -i -e '/keystoreProps = Properties/,/}/d' build.gradle.kts
-      - sed -i -e '/signingConfigs/,/}\s*$/d' build.gradle.kts
-      - sed -i -e '/if (keystoreProps.isNotEmpty()) signingConfig/d' build.gradle.kts
+# SHA-256 fingerprint of the upstream APK signing certificate. F-Droid uses this
+# to verify that the reproducible build it produces matches the same signing key
+# as the GitHub release — guaranteeing identical signature across both
+# distribution channels (users can update freely between GH and F-Droid).
+AllowedAPKSigningKeys: b09a951114908885aefe6144ac980975dd8bd889beb9e61676a5c2c8966c687d
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: 'app/build.gradle.kts|versionName\s*=\s*"(.*?)"|.|versionCode\s*=\s*(\d+)'
-CurrentVersion: 1.3.1
-CurrentVersionCode: 25
+CurrentVersion: 1.3.2
+CurrentVersionCode: 27
