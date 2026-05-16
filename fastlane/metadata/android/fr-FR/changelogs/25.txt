@@ -1,0 +1,15 @@
+v1.3.1 — Notifier le correspondant de vos reactions emoji
+
+NOUVEAUTE
+* Quand vous posez une reaction emoji sur un message recu, un SMS contenant uniquement l'emoji est envoye a l'expediteur (et seulement a lui, jamais a un groupe entier). Le destinataire sait ainsi que vous avez reagi.
+* Reglages > Envoi > "Envoyer mes reactions au correspondant" pour activer/desactiver. ON par defaut, dialog de confirmation au tout premier envoi avec case "Ne plus demander".
+
+SECURITE ET FIABILITE (12 corrections d'audit)
+* Refus strict des destinataires non-dialables (banques, INFO, short codes premium) pour eviter toute facturation surprise (1,50 €+/SMS premium).
+* Dedup 60 secondes sur les rafales de taps (anti-spam en cas d'hesitation null > emoji > null > emoji).
+* Anti-race entre le dialog confirm et un changement de reaction simultane.
+* La case "Ne plus demander" n'est persistee qu'apres un envoi reellement reussi.
+* Defense-in-depth UI : bouton "Reagir" masque sur vos propres messages sortants.
+* Cible unique : seul l'expediteur du message recoit, jamais les autres participants du groupe.
+* Pas de signature ajoutee a l'emoji (evite la facturation multi-part).
+* Dialog autofocus sur "Annuler" + a11y group Checkbox (TalkBack).

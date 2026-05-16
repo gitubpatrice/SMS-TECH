@@ -25,12 +25,33 @@ interface ConversationRepository {
     suspend fun search(query: String): List<Message>
 
     /**
-     * v1.3.0 — pose ([emoji] non-null) ou retire ([emoji] = null) une réaction emoji locale
-     * sur le message [messageId]. Aucun écho réseau (pas de send-side-effect — les réactions
-     * ne sont pas standardisées en SMS/MMS, c'est purement côté Room). No-op silencieux si le
-     * message n'existe plus (ex. : purgé par l'auto-purge, supprimé concurrently).
+     * v1.3.1 — lookup ponctuel d'un message par id. Retourne `null` si purgé ou supprimé
+     * entre-temps. Suspend + indexé sur PRIMARY KEY (négligeable). Utilisé par
+     * [com.filestech.sms.domain.usecase.SendReactionUseCase] pour cibler le bon
+     * expéditeur (anti-bug groupe : on n'envoie qu'à `message.address`, pas à toute la
+     * conversation) et pour bloquer les réactions sur messages sortants.
      */
-    suspend fun setReaction(messageId: Long, emoji: String?)
+    suspend fun findMessageById(id: Long): Message?
+
+    /**
+     * v1.3.1 — pose / change / retire la réaction emoji locale sur [messageId] et retourne
+     * le type de transition pour permettre au caller (ViewModel) de décider d'un éventuel
+     * envoi SMS en aval. Sémantique :
+     *
+     *   - [SetReactionResult.Noop]    : la valeur stockée était déjà égale à [emoji]
+     *                                   (incluant null → null ou même emoji), ou le message
+     *                                   n'existe plus (purgé / supprimé concurrently).
+     *   - [SetReactionResult.First]   : transition null → emoji non-null. Premier tap.
+     *                                   C'est le seul cas qui justifie un envoi SMS.
+     *   - [SetReactionResult.Changed] : transition emoji A → emoji B (deux non-null distincts).
+     *                                   Pas d'envoi (le user a hésité, on n'en spamme pas un 2ᵉ).
+     *   - [SetReactionResult.Removed] : transition emoji → null. Pas d'envoi (silencieux local).
+     *
+     * Le mapping est strictement déterministe : un seul update Room par appel, jamais d'écho
+     * réseau côté repo. L'envoi SMS éventuel est orchestré par le caller via
+     * [com.filestech.sms.domain.usecase.SendReactionUseCase].
+     */
+    suspend fun setReaction(messageId: Long, emoji: String?): SetReactionResult
 
     /**
      * v1.3.0 — compte combien de messages seraient effacés par un nettoyage manuel à la

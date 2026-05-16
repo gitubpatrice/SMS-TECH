@@ -1,0 +1,15 @@
+v1.3.1 — Notify the recipient of your emoji reactions
+
+WHAT'S NEW
+* When you post an emoji reaction on a received message, a SMS containing only the emoji is sent to the sender (and only to them, never to the entire group). The recipient knows you reacted.
+* Settings > Sending > "Send my reactions to recipient" toggle. ON by default, confirmation dialog at the very first send with "Don't ask again" checkbox.
+
+SECURITY & RELIABILITY (12 audit fixes)
+* Strict refusal of non-dialable recipients (banks, INFO, premium short codes) to avoid billing surprises.
+* 60 s dedup window on tap bursts (anti-spam on null > emoji > null > emoji hesitation).
+* Anti-race between the confirm dialog and concurrent reaction changes.
+* "Don't ask again" persisted only after a successful send.
+* UI defense-in-depth: "React" button hidden on your own outgoing messages.
+* Single target: only the sender of the message receives, never the other group participants.
+* No signature appended to the emoji (avoids multi-part billing).
+* Dialog autofocuses on "Cancel" + Checkbox a11y grouping (TalkBack).

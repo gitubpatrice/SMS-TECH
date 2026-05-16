@@ -61,6 +61,22 @@ data class SendingSettings(
      * `null` = pas configuré ; on tente la détection auto puis on laisse le placeholder.
      */
     val userMsisdn: String? = null,
+    /**
+     * v1.3.1 — quand `true` (défaut), poser une réaction emoji sur un message reçu envoie
+     * automatiquement un SMS au correspondant contenant uniquement l'emoji (ex. "❤️"), afin
+     * que le correspondant puisse savoir que vous avez réagi. Quand `false`, la réaction
+     * reste strictement locale (badge visible uniquement dans SMS Tech).
+     *
+     * Le **changement** d'une réaction (A → B) et le **retrait** ne génèrent jamais d'envoi,
+     * pour éviter le spam SMS si l'utilisateur hésite.
+     */
+    val sendReactionsToRecipient: Boolean = true,
+    /**
+     * v1.3.1 — `false` tant que l'utilisateur n'a pas validé le dialog de confirmation
+     * du premier envoi (avec case "Ne plus demander"). Tant que `false`, chaque premier
+     * envoi de réaction ouvre le dialog ; quand `true`, l'envoi est silencieux et direct.
+     */
+    val reactionConfirmDismissed: Boolean = false,
 )
 
 enum class MmsImageQuality { HIGH, BALANCED, ECONOMY }

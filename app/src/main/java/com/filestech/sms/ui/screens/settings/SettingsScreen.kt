@@ -194,6 +194,17 @@ fun SettingsScreen(
                         viewModel.update { it.copy(sending = it.sending.copy(userMsisdn = v?.takeIf { s -> s.isNotBlank() })) }
                     },
                 )
+                // v1.3.1 — envoi des réactions emoji au correspondant. ON par défaut. Quand
+                // OFF, les réactions restent strictement locales (badge visible uniquement
+                // dans SMS Tech). La description prévient explicitement du coût SMS.
+                ToggleRow(
+                    title = stringResource(R.string.settings_send_reactions_title),
+                    description = stringResource(R.string.settings_send_reactions_desc),
+                    value = state.sending.sendReactionsToRecipient,
+                    onChange = { v ->
+                        viewModel.update { it.copy(sending = it.sending.copy(sendReactionsToRecipient = v)) }
+                    },
+                )
             }
 
             SectionCard(

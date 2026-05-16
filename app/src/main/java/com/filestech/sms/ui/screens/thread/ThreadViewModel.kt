@@ -16,9 +16,11 @@ import com.filestech.sms.data.voice.VoiceRecorder
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.repository.SetReactionResult
 import com.filestech.sms.domain.usecase.ExportConversationPdfUseCase
 import com.filestech.sms.domain.usecase.MarkConversationReadUseCase
 import com.filestech.sms.domain.usecase.RetrySendUseCase
+import com.filestech.sms.domain.usecase.SendReactionUseCase
 import com.filestech.sms.domain.usecase.SendSmsUseCase
 import com.filestech.sms.domain.usecase.SendMediaMmsUseCase
 import com.filestech.sms.domain.usecase.SendVoiceMmsUseCase
@@ -54,6 +56,7 @@ class ThreadViewModel @Inject constructor(
     private val toggleConvState: com.filestech.sms.domain.usecase.ToggleConversationStateUseCase,
     private val contactRepo: com.filestech.sms.domain.repository.ContactRepository,
     private val translator: TranslationService,
+    private val sendReaction: SendReactionUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
@@ -152,6 +155,15 @@ class ThreadViewModel @Inject constructor(
 
         /** Launch the system dialer pre-filled with the conversation's phone number. */
         data class OpenDialer(val rawNumber: String) : Event
+
+        /**
+         * v1.3.1 — premier envoi de réaction par SMS : la préférence est activée mais
+         * l'utilisateur n'a pas encore validé le dialog de confirmation. [messageId] est
+         * porté pour qu'au moment du confirm le caller puisse re-vérifier que la réaction
+         * n'a pas été changée/retirée entre temps (anti-race F4 : sans messageId on
+         * pourrait envoyer un emoji obsolète).
+         */
+        data class RequestReactionConfirm(val messageId: Long, val emoji: String) : Event
     }
 
     private val _state = MutableStateFlow(UiState())
@@ -307,16 +319,141 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
-     * v1.3.0 — pose / retire la réaction emoji locale d'un message. `emoji = null` retire.
-     * Pas d'envoi côté SMS/MMS (réactions non standardisées en SMS) ; le ConversationRepository
-     * observe la table `messages` via Flow et la bulle se recompose automatiquement.
+     * v1.3.0 — pose / change / retire la réaction emoji locale d'un message. Le badge sur la
+     * bulle se met à jour automatiquement via le Flow d'observation de la conversation.
+     *
+     * v1.3.1 — si la préférence [com.filestech.sms.data.local.datastore.SendingSettings
+     * .sendReactionsToRecipient] est activée ET que la transition est une **première pose**
+     * ([SetReactionResult.First] : null → emoji), on prévient le correspondant en envoyant
+     * un SMS contenant uniquement l'emoji. Au tout premier envoi (jamais validé), un
+     * dialog de confirmation s'affiche via [Event.RequestReactionConfirm] ; l'envoi réel
+     * a lieu seulement après [confirmReactionSend]. Une fois la case "Ne plus demander"
+     * cochée, les envois suivants sont silencieux.
+     *
+     * Les transitions [SetReactionResult.Changed] (A → B) et [SetReactionResult.Removed]
+     * (emoji → null) sont **toujours silencieuses** côté réseau pour ne pas spammer le
+     * correspondant en cas d'hésitation. Voir KDoc [ConversationRepository.setReaction]
+     * pour la sémantique complète.
      */
     fun setReaction(messageId: Long, emoji: String?) {
         viewModelScope.launch {
-            runCatching { repo.setReaction(messageId, emoji) }
+            val result = runCatching { repo.setReaction(messageId, emoji) }
                 .onFailure { timber.log.Timber.w(it, "setReaction(%d, %s) failed", messageId, emoji) }
+                .getOrNull() ?: return@launch
+
+            if (result !is SetReactionResult.First) return@launch
+
+            // v1.3.1 audit P1 — tout le bloc post-First est wrappé : un crash DataStore
+            // (CorruptionException, IOException disque plein) ne doit pas remonter au
+            // ViewModelScope (= crash process). Log + return safe.
+            runCatching {
+                // v1.3.1 audit F1/F2 — defense-in-depth : le UseCase refuse déjà les
+                // messages outgoing et cible le sender unique, mais on garde un guard ici
+                // pour ne MÊME PAS afficher le dialog confirm sur un cas invalide. Le repo
+                // a déjà mis à jour la colonne reaction_emoji ; on ne touche pas au badge
+                // local (cohérent avec la sémantique "réaction locale toujours possible").
+                val targetMessage = repo.findMessageById(result.messageId)
+                if (targetMessage == null || targetMessage.isOutgoing) return@runCatching
+
+                val sending = settings.flow.first().sending
+                if (!sending.sendReactionsToRecipient) return@runCatching
+
+                if (sending.reactionConfirmDismissed) {
+                    dispatchReactionSms(result.messageId, result.emoji)
+                } else {
+                    _events.tryEmit(Event.RequestReactionConfirm(result.messageId, result.emoji))
+                }
+            }.onFailure {
+                timber.log.Timber.w(it, "setReaction post-emit failed for %d", result.messageId)
+            }
         }
     }
+
+    /**
+     * v1.3.1 — appelé par le dialog de confirmation du premier envoi. Re-vérifie que
+     * l'état du message correspond toujours à l'emoji proposé (anti-race F4 : entre
+     * l'ouverture du dialog et le confirm, l'utilisateur a pu changer/retirer la
+     * réaction) avant de déclencher l'envoi SMS.
+     *
+     * Sémantique :
+     *   - Si l'emoji actuel du message n'est plus [emoji] → abort silencieux (le badge
+     *     local reflète déjà la nouvelle valeur, l'envoi n'aurait plus de sens).
+     *   - Si [neverAskAgain] est `true` → on persiste la préférence AVANT l'envoi pour
+     *     qu'elle prenne effet même si l'envoi échoue (retry ultérieur silencieux).
+     *   - L'envoi est délégué à [dispatchReactionSms].
+     */
+    fun confirmReactionSend(messageId: Long, emoji: String, neverAskAgain: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                // Anti-race F4 : si le user a changé/retiré la réaction depuis l'ouverture
+                // du dialog, on n'envoie rien (et on ne persiste pas non plus la pref).
+                val current = repo.findMessageById(messageId)
+                if (current == null || current.reactionEmoji != emoji) {
+                    timber.log.Timber.d("confirmReactionSend: state drifted, abort send")
+                    return@runCatching
+                }
+                // X3 audit v1.3.1 — on persiste `reactionConfirmDismissed = true` UNIQUEMENT
+                // après une dispatch SENT effective. Persister avant l'envoi (comportement
+                // initial) avait un bug subtil : si `dispatchReactionSms` échouait toujours
+                // (par exemple : NotDefaultSmsApp, blocklist, sender alphanumérique), la
+                // préférence était persistée → tous les envois futurs étaient silencieusement
+                // skip sans que l'utilisateur ait jamais validé qu'un SMS partait. Idem si
+                // dédup-skippé : l'utilisateur n'a pas vu l'envoi réel, donc on garde le
+                // dialog pour la prochaine fois. Seul un Sent confirme le contrat user.
+                val outcome = dispatchReactionSms(messageId, emoji)
+                if (outcome == DispatchOutcome.Sent && neverAskAgain) {
+                    settings.update {
+                        it.copy(sending = it.sending.copy(reactionConfirmDismissed = true))
+                    }
+                }
+            }.onFailure { timber.log.Timber.w(it, "confirmReactionSend failed for %d", messageId) }
+        }
+    }
+
+    /**
+     * v1.3.1 — chemin commun d'envoi SMS d'une réaction. Centralisé pour éviter la
+     * duplication entre le chemin "silencieux" (case cochée) et le chemin "post-confirm".
+     * Propage les erreurs via [Event.SendError] (snack utilisateur), comme tout autre
+     * envoi. La cible (sender unique du message) est résolue dans [SendReactionUseCase].
+     *
+     * **Dedup X2 (audit v1.3.1)** : un utilisateur qui hésite peut générer la séquence
+     * `null → ❤️ → null → ❤️ → …`, chaque pose étant un `SetReactionResult.First` (donc
+     * éligible à l'envoi). Sans garde, c'est 1 SMS facturé par cycle. On stocke en RAM
+     * (session, pas DataStore — c'est une protection contre les rafales, pas un cache
+     * d'état long terme) la dernière dispatch par messageId et on skip si < 60 secondes.
+     *
+     * Retourne :
+     *   - [DispatchOutcome.DedupSkipped] : dans la fenêtre, rien tenté
+     *   - [DispatchOutcome.Sent] : le use case a renvoyé [Outcome.Success]
+     *   - [DispatchOutcome.Failed] : tentative effectuée mais échouée (snack émis)
+     */
+    private suspend fun dispatchReactionSms(messageId: Long, emoji: String): DispatchOutcome {
+        val now = System.currentTimeMillis()
+        val last = recentlySentReactionFor[messageId]
+        if (last != null && now - last < REACTION_DEDUP_WINDOW_MS) {
+            timber.log.Timber.d("dispatchReactionSms: dedup re-send on %d within %ds", messageId, REACTION_DEDUP_WINDOW_MS / 1000)
+            return DispatchOutcome.DedupSkipped
+        }
+        recentlySentReactionFor[messageId] = now
+        return when (val res = sendReaction(messageId, emoji)) {
+            is Outcome.Success -> DispatchOutcome.Sent
+            is Outcome.Failure -> {
+                _events.tryEmit(Event.SendError(res.error))
+                DispatchOutcome.Failed
+            }
+        }
+    }
+
+    /** v1.3.1 — résultat triadique de [dispatchReactionSms] (audit X2 + X3). */
+    private enum class DispatchOutcome { Sent, Failed, DedupSkipped }
+
+    /**
+     * X2 — dedup en mémoire des envois récents de réactions. Clé = messageId, valeur =
+     * epoch ms de la dernière dispatch. RAM seulement (perdu au kill process) — voulu :
+     * c'est une protection courte fenêtre contre les rafales de taps, pas un journal
+     * pérenne. Suffit largement pour le cas d'usage "hésitation utilisateur".
+     */
+    private val recentlySentReactionFor = mutableMapOf<Long, Long>()
 
     /**
      * Receives an attachment URI from [com.filestech.sms.ui.components.AttachmentPickerSheet]
@@ -719,5 +856,13 @@ class ThreadViewModel @Inject constructor(
         const val IMAGE_COMPRESS_THRESHOLD_BYTES: Long = 250L * 1024L
         const val CARRIER_PAYLOAD_CAP_BYTES: Long = 280L * 1024L
         const val SNACK_VOICE_SENT: String = "Message vocal envoyé"
+
+        /**
+         * X2 audit v1.3.1 — fenêtre de dédup pour les envois SMS de réaction. Un user qui
+         * tape/retire/re-tape rapidement le même emoji ne paie qu'un SMS dans cette fenêtre.
+         * 60 secondes est large : couvre la rafale émotionnelle typique sans bloquer un
+         * envoi légitime "j'ai re-réfléchi 2 min plus tard".
+         */
+        const val REACTION_DEDUP_WINDOW_MS: Long = 60_000L
     }
 }

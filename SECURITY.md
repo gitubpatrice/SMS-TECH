@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.0** (2026-05-16)
+Current release : **v1.3.1** (2026-05-16)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -45,7 +45,78 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.2.0 (this release) — 3-axis audit
+### v1.3.1 (this release) — Reaction-as-SMS feature
+
+v1.3.1 adds an opt-in capability : when the user posts an emoji reaction on a
+**received** message, an SMS containing only that emoji is sent to the
+**single sender** of the message (never to other group participants, never
+when the message is outgoing). The preference is **on by default** ; a one-shot
+confirmation dialog (with "don't ask again" checkbox) protects the user from
+silent billing surprises on the first send.
+
+Audited along three axes ; two CRITICAL findings caught and fixed before tag :
+
+- **F1 (CRITICAL)** : `setReaction` could trigger a SMS for outgoing messages
+  (i.e. reacting to your own sent message). Now blocked at the use case AND
+  hidden from the UI menu (`onReact` is `null` on outgoing bubbles).
+- **F2 (CRITICAL)** : in a group conversation, the reaction SMS would be
+  broadcast to *every* participant. Now targets *only* the sender of the
+  reacted message (`message.address`).
+- **F3 (HIGH)** : user signature would be appended to the reaction body
+  (`❤️\n--\nPat` → multi-part SMS billed x2/x3 + sender thread pollution).
+  `SendSmsUseCase` got an `appendSignature: Boolean = true` parameter ;
+  `SendReactionUseCase` passes `false`.
+- **F4 (HIGH)** : race between the confirm dialog and a subsequent reaction
+  tap could dispatch a stale emoji. `Event.RequestReactionConfirm` now carries
+  the `messageId` and `ThreadViewModel.confirmReactionSend` re-checks the
+  current `reactionEmoji` before dispatching.
+- **P1 (HIGH)** : a `DataStore.first()` failure in the post-First block of
+  `ThreadViewModel.setReaction` would crash the ViewModel scope. Wrapped in
+  `runCatching` with a Timber warning.
+- **P5 (MEDIUM)** : empty recipient label in the confirm dialog if the
+  conversation was not yet hydrated. Falls back to a localised "this contact"
+  string.
+
+The 24 quick-pick emojis are hard-coded standard codepoints (no ZWJ-only,
+no BiDi controls). The "+ Other emoji" path runs `EmojiCustomDialog
+.isLikelyEmoji()` which rejects `<>&"'\`, BiDi overrides, BOMs and ZWJ-only
+fakes (see v1.3.0 audit Q4/F2).
+
+A second-pass UI/branchements audit caught 6 additional issues, all fixed
+before tag :
+
+- **X1 (CRITICAL)** : refuse alphanumeric senders (`Free`, `INFO`, bank,
+  delivery, 2FA) and short codes <4 digits. Without this guard, reacting to
+  a bank SMS would attempt to send `❤️` to a non-dialable address or to a
+  premium short code (1,50 €+/SMS in France). `SendReactionUseCase
+  .isDialablePhoneNumber()` enforces `^[+0-9 .()-]+$` + ≥4 digits + no ASCII
+  letter.
+- **X2 (HIGH)** : RAM dedup window (60 s) on `messageId` to prevent billing
+  spam when the user toggles `null → ❤️ → null → ❤️` quickly. Each cycle is
+  legitimately a `SetReactionResult.First` but only the first one in the
+  window sends a SMS.
+- **X3 (HIGH)** : `reactionConfirmDismissed = true` is now persisted **only
+  after** a successful `DispatchOutcome.Sent`. Previously, a permanently
+  failing dispatch (NotDefaultSmsApp, blocklist) would still set the pref
+  silently, leaving the user with no future confirmation despite no SMS ever
+  having been sent.
+- **X4 (MEDIUM)** : confirm dialog autofocuses the "Cancel" button (pattern
+  used by all destructive dialogs : DestructiveConfirmDialog,
+  PurgeNowConfirmDialog, nuke data).
+- **X5 (MEDIUM)** : a second `RequestReactionConfirm` event arriving while
+  the first dialog is still open is now silently dropped (no overwrite). The
+  local reaction badge of the 2nd tap remains posted ; only the SMS dispatch
+  for that second tap is skipped — consistent with "one confirm = one send".
+- **X6 (MEDIUM)** : "Don't ask again" row uses `Modifier.toggleable(role =
+  Role.Checkbox)` instead of `Row.clickable` + `Checkbox.onCheckedChange` to
+  expose a single a11y node to TalkBack / Switch Access.
+
+Tests `AppSettingsTest.v1_3_1_reaction_send_defaults_are_explicit` +
+`SetReactionResultTest` lock the new defaults and sealed-class semantics so
+any future refactor that drops `messageId` from `First` or flips the
+default toggle to `false` fails CI.
+
+### v1.2.0 — 3-axis audit
 
 Three independent agents reviewed the v1.1.x → v1.2.0 delta along three axes :
 

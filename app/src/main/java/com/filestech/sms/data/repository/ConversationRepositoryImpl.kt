@@ -20,6 +20,7 @@ import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
 import com.filestech.sms.domain.model.toDomain
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.repository.SetReactionResult
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -195,17 +196,31 @@ class ConversationRepositoryImpl @Inject constructor(
         messageDao.delete(messageId)
     }
 
-    override suspend fun setReaction(messageId: Long, emoji: String?) = withContext(io) {
-        // v1.3.0 audit Q1 — passe par le repo (cohérence pattern domain/data) plutôt que de
-        // laisser le ViewModel toucher directement au DAO. Audit F4 — court-circuit no-op si
-        // la valeur est déjà la même : évite le churn FTS4 (DELETE+INSERT trigger pour `body`
-        // et `address` à chaque tap, alors que ces colonnes ne changent pas) et évite un
-        // round-trip Flow inutile. `findById` est suspend + indexé sur PRIMARY KEY,
-        // négligeable. No-op silencieux si le message a été purgé/supprimé concurrently.
-        val current = messageDao.findById(messageId) ?: return@withContext
-        if (current.reactionEmoji == emoji) return@withContext
-        messageDao.setReaction(messageId, emoji)
-    }
+    override suspend fun setReaction(messageId: Long, emoji: String?): SetReactionResult =
+        withContext(io) {
+            // v1.3.0 audit Q1 — passe par le repo (cohérence pattern domain/data) plutôt
+            // que de laisser le ViewModel toucher directement au DAO. Audit F4 — court-
+            // circuit no-op si la valeur est déjà la même : évite le churn FTS4
+            // (DELETE+INSERT trigger pour `body` et `address` à chaque tap, alors que ces
+            // colonnes ne changent pas) et évite un round-trip Flow inutile. `findById` est
+            // suspend + indexé sur PRIMARY KEY, négligeable.
+            //
+            // v1.3.1 — retourne un [SetReactionResult] explicite pour que le ViewModel puisse
+            // décider d'envoyer un SMS au correspondant (cas [First] uniquement) sans avoir à
+            // re-lire la DB. La transition est calculée AVANT l'update afin que l'ordre
+            // d'exécution soit déterministe et qu'un retry suite à exception ne fasse pas
+            // double-envoi côté caller.
+            val current = messageDao.findById(messageId) ?: return@withContext SetReactionResult.Noop
+            val previous = current.reactionEmoji
+            if (previous == emoji) return@withContext SetReactionResult.Noop
+            messageDao.setReaction(messageId, emoji)
+            when {
+                previous == null && emoji != null -> SetReactionResult.First(messageId, emoji)
+                previous != null && emoji == null -> SetReactionResult.Removed
+                previous != null && emoji != null -> SetReactionResult.Changed(previous, emoji)
+                else -> SetReactionResult.Noop // unreachable (couvert par le check d'égalité)
+            }
+        }
 
     override suspend fun countMessagesToPurge(olderThanDays: Int): Int = withContext(io) {
         if (olderThanDays <= 0) return@withContext 0
@@ -250,6 +265,14 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun search(query: String): List<Message> = withContext(io) {
         val safe = escapeFtsQuery(query)
         if (safe.isBlank()) emptyList() else messageDao.search(safe).map { it.toDomain() }
+    }
+
+    override suspend fun findMessageById(id: Long): Message? = withContext(io) {
+        // v1.3.1 — lookup PRIMARY KEY, pas de jointure attachments (le caller actuel —
+        // SendReactionUseCase — n'en a pas besoin). Si un futur caller le demande, ajouter
+        // un overload `findMessageByIdWithAttachments`. Volontairement minimal pour rester
+        // O(1) sur la lecture la plus chaude (chaque tap réaction).
+        messageDao.findById(id)?.toDomain()
     }
 
     /**

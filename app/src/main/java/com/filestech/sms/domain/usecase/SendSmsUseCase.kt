@@ -45,6 +45,14 @@ class SendSmsUseCase @Inject constructor(
          * tolerate dangling refs (deleted source) at the UI layer.
          */
         replyToMessageId: Long? = null,
+        /**
+         * v1.3.1 — quand `false`, on n'ajoute PAS la signature utilisateur au corps. Default
+         * `true` pour la compatibilité ascendante (envois texte/médias standards). Mis à
+         * `false` par [SendReactionUseCase] : un emoji de réaction doit rester un emoji seul,
+         * sinon (a) le SMS bascule en multi-part = facturation ×2/×3, (b) le destinataire
+         * reçoit "❤️\n--\nPat" qui pollue le fil et casse la sémantique "réaction".
+         */
+        appendSignature: Boolean = true,
     ): Outcome<List<Long>> {
         if (!defaultAppManager.isDefault()) return Outcome.Failure(AppError.NotDefaultSmsApp)
         if (recipients.isEmpty()) return Outcome.Failure(AppError.Validation("no recipients"))
@@ -52,7 +60,7 @@ class SendSmsUseCase @Inject constructor(
 
         val s = settings.flow.first()
         val signature = s.conversations.signature?.takeIf { it.isNotBlank() }
-        val finalBody = if (signature != null) "$body\n--\n$signature" else body
+        val finalBody = if (appendSignature && signature != null) "$body\n--\n$signature" else body
         val deliveryReports = s.sending.deliveryReports
         val effectiveSubId = subId ?: s.sending.defaultSubId
 

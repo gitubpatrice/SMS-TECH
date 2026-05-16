@@ -272,6 +272,12 @@
     <string name="settings_resync_title">Resynchroniser depuis le téléphone</string>
     <string name="settings_resync_desc">Réimporte tous les SMS depuis le système Android. Utile pour récupérer un historique effacé par erreur. Sans doublons.</string>
     <string name="settings_resync_started">Resynchronisation lancée en arrière-plan.</string>
+    <string name="settings_send_reactions_title">Envoyer mes réactions au correspondant</string>
+    <string name="settings_send_reactions_desc">Quand vous posez une réaction emoji (cœur, pouce…), un SMS contenant uniquement l\'emoji est envoyé au correspondant. Cela compte comme un SMS normal au tarif de votre forfait. Le retrait ou le changement d\'une réaction ne renvoie rien.</string>
+    <string name="reaction_send_confirm_title">Envoyer la réaction ?</string>
+    <string name="reaction_send_confirm_body">Un SMS contenant uniquement cet emoji sera envoyé à votre correspondant. Cela compte comme un SMS normal (tarif forfait). Vous pouvez désactiver cet envoi dans Réglages → Envoi.</string>
+    <string name="reaction_send_confirm_never_ask">Ne plus demander, envoyer directement</string>
+    <string name="reaction_send_confirm_fallback_recipient">ce contact</string>
 
     <string name="action_react">Réagir</string>
     <string name="reaction_picker_other">Autre emoji</string>

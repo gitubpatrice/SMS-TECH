@@ -156,6 +156,11 @@ fun ThreadScreen(
     //   `customReactionFor` non-null = dialog TextField "Plus" affiché pour ce message.
     var pickingReactionFor by remember { mutableStateOf<Long?>(null) }
     var customReactionFor by remember { mutableStateOf<Long?>(null) }
+    // v1.3.1 — premier envoi de réaction par SMS : on stocke (messageId, emoji) tant que
+    // l'utilisateur n'a pas validé le dialog de confirmation. `null` = pas de dialog ouvert.
+    // Le messageId est porté pour permettre au ViewModel de re-vérifier l'état au moment du
+    // confirm (anti-race F4 : l'user a pu changer/retirer la réaction entre temps).
+    var reactionConfirmRequest by remember { mutableStateOf<Pair<Long, String>?>(null) }
     var askDelete by remember { mutableStateOf(false) }
     var attachmentSheetOpen by remember { mutableStateOf(false) }
 
@@ -209,6 +214,18 @@ fun ThreadScreen(
                 is ThreadViewModel.Event.OpenDialer -> {
                     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(e.rawNumber)}"))
                     runCatching { context.startActivity(intent) }
+                }
+                is ThreadViewModel.Event.RequestReactionConfirm -> {
+                    // X5 audit v1.3.1 — si un dialog est déjà ouvert (l'user n'a pas
+                    // encore validé/annulé), on ignore silencieusement le 2ᵉ event pour
+                    // ne pas écraser silencieusement l'intention en cours (le user verrait
+                    // un autre emoji/contact que celui qu'il vient de toucher). Le badge
+                    // local de la 2ᵉ réaction est déjà posé (côté repo), donc l'état UI
+                    // reste cohérent ; seule la dispatch SMS est ignorée pour cette pose,
+                    // ce qui est cohérent avec la sémantique "1 confirm = 1 envoi".
+                    if (reactionConfirmRequest == null) {
+                        reactionConfirmRequest = e.messageId to e.emoji
+                    }
                 }
             }
         }
@@ -365,7 +382,12 @@ fun ThreadScreen(
                         onSeekTo = viewModel::seekPlaybackTo,
                         onDelete = { pendingDelete = msg },
                         onReply = { viewModel.startReply(msg) },
-                        onReact = { pickingReactionFor = msg.id },
+                        // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus : on
+                        // ne réagit pas à son propre envoi (pas de sens UX + cohérent avec
+                        // la garde côté UseCase qui refuse les sender = soi-même).
+                        onReact = if (msg.isIncoming) {
+                            { pickingReactionFor = msg.id }
+                        } else null,
                         onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         showTimestamp = showTimestamp,
@@ -388,7 +410,11 @@ fun ThreadScreen(
                         onTranslate = if (msg.body.isNotBlank() && translation !is ThreadViewModel.TranslationState.Ready) {
                             { viewModel.translateMessage(msg.id) }
                         } else null,
-                        onReact = { pickingReactionFor = msg.id },
+                        // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus
+                        // (voir AudioMessageBubble ci-dessus pour la même justification).
+                        onReact = if (msg.isIncoming) {
+                            { pickingReactionFor = msg.id }
+                        } else null,
                         onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         translationState = translationDisplay,
@@ -425,6 +451,26 @@ fun ThreadScreen(
                 customReactionFor = null
             },
             onDismiss = { customReactionFor = null },
+        )
+    }
+    // v1.3.1 — dialog de confirmation du PREMIER envoi de réaction par SMS. Une fois la
+    // case "Ne plus demander" cochée et validée, l'envoi sera silencieux les fois suivantes.
+    // Le label destinataire pioche dans la conversation chargée ; en garde-fou (audit P5),
+    // si la conversation n'est pas (encore) résolue, on rend "ce contact" plutôt que vide
+    // pour ne jamais afficher un dialog sans destinataire visible.
+    reactionConfirmRequest?.let { (messageId, emoji) ->
+        val recipientLabel = state.conversation?.displayName
+            ?.takeIf { it.isNotBlank() }
+            ?: state.conversation?.addresses?.joinToString { it.raw }?.takeIf { it.isNotBlank() }
+            ?: stringResource(R.string.reaction_send_confirm_fallback_recipient)
+        com.filestech.sms.ui.components.ReactionSendConfirmDialog(
+            emoji = emoji,
+            recipientLabel = recipientLabel,
+            onConfirm = { neverAskAgain ->
+                viewModel.confirmReactionSend(messageId, emoji, neverAskAgain)
+                reactionConfirmRequest = null
+            },
+            onDismiss = { reactionConfirmRequest = null },
         )
     }
 

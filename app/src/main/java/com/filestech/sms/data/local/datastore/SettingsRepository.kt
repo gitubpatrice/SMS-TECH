@@ -60,6 +60,8 @@ class SettingsRepository @Inject constructor(
                 retryFailedAutomatically = p[K.retryFailed] ?: true,
                 defaultSubId = p[K.defaultSubId],
                 userMsisdn = p[K.userMsisdn],
+                sendReactionsToRecipient = p[K.sendReactionsToRecipient] ?: true,
+                reactionConfirmDismissed = p[K.reactionConfirmDismissed] ?: false,
             ),
             notifications = NotificationSettings(
                 enabled = p[K.notifEnabled] ?: true,
@@ -124,6 +126,8 @@ class SettingsRepository @Inject constructor(
         this[K.retryFailed] = s.sending.retryFailedAutomatically
         s.sending.defaultSubId?.let { this[K.defaultSubId] = it } ?: remove(K.defaultSubId)
         s.sending.userMsisdn?.takeIf { it.isNotBlank() }?.let { this[K.userMsisdn] = it } ?: remove(K.userMsisdn)
+        this[K.sendReactionsToRecipient] = s.sending.sendReactionsToRecipient
+        this[K.reactionConfirmDismissed] = s.sending.reactionConfirmDismissed
 
         this[K.notifEnabled] = s.notifications.enabled
         this[K.notifStyle] = s.notifications.style.name
@@ -181,6 +185,8 @@ class SettingsRepository @Inject constructor(
         val retryFailed = booleanPreferencesKey("send.retry")
         val defaultSubId = intPreferencesKey("send.subId")
         val userMsisdn = stringPreferencesKey("send.userMsisdn")
+        val sendReactionsToRecipient = booleanPreferencesKey("send.reactions.toRecipient")
+        val reactionConfirmDismissed = booleanPreferencesKey("send.reactions.confirmDismissed")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")
