@@ -169,4 +169,14 @@ data class AdvancedSettings(
      * fresh install copies everything.
      */
     val lastSyncedSmsId: Long = 0L,
+    /**
+     * v1.3.7 — `true` une fois que le splash de présentation a été vu (à la première
+     * ouverture après install). Tant que `false`, l'ouverture de l'app passe par
+     * [com.filestech.sms.ui.screens.splash.SplashScreen] (logo scale+fade + tagline,
+     * 3 s ou tap-to-skip), puis le flag est persisté et l'utilisateur n'est plus jamais
+     * redirigé vers ce splash, y compris après une mise à jour. `Effacer données` depuis
+     * les paramètres système ré-affiche le splash (comportement attendu : nouvelle "1ère
+     * ouverture" du point de vue de l'utilisateur).
+     */
+    val splashShown: Boolean = false,
 )

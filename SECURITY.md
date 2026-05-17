@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.6** (2026-05-16)
+Current release : **v1.3.7** (2026-05-17)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -327,7 +327,81 @@ Audit M (post-fix) — 4 findings, all fixed before tag :
   vulnerable to index shift on add/remove race. Switched to stable
   `String` id (= absolute path) + remove by id.
 
-### v1.3.6 (this release) — Voice MMS universal codec + reaction format toggle
+### v1.3.7 (this release) — First-launch splash + snackbar bi-color + audit backlog
+
+User-driven feature release that also clears the entire audit backlog reported during
+v1.3.5 and v1.3.6 pre-release audits.
+
+**Feature 1 — First-launch splash** (`SplashScreen.kt` + `SplashViewModel.kt` + DataStore
+`AdvancedSettings.splashShown`) :
+- 100% Compose native animation (no Lottie dependency, no APK weight added).
+- Animations : logo scale (0.5 → 1.0) + alpha (0 → 1) over 900 ms, ease-out cubic ;
+  tagline fade-in after 700 ms ; skip hint fade-in after 1500 ms. Total ≈ 5.5 s,
+  skippable via tap, back hardware, or auto-dismiss.
+- Tagline : "L'appli qui ne lit pas vos messages et qui respecte votre vie privée."
+  (FR) / "The app that doesn't read your messages and respects your privacy." (EN).
+- Single-fire guard via `AtomicBoolean` shared across all dismiss paths (tap, back,
+  auto-dismiss, cold-start "already seen" branch). `LaunchedEffect(Unit)` never
+  re-fires → no double-navigation risk on `markShown()` flag flip.
+- `StateFlow` with `SharingStarted.Eagerly` + initial value `true` → no flash splash
+  on second-launch+ users ; redirect to home before any frame is drawn.
+- Branched into `AppRoot` as `startDestination = Splash` with `popUpTo(Splash)
+  { inclusive = true }` on completion → splash is unreachable via back stack.
+
+**Feature 2 — Bi-color snackbar** (success vs error) :
+- `ThreadViewModel.Event.ShowSnackbar` gains `isError: Boolean = false` flag.
+- `SmsTechSnackbarVisuals` custom `SnackbarVisuals` carries the flag through the
+  `SnackbarHostState` (official Material 3 pattern, no external state).
+- `SnackbarHost { data -> ... }` branches `containerColor` / `contentColor` /
+  `actionColor` on `(data.visuals as? SmsTechSnackbarVisuals)?.isError`.
+- Success → slate-blue brand (`BrandBlue #2460AB`, `Color.kt:SnackbarBg`). Error →
+  strong red (`BrandDanger #C62828`, identical to delete buttons + destructive
+  dialogs). White text on both, WCAG AA contrast verified (5.8:1 / 5.5:1).
+- All `_FAILED` snackbar emissions in `ThreadViewModel` pass `isError = true`.
+- `SnackbarHostState.showError(message)` helper for direct-call sites
+  (`onMicPermissionDenied`, etc.).
+
+**Cleanup release — audit backlog cleared** :
+
+- **G4 (MEDIUM)** : `MIGRATION_5_6 { DROP TABLE IF EXISTS conversation_overrides }` —
+  table morte (entity + DAO existed but zero business consumer ; verified by
+  transversal grep). `IF EXISTS` makes the migration idempotent. `ConversationOverride
+  Entity` + DAO files deleted, removed from `AppDatabase.entities[]` + Hilt
+  `DatabaseModule.@Provides`. Schema version bumped 5 → 6.
+- **G5 (MEDIUM)** : 64 orphan i18n strings removed from both `values/strings.xml`
+  (EN) and `values-fr/strings.xml` (FR). FR↔EN parity preserved at 291/291.
+  ~10-15 KB APK reduction. 43 orphans evocative of planned features
+  (`action_archive`, `action_pin`, `settings_signature`, etc.) kept as-is per
+  v1.3.5 retention rule.
+- **F5 (MEDIUM)** : `displayNameCache` migrated `ConcurrentHashMap` (unbounded) →
+  `android.util.LruCache<String, String>(1000)`. Long-tenure accounts (50k+ SMS
+  history with bank/delivery/2FA alphanumeric senders) no longer grow the cache
+  unbounded across the singleton lifetime. LRU eviction drops oldest senders
+  first ; active conversations stay hot. `LruCache` is thread-safe (synchronized
+  internally) — same atomicity guarantee as the previous `ConcurrentHashMap`.
+- **U1 (MEDIUM)** : `ToggleRow.clickable + Switch.onCheckedChange` → `Modifier
+  .toggleable(role = Role.Switch) + Switch.onCheckedChange = null`. Single
+  semantic node for TalkBack / Switch Access (previously announced two distinct
+  interactive elements per toggle). Material 3 official recommendation for
+  selectable list items.
+- **P2 (MEDIUM)** : conditional "Compact reaction format" toggle wrapped in
+  `AnimatedVisibility(fadeIn + expandVertically / fadeOut + shrinkVertically)`
+  for smooth layout transition when the parent `sendReactionsToRecipient` toggle
+  flips.
+
+**Deferred to v1.3.8** :
+- **U2** : `stateDescription` on parent toggles that gate a child toggle — TalkBack
+  doesn't currently announce why the child appeared/disappeared. Low priority,
+  affects only TalkBack power-users.
+- 43 orphan i18n strings flagged as "evocative of planned features" — to be
+  reassessed individually when the corresponding features land (or get cancelled).
+
+Compile clean (`assembleRelease` green). All 60+ unit tests still pass. No new
+dependency. APK size delta ≈ -10 KB (G5 strings purge minus a few bytes from the
+splash classes). Cert SHA-256 `b09a9511…687d` unchanged. Aucun changement format
+fichier / aucune destruction de données utilisateur (G4 drop empty table).
+
+### v1.3.6 — Voice MMS universal codec + reaction format toggle
 
 Two user-driven fixes after field reports on Xiaomi Redmi 9A (Android 10 Go
 + Orange/SFR). No new feature surface ; minimal touch, audited delta.

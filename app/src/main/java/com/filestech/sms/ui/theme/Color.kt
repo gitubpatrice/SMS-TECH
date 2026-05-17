@@ -34,10 +34,14 @@ internal val BubbleIncomingDark = Color(0xFF37414F)
  * share the same pair: a confirmation toast always reads against this stable identity, no
  * matter the user's theme.
  */
-// Snackbar palette mirrors the BrandDanger of the delete button per user request — strong
-// signal toast in the same identity as the destructive dialog buttons. White text on this red
-// gives ~5.5:1 contrast (WCAG AA pass for normal text).
-internal val SnackbarBg = BrandDanger
+// v1.3.7 — palette snackbar bascule de BrandDanger (rouge) → BrandBlue (slate-blue brand).
+// Règle UX confirmée par user 2026-05-16 : rouge réservé aux destructives (suppression,
+// panique, échec critique). Les snackbars de confirmation positive ("Message vocal envoyé",
+// "Numéro bloqué", "PJ envoyée"…) doivent porter l'identité bleue de la marque, pas alerter
+// faussement. Si un snackbar dangereux est requis ponctuellement, le call site doit poser
+// `containerColor = BrandDanger` explicitement (overrides le default brand). White text sur
+// BrandBlue (#2460AB) donne ~5.8:1 — WCAG AA pour texte normal et grand.
+internal val SnackbarBg = BrandBlue
 internal val SnackbarOn = Color.White
 
 private val LightPalette = lightColorScheme(

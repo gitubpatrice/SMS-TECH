@@ -40,25 +40,34 @@ class ConversationMirror @Inject constructor(
      * Process-wide cache of `address → displayName` lookups. Avoids re-querying the contacts
      * provider for the same phone number across multiple receive/send paths.
      *
-     * **Thread-safety.** This `@Singleton` is invoked concurrently from broadcast-receiver
-     * threads (`SmsDeliverReceiver`, `MmsDownloadedReceiver`), WorkManager workers
-     * (`TelephonySyncWorker.runSync → bulkImportFromTelephony`), and Hilt-scoped coroutines
-     * (`SendSmsUseCase → upsertOutgoingSms`). A plain `HashMap` would race during a fresh-install
-     * import while a live SMS arrives — Android's `HashMap.put` is known to spin at 100 % CPU
-     * forever when two threads rehash at the same time (sporadic ANR with no reproducer).
+     * **v1.3.7 (F5 audit)** — passé de `ConcurrentHashMap` non borné à [android.util.LruCache]
+     * borné à [DISPLAY_NAME_CACHE_MAX] (1000) entries. Sur les comptes très anciens (10 ans+ de
+     * SMS = 50 000+ messages tous opérateurs, banque, livraisons, 2FA, démarchage), la map
+     * pouvait croître jusqu'à plusieurs milliers d'entrées et conserver ces strings ad vitam,
+     * sans plafond. 1000 entrées couvre largement le nombre de correspondants distincts d'un
+     * utilisateur normal (les expéditeurs alphanumériques type "Free", "INFO", "ORANGE" sont
+     * partagés). L'éviction LRU drop les expéditeurs les plus anciens d'abord — donc les
+     * conversations actives gardent toujours leur nom résolu en cache chaud.
      *
-     * `ConcurrentHashMap` rejects null values, so we encode "no name found" as the empty string
-     * and translate back to `null` in [resolveDisplayName] — the negative cache is just as
-     * valuable as the positive one (skips the contacts query a second time around).
+     * **Thread-safety.** Ce `@Singleton` est invoqué concurremment depuis des threads
+     * broadcast-receiver (`SmsDeliverReceiver`, `MmsDownloadedReceiver`), des workers
+     * WorkManager (`TelephonySyncWorker.runSync → bulkImportFromTelephony`), et des coroutines
+     * Hilt-scoped (`SendSmsUseCase → upsertOutgoingSms`). [android.util.LruCache] est
+     * thread-safe (synchronized interne sur `get` / `put` / `evictAll`) — équivalent au
+     * `ConcurrentHashMap` précédent côté garantie atomicity.
+     *
+     * `LruCache` rejette les valeurs `null`, donc on encode "no name found" comme chaîne vide
+     * et on retraduit en `null` dans [resolveDisplayName] — le cache négatif reste tout aussi
+     * précieux (skip de la requête contacts au second tour).
      */
-    private val displayNameCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val displayNameCache = android.util.LruCache<String, String>(DISPLAY_NAME_CACHE_MAX)
 
     private suspend fun resolveDisplayName(rawAddress: String): String? {
-        displayNameCache[rawAddress]?.let { return if (it.isEmpty()) null else it }
+        displayNameCache.get(rawAddress)?.let { return if (it.isEmpty()) null else it }
         val name = runCatching { contacts.lookupByPhone(rawAddress)?.displayName }.getOrNull()
-        // Empty string is our sentinel for "looked up, no match" — keeps `ConcurrentHashMap`
+        // Empty string is our sentinel for "looked up, no match" — keeps `LruCache`
         // happy (it rejects nulls) without losing the negative-cache behaviour.
-        displayNameCache[rawAddress] = name.orEmpty()
+        displayNameCache.put(rawAddress, name.orEmpty())
         return name
     }
 
@@ -332,7 +341,7 @@ class ConversationMirror @Inject constructor(
      * READ_CONTACTS permission immediately updates the list — no reinstall needed.
      */
     suspend fun refreshContactNames() = withContext(io) {
-        displayNameCache.clear()
+        displayNameCache.evictAll()
         val missing = conversationDao.findMissingDisplayName()
         if (missing.isEmpty()) return@withContext
         database.withTransaction {
@@ -589,5 +598,15 @@ class ConversationMirror @Inject constructor(
         )
     }
 
-    private companion object { const val MAX_PREVIEW = 240 }
+    private companion object {
+        const val MAX_PREVIEW = 240
+
+        /**
+         * v1.3.7 (F5 audit) — borne LRU du cache `displayNameCache`. 1000 entrées couvre largement
+         * un compte normal (correspondants distincts + senders alphanumériques opérateurs/banques).
+         * Au-delà, l'éviction LRU drop les expéditeurs anciens d'abord — les conversations actives
+         * restent toujours résolues en cache chaud sans coût ContentProvider.
+         */
+        const val DISPLAY_NAME_CACHE_MAX = 1000
+    }
 }

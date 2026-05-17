@@ -1,0 +1,5 @@
+New first-launch splash screen: animated logo + tagline "The app that doesn't read your messages and respects your privacy." Shown only once after install, fully skippable with a tap.
+
+The "Voice message sent" snackbar and other confirmations now appear in blue (slate-blue brand color). Real failures (send error, mic denied, PDF export failed, translation unavailable) stay red — clear visual distinction between success and error.
+
+Internal cleanup: drop a dead database table (Room migration v5→v6), remove 64 unused translation strings, bound contact-name memory cache at 1000 entries (anti-leak on long-tenure accounts). TalkBack accessibility improvements on Settings switches. Smooth fade-in when the "Compact emoji format" sub-setting appears.

@@ -6,7 +6,6 @@ import com.filestech.sms.data.local.db.DatabaseFactory
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.BlockedNumberDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
-import com.filestech.sms.data.local.db.dao.ConversationOverrideDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.dao.QuickReplyDao
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
@@ -31,5 +30,4 @@ object DatabaseModule {
     @Provides fun blockedNumberDao(db: AppDatabase): BlockedNumberDao = db.blockedNumberDao()
     @Provides fun scheduledMessageDao(db: AppDatabase): ScheduledMessageDao = db.scheduledMessageDao()
     @Provides fun quickReplyDao(db: AppDatabase): QuickReplyDao = db.quickReplyDao()
-    @Provides fun conversationOverrideDao(db: AppDatabase): ConversationOverrideDao = db.conversationOverrideDao()
 }

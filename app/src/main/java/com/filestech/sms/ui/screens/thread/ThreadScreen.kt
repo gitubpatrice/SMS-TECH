@@ -65,8 +65,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarVisuals
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -192,7 +194,11 @@ fun ThreadScreen(
         viewModel.onConversationOpened()
         viewModel.events.collect { e ->
             when (e) {
-                is ThreadViewModel.Event.ShowSnackbar -> snackbarHost.showSnackbar(e.message)
+                // v1.3.7 — branche le `isError` du Event vers le `SnackbarVisuals` custom
+                // pour que le `SnackbarHost` ci-dessous puisse colorer rouge vs slate-blue.
+                is ThreadViewModel.Event.ShowSnackbar -> snackbarHost.showSnackbar(
+                    SmsTechSnackbarVisuals(message = e.message, isError = e.isError),
+                )
                 is ThreadViewModel.Event.PdfReady -> {
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
@@ -202,7 +208,8 @@ fun ThreadScreen(
                     runCatching { context.startActivity(Intent.createChooser(shareIntent, "PDF")) }
                     snackbarHost.showSnackbar(context.getString(R.string.thread_export_success, e.pages))
                 }
-                is ThreadViewModel.Event.SendError -> snackbarHost.showSnackbar(
+                // v1.3.7 — un échec d'envoi est par définition une erreur → rouge.
+                is ThreadViewModel.Event.SendError -> snackbarHost.showError(
                     context.getString(R.string.error_send_failed),
                 )
                 is ThreadViewModel.Event.OpenAddContact -> {
@@ -301,18 +308,37 @@ fun ThreadScreen(
             )
         },
         snackbarHost = {
-            // v1.3.3 — règle user "rouge UNIQUEMENT pour important/suppression" : on
-            // force le rendering de chaque Snackbar en couleurs neutres (inverseSurface
-            // = gris-bleu foncé Material 3). Les vraies destructives passent par des
-            // dialogs (`DestructiveConfirmDialog`) ou par des snacks dédiées via couleur
-            // `errorContainer` explicite — pas par défaut. Cohérent avec le pattern
-            // projet (Notes Tech U2, Pass Tech U2, PDF Tech U1).
+            // v1.3.7 — branchement bi-couleur cohérent avec le système de marque :
+            //   - confirmations positives (`isError = false`, défaut) → fond slate-blue
+            //     `inverseSurface` (override de marque, cf. `Color.kt:SnackbarBg = BrandBlue`).
+            //   - notifications d'échec (`isError = true`, posé par les call sites
+            //     d'erreur via `showError` ou `Event.ShowSnackbar(isError = true)`) →
+            //     fond [BrandDanger] (`#C62828`), le rouge fort utilisé partout dans
+            //     l'app pour les destructives (bouton X attachment, boutons Supprimer,
+            //     dialogs panique). Volontairement PAS `errorContainer` Material 3 qui
+            //     est pâle en light mode et incohérent avec l'identité visuelle de la
+            //     marque. Texte blanc sur `BrandDanger` → contraste 5.5:1 (WCAG AA ✓).
+            // Le flag voyage dans le `SnackbarVisuals` custom `SmsTechSnackbarVisuals`
+            // pour respecter le pattern Material 3 officiel — pas de state externe.
             SnackbarHost(hostState = snackbarHost) { data ->
+                val isError = (data.visuals as? SmsTechSnackbarVisuals)?.isError == true
                 androidx.compose.material3.Snackbar(
                     snackbarData = data,
-                    containerColor = MaterialTheme.colorScheme.inverseSurface,
-                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                    actionColor = MaterialTheme.colorScheme.inversePrimary,
+                    containerColor = if (isError) {
+                        BrandDanger
+                    } else {
+                        MaterialTheme.colorScheme.inverseSurface
+                    },
+                    contentColor = if (isError) {
+                        androidx.compose.ui.graphics.Color.White
+                    } else {
+                        MaterialTheme.colorScheme.inverseOnSurface
+                    },
+                    actionColor = if (isError) {
+                        androidx.compose.ui.graphics.Color.White
+                    } else {
+                        MaterialTheme.colorScheme.inversePrimary
+                    },
                 )
             }
         },
@@ -365,8 +391,9 @@ fun ThreadScreen(
                     onSendVoice = viewModel::sendVoiceMms,
                     onAttachClick = { attachmentSheetOpen = true },
                     onMicPermissionDenied = {
+                        // v1.3.7 — refus de permission = erreur utilisateur visible → rouge.
                         scope.launch {
-                            snackbarHost.showSnackbar(
+                            snackbarHost.showError(
                                 context.getString(R.string.voice_permission_denied),
                             )
                         }
@@ -1390,4 +1417,42 @@ private fun DateSeparator(label: String) {
             )
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Snackbar variant (v1.3.7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * v1.3.7 — Snackbar custom porteur d'un flag [isError]. Pattern Material 3 officiel pour
+ * passer du métadonné à un `SnackbarHost` qui rend différemment selon la nature du message.
+ *
+ * **Convention SMS Tech** :
+ *   - `isError = false` (défaut) → fond slate-blue de marque (`inverseSurface` overridé en
+ *     [com.filestech.sms.ui.theme.SnackbarBg] = `BrandBlue`). Pour toutes les confirmations
+ *     positives ("Message vocal envoyé", "Numéro bloqué", "PJ envoyée"…).
+ *   - `isError = true` → fond rouge `errorContainer` (Material 3, dérivé du `error` token
+ *     du thème). Pour les notifications d'échec ("Échec d'envoi", "Échec traduction",
+ *     "PDF export failed", "Permission micro refusée"…).
+ *
+ * Le contraste texte/fond est calibré côté tokens Material 3 :
+ *   - `BrandBlue` + `White` ≈ 5.8:1 → WCAG AA ✓
+ *   - `errorContainer` (light/dark) + `onErrorContainer` → garanti WCAG AA par Material 3.
+ */
+private data class SmsTechSnackbarVisuals(
+    override val message: String,
+    val isError: Boolean,
+    override val actionLabel: String? = null,
+    override val duration: SnackbarDuration = SnackbarDuration.Short,
+    override val withDismissAction: Boolean = false,
+) : SnackbarVisuals
+
+/**
+ * v1.3.7 — helper utilisé par tous les call sites qui veulent signaler une erreur sans
+ * répéter la construction de [SmsTechSnackbarVisuals]. Préfère cette fonction à
+ * `showSnackbar(message)` pour tout message d'échec — sinon le snackbar s'affichera en
+ * bleu (confirmation) au lieu de rouge (alerte).
+ */
+private suspend fun SnackbarHostState.showError(message: String) {
+    showSnackbar(SmsTechSnackbarVisuals(message = message, isError = true))
 }

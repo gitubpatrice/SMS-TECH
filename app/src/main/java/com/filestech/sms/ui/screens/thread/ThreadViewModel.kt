@@ -152,7 +152,14 @@ class ThreadViewModel @Inject constructor(
     }
 
     sealed interface Event {
-        data class ShowSnackbar(val message: String) : Event
+        /**
+         * v1.3.7 — `isError` distingue les confirmations positives (succès → snackbar slate-blue,
+         * couleur de marque) des notifications d'échec (erreur → snackbar rouge `errorContainer`).
+         * Default `false` pour ne casser aucun call site existant ; les sites _FAILED le passent
+         * explicitement à `true`. Cf. [com.filestech.sms.ui.screens.thread.ThreadScreen] qui
+         * traduit ce flag en `containerColor` via [androidx.compose.material3.SnackbarVisuals].
+         */
+        data class ShowSnackbar(val message: String, val isError: Boolean = false) : Event
         data class PdfReady(val uri: android.net.Uri, val pages: Int) : Event
         data class SendError(val error: AppError) : Event
 
@@ -321,7 +328,7 @@ class ThreadViewModel @Inject constructor(
                 }
                 is Outcome.Failure -> {
                     _state.update { it.copy(translations = it.translations + (messageId to TranslationState.Failed)) }
-                    _events.tryEmit(Event.ShowSnackbar(SNACK_TRANSLATE_FAILED))
+                    _events.tryEmit(Event.ShowSnackbar(SNACK_TRANSLATE_FAILED, isError = true))
                 }
             }
         }
@@ -521,7 +528,7 @@ class ThreadViewModel @Inject constructor(
             val displayName = resolveDisplayName(uri) ?: "Pièce jointe"
             val file = copyAttachmentToCache(uri, mime)
             if (file == null) {
-                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_COPY_FAILED))
+                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_COPY_FAILED, isError = true))
                 return@launch
             }
             // Auto-compress images bigger than the carrier cap. Most photos pickers hand back
@@ -872,7 +879,7 @@ class ThreadViewModel @Inject constructor(
         viewModelScope.launch {
             when (val r = exportPdf.invoke(conversationId)) {
                 is Outcome.Success -> _events.tryEmit(Event.PdfReady(r.value.shareUri, r.value.pages))
-                is Outcome.Failure -> _events.tryEmit(Event.ShowSnackbar("PDF export failed"))
+                is Outcome.Failure -> _events.tryEmit(Event.ShowSnackbar("PDF export failed", isError = true))
             }
             _state.update { it.copy(isExporting = false) }
         }

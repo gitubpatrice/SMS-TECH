@@ -1,0 +1,5 @@
+Nouveau splash de présentation au premier lancement : logo animé + slogan « L'appli qui ne lit pas vos messages et qui respecte votre vie privée. ». Visible une seule fois après l'installation, totalement passable d'un tap.
+
+Snackbar « Message vocal envoyé » et autres confirmations passent en bleu (slate-blue de la marque). Les vrais échecs (envoi en erreur, micro refusé, export PDF échoué, traduction indisponible) restent en rouge — distinction visuelle claire entre succès et erreur.
+
+Nettoyage interne : suppression d'une table de base de données morte (migration v5→v6), suppression de 64 chaînes de traduction inutilisées, cache mémoire des noms de contacts borné à 1000 entrées (anti-leak sur les comptes anciens). Améliorations d'accessibilité TalkBack sur les interrupteurs des Réglages. Transition fluide quand le sous-réglage « Format compact emoji » apparaît.

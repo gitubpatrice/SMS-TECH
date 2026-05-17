@@ -84,6 +84,26 @@ internal object Migrations {
         }
     }
 
+    /**
+     * v5 → v6 (2026-05-17, v1.3.7 G4 audit).
+     *
+     * **Cleanup uniquement** — drop la table `conversation_overrides` (entity + DAO existaient
+     * mais aucun consommateur métier ; vérifié par grep transversal v1.3.5 → v1.3.7). La table
+     * était vide pour 100 % des utilisateurs (jamais d'INSERT du côté code), donc le DROP ne
+     * supprime aucune donnée utilisateur. Si la table a été créée par Room sur une version
+     * antérieure (ce qui est le cas pour tout install ≥ v1.0), elle est nettoyée ; sinon
+     * `IF EXISTS` rend l'opération idempotente sur les rares installations où elle aurait été
+     * absente (Room compatible mode, builds custom).
+     *
+     * Pas de rollback nécessaire — la table était déjà invisible côté code Kotlin (entity et
+     * DAO sont supprimés dans le même commit v1.3.7).
+     */
+    val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DROP TABLE IF EXISTS conversation_overrides")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }

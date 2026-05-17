@@ -2,10 +2,17 @@ package com.filestech.sms.ui.screens.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -210,7 +217,17 @@ fun SettingsScreen(
                 // bulle réaction native). ON = emoji seul (plus propre côté apps SMS legacy
                 // type Mi Messages mais on perd la fusion bulle native sur iPhone/Google).
                 // Affiché uniquement si l'envoi des réactions est activé (cohérence UX).
-                if (state.sending.sendReactionsToRecipient) {
+                //
+                // v1.3.7 P2 audit — `AnimatedVisibility` (fade + slide vertical) au lieu d'un
+                // `if {}` brut. Sans ce wrapper, le toggle apparaissait / disparaissait sans
+                // transition (layout jump 1 frame) quand l'utilisateur basculait le toggle
+                // parent. La transition reste rapide (~300 ms par défaut) pour ne pas freiner
+                // l'usage, juste assez pour signaler visuellement la dépendance entre les 2.
+                AnimatedVisibility(
+                    visible = state.sending.sendReactionsToRecipient,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
                     ToggleRow(
                         title = stringResource(R.string.settings_reaction_format_title),
                         description = stringResource(R.string.settings_reaction_format_desc),
@@ -652,10 +669,21 @@ private fun ToggleRow(
     // un Switch pleine taille). On garde un touch target ≥ 48 dp via `heightIn` tout en
     // resserrant les paddings verticaux. Switch légèrement scaled-down (0.85f) pour qu'il
     // pèse moins dans l'œil — purement visuel, le hit-area natif reste intact.
+    //
+    // v1.3.7 U1 audit — `Modifier.toggleable(role = Role.Switch)` remplace `.clickable {...}` +
+    // `Switch.onCheckedChange`. Avant : TalkBack annonçait DEUX éléments interactifs (la Row
+    // "double-tap pour activer" + le Switch "interrupteur, activé/désactivé") → confusion
+    // utilisateur. Maintenant : un seul nœud sémantique avec `Role.Switch`, le Switch interne
+    // a `onCheckedChange = null` (délègue au parent toggleable). Pattern Material 3 officiel
+    // recommandé pour les "selectable list items" → toggle entier sans double-tap a11y.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onChange(!value) }
+            .toggleable(
+                value = value,
+                role = Role.Switch,
+                onValueChange = onChange,
+            )
             .heightIn(min = 48.dp)
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -672,7 +700,9 @@ private fun ToggleRow(
         }
         Switch(
             checked = value,
-            onCheckedChange = onChange,
+            // v1.3.7 U1 audit — `null` délègue le clic au `Modifier.toggleable` parent
+            // (fusion sémantique, un seul élément interactif côté TalkBack/Switch Access).
+            onCheckedChange = null,
             modifier = Modifier.scale(0.85f),
         )
     }

@@ -5,14 +5,12 @@ import androidx.room.RoomDatabase
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.BlockedNumberDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
-import com.filestech.sms.data.local.db.dao.ConversationOverrideDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.dao.QuickReplyDao
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.entity.AttachmentEntity
 import com.filestech.sms.data.local.db.entity.BlockedNumberEntity
 import com.filestech.sms.data.local.db.entity.ConversationEntity
-import com.filestech.sms.data.local.db.entity.ConversationOverrideEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.local.db.entity.MessageFts
 import com.filestech.sms.data.local.db.entity.QuickReplyEntity
@@ -29,7 +27,6 @@ import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
         BlockedNumberEntity::class,
         ScheduledMessageEntity::class,
         QuickReplyEntity::class,
-        ConversationOverrideEntity::class,
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -39,7 +36,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun blockedNumberDao(): BlockedNumberDao
     abstract fun scheduledMessageDao(): ScheduledMessageDao
     abstract fun quickReplyDao(): QuickReplyDao
-    abstract fun conversationOverrideDao(): ConversationOverrideDao
 
     companion object {
         const val DATABASE_NAME = "smstech.db"
@@ -55,6 +51,10 @@ abstract class AppDatabase : RoomDatabase() {
         //   `WHERE date < cutoff` (TelephonySyncWorker tick) ne fait plus de full scan
         //   SQLCipher. Bump séparé de v4 pour absorber proprement les users qui ont
         //   reçu un build v1.3.0 intermédiaire avec migration v3→v4 sans index.
-        const val SCHEMA_VERSION = 5
+        // v6 (2026-05-17, v1.3.7 G4 audit): DROP TABLE conversation_overrides — table
+        //   morte (entity + DAO existaient mais aucun consommateur métier). Confirmé
+        //   via grep transversal : seulement référencé par AppDatabase + DatabaseModule.
+        //   Migration v5→v6 `DROP TABLE IF EXISTS conversation_overrides` (idempotente).
+        const val SCHEMA_VERSION = 6
     }
 }

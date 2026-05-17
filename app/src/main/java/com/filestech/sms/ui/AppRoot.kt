@@ -20,6 +20,7 @@ import com.filestech.sms.ui.navigation.Lock
 import com.filestech.sms.ui.navigation.Migration
 import com.filestech.sms.ui.navigation.Onboarding
 import com.filestech.sms.ui.navigation.Settings
+import com.filestech.sms.ui.navigation.Splash
 import com.filestech.sms.ui.navigation.Thread
 import com.filestech.sms.ui.navigation.Vault
 import com.filestech.sms.ui.screens.about.AboutScreen
@@ -31,6 +32,7 @@ import com.filestech.sms.ui.screens.lock.LockScreen
 import com.filestech.sms.ui.screens.migration.MigrationScreen
 import com.filestech.sms.ui.screens.onboarding.OnboardingScreen
 import com.filestech.sms.ui.screens.settings.SettingsScreen
+import com.filestech.sms.ui.screens.splash.SplashScreen
 import com.filestech.sms.ui.screens.thread.ThreadScreen
 import com.filestech.sms.ui.screens.vault.VaultScreen
 
@@ -71,7 +73,29 @@ fun AppRoot(appLock: AppLockManager = hiltViewModel<AppRootViewModel>().appLock)
         }
     }
 
-    NavHost(navController = nav, startDestination = Conversations()) {
+    // v1.3.7 — startDestination = Splash. Le SplashScreen se charge lui-même de :
+    //   - rediriger immédiatement vers Conversations sans rendu si le flag DataStore
+    //     `splashShown` est déjà à `true` (cas n°2+ ouvertures de l'app, donc 99 % du temps) ;
+    //   - sinon, jouer l'animation (logo scale+fade + tagline) puis persister le flag et
+    //     naviguer vers Conversations.
+    // Le `LaunchedEffect(showLock)` au-dessus reste compatible : si un lock est actif au
+    // boot et que l'utilisateur n'a jamais vu le splash (cas marginal : restore backup
+    // sur fresh install), le Lock se superpose au Splash en backstack et l'utilisateur
+    // déverrouille avant de voir le splash — UX dégradée acceptable pour ce cas extrême.
+    NavHost(navController = nav, startDestination = Splash) {
+        composable<Splash> {
+            SplashScreen(
+                onFinished = {
+                    nav.navigate(Conversations()) {
+                        // Le Splash ne doit JAMAIS pouvoir être rejoint via back stack
+                        // (back depuis Conversations doit fermer l'app, pas re-jouer
+                        // le splash) — d'où `inclusive = true` sur le pop.
+                        popUpTo(Splash) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
         composable<Conversations> { entry ->
             val args = entry.toRoute<Conversations>()
             ConversationsScreen(
