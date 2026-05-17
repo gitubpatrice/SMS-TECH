@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.7** (2026-05-17)
+Current release : **v1.3.8** (2026-05-17)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -327,7 +327,75 @@ Audit M (post-fix) — 4 findings, all fixed before tag :
   vulnerable to index shift on add/remove race. Switched to stable
   `String` id (= absolute path) + remove by id.
 
-### v1.3.7 (this release) — First-launch splash + snackbar bi-color + audit backlog
+### v1.3.8 (this release) — CRITICAL hotfix : R8 keep rule for embedded AOSP MMS PDU classes
+
+**Severity** : CRITICAL. All users on v1.3.7 had their **MMS sending silently broken**
+(voice messages, multi-attach, single-image MMS). Text SMS were unaffected — the bug was
+specific to the MMS dispatch path through `MmsBuilder.attachRecipientsCompat` reflection.
+
+**Symptom** :
+- User taps Send on a voice clip → bubble appears with status "Sending" → instantly
+  flips to FAILED with "Échec d'envoi" red snackbar.
+- "Tap to retry" under the bubble does nothing (pre-existing limitation : `RetrySend
+  UseCase` only knows how to re-dispatch text SMS, not MMS — to be addressed in a
+  later release).
+- Logcat shows `TP/MmsProvider: insert outbox row 10XX` followed 24 ms later by
+  `TP/MmsProvider: delete row 10XX, caller: com.filestech.sms` — the system row is
+  rolled back the moment `MmsBuilder.buildMultipartSendReq` returns null.
+
+**Root cause** :
+`app/src/main/java/com/google/android/mms/pdu/*.java` embeds the AOSP MMS PDU encoder
+classes (`SendReq`, `PduComposer`, `PduBody`, `PduPart`, `EncodedStringValue`,
+`PduHeaders`, `CharacterSets`, `PduParser`…). `MmsBuilder.attachRecipientsCompat` +
+`MmsBuilder.appendPart` invoke methods on these classes **exclusively via reflection**
+(`Class.getMethod("setTo", arr.javaClass)`, `Class.getMethod("addTo", …)`,
+`Class.getMethod("addPart", …)`) to cross OEM signature divergences (Samsung One UI
+removed `addTo`, certain AOSP versions don't expose `addPart(PduPart)`, etc.).
+
+Because no Kotlin/Java source code calls these methods directly, R8's global static
+call-graph analyzer concluded they were dead code and **stripped them from the release
+APK** when minifying. Subsequent `Class.getMethod("setTo", …)` then throws
+`NoSuchMethodException` → `attachRecipientsCompat` returns `false` →
+`buildMultipartSendReq` returns `null` → `dispatchMms` enters the "BRANCH 2 :
+encodePdu null" rollback path → user sees the failure.
+
+The bug existed latently in every prior release ; v1.3.6 happened to compile with R8
+keeping the methods (call-graph analysis decided to preserve them for unrelated
+reasons), v1.3.7's adjacent changes (G4 migration / G5 string purge / F5 LruCache)
+shifted the analysis output enough to trigger the strip.
+
+**Fix** (`proguard-rules.pro`) :
+```
+-keep class com.google.android.mms.** { *; }
+```
+A single keep rule covering all members of the embedded PDU package. Verified
+sufficient by user test 2026-05-17 (vocal sent successfully, received by recipient).
+No security risk added — the PDU classes are read-only utility code (no credential,
+no state, no network access, no persistence).
+
+**Verification trail** :
+1. `MMS_DEBUG` `android.util.Log.e` calls were temporarily added to all 5 failure
+   branches of `MmsSender.dispatchMms` + every `return null` of
+   `MmsBuilder.buildMultipartSendReq` to bypass the `-assumenosideeffects`
+   Timber stripping in release. Logcat capture pinpointed
+   "`attachRecipientsCompat returned false`" as the root path.
+2. After applying the keep rule + cleaning up the debug logs, user retested ;
+   voice MMS dispatched successfully and was confirmed received.
+3. No diff vs v1.3.7 in `MmsSender.kt` / `MmsBuilder.kt` net of the `MMS_DEBUG`
+   removals — only `proguard-rules.pro` changed functionally.
+
+**Deferred to v1.3.9+** :
+- `RetrySendUseCase` should learn to re-dispatch MMS (voice / multi-attach) via the
+  appropriate use case, not always through `SmsSender.send()` (which silently
+  ignores attachments). The "tap to retry" affordance is currently dead for MMS.
+- Consider tightening the AOSP PDU keep rule from `** { *; }` to per-method `-keep
+  class … { method-name; }` once we have an exhaustive list of reflected methods —
+  saves ~20-50 KB in the APK but requires audit-trail discipline.
+
+No new feature in this patch. No change to file formats, database schema, signing
+key, permissions, or i18n. Same cert SHA-256 `b09a9511…687d`.
+
+### v1.3.7 — First-launch splash + snackbar bi-color + audit backlog
 
 User-driven feature release that also clears the entire audit backlog reported during
 v1.3.5 and v1.3.6 pre-release audits.

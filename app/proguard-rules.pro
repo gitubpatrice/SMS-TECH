@@ -72,6 +72,19 @@
 # ----- SMS / Telephony provider columns referenced via reflection -----------------------------
 -keepclassmembers class android.provider.Telephony$** { *; }
 
+# ----- Embedded AOSP MMS PDU classes (v1.3.8 fix CRITICAL) ------------------------------------
+# `app/src/main/java/com/google/android/mms/pdu/*.java` embeds the AOSP MMS PDU encoder/decoder
+# (SendReq, PduComposer, PduBody, PduPart, EncodedStringValue, PduHeaders, CharacterSets…).
+# Our code drives these classes EXCLUSIVELY via reflection in `MmsBuilder.attachRecipientsCompat`
+# + `MmsBuilder.appendPart` to cross OEM signature divergences (Samsung One UI removed `addTo()`
+# from its bundled SendReq, AOSP doesn't expose `addPart(PduPart)` on certain versions, etc.).
+# Without this keep, R8 sees no direct call site for `setTo` / `addTo` / `addPart` / `getPartsNum`
+# and strips them — `Class.getMethod("setTo", …)` then throws NoSuchMethodException and the
+# whole MMS dispatch silently fails (`buildMultipartSendReq` returns null → `Outcome.Failure`
+# → "Échec d'envoi" snackbar). Regression observed v1.3.6 → v1.3.7 when R8's global call graph
+# analysis decided differently due to adjacent code changes (G4/G5/F5).
+-keep class com.google.android.mms.** { *; }
+
 # ----- App-level reflective entry points (manifest-declared receivers / services / Activity) --
 -keepnames class com.filestech.sms.MainApplication
 -keepnames class com.filestech.sms.MainActivity

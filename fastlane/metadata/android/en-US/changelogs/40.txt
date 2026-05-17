@@ -1,0 +1,5 @@
+Critical hotfix: v1.3.7 silently broke voice MMS and multi-attach MMS sending. The bubble appeared then immediately flipped to "not sent" with a red "Send failed" snackbar. Plain text SMS were unaffected.
+
+Cause: R8 (the Android minifier) was incorrectly stripping methods from internal MMS classes that are called only via reflection. The fix adds a keep rule for those classes (`proguard-rules.pro`), guaranteeing MMS dispatch works across all OEM variants (Samsung One UI, Xiaomi MIUI, Pixel AOSP).
+
+No feature change. No security risk. Strongly recommended update for every v1.3.7 user.

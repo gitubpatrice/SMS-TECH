@@ -1,0 +1,5 @@
+Correctif critique : la v1.3.7 cassait silencieusement l'envoi des messages vocaux et des MMS multi-pièces-jointes. La bulle apparaissait puis passait immédiatement en « non envoyé » avec un message rouge « Échec d'envoi ». Les SMS texte étaient épargnés.
+
+Cause : R8 (le minifieur Android) supprimait à tort des méthodes des classes MMS internes appelées uniquement par réflexion. Le correctif ajoute une règle de conservation pour ces classes (`proguard-rules.pro`), garantissant que l'envoi MMS fonctionne sur toutes les variantes constructeur (Samsung One UI, Xiaomi MIUI, Pixel AOSP).
+
+Aucun changement de fonctionnalité. Aucun risque sécurité. Mise à jour fortement recommandée pour tous les utilisateurs de la v1.3.7.
