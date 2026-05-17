@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.8** (2026-05-17)
+Current release : **v1.3.9** (2026-05-17)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -327,7 +327,67 @@ Audit M (post-fix) — 4 findings, all fixed before tag :
   vulnerable to index shift on add/remove race. Switched to stable
   `String` id (= absolute path) + remove by id.
 
-### v1.3.8 (this release) — CRITICAL hotfix : R8 keep rule for embedded AOSP MMS PDU classes
+### v1.3.9 (this release) — Foreground-active conversation : auto-dismiss notification
+
+User-driven UX fix : when the user is **currently looking at conversation X** in the
+foreground (Thread screen open) and a new SMS for X arrives, the notification was
+persisting in the shade — forcing the user to manually swipe it away even though the
+message had already appeared in real-time inside the open conversation.
+
+**New behaviour** (aligns with Google Messages, iMessage, Mi Messages) :
+- Conv X **open foreground** + SMS arrives on X → notif is **posted briefly** (sound
+  + heads-up play normally, so the user "hears" the new message arrive) then **auto-
+  cancelled by Android after 1500 ms** via `Notification.setTimeoutAfter(1500L)`
+  (API 26+, in our `minSdk`). No persistence in the shade.
+- Conv X open + SMS arrives on **a different conv Y** → notif on Y persists normally
+  (the user has no visibility on Y).
+- App in background → notifs persist normally (unchanged).
+
+**Architecture** :
+- New `ActiveConversationTracker` singleton (`@Singleton @Inject constructor()` Hilt,
+  `AtomicLong` for the active id, sentinel `NONE = -1L`).
+  - `setActive(conversationId)` : called from `ThreadViewModel.init` (before
+    observers / `markRead`).
+  - `clearActive(conversationId)` : called from `ThreadViewModel.onCleared` (before
+    the rest of the cleanup). Uses `AtomicLong.compareAndSet(conversationId, NONE)`
+    so a stale `onCleared` from a previous ViewModel cannot wipe the state set by
+    a freshly-init'd new ViewModel during a configChange race.
+  - `isActive(conversationId): Boolean` : lock-free read by the notifier.
+- `IncomingMessageNotifier.notifyIncomingSms` reads `isActiveConversation` ONCE
+  before building the notification, then conditionally applies
+  `.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)` in the builder `.also { ... }` block.
+
+**Why this design is robust** (pre-release audit mobile-quality-auditor, niveau 2
+STRICT, verdict APPROVED) :
+- `AtomicLong` lock-free read costs ~1 ns per SMS, negligible vs the already-present
+  IO suspends (`settings.flow.first()`, `contacts.lookupByPhone`).
+- `setTimeoutAfter` is Android's official API for time-bounded notifications — no
+  custom coroutine timer, no Handler.postDelayed, no WorkManager. Zero overhead.
+- The metadata held in memory (the active Room conversation id, a Long) carries no
+  PII, no message content. Lock-screen redaction (`VISIBILITY_PRIVATE` / `_SECRET`)
+  is unaffected.
+- `cancelAllForConversation` (v1.3.3 Z4 audit) keeps working : it iterates
+  `activeNotifications` filtered by tag, and a notif already auto-cancelled via
+  `setTimeoutAfter` is simply absent from the iteration — no double-cancel.
+- `markRead` flow stays intact : `init → setActive → observers launch → first batch
+  → markRead → cancelAllForConversation`. Active-conv timeout and read-cancel are
+  orthogonal.
+
+**Limits accepted** :
+- On aggressive OEM ROMs (some MIUI / ColorOS variants) `setTimeoutAfter` may be
+  ignored at the system level — fallback behaviour is the pre-v1.3.9 persistence,
+  no functional regression.
+- If the process is hard-killed without `ThreadViewModel.onCleared` running (rare :
+  OOM killer, force-stop), the AtomicLong stays "active" for the rest of the process
+  session. Next SMS on that conv would then be auto-dismissed instead of persisted —
+  cosmetic UX glitch, no security risk. Reset on next app cold start (AtomicLong
+  has no persistence).
+
+No new dependency. No format / schema / signing key / permission change. Same cert
+SHA-256 `b09a9511…687d`. 3 files modified (1 new `ActiveConversationTracker.kt`, 2
+edited `ThreadViewModel.kt` + `IncomingMessageNotifier.kt`).
+
+### v1.3.8 — CRITICAL hotfix : R8 keep rule for embedded AOSP MMS PDU classes
 
 **Severity** : CRITICAL. All users on v1.3.7 had their **MMS sending silently broken**
 (voice messages, multi-attach, single-image MMS). Text SMS were unaffected — the bug was

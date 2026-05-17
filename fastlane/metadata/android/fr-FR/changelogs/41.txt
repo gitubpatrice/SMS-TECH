@@ -1,0 +1,5 @@
+Quand vous êtes en train de regarder une conversation et qu'un nouveau message arrive sur cette même conversation, la notification ne reste plus dans le tiroir de l'écran d'accueil. Vous entendez quand même le son et voyez le bandeau heads-up arriver, mais la notification s'efface ensuite automatiquement après 1,5 seconde puisque vous voyez déjà le message en direct dans la conversation ouverte.
+
+Si le message arrive sur une AUTRE conversation, ou si l'application est en arrière-plan, la notification persiste normalement comme avant.
+
+Comportement aligné avec Google Messages, Mi Messages et iMessage.

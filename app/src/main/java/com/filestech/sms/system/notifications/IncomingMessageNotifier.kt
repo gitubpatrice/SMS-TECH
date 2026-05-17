@@ -31,6 +31,7 @@ class IncomingMessageNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
     private val contacts: ContactRepository,
+    private val activeConversationTracker: ActiveConversationTracker,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -78,6 +79,17 @@ class IncomingMessageNotifier @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // v1.3.9 — si l'utilisateur est ACTUELLEMENT en train de regarder cette
+        // conversation au foreground (cf. [ActiveConversationTracker]), on pose
+        // quand même la notification (son + heads-up éphémère = signal sonore
+        // préservé : le user "entend" le nouveau message) mais on demande à Android
+        // de la cancel automatiquement après [ACTIVE_CONV_TIMEOUT_MS] ms — l'icone
+        // ne persiste pas dans le shade puisque l'utilisateur voit déjà le message
+        // arriver en temps réel dans la conv ouverte. `setTimeoutAfter` est l'API
+        // officielle Android 8+ (API 26+, dans notre minSdk) pour ce besoin précis,
+        // sans timer/coroutine custom côté app (Android s'en charge atomiquement).
+        val isActiveConversation = activeConversationTracker.isActive(conversationId)
+
         val notif = NotificationCompat.Builder(context, NotificationChannelInitializer.CHANNEL_INCOMING)
             .setSmallIcon(R.drawable.ic_notification_message)
             .setContentTitle(senderName)
@@ -108,6 +120,9 @@ class IncomingMessageNotifier @Inject constructor(
                     b.addAction(buildReplyAction(address, messageId, notificationId))
                 }
                 b.addAction(buildMarkReadAction(address, messageId, notificationId))
+                if (isActiveConversation) {
+                    b.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)
+                }
             }
             .build()
         // Z4 audit fix — tag-based notif : permet à `cancelAllForConversation` de
@@ -232,5 +247,14 @@ class IncomingMessageNotifier @Inject constructor(
         private const val BASE_TAG = 0x10000 // ensures non-zero notif ids
         private const val REPLY_REQUEST_SALT = 0x52455050 // 'REPL'
         private const val MARK_READ_REQUEST_SALT = 0x4D524541 // 'MREA'
+
+        /**
+         * v1.3.9 — durée après laquelle Android cancel automatiquement la notification
+         * d'un message arrivant sur la conv actuellement ouverte au foreground. 1500 ms
+         * laisse jouer le son + le heads-up (peak ≈ 800 ms sur la plupart des OEMs)
+         * tout en garantissant que la notification ne persiste pas dans le shade
+         * (l'utilisateur voit déjà le message en temps réel dans la conv ouverte).
+         */
+        private const val ACTIVE_CONV_TIMEOUT_MS: Long = 1500L
     }
 }

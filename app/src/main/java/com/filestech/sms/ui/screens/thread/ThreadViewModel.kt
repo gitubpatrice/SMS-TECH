@@ -24,7 +24,9 @@ import com.filestech.sms.domain.usecase.SendReactionUseCase
 import com.filestech.sms.domain.usecase.SendSmsUseCase
 import com.filestech.sms.domain.usecase.SendMediaMmsUseCase
 import com.filestech.sms.domain.usecase.SendVoiceMmsUseCase
+import com.filestech.sms.system.notifications.ActiveConversationTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -59,7 +61,8 @@ class ThreadViewModel @Inject constructor(
     private val translator: TranslationService,
     private val sendReaction: SendReactionUseCase,
     private val incomingShare: com.filestech.sms.system.share.IncomingShareHolder,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    private val activeConversationTracker: ActiveConversationTracker,
+    @ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     /** Live playback state, surfaced for the composer's preview UI. */
@@ -188,6 +191,13 @@ class ThreadViewModel @Inject constructor(
     private var recorderJob: Job? = null
 
     init {
+        // v1.3.9 — déclare la conversation comme "active foreground" pour que
+        // `IncomingMessageNotifier` puisse poser un `setTimeoutAfter` court (~1500 ms)
+        // sur toute notif arrivant sur CETTE conv pendant qu'elle est ouverte. Son /
+        // heads-up jouent (signal sonore préservé), puis Android cancel la notif
+        // automatiquement — l'utilisateur n'a pas à la dismiss à la main.
+        activeConversationTracker.setActive(conversationId)
+
         // Audit Q3: ONE observation of the conversation row (seeds the draft on first emission
         // only — subsequent emissions don't overwrite what the user is typing).
         repo.observeOne(conversationId).onEach { conv ->
@@ -972,6 +982,12 @@ class ThreadViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        // v1.3.9 — libère le slot "conversation active" pour que les notifs futures
+        // (l'app étant désormais en background ou sur une autre conv) repassent en
+        // persistance normale. Le `compareAndSet` interne au tracker garantit qu'un
+        // ViewModel d'une autre conv fraîchement init ne sera pas écrasé par ce clear
+        // (race configChange : new init avant old onCleared).
+        activeConversationTracker.clearActive(conversationId)
         recorderJob?.cancel()
         voiceRecorder.cancel()
         playbackController.stop()

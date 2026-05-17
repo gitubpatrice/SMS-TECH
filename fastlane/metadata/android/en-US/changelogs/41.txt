@@ -1,0 +1,5 @@
+When you're already looking at a conversation and a new message arrives on that same conversation, the notification no longer lingers in your home-screen shade. The sound + heads-up banner still play (so you "hear" the new message arrive), but Android auto-cancels the notification after 1.5 second since you're already seeing the message live in the open conversation.
+
+If the message arrives on a DIFFERENT conversation, or the app is in the background, the notification persists normally as before.
+
+Behaviour aligned with Google Messages, Mi Messages and iMessage.
