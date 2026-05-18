@@ -46,7 +46,11 @@ jobs:
           java-version: '17'
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        # v1.3.10 — upgrade v3 → v4. v3 deprecated December 2026 + son
+        # extracteur Kotlin échouait sur les versions récentes de Kotlin/AGP
+        # ("CodeQL detected code written in Java/Kotlin but could not process
+        # any of it" — runs en configuration error en série mai 2026).
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           # Pack additionnel "security-extended" : règles CWE moins fréquentes
@@ -63,6 +67,6 @@ jobs:
         run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
