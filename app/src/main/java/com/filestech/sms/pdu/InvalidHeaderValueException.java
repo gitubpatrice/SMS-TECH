@@ -15,16 +15,15 @@
  * limitations under the License.
  */
 
-package com.google.android.mms;
+package com.filestech.sms.pdu;
 
 /**
- * Generic MMS-pipeline exception. Subclassed by [InvalidHeaderValueException]. Mirrors AOSP.
+ * Thrown when an invalid header value is read or written. Mirrors AOSP
+ * frameworks/opt/mms/src/java/com/google/android/mms/InvalidHeaderValueException.java.
  */
-public class MmsException extends Exception {
-    private static final long serialVersionUID = -7323249827281485390L;
+public class InvalidHeaderValueException extends MmsException {
+    private static final long serialVersionUID = -1474262515174718841L;
 
-    public MmsException() { super(); }
-    public MmsException(String message) { super(message); }
-    public MmsException(Throwable cause) { super(cause); }
-    public MmsException(String message, Throwable cause) { super(message, cause); }
+    public InvalidHeaderValueException() { super(); }
+    public InvalidHeaderValueException(String message) { super(message); }
 }

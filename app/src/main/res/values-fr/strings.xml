@@ -9,6 +9,16 @@
     <string name="splash_skip_hint">Toucher l\'écran pour continuer</string>
     <string name="splash_skip_label">Passer le splash</string>
 
+    <!-- v1.3.10 — Foreground KeepAliveService (mode opt-in pour ROMs OEM agressives). -->
+    <string name="keep_alive_notification_title">SMS Tech est actif</string>
+    <string name="keep_alive_notification_text">Nécessaire pour recevoir vos SMS / MMS de manière fiable sur votre téléphone.</string>
+    <string name="settings_keep_alive_title">Mode résistant (Xiaomi / Huawei…)</string>
+    <string name="settings_keep_alive_desc">Maintient SMS Tech actif en arrière-plan via une petite notification persistante. Nécessaire sur les ROMs agressives (Xiaomi MIUI/HyperOS, Huawei EMUI/HarmonyOS, Honor MagicOS, Oppo/Realme/OnePlus ColorOS, Vivo/iQOO FunTouch, Meizu Flyme, ASUS Zen UI) qui tuent sinon les apps SMS tierces et bloquent les MMS / notifications. Inutile sur Pixel, Samsung Galaxy, Sony, Fairphone, Motorola, Nokia, Nothing Phone — laisser OFF sur ces téléphones.</string>
+    <string name="oem_detected_dialog_title">Réglage recommandé pour votre téléphone</string>
+    <string name="oem_detected_dialog_body">Votre téléphone (%1$s) est connu pour tuer agressivement les apps SMS tierces en arrière-plan, ce qui peut empêcher la réception des SMS/MMS et les notifications. Activer le « Mode résistant » garde SMS Tech actif via une petite notification persistante — recommandé sur cet appareil.</string>
+    <string name="oem_detected_dialog_enable">Activer le mode résistant</string>
+    <string name="oem_detected_dialog_skip">Plus tard</string>
+
 
     <string name="action_send">Envoyer</string>
     <string name="action_cancel">Annuler</string>

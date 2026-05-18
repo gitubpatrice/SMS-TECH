@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
 import android.util.Log;
 
-import com.google.android.mms.InvalidHeaderValueException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -113,11 +112,35 @@ public class PduParser {
                 case PduHeaders.TRANSACTION_ID:
                 case PduHeaders.CONTENT_LOCATION:
                 case PduHeaders.MESSAGE_ID:
-                case PduHeaders.MESSAGE_CLASS:
                 case PduHeaders.RESPONSE_TEXT:
                 case PduHeaders.RETRIEVE_TEXT: {
                     byte[] text = parseWapString(in, TYPE_TEXT_STRING);
                     if (text != null) headers.setTextString(text, headerField);
+                    break;
+                }
+                case PduHeaders.MESSAGE_CLASS: {
+                    // Per OMA-WAP-MMS-ENC: class-identifier (octet, MSB set, 0x80=Personal,
+                    // 0x81=Advertisement, 0x82=Informational, 0x83=Auto) OR token-text.
+                    // Bug pre-v1.3.10 was forcing text-string even on class-identifier — the
+                    // 0x8x byte was then consumed as the first character and parseWapString
+                    // looped until the next 0x00, devouring Message-Size + Expiry + Content-Location.
+                    in.mark(1);
+                    int firstByte = extractByteValue(in);
+                    if ((firstByte & 0x80) != 0) {
+                        String cls;
+                        switch (firstByte & 0x7F) {
+                            case 0x00: cls = "personal"; break;
+                            case 0x01: cls = "advertisement"; break;
+                            case 0x02: cls = "informational"; break;
+                            case 0x03: cls = "auto"; break;
+                            default: cls = "personal";
+                        }
+                        headers.setTextString(cls.getBytes(), PduHeaders.MESSAGE_CLASS);
+                    } else {
+                        in.reset();
+                        byte[] text = parseWapString(in, TYPE_TEXT_STRING);
+                        if (text != null) headers.setTextString(text, PduHeaders.MESSAGE_CLASS);
+                    }
                     break;
                 }
                 case PduHeaders.SUBJECT: {

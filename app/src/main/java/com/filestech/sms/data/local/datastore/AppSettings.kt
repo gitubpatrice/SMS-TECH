@@ -179,4 +179,36 @@ data class AdvancedSettings(
      * ouverture" du point de vue de l'utilisateur).
      */
     val splashShown: Boolean = false,
+    /**
+     * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
+     * qui maintient le processus SMS Tech vivant via une notification persistante
+     * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour
+     * que SMS Tech reçoive correctement les SMS / MMS / notifications sur :
+     *
+     *   - **Xiaomi MIUI / HyperOS 2024+** (Redmi 9A Android 10 Go, Poco F5 HyperOS,
+     *     Redmi Note 14 Pro 5G `2410FPCC5G`…)
+     *   - **Huawei EMUI / HarmonyOS** (sans Google Mobile Services)
+     *   - **Honor MagicOS** (descendant EMUI)
+     *   - Certains **OnePlus** anciens (OxygenOS < 12) et **realme realmeUI**
+     *
+     * Ces ROMs whitelistent uniquement les apps SMS du constructeur ; toute app SMS
+     * tierce (SMS Tech, QKSMS, Signal, Silence, etc.) est silencieusement killée en
+     * background, ce qui empêche la réception MMS et l'affichage des notifications.
+     *
+     * Sur ROMs non-agressives (Pixel Android stock, Samsung One UI, Sony Xperia,
+     * Fairphone, Nothing OS, OnePlus récent OxygenOS, Motorola), ce mode est INUTILE
+     * — la notification persistante encombre le shade pour rien. Laisser `false` par
+     * défaut respecte les utilisateurs sur des ROMs propres.
+     *
+     * **Trade-off** : ~5-10 Mo RAM permanents (processus gardé en heap), batterie
+     * négligeable (service idle). La notif persistante est masquable depuis les
+     * réglages OS si l'utilisateur la trouve gênante.
+     */
+    val keepAliveService: Boolean = false,
+    /**
+     * v1.3.10 (C3) — one-shot flag flipped to `true` after the OEM onboarding dialog has
+     * been shown (and dismissed or accepted) at least once. Prevents re-prompting at every
+     * cold start. `false` for fresh installs.
+     */
+    val keepAliveOnboardingShown: Boolean = false,
 )

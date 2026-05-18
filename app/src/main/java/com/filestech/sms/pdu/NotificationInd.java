@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
-import com.google.android.mms.InvalidHeaderValueException;
 
 /**
  * MMS m-notification.ind PDU (OMA-MMS-ENC §6.2). This is what the network pushes via WAP_PUSH

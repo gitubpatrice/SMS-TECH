@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
-import com.google.android.mms.InvalidHeaderValueException;
 
 /**
  * Base class shared by every MMS PDU we encode or decode. Holds a [PduHeaders] map and exposes

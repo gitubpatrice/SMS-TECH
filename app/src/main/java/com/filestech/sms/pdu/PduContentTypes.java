@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
 /**
  * WSP-encoded content type table — IANA media types compressed to a single byte for the binary

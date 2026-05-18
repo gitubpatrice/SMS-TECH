@@ -75,6 +75,10 @@ class MmsSender @Inject constructor(
             localMessageId = localMessageId,
             recipients = recipients,
             attachments = attachments,
+            // v1.3.10 revert — le caption "🎤" causait une régression d'envoi sur
+            // Samsung One UI (test S24 FE 2026-05-18). On revient à null en attendant
+            // de comprendre l'origine du rejet OEM. À re-tenter avec un caption ASCII
+            // pur (ex: ".") ou via un toggle settings opt-in.
             textBody = null,
             subId = subId,
             encodePdu = {

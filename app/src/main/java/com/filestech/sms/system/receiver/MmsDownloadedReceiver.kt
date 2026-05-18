@@ -4,39 +4,75 @@ import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.di.ApplicationScope
-import com.google.android.mms.pdu.PduBody
-import com.google.android.mms.pdu.PduParser
-import com.google.android.mms.pdu.RetrieveConf
-import dagger.hilt.android.AndroidEntryPoint
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.filestech.sms.pdu.CharacterSets
+import com.filestech.sms.pdu.PduBody
+import com.filestech.sms.pdu.PduParser
+import com.filestech.sms.pdu.RetrieveConf
+import com.filestech.sms.system.notifications.IncomingMessageNotifier
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
-import javax.inject.Inject
 
 /**
  * Receives the result of [MmsDownloader.download]. The OS has written the binary RetrieveConf
  * PDU into the cache file whose path we passed in the PendingIntent. We parse the PDU, extract
- * the first audio attachment (the only one SMS Tech v1 supports), persist it to a stable cache
- * directory, and mirror the message into Room.
+ * the first non-presentation media part (image, audio, video, file), persist it to a stable
+ * cache directory, and mirror the message into Room.
+ *
+ * **v1.3.10** :
+ *   - No more `@AndroidEntryPoint`. Same root cause as [MmsWapPushReceiver]: silent Hilt
+ *     injection crash on Android 10 OEM ROMs when the receiver is dispatched at cold-start.
+ *     [EntryPointAccessors.fromApplication] is resolved on-demand inside [onReceive].
+ *   - First MMS part of MIME image, video, audio, or application (except application/smil)
+ *     is taken as the attachment. SMS Tech v1.3.9 only kept audio, which dropped every
+ *     incoming image/file MMS to a placeholder `[MMS]` bubble.
+ *   - Optional text/plain part is used as caption body (preferred over the MMS Subject
+ *     header, which gateways often leave blank).
  */
-@AndroidEntryPoint
 class MmsDownloadedReceiver : BroadcastReceiver() {
 
-    @Inject @ApplicationContext lateinit var appContext: Context
-    @Inject lateinit var mirror: ConversationMirror
-    @Inject @ApplicationScope lateinit var scope: CoroutineScope
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface MmsDownloadedEntryPoint {
+        fun mirror(): ConversationMirror
+        fun messageDao(): MessageDao
+        fun notifier(): IncomingMessageNotifier
+
+        @ApplicationScope
+        fun applicationScope(): CoroutineScope
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != MmsDownloader.ACTION_MMS_DOWNLOADED) return
         val pduPath = intent.getStringExtra(MmsDownloader.EXTRA_PDU_FILE)
         val senderHint = intent.getStringExtra(MmsDownloader.EXTRA_SENDER)
         val rc = resultCode
+        val appContext = context.applicationContext
+
+        val entry = try {
+            EntryPointAccessors.fromApplication(
+                appContext,
+                MmsDownloadedEntryPoint::class.java,
+            )
+        } catch (t: Throwable) {
+            Timber.e(t, "Hilt entry point resolution failed in MmsDownloadedReceiver")
+            return
+        }
+        val mirror = entry.mirror()
+        val messageDao = entry.messageDao()
+        val notifier = entry.notifier()
+        val scope = entry.applicationScope()
+
         val pending = goAsync()
         scope.launch {
             try {
@@ -47,6 +83,23 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val pduFile = pduPath?.let { File(it) }
                 if (pduFile == null || !pduFile.exists() || pduFile.length() == 0L) {
                     Timber.w("MMS PDU missing or empty: %s", pduPath)
+                    return@launch
+                }
+                // v1.3.10 (SEC-04) — sandbox check: the EXTRA_PDU_FILE path is set by
+                // [MmsDownloader] inside our own process and the receiver is `exported=false`,
+                // so a malicious external sender cannot reach this code with a forged path
+                // today. We still canonicalize + verify the resolved file lives inside our
+                // `cacheDir/mms_incoming/` sandbox so an accidental future regression (a new
+                // intent-filter, an `exported` flip, a test helper) cannot turn this receiver
+                // into a "read any file the app can see" primitive.
+                val sandboxDir = runCatching {
+                    File(appContext.cacheDir, MmsDownloader.MMS_IN_DIR).canonicalFile
+                }.getOrNull()
+                val canonicalPdu = runCatching { pduFile.canonicalFile }.getOrNull()
+                if (sandboxDir == null || canonicalPdu == null ||
+                    !canonicalPdu.toPath().startsWith(sandboxDir.toPath())
+                ) {
+                    Timber.w("MMS PDU path outside sandbox: %s", pduPath)
                     return@launch
                 }
                 val bytes = runCatching { pduFile.readBytes() }.getOrNull()
@@ -66,10 +119,6 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // surface duplicates in the thread. We dedup by the PDU's `transactionId` for
                 // [DEDUP_TTL_MS] (5 min): replays in the wild always come back within seconds,
                 // and the bounded set means we cap the singleton's memory footprint.
-                //
-                // Limit: a process restart loses the set, so a replay split across the kill
-                // boundary still produces 2 rows. A persistent fix would require a Room migration
-                // (new `transaction_id` column on `messages`), deferred to v1.1.1.
                 val txId = parsed.transactionId?.toString(Charsets.UTF_8)
                 if (!txId.isNullOrEmpty()) {
                     val now = System.currentTimeMillis()
@@ -87,23 +136,43 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val date = (if (parsed.date > 0) parsed.date * 1000L else System.currentTimeMillis())
                 val subject = parsed.subject?.string?.takeIf { it.isNotBlank() }
 
-                val audio = parsed.body?.let(::extractFirstAudioPart)
-                val audioFile = audio?.let { persistAudio(it.first, it.second) }
-                val mime = audio?.second
-                val body = subject ?: defaultBodyForAudio(audioFile != null)
+                val body = parsed.body
+                val media = body?.let(::extractFirstMediaPart)
+                val mediaFile = media?.let { persistAttachment(appContext, it.first, it.second) }
+                val mime = media?.second
+                val caption = body?.let(::extractFirstTextCaption)
+                // `previewLabel` is the conversation-list line + notification text. It falls back
+                // to the Subject header, then to a mime-derived placeholder, so the user always
+                // sees something meaningful. `caption` (the raw user text) is what gets stored
+                // in `messages.body` and rendered as an inline caption below the attachment.
+                val previewLabel = caption ?: subject ?: defaultPreviewLabel(mime)
 
-                mirror.upsertIncomingMms(
+                val msgId = mirror.upsertIncomingMms(
                     address = sender,
-                    audioFile = audioFile,
+                    attachmentFile = mediaFile,
                     mimeType = mime,
                     durationMs = null,
-                    body = body,
+                    caption = caption,
+                    previewLabel = previewLabel,
                     date = date,
                 )
+                // Symmetric with [SmsDeliverReceiver]: re-fetch the row to get the conversationId
+                // so [IncomingMessageNotifier.cancelAllForConversation] can later clear the
+                // notification by tag when the user opens the thread.
+                val convId = messageDao.findById(msgId)?.conversationId
+                if (convId != null) {
+                    notifier.notifyIncoming(
+                        address = sender,
+                        body = previewLabel,
+                        messageId = msgId,
+                        conversationId = convId,
+                    )
+                } else {
+                    Timber.w("MmsDownloadedReceiver: message %d not found after insert", msgId)
+                }
             } catch (t: Throwable) {
                 Timber.w(t, "MMS download handling failed")
             } finally {
-                // Cleanup of the temp PDU file is best-effort — keep it on failure so debugging is possible.
                 if (rc == Activity.RESULT_OK && !pduPath.isNullOrBlank()) {
                     runCatching { File(pduPath).delete() }
                 }
@@ -113,32 +182,100 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Returns the (bytes, mimeType) of the first audio part in [body], or null if none is found.
-     * SMS Tech v1 only renders one audio per MMS — we ignore any extra parts.
+     * Decodes a part's content-type bytes. WAP text-strings carry a trailing NUL that
+     * `String(bytes)` would keep, breaking equality / prefix checks ("text/plain " !=
+     * "text/plain"). Also trims content-type parameters (`; charset=...`) so callers can do
+     * simple prefix / equality on the bare MIME.
      */
-    private fun extractFirstAudioPart(body: PduBody): Pair<ByteArray, String>? {
+    private fun decodeMime(bytes: ByteArray?): String? {
+        if (bytes == null || bytes.isEmpty()) return null
+        val end = bytes.indexOf(0.toByte()).let { if (it < 0) bytes.size else it }
+        if (end == 0) return null
+        return String(bytes, 0, end)
+            .substringBefore(';')
+            .trim()
+            .lowercase()
+            .takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Returns the (bytes, mimeType) of the first non-presentation media part in [body], or null.
+     * Skips application/smil (the layout descriptor) and text parts (captions go through
+     * [extractFirstTextCaption]). SMS Tech v1 only renders one attachment per MMS — any extras
+     * are ignored.
+     */
+    private fun extractFirstMediaPart(body: PduBody): Pair<ByteArray, String>? {
         val n = body.partsNum
         for (i in 0 until n) {
             val part = body.getPart(i) ?: continue
-            val ct = part.contentType?.let { String(it) } ?: continue
-            if (ct.startsWith("audio/", ignoreCase = true)) {
-                val data = part.data ?: continue
-                if (data.isNotEmpty()) return data to ct
-            }
+            val ct = decodeMime(part.contentType) ?: continue
+            if (ct.startsWith("text/") || ct == "application/smil") continue
+            val data = part.data ?: continue
+            if (data.isNotEmpty()) return data to ct
         }
         return null
     }
 
-    /** Writes the audio bytes to a stable cache file the AttachmentEntity will reference. */
-    private fun persistAudio(bytes: ByteArray, mime: String): File? = try {
-        val dir = File(appContext.cacheDir, INCOMING_AUDIO_DIR).apply { mkdirs() }
-        val ext = mimeExtension(mime)
-        val f = File(dir, "in-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.$ext")
-        f.writeBytes(bytes)
-        f
-    } catch (t: Throwable) {
-        Timber.w(t, "persistAudio failed")
-        null
+    /**
+     * Returns the trimmed text of the first `text/plain` part, if any.
+     *
+     * Charset resolution: the WAP "any-charset" sentinel (MIBenum 0, mapped to the literal `*`
+     * in [CharacterSets]) is not a valid JVM charset — calling `charset("*")` would throw and
+     * silently drop the caption. We also treat the absence of any usable Java charset as
+     * UTF-8, which matches what every modern Android sender produces.
+     */
+    private fun extractFirstTextCaption(body: PduBody): String? {
+        val n = body.partsNum
+        for (i in 0 until n) {
+            val part = body.getPart(i) ?: continue
+            val ct = decodeMime(part.contentType) ?: continue
+            if (ct != "text/plain") continue
+            val data = part.data ?: continue
+            if (data.isEmpty()) continue
+            val javaCharset = resolveCharset(part.charset)
+            val text = runCatching { String(data, javaCharset) }
+                .getOrNull()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: continue
+            return text
+        }
+        return null
+    }
+
+    private fun resolveCharset(mibEnum: Int): java.nio.charset.Charset {
+        val name = runCatching { CharacterSets.getMimeName(mibEnum) }.getOrNull()
+        if (name.isNullOrEmpty() || name == "*") return Charsets.UTF_8
+        return runCatching { charset(name) }.getOrDefault(Charsets.UTF_8)
+    }
+
+    /**
+     * Writes the bytes to a stable cache file the AttachmentEntity will reference.
+     *
+     * **v1.3.10 (Q5)** : atomic `tmp + rename`. If the process is killed mid-write (OOM, MIUI
+     * aggressive background kill), a half-written `in-*.ext` would otherwise be inserted into
+     * Room — the user tapping the message would crash the image viewer on the truncated file.
+     * Writing to `*.tmp` and only renaming on completion guarantees the consumer sees either
+     * the full file or nothing.
+     */
+    private fun persistAttachment(appContext: Context, bytes: ByteArray, mime: String): File? {
+        return try {
+            val dir = File(appContext.cacheDir, INCOMING_DIR).apply { mkdirs() }
+            val ext = mimeExtension(mime)
+            val name = "in-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.$ext"
+            val finalFile = File(dir, name)
+            val tmp = File(dir, "$name.tmp")
+            tmp.writeBytes(bytes)
+            if (!tmp.renameTo(finalFile)) {
+                tmp.delete()
+                Timber.w("persistAttachment rename failed for %s", finalFile.name)
+                return null
+            }
+            finalFile
+        } catch (t: Throwable) {
+            Timber.w(t, "persistAttachment failed mime=%s", mime)
+            null
+        }
     }
 
     private fun mimeExtension(mime: String): String = when (mime.lowercase()) {
@@ -146,6 +283,18 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         "audio/amr", "audio/3gpp" -> "amr"
         "audio/mpeg", "audio/mp3" -> "mp3"
         "audio/ogg", "audio/opus" -> "ogg"
+        "image/jpeg", "image/jpg" -> "jpg"
+        "image/png" -> "png"
+        "image/gif" -> "gif"
+        "image/webp" -> "webp"
+        "image/heic" -> "heic"
+        "video/mp4" -> "mp4"
+        "video/3gpp" -> "3gp"
+        "video/webm" -> "webm"
+        "application/pdf" -> "pdf"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+        "application/msword" -> "doc"
+        "application/zip" -> "zip"
         else -> "bin"
     }
 
@@ -158,21 +307,47 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         return if (idx > 0) raw.substring(0, idx) else raw
     }
 
-    private fun defaultBodyForAudio(hasAudio: Boolean): String =
-        if (hasAudio) "🎤" else "[MMS]"
+    /**
+     * Fallback label for the conversation list + notification when neither a `text/plain`
+     * caption nor an MMS Subject is present. Picked to mirror Apple Messages / Google
+     * Messages conventions (image/voice/video emoji + paperclip for generic files).
+     */
+    private fun defaultPreviewLabel(mime: String?): String {
+        if (mime == null) return "[MMS]"
+        val m = mime.lowercase()
+        return when {
+            m.startsWith("audio/") -> "🎤"
+            m.startsWith("image/") -> "🖼️"
+            m.startsWith("video/") -> "🎞️"
+            else -> "📎"
+        }
+    }
 
     private companion object {
-        const val INCOMING_AUDIO_DIR: String = "mms_incoming_audio"
+        const val INCOMING_DIR: String = "mms_incoming"
         /** Audit M-10: TTL for the in-memory dedup set. 5 min covers real-world carrier replays. */
         const val DEDUP_TTL_MS: Long = 5 * 60 * 1_000L
         /**
-         * Process-wide cache of recently-mirrored MMS transaction IDs. Backed by a synchronized
-         * [HashMap] (the receiver is `AndroidEntryPoint`-stateless from Hilt's perspective, so
-         * a top-level `companion object` field is the right scope: shared across receiver
-         * instantiations within the same process). Bounded by [DEDUP_TTL_MS]: stale entries get
-         * pruned on the next entry.
+         * v1.3.10 (SEC-03/P4) — hard ceiling on the dedup set. A storm of distinct fresh
+         * transaction-ids (carrier hiccup or hypothetical replay flood from an internal
+         * component) would otherwise let the map grow unbounded for the full TTL window.
+         * 256 entries × ~40 B ≈ 10 KiB worst case — still well under any sane budget for
+         * 5 minutes of MMS bursts, and gives the LinkedHashMap-LRU eviction priority over
+         * the time-based prune when both kick in.
+         */
+        const val DEDUP_MAX_ENTRIES: Int = 256
+
+        /**
+         * Process-wide cache of recently-mirrored MMS transaction IDs. Bounded by
+         * [DEDUP_TTL_MS] (time) AND [DEDUP_MAX_ENTRIES] (count). The [LinkedHashMap] preserves
+         * insertion order so [removeEldestEntry] gives us a free LRU eviction; the existing
+         * `removeAll { now - it.value > DEDUP_TTL_MS }` sweep still removes time-expired entries
+         * on every new insert.
          */
         @JvmStatic
-        private val processedTransactions = HashMap<String, Long>()
+        private val processedTransactions = object : LinkedHashMap<String, Long>(64, 0.75f, false) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, Long>): Boolean =
+                size > DEDUP_MAX_ENTRIES
+        }
     }
 }

@@ -72,18 +72,24 @@
 # ----- SMS / Telephony provider columns referenced via reflection -----------------------------
 -keepclassmembers class android.provider.Telephony$** { *; }
 
-# ----- Embedded AOSP MMS PDU classes (v1.3.8 fix CRITICAL) ------------------------------------
-# `app/src/main/java/com/google/android/mms/pdu/*.java` embeds the AOSP MMS PDU encoder/decoder
-# (SendReq, PduComposer, PduBody, PduPart, EncodedStringValue, PduHeaders, CharacterSets…).
+# ----- Embedded AOSP MMS PDU classes (v1.3.10 — renamed from com.google.android.mms.*) -------
+# `app/src/main/java/com/filestech/sms/pdu/*.java` embeds the AOSP MMS PDU encoder/decoder
+# (SendReq, PduComposer, PduBody, PduPart, EncodedStringValue, PduHeaders, CharacterSets,
+# MmsException, InvalidHeaderValueException…). Originally lived under `com.google.android.mms.*`
+# but Android 10+ enforces a **hidden API blacklist** on that namespace — at runtime the
+# system ClassLoader prefers the framework-bundled (hidden) class over our embedded copy and
+# denies access ("Accessing hidden method PduParser.<init>([B)V (blacklist, linking, denied)"
+# observed on Samsung Galaxy S9 Android 10, 2026-05-18). Result: SMS Tech can't parse any
+# incoming MMS PDU, MMS reception silently broken on Android 10+. Rename to
+# `com.filestech.sms.pdu.*` forces the ClassLoader to always pick our embedded copy.
+#
 # Our code drives these classes EXCLUSIVELY via reflection in `MmsBuilder.attachRecipientsCompat`
 # + `MmsBuilder.appendPart` to cross OEM signature divergences (Samsung One UI removed `addTo()`
 # from its bundled SendReq, AOSP doesn't expose `addPart(PduPart)` on certain versions, etc.).
 # Without this keep, R8 sees no direct call site for `setTo` / `addTo` / `addPart` / `getPartsNum`
 # and strips them — `Class.getMethod("setTo", …)` then throws NoSuchMethodException and the
-# whole MMS dispatch silently fails (`buildMultipartSendReq` returns null → `Outcome.Failure`
-# → "Échec d'envoi" snackbar). Regression observed v1.3.6 → v1.3.7 when R8's global call graph
-# analysis decided differently due to adjacent code changes (G4/G5/F5).
--keep class com.google.android.mms.** { *; }
+# whole MMS dispatch silently fails (regression observed v1.3.6 → v1.3.7, fixed v1.3.8).
+-keep class com.filestech.sms.pdu.** { *; }
 
 # ----- App-level reflective entry points (manifest-declared receivers / services / Activity) --
 -keepnames class com.filestech.sms.MainApplication
@@ -96,11 +102,17 @@
     <init>();
 }
 
-# ----- Strip Timber in release (audit F20) -----------------------------------------------------
+# ----- Strip Timber + android.util.Log in release (audit F20 + v1.3.10 SEC-02) ----------------
 # Release builds set BuildConfig.LOG_ENABLED=false and plant NoOpReleaseTree (which drops INFO and
 # below). On top of that, we make every Timber log call a no-op at the bytecode level so that no
 # argument expression is ever evaluated. This stops accidental PII / PIN material from leaking
 # into logcat via the toString of a captured local even if a developer slipped a Timber.w(secret).
+#
+# **v1.3.10 (SEC-02)** : the embedded AOSP MMS PDU classes under `com.filestech.sms.pdu.*` use
+# `android.util.Log.*` directly (PduComposer / EncodedStringValue). Without the rule below those
+# calls survive R8 and end up in logcat in release builds — leaking incoming PDU file URIs and
+# similar internal cache paths on any developer-mode device. Strip them with the same
+# `-assumenosideeffects` mechanism.
 -assumenosideeffects class timber.log.Timber {
     public static *** v(...);
     public static *** d(...);
@@ -116,4 +128,12 @@
     public *** w(...);
     public *** e(...);
     public *** wtf(...);
+}
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
+    public static *** wtf(...);
 }

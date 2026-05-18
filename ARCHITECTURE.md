@@ -63,7 +63,7 @@
    - `ConversationMirror.upsertIncomingSms` writes a typed, mirrored row into our SQLCipher-backed
      Room database, ensures the conversation exists, updates `lastMessageAt`, `lastMessagePreview`
      and increments `unreadCount`.
-   - `IncomingMessageNotifier.notifyIncomingSms` posts a `MessagingStyle` notification with inline
+   - `IncomingMessageNotifier.notifyIncoming` posts a `MessagingStyle` notification with inline
      reply (`RemoteInput`) and mark-as-read actions, respecting the user's preview-visibility
      setting.
 
@@ -91,9 +91,11 @@
      - `ConversationMirror.upsertOutgoingMms` writes an MMS row + `AttachmentEntity` referencing
        the audio file by absolute path.
      - `MmsSender.sendVoiceMms` builds a `SendReq` PDU through the in-tree
-       `com.google.android.mms.pdu.*` classes (ported from AOSP under Apache-2.0), persists the
-       encoded bytes to `cache/mms_outgoing/`, shares them via FileProvider, and hands the Uri to
-       `SmsManager.sendMultimediaMessage` together with a result `PendingIntent`.
+       `com.filestech.sms.pdu.*` classes (ported from AOSP under Apache-2.0, renamed in
+       v1.3.10 from `com.google.android.mms.pdu.*` to bypass the Android 10+ Hidden API
+       blacklist), persists the encoded bytes to `cache/mms_outgoing/`, shares them via
+       FileProvider, and hands the Uri to `SmsManager.sendMultimediaMessage` together with
+       a result `PendingIntent`.
    - The OS routes the PDU to the carrier MMSC; SMS Tech does not touch HTTP / APN itself.
 4. `MmsSentReceiver` flips the row to `SENT` or `FAILED` based on the broadcast resultCode and
    deletes the transient `.pdu` cache file.
@@ -103,13 +105,22 @@
 1. The carrier pushes a `WAP_PUSH_DELIVER` intent. `MmsWapPushReceiver` parses the
    `m-notification.ind` PDU via `PduParser`, extracts the `contentLocation` URL + `transactionId`,
    and refuses anything larger than 1 MiB (defence-in-depth — SMS Tech only consumes ≤ 300 KB clips).
+   The receiver resolves its Hilt dependencies on-demand via `EntryPointAccessors.fromApplication`
+   rather than `@AndroidEntryPoint` field injection — the latter crashes silently during the
+   Hilt-generated wrapper on certain Android 10 OEM ROMs when the receiver is dispatched at
+   cold-start (no `onReceive` ever called, MMS dropped without a log).
 2. `MmsDownloader.download` creates an empty file in `cache/mms_incoming/`, shares it through
    FileProvider, and calls `SmsManager.downloadMultimediaMessage`. The OS performs the MMSC HTTP
    GET and writes the `RetrieveConf` PDU bytes into the file.
-3. `MmsDownloadedReceiver` parses the result with `PduParser`. The first audio `PduPart` is
-   persisted to `cache/mms_incoming_audio/` and `ConversationMirror.upsertIncomingMms` mirrors a
-   typed Room row + `AttachmentEntity`. The conversation list, the thread view, and notifications
-   pick up the change through the standard Flow pipeline.
+3. `MmsDownloadedReceiver` parses the result with `PduParser`. The first non-presentation
+   media `PduPart` (image / video / audio / file — `application/smil` and `text/*` parts are
+   skipped) is persisted to `cache/mms_incoming/`. The first `text/plain` part is decoded as
+   the user caption (UTF-8 fallback when the WAP "any-charset" MIBenum 0 is used).
+   `ConversationMirror.upsertIncomingMms` mirrors a typed Room row + `AttachmentEntity`,
+   storing the caption verbatim in `messages.body` and a derived preview label
+   (`🖼️` / `🎤` / `🎞️` / `📎` if no caption / Subject is present) in the conversation list.
+   `IncomingMessageNotifier.notifyIncoming` then posts a `MessagingStyle` notification using
+   the preview label as the displayed body — identical pipeline to incoming SMS.
 
 ## Encryption at rest
 

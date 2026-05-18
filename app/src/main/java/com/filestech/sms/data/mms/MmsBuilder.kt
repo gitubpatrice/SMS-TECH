@@ -1,12 +1,12 @@
 package com.filestech.sms.data.mms
 
-import com.google.android.mms.pdu.CharacterSets
-import com.google.android.mms.pdu.EncodedStringValue
-import com.google.android.mms.pdu.PduBody
-import com.google.android.mms.pdu.PduComposer
-import com.google.android.mms.pdu.PduHeaders
-import com.google.android.mms.pdu.PduPart
-import com.google.android.mms.pdu.SendReq
+import com.filestech.sms.pdu.CharacterSets
+import com.filestech.sms.pdu.EncodedStringValue
+import com.filestech.sms.pdu.PduBody
+import com.filestech.sms.pdu.PduComposer
+import com.filestech.sms.pdu.PduHeaders
+import com.filestech.sms.pdu.PduPart
+import com.filestech.sms.pdu.SendReq
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -43,6 +43,10 @@ class MmsBuilder @Inject constructor(
     /**
      * Voice MMS shorthand — preserves the v1.1 API so existing callers compile unchanged.
      * Internally a single-attachment wrapper around [buildMultipartSendReq].
+     *
+     * **v1.3.10 (revert)** : `textBody = null` restauré. La tentative d'injecter "🎤" comme
+     * caption (anti-filter OEM voicemail spam) a régressé l'envoi MMS vocal sur Samsung One
+     * UI (test S24 FE 2026-05-18). Hypothèse à creuser séparément avant de re-tenter.
      */
     fun buildVoiceSendReq(
         audioFile: File,
@@ -78,8 +82,10 @@ class MmsBuilder @Inject constructor(
         requestDeliveryReport: Boolean = false,
     ): ByteArray? {
         if (recipients.isEmpty()) return null
-        val hasText = !textBody.isNullOrBlank()
-        if (attachments.isEmpty() && !hasText) return null
+        // v1.3.10 (Q1) — extract the trimmed caption ONCE so downstream uses smart-cast it as
+        // non-null instead of relying on `!!` after a separate `hasText` flag.
+        val caption = textBody?.takeIf { it.isNotBlank() }
+        if (attachments.isEmpty() && caption == null) return null
         for (a in attachments) {
             if (!a.file.exists() || a.file.length() == 0L) return null
         }
@@ -115,16 +121,17 @@ class MmsBuilder @Inject constructor(
         var totalSize = 0L
 
         // Optional text part — encoded as UTF-8 text/plain, named "text.txt".
-        val textPart: PduPart? = if (hasText) {
-            val bytes = textBody!!.toByteArray(Charsets.UTF_8)
+        val textPart: PduPart? = caption?.let { text ->
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            totalSize += bytes.size
             PduPart().apply {
                 contentType = "text/plain".toByteArray()
                 contentId = "text".toByteArray()
                 contentLocation = "text.txt".toByteArray()
                 data = bytes
                 charset = CharacterSets.UTF_8
-            }.also { totalSize += bytes.size }
-        } else null
+            }
+        }
 
         // Indexed attachment parts — each gets a stable content-id ("a0", "a1", …) referenced
         // from the SMIL document. Names are passed through `safeAttachmentName` so a future
@@ -147,7 +154,7 @@ class MmsBuilder @Inject constructor(
         // what we actually send.
         val smilXml = buildSmil(
             attachments = attachments.mapIndexed { idx, a -> Pair(safeAttachmentName(a.file.name, idx), a.kind) },
-            includeText = hasText,
+            includeText = caption != null,
         )
         val smilPart = PduPart().apply {
             contentType = "application/smil".toByteArray()
@@ -279,7 +286,7 @@ class MmsBuilder @Inject constructor(
      * legacy gateways that choke on Unicode in part headers.
      */
     private fun safeAttachmentName(raw: String, index: Int): String {
-        val cleaned = raw.replace(Regex("[^A-Za-z0-9._-]"), "_").trim('_')
+        val cleaned = raw.replace(UNSAFE_NAME_CHARS, "_").trim('_')
         return if (cleaned.isEmpty()) "attachment_$index" else cleaned.take(64)
     }
 
@@ -306,11 +313,21 @@ class MmsBuilder @Inject constructor(
      * can fail the send loudly rather than silently re-route.
      */
     private fun formatAddressForMms(raw: String): String? {
-        val clean = raw.replace(Regex("[\\s\\-()]"), "")
+        val clean = raw.replace(PHONE_NOISE, "")
         if (clean.contains('@')) return null
         if (clean.endsWith("/TYPE=PLMN")) return clean
         // Basic E.164-ish sanity: + optional, digits only, 6 to 15 chars.
-        if (!clean.matches(Regex("^\\+?\\d{6,15}$"))) return null
+        if (!clean.matches(E164_LIKE)) return null
         return "$clean/TYPE=PLMN"
+    }
+
+    private companion object {
+        /** v1.3.10 (P3) — Regex patterns hoisted to module-level constants. `Regex(...)` compiles
+         *  an NFA at construction; running it from the hot path of every recipient × every
+         *  attachment allocated a fresh automaton each time. Single shared instances are safe
+         *  because [Regex] is thread-safe (immutable matcher state). */
+        private val UNSAFE_NAME_CHARS = Regex("[^A-Za-z0-9._-]")
+        private val PHONE_NOISE = Regex("[\\s\\-()]")
+        private val E164_LIKE = Regex("^\\+?\\d{6,15}$")
     }
 }

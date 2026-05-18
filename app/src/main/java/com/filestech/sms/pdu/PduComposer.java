@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
 import android.content.ContentResolver;
 import android.content.Context;

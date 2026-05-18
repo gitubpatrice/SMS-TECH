@@ -236,6 +236,22 @@
             android:foregroundServiceType="dataSync"
             tools:replace="android:foregroundServiceType" />
 
+        <!-- 7-bis) v1.3.10 — Foreground service permanent OPT-IN (Réglages → Avancé →
+             "Mode résistant Xiaomi/Huawei"). Empêche MIUI/HyperOS/EMUI de killer le
+             processus SMS Tech en arrière-plan, ce qui débloque la réception WAP push
+             des MMS + la pose de notifications SMS sur les ROMs qui whitelistent
+             uniquement Google Messages / Mi Messages.
+             android:exported="false" : aucune surface IPC publique, démarré uniquement
+             en interne via [KeepAliveService.start].
+             android:foregroundServiceType="dataSync" : requis Android 14+ (API 34+).
+             android:stopWithTask="false" : le service survit au swipe-out de l'app
+             depuis les récents — c'est tout le point pour résister à MIUI. -->
+        <service
+            android:name=".system.service.KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
         <!-- 8) WorkManager init — let Hilt take over -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
-import com.google.android.mms.InvalidHeaderValueException;
 
 /**
  * Multi-part MMS PDU (carries an optional [PduBody]). Subclassed by [SendReq] and

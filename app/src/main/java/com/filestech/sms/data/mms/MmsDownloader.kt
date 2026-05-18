@@ -19,10 +19,10 @@ import javax.inject.Singleton
 /**
  * Triggers the OS-managed retrieval of an incoming MMS body from the MMSC.
  *
- * Input: the `contentLocation` URL carried by the [com.google.android.mms.pdu.NotificationInd]
+ * Input: the `contentLocation` URL carried by the [com.filestech.sms.pdu.NotificationInd]
  * that arrived via WAP_PUSH. We create an empty cache file, hand its [FileProvider] Uri to
  * [SmsManager.downloadMultimediaMessage], and Android takes care of the rest (APN routing,
- * HTTP GET, writing the [com.google.android.mms.pdu.RetrieveConf] PDU into our file). The
+ * HTTP GET, writing the [com.filestech.sms.pdu.RetrieveConf] PDU into our file). The
  * result is delivered to [com.filestech.sms.system.receiver.MmsDownloadedReceiver].
  */
 @Singleton
@@ -37,6 +37,16 @@ class MmsDownloader @Inject constructor(
         subId: Int? = null,
     ): Outcome<Unit> {
         if (contentLocation.isBlank()) return Outcome.Failure(AppError.Validation("empty contentLocation"))
+        // v1.3.10 (SEC-05) — defense in depth: reject any contentLocation whose scheme is
+        // not `http(s)://`. The WAP push receiver is OS-protected (BROADCAST_WAP_PUSH), and
+        // every production AOSP telephony stack rejects non-HTTP schemes downstream, but
+        // some legacy OEM stacks were observed honouring `file://` / `content://` URIs —
+        // we'd rather fail the download loudly than let `SmsManager` chase an arbitrary URI.
+        val scheme = contentLocation.substringBefore("://", missingDelimiterValue = "").lowercase()
+        if (scheme != "http" && scheme != "https") {
+            Timber.w("Rejected MMS contentLocation with non-HTTP scheme: %s", scheme)
+            return Outcome.Failure(AppError.Validation("contentLocation scheme not allowed: $scheme"))
+        }
 
         val dir = File(context.cacheDir, MMS_IN_DIR).apply { mkdirs() }
         val pduFile = File(dir, "in-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.pdu")
@@ -102,6 +112,12 @@ class MmsDownloader @Inject constructor(
         const val EXTRA_TRANSACTION_ID: String = "com.filestech.sms.extra.TRANSACTION_ID"
         const val EXTRA_SENDER: String = "com.filestech.sms.extra.SENDER"
 
-        private const val MMS_IN_DIR: String = "mms_incoming"
+        /**
+         * Cache subdirectory (relative to [Context.getCacheDir]) where this class drops the
+         * empty file handed to `SmsManager.downloadMultimediaMessage` and where the OS later
+         * writes the `RetrieveConf` PDU. Exposed publicly so [MmsDownloadedReceiver] can
+         * sandbox-verify the `EXTRA_PDU_FILE` path before reading it (v1.3.10 SEC-04).
+         */
+        const val MMS_IN_DIR: String = "mms_incoming"
     }
 }

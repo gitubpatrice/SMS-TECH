@@ -358,6 +358,27 @@ fun SettingsScreen(
                     description = stringResource(R.string.settings_resync_desc),
                     onClick = { viewModel.forceResyncFromTelephony() },
                 )
+                // v1.3.10 — Mode résistant OPT-IN (KeepAliveService foreground permanent).
+                // Toggle exposé pour TOUS les téléphones car la détection ROM est conservatrice :
+                // certains utilisateurs sur ROM "propre" pourraient quand même vouloir activer ;
+                // certains sur ROM "agressive" pourraient avoir whitelisté SMS Tech à la main et
+                // ne pas vouloir la notif persistante. La description liste les ROMs concernées
+                // pour aider la décision. Sur ROM détectée agressive, un dialog d'onboarding
+                // pré-suggère l'activation (cf. [OemRomDetector] dans MainApplication).
+                ToggleRow(
+                    title = stringResource(R.string.settings_keep_alive_title),
+                    description = stringResource(R.string.settings_keep_alive_desc),
+                    value = state.advanced.keepAliveService,
+                    onChange = { v ->
+                        // v1.3.10 (C4) — single source of truth: only persist the flag here.
+                        // [MainApplication] observes the DataStore via `distinctUntilChanged`
+                        // and calls `KeepAliveService.start/stop` within ~50 ms — well under
+                        // the threshold of perceptibility. The previous inline `start/stop`
+                        // was redundant and caused a double `startForeground` on the same
+                        // notification id, which produced a brief notif-flash on MIUI.
+                        viewModel.update { it.copy(advanced = it.advanced.copy(keepAliveService = v)) }
+                    },
+                )
                 NavigationRow(stringResource(R.string.settings_reset_all), onClick = { viewModel.resetAll() })
                 NavigationRow(
                     stringResource(R.string.settings_nuke_data),

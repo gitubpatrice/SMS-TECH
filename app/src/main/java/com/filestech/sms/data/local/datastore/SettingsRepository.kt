@@ -99,6 +99,8 @@ class SettingsRepository @Inject constructor(
                 mmsRoamingAutoDownload = p[K.mmsRoaming] ?: false,
                 lastSyncedSmsId = p[K.lastSyncedSmsId] ?: 0L,
                 splashShown = p[K.splashShown] ?: false,
+                keepAliveService = p[K.keepAliveService] ?: false,
+                keepAliveOnboardingShown = p[K.keepAliveOnboardingShown] ?: false,
             ),
         )
     }
@@ -166,6 +168,8 @@ class SettingsRepository @Inject constructor(
         this[K.mmsRoaming] = s.advanced.mmsRoamingAutoDownload
         this[K.lastSyncedSmsId] = s.advanced.lastSyncedSmsId
         this[K.splashShown] = s.advanced.splashShown
+        this[K.keepAliveService] = s.advanced.keepAliveService
+        this[K.keepAliveOnboardingShown] = s.advanced.keepAliveOnboardingShown
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -224,5 +228,7 @@ class SettingsRepository @Inject constructor(
         // same first-run signal (0 vs > 0) AND tells the sync manager where to resume from.
         val lastSyncedSmsId = longPreferencesKey("advanced.lastSyncedSmsId")
         val splashShown = booleanPreferencesKey("advanced.splashShown")
+        val keepAliveService = booleanPreferencesKey("advanced.keepAliveService")
+        val keepAliveOnboardingShown = booleanPreferencesKey("advanced.keepAliveOnboardingShown")
     }
 }

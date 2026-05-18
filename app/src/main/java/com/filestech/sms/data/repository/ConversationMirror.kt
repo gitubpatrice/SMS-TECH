@@ -217,14 +217,19 @@ class ConversationMirror @Inject constructor(
         subId: Int? = null,
     ): Long = withContext(io) {
         require(attachments.isNotEmpty()) { "upsertOutgoingMediaMms requires at least one attachment" }
-        val preview = textBody.ifBlank { mediaPreviewLabel(attachments.first()) }
+        // v1.3.10 — `messages.body` stores the **user caption verbatim** (possibly empty), so
+        // MediaAttachmentBubble can decide whether to render a caption line below the icon.
+        // `preview` is only used to keep the conversation list informative ("📎 file.pdf"
+        // when the user sent the file without a caption).
+        val storedBody = textBody.trim()
+        val preview = storedBody.ifBlank { mediaPreviewLabel(attachments.first()) }
         database.withTransaction {
             val convId = ensureConversation(listOf(PhoneAddress.of(address)))
             val msg = MessageEntity(
                 conversationId = convId,
                 telephonyUri = null,
                 address = address,
-                body = preview,
+                body = storedBody,
                 type = MessageType.MMS,
                 direction = MessageDirection.OUTGOING,
                 date = date,
@@ -275,27 +280,35 @@ class ConversationMirror @Inject constructor(
     }
 
     /**
-     * Mirrors an incoming MMS retrieved through [com.google.android.mms.pdu.PduParser]. The
-     * caller is responsible for having already written the audio bytes to disk and passed the
-     * absolute file path here.
+     * Mirrors an incoming MMS retrieved through [com.filestech.sms.pdu.PduParser]. The caller is
+     * responsible for having already written the attachment bytes to disk and passed the absolute
+     * file path here.
+     *
+     * **v1.3.10** : `caption` is the raw user text (e.g. the text/plain part of the multipart),
+     * stored verbatim in `messages.body` (empty when absent). `previewLabel` is the conversation-
+     * list line — derived by the caller from caption / Subject / mime placeholder. Decoupling
+     * the two avoids rendering a placeholder emoji as a fake text caption under the attachment
+     * bubble.
      */
     suspend fun upsertIncomingMms(
         address: String,
-        audioFile: File?,
+        attachmentFile: File?,
         mimeType: String?,
         durationMs: Long?,
-        body: String,
+        caption: String?,
+        previewLabel: String,
         date: Long,
         telephonyUri: String? = null,
         subId: Int? = null,
     ): Long = withContext(io) {
+        val storedBody = caption?.trim().orEmpty()
         database.withTransaction {
             val convId = ensureConversation(listOf(PhoneAddress.of(address)))
             val msg = MessageEntity(
                 conversationId = convId,
                 telephonyUri = telephonyUri,
                 address = address,
-                body = body,
+                body = storedBody,
                 type = MessageType.MMS,
                 direction = MessageDirection.INCOMING,
                 date = date,
@@ -306,24 +319,24 @@ class ConversationMirror @Inject constructor(
                 errorCode = null,
                 subId = subId,
                 scheduledAt = null,
-                attachmentsCount = if (audioFile != null && mimeType != null) 1 else 0,
+                attachmentsCount = if (attachmentFile != null && mimeType != null) 1 else 0,
             )
             val msgId = messageDao.insert(msg)
-            if (audioFile != null && mimeType != null) {
+            if (attachmentFile != null && mimeType != null) {
                 attachmentDao.insert(
                     AttachmentEntity(
                         messageId = msgId,
                         mimeType = mimeType,
-                        fileName = audioFile.name,
-                        sizeBytes = audioFile.length(),
-                        localUri = audioFile.absolutePath,
+                        fileName = attachmentFile.name,
+                        sizeBytes = attachmentFile.length(),
+                        localUri = attachmentFile.absolutePath,
                         width = null,
                         height = null,
                         durationMs = durationMs,
                     ),
                 )
             }
-            touchConversation(convId, date, body, deltaUnread = +1)
+            touchConversation(convId, date, previewLabel, deltaUnread = +1)
             msgId
         }
     }
@@ -514,6 +527,51 @@ class ConversationMirror @Inject constructor(
             }
         }
         val csv = addresses.sortedBy { it.normalized }.toCsv()
+
+        // v1.3.10 — exact-CSV fallback BEFORE the suffix-8 lookup. Catches the case where
+        // [MmsDownloadedReceiver] just created the conversation without a system thread id
+        // (we never query content://mms-sms/threadID from the receiver) and the subsequent
+        // [TelephonySyncManager.bulkImportMmsFromTelephony] is now importing the same MMS
+        // with its real system thread id. Without this, we'd insert a second conversation
+        // for the same correspondent — user-visible as a duplicate thread.
+        conversationDao.findByAddressesCsv(csv)?.let { existing ->
+            if (systemThreadId > 0L && existing.threadId != systemThreadId) {
+                conversationDao.update(existing.copy(
+                    threadId = systemThreadId,
+                    displayName = existing.displayName ?: resolved,
+                ))
+            } else if (existing.displayName == null && resolved != null) {
+                conversationDao.update(existing.copy(displayName = resolved))
+            }
+            return existing.id
+        }
+
+        // v1.3.10 — suffix-8 fallback : if the existing conversation was created from a raw
+        // PDU address (e.g. "+33617332729") and we're now importing from `content://mms` with
+        // the gateway-decorated form (e.g. "+33617332729/TYPE=PLMN"), the exact-CSV match
+        // misses but the last 8 digits do agree. Same rationale as [ensureConversation].
+        if (addresses.size == 1) {
+            val incomingSuffix = addresses.first().raw.phoneSuffix8()
+            if (incomingSuffix.length == 8) {
+                val oneToOne = conversationDao.snapshotOneToOneConversations()
+                val match = oneToOne.firstOrNull { conv ->
+                    val convAddress = PhoneAddress.list(conv.addressesCsv).firstOrNull()
+                    convAddress != null && convAddress.raw.phoneSuffix8() == incomingSuffix
+                }
+                if (match != null) {
+                    if (systemThreadId > 0L && match.threadId != systemThreadId) {
+                        conversationDao.update(match.copy(
+                            threadId = systemThreadId,
+                            displayName = match.displayName ?: resolved,
+                        ))
+                    } else if (match.displayName == null && resolved != null) {
+                        conversationDao.update(match.copy(displayName = resolved))
+                    }
+                    return match.id
+                }
+            }
+        }
+
         return conversationDao.upsert(
             ConversationEntity(
                 threadId = systemThreadId,

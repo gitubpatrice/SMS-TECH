@@ -5,13 +5,15 @@ import android.content.Context
 import android.content.Intent
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.di.ApplicationScope
-import com.google.android.mms.pdu.NotificationInd
-import com.google.android.mms.pdu.PduParser
-import dagger.hilt.android.AndroidEntryPoint
+import com.filestech.sms.pdu.NotificationInd
+import com.filestech.sms.pdu.PduParser
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import javax.inject.Inject
 
 /**
  * Receives MMS WAP_PUSH notifications. The intent carries the binary `m-notification.ind` PDU
@@ -19,17 +21,31 @@ import javax.inject.Inject
  * [MmsDownloader] to trigger SmsManager.downloadMultimediaMessage. The actual message payload
  * arrives later via [MmsDownloadedReceiver].
  *
+ * **v1.3.10 reception hardening** — we intentionally do NOT annotate the class with
+ * `@AndroidEntryPoint`. Symptom observed on Samsung Galaxy S9 Android 10 One UI + Redmi 9A
+ * MIUI 12 (2026-05-18): the Hilt-generated wrapper crashes silently during field injection
+ * BEFORE `onReceive` is ever called when the system dispatches WAP_PUSH at cold-start (app
+ * killed in background, the normal state for an SMS app). Result: every incoming MMS is
+ * dropped, no log, no crash, no notification. Resolving the entry point on-demand inside
+ * `onReceive` is safe (the [android.app.Application] is guaranteed initialized before any
+ * broadcast dispatch, so the Singleton component is ready) and avoids the silent failure.
+ *
  * Audit notes:
  *   - Malformed / truncated PDUs simply log a warning and bail (no crash).
  *   - We DO NOT auto-download messages larger than [MAX_AUTO_DOWNLOAD_BYTES] (default 1 MB) to
  *     guard against runaway data usage — the user can re-trigger from the conversation later.
  *     For SMS Tech's voice-only flow we should never hit that ceiling (clips capped at 300 KB).
  */
-@AndroidEntryPoint
 class MmsWapPushReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var downloader: MmsDownloader
-    @Inject @ApplicationScope lateinit var scope: CoroutineScope
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface MmsWapPushEntryPoint {
+        fun mmsDownloader(): MmsDownloader
+
+        @ApplicationScope
+        fun applicationScope(): CoroutineScope
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != "android.provider.Telephony.WAP_PUSH_DELIVER") return
@@ -38,12 +54,28 @@ class MmsWapPushReceiver : BroadcastReceiver() {
             Timber.w("WAP_PUSH intent missing PDU data")
             return
         }
+
+        val entry = try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                MmsWapPushEntryPoint::class.java,
+            )
+        } catch (t: Throwable) {
+            Timber.e(t, "Hilt entry point resolution failed in MmsWapPushReceiver")
+            return
+        }
+        val downloader = entry.mmsDownloader()
+        val scope = entry.applicationScope()
+
         val pending = goAsync()
         scope.launch {
             try {
                 val parsed = runCatching { PduParser(pdu).parse() }.getOrNull()
                 if (parsed !is NotificationInd) {
-                    Timber.w("WAP_PUSH PDU is not a NotificationInd (parsed=%s)", parsed?.javaClass?.simpleName)
+                    Timber.w(
+                        "WAP_PUSH PDU is not a NotificationInd (parsed=%s)",
+                        parsed?.javaClass?.simpleName,
+                    )
                     return@launch
                 }
                 val contentLocation = parsed.contentLocation?.let { String(it) }
@@ -51,13 +83,22 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                     Timber.w("NotificationInd has no contentLocation")
                     return@launch
                 }
+                // OMA-MMS-ENC §7.3.21: `X-Mms-Message-Size` is OPTIONAL in m-notification.ind.
+                // [PduHeaders.getLongInteger] returns -1 when the header is absent — observed
+                // in the wild on several MVNOs (Lebara, Lycamobile) and a number of non-EU
+                // carriers. Treat "absent" identically to "present and within cap"; only an
+                // explicitly oversized PDU is skipped.
                 val size = parsed.messageSize
-                if (size in 1..MAX_AUTO_DOWNLOAD_BYTES) {
+                val sizeUnknown = size <= 0L
+                val sizeAcceptable = size in 1..MAX_AUTO_DOWNLOAD_BYTES
+                if (sizeUnknown || sizeAcceptable) {
                     val transactionId = parsed.transactionId?.let { String(it) }
                     val sender = parsed.from?.string
                     val res = downloader.download(contentLocation, transactionId, sender)
-                    Timber.i("MMS auto-download triggered loc=%s size=%d outcome=%s",
-                        contentLocation, size, res)
+                    Timber.i(
+                        "MMS auto-download triggered loc=%s size=%d outcome=%s",
+                        contentLocation, size, res,
+                    )
                 } else {
                     Timber.w("MMS auto-download skipped (size=%d > %d)", size, MAX_AUTO_DOWNLOAD_BYTES)
                 }

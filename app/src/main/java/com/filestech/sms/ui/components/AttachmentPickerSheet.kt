@@ -138,17 +138,16 @@ fun AttachmentPickerSheet(
                     icon = Icons.Outlined.Description,
                     label = stringResource(R.string.attach_file),
                     onClick = {
-                        // Common safe MIME types — narrow enough to stay routable through MMS
-                        // gateways, broad enough to cover everyday "send me your invoice" needs.
-                        fileLauncher.launch(
-                            arrayOf(
-                                "application/pdf",
-                                "image/*",
-                                "audio/*",
-                                "video/*",
-                                "text/*",
-                            ),
-                        )
+                        // v1.3.10 — accepter N'IMPORTE QUEL fichier au niveau du file picker
+                        // système. Le cap de taille MMS (280 KB pratique chez les MMSCs FR)
+                        // filtrera de toute façon les fichiers trop gros à l'envoi, et le MIME
+                        // réel sera détecté + transmis par `MmsBuilder` au moment de la
+                        // construction du PDU. Élargir le picker à `*/*` débloque tous les
+                        // formats bureautiques (.docx, .xlsx, .pptx, .odt, .ods, .odp, .pdf,
+                        // .zip, .epub, .json, .csv, .xml…) que les utilisateurs s'attendent
+                        // à pouvoir joindre, sans avoir à maintenir une whitelist exhaustive
+                        // qui dévie inévitablement avec les nouveaux formats.
+                        fileLauncher.launch(arrayOf("*/*"))
                     },
                 )
                 AttachmentTile(

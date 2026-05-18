@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.9** (2026-05-17)
+Current release : **v1.3.10** (2026-05-17)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -327,7 +327,115 @@ Audit M (post-fix) — 4 findings, all fixed before tag :
   vulnerable to index shift on add/remove race. Switched to stable
   `String` id (= absolute path) + remove by id.
 
-### v1.3.9 (this release) — Foreground-active conversation : auto-dismiss notification
+### v1.3.10 (this release) — MMS reception unblocked on Android 10+ OEM ROMs
+
+Cross-device testing on Samsung Galaxy S9 (Android 10 One UI), Samsung S24 FE,
+Redmi 9A (MIUI 12 Go), and Xiaomi Poco F5 (HyperOS 2024) exposed three independent
+silent failures in the MMS reception pipeline. Each was a "no log, no crash, no
+bubble, no notification" failure mode — and the fixes are layered:
+
+**Fix 1 — Hidden API blacklist on Android 10+** (PDU package rename) :
+- The embedded AOSP MMS PDU codec (`PduParser`, `PduComposer`, `PduBody`,
+  `PduPart`, `EncodedStringValue`, `PduHeaders`, `CharacterSets`,
+  `NotificationInd`, `SendReq`, `RetrieveConf`, `MultimediaMessagePdu`,
+  `GenericPdu`, `PduContentTypes`, `MmsException`, `InvalidHeaderValueException`)
+  previously lived under `com.google.android.mms.pdu.*`. Android 10+ enforces a
+  hidden API blacklist on that namespace — the system ClassLoader prefers the
+  framework-bundled (hidden) class over our embedded copy and denies access at
+  link time ("Accessing hidden method PduParser.<init>([B)V (blacklist, linking,
+  denied)", observed on S9 Android 10 logcat 2026-05-18).
+- The whole codec was renamed to `com.filestech.sms.pdu.*` (15 .java files moved,
+  5 .kt files updated, ProGuard `-keep` rule updated). The ClassLoader now always
+  picks our embedded copy. Same pattern Signal / Google Messages use.
+
+**Fix 2 — Silent Hilt-injection crash on Android 10 BroadcastReceivers** :
+- `@AndroidEntryPoint` on `MmsWapPushReceiver` + `MmsDownloadedReceiver` triggered
+  a silent crash in the Hilt-generated wrapper BEFORE `onReceive` was called when
+  Android dispatched WAP_PUSH at cold-start (the normal state for an SMS app
+  killed in the background by aggressive OEMs). Result: every incoming MMS was
+  dropped without a single log line.
+- Both receivers now expose a `@EntryPoint @InstallIn(SingletonComponent::class)`
+  interface and resolve `MmsDownloader`, `ConversationMirror`, `MessageDao`,
+  `IncomingMessageNotifier`, and the `@ApplicationScope CoroutineScope` on-demand
+  inside `onReceive` via `EntryPointAccessors.fromApplication(...)`. The
+  `Application` is guaranteed initialized before any broadcast dispatch, so the
+  Singleton component is always ready, and any resolution failure now logs
+  loudly instead of crashing silently.
+
+**Fix 3 — `PduParser` Message-Class header devoured Content-Location** :
+- Per OMA-WAP-MMS-ENC, the `Message-Class` header can be either a `class-identifier`
+  octet (0x80–0x83 = Personal/Advertisement/Informational/Auto) OR a `text-string`.
+  Our parser was forcing the `text-string` branch unconditionally; when the carrier
+  sent a class-identifier (0x8A 0x80…), the parser consumed the 0x80 as the first
+  byte of a "text-string" and looped until the next 0x00 — devouring `Message-Size`,
+  `Expiry`, AND the trailing `Content-Location` URL. The receiver then bailed with
+  "NotificationInd has no contentLocation", silently dropping the MMS.
+- Added a dual-path decoder: high-bit-set first byte → class-identifier lookup
+  (mapped to "personal" / "advertisement" / "informational" / "auto"); otherwise
+  the existing `text-string` path.
+
+**Reception attachment pipeline modernized** (`MmsDownloadedReceiver`,
+`ConversationMirror.upsertIncomingMms`) :
+- SMS Tech v1.3.9 only kept `audio/*` parts; every incoming image / video / file
+  MMS landed as a `[MMS]` placeholder bubble with no attachment, the file silently
+  discarded. The receiver now extracts the first non-text non-`application/smil`
+  part of ANY MIME (image, video, audio, application) and persists it to
+  `cache/mms_incoming/`.
+- A separate `text/plain` extractor handles the user caption — but the
+  `CharacterSets.getMimeName(0)` call returns the literal `*` (WAP "any-charset"
+  MIBenum sentinel) which is not a valid JVM charset; `charset("*")` then threw
+  and the caption was silently dropped. Now treated as UTF-8 fallback.
+- Decoupled storage: `messages.body` stores the caption verbatim (empty when
+  absent); the conversation-list preview label is computed separately and passed
+  to `touchConversation`. Stops the placeholder emoji from rendering as a fake
+  inline caption under the attachment bubble.
+
+**MMS notifications wired** (`IncomingMessageNotifier`, `MmsDownloadedReceiver`) :
+- Renamed `notifyIncomingSms` → `notifyIncoming` (the `MessagingStyle`
+  notification is type-agnostic — same heads-up, same lockscreen redaction, same
+  inline-reply action, same per-conversation tag cancellation). `MmsDownloadedReceiver`
+  now calls it after `upsertIncomingMms` returns, using the preview label as the
+  notification body. Before, every incoming MMS landed silently in the DB.
+
+**Duplicate-conversation guard** (`ConversationMirror.ensureConversationByThread`) :
+- `MmsDownloadedReceiver` creates the conversation with no system thread id
+  (we don't query `content://mms-sms/threadID` from the receiver). The subsequent
+  `TelephonySyncManager.bulkImportMmsFromTelephony` was importing the same MMS
+  with its real system thread id and inserting a SECOND conversation row when the
+  thread-id lookup missed. Added exact-CSV + suffix-8 fallback inside
+  `ensureConversationByThread` symmetric with `ensureConversation`: a matching
+  one-to-one conv now gets its `thread_id` UPDATED in place instead of being
+  shadowed by a duplicate.
+
+**File picker accepts all MIME types** (`AttachmentPickerSheet`) :
+- Replaced `{pdf, image/*, audio/*, video/*, text/*}` whitelist by `arrayOf("*/*")`.
+  Office formats (.docx, .xlsx, .pptx, .odt, .zip, .epub, .json…) no longer appear
+  greyed out in the system file picker. The MMS size cap (~280 KB on most French
+  MMSCs) still gates oversized files at send time.
+
+**KeepAliveService — opt-in foreground service ("Mode résistant")** :
+- For aggressive OEMs (Xiaomi/Redmi/Poco, Huawei/Honor, Oppo/Realme/OnePlus,
+  Vivo/iQOO, Meizu, Asus — detected by `OemRomDetector` via `Build.MANUFACTURER`
+  / `Build.BRAND`) that kill background SMS apps within minutes. Disabled by
+  default; enabled via Settings → Avancé → "Mode résistant". `START_STICKY`,
+  `stopWithTask="false"`, `foregroundServiceType="dataSync"`. Auto-restart at
+  device boot via `BootReceiver` (reads the DataStore flag). Defensive try/catch
+  covers POST_NOTIFICATIONS revocation (Android 13+) and
+  `ForegroundServiceStartNotAllowedException` (Android 12+).
+
+**Limites de compatibilité documentées (HyperOS récent)** :
+- **Xiaomi Poco F5 + HyperOS 2024+** : HyperOS whitelists Google Messages + Mi
+  Messages at the system level and demands a Mi Account login to disable MIUI
+  Optimization — a step many users won't take. The "Mode résistant" foreground
+  service mitigates background kills but does not bypass the system whitelist.
+  Recommended fallback for these devices: use Google Messages. Documented in
+  the [Compatibilité](https://files-tech.com/sms-tech.php) section of the
+  product site.
+
+No new dependency. No schema change. No signing-key change. Same cert SHA-256
+`b09a9511…687d`. ~10 files modified, 15 .java files renamed.
+
+### v1.3.9 — Foreground-active conversation : auto-dismiss notification
 
 User-driven UX fix : when the user is **currently looking at conversation X** in the
 foreground (Thread screen open) and a new SMS for X arrives, the notification was
@@ -353,7 +461,7 @@ message had already appeared in real-time inside the open conversation.
     so a stale `onCleared` from a previous ViewModel cannot wipe the state set by
     a freshly-init'd new ViewModel during a configChange race.
   - `isActive(conversationId): Boolean` : lock-free read by the notifier.
-- `IncomingMessageNotifier.notifyIncomingSms` reads `isActiveConversation` ONCE
+- `IncomingMessageNotifier.notifyIncoming` reads `isActiveConversation` ONCE
   before building the notification, then conditionally applies
   `.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)` in the builder `.also { ... }` block.
 
@@ -426,8 +534,13 @@ shifted the analysis output enough to trigger the strip.
 
 **Fix** (`proguard-rules.pro`) :
 ```
--keep class com.google.android.mms.** { *; }
+-keep class com.filestech.sms.pdu.** { *; }
 ```
+(Updated in v1.3.10 — the embedded PDU package was renamed from
+`com.google.android.mms.*` to `com.filestech.sms.pdu.*` to bypass the Android 10+
+Hidden API blacklist; the keep rule was bumped accordingly. Pre-v1.3.10 history:
+the rule originally targeted `com.google.android.mms.**`.)
+
 A single keep rule covering all members of the embedded PDU package. Verified
 sufficient by user test 2026-05-17 (vocal sent successfully, received by recipient).
 No security risk added — the PDU classes are read-only utility code (no credential,

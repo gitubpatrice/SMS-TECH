@@ -35,7 +35,7 @@ class IncomingMessageNotifier @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
-    suspend fun notifyIncomingSms(
+    suspend fun notifyIncoming(
         address: String,
         body: String,
         messageId: Long,

@@ -1,0 +1,17 @@
+Réception MMS débloquée sur Android 10 et ROMs OEM agressives, et tous les types de pièces jointes gérés correctement à la réception.
+
+• Réception MMS Android 10 / ROMs OEM (Samsung Galaxy S9, Redmi 9A, etc.) : trois bugs silencieux empêchaient SMS Tech de recevoir le moindre MMS sur ces appareils. (1) Le codec PDU embarqué a été renommé pour contourner la blacklist Hidden API d'Android 10+. (2) Les receivers Hilt crashaient avant d'être appelés au cold-start. (3) Un bug du parseur PDU avalait l'URL du contenu MMS quand le porteur envoyait un Message-Class au format compact.
+
+• Réception images, vidéos, fichiers : les MMS non-audio étaient silencieusement réduits à une bulle "[MMS]" sans pièce jointe. SMS Tech extrait désormais correctement n'importe quel type de pièce jointe (image, vidéo, audio, document) + le texte caption optionnel.
+
+• Notifications MMS : chaque MMS reçu déclenche désormais une notification (avant : ingestion silencieuse en base sans alerte).
+
+• Bulle de pièce jointe : le placeholder "🖼️" / "📎" n'apparaît plus comme un faux caption sous l'image/le fichier — seul le vrai texte saisi par l'expéditeur est affiché.
+
+• Plus de doublons de conversations à la réception : si deux chemins d'import touchaient le même MMS, deux conversations apparaissaient pour le même correspondant. Le fallback de matching par numéro de téléphone est désormais appliqué partout.
+
+• Picker de fichiers ouvert : tous les formats (.docx, .xlsx, .pptx, .zip, .epub, .json…) sont sélectionnables (avant : seulement PDF + image + audio + vidéo + texte).
+
+• Mode résistant opt-in (Réglages → Avancé) : pour les téléphones Xiaomi / Huawei / Oppo / OnePlus / Vivo qui tuent les apps SMS en arrière-plan. Service foreground discret + redémarrage auto après reboot. Désactivé par défaut.
+
+Aucun changement de format de base, de signature ou de permission. Limitation HyperOS 2024+ documentée : utiliser Google Messages (le système whiteliste seulement ses propres apps).

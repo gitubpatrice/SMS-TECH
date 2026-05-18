@@ -1,0 +1,17 @@
+MMS reception unblocked on Android 10 and aggressive OEM ROMs, and every attachment type is now handled correctly on receive.
+
+• Android 10 / OEM ROM MMS reception (Samsung Galaxy S9, Redmi 9A, etc.): three silent failures prevented SMS Tech from receiving any MMS on these devices. (1) The embedded PDU codec was renamed to bypass Android 10+ Hidden API blacklist. (2) Hilt-injected receivers crashed before onReceive at cold-start. (3) A PDU parser bug devoured the MMS content URL when the carrier sent Message-Class as a compact octet.
+
+• Image / video / file reception: non-audio MMS were silently reduced to a "[MMS]" placeholder bubble with no attachment. SMS Tech now correctly extracts any attachment type (image, video, audio, document) + the optional caption text.
+
+• MMS notifications: every received MMS now triggers a notification (previously: silent DB ingest with no alert).
+
+• Attachment bubble: the "🖼️" / "📎" placeholder no longer renders as a fake caption under the image / file — only the real sender-typed text is displayed.
+
+• No more duplicate conversations on receive: if two import paths touched the same MMS, two conversations appeared for the same correspondent. The phone-number fallback matching is now applied everywhere.
+
+• Open file picker: all formats (.docx, .xlsx, .pptx, .zip, .epub, .json…) are pickable (previously: PDF + image + audio + video + text only).
+
+• Opt-in resilient mode (Settings → Advanced): for Xiaomi / Huawei / Oppo / OnePlus / Vivo phones that kill background SMS apps. Discreet foreground service + auto-restart after reboot. Disabled by default.
+
+No database, signing key, or permission change. HyperOS 2024+ limitation documented: use Google Messages (the system whitelists only its own apps).

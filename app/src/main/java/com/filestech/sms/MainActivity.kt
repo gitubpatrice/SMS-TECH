@@ -1,12 +1,16 @@
 package com.filestech.sms
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -22,6 +26,7 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.system.share.IncomingShareHolder
 import com.filestech.sms.ui.AppRoot
+import com.filestech.sms.ui.components.OemKeepAliveOnboarding
 import com.filestech.sms.ui.theme.SmsTechTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +34,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -46,6 +52,76 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var incomingShare: IncomingShareHolder
 
     private val initialSettings = MutableStateFlow<AppSettings?>(null)
+
+    /**
+     * v1.3.10 — launcher pour demande EXPLICITE des permissions runtime critiques au
+     * cold-start. Contrat Android : quand une app devient `RoleManager.ROLE_SMS`
+     * holder, les permissions `READ_SMS`/`RECEIVE_SMS`/`RECEIVE_MMS`/`RECEIVE_WAP_PUSH`
+     * doivent être grantées automatiquement via `GRANTED_BY_ROLE`. **BUG OEM observé**
+     * sur Samsung Galaxy S9 Android 10 One UI : le grant automatique ne s'exécute pas,
+     * les permissions restent `restricted=true`, et l'utilisateur ne reçoit aucun SMS /
+     * MMS sans intervention manuelle (Paramètres → Apps → SMS Tech → Autorisations).
+     * Pour rendre l'app robuste sans assumer ce contrat OEM, on demande nous-mêmes les
+     * permissions runtime manquantes au premier launch (et à chaque cold-start si user
+     * a refusé, jusqu'à grant explicite ou refus "Ne plus demander" du système).
+     */
+    private val permissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grantResults ->
+        val denied = grantResults.filter { !it.value }.keys
+        if (denied.isNotEmpty()) {
+            Timber.w(
+                "MainActivity: %d critical permissions still denied after user prompt: %s",
+                denied.size,
+                denied.joinToString(),
+            )
+            // Pas d'action forcée — l'utilisateur peut toujours les activer plus tard
+            // via Paramètres système. L'app reste fonctionnelle pour les paths qui ne
+            // dépendent pas des perms denied (ex: SMS texte si seul RECEIVE_MMS est
+            // denied).
+        }
+    }
+
+    /**
+     * v1.3.10 — liste des permissions runtime "dangerous" indispensables au fonctionnement
+     * de SMS Tech en tant qu'app SMS par défaut. Calculée dynamiquement à chaque check
+     * pour inclure `POST_NOTIFICATIONS` uniquement sur Android 13+ (API 33+) où elle a
+     * été introduite.
+     */
+    private val criticalSmsPermissions: Array<String>
+        get() = mutableListOf(
+            Manifest.permission.READ_SMS,
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.RECEIVE_MMS,
+            Manifest.permission.RECEIVE_WAP_PUSH,
+            Manifest.permission.SEND_SMS,
+            Manifest.permission.READ_PHONE_NUMBERS,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.RECORD_AUDIO,
+        ).apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.toTypedArray()
+
+    /**
+     * Demande les permissions runtime manquantes parmi [criticalSmsPermissions]. No-op
+     * si toutes déjà grantées (cas Pixel + Samsung One UI ≥ 11 où le grant automatique
+     * via ROLE_SMS fonctionne). Idempotent — Android dédoublonne les requests successifs.
+     */
+    private fun requestMissingCriticalPermissionsIfAny() {
+        val missing = criticalSmsPermissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) {
+            Timber.i(
+                "MainActivity: requesting %d missing critical permissions at cold-start (likely Samsung One UI Android 10 GRANTED_BY_ROLE bug)",
+                missing.size,
+            )
+            permissionsLauncher.launch(missing.toTypedArray())
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition { initialSettings.value == null }
@@ -79,6 +155,17 @@ class MainActivity : FragmentActivity() {
         // `appLock.ensureResolved()` themselves; nothing here needs to block on it.
         lifecycleScope.launch { appLock.ensureResolved() }
 
+        // v1.3.10 — fail-safe contre le bug Samsung One UI Android 10 où GRANTED_BY_ROLE
+        // ne grant pas les permissions runtime critiques (RECEIVE_SMS, RECEIVE_MMS,
+        // RECEIVE_WAP_PUSH, etc.) malgré que SMS Tech soit role holder. Sans ce check,
+        // l'utilisateur croit que SMS Tech est correctement configurée (badge "app par
+        // défaut" affiché dans Paramètres système) mais ne reçoit aucun SMS / MMS. On
+        // demande explicitement les permissions manquantes au cold-start ; les ROMs où
+        // le grant automatique a fonctionné voient toutes les perms déjà à
+        // PERMISSION_GRANTED → `requestMissingCriticalPermissionsIfAny` est no-op
+        // (Android dédoublonne, aucun popup affiché).
+        requestMissingCriticalPermissionsIfAny()
+
         // Observe later toggles of FLAG_SECURE. distinctUntilChanged avoids the no-op addFlags /
         // clearFlags churn on every settings emission (audit P8). Note this also handles the
         // initial pass: when the first emission arrives with `flagSecure = false`, this clears
@@ -101,6 +188,28 @@ class MainActivity : FragmentActivity() {
             SmsTechTheme(appearance = current.appearance) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppRoot()
+                    OemKeepAliveOnboarding(
+                        advanced = current.advanced,
+                        onEnable = {
+                            lifecycleScope.launch {
+                                settings.update {
+                                    it.copy(advanced = it.advanced.copy(
+                                        keepAliveService = true,
+                                        keepAliveOnboardingShown = true,
+                                    ))
+                                }
+                            }
+                        },
+                        onSkip = {
+                            lifecycleScope.launch {
+                                settings.update {
+                                    it.copy(advanced = it.advanced.copy(
+                                        keepAliveOnboardingShown = true,
+                                    ))
+                                }
+                            }
+                        },
+                    )
                 }
             }
         }

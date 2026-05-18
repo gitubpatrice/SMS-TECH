@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
-import com.google.android.mms.InvalidHeaderValueException;
 
 /**
  * MMS m-send.req PDU (OMA-MMS-ENC §6.1.1). Built by the sending side and serialised via

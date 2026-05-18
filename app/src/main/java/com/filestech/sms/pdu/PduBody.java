@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.google.android.mms.pdu;
+package com.filestech.sms.pdu;
 
 import java.util.ArrayList;
 import java.util.HashMap;

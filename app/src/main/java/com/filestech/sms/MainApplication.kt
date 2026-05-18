@@ -6,12 +6,18 @@ import androidx.work.Configuration
 import com.filestech.sms.core.logging.LineNumberDebugTree
 import com.filestech.sms.core.logging.NoOpReleaseTree
 import com.filestech.sms.data.blocking.BlockedNumbersImporter
+import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.sync.TelephonySyncManager
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
 import com.filestech.sms.system.notifications.NotificationChannelInitializer
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
+import com.filestech.sms.system.service.KeepAliveService
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -32,6 +38,8 @@ class MainApplication : Application(), Configuration.Provider {
     @Inject lateinit var telephonySyncManager: TelephonySyncManager
 
     @Inject lateinit var blockedNumbersImporter: BlockedNumbersImporter
+
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
@@ -75,6 +83,29 @@ class MainApplication : Application(), Configuration.Provider {
         appScope.launch {
             runCatching { blockedNumbersImporter.importFromSystem() }
             TelephonySyncWorker.enqueueOneShot(this@MainApplication)
+        }
+
+        // v1.3.10 — observe le flag `AdvancedSettings.keepAliveService` et démarre /
+        // arrête le foreground [KeepAliveService] en conséquence. Cette boucle vit
+        // pendant toute la durée du processus (appScope = SupervisorJob applicationwide),
+        // garantit l'idempotence (`distinctUntilChanged` filtre les ré-émissions
+        // identiques), et couvre :
+        //   - cold-start app avec flag déjà ON depuis une session précédente → démarrage
+        //   - toggle ON pendant que l'app tourne → démarrage immédiat
+        //   - toggle OFF pendant que l'app tourne → arrêt immédiat de la notif persistante
+        //   - boot du device (avant ouverture app) → couvert par BootReceiver, complémentaire
+        appScope.launch {
+            settingsRepository.flow
+                .map { it.advanced.keepAliveService }
+                .distinctUntilChanged()
+                .onEach { enabled ->
+                    if (enabled) {
+                        KeepAliveService.start(this@MainApplication)
+                    } else {
+                        KeepAliveService.stop(this@MainApplication)
+                    }
+                }
+                .collect()
         }
     }
 }

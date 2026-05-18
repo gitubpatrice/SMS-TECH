@@ -175,6 +175,27 @@ fun MediaAttachmentBubble(
                     )
                 }
             }
+            // v1.3.10 — caption text affiché EN DESSOUS de l'image / icône quand
+            // l'utilisateur a saisi du texte avant d'envoyer un MMS image / vidéo /
+            // fichier. Avant ce fix, MediaAttachmentBubble ignorait silencieusement
+            // `message.body` au rendu — le texte était bien envoyé dans le PDU MMS
+            // (donc visible côté destinataire) mais invisible localement, ce qui
+            // donnait l'impression à l'utilisateur que son texte avait disparu.
+            // Pattern WhatsApp / Google Messages : image en haut + caption en bas
+            // dans la même bulle, mêmes couleurs (cohérence visuelle).
+            if (message.body.isNotBlank()) {
+                Spacer(Modifier.size(4.dp))
+                Text(
+                    text = message.body,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isOut) cs.onPrimary else cs.onSurface,
+                    modifier = Modifier
+                        .widthIn(max = 240.dp)
+                        .clip(shape)
+                        .background(bgColor)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
         }
         if (!isOut) {
             BubbleMenuTrigger(onReply = onReply, onReact = onReact, onDelete = onDelete)
@@ -206,9 +227,15 @@ private fun ImagePreview(
             .border(width = 1.dp, color = bgColor, shape = shape)
             .clickable(onClick = onClick),
     ) {
+        // v1.3.10 (P5) — Coil `.size(px)` cap so multi-megapixel incoming MMS images (2048×1536
+        // iPhone shots are routine) are downsampled at decode time instead of decoding the full
+        // bitmap and scaling on the GPU. Without the cap, a thread with 10 photo MMS easily
+        // allocates 120 MiB of Bitmap on the Java heap → OOM on Android Go (Redmi 9A, 2 GiB RAM).
+        // 480 px ≈ 240 dp × 2 density factor (xxhdpi) — sharp on every device, ~230 KiB per image.
         AsyncImage(
             model = ImageRequest.Builder(context)
                 .data(model)
+                .size(THUMBNAIL_PX)
                 .crossfade(true)
                 .build(),
             contentDescription = attachment.fileName ?: stringResource(R.string.attachment_image_label),
@@ -256,15 +283,19 @@ private fun IconAttachment(
 ) {
     val cs = MaterialTheme.colorScheme
     val textColor = if (isOutgoing) cs.onPrimary else cs.onSurface
+    // v1.3.10 — fill the bubble for BOTH directions. Before, outgoing got only a 1.5 dp
+    // border around a transparent interior; that pattern relied on the body placeholder text
+    // ("📎 filename.pdf") underneath to fill the visual space. With the v1.3.10 body /
+    // previewLabel decoupling, outgoing files without a user caption have body = "" → the
+    // bordered shell looks like a hollow white blob. Aligning with [MessageBubble] +
+    // [AudioMessageBubble] (always filled with the brand-primary background, text in
+    // onPrimary) restores visual coherence across all outgoing bubble types.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .widthIn(min = 160.dp, max = 280.dp)
             .clip(shape)
-            .then(
-                if (isOutgoing) Modifier.border(width = 1.5.dp, color = bgColor, shape = shape)
-                else Modifier.background(bgColor),
-            )
+            .background(bgColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
@@ -294,3 +325,10 @@ private fun formatBytes(b: Long): String = when {
     b >= 1024 -> "%d Ko".format(b / 1024)
     else -> "$b o"
 }
+
+/**
+ * Coil downsample target for MMS image previews. 480 px ≈ 240 dp × 2× density factor (xxhdpi),
+ * which is the actual upper bound used by [ImagePreview]'s 240 dp thumbnail box. Capping the
+ * decode here keeps a 12 MiB photo at ~230 KiB of bitmap memory — critical on Android Go.
+ */
+private const val THUMBNAIL_PX: Int = 480

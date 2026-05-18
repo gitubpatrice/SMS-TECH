@@ -71,7 +71,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 // négligeable face au I/O télémetrie déjà fait juste avant.
                 val convId = messageDao.findById(msgId)?.conversationId
                 if (convId != null) {
-                    notifier.notifyIncomingSms(
+                    notifier.notifyIncoming(
                         address = address,
                         body = body,
                         messageId = msgId,

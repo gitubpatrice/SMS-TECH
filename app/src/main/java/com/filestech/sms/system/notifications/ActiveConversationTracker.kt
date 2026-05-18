@@ -16,7 +16,7 @@ import javax.inject.Singleton
  * **Pattern attendu** :
  *   - `ThreadViewModel.init` → `setActive(conversationId)`
  *   - `ThreadViewModel.onCleared` → `clearActive(conversationId)`
- *   - `IncomingMessageNotifier.notifyIncomingSms` → check `isActive(conversationId)`
+ *   - `IncomingMessageNotifier.notifyIncoming` → check `isActive(conversationId)`
  *     pour décider du `setTimeoutAfter` court vs persistance par défaut.
  *
  * **Thread-safety** : `AtomicLong` garantit lecture/écriture atomiques entre le
