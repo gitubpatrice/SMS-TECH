@@ -124,4 +124,34 @@ class IncomingReactionDecoderTest {
         assertThat(result!!.emoji).isEqualTo("❤️")
         assertThat(result.previewPrefix).isEqualTo("Hello")
     }
+
+    // ──────────────── v1.6.0 audit Q4 — ReDoS regression ────────────────
+
+    @Test fun `decode rejects oversized body fast (ReDoS guard)`() {
+        // A malicious sender could craft a multi-part SMS like `Reacted ❤️ to «aaa…`
+        // with no closing guillemet to force the non-greedy regex into catastrophic
+        // backtracking. The MAX_DECODE_INPUT_LENGTH guard short-circuits before the
+        // regex sees the input.
+        val malicious = "Reacted ❤️ to «" + "a".repeat(3000)
+        val start = System.currentTimeMillis()
+        val result = IncomingReactionDecoder.decode(malicious)
+        val elapsed = System.currentTimeMillis() - start
+        assertThat(result).isNull()
+        // Allow generous CI slack ; on a real device the guard returns in microseconds.
+        assertThat(elapsed).isLessThan(200L)
+    }
+
+    @Test fun `decode rejects body just above the cap`() {
+        val justOver = "Reacted ❤️ to «" + "a".repeat(400) + "»"
+        assertThat(IncomingReactionDecoder.decode(justOver)).isNull()
+    }
+
+    @Test fun `decode accepts a realistic Tapback close to the cap`() {
+        // A real Tapback with the longest preview SMS Tech ever emits stays under
+        // 100 chars — confirm the cap doesn't reject legitimate inputs.
+        val realistic = "Reacted ❤️ to «" + "x".repeat(50) + "»"
+        val result = IncomingReactionDecoder.decode(realistic)
+        assertThat(result).isNotNull()
+        assertThat(result!!.emoji).isEqualTo("❤️")
+    }
 }

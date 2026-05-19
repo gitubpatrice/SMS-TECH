@@ -190,8 +190,25 @@ interface MessageDao {
     )
     suspend fun timeoutStalePending(olderThanMs: Long): Int
 
-    /** Snapshot read for backup pipeline. */
-    @Query("SELECT * FROM messages ORDER BY conversation_id ASC, date ASC")
+    /**
+     * Snapshot read for backup pipeline.
+     *
+     * v1.6.0 (audit S2) — exclut les rows sentinels (`body = '' AND attachments_count = 0
+     * AND reaction_emoji IS NULL`) qui sont des artefacts internes Tapback :
+     *   - `upsertReactionSentinel` (incoming Tapback déjà folded sur le message d'origine) ;
+     *   - `upsertOutgoingSms(localMirrorBody = "")` (la propre réaction sortante du user,
+     *     dont seul le badge est exposé en UI).
+     *
+     * Ces lignes sont strictement internes au mécanisme anti-réimport TelephonySync — les
+     * inclure dans un backup produirait des bulles vides à la restauration.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+        ORDER BY conversation_id ASC, date ASC
+        """
+    )
     suspend fun listAll(): List<MessageEntity>
 
     /**

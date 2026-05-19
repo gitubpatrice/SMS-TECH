@@ -17,8 +17,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.filestech.sms.R
 import com.filestech.sms.ui.theme.bubbleIncomingColor
 
 /**
@@ -51,6 +57,11 @@ fun EmojiReactionBadge(
     // `cs.surface` is preserved so the badge still "cuts" cleanly into the bubble it
     // overlaps.
     val shape = RoundedCornerShape(14.dp)
+    // v1.6.0 (audit U2) — a11y : TalkBack annonce "Réaction <emoji>, double-tap pour
+    // retirer" au lieu d'un Box muet "double-tap pour activer". `Role.Button` cible
+    // explicitement les services d'a11y, `onClickLabel` qualifie l'action.
+    val removeLabel = stringResource(R.string.reaction_badge_remove_action)
+    val badgeContentDescription = stringResource(R.string.reaction_badge_content_description, emoji)
     Box(
         modifier = modifier
             .heightIn(min = 28.dp)
@@ -58,7 +69,11 @@ fun EmojiReactionBadge(
             .clip(shape)
             .background(bgColor)
             .border(width = 1.5.dp, color = cs.surface, shape = shape)
-            .clickable(onClick = onClick)
+            .semantics {
+                role = Role.Button
+                contentDescription = badgeContentDescription
+            }
+            .clickable(onClickLabel = removeLabel, onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {

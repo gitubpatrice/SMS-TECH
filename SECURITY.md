@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.5.0** (2026-05-20)
+Current release : **v1.6.0** (2026-05-19)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -45,7 +45,57 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.5.0 (this release) — Multi-emoji reactions + Tapback bidirectional fidelity
+### v1.6.0 (this release) — Post-v1.5.0 audit hardening (security / perf / a11y)
+
+Patch+minor follow-up to v1.5.0. The 3-axis audit run after publication surfaced 2 HIGH and 6 MEDIUM/LOW findings ; this release lands them all.
+
+**HIGH (closed)**
+
+- **S1 — ReDoS guard on `IncomingReactionDecoder`.** The Tapback regex
+  `^Reacted\s+(.+?)\s+to\s+[«"](.+?)[»"]$` is non-greedy and accepts `DOT_MATCHES_ALL` ;
+  a malicious multi-part SMS like `Reacted ❤️ to «aaa…` (no closing guillemet, 3 kB)
+  would otherwise force catastrophic backtracking. We now reject any input
+  `> MAX_DECODE_INPUT_LENGTH = 400` chars before the regex sees it. A real Tapback
+  always fits in a single UCS-2 segment (≤ 70 chars). Three new JUnit5 tests lock the
+  guard (oversize body rejected fast, body just above the cap rejected, realistic
+  body close to the cap accepted).
+- **U1 — Custom emoji dialog respects `MAX_REACTION_EMOJIS`.** The "Other emoji"
+  shortcut routes through the system emoji keyboard, which could produce a string of
+  arbitrarily many clusters. The dispatch site in `ThreadScreen` now splits the input
+  via `splitGraphemeClusters().take(MAX_REACTION_EMOJIS).joinToString("")`, atomically
+  preserving ZWJ family / skin-tone / VS-16 sequences.
+
+**MEDIUM / LOW (closed)**
+
+- **Q1** — `SendReactionUseCase` KDoc updated : the "Changed transitions stay
+  network-silent" line was a v1.3.1 artifact ; since v1.4.1 the ViewModel dispatches
+  Changed too so the recipient sees the new emoji. KDoc now reflects reality.
+- **Q2** — Dead branch `Modifier.then(Modifier)` in `EmojiReactionPickerSheet`
+  replaced by `Modifier.alpha(0.38f)` (Material 3 disabled state), so emojis blocked
+  by the capacity cap are visually muted instead of just non-clickable.
+- **Q3** — `when (result)` on the `SetReactionResult` sealed interface is now
+  exhaustive with explicit `Removed` and `Noop` branches. A future variant of the
+  sealed type will fail to compile here instead of being silently swallowed.
+- **P2** — `atCapacity` in the picker wrapped in `derivedStateOf`, so the 22 emojis
+  that did not change selection state skip a recomposition on every tap.
+- **U2** — `EmojiReactionBadge` now carries `semantics { role = Role.Button ;
+  contentDescription = "Réaction <emoji>" }` and `clickable(onClickLabel = "Retirer la
+  réaction")`. TalkBack used to announce a mute "double-tap to activate" with no
+  context ; it now describes both the badge state and the remove action.
+- **S2** — `MessageDao.listAll()` (the backup snapshot read) excludes Tapback
+  sentinels (`body = '' AND attachments_count = 0 AND reaction_emoji IS NULL`). These
+  rows are internal artifacts of the anti-reimport mechanism ; including them in a
+  backup would surface empty bubbles on restore.
+
+**Not changed**
+
+- The composite `(conversation_id, date)` index on `messages` was flagged as missing
+  but is in fact already present since schema v2 (and the `date` standalone index since
+  v4). No migration required.
+- The "abandon multi-select on Other emoji" UX is intentional and documented in code
+  ; we left it as-is for v1.6.0.
+
+### v1.5.0 — Multi-emoji reactions + Tapback bidirectional fidelity
 
 Minor SemVer bump. Two themes shipped together :
 

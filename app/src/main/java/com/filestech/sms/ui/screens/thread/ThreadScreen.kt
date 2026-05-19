@@ -110,8 +110,10 @@ import com.filestech.sms.ui.components.AttachmentPickerSheet
 import com.filestech.sms.ui.components.AudioMessageBubble
 import com.filestech.sms.ui.components.BurstPosition
 import com.filestech.sms.ui.components.ComposerReplyChip
+import com.filestech.sms.ui.components.MAX_REACTION_EMOJIS
 import com.filestech.sms.ui.components.MessageBubble
 import com.filestech.sms.ui.components.ReplyQuotePreview
+import com.filestech.sms.ui.components.splitGraphemeClusters
 import com.filestech.sms.ui.components.toPlaybackUri
 import com.filestech.sms.ui.util.daySeparatorLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
@@ -685,7 +687,17 @@ fun ThreadScreen(
     customReactionFor?.let { msgId ->
         com.filestech.sms.ui.components.EmojiCustomDialog(
             onPicked = { emoji ->
-                viewModel.setReaction(msgId, emoji)
+                // v1.5.1 (audit U1) — le clavier système peut produire une chaîne
+                // arbitrairement longue (ex. l'utilisateur tape 5+ emojis). On applique
+                // ici le même cap que le picker quick-pick (MAX_REACTION_EMOJIS) pour
+                // éviter qu'une réaction "custom" déforme le badge ou contourne le
+                // contrat UX. Le découpage en clusters de graphèmes garantit qu'on ne
+                // coupe pas une ZWJ family / drapeau / skin-tone au milieu.
+                val capped = emoji
+                    .splitGraphemeClusters()
+                    .take(MAX_REACTION_EMOJIS)
+                    .joinToString(separator = "")
+                if (capped.isNotEmpty()) viewModel.setReaction(msgId, capped)
                 customReactionFor = null
             },
             onDismiss = { customReactionFor = null },

@@ -302,6 +302,9 @@
     <!-- v1.5.0 — multi-emoji picker validate button -->
     <string name="reaction_picker_validate_empty">Select one or more emojis</string>
     <string name="reaction_picker_validate_count">Send reaction %1$s</string>
+    <!-- v1.6.0 — a11y reaction badge (TalkBack) -->
+    <string name="reaction_badge_content_description">Reaction %1$s</string>
+    <string name="reaction_badge_remove_action">Remove reaction</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>

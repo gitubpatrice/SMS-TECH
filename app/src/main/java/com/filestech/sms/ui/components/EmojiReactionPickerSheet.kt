@@ -26,12 +26,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -80,7 +82,10 @@ fun EmojiReactionPickerSheet(
     var selected by remember {
         mutableStateOf(currentReaction?.splitGraphemeClusters().orEmpty().toList())
     }
-    val atCapacity = selected.size >= MAX_REACTION_EMOJIS
+    // v1.6.0 (audit P2) — `derivedStateOf` évite que les 22 emojis non-tappés
+    // recomposent à chaque mutation de `selected` (un seul read coalescé sur la
+    // taille au lieu de N reads de la liste complète).
+    val atCapacity by remember { derivedStateOf { selected.size >= MAX_REACTION_EMOJIS } }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -121,11 +126,13 @@ fun EmojiReactionPickerSheet(
                                 },
                             contentAlignment = Alignment.Center,
                         ) {
+                            // v1.6.0 (audit Q2) — emojis non-tappables à pleine capacité
+                            // sont visuellement grisés via alpha 0.38 (Material 3 disabled
+                            // state) plutôt que par un Modifier.then(Modifier) inopérant.
                             Text(
                                 text = emoji,
                                 fontSize = 28.sp,
-                                modifier = if (canTap || isSelected) Modifier
-                                else Modifier.then(Modifier),
+                                modifier = if (canTap) Modifier else Modifier.alpha(0.38f),
                             )
                         }
                     }

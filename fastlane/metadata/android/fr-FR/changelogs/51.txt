@@ -1,0 +1,12 @@
+v1.6.0 — Audit final 3 axes (sécu / perf+qualité / UI+a11y).
+
+Corrections :
+• Sécurité : garde anti-ReDoS sur le décodeur Tapback (cap 400 chars en entrée).
+• UI : cap MAX_REACTION_EMOJIS = 3 appliqué aussi au dialog "Autre emoji" (le clavier système ne contourne plus le contrat du picker quick-pick).
+• Accessibilité : TalkBack annonce désormais "Réaction <emoji>, retirer la réaction" au lieu d'un bouton muet sur le badge.
+• Performance : `derivedStateOf` sur `atCapacity` du picker (recompositions plus fines).
+• Qualité : `when` exhaustif sur sealed SetReactionResult (Removed/Noop explicites au lieu d'un `else` silencieux), KDoc SendReactionUseCase aligné sur la dispatch Changed (depuis v1.4.1).
+• Backup : les rows sentinels Tapback (body vide interne) ne sont plus exportées (pas de bulle vide à la restauration).
+• Picker : grise visuellement les emojis non-tappables à pleine capacité (alpha 0.38, état disabled Material 3).
+
+Tests : 3 nouveaux tests JUnit5 (régression ReDoS + cap d'entrée). Suite verte.

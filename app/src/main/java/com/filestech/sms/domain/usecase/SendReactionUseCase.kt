@@ -32,8 +32,13 @@ import javax.inject.Inject
  *     .sendReactionsToRecipient] est activée,
  *   - d'avoir affiché le dialog de confirmation au premier envoi si nécessaire,
  *   - de ne PAS invoquer ce use case pour un retrait
- *     ([com.filestech.sms.domain.repository.SetReactionResult.Removed]) ni un changement
- *     ([com.filestech.sms.domain.repository.SetReactionResult.Changed]).
+ *     ([com.filestech.sms.domain.repository.SetReactionResult.Removed]).
+ *
+ * **v1.4.1 — Changed désormais dispatché.** Depuis v1.4.1 le ViewModel propage aussi les
+ * transitions [com.filestech.sms.domain.repository.SetReactionResult.Changed] (changement
+ * d'emoji par le réacteur) via ce use case, afin que le destinataire d'origine voit le
+ * nouvel emoji et pas l'ancien. La dédup côté ViewModel (clef = `(messageId, emoji)`,
+ * fenêtre 60 s) empêche le double-envoi en cas de tap répété sur le même emoji.
  *
  * Erreurs propagées sans transformation depuis [SendSmsUseCase].
  */

@@ -76,10 +76,22 @@ object IncomingReactionDecoder {
     private const val EMOJI_ONLY_MAX_UNITS: Int = 16
 
     /**
+     * v1.5.1 — defensive cap on decoder input length. A Tapback always fits in a single
+     * UCS-2 SMS segment (70 chars) ; even with the longest preview SMS Tech emits, the
+     * body stays under 100 chars. We accept up to [MAX_DECODE_INPUT_LENGTH] to be lenient
+     * with multi-cluster emojis but reject anything longer outright. This neutralises a
+     * theoretical ReDoS on [TAPBACK_WITH_PREVIEW_REGEX] : an attacker sending a multi-part
+     * SMS like `Reacted ❤️ to «aaaa…` (no closing guillemet, 3000 chars) would otherwise
+     * force the regex engine into catastrophic backtracking on the non-greedy quantifier.
+     */
+    private const val MAX_DECODE_INPUT_LENGTH: Int = 400
+
+    /**
      * Tries to decode [body] as a reaction-back. Returns `null` when [body] is plain
      * text — caller falls back to the regular "store as incoming SMS" path.
      */
     fun decode(body: String): DecodedReaction? {
+        if (body.length > MAX_DECODE_INPUT_LENGTH) return null
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return null
 

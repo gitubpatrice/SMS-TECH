@@ -386,6 +386,9 @@ class ThreadViewModel @Inject constructor(
             // describe the exact state the repo just committed.
             val targetMessageId: Long
             val targetEmoji: String
+            // v1.6.0 (audit Q3) — `when` exhaustif sur sealed : pas de branche `else`
+            // pour qu'une future variante du sealed interface fasse échouer la compilation
+            // ici plutôt que d'être avalée silencieusement.
             when (result) {
                 is SetReactionResult.First -> {
                     targetMessageId = result.messageId
@@ -395,7 +398,8 @@ class ThreadViewModel @Inject constructor(
                     targetMessageId = messageId
                     targetEmoji = result.to
                 }
-                else -> return@launch
+                SetReactionResult.Removed -> return@launch
+                SetReactionResult.Noop -> return@launch
             }
 
             // v1.3.1 audit P1 — tout le bloc post-dispatch est wrappé : un crash DataStore
