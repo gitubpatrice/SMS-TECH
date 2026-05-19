@@ -1,0 +1,13 @@
+v1.6.2 — Patch critique réglages + correctifs fold Tapback.
+
+🔴 CRITIQUE : tous les réglages utilisateur étaient ignorés par l'écran conversation (bug caché v1.6.1). Le dialog "Confirmer avant envoi" s'affichait toujours, le dialog confirmation réaction réouvrait après "Ne plus demander", l'option "envoyer mes réactions" était court-circuitée, etc. Cause : un StateFlow privé jamais collecté retournait les valeurs PAR DÉFAUT au lieu de vos réglages. Fix : délégation à la StateFlow Eagerly hydratée globalement.
+
+✅ Fold Tapback messages multi-ligne : l'emoji apparaît désormais en badge sur votre message d'origine même quand celui-ci contient des retours à la ligne (avant : SMS texte "Reacted ❤️ to «...»" parasitait la conversation).
+
+✅ Fold précis sur messages courts ambigus : réagir à un ancien "Hello" alors qu'un récent "Hello world" existe pose désormais le badge sur le BON message (avant : toujours sur le plus récent).
+
+✅ Dialog "Ne plus demander" pour les réactions enfin persisté correctement (race sub-100 ms corrigée).
+
+🏷️ Label réglage clarifié : "Format compact (emoji seul)" renommé "Envoyer l'emoji nu (sans contexte)" avec description réécrite — le DÉSACTIVÉ est désormais explicitement le mode recommandé (badge sur message côté SMS Tech / iPhone / Google Messages).
+
+Build & tests verts, lint baseline propre.

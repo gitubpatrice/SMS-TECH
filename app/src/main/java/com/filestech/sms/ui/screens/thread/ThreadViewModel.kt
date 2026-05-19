@@ -31,7 +31,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -39,7 +38,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -204,18 +202,21 @@ class ThreadViewModel @Inject constructor(
     private var recorderJob: Job? = null
 
     /**
-     * v1.6.1 (audit PERF-01) — snapshot des AppSettings partagé entre tous les call sites
-     * du ViewModel. Avant : chaque envoi SMS/MMS/réaction faisait `settings.flow.first()`
-     * qui ouvre/lit/ferme le fichier DataStore (~5-10 ms × 5 sites = jusqu'à 50 ms de
-     * latence cumulée sur clavier rapide). Désormais : un seul collect partagé via
-     * `stateIn(WhileSubscribed(5_000))`, lecture synchrone `.value` zéro-I/O.
+     * v1.6.1 PERF-01 / v1.6.2 BUGFIX — snapshot chaud des AppSettings.
      *
-     * `WhileSubscribed(5_000)` aligné avec le pattern UI du projet (cf. ConversationsVM) :
-     * libère le collect 5 s après le dernier subscriber pour ne pas garder un job actif
-     * quand le ViewModel est inactif (rotation écran, mise en arrière-plan brève).
+     * **Bug v1.6.1** : la version précédente utilisait `stateIn(viewModelScope,
+     * WhileSubscribed(5_000))` mais aucun consommateur ne collectait jamais la
+     * StateFlow (lecture uniquement via `.value`). Sans collecteur actif, le flux
+     * sous-jacent n'était jamais souscrit et `.value` retournait toujours la valeur
+     * initiale `AppSettings()` — donc TOUS les réglages utilisateur étaient ignorés :
+     * `confirmBeforeBroadcast`, `reactionConfirmDismissed`, `reactionEmojiOnly`,
+     * `sendReactionsToRecipient`, etc. resteraient figés sur leurs valeurs DEFAULT.
+     *
+     * **Fix v1.6.2** : on lit directement `settings.state` (StateFlow `Eagerly`
+     * hydratée par `appScope` côté [SettingsRepository]) — garantie d'être à jour
+     * tout au long de la vie du processus, zero-I/O, sans race.
      */
-    private val cachedSettings: StateFlow<AppSettings> = settings.flow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), AppSettings())
+    private val cachedSettings: StateFlow<AppSettings> get() = settings.state
 
     init {
         // v1.3.9 — déclare la conversation comme "active foreground" pour que
@@ -456,7 +457,18 @@ class ThreadViewModel @Inject constructor(
                 val targetMessage = repo.findMessageById(targetMessageId)
                 if (targetMessage == null || targetMessage.isOutgoing) return@runCatching
 
-                val sending = cachedSettings.value.sending
+                // v1.6.2 — lecture FRAÎCHE via `settings.flow.first()` au lieu de
+                // `cachedSettings.value`. Le hot StateFlow Eagerly de v1.6.1 (PERF-11)
+                // a un délai de propagation : si l'utilisateur réagit deux fois en
+                // < 100 ms, la seconde lecture du flag `reactionConfirmDismissed` peut
+                // encore retourner l'ancienne valeur `false` (le write async du
+                // settings.update dans confirmReactionSend n'a pas encore atteint
+                // le StateFlow), ce qui rouvre le dialog malgré la case "Ne plus
+                // demander" cochée. Coût : ~5-10 ms par tap réaction (action humaine
+                // lente, négligeable). Les 4 autres sites PERF-01 (envoi SMS/MMS hot
+                // path) restent en `cachedSettings.value` car ils n'ont pas de write
+                // précédent à attendre.
+                val sending = settings.flow.first().sending
                 if (!sending.sendReactionsToRecipient) return@runCatching
 
                 // v1.4.1 — the confirmation dialog is only triggered on First (so the

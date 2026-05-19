@@ -209,6 +209,19 @@ class ConversationMirror @Inject constructor(
         emoji: String,
         bodyPrefix: String?,
         kind: Kind,
+        /**
+         * v1.6.2 — `true` quand le wire Tapback contenait le marker `…` (encoder a
+         * tronqué). Détermine la stratégie de match :
+         *   - `false` (body court non tronqué) → match EXACT après normalisation des
+         *     whitespace. Résout l'ambiguïté "Hello" vs "Hello world" : avant on
+         *     prenait toujours le plus récent (FAUX si l'utilisateur a réagi à un
+         *     ancien message court), maintenant on prend celui dont le body normalisé
+         *     EQUALS le prefix.
+         *   - `true` (body long, prefix seul connu) → match `STARTS WITH` (l'unique
+         *     stratégie possible quand on n'a que les 47 premiers chars). Ambiguïté
+         *     résiduelle inhérente au protocole SMS-based Tapback.
+         */
+        wasTruncated: Boolean = false,
     ): ReactionApplied? = withContext(io) {
         val addr = PhoneAddress.of(address)
         if (addr.normalized.isEmpty()) return@withContext null
@@ -224,8 +237,32 @@ class ConversationMirror @Inject constructor(
         val target = when (kind) {
             Kind.Tapback -> {
                 if (bodyPrefix != null) {
-                    val escaped = escapeForSqlLike(bodyPrefix)
-                    messageDao.findMostRecentOutgoingByBodyPrefix(existing.id, escaped)
+                    val normalizedPrefix = bodyPrefix.collapseWhitespace()
+                    val recentOutgoing = messageDao.findRecentOutgoingForConversation(
+                        conversationId = existing.id,
+                        limit = TAPBACK_FALLBACK_LOOKUP_LIMIT,
+                    )
+                    if (!wasTruncated) {
+                        // v1.6.2 — match EXACT (body normalisé == prefix). Élimine
+                        // l'ambiguïté quand plusieurs OUTGOING partagent un préfixe
+                        // court ("Hello" ≠ "Hello world"). Itère le plus récent en
+                        // premier ; comme la liste DAO est ORDER BY date DESC, le
+                        // firstOrNull retourne le plus récent EXACT match — en pratique
+                        // le seul, sauf duplicate identique rare.
+                        recentOutgoing.firstOrNull { entity ->
+                            entity.body.collapseWhitespace() == normalizedPrefix
+                        }
+                    } else {
+                        // v1.4.1 / v1.6.2 — body tronqué : match préfixe inévitable.
+                        // SQL LIKE rapide d'abord (cas mono-ligne), fallback Kotlin
+                        // si le body OUTGOING contient des newlines (l'encoder
+                        // normalise les whitespace mais pas le DAO).
+                        val escaped = escapeForSqlLike(bodyPrefix)
+                        messageDao.findMostRecentOutgoingByBodyPrefix(existing.id, escaped)
+                            ?: recentOutgoing.firstOrNull { entity ->
+                                entity.body.collapseWhitespace().startsWith(normalizedPrefix)
+                            }
+                    }
                 } else {
                     messageDao.findMostRecentOutgoing(existing.id)
                 }
@@ -253,6 +290,18 @@ class ConversationMirror @Inject constructor(
             .replace("""\""", """\\""")
             .replace("""%""", """\%""")
             .replace("""_""", """\_""")
+
+    /**
+     * v1.6.2 — collapse de tout whitespace (espaces multiples, tabs, newlines `\n` `\r`,
+     * U+2028, U+2029, etc.) en un espace simple + trim. Utilisé pour le fallback de fold
+     * Tapback : l'encoder normalise déjà côté envoyeur, on doit le faire aussi côté
+     * receveur pour comparer le previewPrefix au body OUTGOING d'origine.
+     */
+    private fun String.collapseWhitespace(): String =
+        this.replace(Regex("\\s+"), " ").trim()
+
+    // v1.6.2 — la constante TAPBACK_FALLBACK_LOOKUP_LIMIT vit dans le companion
+    // principal en bas du fichier (Kotlin n'accepte qu'un seul companion par classe).
 
     suspend fun upsertOutgoingSms(
         address: String,
@@ -836,5 +885,15 @@ class ConversationMirror @Inject constructor(
          * restent toujours résolues en cache chaud sans coût ContentProvider.
          */
         const val DISPLAY_NAME_CACHE_MAX = 1000
+
+        /**
+         * v1.6.2 (Tapback fold bugfix) — borne du fallback fuzzy de fold Tapback.
+         * 50 messages OUTGOING couvrent largement le scénario réel (l'utilisateur
+         * réagit dans la fenêtre courte qui suit un envoi, pas 3 semaines plus tard).
+         * Coût mémoire négligeable (~50 × 200 B = 10 KB), une seule query Room
+         * supplémentaire grâce au LIMIT côté DAO — déclenchée UNIQUEMENT quand la
+         * LIKE rapide a échoué (cas body OUTGOING multi-ligne).
+         */
+        const val TAPBACK_FALLBACK_LOOKUP_LIMIT = 50
     }
 }

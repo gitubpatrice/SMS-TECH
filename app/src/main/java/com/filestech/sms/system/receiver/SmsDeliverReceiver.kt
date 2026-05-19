@@ -81,6 +81,9 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                         emoji = decoded.emoji,
                         bodyPrefix = decoded.previewPrefix,
                         kind = decoded.kind,
+                        // v1.6.2 — propage le flag de troncature pour que le matcher
+                        // choisisse entre exact match (court) et préfixe (long tronqué).
+                        wasTruncated = decoded.wasTruncated,
                     )
                     if (applied != null) {
                         // Still write the row to the system inbox so other SMS apps on

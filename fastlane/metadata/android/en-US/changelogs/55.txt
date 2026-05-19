@@ -1,0 +1,13 @@
+v1.6.2 — Critical settings regression patch + Tapback fold improvements.
+
+🔴 CRITICAL: all user settings were silently ignored by the thread screen (hidden v1.6.1 bug). The "Confirm before send" dialog always showed, the reaction confirm dialog re-opened after "Don't ask again", the "send my reactions" toggle was bypassed, etc. Root cause: a private StateFlow that nothing ever collected returned the DEFAULT values instead of your settings. Fix: delegated to the globally-hydrated Eagerly StateFlow.
+
+✅ Multi-line message Tapback fold: the emoji now appears as a badge on your original message even when it contains newlines (previously: a parasite "Reacted ❤️ to «...»" text bubble cluttered the conversation).
+
+✅ Precise fold on short ambiguous messages: reacting to an old "Hello" while a more recent "Hello world" exists now places the badge on the RIGHT message (previously: always on the most recent).
+
+✅ Reaction "Don't ask again" dialog now properly persisted (sub-100 ms race fixed).
+
+🏷️ Settings label clarified: "Compact format (emoji only)" renamed "Send bare emoji (without context)" with rewritten description — OFF is now explicitly the recommended mode (badge on message for SMS Tech / iPhone / Google Messages recipients).
+
+Build & tests green, lint baseline clean.

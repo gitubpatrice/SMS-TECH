@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.6.1** (2026-05-19)
+Current release : **v1.6.2** (2026-05-19)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -45,7 +45,74 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.6.1 (this release) — Reaction notif fix + deep audit hardening (30 fixes)
+### v1.6.2 (this release) — Critical settings regression fix + Tapback fold improvements
+
+PATCH bundling 5 user-visible fixes uncovered during v1.6.1 in-field testing.
+
+**B1 — CRITICAL : tous les réglages utilisateur ignorés par ThreadViewModel.** Ma
+PERF-01 v1.6.1 a introduit un `cachedSettings: StateFlow<AppSettings>` initialisé
+avec `stateIn(viewModelScope, WhileSubscribed(5_000), AppSettings())` — mais
+AUCUN consommateur ne collectait jamais cette flow (lecture uniquement via `.value`
+depuis 5 sites). Sans collecteur, le flux sous-jacent n'était jamais souscrit et
+`.value` retournait toujours la **valeur initiale par défaut** `AppSettings()`. Tous
+les réglages utilisateur étaient donc **silencieusement ignorés** dans
+`ThreadViewModel` : `confirmBeforeBroadcast`, `reactionConfirmDismissed`,
+`reactionEmojiOnly`, `sendReactionsToRecipient`. Le dialog de confirmation s'affichait
+sans cesse même après coche "Ne plus demander", le mode emoji-only restait inaccessible,
+etc. Fix : `cachedSettings` délègue désormais à `settings.state` (la StateFlow
+`Eagerly` hydratée par `appScope` côté [SettingsRepository], qui elle EST toujours
+collectée). Vérification ajoutée : `WhileSubscribed` n'est valide que pour des
+StateFlow exposées et collectées par Compose ; les caches privés doivent utiliser
+`Eagerly` ou un autre mécanisme actif.
+
+**B2 — Tapback fold échouait sur les bodies multi-ligne.** L'encoder
+[SendReactionUseCase.buildTapbackBody] normalise les whitespace (newlines, tabs →
+espace simple) dans le preview avant émission, mais le matcher receiver
+[ConversationMirror.applyIncomingReaction] utilisait `body LIKE 'prefix%'` côté
+SQL — et SQLite LIKE ne fait pas d'équivalence whitespace. Un OUTGOING stocké
+`"Hello\nworld"` ne matchait pas le prefix `"Hello world"`, donc la réaction
+s'affichait comme bulle texte au lieu d'un badge. Fix : nouveau DAO
+`findRecentOutgoingForConversation(convId, 50)` + fallback Kotlin qui normalise
+les whitespace des 2 côtés (`collapseWhitespace()` extension privée). Path rapide
+SQL LIKE conservé pour les cas mono-ligne (majorité).
+
+**B3 — Ambiguïté de fold sur messages courts à préfixe partagé.** Quand
+plusieurs OUTGOING courts partagent un préfixe ("Hello" vs "Hello world"),
+l'ancien matcher prenait toujours le PLUS RÉCENT — donc une réaction à l'ancien
+"Hello" était folded sur "Hello world" (faux message). Fix : nouveau champ
+[DecodedReaction.wasTruncated] (true si le wire contenait `…`). Dans le matcher :
+- `wasTruncated == false` (body court non tronqué, preview = body complet) →
+  match **EXACT** après normalisation des whitespace. "Hello" matche uniquement
+  "Hello", pas "Hello world".
+- `wasTruncated == true` (body long, prefix seul connu) → fallback prefix
+  match (avec l'ambiguïté inhérente au protocole SMS-based Tapback, sans solution
+  sans casser la compat iMessage/Google Messages).
+
+**B4 — Dialog confirm réaction réouvrait malgré "Ne plus demander".** Race
+sub-100 ms entre `settings.update { reactionConfirmDismissed = true }` (write
+DataStore async) et la prochaine lecture de `cachedSettings.value.sending`
+(StateFlow Eagerly avec délai de propagation). Si l'utilisateur réagissait deux
+fois en rapide succession, la 2e lecture trouvait encore l'ancienne valeur
+`false`, ré-ouvrait le dialog. Fix : lecture **fraîche** via `settings.flow.first()`
+UNIQUEMENT sur ce site (lecture après write potentiel). Les 4 autres sites
+PERF-01 (envoi SMS/MMS hot path) restent en lecture `cachedSettings.value` car
+ils n'ont pas de write précédent à attendre.
+
+**B5 — Label "Format compact (emoji seul)" trompeur.** L'option contrôle en
+réalité le format wire des réactions (Tapback verbeux qui permet le fold côté
+destinataire, vs emoji nu qui force le destinataire à voir un SMS texte sans
+contexte). Les utilisateurs activaient l'option pensant "compact = mieux", et se
+retrouvaient avec les badges qui n'apparaissaient plus chez le destinataire.
+Label renommé en **"Envoyer l'emoji nu (sans contexte)"** + description
+réécrite pour expliciter le trade-off OFF (recommandé, badge sur message) vs
+ON (SMS texte, perd la fusion).
+
+Aucune surface sécurité changée. Le fold Tapback est strictement local au
+receveur ; il ne crée pas de nouvelle entrée sensible. Le matcher exact
+(B3) ne diminue pas la sécurité — il améliore juste la précision de
+l'association message↔réaction.
+
+### v1.6.1 — Reaction notif fix + deep audit hardening (30 fixes)
 
 **1. Reaction notification regression fix** (root cause of this PATCH).
 Since v1.4.1 (Tapback fold path), `SmsDeliverReceiver` correctly attached an incoming

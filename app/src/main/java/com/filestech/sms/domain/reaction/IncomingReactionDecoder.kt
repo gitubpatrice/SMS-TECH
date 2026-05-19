@@ -50,6 +50,20 @@ object IncomingReactionDecoder {
         val emoji: String,
         val previewPrefix: String?,
         val kind: Kind,
+        /**
+         * v1.6.2 — `true` quand l'encoder a tronqué le body original (preview suivi de
+         * `…`) faute de tenir dans 1 segment UCS-2. Permet au matcher
+         * [com.filestech.sms.data.repository.ConversationMirror.applyIncomingReaction]
+         * de distinguer :
+         *   - non tronqué : le `previewPrefix` est LE body complet → match EXACT
+         *     (élimine l'ambiguïté quand plusieurs OUTGOING partagent un même
+         *     préfixe court : "Hello" vs "Hello world").
+         *   - tronqué : seul un préfixe est connu → match `STARTS WITH` reste l'unique
+         *     stratégie possible (avec l'ambiguïté résiduelle inhérente au protocole).
+         *
+         * `false` pour [Kind.EmojiOnly] (pas de preview).
+         */
+        val wasTruncated: Boolean = false,
     ) {
         enum class Kind { Tapback, EmojiOnly }
     }
@@ -100,12 +114,16 @@ object IncomingReactionDecoder {
         TAPBACK_WITH_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
             val emoji = m.groupValues[1].trim()
             val rawPreview = m.groupValues[2]
+            // v1.6.2 — capture si l'encoder a tronqué (marker `…` en queue). Le caller
+            // utilise ce flag pour choisir entre match exact et match préfixe.
+            val wasTruncated = rawPreview.trimEnd().endsWith(TRUNCATION_MARKER)
             val preview = rawPreview.removeSuffix(TRUNCATION_MARKER).trim()
             if (emoji.isEmpty() || preview.isEmpty()) return null
             return DecodedReaction(
                 emoji = emoji,
                 previewPrefix = preview,
                 kind = DecodedReaction.Kind.Tapback,
+                wasTruncated = wasTruncated,
             )
         }
 

@@ -143,6 +143,29 @@ interface MessageDao {
     suspend fun findMostRecentOutgoing(conversationId: Long): MessageEntity?
 
     /**
+     * v1.6.2 (Tapback fold bugfix) — returns the [limit] most recent OUTGOING messages of
+     * [conversationId]. Used as a fallback by [com.filestech.sms.data.repository
+     * .ConversationMirror.applyIncomingReaction] when the SQL `LIKE prefix%` match fails
+     * because the encoder normalizes whitespace (newlines, tabs → single space) in the
+     * Tapback preview while the stored OUTGOING body keeps the original separators.
+     * The caller fetches a bounded window then matches in Kotlin after collapsing
+     * whitespace on BOTH sides — bulletproof and < 1 ms on real conversations.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversation_id = :conversationId
+          AND direction = 1
+        ORDER BY date DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun findRecentOutgoingForConversation(
+        conversationId: Long,
+        limit: Int,
+    ): List<MessageEntity>
+
+    /**
      * v1.4.1 — finds the most recent OUTGOING message in [conversationId] whose `date`
      * is strictly greater than [sinceMs] (epoch ms). Used by the emoji-only reaction
      * decode path : a bare emoji SMS is only folded onto an outgoing message if that
