@@ -65,6 +65,30 @@ class ComposeViewModel @Inject constructor(
         _state.update { it.copy(recipients = it.recipients - addr) }
     }
 
+    /**
+     * v1.3.11 (F2) — "tap-to-pick" UX: when the picker is empty (the common single-recipient
+     * case), tapping a contact / free-entry row should immediately open the thread instead of
+     * requiring an extra "Continuer" tap. If the user has already started building a group
+     * (chips already present), the tap only appends a new chip and the explicit "Continuer"
+     * button stays as the validation step — preserving the multi-recipient flow.
+     *
+     * Returns `true` when the tap triggered the navigation (caller can use this to dismiss
+     * the keyboard / clear the query field), `false` when it just appended a chip.
+     */
+    fun pickRecipient(rawNumber: String): Boolean {
+        val addr = PhoneAddress.of(rawNumber)
+        if (addr.normalized.isEmpty()) return false
+        val wasEmpty = _state.value.recipients.isEmpty()
+        if (_state.value.recipients.none { it.normalized == addr.normalized }) {
+            _state.update { it.copy(recipients = it.recipients + addr) }
+        }
+        if (wasEmpty) {
+            createConversation()
+            return true
+        }
+        return false
+    }
+
     fun createConversation() {
         viewModelScope.launch {
             val rec = _state.value.recipients

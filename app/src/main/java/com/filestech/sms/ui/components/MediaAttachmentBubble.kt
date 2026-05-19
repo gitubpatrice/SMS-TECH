@@ -72,6 +72,19 @@ fun MediaAttachmentBubble(
     onDelete: () -> Unit,
     onReply: () -> Unit,
     onReact: (() -> Unit)?,
+    /**
+     * v1.3.11 (F3) — copy the caption (`message.body`) to the clipboard. Caller passes
+     * `null` when the message has no caption to avoid an inert "Copier" menu entry.
+     */
+    onCopy: (() -> Unit)? = null,
+    /** v1.3.11 (F5) — forward the attachment (+ caption if any) to another conversation. */
+    onForward: (() -> Unit)? = null,
+    /**
+     * v1.3.11 (F4) — invoked when the user taps a phone number rendered inside the
+     * caption block. Forwarded to [MessageTextWithLinks]; the host (`ThreadScreen`)
+     * surfaces a [PhoneActionsDialog] in response.
+     */
+    onPhoneClick: (String) -> Unit = {},
     onRemoveReaction: () -> Unit,
     repliedToPreview: com.filestech.sms.ui.components.ReplyQuotePreview? = null,
     /** v1.3.3 #7 — étiquette d'expéditeur ; voir [MessageBubble] pour la sémantique. */
@@ -117,7 +130,7 @@ fun MediaAttachmentBubble(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isOut) {
-            BubbleMenuTrigger(onReply = onReply, onReact = onReact, onDelete = onDelete)
+            BubbleMenuTrigger(onCopy = onCopy, onForward = onForward, onReply = onReply, onReact = onReact, onDelete = onDelete)
         }
         Column(
             horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
@@ -185,10 +198,13 @@ fun MediaAttachmentBubble(
             // dans la même bulle, mêmes couleurs (cohérence visuelle).
             if (message.body.isNotBlank()) {
                 Spacer(Modifier.size(4.dp))
-                Text(
+                // v1.3.11 (F4) — linkify the caption so phone numbers + URLs inside an
+                // image / file / video caption are tappable just like in a plain SMS body.
+                MessageTextWithLinks(
                     text = message.body,
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (isOut) cs.onPrimary else cs.onSurface,
+                    onPhoneClick = onPhoneClick,
                     modifier = Modifier
                         .widthIn(max = 240.dp)
                         .clip(shape)
@@ -198,7 +214,7 @@ fun MediaAttachmentBubble(
             }
         }
         if (!isOut) {
-            BubbleMenuTrigger(onReply = onReply, onReact = onReact, onDelete = onDelete)
+            BubbleMenuTrigger(onCopy = onCopy, onForward = onForward, onReply = onReply, onReact = onReact, onDelete = onDelete)
         }
     }
 }

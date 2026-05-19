@@ -1,0 +1,15 @@
+v1.4.0 — 5 nouvelles fonctions ergonomiques + UI vocal repensé.
+
+• Copier / Transférer un message : appui long sur une bulle (ou 3-dots) ouvre le menu avec Copier + Transférer. Le copier pousse le texte dans le presse-papiers système. Le transfert ouvre une feuille qui liste les conversations existantes (avec recherche) ou propose un nouveau destinataire.
+
+• Numéro de téléphone dans un message : tap sur un numéro ouvre un dialog avec 3 actions — Appeler (ouvre le composeur du téléphone, aucune permission supplémentaire), Copier (presse-papiers), Ajouter aux contacts (ouvre l'app Contacts pré-remplie).
+
+• Clavier qui se retracte après envoi : juste après avoir envoyé un message, le clavier disparaît automatiquement pour laisser voir le fil de la conversation (convention iMessage / Google Messages).
+
+• Picker contact à validation instantanée : ouvrir « Nouveau message » puis taper sur un contact ouvre immédiatement la conversation, sans devoir appuyer en plus sur « Continuer ». Le flow groupe reste explicite (chips à valider).
+
+• Ondulation décorative sous les bulles vocales : au repos, la barre grise centrale affiche désormais une silhouette de waveform vertical (28 barres seedées par l'audio, stables d'une recomposition à l'autre). La barre de progression standard reprend le dessus pendant la lecture pour rester lisible.
+
+• Bordure plus marquée sur les bulles vocales reçues, pour un meilleur contraste avec le fond du fil.
+
+Sous le capot : zéro nouvelle permission, zéro changement de format de base, 13 strings i18n ajoutées (FR + EN parité 100 %), 6 corrections d'audit défensives (mémoïsation du picker de transfert, sandboxing FileProvider, accessibilité TalkBack, charset WAP fallback).

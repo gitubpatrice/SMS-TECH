@@ -139,6 +139,19 @@ private fun formatFileSize(bytes: Long): String {
 fun ThreadScreen(
     conversationId: Long,
     onBack: () -> Unit,
+    /**
+     * v1.3.11 (F5) — navigation hook fired when the user picks an existing target
+     * conversation in the forward sheet. The caller (`AppRoot`) typically does
+     * `popBackStack(); navigate(Thread(id))` so the user returns to the conversation list
+     * after the forwarded message is sent rather than stacking thread on top of thread.
+     */
+    onForwardToConversation: (Long) -> Unit = {},
+    /**
+     * v1.3.11 (F5) — navigation hook fired when the user picks "Nouveau destinataire"
+     * in the forward sheet. The caller routes to [com.filestech.sms.ui.screens.compose
+     * .ComposeScreen] which then funnels back into a thread once a contact is picked.
+     */
+    onForwardToNewContact: () -> Unit = {},
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -149,6 +162,35 @@ fun ThreadScreen(
     val formatters = rememberChatFormatters()
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
+    // v1.3.11 (F1) — retract the soft keyboard + drop IME focus after every send so the
+    // sender can read the just-sent message at the bottom of the thread without manually
+    // collapsing the keyboard (Apple Messages / Google Messages convention).
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // v1.3.11 (F3) — single Clipboard channel for all bubble copy actions. We use the
+    // Compose-provided manager (backed by the system `ClipboardManager`) so the same path
+    // applies for paste targets across apps.
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val copyMessageBody: (Message) -> Unit = { m ->
+        val body = m.body.trim()
+        if (body.isNotEmpty()) {
+            clipboard.setText(androidx.compose.ui.text.AnnotatedString(body))
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            val label = context.getString(R.string.toast_copied)
+            scope.launch { snackbarHost.showSnackbar(label) }
+        }
+    }
+
+    // v1.3.11 (F4) — phone number tapped inside any bubble body / caption opens the
+    // [PhoneActionsDialog] hosted below. Single state owned by ThreadScreen so we don't
+    // multiply dialog instances across hundreds of bubbles in a busy thread.
+    var pickingPhoneNumber by remember { mutableStateOf<String?>(null) }
+    val onPhoneClick: (String) -> Unit = { pickingPhoneNumber = it }
+    // v1.3.11 (F5) — message being forwarded. Non-null = open the picker sheet. The
+    // selected destination conversation (or new-recipient flow) consumes the staged
+    // payload via [IncomingShareHolder] which the dest [ThreadViewModel] picks up at
+    // open through `consumeIncomingShareIfAny`.
+    var forwardingMessage by remember { mutableStateOf<Message?>(null) }
 
     var menuOpen by remember { mutableStateOf(false) }
     var detailsOpen by remember { mutableStateOf(false) }
@@ -381,6 +423,10 @@ fun ThreadScreen(
                     onSendText = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.send()
+                        // v1.3.11 (F1) — drop focus + hide IME so the freshly-sent
+                        // message becomes visible at the bottom of the thread.
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
                     },
                     onStartRecording = viewModel::startVoiceRecording,
                     onStopRecording = viewModel::stopVoiceRecording,
@@ -388,7 +434,12 @@ fun ThreadScreen(
                     onTogglePreview = viewModel::togglePreviewPlayback,
                     onSeekPreview = viewModel::seekPreviewTo,
                     onDiscardDraft = viewModel::discardVoiceDraft,
-                    onSendVoice = viewModel::sendVoiceMms,
+                    onSendVoice = {
+                        viewModel.sendVoiceMms()
+                        // v1.3.11 (F1) — symmetrical retract for voice MMS dispatch.
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                    },
                     onAttachClick = { attachmentSheetOpen = true },
                     onMicPermissionDenied = {
                         // v1.3.7 — refus de permission = erreur utilisateur visible → rouge.
@@ -467,6 +518,8 @@ fun ThreadScreen(
                         onReact = if (msg.isIncoming) {
                             { pickingReactionFor = msg.id }
                         } else null,
+                        // v1.3.11 (F5) — forward a voice clip.
+                        onForward = { forwardingMessage = msg },
                         onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         showTimestamp = showTimestamp,
@@ -485,6 +538,14 @@ fun ThreadScreen(
                         onReact = if (msg.isIncoming) {
                             { pickingReactionFor = msg.id }
                         } else null,
+                        // v1.3.11 (F3) — copy exposed only when the bubble carries a
+                        // user-typed caption (the placeholder body is empty in v1.3.10+).
+                        onCopy = if (msg.body.isNotBlank()) {
+                            { copyMessageBody(msg) }
+                        } else null,
+                        // v1.3.11 (F5) — forward image / video / file attachment.
+                        onForward = { forwardingMessage = msg },
+                        onPhoneClick = onPhoneClick,
                         onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         senderLabel = senderLabel,
@@ -512,6 +573,15 @@ fun ThreadScreen(
                         onReact = if (msg.isIncoming) {
                             { pickingReactionFor = msg.id }
                         } else null,
+                        // v1.3.11 (F3) — copy text body to clipboard. Only wired when body is
+                        // non-blank; FAILED rows still allow copy so the user can salvage the
+                        // text they tried to send.
+                        onCopy = if (msg.body.isNotBlank()) {
+                            { copyMessageBody(msg) }
+                        } else null,
+                        // v1.3.11 (F5) — forward a plain text message.
+                        onForward = { forwardingMessage = msg },
+                        onPhoneClick = onPhoneClick,
                         onRemoveReaction = { viewModel.setReaction(msg.id, null) },
                         repliedToPreview = previewFor(msg),
                         translationState = translationDisplay,
@@ -525,6 +595,41 @@ fun ThreadScreen(
                 }
             }
         }
+    }
+
+    // v1.3.11 (F4) — phone number actions dialog. Triggered from any bubble's
+    // [MessageTextWithLinks] (text body or attachment caption) through the
+    // [onPhoneClick] lambda built above.
+    pickingPhoneNumber?.let { number ->
+        com.filestech.sms.ui.components.PhoneActionsDialog(
+            number = number,
+            onDismiss = { pickingPhoneNumber = null },
+            onSnack = { msg -> scope.launch { snackbarHost.showSnackbar(msg) } },
+        )
+    }
+
+    // v1.3.11 (F5) — forward bottom-sheet. The order of operations matters:
+    //   1. stageForward() posts the payload to IncomingShareHolder FIRST so it is in
+    //      place by the time the destination ThreadViewModel hydrates.
+    //   2. forwardingMessage is cleared BEFORE navigation so the sheet dismisses
+    //      cleanly even if the user backs out of the dest screen.
+    //   3. The caller's onForwardToConversation does pop+navigate so we don't stack a
+    //      new thread on top of the source thread (cleaner back behaviour).
+    forwardingMessage?.let { msg ->
+        com.filestech.sms.ui.components.ForwardMessageSheet(
+            currentConversationId = conversationId,
+            onDismiss = { forwardingMessage = null },
+            onPickConversation = { destId ->
+                viewModel.stageForward(msg)
+                forwardingMessage = null
+                onForwardToConversation(destId)
+            },
+            onPickNewContact = {
+                viewModel.stageForward(msg)
+                forwardingMessage = null
+                onForwardToNewContact()
+            },
+        )
     }
 
     // v1.3.0 — Emoji reaction quick-pick sheet

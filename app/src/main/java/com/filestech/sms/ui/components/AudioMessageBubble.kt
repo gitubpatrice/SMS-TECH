@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.components
 
 import android.net.Uri
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -74,6 +76,11 @@ fun AudioMessageBubble(
     onDelete: () -> Unit = {},
     onReply: (() -> Unit)? = null,
     onReact: (() -> Unit)? = null,
+    /**
+     * v1.3.11 (F5) — forward the voice clip + sender label to another conversation. No
+     * `onCopy` here: a voice MMS has no text payload to copy.
+     */
+    onForward: (() -> Unit)? = null,
     onRemoveReaction: () -> Unit = {},
     repliedToPreview: ReplyQuotePreview? = null,
     showTimestamp: Boolean = false,
@@ -137,7 +144,7 @@ fun AudioMessageBubble(
         horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onDelete = onDelete)
+        if (isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onForward = onForward, onDelete = onDelete)
         androidx.compose.foundation.layout.Column(
             horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
         ) {
@@ -159,10 +166,26 @@ fun AudioMessageBubble(
                         .widthIn(min = 220.dp, max = 320.dp)
                         .clip(shape)
                         // v1.2.6 design : outgoing → border seul (allégé). Incoming → fond
-                        // slate-blue comme avant.
+                        // slate-blue. v1.4.0 : the incoming bubble also gets a thin border
+                        // slightly darker than its fill so it pops off the surrounding
+                        // surface (the all-flat slate-blue felt washed-out next to outgoing
+                        // bubbles which already carry a rim).
                         .then(
-                            if (isOut) Modifier.border(width = 1.5.dp, color = bgColor, shape = shape)
-                            else Modifier.background(bgColor),
+                            if (isOut) {
+                                Modifier.border(width = 1.5.dp, color = bgColor, shape = shape)
+                            } else {
+                                Modifier
+                                    .background(bgColor)
+                                    .border(
+                                        width = 1.dp,
+                                        color = androidx.compose.ui.graphics.lerp(
+                                            bgColor,
+                                            androidx.compose.ui.graphics.Color.Black,
+                                            0.18f,
+                                        ),
+                                        shape = shape,
+                                    )
+                            },
                         )
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                 ) {
@@ -210,19 +233,61 @@ fun AudioMessageBubble(
                                 )
                             }
                         }
-                        Slider(
-                            value = sliderValue.coerceIn(0f, 1f),
-                            onValueChange = { f ->
-                                if (totalMs > 0) onSeekTo((f * totalMs).toInt())
-                            },
-                            enabled = totalMs > 0,
-                            colors = SliderDefaults.colors(
-                                thumbColor = sliderActive,
-                                activeTrackColor = sliderActive,
-                                inactiveTrackColor = sliderInactive,
-                            ),
-                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-                        )
+                        // v1.4.0 — decorative waveform at rest. When the clip is NOT playing,
+                        // overlay deterministic vertical bars BEHIND the slider track + force
+                        // the inactive track to transparent so the bars show through. During
+                        // playback the standard Material 3 slider takes over so the progress
+                        // animation stays clean (no flicker from bars under the moving thumb).
+                        // The bar heights are seeded by [audio.id] so the same voice clip
+                        // always renders the same wave silhouette across recompositions.
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 4.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (!isPlaying) {
+                                val barHeights = androidx.compose.runtime.remember(audio.id) {
+                                    val rng = kotlin.random.Random(audio.id.takeIf { it != 0L } ?: 1L)
+                                    IntArray(WAVE_BAR_COUNT) { rng.nextInt(3, 14) }
+                                }
+                                Canvas(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(20.dp),
+                                ) {
+                                    val n = barHeights.size
+                                    val barWidthPx = 2.dp.toPx()
+                                    val spacing = size.width / n
+                                    val cy = size.height / 2f
+                                    for (i in 0 until n) {
+                                        val cx = spacing * i + spacing / 2f
+                                        val halfH = barHeights[i].dp.toPx() / 2f
+                                        drawLine(
+                                            color = sliderInactive,
+                                            start = androidx.compose.ui.geometry.Offset(cx, cy - halfH),
+                                            end = androidx.compose.ui.geometry.Offset(cx, cy + halfH),
+                                            strokeWidth = barWidthPx,
+                                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                        )
+                                    }
+                                }
+                            }
+                            Slider(
+                                value = sliderValue.coerceIn(0f, 1f),
+                                onValueChange = { f ->
+                                    if (totalMs > 0) onSeekTo((f * totalMs).toInt())
+                                },
+                                enabled = totalMs > 0,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = sliderActive,
+                                    activeTrackColor = sliderActive,
+                                    inactiveTrackColor = if (isPlaying) sliderInactive
+                                        else androidx.compose.ui.graphics.Color.Transparent,
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         Text(
                             text = formatBubbleDuration(if (isPlaying && positionMs > 0) positionMs.toLong() else totalMs.toLong()),
                             style = MaterialTheme.typography.labelSmall,
@@ -234,7 +299,7 @@ fun AudioMessageBubble(
                 }
             }
         }
-        if (!isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onDelete = onDelete)
+        if (!isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onForward = onForward, onDelete = onDelete)
     }
 
     if (showTimestamp || message.status == Message.Status.FAILED) {
@@ -281,6 +346,14 @@ private fun formatBubbleDuration(ms: Long): String {
     val s = totalSec % 60
     return "%d:%02d".format(m, s)
 }
+
+/**
+ * v1.4.0 — number of decorative waveform bars drawn behind the slider when the audio
+ * clip is at rest. 28 reads as a "voice clip" silhouette in the ~280-dp bubble width
+ * without crowding (≈ 10 dp / bar including spacing) and stays cheap to draw (single
+ * Canvas pass, no recomposition during playback because the wave is hidden then).
+ */
+private const val WAVE_BAR_COUNT: Int = 28
 
 /**
  * Per-bubble projection of [VoicePlaybackController.PlaybackState]. The bubble derives its

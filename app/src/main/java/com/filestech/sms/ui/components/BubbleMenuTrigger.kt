@@ -3,6 +3,8 @@ package com.filestech.sms.ui.components
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.MoreVert
@@ -48,6 +50,16 @@ fun BubbleMenuTrigger(
     onReply: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
     onReact: (() -> Unit)? = null,
+    /**
+     * v1.3.11 (F3) — copy the bubble's text payload to the system clipboard. Caller passes
+     * `null` for bubbles where copy makes no sense (audio MMS, attachment without caption).
+     */
+    onCopy: (() -> Unit)? = null,
+    /**
+     * v1.3.11 (F5) — forward the message to another conversation or new recipient. Caller
+     * passes `null` for bubbles where forwarding is not yet supported.
+     */
+    onForward: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -70,6 +82,40 @@ fun BubbleMenuTrigger(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
+            // v1.3.11 (F3) — Copy ranked first because it's the most-requested action
+            // (clipboard fed by long-press is the iMessage / Google Messages convention).
+            if (onCopy != null) {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentCopy,
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(stringResource(R.string.action_copy)) },
+                    onClick = {
+                        expanded = false
+                        onCopy()
+                    },
+                )
+            }
+            // v1.3.11 (F5) — Forward right under Copy: same "I want to do something with
+            // this content" intent group, before per-message actions (Reply / React).
+            if (onForward != null) {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Send,
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(stringResource(R.string.action_forward)) },
+                    onClick = {
+                        expanded = false
+                        onForward()
+                    },
+                )
+            }
             if (onReply != null) {
                 DropdownMenuItem(
                     leadingIcon = {

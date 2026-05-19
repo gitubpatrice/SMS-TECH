@@ -37,6 +37,20 @@
     <string name="action_message_actions">Actions sur le message</string>
     <string name="action_reply">Répondre</string>
     <string name="action_translate">Traduire</string>
+    <!-- v1.3.11 (F3) — `action_copy` / `action_forward` déjà définis plus bas (l.89-90). -->
+    <string name="toast_copied">Message copié</string>
+    <!-- v1.3.11 (F4) — dialog d'actions sur numéro de téléphone -->
+    <string name="phone_action_subtitle">Choisir une action pour ce numéro.</string>
+    <string name="phone_action_call">Appeler</string>
+    <string name="phone_action_add_contact">Ajouter aux contacts</string>
+    <string name="phone_action_no_dialer">Aucune application téléphone disponible sur cet appareil.</string>
+    <string name="phone_action_no_contacts">Aucune application Contacts disponible sur cet appareil.</string>
+    <!-- v1.3.11 (F5) — sheet de transfert -->
+    <string name="forward_sheet_title">Transférer vers…</string>
+    <string name="forward_search_placeholder">Chercher une conversation</string>
+    <string name="forward_new_contact">Nouveau destinataire</string>
+    <string name="forward_existing_conversation">Conversations existantes</string>
+    <string name="forward_no_conversation">Aucune autre conversation où transférer.</string>
     <string name="thread_reply_to">Réponse à %1$s</string>
     <string name="thread_reply_to_you">Réponse à vous-même</string>
     <string name="thread_reply_deleted">Message d\'origine supprimé</string>
@@ -162,6 +176,8 @@
 
     <string name="compose_to_label">À :</string>
     <string name="compose_search_contact">Chercher un contact ou un numéro</string>
+    <string name="compose_use_this_number">Utiliser ce numéro</string>
+    <string name="compose_add_to_group">Ajouter au groupe</string>
 
     <string name="blocked_title">Numéros bloqués</string>
     <string name="blocked_empty">Aucun numéro bloqué.</string>

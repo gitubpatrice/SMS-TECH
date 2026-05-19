@@ -4,6 +4,7 @@ import android.util.Patterns
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -41,11 +42,22 @@ fun MessageTextWithLinks(
     text: String,
     style: TextStyle,
     color: Color,
+    /**
+     * v1.3.11 (F4) — invoked when the user taps a phone number detected inside [text].
+     * Default no-op so existing call sites keep working until they opt in. Wrapped in
+     * [rememberUpdatedState] below so the lambda identity can change between
+     * recompositions without invalidating the (potentially expensive) regex pass.
+     */
+    onPhoneClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    // Recalcule l'AnnotatedString uniquement quand le texte change, pas à chaque
-    // recomposition (la regex Patterns.WEB_URL n'est pas gratuite sur un long SMS).
-    val annotated = remember(text) { buildLinkifiedText(text) }
+    // v1.3.11 (F4) — keep the closure inside the AnnotatedString stable so the regex
+    // pass below only re-runs when [text] changes, while the actual phone callback the
+    // listener forwards to always points to the latest [onPhoneClick].
+    val phoneClickState = rememberUpdatedState(onPhoneClick)
+    val annotated = remember(text) {
+        buildLinkifiedText(text) { number -> phoneClickState.value(number) }
+    }
     // Note : le SpanStyle des liens (dans buildLinkifiedText) ne fixe PAS de `color`,
     // de sorte que le lien hérite de la couleur du texte parent (gérée ici par
     // [color]). Ça garantit la lisibilité en thème clair ET sombre sans hardcode.
@@ -82,15 +94,31 @@ private val LINK_STYLE = TextLinkStyles(
 private val URL_TRAILING_PUNCTUATION = charArrayOf('.', ',', ';', ':', '!', '?', ')', ']', '}', '»', '"', '\'')
 
 /**
- * v1.3.2 — construit l'AnnotatedString avec les URLs détectées en [LinkAnnotation.Url].
- * Public-internal pour test JUnit isolé (sans Compose runtime).
+ * v1.3.11 (F4) — minimum / maximum digit count for a `Patterns.PHONE` match to be
+ * accepted as a clickable phone number. `Patterns.PHONE` is intentionally lax (matches
+ * any digit-with-separators run); without this band we'd surface a tap action on order
+ * IDs, postal codes and CB last-4 digits.
+ *
+ * 7 is the floor of E.164 subscriber lengths (Niue / Tokelau); 15 is the spec ceiling
+ * (E.164 §6.2.1). Matches Google Messages' own filter empirically.
+ */
+private const val PHONE_MIN_DIGITS = 7
+private const val PHONE_MAX_DIGITS = 15
+
+private enum class HitKind { Url, Phone }
+private data class LinkHit(val start: Int, val end: Int, val kind: HitKind)
+
+/**
+ * v1.3.2 (URL) + v1.3.11 F4 (phone) — construit l'AnnotatedString avec les URLs ET les
+ * numéros de téléphone détectés. Public-internal pour test JUnit isolé (sans Compose
+ * runtime).
  *
  * Sécurité :
  *
  *   - **Cap entrée** : si [text] excède [LINKIFY_INPUT_CAP] (2 000 chars), on
  *     court-circuite — pas de regex, juste un append brut. Anti-ReDoS pour les
  *     entrées pathologiques.
- *   - **Whitelist scheme** : seules `http://` / `https://` sont permises comme
+ *   - **Whitelist scheme URL** : seules `http://` / `https://` sont permises comme
  *     liens cliquables. Une URL détectée avec un autre scheme (`javascript:`,
  *     `data:`, `file:`, `content:`, `intent:` …) est rendue en texte brut SANS
  *     `withLink`. Aucun risque qu'une app installée déclarant un intent-filter
@@ -98,47 +126,128 @@ private val URL_TRAILING_PUNCTUATION = charArrayOf('.', ',', ';', ':', '!', '?',
  *   - **Bare domain** (`google.com`) : normalisé en `https://google.com`.
  *   - **Strip ponctuation queue** : `Hello google.com.` → URL = `google.com`,
  *     le `.` final reste hors-lien.
+ *   - **Filtre digit count téléphone** : un match `Patterns.PHONE` n'est promu
+ *     cliquable que si son nombre de chiffres tombe dans `[PHONE_MIN_DIGITS,
+ *     PHONE_MAX_DIGITS]` — évite la pollution sur les codes courts (CB derniers
+ *     4 digits, codes promo) et les chaînes de chiffres pathologiques.
+ *   - **Pas d'intent direct** : le tap téléphone ne déclenche AUCUN intent depuis
+ *     ce composable. Il appelle [onPhoneClick] qui owns le dialog de confirmation
+ *     (cf. [PhoneActionsDialog]) avec actions explicites.
+ *
+ * Chevauchements URL ↔ téléphone : URL gagne (priorité 0 vs 1 dans le tri). Évite
+ * qu'une URL contenant des chiffres soit fragmentée en un lien URL + un sous-lien
+ * téléphone décalé.
  */
-internal fun buildLinkifiedText(text: String): AnnotatedString = buildAnnotatedString {
+internal fun buildLinkifiedText(
+    text: String,
+    onPhoneClick: (String) -> Unit = {},
+): AnnotatedString = buildAnnotatedString {
     if (text.isEmpty()) return@buildAnnotatedString
     if (text.length > LINKIFY_INPUT_CAP) {
         append(text)
         return@buildAnnotatedString
     }
-    val matcher = Patterns.WEB_URL.matcher(text)
-    var cursor = 0
-    while (matcher.find()) {
-        val start = matcher.start()
-        val end = matcher.end()
-        // Texte avant l'URL (peut être vide si URL en tête).
-        if (start > cursor) {
-            append(text.substring(cursor, start))
-        }
-        // Extraction + strip ponctuation finale (`google.com.` → `google.com` +
-        // le `.` reste dans le texte hors-lien).
-        val raw = text.substring(start, end)
-        val stripped = raw.trimEnd(*URL_TRAILING_PUNCTUATION)
-        val safeTarget = stripped.toSafeHttpsTargetOrNull()
-        if (safeTarget != null) {
-            withLink(LinkAnnotation.Url(url = safeTarget, styles = LINK_STYLE)) {
-                append(stripped)
-            }
-        } else {
-            // Scheme exotique détecté (`javascript:`, `data:` …) — rendu en texte
-            // brut, pas cliquable. Aucun intent système n'est généré.
-            append(stripped)
-        }
-        // Le reliquat de ponctuation strip-é est rendu en texte normal hors du lien.
-        if (stripped.length < raw.length) {
-            append(raw.substring(stripped.length))
-        }
-        cursor = end
+
+    val hits = collectLinkHits(text)
+    if (hits.isEmpty()) {
+        append(text)
+        return@buildAnnotatedString
     }
-    // Texte après la dernière URL (ou tout le texte si aucune URL).
+
+    var cursor = 0
+    for (hit in hits) {
+        if (hit.start > cursor) {
+            append(text.substring(cursor, hit.start))
+        }
+        val raw = text.substring(hit.start, hit.end)
+        when (hit.kind) {
+            HitKind.Url -> {
+                val stripped = raw.trimEnd(*URL_TRAILING_PUNCTUATION)
+                val safeTarget = stripped.toSafeHttpsTargetOrNull()
+                if (safeTarget != null) {
+                    withLink(LinkAnnotation.Url(url = safeTarget, styles = LINK_STYLE)) {
+                        append(stripped)
+                    }
+                } else {
+                    // Scheme exotique → rendu brut, pas cliquable.
+                    append(stripped)
+                }
+                if (stripped.length < raw.length) {
+                    append(raw.substring(stripped.length))
+                }
+            }
+            HitKind.Phone -> {
+                // Bind the raw match into a local so the listener closes over a stable
+                // String — not over a loop variable that could mutate between matches.
+                val number = raw
+                withLink(
+                    LinkAnnotation.Clickable(
+                        tag = number,
+                        styles = LINK_STYLE,
+                        linkInteractionListener = { onPhoneClick(number) },
+                    ),
+                ) {
+                    append(number)
+                }
+            }
+        }
+        cursor = hit.end
+    }
     if (cursor < text.length) {
         append(text.substring(cursor))
     }
 }
+
+/**
+ * v1.3.11 (F4) — runs the URL and PHONE regexes once each, then merges + dedupes
+ * overlapping ranges. URL wins on conflict (priority 0 vs 1) to keep things like
+ * `https://example.com/+33612345678` rendered as a single URL link.
+ */
+private fun collectLinkHits(text: String): List<LinkHit> {
+    val all = ArrayList<LinkHit>(8)
+    val webMatcher = Patterns.WEB_URL.matcher(text)
+    while (webMatcher.find()) {
+        all += LinkHit(webMatcher.start(), webMatcher.end(), HitKind.Url)
+    }
+    val phoneMatcher = Patterns.PHONE.matcher(text)
+    while (phoneMatcher.find()) {
+        val start = phoneMatcher.start()
+        val end = phoneMatcher.end()
+        val digits = countDigits(text, start, end)
+        if (digits in PHONE_MIN_DIGITS..PHONE_MAX_DIGITS) {
+            all += LinkHit(start, end, HitKind.Phone)
+        }
+    }
+    if (all.isEmpty()) return emptyList()
+    // Sort by start (asc) then URL-first on equal starts.
+    all.sortWith(compareBy({ it.start }, { if (it.kind == HitKind.Url) 0 else 1 }))
+    // Drop any hit whose range overlaps the previous accepted one.
+    val accepted = ArrayList<LinkHit>(all.size)
+    var lastEnd = 0
+    for (hit in all) {
+        if (hit.start >= lastEnd) {
+            accepted += hit
+            lastEnd = hit.end
+        }
+    }
+    return accepted
+}
+
+/**
+ * v1.3.11 (F4) — internal so JUnit can pin the digit-count band filter that drives the
+ * phone-link promotion decision. Pure helper, no Android dependency.
+ */
+internal fun countDigits(text: String, start: Int, end: Int): Int {
+    var n = 0
+    for (i in start until end) {
+        if (text[i].isDigit()) n++
+    }
+    return n
+}
+
+/** v1.3.11 (F4) — internal for JUnit visibility; mirrors the const used in the filter. */
+internal const val PHONE_DIGITS_MIN: Int = PHONE_MIN_DIGITS
+internal const val PHONE_DIGITS_MAX: Int = PHONE_MAX_DIGITS
 
 /**
  * v1.3.2 — retourne une URL cible sûre pour `LinkAnnotation.Url` :

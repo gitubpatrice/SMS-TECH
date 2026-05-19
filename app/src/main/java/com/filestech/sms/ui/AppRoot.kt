@@ -142,6 +142,23 @@ fun AppRoot(appLock: AppLockManager = hiltViewModel<AppRootViewModel>().appLock)
             ThreadScreen(
                 conversationId = args.conversationId,
                 onBack = { nav.popBackStack() },
+                // v1.3.11 (F5) — forward to existing conversation. Pop the source thread
+                // so the back stack reads [Conversations -> Thread(dest)] instead of
+                // [Conversations -> Thread(source) -> Thread(dest)] which would surprise
+                // the user on back press.
+                onForwardToConversation = { destId ->
+                    nav.popBackStack()
+                    nav.navigate(Thread(destId))
+                },
+                // v1.3.11 (F5) — forward to a new recipient: route to ComposeScreen.
+                // The IncomingShareHolder payload posted by `stageForward` is still
+                // present when ComposeScreen's `onConversationCreated` navigates to
+                // the newly-created thread, where `consumeIncomingShareIfAny` picks it
+                // up at hydration.
+                onForwardToNewContact = {
+                    nav.popBackStack()
+                    nav.navigate(Compose())
+                },
             )
         }
         composable<Compose> { backStackEntry ->

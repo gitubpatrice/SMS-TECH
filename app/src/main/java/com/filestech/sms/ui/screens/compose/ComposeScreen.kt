@@ -116,13 +116,24 @@ fun ComposeScreen(
                     item {
                         ListItem(
                             headlineContent = { Text(state.query) },
-                            supportingContent = { Text(stringResource(R.string.action_continue)) },
+                            // v1.3.11 (F2) — show "Use this number" / "Add to group" rather
+                            // than the misleading "Continuer" subtitle: when the picker is
+                            // empty the tap opens the thread directly; otherwise it appends
+                            // to the recipients chips (group flow). The [pickRecipient] call
+                            // returns true in the first case so we know not to leave a stale
+                            // query around the moment we navigate away.
+                            supportingContent = {
+                                Text(stringResource(
+                                    if (state.recipients.isEmpty()) R.string.compose_use_this_number
+                                    else R.string.compose_add_to_group
+                                ))
+                            },
                             leadingContent = { Avatar(label = state.query) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp)
                                 .clickable {
-                                    viewModel.addRecipient(state.query)
+                                    viewModel.pickRecipient(state.query)
                                     viewModel.setQuery("")
                                 },
                         )
@@ -137,7 +148,7 @@ fun ComposeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(enabled = number.isNotBlank()) {
-                                viewModel.addRecipient(number)
+                                viewModel.pickRecipient(number)
                                 viewModel.setQuery("")
                             },
                     )

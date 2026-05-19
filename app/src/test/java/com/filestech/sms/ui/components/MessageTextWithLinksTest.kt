@@ -71,4 +71,43 @@ class MessageTextWithLinksTest {
         val out = "example.com/path:foo/bar".toSafeHttpsTargetOrNull()
         assertThat(out).isEqualTo("https://example.com/path:foo/bar")
     }
+
+    // ──────────────── v1.3.11 (F4) — phone link helper unit tests ────────────────
+    //
+    // The full phone-detection path (`collectLinkHits` → `Patterns.PHONE.matcher`) requires
+    // `android.util.Patterns` and would need Robolectric to run in pure JVM. We still
+    // pin the **two purely-Kotlin helpers** that gate the phone-link promotion decision
+    // so a future refactor cannot silently widen the band filter:
+    //
+    //   - [countDigits] : counts the digits inside a substring range — the value compared
+    //     against [PHONE_DIGITS_MIN] / [PHONE_DIGITS_MAX].
+    //   - [PHONE_DIGITS_MIN] / [PHONE_DIGITS_MAX] : the digit-count band itself.
+    //
+    // Together these ensure that even if `Patterns.PHONE` matches a 4-digit promo code or
+    // a 20-digit IBAN, the link is filtered out before [LinkAnnotation.Clickable] is
+    // emitted.
+
+    @Test fun `countDigits counts only ASCII digits within the substring range`() {
+        assertThat(countDigits("+33 612 34 56 78", 0, 16)).isEqualTo(11)
+        assertThat(countDigits("Order #12345", 0, 12)).isEqualTo(5)
+        assertThat(countDigits("no digits here", 0, 14)).isEqualTo(0)
+        assertThat(countDigits("abc 123 def 456", 4, 7)).isEqualTo(3)
+    }
+
+    @Test fun `countDigits handles empty range without throwing`() {
+        assertThat(countDigits("anything", 3, 3)).isEqualTo(0)
+    }
+
+    @Test fun `phone digit band rejects too-short and too-long sequences`() {
+        // The band MUST stay at [7, 15] — anything lower lets order IDs / promo codes
+        // through, anything higher accepts IBANs / credit-card numbers.
+        assertThat(PHONE_DIGITS_MIN).isEqualTo(7)
+        assertThat(PHONE_DIGITS_MAX).isEqualTo(15)
+        // Sanity: a 6-digit count is below the floor, 16 is above the ceiling.
+        assertThat(6 in PHONE_DIGITS_MIN..PHONE_DIGITS_MAX).isFalse()
+        assertThat(16 in PHONE_DIGITS_MIN..PHONE_DIGITS_MAX).isFalse()
+        // Common French national + international formats fall inside the band.
+        assertThat(10 in PHONE_DIGITS_MIN..PHONE_DIGITS_MAX).isTrue() // 06 12 34 56 78
+        assertThat(11 in PHONE_DIGITS_MIN..PHONE_DIGITS_MAX).isTrue() // +33 6 12 34 56 78
+    }
 }

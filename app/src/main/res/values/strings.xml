@@ -39,6 +39,21 @@
     <string name="action_message_actions">Message actions</string>
     <string name="action_reply">Reply</string>
     <string name="action_translate">Translate</string>
+    <!-- v1.3.11 (F3) — `action_copy` / `action_forward` already defined below (line 91-92);
+         only the toast string is new. -->
+    <string name="toast_copied">Message copied</string>
+    <!-- v1.3.11 (F4) — phone number actions dialog -->
+    <string name="phone_action_subtitle">Choose an action for this phone number.</string>
+    <string name="phone_action_call">Call</string>
+    <string name="phone_action_add_contact">Add to contacts</string>
+    <string name="phone_action_no_dialer">No phone app available on this device.</string>
+    <string name="phone_action_no_contacts">No Contacts app available on this device.</string>
+    <!-- v1.3.11 (F5) — forward sheet -->
+    <string name="forward_sheet_title">Forward to…</string>
+    <string name="forward_search_placeholder">Search a conversation</string>
+    <string name="forward_new_contact">New recipient</string>
+    <string name="forward_existing_conversation">Existing conversations</string>
+    <string name="forward_no_conversation">No other conversation to forward to.</string>
     <string name="thread_reply_to">Replying to %1$s</string>
     <string name="thread_reply_to_you">Replying to yourself</string>
     <string name="thread_reply_deleted">Original message deleted</string>
@@ -169,6 +184,8 @@
     <!-- Compose -->
     <string name="compose_to_label">To:</string>
     <string name="compose_search_contact">Search a contact or phone number</string>
+    <string name="compose_use_this_number">Use this number</string>
+    <string name="compose_add_to_group">Add to the group</string>
 
     <!-- Blocked numbers -->
     <string name="blocked_title">Blocked numbers</string>

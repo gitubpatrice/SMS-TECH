@@ -1,7 +1,9 @@
 package com.filestech.sms.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +38,7 @@ import java.util.Date
  */
 enum class BurstPosition { Solo, First, Middle, Last }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: Message,
@@ -47,6 +50,20 @@ fun MessageBubble(
     onReply: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
     onReact: (() -> Unit)? = null,
+    /**
+     * v1.3.11 (F3) — copy the bubble's text body to the clipboard. Triggered from both the
+     * overflow menu and the long-press gesture on the bubble itself. `null` for bubbles
+     * without a text payload (none today — every [MessageBubble] has a body).
+     */
+    onCopy: (() -> Unit)? = null,
+    /** v1.3.11 (F5) — forward the bubble's text body to another conversation. */
+    onForward: (() -> Unit)? = null,
+    /**
+     * v1.3.11 (F4) — invoked when the user taps a phone number rendered inside the
+     * bubble body. Forwarded to [MessageTextWithLinks]; the host (`ThreadScreen`)
+     * surfaces a [PhoneActionsDialog] in response.
+     */
+    onPhoneClick: (String) -> Unit = {},
     onRemoveReaction: () -> Unit = {},
     repliedToPreview: ReplyQuotePreview? = null,
     translationState: TranslationDisplayState? = null,
@@ -87,6 +104,8 @@ fun MessageBubble(
         // Delete (in that order; Delete in red at the bottom of the list).
         if (isOut) {
             BubbleMenuTrigger(
+                onCopy = onCopy,
+                onForward = onForward,
                 onReply = onReply,
                 onTranslate = onTranslate,
                 onReact = onReact,
@@ -119,10 +138,19 @@ fun MessageBubble(
                             if (isOut) Modifier.drawBehind { drawRect(outgoingBrush) }
                             else Modifier.background(com.filestech.sms.ui.theme.bubbleIncomingColor(cs)),
                         )
-                        // Tap → retry (handled by parent on FAILED rows). Delete is now driven by
-                        // the bubble's overflow menu (see [BubbleMenuTrigger]) so the bubble area
-                        // itself only handles taps.
-                        .clickable(onClick = onTap)
+                        // v1.3.11 (F3) — long-press copies the bubble body when [onCopy] is wired.
+                        // Falls back to a plain `clickable` when copy is not available so the
+                        // bubble keeps its tap-to-retry behaviour on FAILED rows untouched.
+                        .then(
+                            if (onCopy != null) {
+                                Modifier.combinedClickable(
+                                    onClick = onTap,
+                                    onLongClick = onCopy,
+                                )
+                            } else {
+                                Modifier.clickable(onClick = onTap)
+                            },
+                        )
                         .padding(PaddingValues(horizontal = 14.dp, vertical = 10.dp)),
                 ) {
                     // v1.3.2 — URLs détectées et rendues cliquables (ouvre le navigateur
@@ -158,6 +186,7 @@ fun MessageBubble(
                                 text = message.body,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = textColor,
+                                onPhoneClick = onPhoneClick,
                             )
                         }
                     }
@@ -175,6 +204,8 @@ fun MessageBubble(
         // Incoming: trigger sits to the RIGHT of the bubble.
         if (!isOut) {
             BubbleMenuTrigger(
+                onCopy = onCopy,
+                onForward = onForward,
                 onReply = onReply,
                 onTranslate = onTranslate,
                 onReact = onReact,

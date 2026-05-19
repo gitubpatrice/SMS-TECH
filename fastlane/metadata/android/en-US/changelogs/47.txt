@@ -1,0 +1,15 @@
+v1.4.0 — 5 new productivity actions + reworked voice bubble UI.
+
+• Copy / Forward a message: long-press on a bubble (or the 3-dots) now reveals a Copy + Forward menu. Copy pushes the body to the system clipboard. Forward opens a sheet listing existing conversations (with search) or offers a brand-new recipient.
+
+• Phone number in a message: tap a detected number to open a 3-action dialog — Call (opens the phone dialer pre-filled, no extra permission), Copy (clipboard), Add to contacts (opens the Contacts app pre-filled).
+
+• Keyboard retracts after send: right after sending a message, the soft keyboard collapses so you can read the rest of the thread (iMessage / Google Messages convention).
+
+• Instant-validation contact picker: opening "New message" then tapping a contact opens the conversation immediately, no extra "Continue" tap. The group flow is preserved (chips stay explicit).
+
+• Decorative waveform on voice bubbles: at rest, the centre grey track now shows a vertical waveform silhouette (28 bars seeded by the audio so the pattern stays stable across recompositions). The standard progress bar takes over during playback for readability.
+
+• Slightly darker border on incoming voice bubbles for better contrast against the thread background.
+
+Under the hood: zero new permission, zero schema change, 13 i18n strings added (FR + EN at 100 % parity), 6 defensive audit fixes (forward picker memoization, FileProvider sandboxing, TalkBack accessibility, WAP charset fallback).

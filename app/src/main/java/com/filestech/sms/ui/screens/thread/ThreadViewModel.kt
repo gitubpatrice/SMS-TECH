@@ -939,6 +939,62 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
+     * v1.3.11 (F5) — stages the given [message] into [com.filestech.sms.system.share
+     * .IncomingShareHolder] so the next [ThreadViewModel] that hydrates (i.e. the
+     * destination thread the user picks in [com.filestech.sms.ui.components
+     * .ForwardMessageSheet]) pulls it through [consumeIncomingShareIfAny] and pre-fills
+     * its draft / staged attachment.
+     *
+     * The payload mirrors what the share-target flow produces for [android.content
+     * .Intent.ACTION_SEND]:
+     *   - `text` = the message body (trimmed, `null` if blank);
+     *   - `uris` = the first attachment's URI if any (image / file / audio / video). The
+     *     URI is built from the stored `localUri` — either a `content://` (system MMS
+     *     parts) used as-is, or a `file://` for our own cache (intra-process consume,
+     *     no FileUriExposedException because no [Intent] crosses).
+     *   - `mimeType` = the attachment's MIME (drives the `AttachmentKind` selection in
+     *     [onAttachmentPicked]).
+     */
+    fun stageForward(message: com.filestech.sms.domain.model.Message) {
+        val text = message.body.trim().takeIf { it.isNotBlank() }
+        val attachment = message.attachments.firstOrNull()
+        val uris = buildList {
+            if (attachment != null && attachment.localUri.isNotBlank()) {
+                // v1.3.11 (S1) — local file paths are wrapped via FileProvider so the
+                // resulting `content://` URI stays safe even if a future caller stuffs it
+                // into an outgoing Intent. Using `Uri.fromFile` here was technically OK
+                // (the consumer is intra-process via `ContentResolver.openInputStream`),
+                // but the `file://` pattern is a known FileUriExposedException landmine
+                // and we standardise on FileProvider throughout the app already (cf.
+                // [MediaAttachmentBubble.toShareableUri]).
+                val uri = if (attachment.localUri.startsWith("content://")) {
+                    android.net.Uri.parse(attachment.localUri)
+                } else {
+                    val file = java.io.File(attachment.localUri)
+                    if (file.exists()) {
+                        runCatching {
+                            androidx.core.content.FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                file,
+                            )
+                        }.getOrNull()
+                    } else null
+                }
+                if (uri != null) add(uri)
+            }
+        }
+        val pending = com.filestech.sms.system.share.IncomingShareHolder.Pending(
+            uris = uris,
+            mimeType = attachment?.mimeType,
+            text = text,
+        )
+        if (!pending.isEmpty) {
+            incomingShare.set(pending)
+        }
+    }
+
+    /**
      * v1.3.3 bug #4 — auto-attach d'un partage entrant. Pas de routing dédié pour
      * v1.3.3 ; l'user choisit lui-même la conversation cible parmi sa liste après
      * tap sur SMS Tech dans le chooser système. Le 1ᵉʳ URI du partage est attaché ;

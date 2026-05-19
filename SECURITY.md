@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.3.10** (2026-05-17)
+Current release : **v1.4.0** (2026-05-19)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -44,6 +44,113 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 ---
 
 ## Audit history
+
+### v1.4.0 (this release) — Ergonomics pack + voice bubble waveform
+
+Minor SemVer bump driven by 5 user-facing features. No new permission, no schema
+change, no signing key change. 6 defensive fixes applied from a parallel 3-axis
+audit (security / performance / UI-coherence) before tag.
+
+**F1 — Keyboard retract after send** (`ThreadScreen.kt`)
+- After every send (text, voice, or media MMS), the soft keyboard is hidden via
+  `LocalSoftwareKeyboardController.hide()` and IME focus is dropped via
+  `LocalFocusManager.clearFocus()`. Lets the sender see the freshly-sent message
+  at the bottom of the thread without manually collapsing the keyboard.
+
+**F2 — Instant-validation contact picker** (`ComposeViewModel.kt`, `ComposeScreen.kt`)
+- New `pickRecipient(rawNumber: String): Boolean` checks if `recipients.isEmpty()`
+  BEFORE the append; when true it appends + immediately calls `createConversation`
+  (single-recipient flow, ~99 % of cases). When false (user is building a group)
+  it only appends — the explicit "Continuer" button stays the validation step.
+  The free-entry row supporting text adapts via a new `compose_use_this_number` /
+  `compose_add_to_group` string pair to mirror the current state.
+
+**F3 — Copy message** (`BubbleMenuTrigger.kt`, `MessageBubble.kt`)
+- New `onCopy: (() -> Unit)?` parameter on `BubbleMenuTrigger` surfaces a
+  Material 3 `DropdownMenuItem` "Copier" with `Icons.Outlined.ContentCopy`.
+  `MessageBubble` wraps its body Box in `combinedClickable(onClick, onLongClick)`
+  so a long-press triggers the same copy action without going through the 3-dots
+  menu (iMessage convention). `MediaAttachmentBubble` exposes copy only when a
+  caption is present (placeholder bodies are filtered out at the call site).
+  `ThreadScreen` injects `LocalClipboardManager` and routes through a single
+  `copyMessageBody(msg)` helper that emits a `LongPress` haptic + a "Message
+  copié" snackbar for tactile + visual confirmation.
+
+**F4 — Phone number actions** (`MessageTextWithLinks.kt`, `PhoneActionsDialog.kt`)
+- `buildLinkifiedText` is extended to also run `Patterns.PHONE` over the body
+  alongside `Patterns.WEB_URL`. Phone hits are filtered by a strict digit-count
+  band `[PHONE_DIGITS_MIN=7, PHONE_DIGITS_MAX=15]` to reject promo codes (too
+  short) and IBANs / credit-card numbers (too long). Overlapping hits prioritise
+  URL over phone (priority `0 < 1` in `compareBy`) so an URL containing digits
+  is never fragmented.
+- Phone hits emit `LinkAnnotation.Clickable` (NOT `Url`) so the tap routes
+  through a custom listener instead of an implicit Intent. The listener
+  surfaces `PhoneActionsDialog` with 3 actions :
+  - **Call** → `Intent.ACTION_DIAL` with `tel:$number` URI. Intentionally NOT
+    `ACTION_CALL` which would require `CALL_PHONE` runtime permission.
+  - **Copy** → push to clipboard + snackbar.
+  - **Add to contacts** → `ContactsContract.Intents.Insert.ACTION` pre-filled
+    with the number. No permission required.
+- Each `startActivity` is wrapped in `runCatching` + fallback snackbar so a
+  stripped ROM without a default dialer / contacts app cannot crash the thread.
+- The WAP "any-charset" sentinel (MIBenum 0 → literal `*`) was already handled
+  by `resolveCharset` in v1.3.10 — same fallback to UTF-8.
+
+**F5 — Forward message** (`ForwardMessageSheet.kt`, `ForwardPickerViewModel.kt`,
+`ThreadViewModel.stageForward`)
+- New `Modal Bottom Sheet` lists recent conversations (with search) + a top
+  "Nouveau destinataire" CTA. The source conversation is hidden from the list
+  (impossible to forward to oneself) via a new
+  `ForwardPickerViewModel.setExcludedConversation(id)` API.
+- The forward payload reuses the existing share-target plumbing
+  (`IncomingShareHolder.Pending`) :
+  - text → `Pending.text` → consumer's draft
+  - first attachment → `Pending.uris[0]` (wrapped via FileProvider for local
+    files — see SEC-01 below), `Pending.mimeType` drives the `AttachmentKind`
+    selection
+- Destination ThreadViewModel picks up the payload via the existing
+  `consumeIncomingShareIfAny()` path. No new ViewModel-to-ViewModel coupling.
+
+**Voice bubble waveform** (`AudioMessageBubble.kt`)
+- At rest (`!isPlaying`), the standard Material 3 inactive slider track is
+  overlaid by a `Canvas` drawing `WAVE_BAR_COUNT = 28` vertical bars with
+  pseudo-random heights seeded by `audio.id`. Same audio clip always renders
+  the same silhouette across recompositions (deterministic `Random(seed)`).
+  During playback the slider takes over for clean progress animation.
+- Incoming voice bubbles now carry a 1-dp border at
+  `lerp(bgColor, Color.Black, 0.18f)` (18 % darker than the fill) for better
+  contrast against the thread surface, symmetric with the outgoing border-only
+  design.
+
+**Defensive audit fixes shipped with this release**
+- **SEC-01** (`ThreadViewModel.stageForward`) : local file paths in the forward
+  payload are wrapped through `FileProvider.getUriForFile(...)` instead of
+  `Uri.fromFile(...)`. The latter was technically safe today (intra-process
+  `openInputStream` consumer, no `Intent` crossing), but the `file://` pattern
+  is a known `FileUriExposedException` landmine and the rest of the app already
+  uses `FileProvider` throughout — alignment.
+- **P1** (`ForwardPickerViewModel`) : the filtered conversation list is now
+  cached in `UiState.filtered` and recomputed only on `setQuery`,
+  `setExcludedConversation`, or `observeAll` emissions. The composable reads
+  `state.filtered` instead of calling the filter inside the recomposition.
+  Eliminates O(n·m) jank on Android Go appliances when typing into the picker
+  search field with ~150 conversations loaded.
+- **P3** (`MessageTextWithLinksTest.kt`) : 3 new JUnit 5 tests pin the
+  `countDigits` helper and the `PHONE_DIGITS_MIN/MAX` band so a future widen
+  cannot silently let through promo codes or IBANs.
+- **U2** (`ForwardMessageSheet`) : the "Nouveau destinataire" `ListItem` carries
+  `semantics { role = Role.Button }` so TalkBack announces "Bouton" in addition
+  to the headline text.
+- **U3** (`ForwardMessageSheet`) : the sheet's `dismissAndReset` lambda clears
+  `viewModel.setQuery("")` before bubbling the dismiss up — prevents a stale
+  query from reappearing when the user reopens the sheet.
+- **Hook removed** : the `Annuler` button on `PhoneActionsDialog` was orphaned
+  by Material 3's `dismissButton` slot (rendered below the 3-action stack).
+  Removed — tap-outside and back-press already invoke `onDismissRequest`.
+
+Same cert SHA-256 `b09a9511…687d`. ~12 files modified, 2 new files
+(`PhoneActionsDialog.kt`, `ForwardMessageSheet.kt`, `ForwardPickerViewModel.kt`,
+`OemKeepAliveOnboarding.kt` was v1.3.10 — no new manifest entry).
 
 ### v1.3.1 (this release) — Reaction-as-SMS feature
 
@@ -327,7 +434,7 @@ Audit M (post-fix) — 4 findings, all fixed before tag :
   vulnerable to index shift on add/remove race. Switched to stable
   `String` id (= absolute path) + remove by id.
 
-### v1.3.10 (this release) — MMS reception unblocked on Android 10+ OEM ROMs
+### v1.3.10 — MMS reception unblocked on Android 10+ OEM ROMs
 
 Cross-device testing on Samsung Galaxy S9 (Android 10 One UI), Samsung S24 FE,
 Redmi 9A (MIUI 12 Go), and Xiaomi Poco F5 (HyperOS 2024) exposed three independent
