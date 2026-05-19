@@ -20,9 +20,9 @@ Repo: https://github.com/gitubpatrice/SMS-TECH.git
 Binaries: https://github.com/gitubpatrice/SMS-TECH/releases/download/v%v/app-%a-release.apk
 
 Builds:
-  - versionName: 1.6.0
-    versionCode: 51
-    commit: d6970463f8f2b15805be268dc969317422e2920e
+  - versionName: 1.6.1
+    versionCode: 53
+    commit: efd451281e4eed29cd99f446b97e0f43700da210
     subdir: app
     gradle:
       - yes
@@ -42,5 +42,5 @@ AllowedAPKSigningKeys: b09a951114908885aefe6144ac980975dd8bd889beb9e61676a5c2c89
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: 'app/build.gradle.kts|versionName\s*=\s*"(.*?)"|.|versionCode\s*=\s*(\d+)'
-CurrentVersion: 1.6.0
-CurrentVersionCode: 51
+CurrentVersion: 1.6.1
+CurrentVersionCode: 53
