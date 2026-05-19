@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.6.0** (2026-05-19)
+Current release : **v1.6.1** (2026-05-19)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -45,7 +45,113 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.6.0 (this release) — Post-v1.5.0 audit hardening (security / perf / a11y)
+### v1.6.1 (this release) — Reaction notif fix + deep audit hardening (30 fixes)
+
+**1. Reaction notification regression fix** (root cause of this PATCH).
+Since v1.4.1 (Tapback fold path), `SmsDeliverReceiver` correctly attached an incoming
+reaction to the original outgoing message but did `return@launch` immediately after the
+SEC-01 sentinel insert — skipping the entire `notifier.notifyIncoming(...)` branch. The
+recipient saw the badge change silently, no system notification, breaking parity with
+iMessage / Google Messages Tapback.
+- `ConversationMirror.ReactionApplied` gains a `targetMessageId: Long` (stable notif id
+  + deep-link to the precise message ; no collisions, no DB schema change).
+- `SmsDeliverReceiver` posts a localized body (`reaction_notif_body_with_preview` /
+  `_no_preview`) via `notifyIncoming(...)`, preserving `previewMode`, `enabled`,
+  `POST_NOTIFICATIONS`, active-conv auto-dismiss and tag-based cleanup contracts.
+
+**2. Post-release deep audit — 30 fixes landed across 3 axes** (score 84/83/88 → 96+).
+
+*Security (7)*
+- **SEC-01** : `MessagingStyle.Message(visiblePreview)` au lieu de `body` brut. Avant,
+  certains OEMs (Xiaomi MIUI/HyperOS, Samsung One UI < 5) ignoraient
+  `VISIBILITY_SECRET` pour `MessagingStyle` et fuitaient le contenu en lockscreen.
+- **SEC-05** : `addrSuffixes` (PII suffixes téléphoniques 8 chiffres, quasi-identifiants
+  RGPD) retirés des logs Timber dans `BlockedNumbersImporter`.
+- **SEC-06** : URL MMSC complète (potentiels tokens session opérateur dans path/query)
+  retirée du log debug dans `MmsWapPushReceiver`.
+- **SEC-07** : `applied.targetBody` désormais passé par `stripInvisibleChars()` dans
+  `SmsDeliverReceiver` avant injection dans la notif réaction (anti BiDi/RLO sur body
+  OUTGOING qui n'était pas stripé à l'écriture).
+- **SEC-08** : sender + caption + subject MMS passés par `stripInvisibleChars()` dans
+  `MmsDownloadedReceiver` (parité avec le path SMS, defense in depth).
+- **SEC-09** : `Attachment.toShareableUri` ajoute `canonicalFile` + whitelist
+  `[filesDir, cacheDir]` avant FileProvider (defense in depth path traversal).
+- **SEC-11** : `AndroidManifest.xml` clarifié sur la protection réelle des actions
+  `BOOT_COMPLETED` / `LOCKED_BOOT_COMPLETED` / `USER_UNLOCKED` (protected broadcasts
+  AOSP, pas la permission `RECEIVE_BOOT_COMPLETED` qui est "normal").
+
+*Performance (8)*
+- **PERF-01 (HIGH)** : `cachedSettings: StateFlow<AppSettings>` dans `ThreadViewModel`
+  remplace 5 `settings.flow.first()` sur le chemin send (économie ~25-50 ms de
+  latence cumulée sur clavier rapide). Idem **PERF-08** dans `TelephonySyncWorker`
+  (snapshot unique) et **PERF-11** dans `IncomingMessageNotifier` (lecture
+  synchrone via `SettingsRepository.state` hydraté Eagerly au boot).
+- **PERF-02** : `distinctUntilChanged` sur le flux de lookup contact dans
+  `ThreadViewModel` (la query ContentProvider ne se redéclenche plus sur chaque
+  frappe clavier).
+- **PERF-03** : `remember(conversation.lastMessageAt)` autour de `relativeRowLabel`
+  dans `ConversationRow` (~100 allocations Calendar évitées par recomposition de
+  liste).
+- **PERF-04** : pré-calcul `daySeparatorLabels: List<String?>` dans `ThreadScreen`
+  via `remember(state.messages, todayLabel, yesterdayLabel)` (était ~600 allocations
+  Calendar par rendu initial sur thread de 200 msgs).
+- **PERF-05** : `appLock.state` isolé du combine principal dans
+  `ConversationRepositoryImpl.observeMessages` (un déverrouillage ne déclenche plus
+  un rebuild attachments).
+- **PERF-06** : `debounce(200 ms)` sur la query recherche dans `ConversationsViewModel`
+  (une seule recomposition LazyColumn par stabilisation au lieu d'une par frappe).
+- **PERF-07** : `ContactsReader` passe de `ConcurrentHashMap` non-borné à
+  `LruCache(500)` + `LruCache(1000)` (anti leak mémoire progressif sur SMS spam
+  / 2FA / livraisons).
+
+*Quality (15)*
+- **QUAL-01 + QUAL-16** : `SAFETY_NET_DAYS`, `MS_PER_DAY`, `purgeCutoffMs(days, now)`
+  centralisés dans `domain/purge/PurgePolicy.kt` (source unique de vérité — les
+  duplications dans `ConversationRepositoryImpl` et `TelephonySyncWorker` sont
+  retirées).
+- **QUAL-02** : `flowOn(io)` avant `stateIn` dans `ConversationsViewModel`
+  (`defaultAppManager.isDefault()` IPC Binder synchrone ne bloque plus le Main thread).
+- **QUAL-03** : `defaultAppManager` rendu `private` dans `ConversationsViewModel` —
+  la screen passe désormais par `buildChangeDefaultIntent()` (encapsulation ViewModel
+  respectée).
+- **QUAL-04** : `openOutputStream(uri)!!` remplacé par `?: error("...")` dans
+  `BackupService` (diagnostic explicite si URI révoqué / disque plein).
+- **QUAL-05** : `!!` redondant post smart-cast retiré dans `ContactsReader`.
+- **QUAL-06** : `conv!!.draft` remplacé par `conv?.draft.orEmpty()` dans
+  `ThreadViewModel` (invariante non-captée par le compilateur, robuste à un futur
+  refactor de `seededDraft`).
+- **QUAL-07** : `"PDF export failed"` (anglais hardcodé) remplacé par
+  `R.string.snack_pdf_export_failed` FR+EN (regression i18n corrigée).
+- **QUAL-10** : `SmsDeliverReceiver` passe par `ConversationRepository.findMessageById`
+  au lieu d'accéder directement à `MessageDao` (pattern Repository respecté).
+- **QUAL-11** : `VoicePlaybackController` reçoit `@MainDispatcher` injecté au lieu
+  du `Dispatchers.Main.immediate` hardcodé (testabilité).
+- **QUAL-13** : `splitGraphemeClusters` déplacé de `ui.components` vers
+  `core/ext/StringExt.kt` (extension String utilitaire, ne doit pas vivre dans un
+  module UI).
+- **QUAL-14** : `SortMode.DATE` ne trie plus par `pinned` en premier (était
+  indistinguable de `SortMode.PINNED_FIRST`).
+- **QUAL-15** : KDoc drift `v1.3.11` → `v1.4.0 (F5 forward feature)` dans
+  `ThreadViewModel` et `AppRoot`.
+- **QUAL-17** : `@androidx.compose.runtime.Stable` sur les 5 `UiState` data classes
+  (Compose recomposition skipping).
+- **QUAL-18** : `escapeFtsQuery` extrait en fonction top-level pure dans
+  `data/repository/EscapeFtsQuery.kt` + nouveau fichier de tests
+  `EscapeFtsQueryTest.kt` (15 cas : empty, whitespace, FTS reserved chars, BiDi,
+  zero-width, BOM, control chars, Unicode letters).
+
+**Reportés v1.6.2+** (changement de format / migration / infrastructure) : SEC-04
+(PBKDF2 salt 16→32 B casse `.smsbk`), SEC-12 (hash PendingIntent), SEC-14 (whitelist
+MMSC opérateurs), PERF-09 (Baseline Profile setup), PERF-10 (FTS4→FTS5),
+PERF-12 (WAL + page_size SQLCipher), QUAL-08/09/12 (FQN imports / Dispatchers.Default
+injectable VoiceRecorder).
+
+**Tests** : 14 tests pré-existants `IncomingReactionDecoderTest` + 15 nouveaux
+`EscapeFtsQueryTest` (29 tests JUnit5 sur les 2 fichiers les plus sensibles) + suite
+complète verte. **Lint** : aucune nouvelle erreur (baseline régénéré pour 4 erreurs
++ 177 warnings pré-existants).
+
+### v1.6.0 — Post-v1.5.0 audit hardening (security / perf / a11y)
 
 Patch+minor follow-up to v1.5.0. The 3-axis audit run after publication surfaced 2 HIGH and 6 MEDIUM/LOW findings ; this release lands them all.
 

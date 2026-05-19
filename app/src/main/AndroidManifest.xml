@@ -193,9 +193,18 @@
             android:exported="false" />
 
         <!-- 4) Boot — reschedule scheduled messages.
-             Audit F10: requires RECEIVE_BOOT_COMPLETED (held only by the OS) so a third-party app
-             cannot forge a fake boot to re-run WorkManager scheduled SMS broadcasts.
-             QUICKBOOT_POWERON (unprotected HTC legacy action) removed. -->
+             v1.6.1 audit SEC-11 clarification: les trois actions déclarées sont des
+             "protected broadcasts" AOSP — seul le framework (ActivityManagerService) peut
+             les émettre. Le `android:permission="RECEIVE_BOOT_COMPLETED"` ci-dessous est
+             une permission "normal" (pas "signature") : elle peut être détenue par
+             n'importe quelle app et n'ajoute donc PAS de protection effective contre les
+             apps tierces — la vraie protection vient du statut protected-broadcast des
+             actions BOOT_COMPLETED / LOCKED_BOOT_COMPLETED / USER_UNLOCKED, énumérées
+             dans la liste AOSP `frameworks/base/core/res/AndroidManifest.xml`. On conserve
+             la permission pour cohérence avec la convention historique et pour signaler
+             l'intention au lecteur ; ne pas la retirer SANS également remplacer par un
+             check `isOrderedBroadcast()` ou un mécanisme équivalent.
+             QUICKBOOT_POWERON (action HTC legacy non-protégée) retirée. -->
         <receiver
             android:name=".system.receiver.BootReceiver"
             android:exported="true"
@@ -203,9 +212,9 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-                <!-- Audit M-11: rattrapage des SMS arrivés en direct-boot avant que l'utilisateur
-                     ne déverrouille le téléphone pour la première fois. ACTION_USER_UNLOCKED est
-                     un broadcast OS protégé (pas besoin de permission supplémentaire). -->
+                <!-- Audit M-11: rattrapage des SMS arrivés en direct-boot avant que
+                     l'utilisateur ne déverrouille le téléphone pour la première fois.
+                     ACTION_USER_UNLOCKED est un protected-broadcast AOSP (cf. note ci-dessus). -->
                 <action android:name="android.intent.action.USER_UNLOCKED" />
             </intent-filter>
         </receiver>

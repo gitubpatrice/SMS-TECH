@@ -134,9 +134,15 @@ class BackupService @Inject constructor(
                 } finally {
                     password.wipe()
                 }
-                context.contentResolver.openOutputStream(uri, "w")!!.use { os ->
-                    os.write(out.toByteArray())
-                    os.flush()
+                // v1.6.1 (audit QUAL-04) — diagnostic explicite si openOutputStream
+                // retourne null (URI révoqué, disque plein, provider crashé). Avant le
+                // `!!` produisait un NPE générique enveloppé dans AppError.Storage sans
+                // message métier — debugging à l'aveugle.
+                val os = context.contentResolver.openOutputStream(uri, "w")
+                    ?: error("openOutputStream returned null for backup URI")
+                os.use {
+                    it.write(out.toByteArray())
+                    it.flush()
                 }
                 uri
             },
@@ -159,7 +165,10 @@ class BackupService @Inject constructor(
                 sb.append(" read=\"").append(if (m.read) 1 else 0).append("\" />\n")
             }
             sb.append("</smses>\n")
-            context.contentResolver.openOutputStream(uri, "w")!!.use {
+            // v1.6.1 (audit QUAL-04) — idem, diagnostic explicite.
+            val os = context.contentResolver.openOutputStream(uri, "w")
+                ?: error("openOutputStream returned null for XML backup URI")
+            os.use {
                 it.write(sb.toString().toByteArray(Charsets.UTF_8))
             }
             uri

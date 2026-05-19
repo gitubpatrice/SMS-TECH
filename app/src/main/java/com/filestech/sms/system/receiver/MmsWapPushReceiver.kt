@@ -95,10 +95,11 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                     val transactionId = parsed.transactionId?.let { String(it) }
                     val sender = parsed.from?.string
                     val res = downloader.download(contentLocation, transactionId, sender)
-                    Timber.i(
-                        "MMS auto-download triggered loc=%s size=%d outcome=%s",
-                        contentLocation, size, res,
-                    )
+                    // v1.6.1 (audit SEC-06) — `loc=%s` retiré : `contentLocation` est
+                    // l'URL MMSC opérateur qui peut contenir un token de session ou un
+                    // identifiant de transaction dans le path/query. En debug logcat
+                    // c'était lisible par toute app détentrice de READ_LOGS.
+                    Timber.i("MMS auto-download triggered size=%d outcome=%s", size, res)
                 } else {
                     Timber.w("MMS auto-download skipped (size=%d > %d)", size, MAX_AUTO_DOWNLOAD_BYTES)
                 }

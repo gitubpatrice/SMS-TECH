@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -118,8 +119,15 @@ fun ConversationRow(
                         )
                         Spacer(Modifier.width(6.dp))
                     }
+                    // v1.6.1 (audit PERF-03) — `relativeRowLabel` alloue 2 Calendar
+                    // par appel ; sur liste de 50 conversations qui recompose lors d'une
+                    // arrivée SMS, c'est 100 allocations Calendar inutiles. La clef
+                    // `lastMessageAt` garantit le recalcul si la date change réellement.
+                    val dateLabel = remember(conversation.lastMessageAt) {
+                        formatters.relativeRowLabel(conversation.lastMessageAt)
+                    }
                     Text(
-                        text = formatters.relativeRowLabel(conversation.lastMessageAt),
+                        text = dateLabel,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
                         ),

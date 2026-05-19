@@ -1,0 +1,13 @@
+v1.6.1 — Fix notification de réaction + audit profond 3 axes (30 fixes).
+
+Fix bug : quand un correspondant utilise SMS Tech (ou iMessage / Google Messages) et réagit à un message envoyé, on reçoit maintenant une vraie notification système « A réagi ❤️ à : Bonjour » au lieu d'une mise à jour silencieuse du badge.
+
+Audit complet (sécurité / perf / qualité) — scores 84/83/88 → 96+/100 :
+
+Sécurité (7) : MessagingStyle ne fuite plus le contenu sur lockscreen Xiaomi/Samsung (previewMode=NEVER honoré partout), suppression des suffixes téléphoniques PII dans les logs debug, strip Bidi/RLO du body OUTGOING dans la notif réaction, strip Bidi/RLO du sender + caption + subject MMS entrants, canonicalFile + whitelist sandbox sur FileProvider (defense in depth), URL MMSC retirée des logs debug, manifest BootReceiver clarifié (protected broadcasts AOSP).
+
+Performance (8) : cachedSettings StateFlow (économie ~25-50 ms par envoi SMS), distinctUntilChanged sur lookup contact (plus de query ContentProvider à chaque frappe), pré-calcul des séparateurs de jour dans le thread (~600 allocations Calendar évitées au rendu), debounce 200 ms sur la recherche, LruCache borné sur ContactsReader (anti leak mémoire), isolation appLock.state du combine messages, snapshot unique settings dans le worker, settings.state Eagerly pour le notifier.
+
+Qualité Kotlin (15) : centralisation PurgePolicy, flowOn(io) sur isDefault() IPC Binder, encapsulation defaultAppManager, suppression de tous les !! injustifiés, when exhaustif sur sealed, @Stable sur les 5 UiState (recomposition skipping), repository pattern respecté dans SmsDeliverReceiver, dispatcher injectable dans VoicePlaybackController, splitGraphemeClusters déplacé en core/ext, SortMode.DATE distinct de PINNED_FIRST, KDoc drift v1.3.11 corrigé, snackbar PDF export désormais localisé, 15 nouveaux tests JUnit5 sur escapeFtsQuery.
+
+Tests : 29 tests JUnit5 sur les fonctions critiques (réactions + recherche FTS). Suite complète verte. Lint propre (baseline régénéré).

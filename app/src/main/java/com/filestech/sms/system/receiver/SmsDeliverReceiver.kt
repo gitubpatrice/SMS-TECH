@@ -4,13 +4,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import com.filestech.sms.R
 import com.filestech.sms.core.ext.stripInvisibleChars
-import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
 import com.filestech.sms.domain.repository.BlockedNumberRepository
+import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +36,14 @@ class SmsDeliverReceiver : BroadcastReceiver() {
     @Inject lateinit var mirror: ConversationMirror
     @Inject lateinit var blockedRepo: BlockedNumberRepository
     @Inject lateinit var notifier: IncomingMessageNotifier
-    @Inject lateinit var messageDao: MessageDao
+
+    /**
+     * v1.6.1 (audit QUAL-10) — passe désormais par le Repository plutôt que d'accéder
+     * directement au DAO. Garde la couche system décorrélée de la couche data/db et
+     * profite des invariants Repository (mapper Entity → Domain) au lieu de manipuler
+     * une row Room nue.
+     */
+    @Inject lateinit var conversationRepo: ConversationRepository
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -89,6 +97,42 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                             telephonyUri = sysUri?.toString(),
                             date = ts,
                         )
+                        // v1.6.1 — fix : poste une notification système pour que
+                        // l'expéditeur du message d'origine sache qu'on a réagi à son
+                        // message (parité iMessage / Google Messages). Avant v1.6.1 le
+                        // badge se mettait à jour silencieusement, ce qui faisait
+                        // croire que la fonction "envoyer ma réaction" ne marchait pas.
+                        // Le body de la notif est localisé via [R.string
+                        // .reaction_notif_body_with_preview] / `_no_preview` selon que
+                        // le message ciblé avait un texte ou non (cas voice MMS / image
+                        // sans légende). `previewMode` côté [IncomingMessageNotifier]
+                        // s'occupe encore de masquer le contenu si l'utilisateur a
+                        // choisi de cacher les aperçus.
+                        // v1.6.1 (audit SEC-07) — strip Bidi/RLO/ZWSP du body OUTGOING
+                        // avant injection dans la string de notif. Le body d'un message
+                        // sortant n'est PAS passé par `stripInvisibleChars` à l'écriture
+                        // (contrairement au body entrant) car il vient de l'utilisateur ;
+                        // mais un copier-coller depuis le web peut contenir des contrôles
+                        // BiDi qui inverseraient visuellement la notif.
+                        val targetPreview = applied.targetBody.stripInvisibleChars().trim().take(80)
+                        val notifBody = if (targetPreview.isEmpty()) {
+                            context.getString(
+                                R.string.reaction_notif_body_no_preview,
+                                decoded.emoji,
+                            )
+                        } else {
+                            context.getString(
+                                R.string.reaction_notif_body_with_preview,
+                                decoded.emoji,
+                                targetPreview,
+                            )
+                        }
+                        notifier.notifyIncoming(
+                            address = address,
+                            body = notifBody,
+                            messageId = applied.targetMessageId,
+                            conversationId = applied.conversationId,
+                        )
                         return@launch
                     }
                     // Decoded but no matching outgoing message (the user removed it, or
@@ -110,7 +154,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 // [IncomingMessageNotifier.cancelAllForConversation] (appelée à l'ouverture
                 // du thread) puisse l'effacer en utilisant le groupe. Lookup O(1) sur PK,
                 // négligeable face au I/O télémetrie déjà fait juste avant.
-                val convId = messageDao.findById(msgId)?.conversationId
+                val convId = conversationRepo.findMessageById(msgId)?.conversationId
                 if (convId != null) {
                     notifier.notifyIncoming(
                         address = address,

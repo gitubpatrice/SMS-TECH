@@ -25,6 +25,8 @@ class ComposeViewModel @Inject constructor(
     private val conversationRepo: ConversationRepository,
 ) : ViewModel() {
 
+    // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
+    @androidx.compose.runtime.Stable
     data class UiState(
         val query: String = "",
         val results: List<Contact> = emptyList(),

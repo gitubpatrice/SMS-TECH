@@ -42,6 +42,8 @@ class MigrationViewModel @Inject constructor(
     private val mirror: ConversationMirror,
     private val settings: SettingsRepository,
 ) : ViewModel() {
+    // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
+    @androidx.compose.runtime.Stable
     data class UiState(val isRunning: Boolean = false, val imported: Int = 0, val done: Boolean = false)
 
     private val _state = MutableStateFlow(UiState())

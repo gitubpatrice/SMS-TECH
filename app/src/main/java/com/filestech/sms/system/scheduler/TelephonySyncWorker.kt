@@ -20,6 +20,9 @@ import com.filestech.sms.data.mms.MmsSystemWriteback
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.data.voice.VoiceRecorder
+import com.filestech.sms.domain.purge.MS_PER_DAY
+import com.filestech.sms.domain.purge.SAFETY_NET_DAYS
+import com.filestech.sms.domain.purge.purgeCutoffMs
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -57,7 +60,14 @@ class TelephonySyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
-            runImport()
+            // v1.6.1 (audit PERF-08) — snapshot unique des settings en début de
+            // `doWork()` et passé aux helpers qui en ont besoin. Avant : 2 lectures
+            // DataStore séparées (`first()` au début de runImport + au début de la
+            // purge auto) = 2× IO + 2× désérialisation proto. Worker s'exécute toutes
+            // les 12 h donc impact absolu faible, mais le pattern est aligné avec
+            // PERF-01 dans le reste du code.
+            val snapshot = settings.flow.first()
+            runImport(snapshot)
             // Audit M-6: opportunistic housekeeping. Outbound MMS / voice caches accumulate when
             // the `SmsSentReceiver` never fires (process force-killed, OS skips the broadcast);
             // we prune anything older than 24 h here. Inbound caches are intentionally **not**
@@ -94,7 +104,7 @@ class TelephonySyncWorker @AssistedInject constructor(
             // (30/60/180 j) il est strictement plus large donc neutre. Favoris (starred=1)
             // épargnés au niveau du DAO.
             runCatching {
-                val sec = settings.flow.first().security
+                val sec = snapshot.security
                 val days = sec.autoDeleteOlderThanDays
                 if (days != null && days > 0) {
                     val now = System.currentTimeMillis()
@@ -110,9 +120,10 @@ class TelephonySyncWorker @AssistedInject constructor(
                         }
                         Timber.i("Auto-purge: first run, anchor set; first purge in %d days", AUTO_PURGE_INTERVAL_MS / MS_PER_DAY)
                     } else if (now - last >= AUTO_PURGE_INTERVAL_MS) {
-                        val retentionCutoff = now - days.toLong() * MS_PER_DAY
-                        val safetyNetCutoff = now - SAFETY_NET_DAYS * MS_PER_DAY
-                        val cutoff = minOf(retentionCutoff, safetyNetCutoff)
+                        // v1.6.1 (audit QUAL-01) — `purgeCutoffMs` est la source unique
+                        // partagée avec [ConversationRepositoryImpl] ; les constantes
+                        // SAFETY_NET_DAYS et MS_PER_DAY viennent de [PurgePolicy].
+                        val cutoff = purgeCutoffMs(days, now)
                         val purged = messageDao.purgeOlderThan(cutoff)
                         if (purged > 0) {
                             // v1.3.3 G1 audit fix — refresh preview/last_message_at après
@@ -145,8 +156,8 @@ class TelephonySyncWorker @AssistedInject constructor(
      * 500-row pages via [ConversationMirror.bulkImportFromTelephony]. Idempotent: the
      * `telephony_uri` UNIQUE index + `OnConflictStrategy.IGNORE` make re-runs safe.
      */
-    private suspend fun runImport() {
-        val sinceId = settings.flow.first().advanced.lastSyncedSmsId
+    private suspend fun runImport(snapshot: com.filestech.sms.data.local.datastore.AppSettings) {
+        val sinceId = snapshot.advanced.lastSyncedSmsId
         val fp = runCatching { reader.snapshotSmsFingerprint() }.getOrNull()
         if (fp == null) {
             Timber.w("Sync: fingerprint query failed (READ_SMS revoked?) — skipping import pass")
@@ -217,23 +228,20 @@ class TelephonySyncWorker @AssistedInject constructor(
     companion object {
         const val PERIODIC_NAME = "telephony_sync_periodic"
         const val ONE_SHOT_NAME = "telephony_sync_oneshot"
-        private const val STALE_CACHE_AGE_MS = 24L * 60L * 60L * 1_000L
+        // v1.6.1 (audit QUAL-16) — `STALE_CACHE_AGE_MS` exprimé via [MS_PER_DAY] (était
+        // une expansion en clair `24L * 60L * 60L * 1_000L` ≡ MS_PER_DAY, source de
+        // duplication silencieuse).
+        private val STALE_CACHE_AGE_MS = MS_PER_DAY
         private const val PENDING_TIMEOUT_MS = 15L * 60L * 1_000L
-        /** v1.3.0 — millisecondes / jour, partagé entre les calculs de purge. */
-        private const val MS_PER_DAY: Long = 24L * 60L * 60L * 1_000L
-        /**
-         * v1.3.0 — safety net auto-purge : aucun message des N derniers jours n'est jamais
-         * supprimé, quel que soit le setting de rétention choisi par l'utilisateur. Un
-         * seul site de définition (ici) pour faciliter un changement futur.
-         */
-        private const val SAFETY_NET_DAYS: Long = 5L
+        // v1.6.1 (audit QUAL-01) — MS_PER_DAY et SAFETY_NET_DAYS centralisés dans
+        // [com.filestech.sms.domain.purge.PurgePolicy]. Importés en tête de fichier.
         /**
          * v1.3.0 — cadence de l'auto-nettoyage. Le worker tourne toutes les 12 h pour
          * d'autres raisons (sync SMS, watchdogs PENDING / OUTBOX) mais on gate la purge
          * sur 30 jours pour matcher l'attente utilisateur ("1 fois par mois"). Le bouton
          * "Effacer maintenant" du dialog réglages bypass complètement ce gate.
          */
-        private const val AUTO_PURGE_INTERVAL_MS: Long = 30L * MS_PER_DAY
+        private val AUTO_PURGE_INTERVAL_MS: Long = 30L * MS_PER_DAY
 
         /**
          * Enqueues the recurring 12 h job. Uses [ExistingPeriodicWorkPolicy.KEEP] so repeated

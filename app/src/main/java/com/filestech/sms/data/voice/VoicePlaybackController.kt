@@ -4,9 +4,10 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
+import com.filestech.sms.di.MainDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -38,6 +39,14 @@ import javax.inject.Singleton
 @Singleton
 class VoicePlaybackController @Inject constructor(
     @ApplicationContext private val context: Context,
+    /**
+     * v1.6.1 (audit QUAL-11) — dispatcher Main injecté plutôt qu'hardcodé. Reste
+     * `Dispatchers.Main.immediate` en prod (cf. [com.filestech.sms.di.CoroutineModule])
+     * car `MediaPlayer.start/pause/seekTo` requièrent le thread principal, mais les
+     * tests peuvent désormais injecter un `TestDispatcher` pour contrôler l'horloge
+     * du ticker progression sans bloquer le main thread.
+     */
+    @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
 ) {
 
     data class PlaybackState(
@@ -48,7 +57,7 @@ class VoicePlaybackController @Inject constructor(
         val durationMs: Int = 0,
     )
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 

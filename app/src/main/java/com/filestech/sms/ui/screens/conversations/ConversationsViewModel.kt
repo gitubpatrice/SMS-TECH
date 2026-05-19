@@ -10,16 +10,22 @@ import com.filestech.sms.data.local.datastore.SortMode
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sync.TelephonySyncManager
+import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.usecase.BlockNumberUseCase
 import com.filestech.sms.domain.usecase.ToggleConversationStateUseCase
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,7 +54,10 @@ class ConversationsViewModel @Inject constructor(
     private val syncManager: TelephonySyncManager,
     private val appLock: AppLockManager,
     private val blockNumber: BlockNumberUseCase,
-    val defaultAppManager: DefaultSmsAppManager,
+    // v1.6.1 (audit QUAL-03) — privé : la screen passe désormais par
+    // [buildChangeDefaultIntent] au lieu de manipuler le manager directement.
+    private val defaultAppManager: DefaultSmsAppManager,
+    @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val archivedFlag: Boolean = savedStateHandle.get<Boolean>("archived") ?: false
@@ -69,6 +78,9 @@ class ConversationsViewModel @Inject constructor(
         viewModelScope.launch { runCatching { mirror.refreshContactNames() } }
     }
 
+    // v1.6.1 (audit QUAL-17) — @Stable : Compose traite la classe comme stable et
+    // skip les recompositions de sous-arbres dont les inputs n'ont pas changé.
+    @androidx.compose.runtime.Stable
     data class UiState(
         val isLoading: Boolean = true,
         val conversations: List<Conversation> = emptyList(),
@@ -89,10 +101,23 @@ class ConversationsViewModel @Inject constructor(
         val isPanicDecoy: Boolean = false,
     )
 
+    /**
+     * v1.6.1 (audit PERF-06) — `debounce(200ms)` sur la query de recherche pour éviter
+     * une recomposition LazyColumn complète à chaque frappe. Une saisie rapide "bonjour"
+     * (7 frappes en < 200 ms) déclenchait 7 filterConversations + 7 émissions stateIn.
+     * Désormais : un seul filter + une seule émission après stabilisation. La valeur
+     * vide est émise immédiatement (cas "effacer la recherche") via `distinctUntilChanged`
+     * appliqué sur l'OUTPUT du debounce — pas de perte de réactivité perceptible.
+     */
+    @OptIn(FlowPreview::class)
+    private val debouncedQuery = query
+        .debounce { q -> if (q.isEmpty()) 0L else 200L }
+        .distinctUntilChanged()
+
     val state: StateFlow<UiState> = combine(
         repo.observeAll(includeArchived = archivedFlag),
         settings.flow,
-        query,
+        debouncedQuery,
         // Merge the default-SMS-refresh tick with the lock state stream so we stay at 5 typed
         // arguments to `combine` (kotlinx coroutines's typed overloads cap at 5; beyond that we
         // would have to fall back to the `Array<*>` variadic form, which loses type safety).
@@ -115,12 +140,28 @@ class ConversationsViewModel @Inject constructor(
             importedCount = (syncState as? TelephonySyncManager.State.Running)?.importedSoFar ?: 0,
             isPanicDecoy = lockState is AppLockManager.LockState.PanicDecoy,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())
+    }
+        // v1.6.1 (audit QUAL-02) — `defaultAppManager.isDefault()` est un IPC Binder
+        // synchrone (RoleManager.isRoleHeld + ContentProvider query) qui peut bloquer
+        // ~5-15 ms sur OEM lents. `flowOn(io)` déplace tout le `combine` sur le
+        // dispatcher IO ; le dernier émetteur (stateIn) bascule sur Main pour la
+        // souscription côté Compose, comme attendu.
+        .flowOn(io)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())
 
     /** Forces a re-evaluation of [DefaultSmsAppManager.isDefault]. Call from ON_RESUME / role result. */
     fun refreshDefaultStatus() {
         defaultRefreshTick.update { it + 1 }
     }
+
+    /**
+     * v1.6.1 (audit QUAL-03) — facade pour la screen, qui n'a plus à tenir une référence
+     * directe à [DefaultSmsAppManager] (couche data). Retourne l'`Intent` à lancer pour
+     * que l'utilisateur choisisse SMS Tech comme app SMS par défaut, ou `null` si l'OS
+     * n'expose pas cette demande (Android < 7 — hors target ici puisque minSdk=26).
+     */
+    fun buildChangeDefaultIntent(): android.content.Intent? =
+        defaultAppManager.buildChangeDefaultIntent()
 
     /**
      * Triggered by the host screen when SMS permissions are freshly granted, so the sync manager
@@ -147,9 +188,11 @@ class ConversationsViewModel @Inject constructor(
     }
 
     private fun sortConversations(rows: List<Conversation>, mode: SortMode): List<Conversation> = when (mode) {
-        SortMode.DATE -> rows.sortedWith(
-            compareByDescending<Conversation> { it.pinned }.thenByDescending { it.lastMessageAt },
-        )
+        // v1.6.1 (audit QUAL-14) — DATE = tri par date pure SANS prioriser les
+        // épinglés (avant : DATE et PINNED_FIRST produisaient le même tri à
+        // l'identique, ce qui rendait DATE indistinguable de PINNED_FIRST pour
+        // l'utilisateur qui sélectionnait l'un ou l'autre).
+        SortMode.DATE -> rows.sortedByDescending { it.lastMessageAt }
         SortMode.UNREAD_FIRST -> rows.sortedWith(
             compareByDescending<Conversation> { it.unreadCount > 0 }.thenByDescending { it.lastMessageAt },
         )

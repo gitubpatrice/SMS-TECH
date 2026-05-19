@@ -1,0 +1,5 @@
+v1.6.1 — Fix notification de réaction.
+
+Quand le correspondant utilise SMS Tech (ou iMessage / Google Messages) et réagit à un message qu'on a envoyé, on reçoit maintenant une notification système (« A réagi ❤️ à : Bonjour ») au lieu d'une mise à jour silencieuse du badge.
+
+Régression introduite en v1.4.1 lors du fold Tapback : le `return@launch` du receiver sautait toute la branche notification. Le bug n'a pas été détecté par l'audit v1.6.0 (passé sur les axes ReDoS / cap UI / a11y / qualité, pas sur le wiring de notif). Tests verts.

@@ -278,7 +278,7 @@ fun ConversationsScreen(
             )
             if (!state.isDefaultSmsApp && !archived) {
                 DefaultAppBanner(onSetDefault = {
-                    viewModel.defaultAppManager.buildChangeDefaultIntent()?.let { intent ->
+                    viewModel.buildChangeDefaultIntent()?.let { intent ->
                         defaultAppLauncher.launch(intent)
                     }
                 })

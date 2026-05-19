@@ -18,6 +18,7 @@ import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
 import com.filestech.sms.domain.model.toDomain
+import com.filestech.sms.domain.purge.purgeCutoffMs
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
@@ -117,29 +118,40 @@ class ConversationRepositoryImpl @Inject constructor(
      * threads pay zero attachment cost because the bulk SELECT against `attachments` returns
      * an empty list (covered by the `message_id` index).
      */
-    override fun observeMessages(conversationId: Long): Flow<List<Message>> =
-        combine(
-            appLock.state,
+    override fun observeMessages(conversationId: Long): Flow<List<Message>> {
+        // v1.6.1 (audit PERF-05) — `appLock.state` isolé du combine principal afin que
+        // chaque déverrouillage biométrique / timeout lock NE déclenche PAS la
+        // reconstruction complète des messages + fetch attachments. Avant : tout
+        // changement d'état lock = ~5-15 ms IO inutile sur thread actif de 200 msgs.
+        // Désormais : la reconstruction (incluant le bulk attachment fetch) ne tourne
+        // qu'au changement effectif de la conv ou de la liste messages. Le filtre
+        // panic-decoy s'applique sur le résultat déjà calculé, en O(1).
+        val baseFlow = combine(
             conversationDao.observeById(conversationId),
             messageDao.observeForConversation(conversationId),
-        ) { lockState, conv, rows ->
-            if (lockState is AppLockManager.LockState.PanicDecoy && conv?.inVault == true) {
-                emptyList<Message>()
-            } else {
-                // Single bulk fetch — only hit Room if at least one row claims an attachment.
-                // Avoids the SELECT round-trip on text-only conversations entirely.
-                val needAttachments = rows.any { it.attachmentsCount > 0 }
-                val attachmentsByMessage: Map<Long, List<Attachment>> =
-                    if (needAttachments) {
-                        attachmentDao.findForConversation(conversationId)
-                            .groupBy { it.messageId }
-                            .mapValues { (_, list) -> list.map { it.toDomain() } }
-                    } else emptyMap()
-                rows.map { entity ->
-                    entity.toDomain(attachmentsByMessage[entity.id].orEmpty())
-                }
+        ) { conv, rows ->
+            // Single bulk fetch — only hit Room if at least one row claims an attachment.
+            // Avoids the SELECT round-trip on text-only conversations entirely.
+            val needAttachments = rows.any { it.attachmentsCount > 0 }
+            val attachmentsByMessage: Map<Long, List<Attachment>> =
+                if (needAttachments) {
+                    attachmentDao.findForConversation(conversationId)
+                        .groupBy { it.messageId }
+                        .mapValues { (_, list) -> list.map { it.toDomain() } }
+                } else emptyMap()
+            val messages = rows.map { entity ->
+                entity.toDomain(attachmentsByMessage[entity.id].orEmpty())
             }
+            conv to messages
         }.flowOn(io)
+        return combine(baseFlow, appLock.state) { (conv, messages), lockState ->
+            if (lockState is AppLockManager.LockState.PanicDecoy && conv?.inVault == true) {
+                emptyList()
+            } else {
+                messages
+            }
+        }
+    }
 
     override fun observeUnreadConversationCount(): Flow<Int> =
         conversationDao.observeUnreadConversationCount().flowOn(io)
@@ -248,19 +260,8 @@ class ConversationRepositoryImpl @Inject constructor(
         purged
     }
 
-    /**
-     * v1.3.0 — calcule le cutoff effectif pour la purge : `min(now - days·DAY, now - 5j)`.
-     * Le filet 5 jours interne (anti-misconfig) est plus large que tout choix exposé
-     * (30/60/180 j), donc neutre en pratique mais conserve une garantie défensive si une
-     * future option agressive (ou clé dev) descend sous 5 jours.
-     */
-    private fun purgeCutoffMs(days: Int): Long {
-        val now = System.currentTimeMillis()
-        val msPerDay = 24L * 60L * 60L * 1_000L
-        val retentionCutoff = now - days.toLong() * msPerDay
-        val safetyNetCutoff = now - SAFETY_NET_DAYS * msPerDay
-        return minOf(retentionCutoff, safetyNetCutoff)
-    }
+    // v1.6.1 (audit QUAL-01) — `purgeCutoffMs` et `SAFETY_NET_DAYS` centralisés dans
+    // [com.filestech.sms.domain.purge.PurgePolicy]. Tous les call sites passent par là.
 
     /**
      * Deletes a single SMS / MMS row from the system content provider, identified by the URI we
@@ -289,39 +290,11 @@ class ConversationRepositoryImpl @Inject constructor(
         messageDao.findById(id)?.toDomain()
     }
 
-    /**
-     * Audit P11 + R3: SQLite FTS4 treats `"`, `*`, `^`, `:`, `-`, `(`, `)`, `+` as syntax. A query
-     * containing any of these previously made `MATCH` raise `SQLiteException` at runtime. The
-     * previous implementation wrapped each token in double quotes and suffixed `*` AFTER the
-     * closing quote — which is invalid FTS4 syntax (`"foo"*` is not a prefix query).
-     *
-     * The new strategy:
-     *  - drop control chars (C0, DEL, bidi/zero-width)
-     *  - per token: strip every FTS reserved char so the token contains only safe word chars
-     *  - per (non-blank) token: append `*` to enable prefix matching
-     *  - join tokens with a single space (implicit AND in FTS)
-     */
-    private fun escapeFtsQuery(input: String): String {
-        val cleaned = input
-            .replace(Regex("[\\u0000-\\u001F\\u007F]"), " ")
-            .replace(Regex("[\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]"), "")
-            .trim()
-        if (cleaned.isEmpty()) return ""
-        return cleaned
-            .split(Regex("\\s+"))
-            .asSequence()
-            .map { it.replace(Regex("[\"*^():+\\-]"), "") }
-            .filter { it.isNotBlank() }
-            .joinToString(separator = " ") { "${it}*" }
-    }
+    // v1.6.1 (audit QUAL-18) — délégation à la fonction top-level pure
+    // [escapeFtsQuery] (testable sans instance ConversationRepositoryImpl).
+    private fun escapeFtsQuery(input: String): String =
+        com.filestech.sms.data.repository.escapeFtsQuery(input)
 
-    private companion object {
-        /**
-         * v1.3.0 — filet de sécurité interne du nettoyage historique : aucun message des
-         * N derniers jours n'est jamais effacé, quel que soit le réglage utilisateur. Sert
-         * de garde-fou défensif au cas où une future option agressive ou une clé dev
-         * descendrait sous ce seuil. Source unique partagée avec [TelephonySyncWorker].
-         */
-        const val SAFETY_NET_DAYS: Long = 5L
-    }
+    // v1.6.1 (audit QUAL-01) — SAFETY_NET_DAYS centralisé dans
+    // [com.filestech.sms.domain.purge.PurgePolicy]. Plus de companion local nécessaire.
 }

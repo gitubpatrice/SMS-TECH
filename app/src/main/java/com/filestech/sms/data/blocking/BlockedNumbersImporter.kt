@@ -95,10 +95,14 @@ class BlockedNumbersImporter @Inject constructor(
             if (matchCount == 0) continue
             if (matchCount < addrSuffixes.size) {
                 partialMatch += 1
-                Timber.d("Purge: conv #%d partial-block (%d/%d) addrs=%s — keeping", entity.id, matchCount, addrSuffixes.size, addrSuffixes)
+                // v1.6.1 (audit SEC-05) — `addrs=%s` retiré : les suffixes téléphoniques
+                // 8 chiffres sont des quasi-identifiants PII (RGPD). En release R8 strip
+                // tout l'appel Timber via assumenosideeffects mais en debug logcat les
+                // exposait à toute app détentrice de READ_LOGS.
+                Timber.d("Purge: conv #%d partial-block (%d/%d) — keeping", entity.id, matchCount, addrSuffixes.size)
                 continue
             }
-            Timber.i("Purge: deleting conv #%d (all %d participants blocked) addrs=%s", entity.id, addrSuffixes.size, addrSuffixes)
+            Timber.i("Purge: deleting conv #%d (all %d participants blocked)", entity.id, addrSuffixes.size)
             runCatching { conversationRepo.delete(entity.id) }
                 .onSuccess { purged += 1 }
                 .onFailure { Timber.w(it, "Purge of blocked conv #%d failed", entity.id) }

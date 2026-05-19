@@ -21,7 +21,6 @@ import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.repository.ContactRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,7 +44,11 @@ class IncomingMessageNotifier @Inject constructor(
         // Falls back gracefully if READ_CONTACTS is denied or no match exists.
         val senderName = runCatching { contacts.lookupByPhone(address)?.displayName }.getOrNull()
             ?.takeIf { it.isNotBlank() } ?: address
-        val s = settings.flow.first()
+        // v1.6.1 (audit PERF-11) — lecture synchrone via le snapshot chaud StateFlow
+        // hydraté par [SettingsRepository.state] au boot. Avant : `flow.first()` =
+        // ouverture DataStore + désérialisation proto sur CHAQUE SMS entrant (5-15 ms
+        // sous charge), retardant la notif d'autant.
+        val s = settings.state.value
         if (!s.notifications.enabled) return@withContext
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -95,8 +98,19 @@ class IncomingMessageNotifier @Inject constructor(
             .setContentTitle(senderName)
             .setContentText(visiblePreview)
             .setStyle(
+                // v1.6.1 (audit SEC-01) — Passe `visiblePreview` (redacté quand
+                // `previewMode` est NEVER / WHEN_UNLOCKED) au lieu de `body` brut.
+                // L'ancien code laissait fuiter le contenu via `MessagingStyle.Message`
+                // sur certains OEMs (Xiaomi MIUI / HyperOS, Samsung One UI < 5) qui
+                // ignorent `VISIBILITY_SECRET` pour MessagingStyle. Désormais le body
+                // sensible n'est exposé QUE quand l'utilisateur a explicitement choisi
+                // PreviewMode.ALWAYS.
                 NotificationCompat.MessagingStyle(person).addMessage(
-                    NotificationCompat.MessagingStyle.Message(body, System.currentTimeMillis(), person),
+                    NotificationCompat.MessagingStyle.Message(
+                        visiblePreview,
+                        System.currentTimeMillis(),
+                        person,
+                    ),
                 ),
             )
             .setVisibility(

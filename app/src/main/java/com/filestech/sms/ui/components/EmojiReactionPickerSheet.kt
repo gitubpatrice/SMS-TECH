@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.filestech.sms.R
+import com.filestech.sms.core.ext.splitGraphemeClusters
 
 /**
  * v1.3.0 / v1.5.0 — Bottom sheet pour réagir à un message. Grille de 24 emojis populaires
@@ -209,53 +210,10 @@ private const val EMOJIS_PER_ROW = 6
  */
 const val MAX_REACTION_EMOJIS: Int = 3
 
-/**
- * v1.5.0 — découpe une chaîne en clusters de graphèmes Unicode (ZWJ family, drapeau,
- * emoji + variation selector restent ATOMIQUES). Implémentation maison naïve mais
- * suffisante pour les emojis courants : on regroupe surrogate pairs + ZWJ + VS-16
- * (U+FE0F). Pas de dépendance ICU.
- */
-internal fun String.splitGraphemeClusters(): MutableList<String> {
-    val out = mutableListOf<String>()
-    if (isEmpty()) return out
-    var i = 0
-    while (i < length) {
-        val sb = StringBuilder()
-        // Base char : surrogate pair (BMP supplementary) ou simple BMP char.
-        if (i < length - 1 && this[i].isHighSurrogate() && this[i + 1].isLowSurrogate()) {
-            sb.append(this[i]); sb.append(this[i + 1]); i += 2
-        } else {
-            sb.append(this[i]); i++
-        }
-        // Glob ZWJ continuations + variation selectors + further surrogate pairs.
-        while (i < length) {
-            val c = this[i]
-            val code = c.code
-            val isZwj = code == 0x200D
-            val isVs = code in 0xFE00..0xFE0F
-            val isSkinTone = i < length - 1 && c.isHighSurrogate() &&
-                this[i + 1].isLowSurrogate() &&
-                ((code - 0xD800) * 0x400 + (this[i + 1].code - 0xDC00) + 0x10000) in 0x1F3FB..0x1F3FF
-            if (isZwj || isVs) {
-                sb.append(c); i++
-                // ZWJ is followed by another base char — fold it into the same cluster.
-                if (isZwj && i < length) {
-                    if (i < length - 1 && this[i].isHighSurrogate() && this[i + 1].isLowSurrogate()) {
-                        sb.append(this[i]); sb.append(this[i + 1]); i += 2
-                    } else {
-                        sb.append(this[i]); i++
-                    }
-                }
-            } else if (isSkinTone) {
-                sb.append(this[i]); sb.append(this[i + 1]); i += 2
-            } else {
-                break
-            }
-        }
-        out += sb.toString()
-    }
-    return out
-}
+// v1.6.1 (audit QUAL-13) — `splitGraphemeClusters` déplacé vers
+// [com.filestech.sms.core.ext.splitGraphemeClusters] (`core/ext/StringExt.kt`). C'est
+// une fonction utilitaire String partagée avec [ThreadScreen] et n'appartenait pas à
+// un composable UI. Les call sites importent désormais directement depuis core/ext.
 
 /**
  * v1.3.0 — palette de 24 emojis quick-pick (4 lignes × 6 colonnes). Choisis pour couvrir

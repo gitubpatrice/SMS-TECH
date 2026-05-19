@@ -305,6 +305,11 @@
     <!-- v1.6.0 — a11y reaction badge (TalkBack) -->
     <string name="reaction_badge_content_description">Reaction %1$s</string>
     <string name="reaction_badge_remove_action">Remove reaction</string>
+    <!-- v1.6.1 — body of the system notification fired when someone reacts to our message -->
+    <string name="reaction_notif_body_with_preview">Reacted %1$s to: %2$s</string>
+    <string name="reaction_notif_body_no_preview">Reacted %1$s to your message</string>
+    <!-- v1.6.1 — snackbar shown when PDF export fails (audit QUAL-07 i18n fix) -->
+    <string name="snack_pdf_export_failed">PDF export failed</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>

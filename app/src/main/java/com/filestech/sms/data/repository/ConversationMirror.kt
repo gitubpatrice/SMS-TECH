@@ -188,12 +188,19 @@ class ConversationMirror @Inject constructor(
     /**
      * v1.4.1 — outcome of [applyIncomingReaction]. `null` = no matching outgoing
      * message was found (caller falls back to inserting the body as a plain incoming
-     * SMS). Non-null carries the `conversationId` and the body of the outgoing
-     * message the reaction was glued onto — both are consumed by the receiver to
-     * post a "Marie a réagi ❤️ : …" system notification.
+     * SMS). Non-null carries the `conversationId`, the `targetMessageId` (Room id of
+     * the outgoing message the reaction was glued onto) and the body of that message
+     * — all three are consumed by the receiver to post a "<sender> a réagi ❤️ : …"
+     * system notification (v1.6.1).
+     *
+     * `targetMessageId` is required by
+     * [com.filestech.sms.system.notifications.IncomingMessageNotifier.notifyIncoming]
+     * to derive a stable, non-colliding notification id (one notif per reacted
+     * message) and to deep-link the user back to the precise message on tap.
      */
     data class ReactionApplied(
         val conversationId: Long,
+        val targetMessageId: Long,
         val targetBody: String,
     )
 
@@ -230,7 +237,11 @@ class ConversationMirror @Inject constructor(
             }
         } ?: return@withContext null
         messageDao.setReaction(target.id, emoji)
-        ReactionApplied(conversationId = existing.id, targetBody = target.body)
+        ReactionApplied(
+            conversationId = existing.id,
+            targetMessageId = target.id,
+            targetBody = target.body,
+        )
     }
 
     /**

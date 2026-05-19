@@ -103,3 +103,56 @@ fun String.stripInvisibleChars(): String =
 private val INVISIBLE_CHARS_REGEX = Regex(
     "[\\u00AD\\u034F\\u061C\\u180E\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\uFFFC\\uFFFD]"
 )
+
+/**
+ * v1.6.1 (audit QUAL-13, déplacé depuis `ui.components.EmojiReactionPickerSheet`) —
+ * découpe une chaîne en clusters de graphèmes Unicode (ZWJ family, drapeau, emoji +
+ * variation selector, skin-tone modifier restent ATOMIQUES). Implémentation maison
+ * naïve mais suffisante pour les emojis courants : on regroupe surrogate pairs +
+ * ZWJ (U+200D) + variation selectors (U+FE00..U+FE0F) + skin-tone modifiers
+ * (U+1F3FB..U+1F3FF). Pas de dépendance ICU.
+ *
+ * Utilisé par le picker emoji multi-sélection (cap à 3 clusters) ET par le cap UX
+ * du custom emoji dialog côté ThreadScreen — c'est donc une fonction utilitaire
+ * partagée qui appartient à `core/ext/` plutôt qu'à un composant UI.
+ */
+fun String.splitGraphemeClusters(): MutableList<String> {
+    val out = mutableListOf<String>()
+    if (isEmpty()) return out
+    var i = 0
+    while (i < length) {
+        val sb = StringBuilder()
+        // Base char : surrogate pair (BMP supplementary) ou simple BMP char.
+        if (i < length - 1 && this[i].isHighSurrogate() && this[i + 1].isLowSurrogate()) {
+            sb.append(this[i]); sb.append(this[i + 1]); i += 2
+        } else {
+            sb.append(this[i]); i++
+        }
+        // Glob ZWJ continuations + variation selectors + further surrogate pairs.
+        while (i < length) {
+            val c = this[i]
+            val code = c.code
+            val isZwj = code == 0x200D
+            val isVs = code in 0xFE00..0xFE0F
+            val isSkinTone = i < length - 1 && c.isHighSurrogate() &&
+                this[i + 1].isLowSurrogate() &&
+                ((code - 0xD800) * 0x400 + (this[i + 1].code - 0xDC00) + 0x10000) in 0x1F3FB..0x1F3FF
+            if (isZwj || isVs) {
+                sb.append(c); i++
+                if (isZwj && i < length) {
+                    if (i < length - 1 && this[i].isHighSurrogate() && this[i + 1].isLowSurrogate()) {
+                        sb.append(this[i]); sb.append(this[i + 1]); i += 2
+                    } else {
+                        sb.append(this[i]); i++
+                    }
+                }
+            } else if (isSkinTone) {
+                sb.append(this[i]); sb.append(this[i + 1]); i += 2
+            } else {
+                break
+            }
+        }
+        out += sb.toString()
+    }
+    return out
+}

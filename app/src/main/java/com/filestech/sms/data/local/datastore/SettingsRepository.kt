@@ -8,9 +8,15 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.filestech.sms.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,8 +25,25 @@ private val Context.dataStore by preferencesDataStore(name = "sms_tech_settings"
 @Singleton
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    @ApplicationScope private val appScope: CoroutineScope,
 ) {
     val flow: Flow<AppSettings> = context.dataStore.data.map { prefs -> prefs.toAppSettings() }
+
+    /**
+     * v1.6.1 (audit PERF-01 / PERF-11) — snapshot chaud partagé via [StateFlow]. Tous
+     * les call sites qui n'ont besoin que de la valeur courante des settings (notif
+     * incoming, dispatch SMS, worker auto-purge) devraient lire `state.value` au lieu
+     * de `flow.first()` qui ouvre/lit/ferme le fichier DataStore à chaque appel
+     * (~5-10 ms × N call sites).
+     *
+     * `SharingStarted.Eagerly` car on est `@Singleton` scoped à l'app : on garde un
+     * unique collect actif pour toute la durée de vie du processus, ce qui est exactement
+     * le comportement attendu (les settings sont consultés en permanence par les
+     * receivers, workers, viewmodels). Le seul coût est la première hydration au boot.
+     */
+    val state: StateFlow<AppSettings> = flow.stateIn(
+        appScope, SharingStarted.Eagerly, AppSettings(),
+    )
 
     suspend fun update(transform: (AppSettings) -> AppSettings) {
         context.dataStore.edit { prefs ->

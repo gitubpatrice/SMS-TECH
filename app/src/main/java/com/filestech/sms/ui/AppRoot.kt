@@ -184,7 +184,7 @@ fun AppRoot() {
             ThreadScreen(
                 conversationId = args.conversationId,
                 onBack = { nav.popBackStack() },
-                // v1.3.11 (F5) — forward to existing conversation. Pop the source thread
+                // v1.4.0 (F5 forward feature) — forward to existing conversation. Pop the source thread
                 // so the back stack reads [Conversations -> Thread(dest)] instead of
                 // [Conversations -> Thread(source) -> Thread(dest)] which would surprise
                 // the user on back press.
@@ -192,7 +192,7 @@ fun AppRoot() {
                     nav.popBackStack()
                     nav.navigate(Thread(destId))
                 },
-                // v1.3.11 (F5) — forward to a new recipient: route to ComposeScreen.
+                // v1.4.0 (F5 forward feature) — forward to a new recipient: route to ComposeScreen.
                 // The IncomingShareHolder payload posted by `stageForward` is still
                 // present when ComposeScreen's `onConversationCreated` navigates to
                 // the newly-created thread, where `consumeIncomingShareIfAny` picks it

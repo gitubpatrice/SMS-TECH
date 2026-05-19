@@ -110,10 +110,10 @@ import com.filestech.sms.ui.components.AttachmentPickerSheet
 import com.filestech.sms.ui.components.AudioMessageBubble
 import com.filestech.sms.ui.components.BurstPosition
 import com.filestech.sms.ui.components.ComposerReplyChip
+import com.filestech.sms.core.ext.splitGraphemeClusters
 import com.filestech.sms.ui.components.MAX_REACTION_EMOJIS
 import com.filestech.sms.ui.components.MessageBubble
 import com.filestech.sms.ui.components.ReplyQuotePreview
-import com.filestech.sms.ui.components.splitGraphemeClusters
 import com.filestech.sms.ui.components.toPlaybackUri
 import com.filestech.sms.ui.util.daySeparatorLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
@@ -460,6 +460,28 @@ fun ThreadScreen(
         // recomposition — wasted work given the formatters are stateless cached singletons.
         val todayLabel = stringResource(R.string.date_today)
         val yesterdayLabel = stringResource(R.string.date_yesterday)
+        // v1.6.1 (audit PERF-04) — pré-calcul des séparateurs de jour HORS du lambda
+        // `itemsIndexed`. Avant : `sameDay` + `daySeparatorLabel` allouaient 3 Calendar
+        // par message visible (≈ 600 allocations sur thread de 200 msgs au premier rendu)
+        // ET re-couraient à chaque recomposition partielle (mise à jour `read` d'un
+        // message). Désormais : un seul `remember(state.messages, todayLabel,
+        // yesterdayLabel)` recalcule la liste de labels (`null` = pas de séparateur, sinon
+        // le label localisé prêt à afficher). Le bloc se reconstruit uniquement quand la
+        // liste change OU si la langue change (todayLabel/yesterdayLabel sont keys).
+        val daySeparatorLabels: List<String?> = remember(
+            state.messages, todayLabel, yesterdayLabel,
+        ) {
+            state.messages.mapIndexed { index, msg ->
+                val prev = state.messages.getOrNull(index - 1)
+                if (prev == null || !sameDay(prev.date, msg.date)) {
+                    formatters.daySeparatorLabel(
+                        timestampMillis = msg.date,
+                        todayLabel = todayLabel,
+                        yesterdayLabel = yesterdayLabel,
+                    )
+                } else null
+            }
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             state = listState,
@@ -470,15 +492,9 @@ fun ThreadScreen(
                 val showTimestamp = prev?.date?.let { msg.date - it > 5 * 60_000L } ?: true
 
                 // Insert a centered date divider whenever we cross a calendar-day boundary
-                // (including the first message of the thread).
-                if (prev == null || !sameDay(prev.date, msg.date)) {
-                    DateSeparator(
-                        label = formatters.daySeparatorLabel(
-                            timestampMillis = msg.date,
-                            todayLabel = todayLabel,
-                            yesterdayLabel = yesterdayLabel,
-                        ),
-                    )
+                // (including the first message of the thread). v1.6.1 — label pré-calculé.
+                daySeparatorLabels.getOrNull(index)?.let { label ->
+                    DateSeparator(label = label)
                 }
 
                 val burstPosition = computeBurstPosition(prev, msg, next)

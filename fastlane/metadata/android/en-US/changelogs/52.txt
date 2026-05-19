@@ -1,0 +1,5 @@
+v1.6.1 — Reaction notification fix.
+
+When the correspondent uses SMS Tech (or iMessage / Google Messages) and reacts to a message we sent, we now get a system notification ("Reacted ❤️ to: Hello") instead of a silent badge update.
+
+Regression introduced in v1.4.1 when the Tapback fold path landed: the receiver's `return@launch` skipped the entire notification branch. The bug was missed by the v1.6.0 audit (which covered ReDoS / UI cap / a11y / quality, but not notif wiring). Tests green.

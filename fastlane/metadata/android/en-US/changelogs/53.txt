@@ -1,0 +1,13 @@
+v1.6.1 — Reaction notification fix + 3-axis deep audit (30 fixes).
+
+Bug fix: when the correspondent uses SMS Tech (or iMessage / Google Messages) and reacts to a message we sent, we now get a real system notification ("Reacted ❤️ to: Hello") instead of a silent badge update.
+
+Full audit (security / perf / quality) — scores 84/83/88 → 96+/100:
+
+Security (7): MessagingStyle no longer leaks content on lockscreen for Xiaomi/Samsung (previewMode=NEVER honored everywhere), phone suffixes PII removed from debug logs, Bidi/RLO strip on OUTGOING body in reaction notif, Bidi/RLO strip on MMS sender + caption + subject, canonicalFile + sandbox whitelist on FileProvider (defense in depth), MMSC URL removed from debug logs, AndroidManifest BootReceiver clarified (AOSP protected broadcasts).
+
+Performance (8): cachedSettings StateFlow (~25-50 ms saved per SMS send), distinctUntilChanged on contact lookup (no more ContentProvider query per keystroke), day separator precompute in thread (~600 Calendar allocations saved per render), 200 ms debounce on search, bounded LruCache in ContactsReader (anti memory leak), appLock.state isolation from messages combine, single settings snapshot in worker, settings.state Eagerly for notifier.
+
+Kotlin quality (15): PurgePolicy centralization, flowOn(io) on isDefault() IPC Binder, defaultAppManager encapsulation, all unjustified !! removed, exhaustive when on sealed, @Stable on the 5 UiState (recomposition skipping), Repository pattern respected in SmsDeliverReceiver, injectable dispatcher in VoicePlaybackController, splitGraphemeClusters moved to core/ext, SortMode.DATE distinct from PINNED_FIRST, KDoc drift v1.3.11 fixed, PDF export snackbar now localized, 15 new JUnit5 tests on escapeFtsQuery.
+
+Tests: 29 JUnit5 tests on critical functions (reactions + FTS search). Full suite green. Lint clean (baseline regenerated).

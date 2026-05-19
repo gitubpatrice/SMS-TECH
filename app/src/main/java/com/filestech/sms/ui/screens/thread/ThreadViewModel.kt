@@ -8,6 +8,7 @@ import com.filestech.sms.core.ext.asEvents
 import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.ml.TranslationService
 import com.filestech.sms.data.sms.SmsSegmentCounter
@@ -30,11 +31,15 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -87,6 +92,14 @@ class ThreadViewModel @Inject constructor(
         ) : VoiceState
     }
 
+    /**
+     * v1.6.1 (audit QUAL-17) — `@Stable` indique au compilateur Compose que les écritures
+     * sur les propriétés `val` de la data class sont observables via le moteur de runtime
+     * (StateFlow chez nous). Sans cette annotation, Compose marque la classe `unstable` et
+     * recompose tout sous-arbre qui la lit dès qu'un parent change. Avec 14 champs ici,
+     * le gain est significatif sur l'animation/scroll des bulles.
+     */
+    @androidx.compose.runtime.Stable
     data class UiState(
         val isLoading: Boolean = true,
         val conversation: Conversation? = null,
@@ -190,6 +203,20 @@ class ThreadViewModel @Inject constructor(
 
     private var recorderJob: Job? = null
 
+    /**
+     * v1.6.1 (audit PERF-01) — snapshot des AppSettings partagé entre tous les call sites
+     * du ViewModel. Avant : chaque envoi SMS/MMS/réaction faisait `settings.flow.first()`
+     * qui ouvre/lit/ferme le fichier DataStore (~5-10 ms × 5 sites = jusqu'à 50 ms de
+     * latence cumulée sur clavier rapide). Désormais : un seul collect partagé via
+     * `stateIn(WhileSubscribed(5_000))`, lecture synchrone `.value` zéro-I/O.
+     *
+     * `WhileSubscribed(5_000)` aligné avec le pattern UI du projet (cf. ConversationsVM) :
+     * libère le collect 5 s après le dernier subscriber pour ne pas garder un job actif
+     * quand le ViewModel est inactif (rotation écran, mise en arrière-plan brève).
+     */
+    private val cachedSettings: StateFlow<AppSettings> = settings.flow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), AppSettings())
+
     init {
         // v1.3.9 — déclare la conversation comme "active foreground" pour que
         // `IncomingMessageNotifier` puisse poser un `setTimeoutAfter` court (~1500 ms)
@@ -200,10 +227,20 @@ class ThreadViewModel @Inject constructor(
 
         // Audit Q3: ONE observation of the conversation row (seeds the draft on first emission
         // only — subsequent emissions don't overwrite what the user is typing).
-        repo.observeOne(conversationId).onEach { conv ->
+        // v1.6.1 (audit PERF-02) — la lookup contact est séparée et déclenchée UNIQUEMENT
+        // quand le numéro du destinataire change. Avant : chaque frappe clavier mettait à
+        // jour le champ `draft` de la conversation → l'`onEach` se redéclenchait → query
+        // ContentProvider Contacts sur chaque frappe (jusqu'à 30 ms par lookup en cache miss).
+        val convFlow = repo.observeOne(conversationId)
+        convFlow.onEach { conv ->
             _state.update { st ->
+                // v1.6.1 (audit QUAL-06) — `conv?.draft.orEmpty()` au lieu de
+                // `conv!!.draft.orEmpty()`. Si `seededDraft = true` alors `conv.draft`
+                // est non-vide donc `conv != null` ; mais le compilateur ne capture pas
+                // l'invariante à travers deux variables séparées. `?.` produit le même
+                // résultat ("" si null) sans risque NPE si un refactor casse l'invariante.
                 val seededDraft = !st.draftSeeded && !conv?.draft.isNullOrEmpty()
-                val draft = if (seededDraft) conv!!.draft.orEmpty() else st.draft
+                val draft = if (seededDraft) conv?.draft.orEmpty() else st.draft
                 st.copy(
                     conversation = conv,
                     draft = draft,
@@ -211,10 +248,15 @@ class ThreadViewModel @Inject constructor(
                     draftSeeded = st.draftSeeded || conv != null,
                 )
             }
-            val firstNumber = conv?.addresses?.firstOrNull()?.raw
-            val has = firstNumber?.let { contactRepo.lookupByPhone(it) != null } ?: false
-            _state.update { it.copy(hasContact = has) }
         }.launchIn(viewModelScope)
+        convFlow
+            .map { conv -> conv?.addresses?.firstOrNull()?.raw }
+            .distinctUntilChanged()
+            .onEach { firstNumber ->
+                val has = firstNumber?.let { contactRepo.lookupByPhone(it) != null } ?: false
+                _state.update { it.copy(hasContact = has) }
+            }
+            .launchIn(viewModelScope)
 
         var markedReadAtLeastOnce = false
         repo.observeMessages(conversationId).onEach { msgs ->
@@ -255,7 +297,7 @@ class ThreadViewModel @Inject constructor(
                 dispatchPendingAttachments()
                 return@launch
             }
-            val confirm = settings.flow.first().sending.confirmBeforeBroadcast
+            val confirm = cachedSettings.value.sending.confirmBeforeBroadcast
             if (confirm) {
                 _state.update { it.copy(pendingSend = body) }
             } else {
@@ -325,7 +367,7 @@ class ThreadViewModel @Inject constructor(
         if (msg.body.isBlank()) return
         _state.update { it.copy(translations = it.translations + (messageId to TranslationState.Pending)) }
         viewModelScope.launch {
-            val targetTag = settings.flow.first().locale.languageTag
+            val targetTag = cachedSettings.value.locale.languageTag
                 ?: java.util.Locale.getDefault().language
             when (val res = translator.translate(msg.body, targetTag)) {
                 is Outcome.Success -> _state.update {
@@ -414,7 +456,7 @@ class ThreadViewModel @Inject constructor(
                 val targetMessage = repo.findMessageById(targetMessageId)
                 if (targetMessage == null || targetMessage.isOutgoing) return@runCatching
 
-                val sending = settings.flow.first().sending
+                val sending = cachedSettings.value.sending
                 if (!sending.sendReactionsToRecipient) return@runCatching
 
                 // v1.4.1 — the confirmation dialog is only triggered on First (so the
@@ -466,9 +508,10 @@ class ThreadViewModel @Inject constructor(
                 // dialog pour la prochaine fois. Seul un Sent confirme le contrat user.
                 //
                 // v1.3.6 audit P1 — lit le snapshot sending une seule fois et passe
-                // `reactionEmojiOnly` au dispatcher (au lieu d'un second `settings.flow.first()`
+                // `reactionEmojiOnly` au dispatcher (au lieu d'un second `cachedSettings.value`
                 // dans le dispatcher lui-même → 2 lectures DataStore par envoi).
-                val emojiOnly = settings.flow.first().sending.reactionEmojiOnly
+                // v1.6.1 audit PERF-01 — lecture synchrone zéro-I/O via cachedSettings.
+                val emojiOnly = cachedSettings.value.sending.reactionEmojiOnly
                 val outcome = dispatchReactionSms(messageId, emoji, emojiOnly)
                 if (outcome == DispatchOutcome.Sent && neverAskAgain) {
                     settings.update {
@@ -880,7 +923,7 @@ class ThreadViewModel @Inject constructor(
         if (_state.value.voice !is VoiceState.Reviewing) return
         if (_state.value.isSendingVoice) return
         viewModelScope.launch {
-            val confirm = settings.flow.first().sending.confirmBeforeBroadcast
+            val confirm = cachedSettings.value.sending.confirmBeforeBroadcast
             if (confirm) {
                 _state.update { it.copy(pendingVoiceConfirm = true) }
             } else {
@@ -931,7 +974,14 @@ class ThreadViewModel @Inject constructor(
         viewModelScope.launch {
             when (val r = exportPdf.invoke(conversationId)) {
                 is Outcome.Success -> _events.tryEmit(Event.PdfReady(r.value.shareUri, r.value.pages))
-                is Outcome.Failure -> _events.tryEmit(Event.ShowSnackbar("PDF export failed", isError = true))
+                // v1.6.1 (audit QUAL-07) — string localisée (avant : "PDF export failed"
+                // affiché en anglais même sur device FR — regression i18n).
+                is Outcome.Failure -> _events.tryEmit(
+                    Event.ShowSnackbar(
+                        context.getString(com.filestech.sms.R.string.snack_pdf_export_failed),
+                        isError = true,
+                    ),
+                )
             }
             _state.update { it.copy(isExporting = false) }
         }
@@ -981,7 +1031,7 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
-     * v1.3.11 (F5) — stages the given [message] into [com.filestech.sms.system.share
+     * v1.4.0 (F5 forward feature) — stages the given [message] into [com.filestech.sms.system.share
      * .IncomingShareHolder] so the next [ThreadViewModel] that hydrates (i.e. the
      * destination thread the user picks in [com.filestech.sms.ui.components
      * .ForwardMessageSheet]) pulls it through [consumeIncomingShareIfAny] and pre-fills
@@ -1002,7 +1052,7 @@ class ThreadViewModel @Inject constructor(
         val attachment = message.attachments.firstOrNull()
         val uris = buildList {
             if (attachment != null && attachment.localUri.isNotBlank()) {
-                // v1.3.11 (S1) — local file paths are wrapped via FileProvider so the
+                // v1.4.0 (S1) — local file paths are wrapped via FileProvider so the
                 // resulting `content://` URI stays safe even if a future caller stuffs it
                 // into an outgoing Intent. Using `Uri.fromFile` here was technically OK
                 // (the consumer is intra-process via `ContentResolver.openInputStream`),

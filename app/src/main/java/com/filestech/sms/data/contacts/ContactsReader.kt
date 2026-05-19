@@ -4,11 +4,11 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.ContactsContract
+import android.util.LruCache
 import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.domain.model.Contact
 import com.filestech.sms.domain.model.PhoneAddress
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,16 +20,15 @@ import javax.inject.Singleton
  *
  * **Thread-safety.** This is a Hilt `@Singleton` consumed concurrently from receiver threads
  * (SmsDeliverReceiver, MmsDownloadedReceiver), Worker threads (TelephonySyncWorker), and
- * viewModelScopes (ConversationsViewModel.refreshContactNames). The historical
- * `mutableMapOf<...>()` (a non-synchronized `LinkedHashMap`) is **unsafe** under concurrent
- * writes on Android — a long-standing JVM/ART quirk where concurrent `put` calls can rehash
- * the table into a self-referential bucket linked list and pin the thread at 100 % CPU
- * forever. The symptom is a sporadic, non-reproducible ANR. Switching to
- * [ConcurrentHashMap] keeps the lookup O(1) and eliminates the race.
+ * viewModelScopes (ConversationsViewModel.refreshContactNames).
  *
- * `ConcurrentHashMap` does not accept null **values**, so we encode "no contact found" via
- * the [NEGATIVE] sentinel object rather than dropping the negative cache (which would
- * re-trigger a content-provider query on every miss).
+ * **v1.6.1 (audit PERF-07).** Le précédent `ConcurrentHashMap` non-borné laissait le
+ * cache grossir indéfiniment : chaque numéro inconnu rencontré (SMS spam, codes 2FA,
+ * livraisons) s'accumulait pour la durée de vie du processus. Sur deux ans d'usage =
+ * potentiellement 10 000+ entrées ≈ 3 Mo heap permanent. Remplacé par [LruCache] (qui
+ * est thread-safe et déjà disponible via `android.util` — pas de dep additionnelle).
+ * Bornes choisies pour rester sous ~500 KB heap dans le pire cas : 500 entrées
+ * positives × ~250 B = 125 KB ; 1000 entrées négatives × 50 B = 50 KB.
  */
 @Singleton
 class ContactsReader @Inject constructor(
@@ -37,13 +36,13 @@ class ContactsReader @Inject constructor(
 ) {
 
     private val resolver: ContentResolver get() = context.contentResolver
-    private val cache = ConcurrentHashMap<String, Contact>()
-    private val negativeCache = ConcurrentHashMap.newKeySet<String>()
+    private val cache = LruCache<String, Contact>(CONTACT_CACHE_MAX)
+    private val negativeCache = LruCache<String, Boolean>(NEGATIVE_CACHE_MAX)
 
     fun lookupByPhone(rawPhone: String): Contact? {
         val key = rawPhone.normalizePhone()
-        cache[key]?.let { return it }
-        if (key in negativeCache) return null
+        cache.get(key)?.let { return it }
+        if (negativeCache.get(key) != null) return null
         val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(rawPhone))
         val proj = arrayOf(
             ContactsContract.PhoneLookup._ID,
@@ -61,8 +60,11 @@ class ContactsReader @Inject constructor(
                 )
             }
         }
-        if (contact != null) cache[key] = contact!! else negativeCache.add(key)
-        return contact
+        // v1.6.1 (audit QUAL-05) — smart-cast post if(contact != null) suffit, pas
+        // besoin du !! qui trompait sur l'intention.
+        val resolved = contact
+        if (resolved != null) cache.put(key, resolved) else negativeCache.put(key, true)
+        return resolved
     }
 
     /** Read all visible contacts that have at least one phone number. Used by the new-message picker. */
@@ -98,7 +100,15 @@ class ContactsReader @Inject constructor(
     }
 
     fun invalidate() {
-        cache.clear()
-        negativeCache.clear()
+        cache.evictAll()
+        negativeCache.evictAll()
+    }
+
+    private companion object {
+        /** Max positive entries kept in RAM ; ~500 × 250 B = 125 KB ceiling. */
+        const val CONTACT_CACHE_MAX = 500
+
+        /** Max "no contact" entries kept in RAM ; bornes le pire cas SMS spam / 2FA. */
+        const val NEGATIVE_CACHE_MAX = 1000
     }
 }

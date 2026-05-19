@@ -276,13 +276,27 @@ private fun com.filestech.sms.domain.model.Attachment.toShareableUri(
     if (localUri.startsWith("content://")) {
         return Uri.parse(localUri)
     }
-    val file = File(localUri)
-    if (!file.exists()) {
-        Timber.w("Attachment.toShareableUri: file not found %s", localUri)
+    // v1.6.1 (audit SEC-09) — canonicalFile + whitelist filesDir/cacheDir defense-in-depth.
+    // FileProvider.getUriForFile() throw IllegalArgumentException si le path est hors des
+    // répertoires déclarés dans file_provider_paths.xml — c'est la protection effective —
+    // mais le whitelist explicite ici garantit qu'un `localUri` traversant (`../` injecté
+    // via PDU MMS corrompu ou migration DB) est rejeté AVANT même de toucher FileProvider.
+    val canonicalFile = runCatching { File(localUri).canonicalFile }.getOrNull()
+    if (canonicalFile == null || !canonicalFile.exists()) {
+        Timber.w("Attachment.toShareableUri: file not found or unresolvable")
+        return null
+    }
+    val allowedPrefixes = listOf(
+        runCatching { context.filesDir.canonicalPath }.getOrNull(),
+        runCatching { context.cacheDir.canonicalPath }.getOrNull(),
+    ).filterNotNull()
+    val absolutePath = canonicalFile.absolutePath
+    if (allowedPrefixes.none { absolutePath.startsWith(it + File.separator) || absolutePath == it }) {
+        Timber.w("Attachment.toShareableUri: path outside app sandbox, refusing")
         return null
     }
     return runCatching {
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", canonicalFile)
     }.getOrNull()
 }
 

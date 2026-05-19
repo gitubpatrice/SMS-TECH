@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.data.repository.ConversationMirror
@@ -132,15 +133,22 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     }
                 }
 
-                val sender = parsed.from?.string?.let(::stripMmsAddressSuffix) ?: senderHint ?: ""
+                // v1.6.1 (audit SEC-08) — strip Bidi/RLO/ZWSP sur sender + subject +
+                // caption avant d'arriver dans la notification système. Le PDU MMS est
+                // une entrée externe non-contrôlée ; sans cette sanitization un
+                // expéditeur malicieux pouvait inverser visuellement le preview notif
+                // (parité avec le path SMS qui appelle déjà stripInvisibleChars dans
+                // SmsDeliverReceiver).
+                val sender = (parsed.from?.string?.let(::stripMmsAddressSuffix) ?: senderHint ?: "")
+                    .stripInvisibleChars()
                 val date = (if (parsed.date > 0) parsed.date * 1000L else System.currentTimeMillis())
-                val subject = parsed.subject?.string?.takeIf { it.isNotBlank() }
+                val subject = parsed.subject?.string?.stripInvisibleChars()?.takeIf { it.isNotBlank() }
 
                 val body = parsed.body
                 val media = body?.let(::extractFirstMediaPart)
                 val mediaFile = media?.let { persistAttachment(appContext, it.first, it.second) }
                 val mime = media?.second
-                val caption = body?.let(::extractFirstTextCaption)
+                val caption = body?.let(::extractFirstTextCaption)?.stripInvisibleChars()
                 // `previewLabel` is the conversation-list line + notification text. It falls back
                 // to the Subject header, then to a mime-derived placeholder, so the user always
                 // sees something meaningful. `caption` (the raw user text) is what gets stored
