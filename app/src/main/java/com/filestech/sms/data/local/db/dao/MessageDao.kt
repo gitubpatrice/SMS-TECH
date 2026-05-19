@@ -11,7 +11,44 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface MessageDao {
 
-    @Query("SELECT * FROM messages WHERE conversation_id = :conversationId ORDER BY date ASC")
+    /**
+     * v1.4.1 — excludes the **reaction sentinel rows** so the thread doesn't paint
+     * an empty bubble for every Tapback-folded reaction. Two flavors of sentinel
+     * exist :
+     *
+     *   - **Incoming sentinel** — inserted by [com.filestech.sms.data.repository
+     *     .ConversationMirror.upsertReactionSentinel] after we fold an incoming
+     *     Tapback SMS into a reaction badge. Carries the `telephony_uri` of the
+     *     system inbox row so the UNIQUE index blocks
+     *     [com.filestech.sms.data.sync.TelephonySyncManager] from re-importing
+     *     the `Reacted ❤️ to «…»` body as a phantom text bubble.
+     *   - **Outgoing sentinel** — inserted by [com.filestech.sms.data.repository
+     *     .ConversationMirror.upsertOutgoingSms] when [SendReactionUseCase]
+     *     passes `localMirrorBody = ""`. The Tapback SMS is still on the wire +
+     *     in the system inbox (read by other SMS apps / the correspondent), but
+     *     the reactor doesn't see a redundant outgoing text bubble in their own
+     *     thread — they already have the local badge on the message they
+     *     reacted to.
+     *
+     * Both sentinels share the same shape : `body = ''` + no attachment + no
+     * reaction emoji, regardless of direction. A legitimate empty body always
+     * carries either an attachment (image / audio / file MMS without caption) or
+     * a reaction emoji, so the predicate is tight enough to never hide a real
+     * message — outgoing SMS reject blank bodies in [SendSmsUseCase] before they
+     * ever reach the DB.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversation_id = :conversationId
+          AND NOT (
+              body = ''
+              AND attachments_count = 0
+              AND reaction_emoji IS NULL
+          )
+        ORDER BY date ASC
+        """
+    )
     fun observeForConversation(conversationId: Long): Flow<List<MessageEntity>>
 
     @Query("SELECT * FROM messages WHERE id = :id")
@@ -63,6 +100,69 @@ interface MessageDao {
      */
     @Query("UPDATE messages SET reaction_emoji = :emoji WHERE id = :id")
     suspend fun setReaction(id: Long, emoji: String?)
+
+    /**
+     * v1.4.1 — finds the most recent OUTGOING message in [conversationId] whose body
+     * starts with [bodyPrefix] (used by the incoming Tapback parser to match a remote
+     * "Reacted ❤️ to «hello…»" SMS back to the original outgoing message it was reacting
+     * to). The lookup is scoped to outgoing messages because a reaction-back can only
+     * target something WE sent.
+     *
+     * The `bodyPrefix` is fed as the LHS of a SQL `LIKE :bodyPrefix || '%'` so the
+     * caller must escape any `%` / `_` / `\` it contains beforehand.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversation_id = :conversationId
+          AND direction = 1
+          AND body LIKE :bodyPrefix || '%' ESCAPE '\'
+        ORDER BY date DESC
+        LIMIT 1
+        """
+    )
+    suspend fun findMostRecentOutgoingByBodyPrefix(
+        conversationId: Long,
+        bodyPrefix: String,
+    ): MessageEntity?
+
+    /**
+     * v1.4.1 — finds the most recent OUTGOING message in [conversationId] regardless of
+     * its body. Used when the incoming Tapback has no `to «…»` segment (the reacting
+     * party reacted to a message with no text body, e.g. voice MMS or image-only).
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversation_id = :conversationId
+          AND direction = 1
+        ORDER BY date DESC
+        LIMIT 1
+        """
+    )
+    suspend fun findMostRecentOutgoing(conversationId: Long): MessageEntity?
+
+    /**
+     * v1.4.1 — finds the most recent OUTGOING message in [conversationId] whose `date`
+     * is strictly greater than [sinceMs] (epoch ms). Used by the emoji-only reaction
+     * decode path : a bare emoji SMS is only folded onto an outgoing message if that
+     * message was sent within the last ~5 minutes, so a standalone "❤️" sent days
+     * later cannot be silently glued onto an unrelated past message.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversation_id = :conversationId
+          AND direction = 1
+          AND date > :sinceMs
+        ORDER BY date DESC
+        LIMIT 1
+        """
+    )
+    suspend fun findMostRecentOutgoingAfter(
+        conversationId: Long,
+        sinceMs: Long,
+    ): MessageEntity?
 
     /**
      * Audit M-5 + M-1: stalls-watchdog. Bulk-promotes outgoing messages stuck in `PENDING`

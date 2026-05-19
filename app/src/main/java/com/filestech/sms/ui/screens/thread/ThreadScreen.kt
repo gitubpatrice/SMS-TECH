@@ -520,7 +520,17 @@ fun ThreadScreen(
                         } else null,
                         // v1.3.11 (F5) — forward a voice clip.
                         onForward = { forwardingMessage = msg },
-                        onRemoveReaction = { viewModel.setReaction(msg.id, null) },
+                        // v1.4.1 — tap-pour-retirer le badge n'est autorisé que sur les
+                        // messages INCOMING (la réaction a été posée localement par
+                        // l'utilisateur). Pour les OUTGOING (la réaction vient du
+                        // destinataire via Tapback fold), on ignore le tap : seul celui
+                        // qui a posé la réaction peut la retirer (convention iMessage).
+                        // Sans ce guard, retirer le badge localement créait une désync
+                        // visible — chez nous le badge disparaît, chez le destinataire il
+                        // reste affiché.
+                        onRemoveReaction = {
+                            if (msg.isIncoming) viewModel.setReaction(msg.id, null)
+                        },
                         repliedToPreview = previewFor(msg),
                         showTimestamp = showTimestamp,
                         senderLabel = senderLabel,
@@ -546,7 +556,17 @@ fun ThreadScreen(
                         // v1.3.11 (F5) — forward image / video / file attachment.
                         onForward = { forwardingMessage = msg },
                         onPhoneClick = onPhoneClick,
-                        onRemoveReaction = { viewModel.setReaction(msg.id, null) },
+                        // v1.4.1 — tap-pour-retirer le badge n'est autorisé que sur les
+                        // messages INCOMING (la réaction a été posée localement par
+                        // l'utilisateur). Pour les OUTGOING (la réaction vient du
+                        // destinataire via Tapback fold), on ignore le tap : seul celui
+                        // qui a posé la réaction peut la retirer (convention iMessage).
+                        // Sans ce guard, retirer le badge localement créait une désync
+                        // visible — chez nous le badge disparaît, chez le destinataire il
+                        // reste affiché.
+                        onRemoveReaction = {
+                            if (msg.isIncoming) viewModel.setReaction(msg.id, null)
+                        },
                         repliedToPreview = previewFor(msg),
                         senderLabel = senderLabel,
                     )
@@ -582,7 +602,17 @@ fun ThreadScreen(
                         // v1.3.11 (F5) — forward a plain text message.
                         onForward = { forwardingMessage = msg },
                         onPhoneClick = onPhoneClick,
-                        onRemoveReaction = { viewModel.setReaction(msg.id, null) },
+                        // v1.4.1 — tap-pour-retirer le badge n'est autorisé que sur les
+                        // messages INCOMING (la réaction a été posée localement par
+                        // l'utilisateur). Pour les OUTGOING (la réaction vient du
+                        // destinataire via Tapback fold), on ignore le tap : seul celui
+                        // qui a posé la réaction peut la retirer (convention iMessage).
+                        // Sans ce guard, retirer le badge localement créait une désync
+                        // visible — chez nous le badge disparaît, chez le destinataire il
+                        // reste affiché.
+                        onRemoveReaction = {
+                            if (msg.isIncoming) viewModel.setReaction(msg.id, null)
+                        },
                         repliedToPreview = previewFor(msg),
                         translationState = translationDisplay,
                         // Dismiss is exposed for every non-null state so user can collapse a
@@ -632,8 +662,12 @@ fun ThreadScreen(
         )
     }
 
-    // v1.3.0 — Emoji reaction quick-pick sheet
+    // v1.3.0 / v1.5.0 — Emoji reaction quick-pick sheet (multi-select)
     pickingReactionFor?.let { msgId ->
+        // v1.5.0 — pre-load the message's existing reaction so the sheet opens with
+        // it already selected. Lets the user add / remove an emoji from a multi
+        // reaction without having to re-tap everything from scratch.
+        val existingReaction = state.messages.firstOrNull { it.id == msgId }?.reactionEmoji
         com.filestech.sms.ui.components.EmojiReactionPickerSheet(
             onPicked = { emoji ->
                 viewModel.setReaction(msgId, emoji)
@@ -644,6 +678,7 @@ fun ThreadScreen(
                 customReactionFor = msgId
             },
             onDismiss = { pickingReactionFor = null },
+            currentReaction = existingReaction,
         )
     }
     // v1.3.0 — Emoji reaction custom dialog (bouton "Plus")

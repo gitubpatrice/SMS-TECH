@@ -100,7 +100,6 @@ class SettingsRepository @Inject constructor(
                 lastSyncedSmsId = p[K.lastSyncedSmsId] ?: 0L,
                 splashShown = p[K.splashShown] ?: false,
                 keepAliveService = p[K.keepAliveService] ?: false,
-                keepAliveOnboardingShown = p[K.keepAliveOnboardingShown] ?: false,
             ),
         )
     }
@@ -169,7 +168,6 @@ class SettingsRepository @Inject constructor(
         this[K.lastSyncedSmsId] = s.advanced.lastSyncedSmsId
         this[K.splashShown] = s.advanced.splashShown
         this[K.keepAliveService] = s.advanced.keepAliveService
-        this[K.keepAliveOnboardingShown] = s.advanced.keepAliveOnboardingShown
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -229,6 +227,5 @@ class SettingsRepository @Inject constructor(
         val lastSyncedSmsId = longPreferencesKey("advanced.lastSyncedSmsId")
         val splashShown = booleanPreferencesKey("advanced.splashShown")
         val keepAliveService = booleanPreferencesKey("advanced.keepAliveService")
-        val keepAliveOnboardingShown = booleanPreferencesKey("advanced.keepAliveOnboardingShown")
     }
 }

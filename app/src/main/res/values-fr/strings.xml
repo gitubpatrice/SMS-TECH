@@ -13,11 +13,7 @@
     <string name="keep_alive_notification_title">SMS Tech est actif</string>
     <string name="keep_alive_notification_text">Nécessaire pour recevoir vos SMS / MMS de manière fiable sur votre téléphone.</string>
     <string name="settings_keep_alive_title">Mode résistant (Xiaomi / Huawei…)</string>
-    <string name="settings_keep_alive_desc">Maintient SMS Tech actif en arrière-plan via une petite notification persistante. Nécessaire sur les ROMs agressives (Xiaomi MIUI/HyperOS, Huawei EMUI/HarmonyOS, Honor MagicOS, Oppo/Realme/OnePlus ColorOS, Vivo/iQOO FunTouch, Meizu Flyme, ASUS Zen UI) qui tuent sinon les apps SMS tierces et bloquent les MMS / notifications. Inutile sur Pixel, Samsung Galaxy, Sony, Fairphone, Motorola, Nokia, Nothing Phone — laisser OFF sur ces téléphones.</string>
-    <string name="oem_detected_dialog_title">Réglage recommandé pour votre téléphone</string>
-    <string name="oem_detected_dialog_body">Votre téléphone (%1$s) est connu pour tuer agressivement les apps SMS tierces en arrière-plan, ce qui peut empêcher la réception des SMS/MMS et les notifications. Activer le « Mode résistant » garde SMS Tech actif via une petite notification persistante — recommandé sur cet appareil.</string>
-    <string name="oem_detected_dialog_enable">Activer le mode résistant</string>
-    <string name="oem_detected_dialog_skip">Plus tard</string>
+    <string name="settings_keep_alive_desc">Maintient SMS Tech actif en arrière-plan via une notification permanente dans la barre de statut (contrat Android obligatoire pour tout service foreground — elle ne peut pas être effacée tant que le mode est ON). Utile sur les ROMs agressives (Xiaomi MIUI/HyperOS, Huawei EMUI/HarmonyOS, Honor MagicOS, Oppo/Realme/OnePlus ColorOS, Vivo/iQOO FunTouch, Meizu Flyme, ASUS Zen UI) qui tuent sinon les apps SMS tierces et bloquent les MMS / notifications. Inutile sur Pixel, Samsung Galaxy, Sony, Fairphone, Motorola, Nokia, Nothing Phone — laisser OFF sur ces téléphones.</string>
 
 
     <string name="action_send">Envoyer</string>
@@ -291,6 +287,9 @@
     <string name="reaction_picker_other_title">Emoji personnalisé</string>
     <string name="reaction_picker_other_body">Tape ou colle un emoji</string>
     <string name="reaction_picker_other_hint">😀</string>
+    <!-- v1.5.0 — bouton valider du picker multi-emoji -->
+    <string name="reaction_picker_validate_empty">Sélectionnez un ou plusieurs emojis</string>
+    <string name="reaction_picker_validate_count">Envoyer la réaction %1$s</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Activer les notifications</string>

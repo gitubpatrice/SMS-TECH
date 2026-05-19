@@ -53,6 +53,17 @@ class SendSmsUseCase @Inject constructor(
          * reçoit "❤️\n--\nPat" qui pollue le fil et casse la sémantique "réaction".
          */
         appendSignature: Boolean = true,
+        /**
+         * v1.4.1 — when non-null, overrides what the Room mirror stores as the row's
+         * `body` (the on-wire SMS body sent via `SmsManager` and mirrored into the
+         * system inbox `content://sms` remains the regular [body] / `finalBody`,
+         * untouched). Used by [SendReactionUseCase] to send a Tapback reaction to
+         * the correspondent while NOT painting a redundant outgoing text bubble in
+         * the reactor's own thread — the empty `""` row is filtered out at the DAO
+         * `observeForConversation` query level. Default `null` = mirror the wire
+         * body as-is (regular text SMS).
+         */
+        localMirrorBody: String? = null,
     ): Outcome<List<Long>> {
         if (!defaultAppManager.isDefault()) return Outcome.Failure(AppError.NotDefaultSmsApp)
         if (recipients.isEmpty()) return Outcome.Failure(AppError.Validation("no recipients"))
@@ -82,6 +93,7 @@ class SendSmsUseCase @Inject constructor(
                 subId = effectiveSubId,
                 initialStatus = MessageStatus.PENDING,
                 replyToMessageId = replyToMessageId,
+                localMirrorBody = localMirrorBody,
             )
             when (val res = sender.send(localId, r.raw, finalBody, effectiveSubId, deliveryReports)) {
                 is Outcome.Success -> ids += localId

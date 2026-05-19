@@ -373,9 +373,32 @@ class ThreadViewModel @Inject constructor(
                 .onFailure { timber.log.Timber.w(it, "setReaction(%d, %s) failed", messageId, emoji) }
                 .getOrNull() ?: return@launch
 
-            if (result !is SetReactionResult.First) return@launch
+            // v1.4.1 — dispatch SMS on BOTH First (null → emoji) AND Changed (A → B)
+            // transitions. The v1.3.1 silence-on-Changed rule was too defensive : users
+            // legitimately switch their mind ("oh wait, 👍 fits better than ❤️") and
+            // expect the correspondent to see the update too. Removed (emoji → null)
+            // stays local-only — Apple/Google Tapback has no "remove" wire format we
+            // could encode in a one-segment UCS-2 SMS.
+            //
+            // [SetReactionResult.Changed] does not carry the messageId (the sealed type
+            // is shared across the repo layer), so we close over the [messageId] /
+            // [emoji] parameters from the enclosing call — both are still in scope and
+            // describe the exact state the repo just committed.
+            val targetMessageId: Long
+            val targetEmoji: String
+            when (result) {
+                is SetReactionResult.First -> {
+                    targetMessageId = result.messageId
+                    targetEmoji = result.emoji
+                }
+                is SetReactionResult.Changed -> {
+                    targetMessageId = messageId
+                    targetEmoji = result.to
+                }
+                else -> return@launch
+            }
 
-            // v1.3.1 audit P1 — tout le bloc post-First est wrappé : un crash DataStore
+            // v1.3.1 audit P1 — tout le bloc post-dispatch est wrappé : un crash DataStore
             // (CorruptionException, IOException disque plein) ne doit pas remonter au
             // ViewModelScope (= crash process). Log + return safe.
             runCatching {
@@ -384,19 +407,24 @@ class ThreadViewModel @Inject constructor(
                 // pour ne MÊME PAS afficher le dialog confirm sur un cas invalide. Le repo
                 // a déjà mis à jour la colonne reaction_emoji ; on ne touche pas au badge
                 // local (cohérent avec la sémantique "réaction locale toujours possible").
-                val targetMessage = repo.findMessageById(result.messageId)
+                val targetMessage = repo.findMessageById(targetMessageId)
                 if (targetMessage == null || targetMessage.isOutgoing) return@runCatching
 
                 val sending = settings.flow.first().sending
                 if (!sending.sendReactionsToRecipient) return@runCatching
 
-                if (sending.reactionConfirmDismissed) {
-                    dispatchReactionSms(result.messageId, result.emoji, sending.reactionEmojiOnly)
+                // v1.4.1 — the confirmation dialog is only triggered on First (so the
+                // user gets to opt-in to "send my reactions" the very first time). For
+                // Changed, we assume the user has already validated the wire pattern
+                // and dispatch silently.
+                val isFirstEver = result is SetReactionResult.First
+                if (sending.reactionConfirmDismissed || !isFirstEver) {
+                    dispatchReactionSms(targetMessageId, targetEmoji, sending.reactionEmojiOnly)
                 } else {
-                    _events.tryEmit(Event.RequestReactionConfirm(result.messageId, result.emoji))
+                    _events.tryEmit(Event.RequestReactionConfirm(targetMessageId, targetEmoji))
                 }
             }.onFailure {
-                timber.log.Timber.w(it, "setReaction post-emit failed for %d", result.messageId)
+                timber.log.Timber.w(it, "setReaction post-emit failed for %d", targetMessageId)
             }
         }
     }
@@ -479,13 +507,16 @@ class ThreadViewModel @Inject constructor(
         // (la map croîtrait sinon linéairement avec le nb de messages réagis pendant
         // la vie du ViewModel). Coût O(N) acceptable car N est borné par la fenêtre
         // de dedup et l'activité utilisateur (typiquement < 50 entries).
-        recentlySentReactionFor.entries.removeAll { now - it.value > REACTION_DEDUP_WINDOW_MS }
+        recentlySentReactionFor.entries.removeAll { now - it.value.timestamp > REACTION_DEDUP_WINDOW_MS }
+        // v1.4.1 — dedup ne s'applique QU'AU MÊME emoji. Si l'utilisateur change
+        // (❤️ → 👍), la réaction part même si on est dans la fenêtre 60s — sinon le
+        // destinataire reste bloqué sur la 1ʳᵉ réaction et ne voit jamais le changement.
         val last = recentlySentReactionFor[messageId]
-        if (last != null && now - last < REACTION_DEDUP_WINDOW_MS) {
+        if (last != null && last.emoji == emoji && now - last.timestamp < REACTION_DEDUP_WINDOW_MS) {
             timber.log.Timber.d("dispatchReactionSms: dedup re-send on %d within %ds", messageId, REACTION_DEDUP_WINDOW_MS / 1000)
             return DispatchOutcome.DedupSkipped
         }
-        recentlySentReactionFor[messageId] = now
+        recentlySentReactionFor[messageId] = ReactionDispatch(emoji = emoji, timestamp = now)
         return when (val res = sendReaction(messageId, emoji, emojiOnly)) {
             is Outcome.Success -> DispatchOutcome.Sent
             is Outcome.Failure -> {
@@ -499,12 +530,19 @@ class ThreadViewModel @Inject constructor(
     private enum class DispatchOutcome { Sent, Failed, DedupSkipped }
 
     /**
-     * X2 — dedup en mémoire des envois récents de réactions. Clé = messageId, valeur =
-     * epoch ms de la dernière dispatch. RAM seulement (perdu au kill process) — voulu :
-     * c'est une protection courte fenêtre contre les rafales de taps, pas un journal
-     * pérenne. Suffit largement pour le cas d'usage "hésitation utilisateur".
+     * v1.4.1 — `(emoji, timestamp)` tuple. Track emoji in addition to time so the dedup
+     * only fires on **same emoji + within 60s** — a legitimate change of heart
+     * (❤️ → 👍) bypasses the window and reaches the correspondent.
      */
-    private val recentlySentReactionFor = mutableMapOf<Long, Long>()
+    private data class ReactionDispatch(val emoji: String, val timestamp: Long)
+
+    /**
+     * X2 — dedup en mémoire des envois récents de réactions. Clé = messageId, valeur =
+     * dernier `(emoji, epoch ms)` dispatché. RAM seulement (perdu au kill process) —
+     * voulu : c'est une protection courte fenêtre contre les rafales de taps sur
+     * **le même emoji**, pas un journal pérenne.
+     */
+    private val recentlySentReactionFor = mutableMapOf<Long, ReactionDispatch>()
 
     /**
      * Receives an attachment URI from [com.filestech.sms.ui.components.AttachmentPickerSheet]

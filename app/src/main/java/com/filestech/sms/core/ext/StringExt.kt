@@ -73,6 +73,33 @@ fun String.deterministicHue(): Int {
 private val OTP_REGEX = Regex("(?<!\\d)(\\d{4,8})(?!\\d)")
 fun String.extractOtp(): String? = OTP_REGEX.find(this)?.value
 
-/** Strips invisible bidi / zero-width characters often present in spam SMS. */
+/**
+ * Strips invisible bidi / zero-width / replacement characters often present in spam SMS.
+ *
+ * **v1.4.1 (SEC-02)** : widened beyond the original zero-width / bidi set to also cover
+ * Unicode invisibles that previously slipped through the `looksLikeEmojiOnly` heuristic in
+ * [com.filestech.sms.domain.reaction.IncomingReactionDecoder] — a body like
+ * `­❤` (soft-hyphen + heart) used to look like a pure-emoji body and could be
+ * forged by an attacker to push a reaction badge onto the victim's most recent outgoing
+ * message. Cleaning the body upstream (in `SmsDeliverReceiver`) closes the bypass for
+ * every consumer at once.
+ *
+ * Ranges and code-points covered :
+ *   - `­`       — SOFT HYPHEN (formerly invisible)
+ *   - `͏`       — COMBINING GRAPHEME JOINER
+ *   - `؜`       — ARABIC LETTER MARK (bidi)
+ *   - `᠎`       — MONGOLIAN VOWEL SEPARATOR (formerly whitespace, now zero-width)
+ *   - `​-‏` — zero-width space / non-joiner / joiner / LRM / RLM
+ *   - `‪-‮` — bidi explicit formatting (LRE/RLE/PDF/LRO/RLO)
+ *   - `⁠-⁤` — word joiner + invisible operators
+ *   - `⁦-⁩` — bidi isolates (LRI/RLI/FSI/PDI)
+ *   - `﻿`       — ZWNBSP / BOM
+ *   - `￼-�` — object replacement + replacement character
+ */
 fun String.stripInvisibleChars(): String =
-    this.replace(Regex("[\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]"), "")
+    this.replace(INVISIBLE_CHARS_REGEX, "")
+
+/** Compiled once at class-load — never re-allocated per call. */
+private val INVISIBLE_CHARS_REGEX = Regex(
+    "[\\u00AD\\u034F\\u061C\\u180E\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\uFFFC\\uFFFD]"
+)

@@ -2,7 +2,6 @@ package com.filestech.sms.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,7 +36,10 @@ import com.filestech.sms.ui.screens.thread.ThreadScreen
 import com.filestech.sms.ui.screens.vault.VaultScreen
 
 @androidx.compose.runtime.Composable
-fun AppRoot(appLock: AppLockManager = hiltViewModel<AppRootViewModel>().appLock) {
+fun AppRoot() {
+    val rootViewModel: AppRootViewModel = hiltViewModel()
+    val appLock: AppLockManager = rootViewModel.appLock
+    val incomingShare = rootViewModel.incomingShare
     val nav = rememberNavController()
     val lockState by appLock.state.collectAsStateWithLifecycle()
     // Fail-closed: anything that is NOT an explicit "open" state requires the lock screen.
@@ -71,6 +73,46 @@ fun AppRoot(appLock: AppLockManager = hiltViewModel<AppRootViewModel>().appLock)
         if (isPanicDecoy && nav.currentDestination?.route?.contains("Vault") == true) {
             nav.popBackStack(route = Vault, inclusive = true)
         }
+    }
+
+    // v1.4.1 — auto-route share-target arrivals to the contact picker. Without this,
+    // a `Pending` posted by [MainActivity.handleSharedIntent] silently sat in
+    // [IncomingShareHolder] until the user happened to open a thread, which felt
+    // like the share had been dropped (especially when the app was already in the
+    // foreground on an existing thread — the user just saw their previous
+    // conversation and assumed nothing happened).
+    //
+    // Flow now matches iMessage / Google Messages :
+    //   ACTION_SEND → Pending posted → AppRoot navigates to ComposeScreen → user
+    //   picks a contact → conversation created → ThreadScreen opens →
+    //   `consumeIncomingShareIfAny` stages the attachment into the composer.
+    //
+    // Guard rails :
+    //   - skip if the lock screen is up (user must unlock first; the Pending TTL
+    //     of 60 s covers a quick unlock),
+    //   - skip if we're already on Compose / Thread (the user is mid-flow),
+    //   - skip in panic-decoy state (sharing into the decoy session is forbidden
+    //     by design — the user's real conversations are not available there).
+    val pendingShare by incomingShare.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingShare, showLock, isPanicDecoy) {
+        val current = pendingShare ?: return@LaunchedEffect
+        if (showLock || isPanicDecoy) return@LaunchedEffect
+        if (current.isExpired()) return@LaunchedEffect
+        val route = nav.currentDestination?.route
+        val alreadyInFlow = route?.contains("Compose") == true ||
+            route?.contains("Thread") == true
+        if (alreadyInFlow) {
+            // v1.4.1 (SEC-03) — privacy fix : when a share arrives while the user is
+            // already inside a Thread (or in Compose), the Pending used to linger up to
+            // its 60 s TTL. If the user then navigated to ANOTHER thread within that
+            // window, `ThreadViewModel.consumeIncomingShareIfAny` would silently stage
+            // the shared attachment into that wrong conversation's composer — risking
+            // an accidental send to the wrong recipient. Clearing the Pending here is
+            // a small UX cost (the user has to share again) for a real privacy guard.
+            incomingShare.clear()
+            return@LaunchedEffect
+        }
+        nav.navigate(Compose())
     }
 
     // v1.3.7 — startDestination = Splash. Le SplashScreen se charge lui-même de :

@@ -1,0 +1,19 @@
+v1.5.0 — réactions emoji multi (jusqu'à 3 emojis) + fiabilité réactions Tapback de bout en bout.
+
+• Multi-emoji dans une réaction : appui long sur un message → Réagir → vous pouvez désormais empiler jusqu'à 3 emojis dans la même réaction (ex. ❤️ 👍 🎉). Tap un emoji pour le sélectionner / le retirer, puis bouton « Envoyer la réaction » pour valider. Le badge sur le message d'origine s'élargit automatiquement en pilule pour rendre lisible la combinaison.
+
+• Édition d'une réaction existante : rouvrir le picker sur un message déjà réagi pré-sélectionne ses emojis, pour ajouter / retirer sans repartir de zéro.
+
+• Réactions Tapback : quand vous réagissez à un message d'un autre utilisateur SMS Tech (ou d'iMessage / Google Messages), la réaction apparaît correctement comme un badge emoji discret sur la bulle d'origine au lieu d'un SMS texte parasite « Reacted ❤️ to «...» ». Vrai côté expéditeur ET côté destinataire.
+
+• Changement de réaction propagé : vous pouvez maintenant changer votre emoji (❤️ → 👍) ou réagir plusieurs fois dans la même minute, le destinataire voit la mise à jour. Avant, une protection anti-spam bloquait le 2ᵉ envoi.
+
+• Plus de bulle « Reacted ❤️ to «...» » parasite chez celui qui réagit : la réaction reste un badge local + un SMS technique invisible vers le correspondant, sans polluer le fil.
+
+• Retrait du dialog « Mode résistant Xiaomi » au 1er lancement (trop pushy). Le toggle reste accessible via Réglages → Avancé.
+
+• Partage Galerie → SMS Tech : ouvre maintenant directement le sélecteur de contact (comme iMessage / Google Messages).
+
+• Polish sécurité : caractères Unicode invisibles supplémentaires nettoyés (SOFT HYPHEN, WORD JOINER, etc.) pour qu'un SMS forgé ne déclenche pas de fausse réaction.
+
+Aucun changement de format de base, signature ou permission. 17 tests unitaires verts pour le nouveau décodeur de réactions et le découpage de graphèmes Unicode multi-emoji.

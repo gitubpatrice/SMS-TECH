@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.4.0** (2026-05-19)
+Current release : **v1.5.0** (2026-05-20)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -45,7 +45,79 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.4.0 (this release) — Ergonomics pack + voice bubble waveform
+### v1.5.0 (this release) — Multi-emoji reactions + Tapback bidirectional fidelity
+
+Minor SemVer bump. Two themes shipped together :
+
+1. **Multi-emoji reactions** (v1.5.0 feature) :
+   - `EmojiReactionPickerSheet` rewritten as a multi-select grid. Tap toggles an
+     emoji in/out of the current selection (highlighted with a `cs.primary` ring),
+     "Envoyer la réaction" commits the joined string. Cap at `MAX_REACTION_EMOJIS = 3`
+     to keep the badge readable.
+   - `EmojiReactionBadge` switched from fixed-size circle to an auto-growing pill
+     (min 28 dp height, min 28 dp width, rounded-rect with 14 dp corner = visual
+     circle for the single-emoji case ; widens horizontally for 2-3 emojis).
+   - `splitGraphemeClusters()` helper handles the multi-codepoint emojis (ZWJ
+     families, skin tones, variation selectors) so the picker's pre-selection
+     state and the badge rendering keep clusters atomic.
+   - The picker opens with the message's existing reaction pre-selected, allowing
+     additive edits without re-typing the full combination.
+   - The wire format (Tapback or emoji-only per `SendingSettings.reactionEmojiOnly`)
+     ships the joined string transparently — the receiving decoder accepts arbitrary
+     emoji sequences without code changes.
+
+2. **Tapback bidirectional fidelity** (folded the v1.4.1 backlog) :
+   - **Multi-react dispatch** : `ThreadViewModel.dispatchReactionSms` dedup map
+     switched from `Map<Long, Long>` (messageId → timestamp) to `Map<Long,
+     ReactionDispatch>` (messageId → emoji + timestamp). The 60 s dedup now only
+     fires when the SAME emoji is sent twice ; legitimate changes (❤️ → 👍) bypass
+     the window so the correspondent sees the update.
+   - **Send-on-change** : `setReaction` dispatches an outgoing SMS on both `First`
+     (null → emoji) AND `Changed` (A → B) transitions (was First-only since v1.3.1).
+     `Removed` stays local-only — Tapback has no "remove reaction" wire format.
+   - **Hide reactor's own outgoing Tapback bubble** : `upsertOutgoingSms` accepts a
+     new `localMirrorBody: String?` parameter ; `SendReactionUseCase` passes `""`
+     so the Tapback SMS still ships on-wire + lands in `content://sms` (legal duty
+     as default SMS app) but the reactor's own thread no longer paints a redundant
+     `"Reacted ❤️ to «…»"` text bubble. The empty Room row is filtered out by
+     `MessageDao.observeForConversation` (`body='' AND attach=0 AND reaction IS NULL`
+     regardless of direction).
+   - `touchConversation` is skipped when `mirrorBody.isEmpty()` so the conversation
+     list does not show a blank preview / wrong sort order from the sentinel row.
+
+**Carryover from v1.4.0 / v1.4.1 backlog** (already in v1.4.0 but kept here for
+trace) : MMS reception unblocked on Android 10+, multi-MIME attachment extraction,
+caption ↔ previewLabel decoupling, KeepAliveService opt-in, AttachmentPicker `*/*`,
+voice bubble waveform, file picker open to all MIME types.
+
+**Defensive audit fixes shipped with this release**
+- **SEC-01** : `upsertReactionSentinel` drops a poison-pill Room row carrying the
+  same `telephonyUri` as the system inbox row after a Tapback fold, so
+  `TelephonySyncManager` cannot re-import the body as a phantom text bubble. The
+  sentinel is filtered out at the DAO level (body='' + 0 attach + 0 reaction).
+- **SEC-02** : `stripInvisibleChars` widened to also strip U+00AD (soft hyphen),
+  U+034F (combining grapheme joiner), U+061C, U+180E, U+2060–2064, U+FFFC, U+FFFD.
+  Closes an attack path where a forged SMS like `­❤` could pass the
+  pure-emoji heuristic and forcibly pin a reaction badge.
+- **SEC-03** : `AppRoot` share-target route now clears `IncomingShareHolder.pending`
+  when the user is already inside a Thread or Compose — prevents the pending
+  payload from being silently stuffed into a different conversation later.
+- **SEC-04** : phone number address removed from a `Timber.i` log line for
+  consistency with the project-wide PII-out-of-logs policy.
+- **KQ1** : FQN repetition in `ConversationMirror.applyIncomingReaction` replaced
+  by a top-of-file import alias `Kind`.
+- **KQ2** : `AppRoot` switched from `collectAsState()` to
+  `collectAsStateWithLifecycle()` for the incoming-share flow.
+- **KQ3** : `TAPBACK_WITH_PREVIEW_REGEX` KDoc fixed to describe the actual fallback
+  ASCII quotes `"..."` (was misleadingly stating `<<>>`).
+- **KQ4** : `EMOJI_ONLY_REACT_WINDOW_MS` visibility narrowed from `public` to
+  `internal`.
+
+Same cert SHA-256 `b09a9511…687d`. No new permission. No schema change. 17 JUnit
+tests green (3 new for the grapheme cluster splitter, 14 existing for the reaction
+decoder).
+
+### v1.4.0 — Ergonomics pack + voice bubble waveform
 
 Minor SemVer bump driven by 5 user-facing features. No new permission, no schema
 change, no signing key change. 6 defensive fixes applied from a parallel 3-axis

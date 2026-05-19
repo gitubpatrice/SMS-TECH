@@ -9,6 +9,7 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.di.ApplicationScope
+import com.filestech.sms.domain.reaction.IncomingReactionDecoder
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import dagger.hilt.android.AndroidEntryPoint
@@ -57,6 +58,46 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 if (blockedRepo.isBlocked(address)) {
                     Timber.i("Dropping incoming SMS from blocked sender")
                     return@launch
+                }
+                // v1.4.1 — if the body looks like a Tapback reaction back from another
+                // SMS Tech / iMessage / Google Messages, try to fold it onto the
+                // original outgoing message instead of inserting a noisy "Reacted ❤️
+                // to «…»" text bubble. The decoder is intentionally strict (only
+                // accepts the `Reacted <emoji> [to «…»]` shape — a real one-emoji SMS
+                // like "❤️" is left alone). On miss, fall through to the standard
+                // insert path so legitimate text SMS are never swallowed.
+                val decoded = IncomingReactionDecoder.decode(body)
+                if (decoded != null) {
+                    val applied = mirror.applyIncomingReaction(
+                        address = address,
+                        emoji = decoded.emoji,
+                        bodyPrefix = decoded.previewPrefix,
+                        kind = decoded.kind,
+                    )
+                    if (applied != null) {
+                        // Still write the row to the system inbox so other SMS apps on
+                        // the device see the message in their history (legal duty as
+                        // default SMS app).
+                        val sysUri = telephonyReader.insertInboxSms(address, body, ts)
+                        // v1.4.1 (SEC-01) — drop a poison-pill Room row carrying the
+                        // same `telephonyUri` so the next [TelephonySyncManager] sweep
+                        // sees the UNIQUE constraint already taken and skips the
+                        // re-import — otherwise the user would see a phantom text
+                        // bubble "Reacted ❤️ to «…»" duplicating the badge.
+                        mirror.upsertReactionSentinel(
+                            address = address,
+                            telephonyUri = sysUri?.toString(),
+                            date = ts,
+                        )
+                        return@launch
+                    }
+                    // Decoded but no matching outgoing message (the user removed it, or
+                    // the reaction came from a third party we never wrote to). Fall
+                    // through and store the body verbatim so nothing is silently lost.
+                    // v1.4.1 (SEC-04) — phone address dropped from the log line so a
+                    // debug-build logcat capture cannot leak PII (consistent with the
+                    // blocklist-drop log just above, which also omits the address).
+                    Timber.i("Tapback decoded but no matching outgoing message found")
                 }
                 val uri = telephonyReader.insertInboxSms(address, body, ts)
                 val msgId = mirror.upsertIncomingSms(

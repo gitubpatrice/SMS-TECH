@@ -115,6 +115,13 @@ class SendReactionUseCase @Inject constructor(
             // Pas de réponse contextuelle (la réaction est ponctuelle, ajouter un
             // replyTo polluerait le fil côté correspondant avec une quote inutile).
             replyToMessageId = null,
+            // v1.4.1 — empty `body` in the Room mirror so the reactor doesn't see
+            // their own outgoing Tapback as a redundant text bubble in their own
+            // thread (the local badge on the incoming message they reacted to is
+            // already the right feedback). The wire body + `content://sms`
+            // writeback still carry the full Tapback so the correspondent's app
+            // (SMS Tech, iMessage, Google Messages) can fold or render it.
+            localMirrorBody = "",
         )
     }
 

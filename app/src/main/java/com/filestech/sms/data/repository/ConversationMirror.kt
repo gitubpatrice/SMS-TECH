@@ -15,6 +15,8 @@ import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
+import com.filestech.sms.domain.reaction.IncomingReactionDecoder
+import com.filestech.sms.domain.reaction.IncomingReactionDecoder.DecodedReaction.Kind
 import com.filestech.sms.domain.repository.ContactRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -103,6 +105,144 @@ class ConversationMirror @Inject constructor(
         }
     }
 
+    /**
+     * v1.4.1 (SEC-01) — drops a "poison-pill" Room row carrying the system [telephonyUri]
+     * of an incoming SMS that was already folded into a reaction badge by
+     * [applyIncomingReaction]. Without this sentinel, [TelephonySyncManager] would later
+     * re-import the very same `Reacted ❤️ to «…»` body from `content://sms` as a regular
+     * incoming bubble — duplicating the user-visible event (one badge + one phantom text
+     * bubble).
+     *
+     * The sentinel is intentionally invisible :
+     *   - `body = ""`        → renders no text in the thread list / bubble
+     *   - `read = true`      → never bumps the unread count
+     *   - `reaction_emoji = null` → does not paint an extra badge anywhere
+     *   - same `telephonyUri` as the system row → unique index in [MessageEntity] makes
+     *     the future [TelephonySyncManager] insert a no-op (`OnConflictStrategy.IGNORE`).
+     *
+     * Idempotent : a second call with the same `telephonyUri` is silently ignored at the
+     * DAO level. Safe to call after a successful [applyIncomingReaction] even if the user
+     * resends the same reaction (rare carrier replay).
+     */
+    suspend fun upsertReactionSentinel(
+        address: String,
+        telephonyUri: String?,
+        date: Long,
+    ) = withContext(io) {
+        if (telephonyUri.isNullOrBlank()) return@withContext
+        database.withTransaction {
+            val convId = ensureConversation(listOf(PhoneAddress.of(address)))
+            val sentinel = MessageEntity(
+                conversationId = convId,
+                telephonyUri = telephonyUri,
+                address = address,
+                body = "",
+                type = MessageType.SMS,
+                direction = MessageDirection.INCOMING,
+                date = date,
+                dateSent = date,
+                read = true,
+                starred = false,
+                status = MessageStatus.RECEIVED,
+                errorCode = null,
+                subId = null,
+                scheduledAt = null,
+                attachmentsCount = 0,
+            )
+            // `OnConflictStrategy.IGNORE` on the insert means a second call with the same
+            // telephonyUri is a no-op — idempotent.
+            messageDao.insert(sentinel)
+            // NB: we do NOT call `touchConversation` here — the user never sent or
+            // received a new message, just a metadata reaction. Bumping
+            // `lastMessageAt` / `lastMessagePreview` would surface the empty body in
+            // the conversation list, which is exactly what we want to avoid.
+        }
+    }
+
+    /**
+     * v1.4.1 — tries to apply an incoming reaction back to an outgoing message we
+     * previously sent to [address]. Returns `true` when a target outgoing message was
+     * found and its `reaction_emoji` was updated ; `false` when no match exists (caller
+     * then falls back to inserting the body as a plain incoming SMS).
+     *
+     * Lookup strategy depends on [kind] :
+     *   - [com.filestech.sms.domain.reaction.IncomingReactionDecoder.DecodedReaction
+     *     .Kind.Tapback] — verbose `Reacted <emoji> [to «…»]` shape. Always safe to
+     *     bind to ANY recent outgoing in the conversation. Match either by body
+     *     prefix (when [bodyPrefix] is non-null) or by "most recent outgoing"
+     *     (when the remote reacted to a message with no text body, voice / image).
+     *   - [com.filestech.sms.domain.reaction.IncomingReactionDecoder.DecodedReaction
+     *     .Kind.EmojiOnly] — bare emoji SMS, ambiguous with a real one-emoji message.
+     *     The match requires an outgoing message strictly younger than
+     *     [IncomingReactionDecoder.EMOJI_ONLY_REACT_WINDOW_MS]. If none exists, we
+     *     give up and the caller stores the body as a regular incoming SMS.
+     *
+     * The conversation is resolved via exact-CSV match, then suffix-8 fallback (covers
+     * the `+33` vs `06` representation drift between provider and SMS Tech). We do NOT
+     * call [ensureConversation] here — the reaction cannot target anything we haven't
+     * sent, so a missing conv is a fast-fail.
+     *
+     * No side-effect on `conversations.lastMessagePreview` / `unreadCount` : a reaction
+     * is a metadata update on an existing row, not a new message.
+     */
+    /**
+     * v1.4.1 — outcome of [applyIncomingReaction]. `null` = no matching outgoing
+     * message was found (caller falls back to inserting the body as a plain incoming
+     * SMS). Non-null carries the `conversationId` and the body of the outgoing
+     * message the reaction was glued onto — both are consumed by the receiver to
+     * post a "Marie a réagi ❤️ : …" system notification.
+     */
+    data class ReactionApplied(
+        val conversationId: Long,
+        val targetBody: String,
+    )
+
+    suspend fun applyIncomingReaction(
+        address: String,
+        emoji: String,
+        bodyPrefix: String?,
+        kind: Kind,
+    ): ReactionApplied? = withContext(io) {
+        val addr = PhoneAddress.of(address)
+        if (addr.normalized.isEmpty()) return@withContext null
+        // Avoid creating an empty conversation just to lookup against it — only
+        // proceed if a conversation for this address already exists.
+        val csv = addr.raw
+        val existing = conversationDao.findByAddressesCsv(csv)
+            ?: conversationDao.snapshotOneToOneConversations().firstOrNull { conv ->
+                PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw?.phoneSuffix8() ==
+                    addr.raw.phoneSuffix8()
+            }
+            ?: return@withContext null
+        val target = when (kind) {
+            Kind.Tapback -> {
+                if (bodyPrefix != null) {
+                    val escaped = escapeForSqlLike(bodyPrefix)
+                    messageDao.findMostRecentOutgoingByBodyPrefix(existing.id, escaped)
+                } else {
+                    messageDao.findMostRecentOutgoing(existing.id)
+                }
+            }
+            Kind.EmojiOnly -> {
+                val sinceMs = System.currentTimeMillis() -
+                    IncomingReactionDecoder.EMOJI_ONLY_REACT_WINDOW_MS
+                messageDao.findMostRecentOutgoingAfter(existing.id, sinceMs)
+            }
+        } ?: return@withContext null
+        messageDao.setReaction(target.id, emoji)
+        ReactionApplied(conversationId = existing.id, targetBody = target.body)
+    }
+
+    /**
+     * Escapes the three SQL LIKE wildcards (`%`, `_`, `\`) so a body containing them
+     * is matched literally. Mirrors the `ESCAPE '\'` clause in the DAO query.
+     */
+    private fun escapeForSqlLike(input: String): String =
+        input
+            .replace("""\""", """\\""")
+            .replace("""%""", """\%""")
+            .replace("""_""", """\_""")
+
     suspend fun upsertOutgoingSms(
         address: String,
         body: String,
@@ -111,14 +251,26 @@ class ConversationMirror @Inject constructor(
         subId: Int? = null,
         initialStatus: Int = MessageStatus.PENDING,
         replyToMessageId: Long? = null,
+        /**
+         * v1.4.1 — when non-null, overrides what gets stored in the Room row's `body`
+         * column (the on-wire SMS body sent via `SmsManager` and mirrored to the
+         * system inbox remains [body], unchanged). Used by [com.filestech.sms.domain
+         * .usecase.SendReactionUseCase] to silently send a Tapback to the
+         * correspondent while keeping its own thread free of a redundant outgoing
+         * bubble — the empty `localMirrorBody = ""` row is filtered out at the DAO
+         * query level (`observeForConversation` excludes body=''+0 attach+0 reaction).
+         * Default `null` = mirror the wire body as-is (regular text SMS).
+         */
+        localMirrorBody: String? = null,
     ): Long = withContext(io) {
+        val mirrorBody = localMirrorBody ?: body
         database.withTransaction {
             val convId = ensureConversation(listOf(PhoneAddress.of(address)))
             val msg = MessageEntity(
                 conversationId = convId,
                 telephonyUri = telephonyUri,
                 address = address,
-                body = body,
+                body = mirrorBody,
                 type = MessageType.SMS,
                 direction = MessageDirection.OUTGOING,
                 date = date,
@@ -133,7 +285,14 @@ class ConversationMirror @Inject constructor(
                 replyToMessageId = replyToMessageId,
             )
             val msgId = messageDao.insert(msg)
-            touchConversation(convId, date, body, deltaUnread = 0)
+            // v1.4.1 — when the row is a hidden reaction sentinel (mirrorBody=""),
+            // we don't bump `lastMessageAt` / `lastMessagePreview` either, otherwise
+            // the conversation list would show a blank preview line and the wrong
+            // sort order (sentinel timestamp masking the real last message). For
+            // regular SMS, [touchConversation] behaviour is unchanged.
+            if (mirrorBody.isNotEmpty()) {
+                touchConversation(convId, date, mirrorBody, deltaUnread = 0)
+            }
             msgId
         }
     }

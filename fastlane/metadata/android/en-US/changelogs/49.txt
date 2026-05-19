@@ -1,0 +1,19 @@
+v1.5.0 — multi-emoji reactions (up to 3) + end-to-end Tapback reliability.
+
+• Multi-emoji reactions : long-press a message → React → you can now stack up to 3 emojis in a single reaction (e.g. ❤️ 👍 🎉). Tap to select / deselect, then "Send reaction" to commit. The badge on the original message auto-grows into a pill so the combination stays readable.
+
+• Edit an existing reaction : re-opening the picker on a message you already reacted to pre-selects its emojis so you can add / remove without starting from scratch.
+
+• Tapback reactions : when you react to a message from another SMS Tech user (or iMessage / Google Messages), the reaction now appears correctly as a discreet emoji badge on the original bubble instead of a phantom text SMS "Reacted ❤️ to «...»". True on both the sender AND the recipient side.
+
+• Reaction change propagated : you can now change your emoji (❤️ → 👍) or react multiple times within the minute and the recipient sees the update. Before, an anti-spam guard blocked the second send.
+
+• No more "Reacted ❤️ to «...»" phantom bubble on the reactor side : the reaction stays a local badge + an invisible technical SMS to the correspondent, without polluting the thread.
+
+• Removed the "Xiaomi Resistant Mode" first-launch dialog (too pushy). The toggle remains available under Settings → Advanced.
+
+• Gallery → SMS Tech share : now opens the contact picker directly (like iMessage / Google Messages).
+
+• Security polish : extra invisible Unicode characters stripped (SOFT HYPHEN, WORD JOINER, etc.) so a forged SMS can't trigger a fake reaction.
+
+No database, signing key or permission change. 17 unit tests green for the new reaction decoder and the multi-emoji grapheme splitter.

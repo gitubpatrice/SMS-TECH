@@ -205,10 +205,4 @@ data class AdvancedSettings(
      * réglages OS si l'utilisateur la trouve gênante.
      */
     val keepAliveService: Boolean = false,
-    /**
-     * v1.3.10 (C3) — one-shot flag flipped to `true` after the OEM onboarding dialog has
-     * been shown (and dismissed or accepted) at least once. Prevents re-prompting at every
-     * cold start. `false` for fresh installs.
-     */
-    val keepAliveOnboardingShown: Boolean = false,
 )

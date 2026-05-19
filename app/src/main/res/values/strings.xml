@@ -14,11 +14,7 @@
     <string name="keep_alive_notification_title">SMS Tech is active</string>
     <string name="keep_alive_notification_text">Required to receive SMS / MMS reliably on your phone.</string>
     <string name="settings_keep_alive_title">Resistant mode (Xiaomi / Huawei…)</string>
-    <string name="settings_keep_alive_desc">Keeps SMS Tech alive in the background via a small persistent notification. Required on aggressive ROMs (Xiaomi MIUI/HyperOS, Huawei EMUI/HarmonyOS, Honor MagicOS, Oppo/Realme/OnePlus ColorOS, Vivo/iQOO FunTouch, Meizu Flyme, ASUS Zen UI) which otherwise kill third-party SMS apps and block MMS/notifications. Useless on Pixel, Samsung Galaxy, Sony, Fairphone, Motorola, Nokia, Nothing Phone — leave OFF on these.</string>
-    <string name="oem_detected_dialog_title">Recommended setting for your phone</string>
-    <string name="oem_detected_dialog_body">Your phone (%1$s) is known to aggressively kill third-party SMS apps in the background, which can prevent SMS/MMS reception and notifications. Enabling \"Resistant mode\" keeps SMS Tech alive via a small persistent notification — recommended on this device.</string>
-    <string name="oem_detected_dialog_enable">Enable resistant mode</string>
-    <string name="oem_detected_dialog_skip">Not now</string>
+    <string name="settings_keep_alive_desc">Keeps SMS Tech alive in the background via a permanent notification in the status bar (mandatory Android contract for any foreground service — it cannot be dismissed while the toggle is ON). Useful on aggressive ROMs (Xiaomi MIUI/HyperOS, Huawei EMUI/HarmonyOS, Honor MagicOS, Oppo/Realme/OnePlus ColorOS, Vivo/iQOO FunTouch, Meizu Flyme, ASUS Zen UI) which otherwise kill third-party SMS apps and block MMS/notifications. Useless on Pixel, Samsung Galaxy, Sony, Fairphone, Motorola, Nokia, Nothing Phone — leave OFF on these.</string>
 
 
     <!-- Common -->
@@ -303,6 +299,9 @@
     <string name="reaction_picker_other_title">Custom emoji</string>
     <string name="reaction_picker_other_body">Type or paste an emoji</string>
     <string name="reaction_picker_other_hint">😀</string>
+    <!-- v1.5.0 — multi-emoji picker validate button -->
+    <string name="reaction_picker_validate_empty">Select one or more emojis</string>
+    <string name="reaction_picker_validate_count">Send reaction %1$s</string>
 
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>

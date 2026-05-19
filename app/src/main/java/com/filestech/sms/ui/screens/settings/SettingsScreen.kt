@@ -358,13 +358,15 @@ fun SettingsScreen(
                     description = stringResource(R.string.settings_resync_desc),
                     onClick = { viewModel.forceResyncFromTelephony() },
                 )
-                // v1.3.10 — Mode résistant OPT-IN (KeepAliveService foreground permanent).
-                // Toggle exposé pour TOUS les téléphones car la détection ROM est conservatrice :
-                // certains utilisateurs sur ROM "propre" pourraient quand même vouloir activer ;
-                // certains sur ROM "agressive" pourraient avoir whitelisté SMS Tech à la main et
-                // ne pas vouloir la notif persistante. La description liste les ROMs concernées
-                // pour aider la décision. Sur ROM détectée agressive, un dialog d'onboarding
-                // pré-suggère l'activation (cf. [OemRomDetector] dans MainApplication).
+                // v1.3.10 + v1.4.1 — Mode résistant OPT-IN (KeepAliveService foreground
+                // permanent). Toggle exposé pour TOUS les téléphones car la détection ROM
+                // est conservatrice : certains utilisateurs sur ROM "propre" pourraient
+                // quand même vouloir activer ; certains sur ROM "agressive" pourraient avoir
+                // whitelisté SMS Tech à la main et ne pas vouloir la notif persistante. La
+                // description liste les ROMs concernées pour aider la décision.
+                // **v1.4.1** : retrait du dialog onboarding qui auto-proposait l'activation
+                // sur Xiaomi/Redmi — trop pushy, des users tapaient "Activer" sans
+                // comprendre la notif persistante.
                 ToggleRow(
                     title = stringResource(R.string.settings_keep_alive_title),
                     description = stringResource(R.string.settings_keep_alive_desc),

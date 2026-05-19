@@ -26,7 +26,6 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.system.share.IncomingShareHolder
 import com.filestech.sms.ui.AppRoot
-import com.filestech.sms.ui.components.OemKeepAliveOnboarding
 import com.filestech.sms.ui.theme.SmsTechTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -188,28 +187,12 @@ class MainActivity : FragmentActivity() {
             SmsTechTheme(appearance = current.appearance) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppRoot()
-                    OemKeepAliveOnboarding(
-                        advanced = current.advanced,
-                        onEnable = {
-                            lifecycleScope.launch {
-                                settings.update {
-                                    it.copy(advanced = it.advanced.copy(
-                                        keepAliveService = true,
-                                        keepAliveOnboardingShown = true,
-                                    ))
-                                }
-                            }
-                        },
-                        onSkip = {
-                            lifecycleScope.launch {
-                                settings.update {
-                                    it.copy(advanced = it.advanced.copy(
-                                        keepAliveOnboardingShown = true,
-                                    ))
-                                }
-                            }
-                        },
-                    )
+                    // v1.4.1 — the v1.3.10 [OemKeepAliveOnboarding] auto-popup was removed
+                    // here because it surprised users on Xiaomi / Redmi who tapped "Activer"
+                    // without realising it would create a permanent system notification
+                    // (a hard requirement for Android's foreground-service contract). The
+                    // "Mode résistant" toggle remains accessible via Réglages → Avancé for
+                    // power users who explicitly want the trade-off.
                 }
             }
         }
