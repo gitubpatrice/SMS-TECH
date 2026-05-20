@@ -603,9 +603,12 @@ fun ThreadScreen(
                         onTap = { if (msg.status == Message.Status.FAILED) viewModel.retry(msg.id) },
                         onDelete = { pendingDelete = msg },
                         onReply = { viewModel.startReply(msg) },
-                        onTranslate = if (msg.body.isNotBlank() && translation !is ThreadViewModel.TranslationState.Ready) {
-                            { viewModel.translateMessage(msg.id) }
-                        } else null,
+                        // v1.7.0 — Translate action removed from the menu while the
+                        // FLOSS replacement (fastText + Marian MT via ONNX) is
+                        // implemented in v1.8.x. ML Kit Translate (Google
+                        // proprietary) was blocking F-Droid distribution. Cf.
+                        // TranslationService.kt header for the roadmap.
+                        onTranslate = null,
                         // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus
                         // (voir AudioMessageBubble ci-dessus pour la même justification).
                         onReact = if (msg.isIncoming) {

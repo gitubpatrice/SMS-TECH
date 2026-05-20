@@ -42,10 +42,10 @@ sqlcipher = "4.6.1"
 # Logging
 timber = "5.0.1"
 
-# ML Kit (on-device translation, language ID) — bundled models downloaded at first use,
-# pinned versions to avoid surprise reproducibility regressions.
-mlkit-translate = "17.0.3"
-mlkit-language-id = "17.0.6"
+# v1.7.0 — ML Kit (mlkit-translate + mlkit-language-id) removed for F-Droid
+# FLOSS compliance (was flagged AntiFeatures: NonFreeDep on MR !38458).
+# Translation feature temporarily disabled in UI ; full FLOSS replacement
+# (fastText lid.176 + Marian MT via ONNX Runtime) planned for v1.8.x.
 
 # Tests
 junit = "4.13.2"
@@ -121,7 +121,7 @@ accompanist-permissions = { module = "com.google.accompanist:accompanist-permiss
 # Coroutines
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
-kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
+# v1.7.0 — kotlinx-coroutines-play-services retiré (était bridge ML Kit Task→suspend).
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 
 # Serialization
@@ -133,9 +133,8 @@ sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "s
 # Logging
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 
-# ML Kit on-device translation + language identification (#4)
-mlkit-translate = { module = "com.google.mlkit:translate", version.ref = "mlkit-translate" }
-mlkit-language-id = { module = "com.google.mlkit:language-id", version.ref = "mlkit-language-id" }
+# v1.7.0 — mlkit-translate + mlkit-language-id removed (F-Droid FLOSS).
+# See comment in [versions] section above for migration plan.
 
 # Tests
 junit = { module = "junit:junit", version.ref = "junit" }

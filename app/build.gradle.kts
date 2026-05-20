@@ -35,7 +35,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = gitCommitCount.coerceAtLeast(1)
-        versionName = "1.6.2"
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "com.filestech.sms.HiltTestRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -205,12 +205,9 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
-    // ML Kit's `Task<T>` APIs are bridged to `suspend` via this artifact.
-    implementation(libs.kotlinx.coroutines.play.services)
-
-    // ML Kit on-device translation (#4)
-    implementation(libs.mlkit.translate)
-    implementation(libs.mlkit.language.id)
+    // v1.7.0 — retiré : kotlinx-coroutines-play-services (était bridge
+    // Task<T>→suspend pour ML Kit), mlkit-translate, mlkit-language-id.
+    // Cf. TranslationService.kt header pour le plan migration FLOSS v1.8.x.
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)

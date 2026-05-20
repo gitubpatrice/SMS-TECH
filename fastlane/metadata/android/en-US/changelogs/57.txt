@@ -1,0 +1,15 @@
+v1.7.0 — F-Droid FLOSS compliance
+
+Google ML Kit (mlkit-translate + mlkit-language-id)
+removed from the codebase: Google proprietary,
+blocking F-Droid publication (MR !38458 NonFreeDep).
+
+TranslationService reduced to a stub (API preserved).
+"Translate" button temporarily hidden from menu.
+
+v1.8.x roadmap: FLOSS replacement via fastText
+lid.176 (MIT) + Marian MT (Helsinki, MIT) imported
+by the user via SAF.
+
+No other functional change: SMS/MMS/vaults identical
+to v1.6.2.
