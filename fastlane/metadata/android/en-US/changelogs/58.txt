@@ -1,0 +1,14 @@
+v1.7.1 — Translation via system app
+
+Following v1.7.0 (ML Kit removed, FLOSS), translation
+restored via user's app (Google Translate, DeepL, Aves,
+LibreTranslate…).
+
+Implementation: ACTION_PROCESS_TEXT intent with
+EXTRA_PROCESS_TEXT_READONLY=true. "Translate" button
+restored in context menu. User picks app on first use,
+Android remembers. Snackbar "No translation app
+installed" if nothing handles the intent.
+
+Dead code removed: TranslationService, TranslationBlock,
+dismissTranslation.

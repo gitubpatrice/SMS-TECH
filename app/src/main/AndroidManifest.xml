@@ -74,6 +74,17 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="tel" />
         </intent>
+        <!-- v1.7.1 — ACTION_PROCESS_TEXT pour la traduction externe (remplace
+             la feature ML Kit retirée en v1.7.0). Permet à l'utilisateur de
+             choisir son app de traduction installée (Google Translate, DeepL,
+             Aves Translate, LibreTranslate…) — SMS Tech délègue au système
+             plutôt que de bundler un traducteur interne. `resolveActivity`
+             côté Kotlin nécessite cette déclaration sur Android 11+ pour
+             vérifier qu'au moins une app handle l'intent. -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
         <package android:name="com.android.contacts" />
     </queries>
 

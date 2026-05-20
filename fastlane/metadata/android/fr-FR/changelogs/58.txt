@@ -1,0 +1,13 @@
+v1.7.1 — Traduction via app système
+
+Suite v1.7.0 (retrait ML Kit, FLOSS), traduction restaurée
+via l'app de l'utilisateur (Google Translate, DeepL, Aves,
+LibreTranslate…).
+
+Implémentation : Intent ACTION_PROCESS_TEXT avec
+EXTRA_PROCESS_TEXT_READONLY=true. Bouton "Traduire"
+réintroduit dans le menu contextuel. Choix d'app au 1er
+usage mémorisé. Snackbar "Aucune app de traduction
+installée" si rien ne répond.
+
+Code mort retiré (TranslationService, etc.).

@@ -183,6 +183,35 @@ fun ThreadScreen(
         }
     }
 
+    // v1.7.1 — Translation feature delegated to the system. After ML Kit was
+    // removed in v1.7.0 (FLOSS compliance for F-Droid — MR !38458), we don't
+    // ship an in-app translator anymore : the user picks their preferred
+    // translation app via ACTION_PROCESS_TEXT (Google Translate, DeepL,
+    // Aves Translate, LibreTranslate…). The system shows its standard chooser,
+    // so the user stays in control of which app gets the message body.
+    //
+    // Security : we pass `EXTRA_PROCESS_TEXT_READONLY = true` so the receiving
+    // app cannot modify the original text. Empty / blank bodies are filtered
+    // out — no point opening a chooser with nothing to translate. If no app
+    // declares the intent, we show a snackbar instead of letting the chooser
+    // display its empty state (cleaner UX).
+    val translateMessageExternal: (Message) -> Unit = { m ->
+        val body = m.body.trim()
+        if (body.isNotEmpty()) {
+            val intent = Intent(Intent.ACTION_PROCESS_TEXT)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_PROCESS_TEXT, body)
+                .putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true)
+            if (intent.resolveActivity(context.packageManager) != null) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                context.startActivity(Intent.createChooser(intent, null))
+            } else {
+                val label = context.getString(R.string.snack_no_translate_app)
+                scope.launch { snackbarHost.showSnackbar(label) }
+            }
+        }
+    }
+
     // v1.3.11 (F4) — phone number tapped inside any bubble body / caption opens the
     // [PhoneActionsDialog] hosted below. Single state owned by ThreadScreen so we don't
     // multiply dialog instances across hundreds of bubbles in a busy thread.
@@ -589,13 +618,6 @@ fun ThreadScreen(
                         senderLabel = senderLabel,
                     )
                 } else {
-                    val translation = state.translations[msg.id]
-                    val translationDisplay = when (translation) {
-                        is ThreadViewModel.TranslationState.Pending -> com.filestech.sms.ui.components.TranslationDisplayState.Pending
-                        is ThreadViewModel.TranslationState.Ready -> com.filestech.sms.ui.components.TranslationDisplayState.Ready(translation.translated)
-                        is ThreadViewModel.TranslationState.Failed -> com.filestech.sms.ui.components.TranslationDisplayState.Failed
-                        null -> null
-                    }
                     MessageBubble(
                         message = msg,
                         showTimestamp = showTimestamp,
@@ -603,12 +625,15 @@ fun ThreadScreen(
                         onTap = { if (msg.status == Message.Status.FAILED) viewModel.retry(msg.id) },
                         onDelete = { pendingDelete = msg },
                         onReply = { viewModel.startReply(msg) },
-                        // v1.7.0 — Translate action removed from the menu while the
-                        // FLOSS replacement (fastText + Marian MT via ONNX) is
-                        // implemented in v1.8.x. ML Kit Translate (Google
-                        // proprietary) was blocking F-Droid distribution. Cf.
-                        // TranslationService.kt header for the roadmap.
-                        onTranslate = null,
+                        // v1.7.1 — "Translate" action delegated to the system via
+                        // ACTION_PROCESS_TEXT (replaces the ML Kit feature removed in
+                        // v1.7.0). User picks their preferred translation app each
+                        // time (Google Translate / DeepL / Aves / LibreTranslate…).
+                        // Only wired when the body is non-blank (nothing to translate
+                        // on attachment-only messages).
+                        onTranslate = if (msg.body.isNotBlank()) {
+                            { translateMessageExternal(msg) }
+                        } else null,
                         // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus
                         // (voir AudioMessageBubble ci-dessus pour la même justification).
                         onReact = if (msg.isIncoming) {
@@ -635,12 +660,6 @@ fun ThreadScreen(
                             if (msg.isIncoming) viewModel.setReaction(msg.id, null)
                         },
                         repliedToPreview = previewFor(msg),
-                        translationState = translationDisplay,
-                        // Dismiss is exposed for every non-null state so user can collapse a
-                        // stuck Pending or a Failed state, not just a Ready translation.
-                        onDismissTranslation = if (translation != null) {
-                            { viewModel.dismissTranslation(msg.id) }
-                        } else null,
                         senderLabel = senderLabel,
                     )
                 }

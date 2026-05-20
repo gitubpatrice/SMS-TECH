@@ -54,10 +54,10 @@
     <string name="thread_reply_to_you">Replying to yourself</string>
     <string name="thread_reply_deleted">Original message deleted</string>
     <string name="action_cancel_reply">Cancel reply</string>
-    <string name="action_dismiss_translation">Hide translation</string>
-    <string name="translation_in_progress">Translating…</string>
-    <string name="translation_failed">Translation failed</string>
-    <string name="translation_label">Translation</string>
+    <!-- v1.7.1 — translation feature delegated to the system app via
+         ACTION_PROCESS_TEXT (replaces in-app ML Kit removed in v1.7.0).
+         Shown if no app on the device declares the intent. -->
+    <string name="snack_no_translate_app">No translation app installed</string>
     <string name="chat_you">You</string>
     <string name="attach_photo">Photo</string>
     <string name="attach_video">Video</string>

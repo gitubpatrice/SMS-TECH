@@ -10,7 +10,6 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.ml.TranslationService
 import com.filestech.sms.data.sms.SmsSegmentCounter
 import com.filestech.sms.data.voice.VoicePlaybackController
 import com.filestech.sms.data.voice.VoiceRecorder
@@ -61,7 +60,6 @@ class ThreadViewModel @Inject constructor(
     private val blockNumber: com.filestech.sms.domain.usecase.BlockNumberUseCase,
     private val toggleConvState: com.filestech.sms.domain.usecase.ToggleConversationStateUseCase,
     private val contactRepo: com.filestech.sms.domain.repository.ContactRepository,
-    private val translator: TranslationService,
     private val sendReaction: SendReactionUseCase,
     private val incomingShare: com.filestech.sms.system.share.IncomingShareHolder,
     private val activeConversationTracker: ActiveConversationTracker,
@@ -126,17 +124,6 @@ class ThreadViewModel @Inject constructor(
          */
         val replyingTo: Message? = null,
         /**
-         * Per-message on-device translation cache (#4). Maps the message's local id to its
-         * current translation state — Pending while ML Kit detects + downloads the model,
-         * Ready once the target string is available, Failed when the language pair is not
-         * supported or the model download was refused.
-         *
-         * The map is **session-scoped** by design: translations are not persisted in Room.
-         * Re-opening the thread starts with an empty cache and the user re-arms translation
-         * on whichever bubbles they care about, which avoids exporting ML output to backups.
-         */
-        val translations: Map<Long, TranslationState> = emptyMap(),
-        /**
          * v1.3.4 — pièces jointes stagées dans le composer (passé du dialog modal singleton
          * v1.2.1 à une liste affichée comme une bande horizontale au-dessus du champ texte).
          * L'utilisateur empile autant de PJ qu'il veut (cap par taille totale 280 KB,
@@ -157,13 +144,6 @@ class ThreadViewModel @Inject constructor(
         val displayName: String,
         val sizeBytes: Long,
     )
-
-    /** UI projection of an in-flight or completed translation for a single bubble. */
-    sealed interface TranslationState {
-        data object Pending : TranslationState
-        data class Ready(val translated: String, val sourceLanguage: String) : TranslationState
-        data object Failed : TranslationState
-    }
 
     sealed interface Event {
         /**
@@ -350,47 +330,6 @@ class ThreadViewModel @Inject constructor(
     fun cancelReply() {
         if (_state.value.replyingTo == null) return
         _state.update { it.copy(replyingTo = null) }
-    }
-
-    /**
-     * Kicks off an on-device translation of [messageId]'s body (#4). The target language is
-     * taken from the user's locale preference (`SettingsRepository.locale.languageTag`); when
-     * absent we fall back to the device's primary locale. The UI observes [UiState.translations]
-     * to render the [TranslationBlock] under the bubble.
-     *
-     * Calling twice on the same message id while a translation is already in flight is a
-     * no-op (idempotent), so accidental double-taps don't double the model-download work.
-     */
-    fun translateMessage(messageId: Long) {
-        val existing = _state.value.translations[messageId]
-        if (existing is TranslationState.Pending || existing is TranslationState.Ready) return
-        val msg = _state.value.messages.firstOrNull { it.id == messageId } ?: return
-        if (msg.body.isBlank()) return
-        _state.update { it.copy(translations = it.translations + (messageId to TranslationState.Pending)) }
-        viewModelScope.launch {
-            val targetTag = cachedSettings.value.locale.languageTag
-                ?: java.util.Locale.getDefault().language
-            when (val res = translator.translate(msg.body, targetTag)) {
-                is Outcome.Success -> _state.update {
-                    it.copy(
-                        translations = it.translations + (messageId to TranslationState.Ready(
-                            translated = res.value.translated,
-                            sourceLanguage = res.value.sourceLanguage,
-                        )),
-                    )
-                }
-                is Outcome.Failure -> {
-                    _state.update { it.copy(translations = it.translations + (messageId to TranslationState.Failed)) }
-                    _events.tryEmit(Event.ShowSnackbar(SNACK_TRANSLATE_FAILED, isError = true))
-                }
-            }
-        }
-    }
-
-    /** Collapses any visible translation for [messageId]. Idempotent. */
-    fun dismissTranslation(messageId: Long) {
-        if (messageId !in _state.value.translations) return
-        _state.update { it.copy(translations = it.translations - messageId) }
     }
 
     /**
@@ -1163,7 +1102,6 @@ class ThreadViewModel @Inject constructor(
         // v1.3.0 audit Q8 — calculé depuis `VoiceRecorder.MAX_DURATION_MS` pour qu'un futur
         // changement du cap soit reflété sans drift dans le snack utilisateur.
         val SNACK_MAX_DURATION: String = "Limite de ${VoiceRecorder.MAX_DURATION_MS / 1000} s atteinte"
-        const val SNACK_TRANSLATE_FAILED: String = "Échec de la traduction"
         const val SNACK_ATTACH_SENT: String = "Pièce jointe envoyée"
         const val SNACK_ATTACH_COPY_FAILED: String = "Impossible de lire la pièce jointe"
         const val SNACK_ATTACH_CAP_REACHED: String =

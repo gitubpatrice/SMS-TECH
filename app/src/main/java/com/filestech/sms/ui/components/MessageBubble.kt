@@ -66,8 +66,6 @@ fun MessageBubble(
     onPhoneClick: (String) -> Unit = {},
     onRemoveReaction: () -> Unit = {},
     repliedToPreview: ReplyQuotePreview? = null,
-    translationState: TranslationDisplayState? = null,
-    onDismissTranslation: (() -> Unit)? = null,
     /**
      * v1.3.3 #7 — étiquette d'expéditeur intégrée dans la bulle ("Vous" pour les
      * messages sortants, nom du contact pour les messages reçus). `null` = pas
@@ -192,14 +190,10 @@ fun MessageBubble(
                     }
                 }
             }
-            if (translationState != null) {
-                TranslationBlock(
-                    state = translationState,
-                    isOutgoingHost = isOut,
-                    onDismiss = onDismissTranslation,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
+            // v1.7.1 — inline TranslationBlock removed (was rendering an in-app
+            // translation result from ML Kit). Translation now happens out-of-process
+            // via ACTION_PROCESS_TEXT — the user's chosen translation app shows the
+            // result in its own UI, so no in-bubble overlay is needed anymore.
         }
         // Incoming: trigger sits to the RIGHT of the bubble.
         if (!isOut) {
