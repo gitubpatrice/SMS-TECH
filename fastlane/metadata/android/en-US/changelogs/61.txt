@@ -1,0 +1,8 @@
+v1.8.1 — reaction UX patch
+
+• New FR reaction format: "Réagi par ❤️ à votre message : «…»"
+• If you set your name (Settings → Sending):
+  "Florence a réagi par ❤️ à votre message : «…»"
+• Auto-detect from your Android profile
+• 100% compat: reactions from v1.8.0 still decoded
+• Tapback iMessage + emoji-only still available

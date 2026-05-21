@@ -292,6 +292,11 @@
     <string name="settings_reaction_format_en_hint">"Reacted ❤️ to «preview»". Detected automatically by iMessage (iPhone) and recent Google Messages as a native reaction bubble. Less natural for French recipients.</string>
     <string name="settings_reaction_format_emoji">Emoji only</string>
     <string name="settings_reaction_format_emoji_hint">"❤️" alone. Cleaner on older SMS apps, but the recipient loses all context — they can\'t tell which message you reacted to.</string>
+    <!-- v1.8.1 — sender display name -->
+    <string name="settings_sender_name_title">Your display name</string>
+    <string name="settings_sender_name_desc">Included in outgoing reaction SMS to help the recipient identify the author. Leave empty to use your Android profile name (or fall back to anonymous "Reacted ❤️…").</string>
+    <string name="settings_sender_name_label">Display name (max 40)</string>
+    <string name="settings_sender_name_auto">Auto-detect from Android profile</string>
     <string name="reaction_send_confirm_title">Send reaction?</string>
     <string name="reaction_send_confirm_body">An SMS containing only this emoji will be sent to your recipient. Counts as a regular SMS (plan rate). You can disable this in Settings → Sending.</string>
     <string name="reaction_send_confirm_never_ask">Don\'t ask again, send directly</string>

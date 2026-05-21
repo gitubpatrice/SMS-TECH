@@ -100,6 +100,7 @@ class SettingsRepository @Inject constructor(
                     p[K.reactionEmojiOnly] == false -> ReactionFormat.TAPBACK_EN
                     else -> ReactionFormat.READABLE_FR
                 },
+                senderDisplayName = p[K.senderDisplayName]?.takeIf { it.isNotBlank() },
             ),
             notifications = NotificationSettings(
                 enabled = p[K.notifEnabled] ?: true,
@@ -173,6 +174,8 @@ class SettingsRepository @Inject constructor(
         // `reactionEmojiOnly` continue à être écrite au-dessus pour ne pas
         // casser un éventuel downgrade vers v1.7.x.
         this[K.reactionFormat] = s.sending.reactionFormat.name
+        s.sending.senderDisplayName?.takeIf { it.isNotBlank() }?.let { this[K.senderDisplayName] = it }
+            ?: remove(K.senderDisplayName)
 
         this[K.notifEnabled] = s.notifications.enabled
         this[K.notifStyle] = s.notifications.style.name
@@ -244,6 +247,9 @@ class SettingsRepository @Inject constructor(
         // / EMOJI_ONLY). La clé `reactionEmojiOnly` ci-dessus reste écrite pour la
         // rétro-compat v1.7.x si un downgrade se produit.
         val reactionFormat = stringPreferencesKey("send.reactions.format")
+        // v1.8.1 — override personnel du nom inclus dans les SMS de réaction
+        // sortants. `null` = résolution auto via `ContactsContract.Profile`.
+        val senderDisplayName = stringPreferencesKey("send.senderDisplayName")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")

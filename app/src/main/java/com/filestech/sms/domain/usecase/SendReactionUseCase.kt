@@ -5,6 +5,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.ReactionFormat
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.sender.SenderNameProvider
 import javax.inject.Inject
 
 /**
@@ -46,6 +47,10 @@ import javax.inject.Inject
 class SendReactionUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
     private val conversationRepo: ConversationRepository,
+    // v1.8.1 — résout le nom de l'expéditeur (override Settings > Profile auto >
+    // null). Inclus dans le format READABLE_FR uniquement (TAPBACK_EN / EMOJI_ONLY
+    // restent identiques pour préserver la compat iMessage et la concision).
+    private val senderNameProvider: SenderNameProvider,
 ) {
     /**
      * Envoie [emoji] à l'expéditeur du message [messageId]. Retourne :
@@ -118,7 +123,15 @@ class SendReactionUseCase @Inject constructor(
             body = when (format) {
                 ReactionFormat.EMOJI_ONLY -> emoji
                 ReactionFormat.TAPBACK_EN -> buildTapbackBody(emoji, message.body)
-                ReactionFormat.READABLE_FR -> buildReadableFrBody(emoji, message.body)
+                ReactionFormat.READABLE_FR -> buildReadableFrBody(
+                    emoji,
+                    message.body,
+                    // v1.8.1 — résolu à l'envoi (Settings override > Profile
+                    // Android > null). Lecture rapide (~1-5 ms), faite à
+                    // chaque envoi pour refléter immédiatement un changement
+                    // de nom dans Settings sans avoir à redémarrer l'app.
+                    senderName = senderNameProvider.resolveDisplayName(),
+                )
             },
             // F3 — pas de signature pour une réaction.
             appendSignature = false,
@@ -177,12 +190,12 @@ private const val SMS_UCS2_SEGMENT_CAP = 70
 private const val TAPBACK_WRAP_LENGTH = 8 + 5 + 1 + 1
 
 /**
- * v1.8.0 (bug 5 fix) — wrap fixe pour le format français lisible :
- * `"J'ai réagi par "` (15 chars, sans l'apostrophe ASCII qui pourrait être typographique)
- * + `" à : «"` (6) + `"»"` (1) + `"…"` éventuel (1). On utilise l'apostrophe typographique
- * `'` (U+2019) qui force déjà UCS-2 sur le wrap, alignant le budget calcul.
+ * v1.8.1 (bug 5 wording) — wrap fixe pour le format français lisible neutre :
+ * `"Réagi par "` (10) + `" à votre message : «"` (20) + `"»"` (1) + `"…"` éventuel (1).
+ * Format impersonnel (sans "J'ai") pour éviter l'ambiguïté côté destinataire qui
+ * voit déjà l'expéditeur dans son carnet de contacts.
  */
-private const val READABLE_FR_WRAP_LENGTH = 15 + 6 + 1 + 1
+private const val READABLE_FR_WRAP_LENGTH = 10 + 20 + 1 + 1
 
 /**
  * v1.3.2 — borne SUPÉRIEURE stricte de l'aperçu, indépendante de l'emoji. Limite
@@ -248,51 +261,74 @@ internal fun buildTapbackBody(emoji: String, originalBody: String): String {
 }
 
 /**
- * v1.8.0 (bug 5 fix) — construit le corps SMS au format français lisible.
- * Wrap : `"J'ai réagi par <emoji> à : «<preview>»"`.
+ * v1.8.1 (feedback user — nom de l'expéditeur) — construit le corps SMS au format
+ * français lisible. Si [senderName] est non-null/non-vide, il est préfixé pour
+ * identifier explicitement l'auteur de la réaction côté destinataire :
+ *   `"Florence a réagi par ❤️ à votre message : «…»"`.
+ * Sinon, format anonyme aligné iMessage :
+ *   `"Réagi par ❤️ à votre message : «…»"`.
  *
  * Pourquoi ce format précis :
- *  - 1ʳᵉ personne (`J'ai réagi`) — sonne comme un vrai SMS écrit par moi, pas
- *    comme un message machine. Le destinataire voit déjà QUI envoie (carnet
- *    de contacts), donc inutile de répéter le nom.
- *  - guillemets typographiques `«»` — uniformes avec [buildTapbackBody]
+ *  - **Nom explicite quand disponible** (Settings override ou
+ *    `ContactsContract.Profile` Android) — le destinataire voit déjà le contact
+ *    via son carnet, mais le nom dans le SMS lève toute ambiguïté sur l'auteur
+ *    de la réaction (utile si l'utilisateur a plusieurs MSISDN dual-SIM, par ex).
+ *  - **"a réagi par"** plutôt que "J'ai réagi" — la 3e personne sonne naturelle
+ *    quand le destinataire la lit ("Florence a réagi par ❤️ à mon message").
+ *  - **"à votre message"** — explicite que c'est une réaction au message du
+ *    destinataire (aligné iMessage "Reacted ❤️ to your message").
+ *  - Guillemets typographiques `«»` — uniformes avec [buildTapbackBody]
  *    (forcent UCS-2 single-segment, et matchent le décodage côté SMS Tech).
- *  - apostrophe typographique `'` (U+2019) au lieu de `'` ASCII — alignement
- *    typographique français + évite de mélanger les deux dans le décodeur.
- *  - troncature à `…` identique aux autres formats.
+ *  - Troncature à `…` identique aux autres formats.
  *
  * Garanties (cf. [buildTapbackBody]) :
- *  - Body vide (MMS image pure) → fallback `"J'ai réagi par <emoji>"`.
+ *  - Body vide (MMS image pure) → fallback sans `« »`
+ *    (avec ou sans nom selon `senderName`).
  *  - Caractères dangereux (C0/C1, bidi controls, BOM) strippés via
  *    [FORBIDDEN_BODY_CHARS].
  *  - Aperçu tronqué grapheme-safe via [safeTake] pour rester dans 1 segment
- *    UCS-2.
+ *    UCS-2. Le budget est ré-ajusté en fonction de la longueur du nom.
  */
-internal fun buildReadableFrBody(emoji: String, originalBody: String): String {
+internal fun buildReadableFrBody(
+    emoji: String,
+    originalBody: String,
+    senderName: String? = null,
+): String {
     val sanitized = originalBody
         .replace(FORBIDDEN_BODY_CHARS, " ")
         .replace(Regex("\\s+"), " ")
         .trim()
+    val name = senderName?.takeIf { it.isNotBlank() }
     if (sanitized.isEmpty()) {
-        return "J’ai réagi par $emoji"
+        return if (name != null) "$name a réagi par $emoji à votre message"
+        else "Réagi par $emoji à votre message"
     }
-    val budget = previewBudgetForFr(emoji)
+    val budget = previewBudgetForFr(emoji, namePrefixLength = name?.length ?: 0)
     val preview = if (sanitized.length <= budget) {
         sanitized
     } else {
         sanitized.safeTake(budget).trimEnd() + "…"
     }
-    return "J’ai réagi par $emoji à : «$preview»"
+    return if (name != null) {
+        "$name a réagi par $emoji à votre message : «$preview»"
+    } else {
+        "Réagi par $emoji à votre message : «$preview»"
+    }
 }
 
 /**
- * v1.8.0 (bug 5 fix) — budget chars UTF-16 pour l'aperçu du format FR.
- * Symétrique de [previewBudget] mais avec [READABLE_FR_WRAP_LENGTH].
+ * v1.8.1 — budget chars UTF-16 pour l'aperçu du format FR. Prend en compte la
+ * longueur du nom de l'expéditeur (prefix " a") quand il est présent, pour
+ * garder le SMS dans 1 segment UCS-2 même avec emoji multi-codepoint + nom.
+ *
+ * Le "+2" est pour l'espace + "a" du connecteur "<Nom> a réagi par <emoji>".
  */
-private fun previewBudgetForFr(emoji: String): Int =
-    (SMS_UCS2_SEGMENT_CAP - READABLE_FR_WRAP_LENGTH - emoji.length)
+private fun previewBudgetForFr(emoji: String, namePrefixLength: Int = 0): Int {
+    val nameOverhead = if (namePrefixLength > 0) namePrefixLength + 2 else 0
+    return (SMS_UCS2_SEGMENT_CAP - READABLE_FR_WRAP_LENGTH - emoji.length - nameOverhead)
         .coerceAtMost(PREVIEW_HARD_MAX)
         .coerceAtLeast(8)
+}
 
 /**
  * v1.3.2 — budget chars UTF-16 pour l'aperçu, calculé pour que le SMS final tienne

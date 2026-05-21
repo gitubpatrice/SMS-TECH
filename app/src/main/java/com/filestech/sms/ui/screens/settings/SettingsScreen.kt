@@ -255,6 +255,29 @@ fun SettingsScreen(
                         onClick = { reactionFormatPickerOpen = true },
                     )
                 }
+                // v1.8.1 — nom inclus dans les SMS de réaction sortants au
+                // format READABLE_FR. Affiché uniquement si READABLE_FR est
+                // sélectionné ET envoi des réactions activé (cohérence UX).
+                AnimatedVisibility(
+                    visible = state.sending.sendReactionsToRecipient &&
+                        state.sending.reactionFormat ==
+                            com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    SenderNameRow(
+                        current = state.sending.senderDisplayName,
+                        onChange = { name ->
+                            viewModel.update {
+                                it.copy(
+                                    sending = it.sending.copy(
+                                        senderDisplayName = name?.takeIf { s -> s.isNotBlank() },
+                                    ),
+                                )
+                            }
+                        },
+                    )
+                }
             }
 
             SectionCard(
@@ -1610,6 +1633,97 @@ private fun MyNumberDialog(
                 onClick = { onConfirm(value) },
                 enabled = canSubmit,
             ) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+/**
+ * v1.8.1 — row Settings pour saisir/effacer le nom personnel inclus dans les
+ * SMS de réaction sortants au format `READABLE_FR`. `null` = utiliser l'auto-
+ * détection via `ContactsContract.Profile` (le "moi" Android).
+ */
+@Composable
+private fun SenderNameRow(current: String?, onChange: (String?) -> Unit) {
+    var dialogOpen by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { dialogOpen = true }
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                stringResource(R.string.settings_sender_name_title),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = current?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.settings_sender_name_auto),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (current.isNullOrBlank()) cs.onSurfaceVariant else cs.primary,
+            )
+        }
+        Icon(
+            Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = cs.onSurfaceVariant,
+        )
+    }
+    if (dialogOpen) {
+        SenderNameDialog(
+            initial = current.orEmpty(),
+            onDismiss = { dialogOpen = false },
+            onConfirm = { value ->
+                dialogOpen = false
+                onChange(value)
+            },
+        )
+    }
+}
+
+@Composable
+private fun SenderNameDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit,
+) {
+    var value by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_sender_name_title)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.settings_sender_name_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = value,
+                    onValueChange = { input ->
+                        // Cap à 40 chars au save (cf. SenderNameProvider.MAX_NAME_LENGTH).
+                        value = input.take(40)
+                    },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.settings_sender_name_label)) },
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                onConfirm(value.trim().takeIf { it.isNotBlank() })
+            }) {
                 Text(stringResource(R.string.action_save))
             }
         },

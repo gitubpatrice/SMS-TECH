@@ -103,6 +103,24 @@ data class SendingSettings(
      *     legacy mais le destinataire perd tout contexte du message d'origine.
      */
     val reactionFormat: ReactionFormat = ReactionFormat.READABLE_FR,
+    /**
+     * v1.8.1 — nom personnel à inclure dans les SMS de réaction sortants
+     * (format `"<Nom> a réagi par ❤️ à votre message : «…»"`). Pour aider
+     * le destinataire à identifier l'auteur de la réaction de manière
+     * explicite, en plus du nom de contact que son app SMS affiche déjà.
+     *
+     *  - `null` ou chaîne vide → résolution automatique via
+     *    `ContactsContract.Profile` (le "moi" Android, si l'utilisateur a
+     *    renseigné son profil dans Contacts). Si Profile est absent / vide,
+     *    fallback au format anonyme `"Réagi par ❤️ à votre message : «…»"`.
+     *  - chaîne non-vide → override explicite, utilisé tel quel (priorité
+     *    sur Profile).
+     *
+     *  Saisissable depuis Settings → Envoi → "Mon nom dans les réactions".
+     *  Cappé à 40 caractères au save pour rester dans 1 segment UCS-2 même
+     *  avec un emoji multi-codepoint et un preview de message d'origine.
+     */
+    val senderDisplayName: String? = null,
 )
 
 /**

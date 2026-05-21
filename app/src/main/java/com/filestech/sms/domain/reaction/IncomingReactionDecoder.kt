@@ -109,14 +109,41 @@ object IncomingReactionDecoder {
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return null
 
-        // v1.8.0 (bug 5 fix) — French readable format with preview :
-        // `J'ai réagi par <emoji> à : «<preview>»`. Sent by SMS Tech v1.8.0+
-        // when [com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR]
-        // is selected (new default). Both apostrophes (typographic `'` U+2019 and
-        // ASCII `'`) are accepted defensively — some keyboards or SMS gateways
-        // normalise punctuation. Same `«»` / `"..."` guillemet tolerance as the
-        // English Tapback. Run BEFORE the English regex since the FR sentence
-        // never starts with `Reacted`, so no ambiguity.
+        // v1.8.1 — French readable WITH sender name prefix :
+        // `<Nom> a réagi par <emoji> à votre message : «<preview>»`. Tried
+        // FIRST because it's a strict super-pattern of the anonymous form.
+        // The captured name is currently NOT exposed in DecodedReaction (the
+        // caller already knows the contact via the SMS sender address), but
+        // keeping the regex strict prevents misclassification of e.g.
+        // "Réagi par X à votre message" as if it started with a name.
+        READABLE_FR_NAMED_WITH_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
+            val emoji = m.groupValues[2].trim()
+            val rawPreview = m.groupValues[3]
+            val wasTruncated = rawPreview.trimEnd().endsWith(TRUNCATION_MARKER)
+            val preview = rawPreview.removeSuffix(TRUNCATION_MARKER).trim()
+            if (emoji.isEmpty() || preview.isEmpty()) return null
+            return DecodedReaction(
+                emoji = emoji,
+                previewPrefix = preview,
+                kind = DecodedReaction.Kind.Tapback,
+                wasTruncated = wasTruncated,
+            )
+        }
+
+        // v1.8.1 — French readable WITH sender name, no preview (MMS image) :
+        // `<Nom> a réagi par <emoji> à votre message`.
+        READABLE_FR_NAMED_NO_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
+            val emoji = m.groupValues[2]
+            if (emoji.isEmpty() || emoji.all { it.code < 128 }) return null
+            return DecodedReaction(
+                emoji = emoji,
+                previewPrefix = null,
+                kind = DecodedReaction.Kind.Tapback,
+            )
+        }
+
+        // v1.8.1 (wording neutral) — French readable WITHOUT name :
+        // `Réagi par <emoji> à votre message : «<preview>»`.
         READABLE_FR_WITH_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
             val emoji = m.groupValues[1].trim()
             val rawPreview = m.groupValues[2]
@@ -131,9 +158,35 @@ object IncomingReactionDecoder {
             )
         }
 
-        // v1.8.0 — French readable format without preview (MMS image pure case) :
-        // `J'ai réagi par <emoji>`.
+        // v1.8.1 — French readable WITHOUT name, no preview :
+        // `Réagi par <emoji> à votre message`.
         READABLE_FR_NO_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
+            val emoji = m.groupValues[1]
+            if (emoji.isEmpty() || emoji.all { it.code < 128 }) return null
+            return DecodedReaction(
+                emoji = emoji,
+                previewPrefix = null,
+                kind = DecodedReaction.Kind.Tapback,
+            )
+        }
+
+        // v1.8.1 — LEGACY v1.8.0 format (kept for backward compat) :
+        // `J'ai réagi par <emoji> à : «<preview>»`. Run AFTER the new regex
+        // so v1.8.1+ messages match the new (preferred) format first.
+        READABLE_FR_LEGACY_WITH_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
+            val emoji = m.groupValues[1].trim()
+            val rawPreview = m.groupValues[2]
+            val wasTruncated = rawPreview.trimEnd().endsWith(TRUNCATION_MARKER)
+            val preview = rawPreview.removeSuffix(TRUNCATION_MARKER).trim()
+            if (emoji.isEmpty() || preview.isEmpty()) return null
+            return DecodedReaction(
+                emoji = emoji,
+                previewPrefix = preview,
+                kind = DecodedReaction.Kind.Tapback,
+                wasTruncated = wasTruncated,
+            )
+        }
+        READABLE_FR_LEGACY_NO_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
             val emoji = m.groupValues[1]
             if (emoji.isEmpty() || emoji.all { it.code < 128 }) return null
             return DecodedReaction(
@@ -241,30 +294,59 @@ object IncomingReactionDecoder {
     private val TAPBACK_NO_PREVIEW_REGEX = Regex("""^Reacted\s+(\S+)$""")
 
     /**
-     * v1.8.0 (bug 5 fix) — French readable format with preview :
-     * `J'ai réagi par <emoji> à : «<preview>»`. Accepts both apostrophes
-     * (typographic `'` U+2019 emitted by [buildReadableFrBody] AND ASCII `'`
-     * in case a gateway normalises it). Accepts both Unicode `«»` and ASCII
-     * `"..."` guillemets defensively. Emoji group is non-greedy and the preview
-     * group accepts any char (`DOT_MATCHES_ALL`) — same defensive shape as the
-     * English Tapback regex.
+     * v1.8.1 — French readable WITH sender name + preview :
+     * `<Nom> a réagi par <emoji> à votre message : «<preview>»`.
+     * Capture groups : (1) name, (2) emoji, (3) preview.
      *
-     * Anchored start (no `\s*` prefix) — `decode` already trim()s the body.
-     * The leading `J` is case-sensitive : a body starting with a lower-case
-     * `j'ai` is rejected (likely a casual chat sentence, not our SMS Tech
-     * output which always capitalises).
+     * The name group is `[^\s].{0,38}[^\s]|[^\s]` — at most 40 chars, no leading
+     * nor trailing whitespace, can be any non-control character (the encoder
+     * already sanitises names via [SenderNameProvider]). Must NOT contain "a réagi"
+     * to avoid greedily eating the rest of the sentence (use non-greedy plus the
+     * explicit " a réagi" separator).
+     */
+    private val READABLE_FR_NAMED_WITH_PREVIEW_REGEX = Regex(
+        """^(.{1,40}?)\s+a\s+réagi\s+par\s+(.+?)\s+à\s+votre\s+message\s*:\s*[«"](.+?)[»"]$""",
+        RegexOption.DOT_MATCHES_ALL,
+    )
+
+    /**
+     * v1.8.1 — French readable WITH sender name, no preview (MMS image only) :
+     * `<Nom> a réagi par <emoji> à votre message`.
+     */
+    private val READABLE_FR_NAMED_NO_PREVIEW_REGEX = Regex(
+        """^(.{1,40}?)\s+a\s+réagi\s+par\s+(\S+)\s+à\s+votre\s+message$""",
+    )
+
+    /**
+     * v1.8.1 (wording neutral) — French readable WITHOUT name, with preview :
+     * `Réagi par <emoji> à votre message : «<preview>»`.
      */
     private val READABLE_FR_WITH_PREVIEW_REGEX = Regex(
+        """^Réagi\s+par\s+(.+?)\s+à\s+votre\s+message\s*:\s*[«"](.+?)[»"]$""",
+        RegexOption.DOT_MATCHES_ALL,
+    )
+
+    /**
+     * v1.8.1 — French readable WITHOUT name, no preview :
+     * `Réagi par <emoji> à votre message`.
+     */
+    private val READABLE_FR_NO_PREVIEW_REGEX = Regex(
+        """^Réagi\s+par\s+(\S+)\s+à\s+votre\s+message$""",
+    )
+
+    /**
+     * v1.8.0 LEGACY — kept for retro-compat. Format
+     * `J'ai réagi par <emoji> à : «<preview>»` emitted by v1.8.0 only.
+     */
+    private val READABLE_FR_LEGACY_WITH_PREVIEW_REGEX = Regex(
         """^J['’]ai\s+réagi\s+par\s+(.+?)\s+à\s*:\s*[«"](.+?)[»"]$""",
         RegexOption.DOT_MATCHES_ALL,
     )
 
     /**
-     * v1.8.0 — French readable format without preview (original message had no
-     * text body) : `J'ai réagi par <emoji>`. Single non-whitespace token like
-     * the English equivalent ; `decode` rejects pure-ASCII tokens.
+     * v1.8.0 LEGACY — `J'ai réagi par <emoji>` no preview.
      */
-    private val READABLE_FR_NO_PREVIEW_REGEX = Regex(
+    private val READABLE_FR_LEGACY_NO_PREVIEW_REGEX = Regex(
         """^J['’]ai\s+réagi\s+par\s+(\S+)$""",
     )
 }

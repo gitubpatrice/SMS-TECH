@@ -94,16 +94,28 @@ class AuditV180Test {
         assertThat(values).containsExactly("READABLE_FR", "TAPBACK_EN", "EMOJI_ONLY")
     }
 
-    @Test fun `buildReadableFrBody produces French format with preview`() {
+    @Test fun `buildReadableFrBody produces French format with preview (anonymous)`() {
         val body = buildReadableFrBody("❤️", "Salut ça va")
-        assertThat(body).startsWith("J’ai réagi par ❤️ à : «")
+        // v1.8.1 — wording neutral sans "J'ai", avec "à votre message".
+        assertThat(body).startsWith("Réagi par ❤️ à votre message : «")
         assertThat(body).endsWith("»")
         assertThat(body).contains("Salut ça va")
     }
 
-    @Test fun `buildReadableFrBody falls back to bare emoji when body is empty`() {
+    @Test fun `buildReadableFrBody falls back to anonymous prefix when body is empty`() {
         val body = buildReadableFrBody("👍", "")
-        assertThat(body).isEqualTo("J’ai réagi par 👍")
+        // v1.8.1 — "à votre message" inclus même en fallback (cohérence visuelle
+        // côté destinataire, qui reconnaît immédiatement le pattern).
+        assertThat(body).isEqualTo("Réagi par 👍 à votre message")
+    }
+
+    @Test fun `buildReadableFrBody includes sender name when provided`() {
+        // v1.8.1 — format avec nom de l'expéditeur (override Settings ou
+        // ContactsContract.Profile auto-detect).
+        val body = buildReadableFrBody("❤️", "Salut", senderName = "Florence")
+        assertThat(body).startsWith("Florence a réagi par ❤️ à votre message : «")
+        assertThat(body).endsWith("»")
+        assertThat(body).contains("Salut")
     }
 
     @Test fun `buildReadableFrBody truncates long body with ellipsis marker`() {
@@ -115,7 +127,37 @@ class AuditV180Test {
         assertThat(body.length).isLessThan(80)
     }
 
-    @Test fun `decoder recognises French format with preview`() {
+    @Test fun `decoder recognises v1_8_1 anonymous French format with preview`() {
+        // v1.8.1 nouveau format neutre (sans "J'ai", avec "à votre message").
+        val decoded = IncomingReactionDecoder.decode("Réagi par ❤️ à votre message : «Bonjour»")
+        assertThat(decoded).isNotNull()
+        assertThat(decoded!!.emoji).isEqualTo("❤️")
+        assertThat(decoded.previewPrefix).isEqualTo("Bonjour")
+        assertThat(decoded.kind).isEqualTo(IncomingReactionDecoder.DecodedReaction.Kind.Tapback)
+    }
+
+    @Test fun `decoder recognises v1_8_1 named French format with preview`() {
+        // v1.8.1 format avec nom de l'expéditeur (prefix Nom + " a réagi par").
+        val decoded = IncomingReactionDecoder.decode(
+            "Florence a réagi par ❤️ à votre message : «Salut»",
+        )
+        assertThat(decoded).isNotNull()
+        assertThat(decoded!!.emoji).isEqualTo("❤️")
+        assertThat(decoded.previewPrefix).isEqualTo("Salut")
+        assertThat(decoded.kind).isEqualTo(IncomingReactionDecoder.DecodedReaction.Kind.Tapback)
+    }
+
+    @Test fun `decoder recognises v1_8_1 anonymous French format without preview`() {
+        val decoded = IncomingReactionDecoder.decode("Réagi par ❤️ à votre message")
+        assertThat(decoded).isNotNull()
+        assertThat(decoded!!.emoji).isEqualTo("❤️")
+        assertThat(decoded.previewPrefix).isNull()
+        assertThat(decoded.kind).isEqualTo(IncomingReactionDecoder.DecodedReaction.Kind.Tapback)
+    }
+
+    @Test fun `decoder STILL recognises v1_8_0 LEGACY French format (retro-compat)`() {
+        // Critical : un user qui reçoit une réaction d'un correspondant SMS Tech v1.8.0
+        // (pas encore upgradé en v1.8.1) doit continuer à voir le badge réaction.
         val decoded = IncomingReactionDecoder.decode("J’ai réagi par ❤️ à : «Bonjour»")
         assertThat(decoded).isNotNull()
         assertThat(decoded!!.emoji).isEqualTo("❤️")
@@ -123,14 +165,14 @@ class AuditV180Test {
         assertThat(decoded.kind).isEqualTo(IncomingReactionDecoder.DecodedReaction.Kind.Tapback)
     }
 
-    @Test fun `decoder recognises French format with ASCII apostrophe (gateway normalisation)`() {
+    @Test fun `decoder STILL recognises v1_8_0 LEGACY with ASCII apostrophe (gateway normalisation)`() {
         val decoded = IncomingReactionDecoder.decode("J'ai réagi par 👍 à : «Yes»")
         assertThat(decoded).isNotNull()
         assertThat(decoded!!.emoji).isEqualTo("👍")
         assertThat(decoded.previewPrefix).isEqualTo("Yes")
     }
 
-    @Test fun `decoder recognises French format without preview (image-only MMS reply)`() {
+    @Test fun `decoder STILL recognises v1_8_0 LEGACY no preview (image-only MMS reply)`() {
         val decoded = IncomingReactionDecoder.decode("J’ai réagi par ❤️")
         assertThat(decoded).isNotNull()
         assertThat(decoded!!.emoji).isEqualTo("❤️")
@@ -152,14 +194,15 @@ class AuditV180Test {
         // Le cap MAX_DECODE_INPUT_LENGTH protège contre un attaquant qui injecterait un
         // body très long sans guillemet fermant, forçant un backtracking catastrophique sur
         // la regex non-greedy. Valeur cap = 400 chars d'après v1.5.1.
-        val attackBody = "J’ai réagi par ❤️ à : «" + "a".repeat(500)
+        val attackBody = "Réagi par ❤️ à votre message : «" + "a".repeat(500)
         val decoded = IncomingReactionDecoder.decode(attackBody)
         assertThat(decoded).isNull()
     }
 
     @Test fun `decoder rejects lowercase French sentences (avoid casual chat false positive)`() {
-        // "j'ai réagi par ..." (lowercase) est probablement un vrai SMS écrit par un humain,
-        // pas une sortie auto de SMS Tech (qui capitalise toujours). On garde le J majuscule
+        // "j'ai réagi par ..." ou "réagi par ..." (lowercase) — laissons passer le check
+        // pour le format LEGACY uniquement (la regex `Réagi` du nouveau format a un R
+        // majuscule strict). Pour ce test, on garde le check sur l'ancien legacy.
         // strict pour éviter les faux positifs.
         val decoded = IncomingReactionDecoder.decode("j'ai réagi par truc")
         assertThat(decoded).isNull()

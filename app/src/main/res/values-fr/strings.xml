@@ -279,6 +279,11 @@
     <string name="settings_reaction_format_en_hint">« Reacted ❤️ to «aperçu» ». Détecté automatiquement par iMessage (iPhone) et Google Messages récents comme une bulle réaction native. Moins naturel pour les destinataires francophones.</string>
     <string name="settings_reaction_format_emoji">Emoji seul</string>
     <string name="settings_reaction_format_emoji_hint">« ❤️ » nu. Plus propre sur les vieilles apps SMS, mais le destinataire perd tout contexte — il ne peut plus savoir à quel message vous avez réagi.</string>
+    <!-- v1.8.1 — nom de l\'expéditeur -->
+    <string name="settings_sender_name_title">Votre nom affiché</string>
+    <string name="settings_sender_name_desc">Inclus dans les SMS de réaction sortants pour aider le destinataire à identifier l\'auteur. Laisser vide pour utiliser le nom de votre profil Android (sinon, fallback anonyme « Réagi par ❤️… »).</string>
+    <string name="settings_sender_name_label">Nom affiché (max 40)</string>
+    <string name="settings_sender_name_auto">Détection automatique depuis votre profil Android</string>
     <string name="reaction_send_confirm_title">Envoyer la réaction ?</string>
     <string name="reaction_send_confirm_body">Un SMS contenant uniquement cet emoji sera envoyé à votre correspondant. Cela compte comme un SMS normal (tarif forfait). Vous pouvez désactiver cet envoi dans Réglages → Envoi.</string>
     <string name="reaction_send_confirm_never_ask">Ne plus demander, envoyer directement</string>
