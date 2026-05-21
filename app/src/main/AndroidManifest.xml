@@ -34,6 +34,14 @@
     <!-- Voice MMS (audio recording attached to outgoing MMS) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- v1.10.0 — Mode urgence : géoloc pour SMS d'urgence (single-fix uniquement,
+         pas de tracking continu). ACCESS_COARSE_LOCATION en filet pour devices/OEM
+         où FINE est durci. Permission opt-in : si refusée par l'user, le SMS d'urgence
+         est envoyé sans coordonnées (graceful degradation). Aucune utilisation
+         background. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <!-- v1.3.5 G3 audit fix — SCHEDULE_EXACT_ALARM + USE_EXACT_ALARM retirées :
          l'envoi planifié passe exclusivement par WorkManager.enqueueUniqueWork (cf.
          ScheduledMessageScheduler) qui n'a PAS besoin de ces permissions. Elles

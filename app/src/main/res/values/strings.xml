@@ -292,11 +292,98 @@
     <string name="settings_reaction_format_en_hint">"Reacted ❤️ to «preview»". Detected automatically by iMessage (iPhone) and recent Google Messages as a native reaction bubble. Less natural for French recipients.</string>
     <string name="settings_reaction_format_emoji">Emoji only</string>
     <string name="settings_reaction_format_emoji_hint">"❤️" alone. Cleaner on older SMS apps, but the recipient loses all context — they can\'t tell which message you reacted to.</string>
+    <!-- v1.9.0 — compact emoji + quote -->
+    <string name="settings_reaction_format_emoji_quote">Emoji + quote</string>
+    <string name="settings_reaction_format_emoji_quote_hint">"❤️ «your message»". Compact and context-preserving. Recipient sees emoji followed by the quoted original message.</string>
     <!-- v1.8.1 — sender display name -->
     <string name="settings_sender_name_title">Your display name</string>
     <string name="settings_sender_name_desc">Included in outgoing reaction SMS to help the recipient identify the author. Leave empty to use your Android profile name (or fall back to anonymous "Reacted ❤️…").</string>
     <string name="settings_sender_name_label">Display name (max 40)</string>
     <string name="settings_sender_name_auto">Auto-detect from Android profile</string>
+
+    <!-- v1.9.0 — Safety call -->
+    <string name="settings_section_safety_call">Safety call</string>
+    <string name="settings_safety_call_title">Safety call</string>
+    <string name="settings_safety_call_desc">Send an automatic SMS to your emergency contacts if you don\'t open SMS Tech for a configured duration. Designed for solo travel, isolated living, professions at risk.</string>
+    <string name="settings_safety_call_disabled">Disabled</string>
+    <string name="settings_safety_call_enabled">Armed · resets in %1$s</string>
+    <string name="settings_safety_call_im_ok">I\'m OK — reset timer</string>
+    <string name="settings_safety_call_im_ok_snack">Timer reset.</string>
+    <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
+    <string name="settings_safety_call_armed_chip">Armed</string>
+    <string name="settings_safety_call_armed_duration">Duration: %1$s</string>
+    <string name="settings_safety_call_armed_remaining">Remaining: %1$s before trigger</string>
+    <string name="settings_safety_call_armed_remaining_imminent">Less than 2 h before trigger</string>
+    <string name="settings_safety_call_armed_contacts_one">Contact: %1$s</string>
+    <string name="settings_safety_call_armed_contacts_many">Contacts: %1$s (+%2$d others)</string>
+    <string name="settings_safety_call_armed_template">Template: %1$s</string>
+    <string name="settings_safety_call_armed_modify">Modify</string>
+    <string name="settings_safety_call_armed_im_ok_short">I\'m OK</string>
+    <string name="safety_call_setup_title">Safety call</string>
+    <string name="safety_call_setup_section_status">Status</string>
+    <string name="safety_call_setup_section_duration">Duration</string>
+    <string name="safety_call_setup_section_contacts">Emergency contacts (max 4)</string>
+    <string name="safety_call_setup_section_template">Message</string>
+    <string name="safety_call_setup_toggle_enable">Enable Safety call</string>
+    <string name="safety_call_setup_toggle_desc">When enabled, opening SMS Tech resets the timer. If you don\'t open it within the chosen duration, your contacts receive an automatic SMS.</string>
+    <string name="safety_call_setup_duration_24h">24 hours</string>
+    <string name="safety_call_setup_duration_48h">48 hours</string>
+    <string name="safety_call_setup_duration_72h">72 hours</string>
+    <string name="safety_call_setup_duration_custom">Custom</string>
+    <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="safety_call_setup_duration_custom_hint">In hours · 168 h = 1 week · max 720 h (30 days)</string>
+    <string name="safety_call_setup_add_contact">Add a contact</string>
+    <string name="safety_call_setup_contact_name_label">Name (optional)</string>
+    <string name="safety_call_setup_contact_phone_label">Phone number</string>
+    <string name="safety_call_setup_contact_invalid">Invalid phone number.</string>
+    <string name="safety_call_setup_contact_max_reached">Maximum 4 contacts.</string>
+    <string name="safety_call_setup_remove_contact">Remove</string>
+    <string name="safety_call_setup_template_check_in">Check-in (default)</string>
+    <string name="safety_call_setup_template_urgent">Urgent</string>
+    <string name="safety_call_setup_template_follow_up">Follow-up</string>
+    <string name="safety_call_setup_template_custom">Custom</string>
+    <string name="safety_call_setup_template_custom_label">Your message (max 140 chars)</string>
+    <string name="safety_call_setup_template_preview">Preview</string>
+    <string name="safety_call_setup_save">Save</string>
+    <string name="safety_call_setup_save_validation_no_contacts">Add at least one contact before enabling.</string>
+    <string name="safety_call_setup_save_validation_custom_empty">Custom message cannot be empty.</string>
+    <string name="safety_call_warning_title">SMS Tech — confirm you\'re OK</string>
+    <string name="safety_call_warning_body_hours">Safety call will trigger in about %1$d hours. Tap to reset the timer.</string>
+    <string name="safety_call_warning_body_imminent">Safety call will trigger in less than 2 hours. Tap to reset now.</string>
+    <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
+    <string name="settings_section_emergency">Emergency mode</string>
+    <string name="settings_emergency_title">Emergency mode</string>
+    <string name="settings_emergency_desc">A hold-3s button sends an SMS to your emergency contacts with your current location. Distinct from Safety call (which is automatic on inactivity). Disabled by default.</string>
+    <string name="settings_emergency_disabled">Disabled</string>
+    <string name="settings_emergency_enabled">Armed</string>
+    <string name="settings_emergency_open">Open emergency</string>
+    <string name="emergency_title">Emergency mode</string>
+    <string name="emergency_setup_title">Emergency mode setup</string>
+    <string name="emergency_button_label">EMERGENCY</string>
+    <string name="emergency_button_hint_hold_3s">Emergency — hold 3 seconds to send</string>
+    <string name="emergency_preview_title">Message that will be sent</string>
+    <string name="emergency_status_disabled">Emergency mode is disabled. Turn it on in settings.</string>
+    <string name="emergency_status_no_contacts">No emergency contacts configured. Add some in Safety call settings.</string>
+    <string name="emergency_status_cooldown">Just sent. Available again in a minute.</string>
+    <string name="emergency_status_ready">Hold the button 3 seconds to alert your contacts.</string>
+    <string name="emergency_triggered_ok">Emergency sent to %1$d contact(s).</string>
+    <string name="emergency_triggered_no_location">Emergency sent to %1$d contact(s) — location unavailable.</string>
+    <string name="emergency_triggered_all_failed">Emergency send failed (%1$d). Check your default SMS app.</string>
+    <string name="emergency_setup_enable_title">Enable emergency mode</string>
+    <string name="emergency_setup_enable_desc">When on, an emergency button appears in the dedicated screen. Hold 3s to send an SMS with your location to your emergency contacts.</string>
+    <string name="emergency_setup_template_title">Message template</string>
+    <string name="emergency_setup_template_need_help">I need help</string>
+    <string name="emergency_setup_template_danger">Danger</string>
+    <string name="emergency_setup_template_discreet">Discreet</string>
+    <string name="emergency_setup_location_title">Include location</string>
+    <string name="emergency_setup_location_desc">Adds a Google Maps URL to the SMS. Requires Location permission. If turned off (or permission denied), the SMS is sent without coordinates.</string>
+    <string name="emergency_setup_location_permission_warning">Location permission not granted. The emergency SMS will be sent without coordinates. Grant the permission in Android settings to fix this.</string>
+    <string name="emergency_setup_contacts_title">Emergency contacts</string>
+    <string name="emergency_setup_contacts_empty">No contacts configured.</string>
+    <string name="emergency_setup_contacts_count">%1$d contact(s) configured.</string>
+    <string name="emergency_setup_contacts_cta">Manage contacts</string>
+    <string name="action_edit">Edit</string>
+    <string name="snack_generic_error">Something went wrong.</string>
     <string name="reaction_send_confirm_title">Send reaction?</string>
     <string name="reaction_send_confirm_body">An SMS containing only this emoji will be sent to your recipient. Counts as a regular SMS (plan rate). You can disable this in Settings → Sending.</string>
     <string name="reaction_send_confirm_never_ask">Don\'t ask again, send directly</string>
@@ -360,7 +447,6 @@
     <string name="settings_notif_channel_disabled_warn">Notifications are disabled for SMS Tech in the system settings. Tap below to fix.</string>
 
     <string name="settings_section_security">Security &amp; privacy</string>
-    <string name="settings_lock_mode">App lock</string>
     <string name="settings_flag_secure">Hide preview in Recents</string>
     <string name="settings_flag_secure_desc">Hides the conversation thumbnail in the system task switcher and blocks screenshots / screen recording while the app is open.</string>
     <string name="settings_lock_vault_on_leave">Lock vault on leave</string>
@@ -413,6 +499,8 @@
     <string name="channel_failed_desc">Errors and retry suggestions.</string>
     <string name="channel_background_label">Background tasks</string>
     <string name="channel_background_desc">Imports, backups and scheduled sending.</string>
+    <string name="channel_safety_call_warning_label">Safety call warning</string>
+    <string name="channel_safety_call_warning_desc">Reminder before automatic SMS to your emergency contacts.</string>
 
     <!-- Notification actions -->
     <string name="notif_reply_label">Reply</string>

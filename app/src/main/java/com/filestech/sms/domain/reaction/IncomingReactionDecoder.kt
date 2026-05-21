@@ -170,6 +170,33 @@ object IncomingReactionDecoder {
             )
         }
 
+        // v1.9.0 — Emoji + quote compact format : `<emoji> «<preview>»`.
+        // Strict : emoji = 1ʳᵉ token sans whitespace + au moins 1 codepoint
+        // emoji vrai (cf. [isLikelyEmojiChar]). v1.9.0 audit fix SEC-7 :
+        // l'ancien guard `emoji.all { it.code < 128 }` acceptait à tort un
+        // mot accentué français (`été «aperçu»` → réaction faussement
+        // décodée). Le nouveau guard exige au moins un char dans les blocs
+        // emoji Unicode connus.
+        //
+        // Fast-path SEC-6 anti-ReDoS : on skip la regex si pas de guillemet
+        // fermant (la regex non-greedy backtracke sur input pathologique).
+        if (trimmed.contains('»') || trimmed.lastIndexOf('"') > 0) {
+            EMOJI_WITH_QUOTE_REGEX.matchEntire(trimmed)?.let { m ->
+                val emoji = m.groupValues[1]
+                val rawPreview = m.groupValues[2]
+                if (emoji.isEmpty() || emoji.none { isLikelyEmojiChar(it) }) return@let
+                val wasTruncated = rawPreview.trimEnd().endsWith(TRUNCATION_MARKER)
+                val preview = rawPreview.removeSuffix(TRUNCATION_MARKER).trim()
+                if (preview.isEmpty()) return@let
+                return DecodedReaction(
+                    emoji = emoji,
+                    previewPrefix = preview,
+                    kind = DecodedReaction.Kind.Tapback,
+                    wasTruncated = wasTruncated,
+                )
+            }
+        }
+
         // v1.8.1 — LEGACY v1.8.0 format (kept for backward compat) :
         // `J'ai réagi par <emoji> à : «<preview>»`. Run AFTER the new regex
         // so v1.8.1+ messages match the new (preferred) format first.
@@ -349,4 +376,49 @@ object IncomingReactionDecoder {
     private val READABLE_FR_LEGACY_NO_PREVIEW_REGEX = Regex(
         """^J['’]ai\s+réagi\s+par\s+(\S+)$""",
     )
+
+    /**
+     * v1.9.0 — format compact "emoji + citation" : `<emoji> «<preview>»`.
+     * Emoji = 1ʳᵉ token sans whitespace, preview entre guillemets typographiques
+     * `«»` (ou `"..."` ASCII en fallback gateway).
+     *
+     * **Audit fix SEC-6** : la classe négative `[^»"]+` remplace `.+?` pour
+     * éliminer tout risque de backtracking catastrophique sur input
+     * pathologique (ex: `❤️ «aaaa...` sans guillemet fermant). L'engine
+     * ne peut plus revenir en arrière puisque chaque caractère est soit
+     * accepté soit non-matchant définitivement. Plus de `DOT_MATCHES_ALL`
+     * (les réactions sont mono-ligne).
+     */
+    private val EMOJI_WITH_QUOTE_REGEX = Regex(
+        """^(\S+)\s+[«"]([^»"]{1,200})[»"]$""",
+    )
+
+    /**
+     * v1.9.0 audit fix SEC-7 — heuristique "est-ce un vrai char emoji ?".
+     *
+     * Accepte :
+     *  - High surrogate (`U+D800..U+DBFF`) : plane supplémentaire 1F000+,
+     *    couvre 99% des emojis modernes (😀 👍 ❤️‍🔥 etc.)
+     *  - Plage BMP `U+2300..U+27BF` : Miscellaneous Technical, Symbols,
+     *    Dingbats — couvre ❤ ☀ ⚠ ✂ ✅ ❌ et autres emojis BMP avant
+     *    plane supplémentaire
+     *  - ZWJ (`U+200D`) et Variation Selector-16 (`U+FE0F`) : combinés
+     *    avec autres codepoints emoji (composition de séquences emoji)
+     *
+     * Rejette explicitement :
+     *  - Lettres accentuées latin-1 (`é`=0xE9, `à`=0xE0, `ç`=0xE7…) qui
+     *    avaient l'ancien guard `code >= 128` ✓ et accepté un mot français
+     *    comme "été" en tant qu'emoji.
+     *  - ASCII pur.
+     *
+     * Note : strict mais robuste. Un emoji isolé du Latin Extended-A (rare)
+     * pourrait être rejeté, mais ce sont des cas que SMS Tech n'émet pas
+     * (encoder utilise le picker système qui produit du plane supplémentaire
+     * pour la quasi-totalité des emojis usuels).
+     */
+    private fun isLikelyEmojiChar(c: Char): Boolean {
+        if (c.isHighSurrogate()) return true
+        val code = c.code
+        return code in 0x2300..0x27BF || code == 0x200D || code == 0xFE0F
+    }
 }

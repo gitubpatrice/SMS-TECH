@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.6.2** (2026-05-19)
+Current release : **v1.10.0** (2026-05-21)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -22,6 +22,14 @@ If you find a vulnerability, please disclose it to **contact@files-tech.com** wi
 | Brute-force PIN | Online guessing of a short PIN | PBKDF2-HMAC-SHA512 with calibrated iterations (>= 210 k) + salted hash. Exponential lockout (5 s, 10 s, 30 s, 1 min, 2 min, 5 min) starting at 5 failures. `setLockoutUntil` clamped to a 24 h forward horizon so a tainted backup restore cannot brick the app. |
 | Malicious component on the same device sending an Intent | Forge a `MmsSent` / `SmsSent` broadcast to manipulate row status | Every result-callback `PendingIntent` uses **explicit** `Intent.setClass(context, ReceiverClass)` rather than implicit `setPackage`. Receivers stay `exported = false`. |
 | Carrier-side / MITM | Intercept message bytes in flight | **Not in scope.** SMS / MMS is unencrypted by protocol; we cannot fix that. Users who need transport encryption should use Signal or similar. |
+| Unwanted automatic Safety call SMS during coercion (v1.9.0) | The deadman feature firing while the victim is forced into the `PanicDecoy` session — which would reveal her emergency contacts to the attacker | `SafetyCallTriggerService` and `SafetyCallWorker` both check `AppLockManager.LockState.PanicDecoy` and short-circuit before any send. Worker tick retries automatically once decoy state is left. |
+| Spoofed Safety call reset intent (v1.9.0) | A third-party app on the device crafting `ACTION_SAFETY_CALL_RESET` (the activity is `exported=true` because of the SMS role) to neutralise the deadman remotely | `SafetyCallIntentToken` rotates a `SecureRandom` 63-bit nonce on every warning notification; `MainActivity` validates the extra against the in-process token and burns it on consume. A forged intent with no/wrong token is logged and ignored. |
+| Coerced reset of Safety call timer via app opening (v1.9.0) | An attacker who knows the app icon could open SMS Tech repeatedly (without PIN) to neutralise the deadman | `MainActivity.onResume` only resets `lastActivityAt` when `AppLockManager.LockState` is `Unlocked` or `Disabled`. `Locked` / `PanicDecoy` sessions never reset the timer. |
+| User-triggered emergency SMS during coercion (v1.10.0) | The new Emergency mode (hold-3s button) could reveal the victim's emergency contacts if the attacker forces an unlock to `PanicDecoy` and sees the URGENCE button | Three layers of defence : (a) `AppRoot` navigation guard pops both `Emergency` and `EmergencySetup` routes the moment `PanicDecoy` becomes active, (b) `SettingsScreen` hides both "Mode urgence" and "Safety call" sections when `isPanicDecoy = true` (the attacker doesn't learn the feature exists), (c) `TriggerEmergencyUseCase` checks the same lock state and short-circuits before any SMS is sent. |
+| Wall-clock manipulation to bypass anti-spam cooldown (v1.10.0) | A rooted attacker advances `Settings.Global.AUTO_TIME=0; date <future>` to skip the 60 s emergency-mode cooldown and re-trigger the SMS to harass the contacts | `EmergencyConfig.isInAntiSpamWindow()` checks both wall-clock AND `SystemClock.elapsedRealtime()`. Cooldown is active if EITHER clock is still in window. A negative monotonic delta (post-reboot before drift recovery) is also treated as "still in cooldown" — fail-safe against root + reboot + clock-forward. Same defence on `SafetyCallConfig.isExpired()` (SEC-11) — required both clocks to expire before the deadman fires. |
+| Wall-clock manipulation to fire Safety call early (v1.10.0 SEC-11) | A rooted attacker advances the wall-clock to make `lastActivityAt + timeoutMs < now()` evaluate `true` immediately and trigger the SMS to expose the support network | `SafetyCallConfig.isExpired()` now requires BOTH wall-clock AND monotonic clock to have crossed `timeoutMs`. `SystemClock.elapsedRealtime()` is not manipulable via Settings → Date/time. The drift between the two clocks defeats the attack. Drift recovery in `MainApplication.onCreate` realigns monotonic post-reboot if the stored value exceeds current uptime. |
+| Double-trigger of emergency SMS via UI race (v1.10.0) | A panicked user holds the URGENCE button, releases, and immediately holds again before the DataStore write completes; without protection a second SMS could be sent within ~50–300 ms | `EmergencyViewModel.trigger()` uses `AtomicBoolean compareAndSet(false, true)` as an in-flight guard. A second `trigger()` call while the first is still running returns immediately. The flag is reset in `finally` so any exception in the UseCase still releases it. |
+| Listener leak in `LocationResolver` (v1.10.0) | Theoretical leak of GPS listener if `SecurityException` thrown on NETWORK provider after GPS listener was registered | `awaitFirstFix` uses `AtomicBoolean resumed` to enforce single-resume on `suspendCancellableCoroutine`, and `cleanup()` is always called in the `catch (SecurityException)` block regardless of `resumed` state. Same `cleanup()` is wired in `invokeOnCancellation`. |
 
 ---
 
@@ -45,7 +53,82 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.6.2 (this release) — Critical settings regression fix + Tapback fold improvements
+### v1.10.0 (this release) — Emergency mode + clock-monotonic hardening + refactors
+
+MINOR release introducing the **Emergency mode** feature (opt-in active hold-3s SMS button that sends a personalised template + GPS location URL to the user's safety-call contacts) plus a monotonic-clock complementary check (SEC-11) on the existing Safety call deadman.
+
+A pre-release audit (3 axes + deep dive security + architecture coherence + i18n) surfaced 3 HIGH, 8 MEDIUM and 2 LOW findings, all fixed before tag :
+
+- **HIGH SEC-1** — `AppRoot` navigation guard now pops both `Emergency` and `EmergencySetup` routes when `PanicDecoy` activates ; `SettingsScreen` hides both "Mode urgence" and "Safety call" sections when `isPanicDecoy = true`. Without this, an attacker in a forced-decoy session would see the URGENCE button and learn the feature exists, breaking the "ordinary SMS app" illusion.
+- **HIGH SEC-2** — `EmergencyViewModel.trigger()` protected by `AtomicBoolean compareAndSet` in-flight guard. Without it, a panicked double-hold during the ~50–300 ms DataStore-write window could fire two SMS to every contact, confusing the recipients in a stressful moment.
+- **HIGH P1** — `LocationResolver.awaitFirstFix` uses `AtomicBoolean resumed` to guarantee single-resume on `suspendCancellableCoroutine`. Without it, near-simultaneous GPS + NETWORK fixes could call `cont.resume` twice → `IllegalStateException: Already resumed` swallowed silently → SMS sent without coordinates despite a valid fix being available.
+- **HIGH S1+U1+U2** — `EmergencySetupScreen` now uses `rememberPermissionState(ACCESS_FINE_LOCATION)`, prompts at toggle ON, and shows a persistent red warning if the permission is denied. `EmergencyScreen.MessagePreviewCard` reflects the REAL permission state (not just the user preference) so the previewed SMS body matches what will be sent. Without these, a user activating the switch without granting the permission was building false trust in a security feature.
+- **MEDIUM SEC-4** — `EmergencyConfig.isInAntiSpamWindow()` treats a negative monotonic delta (post-reboot before async drift recovery in `MainApplication.onCreate` completes) as "still in cooldown" — fail-safe against a root + reboot + clock-forward attack.
+- **MEDIUM SEC-5** — `EmergencyTemplate` body strings switched from `—` (U+2014, em dash) to `-` (ASCII hyphen) and removed `Ù` from `DISCREET`. All three templates now fit in a single GSM-7 segment with the URL Maps appended → no multi-segment risk in weak-radio emergency zones. Guarded by two unit tests in `AuditV1100Test`.
+- **MEDIUM SEC-6** — `LocationResolver.awaitFirstFix`'s `SecurityException` catch always calls `cleanup()` before checking the `resumed` flag, ensuring the GPS listener is removed even if NETWORK provider registration failed after GPS already registered.
+- **MEDIUM S3** — `EmergencyViewModel.save()` preserves the LIVE `lastTriggeredAt` and `monotonicLastTriggeredAt` from DataStore at the moment of save, not the stale value captured at setup-open. Without this, modifying any setup parameter after a recent trigger would clear the anti-spam cooldown.
+- **MEDIUM C1** — `EmergencySetupScreen.SetupCard` aligned on `surfaceContainer` (was `surface`), matching the `SafetyCallSetupScreen.SectionCard` convention.
+- **MEDIUM C2** — `EmergencySetupScreen` event collector uses exhaustive `when (event)` instead of `if (event is …)`, so a new `Event` case added later is signalled at compile time.
+- **MEDIUM i18n** — 6 FR strings in the Emergency block converted from tutoiement to vouvoiement, aligning with the project-wide FR tone (the templates themselves keep the user's first-person voice).
+- **LOW C5** — `K.safetyCallCustomMessage` declaration moved back into the `safetyCall*` block in `SettingsRepository` (was visually orphaned after the `emergency*` block).
+
+#### SEC-11 — clock-monotonic complementary check on Safety call
+
+Independent hardening of the v1.9.0 Safety call : `SafetyCallConfig.lastActivityAt` (wall-clock) is now complemented by `SafetyCallConfig.monotonicLastActivityAt` (snapshot of `SystemClock.elapsedRealtime()` at every reset). `isExpired()` and `isInWarningWindow()` require BOTH clocks to cross `timeoutMs` before triggering. A rooted attacker who advances `Settings.Global.AUTO_TIME=0; date <future>` to force the deadman to fire immediately is now defeated — the monotonic clock continues to track real elapsed time since boot, regardless of wall-clock manipulation.
+
+Drift recovery: on every cold-start, `MainApplication.onCreate` detects if any stored monotonic value exceeds the current `SystemClock.elapsedRealtime()` (consequence of a reboot) and realigns it to the current monotonic. The deadman is effectively extended by the post-reboot uptime — acceptable trade-off given the alternative would be a permanently-locked deadman after every reboot.
+
+Migration v1.9.0 → v1.10.0: configs persisted before this release have `monotonicLastActivityAt = 0L` ; `isExpired()` returns `false` in that case (safety net) until the first reset (`MainActivity.onResume`, "Je vais bien", warning-notif tap, setup save) populates the new field. The first app open after upgrade implicitly re-arms the deadman.
+
+#### Refactors C1 + C4 (cosmetic, no behaviour change)
+
+- C1 — `SafetyCallTriggerService` (data layer) → `TriggerSafetyCallUseCase` (domain/usecase) with `operator invoke()`, aligning with the project's dominant UseCase pattern. Callers updated: `SafetyCallWorker`, `AuditV190Test`.
+- C4 — `SafetyCallContactJsonCodec` → `SafetyCallContactCodec` (the format was never JSON, was pipe-separated from day one). Renamed object + file ; DataStore key (`security.safetyCall.contactsJson`) kept unchanged for storage backward-compat.
+
+#### Performance P2
+
+`SettingsScreen.SafetyCallArmedRecap` no longer calls `System.currentTimeMillis()` at every recomposition ; `SettingsViewModel` exposes `safetyCallRemainingMs: StateFlow<Long>` recomputed every 60 s (or whenever `state` changes via `combine`). Granularity sufficient for an hour-level countdown displayed to the user.
+
+Pre-release audit: 17 garde-régression tests in `AuditV1100Test` (clock-forward attack on safety call + emergency, post-reboot drift, v1.9.0 migration fallback, emergency anti-spam, GSM-7 single-segment guarantee, template defaults).
+
+### v1.9.0 — Safety call + compact reaction format + audit hardening
+
+MINOR release introducing the **Safety call** feature (opt-in automatic SMS to 1–4 emergency contacts after a user-configured inactivity timeout, 1 h to 30 days) and a fourth compact reaction format `EMOJI_WITH_QUOTE` (`❤️ «excerpt»`). Disabled by default.
+
+A pre-release audit (3 axes in parallel + architecture coherence + i18n + deep dive security) surfaced 1 CRITICAL, 4 HIGH and 6 MEDIUM findings, all fixed before tag :
+
+- **CRITICAL** — `SafetyCallTriggerService` + `SafetyCallWorker` now check `AppLockManager.LockState.PanicDecoy` and short-circuit before any send. Without that guard, the deadman would have fired SMS to the victim's emergency contacts under coercion, revealing her support network to the attacker. The worker tick (60 min) retries automatically once decoy state is left.
+- **HIGH** — `BootReceiver` now reschedules `SafetyCallWorker.schedulePeriodic` on `BOOT_COMPLETED` so a force-stop OEM (Xiaomi / Huawei) doesn't lose the deadman. KEEP policy keeps the call idempotent.
+- **HIGH** — `IncomingReactionDecoder.EMOJI_WITH_QUOTE_REGEX` reformulated with negative class `[^»"]{1,200}` (was `.+?` + DOT_MATCHES_ALL) — eliminates catastrophic backtracking on pathological input `❤️ «aaaa...` (no closing guillemet, capped at 400 chars).
+- **HIGH** — Strict emoji guard `isLikelyEmojiChar(c)` requires high-surrogate OR `U+2300..U+27BF` OR ZWJ / VS-16 (was `code < 128` which silently swallowed FR messages starting with an accented word — `"été «aperçu»"` was being misinterpreted as a reaction).
+- **MEDIUM** — Anti-spoofing nonce (`SafetyCallIntentToken`) on `ACTION_SAFETY_CALL_RESET`. The intent extra `EXTRA_RESET_TOKEN` is validated and consumed mono-shot by `MainActivity` ; a third-party app cannot neutralise the deadman by forging the action.
+- **MEDIUM** — `MainActivity.onResume` reset gated on `LockState.Unlocked || Disabled`. `Locked` / `PanicDecoy` no longer reset the timer.
+- **MEDIUM** — `SafetyCallTriggerService.disableSafetyCall()` is now called **before** the send loop (preemptive disable). A crash mid-loop no longer causes a double-trigger 60 min later.
+- **MEDIUM** — `SafetyCallContactJsonCodec.decode()` filters via `SafetyCallContact.isValid()` (defense in depth against tampered DataStore restore). Encoding strips full C0/C1 range + `|` separator (was only `\n` + `|`).
+- **MEDIUM** — Dedicated notification channel `CHANNEL_SAFETY_CALL_WARNING` (was sharing `CHANNEL_INCOMING` with regular SMS) so the user can tune sound / vibration independently.
+- **MEDIUM** — `SafetyCallSetupViewModel` snapshot-once from DataStore (`first()` instead of `collect`) — fixes data loss when a concurrent write (`onResume` reset) overrode the in-progress draft.
+
+Logs no longer leak `phoneNumber` to Timber (replaced by index-only identifiers). `SafetyCallTemplate.CUSTOM` re-caps at render to `MAX_CUSTOM_MESSAGE_LENGTH=140` to defend against tampered DataStore values that would otherwise produce a multi-segment surprise.
+
+### v1.8.1 — Reaction wording hybrid (named / anonymous) + decoder dual
+
+PATCH following v1.8.0 field testing — the FR readable reaction format `"J'ai réagi par ❤️ à : «…»"` was ambiguous when read out of context. v1.8.1 reformulates to a hybrid : with sender name → `"<Name> a réagi par ❤️ à votre message : «…»"`, anonymous → `"Réagi par ❤️ à votre message : «…»"`. Sender name resolved via 3-tier fallback : (1) Settings override (sanitized, cap 40c, anti-C0/C1/bidi/BOM), (2) `ContactsContract.Profile` auto-detection, (3) anonymous.
+
+Decoder accepts 4 new regex (named/anonymous × with-preview/no-preview) + legacy v1.8.0 + legacy Tapback EN. `MAX_DECODE_INPUT_LENGTH = 400` neutralises ReDoS on the non-greedy quantifiers. No schema migration, DataStore-additive downgrade-safe.
+
+### v1.8.0 — Conversation badge fixes + reaction format picker + tap-notif nav
+
+12 fixes confirmed on Galaxy S9 Android 10 + Galaxy S24 Android 15. Notable security-adjacent : `markRead` now propagates to the system `content://sms` + `content://mms` providers so uninstall + reinstall preserves read state ; one-shot migration `unreadResetV180` resets historical incoming messages to read=1 (aligned Google Messages / Samsung Messages) ; `TelephonySyncManager.runSync` forces `read=true` on all historical messages at first sync.
+
+### v1.7.1 — FLOSS translation via system delegation (ACTION_PROCESS_TEXT)
+
+Restores translation by delegating to the user's installed translation app via `Intent.ACTION_PROCESS_TEXT` with `EXTRA_PROCESS_TEXT_READONLY=true` (anti-spoofing : the called app cannot modify the original). `<queries>` in `AndroidManifest` declares targeted package visibility (no `QUERY_ALL_PACKAGES`). System chooser obligatory. No bundled ML model.
+
+### v1.7.0 — F-Droid FLOSS compliance (Google ML Kit removed)
+
+Suppression of `com.google.mlkit:translate` + `com.google.mlkit:language-id` + `kotlinx-coroutines-play-services` (was a bridge `Task→suspend` for ML Kit). `TranslationService.kt` rewritten as a stub returning `Outcome.Failure(Validation("translation_unavailable_v17"))`. Cert SHA-256 stable. APK arm64 -2 MB.
+
+### v1.6.2 — Critical settings regression fix + Tapback fold improvements
 
 PATCH bundling 5 user-visible fixes uncovered during v1.6.1 in-field testing.
 

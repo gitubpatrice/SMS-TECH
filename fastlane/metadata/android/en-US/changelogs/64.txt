@@ -1,0 +1,12 @@
+v1.10.0 — Emergency mode + hardening
+
+• NEW Emergency mode: hold "EMERGENCY" 3 s to send
+  an SMS to Safety Call contacts with your GPS
+  location (clickable Maps URL)
+• 3 GSM-7 templates (single segment guaranteed)
+• Location permission opt-in, graceful fallback
+• Safety Call: monotonic clock defeats clock-forward
+• Emergency + Safety Call hidden in panic mode
+  (PanicDecoy)
+• 17 regression tests + internal refactors
+• Off by default, strict opt-in, no cloud

@@ -131,7 +131,16 @@ data class SendingSettings(
  * 3 formats en parallèle (rétro-compatibilité totale avec les v1.7.x et avec
  * les Tapbacks iMessage entrants).
  */
-enum class ReactionFormat { READABLE_FR, TAPBACK_EN, EMOJI_ONLY }
+/**
+ * v1.8.0 (bug 5 fix) — format du SMS de réaction envoyé au correspondant.
+ *  - READABLE_FR : "Réagi par ❤️ à votre message : «…»"
+ *  - TAPBACK_EN  : "Reacted ❤️ to «…»" (Tapback iMessage / Google Messages récent)
+ *  - EMOJI_ONLY  : "❤️" seul (compact, perd le contexte)
+ *  - **v1.9.0** EMOJI_WITH_QUOTE : "❤️ «aperçu du message»" (compact + contexte
+ *    visuel ; pas de mot "Réagi", l'emoji + citation typographique parlent
+ *    d'elles-mêmes côté destinataire)
+ */
+enum class ReactionFormat { READABLE_FR, TAPBACK_EN, EMOJI_ONLY, EMOJI_WITH_QUOTE }
 
 enum class MmsImageQuality { HIGH, BALANCED, ECONOMY }
 
@@ -160,6 +169,25 @@ data class SecuritySettings(
     val flagSecure: Boolean = true,
     val lockVaultOnLeave: Boolean = true,
     val panicCodeEnabled: Boolean = false,
+    /**
+     * v1.9.0 — config du Safety call (opt-in, désactivé par défaut).
+     * Voir [com.filestech.sms.domain.safetycall.SafetyCallConfig] pour le
+     * détail des champs et de la sémantique. Stocké dans DataStore via 5
+     * clés indépendantes (cf. K.safetyCall*) plutôt qu'un blob JSON sérialisé,
+     * pour rester lisible/debugable et permettre des migrations partielles
+     * sans schéma. La liste [SafetyCallContact] est stockée en format
+     * pipe-separated via [SafetyCallContactCodec] (seule structure complexe).
+     */
+    val safetyCall: com.filestech.sms.domain.safetycall.SafetyCallConfig =
+        com.filestech.sms.domain.safetycall.SafetyCallConfig(),
+    /**
+     * v1.10.0 — config du Mode urgence (opt-in, désactivé par défaut).
+     * Voir [com.filestech.sms.domain.emergency.EmergencyConfig]. Réutilise
+     * les contacts de [safetyCall] (pas de liste séparée). Stocké dans
+     * DataStore via 4 clés flat (cf. K.emergency*).
+     */
+    val emergency: com.filestech.sms.domain.emergency.EmergencyConfig =
+        com.filestech.sms.domain.emergency.EmergencyConfig(),
     /**
      * Profondeur de l'auto-nettoyage : NULL ou 0 = désactivé, sinon nombre de jours
      * au-delà duquel les messages sont effacés. L'auto-nettoyage tourne au plus une fois

@@ -1,0 +1,12 @@
+v1.10.0 — Mode urgence + hardening
+
+• NEW Mode urgence : bouton "URGENCE" hold 3 s
+  envoie SMS aux contacts Safety Call avec position
+  GPS (URL Maps cliquable)
+• 3 templates GSM-7 (1 segment garanti)
+• Permission Localisation opt-in, fallback gracieux
+• Safety Call : horloge monotone anti clock-forward
+• Sections Urgence + Safety Call masquées en mode
+  panique (PanicDecoy)
+• 17 tests garde-régression + refactos internes
+• Opt-in strict, désactivé par défaut, zéro cloud

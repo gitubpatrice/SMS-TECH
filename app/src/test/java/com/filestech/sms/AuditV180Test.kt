@@ -89,9 +89,12 @@ class AuditV180Test {
 
     // ──────────────── Bug 5 — Format réaction FR par défaut ────────────────
 
-    @Test fun `ReactionFormat enum exposes 3 values with READABLE_FR as a member`() {
+    @Test fun `ReactionFormat enum exposes 4 values v1_9_0`() {
+        // v1.9.0 ajout EMOJI_WITH_QUOTE en complément des 3 v1.8.x.
         val values = ReactionFormat.values().map { it.name }.toSet()
-        assertThat(values).containsExactly("READABLE_FR", "TAPBACK_EN", "EMOJI_ONLY")
+        assertThat(values).containsExactly(
+            "READABLE_FR", "TAPBACK_EN", "EMOJI_ONLY", "EMOJI_WITH_QUOTE",
+        )
     }
 
     @Test fun `buildReadableFrBody produces French format with preview (anonymous)`() {

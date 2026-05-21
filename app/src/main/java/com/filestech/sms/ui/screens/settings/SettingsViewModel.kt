@@ -14,9 +14,13 @@ import com.filestech.sms.system.scheduler.TelephonySyncWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,6 +54,57 @@ class SettingsViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(5_000L),
         AppSettings(),
     )
+
+    /**
+     * v1.10.0 audit SEC-1 — exposé pour que [SettingsScreen] puisse masquer
+     * la section Mode urgence en session [AppLockManager.LockState.PanicDecoy].
+     * Un agresseur en decoy ne doit pas voir qu'un mode urgence existe
+     * (l'illusion "app SMS ordinaire" doit tenir).
+     */
+    val isPanicDecoy: StateFlow<Boolean> = appLock.state
+        .map { it is AppLockManager.LockState.PanicDecoy }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+    /**
+     * v1.10.0 perf P2 — temps restant avant déclenchement du Safety call (en ms).
+     * Recomputé à chaque tick 60s (granularité suffisante pour un compteur d'heures
+     * affiché en h/j) OU à chaque changement de [state] (reset "Je vais bien",
+     * modification timeout, désactivation…). Évite l'appel à
+     * `System.currentTimeMillis()` à chaque recomposition de [SettingsScreen].
+     *
+     * Valeur sentinelle [REMAINING_NOT_ARMED] quand le deadman est désactivé ou
+     * pas encore initialisé — l'UI ne lit cette flow que dans la branche `armed`,
+     * mais la sentinelle évite toute lecture stale entre deux ticks.
+     */
+    val safetyCallRemainingMs: StateFlow<Long> = combine(
+        state,
+        flow {
+            while (true) {
+                emit(Unit)
+                delay(60_000L)
+            }
+        },
+    ) { snapshot, _ ->
+        val cfg = snapshot.security.safetyCall
+        // v1.10.0 SEC-11 — affichage cohérent avec [SafetyCallConfig.isExpired] :
+        // si la mono clock n'est pas posée (config v1.9.0 héritée), on traite
+        // comme "non armé" — l'UI ne fait pas miroiter un compte à rebours qui
+        // ne déclencherait pas.
+        if (!cfg.enabled || cfg.lastActivityAt == 0L || cfg.monotonicLastActivityAt == 0L) {
+            REMAINING_NOT_ARMED
+        } else {
+            (cfg.lastActivityAt + cfg.timeoutMs) - System.currentTimeMillis()
+        }
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000L),
+        REMAINING_NOT_ARMED,
+    )
+
+    companion object {
+        /** Sentinelle : Safety call inactif (désactivé ou non initialisé). */
+        const val REMAINING_NOT_ARMED: Long = Long.MIN_VALUE
+    }
 
     fun update(transform: (AppSettings) -> AppSettings) = viewModelScope.launch { settings.update(transform) }
 

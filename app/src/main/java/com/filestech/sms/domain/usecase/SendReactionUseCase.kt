@@ -132,6 +132,8 @@ class SendReactionUseCase @Inject constructor(
                     // de nom dans Settings sans avoir à redémarrer l'app.
                     senderName = senderNameProvider.resolveDisplayName(),
                 )
+                // v1.9.0 — format compact + contexte : "❤️ «aperçu»".
+                ReactionFormat.EMOJI_WITH_QUOTE -> buildEmojiWithQuoteBody(emoji, message.body)
             },
             // F3 — pas de signature pour une réaction.
             appendSignature = false,
@@ -314,6 +316,39 @@ internal fun buildReadableFrBody(
     } else {
         "Réagi par $emoji à votre message : «$preview»"
     }
+}
+
+/**
+ * v1.9.0 — wrap pour le format compact "emoji + citation" :
+ * `<emoji> «<preview>»` = espace (1) + `«` (1) + `»` (1) + `…` éventuel (1).
+ */
+private const val EMOJI_WITH_QUOTE_WRAP_LENGTH = 1 + 1 + 1 + 1
+
+/**
+ * v1.9.0 — construit le corps SMS au format compact "emoji + citation" :
+ * `❤️ «aperçu du message original»`. Pas de mot "Réagi" en préfixe — la
+ * combinaison emoji-en-tête + guillemets typographiques suffit à signaler
+ * une réaction côté destinataire (plus court que `READABLE_FR`, plus
+ * explicite que `EMOJI_ONLY` seul).
+ *
+ * Body vide (MMS image pure) → fallback `<emoji>` seul (équivalent
+ * EMOJI_ONLY pour ce cas, on évite d'envoyer `«»` vides).
+ */
+internal fun buildEmojiWithQuoteBody(emoji: String, originalBody: String): String {
+    val sanitized = originalBody
+        .replace(FORBIDDEN_BODY_CHARS, " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+    if (sanitized.isEmpty()) return emoji
+    val budget = (SMS_UCS2_SEGMENT_CAP - EMOJI_WITH_QUOTE_WRAP_LENGTH - emoji.length)
+        .coerceAtMost(PREVIEW_HARD_MAX)
+        .coerceAtLeast(8)
+    val preview = if (sanitized.length <= budget) {
+        sanitized
+    } else {
+        sanitized.safeTake(budget).trimEnd() + "…"
+    }
+    return "$emoji «$preview»"
 }
 
 /**

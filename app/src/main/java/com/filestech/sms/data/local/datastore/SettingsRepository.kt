@@ -121,6 +121,37 @@ class SettingsRepository @Inject constructor(
                 panicCodeEnabled = p[K.panicCode] ?: false,
                 autoDeleteOlderThanDays = p[K.autoDeleteDays],
                 lastAutoPurgeAt = p[K.lastAutoPurgeAt],
+                safetyCall = com.filestech.sms.domain.safetycall.SafetyCallConfig(
+                    enabled = p[K.safetyCallEnabled] ?: false,
+                    timeoutMs = p[K.safetyCallTimeoutMs]
+                        ?: com.filestech.sms.domain.safetycall.SafetyCallConfig.TIMEOUT_48H_MS,
+                    lastActivityAt = p[K.safetyCallLastActivityAt] ?: 0L,
+                    // v1.10.0 SEC-11 — défaut 0L si absent (config v1.9.0
+                    // héritée) → isExpired retournera false jusqu'au premier
+                    // reset (cf. KDoc SafetyCallConfig.monotonicLastActivityAt).
+                    monotonicLastActivityAt = p[K.safetyCallMonotonicLastActivityAt] ?: 0L,
+                    contacts = SafetyCallContactCodec.decode(p[K.safetyCallContactsJson]),
+                    template = enumOr(
+                        p,
+                        K.safetyCallTemplate,
+                        com.filestech.sms.domain.safetycall.SafetyCallTemplate.CHECK_IN,
+                        com.filestech.sms.domain.safetycall.SafetyCallTemplate::valueOf,
+                    ),
+                    customMessage = p[K.safetyCallCustomMessage].orEmpty(),
+                ),
+                // v1.10.0 — Mode urgence.
+                emergency = com.filestech.sms.domain.emergency.EmergencyConfig(
+                    enabled = p[K.emergencyEnabled] ?: false,
+                    template = enumOr(
+                        p,
+                        K.emergencyTemplate,
+                        com.filestech.sms.domain.emergency.EmergencyTemplate.NEED_HELP,
+                        com.filestech.sms.domain.emergency.EmergencyTemplate::valueOf,
+                    ),
+                    includeLocation = p[K.emergencyIncludeLocation] ?: true,
+                    lastTriggeredAt = p[K.emergencyLastTriggeredAt] ?: 0L,
+                    monotonicLastTriggeredAt = p[K.emergencyMonotonicLastTriggeredAt] ?: 0L,
+                ),
             ),
             blocking = BlockingSettings(
                 blockUnknown = p[K.blockUnknown] ?: false,
@@ -194,6 +225,22 @@ class SettingsRepository @Inject constructor(
         this[K.panicCode] = s.security.panicCodeEnabled
         s.security.autoDeleteOlderThanDays?.let { this[K.autoDeleteDays] = it } ?: remove(K.autoDeleteDays)
         s.security.lastAutoPurgeAt?.let { this[K.lastAutoPurgeAt] = it } ?: remove(K.lastAutoPurgeAt)
+        // v1.9.0 — Safety call. La config est éclatée en 5 clés flat (cf.
+        // doc [SecuritySettings.safetyCall]). Seuls [contacts] passent par un
+        // codec pipe-separated, le reste est trivialement scalaire.
+        this[K.safetyCallEnabled] = s.security.safetyCall.enabled
+        this[K.safetyCallTimeoutMs] = s.security.safetyCall.timeoutMs
+        this[K.safetyCallLastActivityAt] = s.security.safetyCall.lastActivityAt
+        this[K.safetyCallMonotonicLastActivityAt] = s.security.safetyCall.monotonicLastActivityAt
+        this[K.safetyCallContactsJson] = SafetyCallContactCodec.encode(s.security.safetyCall.contacts)
+        this[K.safetyCallTemplate] = s.security.safetyCall.template.name
+        this[K.safetyCallCustomMessage] = s.security.safetyCall.customMessage
+        // v1.10.0 — Mode urgence.
+        this[K.emergencyEnabled] = s.security.emergency.enabled
+        this[K.emergencyTemplate] = s.security.emergency.template.name
+        this[K.emergencyIncludeLocation] = s.security.emergency.includeLocation
+        this[K.emergencyLastTriggeredAt] = s.security.emergency.lastTriggeredAt
+        this[K.emergencyMonotonicLastTriggeredAt] = s.security.emergency.monotonicLastTriggeredAt
 
         this[K.blockUnknown] = s.blocking.blockUnknown
         // v1.3.5 G6 + audit F3 — `blockShortCodes` retiré (champ fantôme, voir
@@ -250,6 +297,28 @@ class SettingsRepository @Inject constructor(
         // v1.8.1 — override personnel du nom inclus dans les SMS de réaction
         // sortants. `null` = résolution auto via `ContactsContract.Profile`.
         val senderDisplayName = stringPreferencesKey("send.senderDisplayName")
+
+        // v1.9.0 — Safety call (opt-in, désactivé par défaut). 6 clés flat
+        // pour rester lisible/debugable, la liste des contacts est sérialisée
+        // en format pipe-separated via SafetyCallContactCodec. Le suffixe
+        // `Json` dans la clé est conservé pour rétro-compatibilité de stockage.
+        val safetyCallEnabled = booleanPreferencesKey("security.safetyCall.enabled")
+        val safetyCallTimeoutMs = longPreferencesKey("security.safetyCall.timeoutMs")
+        val safetyCallLastActivityAt = longPreferencesKey("security.safetyCall.lastActivityAt")
+        // v1.10.0 SEC-11 — snapshot monotonic du dernier reset, anti clock-forward.
+        val safetyCallMonotonicLastActivityAt =
+            longPreferencesKey("security.safetyCall.monotonicLastActivityAt")
+        val safetyCallContactsJson = stringPreferencesKey("security.safetyCall.contactsJson")
+        val safetyCallTemplate = stringPreferencesKey("security.safetyCall.template")
+        val safetyCallCustomMessage = stringPreferencesKey("security.safetyCall.customMessage")
+        // v1.10.0 — Mode urgence (réutilise les contacts Safety call).
+        val emergencyEnabled = booleanPreferencesKey("security.emergency.enabled")
+        val emergencyTemplate = stringPreferencesKey("security.emergency.template")
+        val emergencyIncludeLocation = booleanPreferencesKey("security.emergency.includeLocation")
+        val emergencyLastTriggeredAt = longPreferencesKey("security.emergency.lastTriggeredAt")
+        // v1.10.0 audit S2 — snapshot monotonic du dernier trigger urgence.
+        val emergencyMonotonicLastTriggeredAt =
+            longPreferencesKey("security.emergency.monotonicLastTriggeredAt")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")

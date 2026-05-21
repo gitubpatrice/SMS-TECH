@@ -1,5 +1,6 @@
 package com.filestech.sms.ui.screens.settings
 
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Forum
@@ -43,6 +45,7 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -87,9 +90,18 @@ fun SettingsScreen(
     onOpenBackup: () -> Unit,
     onOpenMigration: () -> Unit,
     onOpenBlocked: () -> Unit,
+    onOpenSafetyCall: () -> Unit,
+    onOpenEmergency: () -> Unit,
+    onOpenEmergencySetup: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // v1.10.0 perf P2 — recomputé toutes les 60s (ou à chaque changement de
+    // state), évite l'appel à System.currentTimeMillis() à chaque recomposition.
+    val safetyCallRemainingMs by viewModel.safetyCallRemainingMs.collectAsStateWithLifecycle()
+    // v1.10.0 audit SEC-1 — en session PanicDecoy, masquer toutes les sections
+    // qui révèlent que l'app dispose de fonctions de sécurité personnelle.
+    val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
     var showNuke by remember { mutableStateOf(false) }
     var lockModePickerOpen by remember { mutableStateOf(false) }
     var autoDeletePickerOpen by remember { mutableStateOf(false) }
@@ -112,6 +124,9 @@ fun SettingsScreen(
 
     val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    // v1.9.0 — scope partagé pour les actions instantanées qui doivent émettre
+    // un snack depuis un onClick callback (ex. bouton "Je vais bien" Safety call).
+    val rootScope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         viewModel.events.collect { e ->
             when (e) {
@@ -144,7 +159,7 @@ fun SettingsScreen(
                 },
             )
         },
-        snackbarHost = { androidx.compose.material3.SnackbarHost(hostState = snackbarHost) },
+        snackbarHost = { com.filestech.sms.ui.components.SmsTechSnackbarHost(snackbarHost) },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -248,6 +263,8 @@ fun SettingsScreen(
                             stringResource(R.string.settings_reaction_format_en)
                         com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY ->
                             stringResource(R.string.settings_reaction_format_emoji)
+                        com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_WITH_QUOTE ->
+                            stringResource(R.string.settings_reaction_format_emoji_quote)
                     }
                     NavigationRow(
                         title = stringResource(R.string.settings_reaction_format_title),
@@ -392,6 +409,80 @@ fun SettingsScreen(
                     description = "$currentRetentionLabel\n$explainer",
                     onClick = { autoDeletePickerOpen = true },
                 )
+            }
+
+            // v1.9.0 — Safety call. Section dédiée pour clarté visuelle :
+            // c'est une feature de sécurité PERSONNELLE (envoyer SMS à mes
+            // proches si je ne donne plus signe de vie), distincte de la
+            // sécurité du DEVICE (verrouillage, panic mode).
+            // v1.10.0 audit SEC-1 (extension) — masquée en PanicDecoy par
+            // cohérence avec Mode urgence : ne pas révéler à l'agresseur
+            // l'existence des features de sécurité personnelle.
+            if (!isPanicDecoy) SectionCard(
+                title = stringResource(R.string.settings_section_safety_call),
+                icon = Icons.Outlined.Shield,
+            ) {
+                val safetyCall = state.security.safetyCall
+                if (safetyCall.enabled) {
+                    // Récap visible quand armé : durée, restant, contacts,
+                    // template + 2 actions (Modifier / Je vais bien).
+                    SafetyCallArmedRecap(
+                        config = safetyCall,
+                        remainingMs = safetyCallRemainingMs,
+                        onModify = onOpenSafetyCall,
+                        onImOk = {
+                            viewModel.update { s ->
+                                s.copy(
+                                    security = s.security.copy(
+                                        safetyCall = s.security.safetyCall.copy(
+                                            lastActivityAt = System.currentTimeMillis(),
+                                            // v1.10.0 SEC-11 — couple mono+wall.
+                                            monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                                        ),
+                                    ),
+                                )
+                            }
+                            rootScope.launch {
+                                snackbarHost.showSnackbar(
+                                    ctx.getString(R.string.settings_safety_call_im_ok_snack),
+                                )
+                            }
+                        },
+                    )
+                } else {
+                    NavigationRow(
+                        title = stringResource(R.string.settings_safety_call_title),
+                        description = stringResource(R.string.settings_safety_call_disabled) +
+                            "\n" + stringResource(R.string.settings_safety_call_desc),
+                        onClick = onOpenSafetyCall,
+                    )
+                }
+            }
+
+            // v1.10.0 — Mode urgence. Section dédiée, distincte du Safety call :
+            // ici c'est l'user qui DÉCLENCHE activement (bouton hold 3s) ; le
+            // Safety call est passif (timer d'inactivité). Cohérence des
+            // contacts garantie par la réutilisation de la même liste.
+            // v1.10.0 audit SEC-1 — entièrement masquée en PanicDecoy
+            // (l'agresseur ne doit pas savoir que la feature existe).
+            if (!isPanicDecoy) {
+                SectionCard(
+                    title = stringResource(R.string.settings_section_emergency),
+                    icon = Icons.Outlined.WarningAmber,
+                ) {
+                    val emergency = state.security.emergency
+                    NavigationRow(
+                        title = stringResource(R.string.settings_emergency_title),
+                        description = if (emergency.enabled) {
+                            stringResource(R.string.settings_emergency_enabled) +
+                                "\n" + stringResource(R.string.settings_emergency_open)
+                        } else {
+                            stringResource(R.string.settings_emergency_disabled) +
+                                "\n" + stringResource(R.string.settings_emergency_desc)
+                        },
+                        onClick = if (emergency.enabled) onOpenEmergency else onOpenEmergencySetup,
+                    )
+                }
             }
 
             SectionCard(
@@ -646,7 +737,9 @@ fun SettingsScreen(
     }
 
     // v1.8.0 — Dialog de confirmation : Resync depuis le téléphone.
-    // Pattern Files Tech : autofocus Cancel + FilledTonalButton primary action.
+    // Pattern Files Tech : autofocus Cancel + bouton confirm primary action.
+    // v1.10.0 — BrandBlue + blanc (demande user 2026-05-21), action non
+    // destructive (re-importe depuis content://sms, pas de perte).
     if (showResyncConfirm) {
         val cancelFocus = remember { FocusRequester() }
         LaunchedEffect(Unit) { cancelFocus.requestFocus() }
@@ -655,11 +748,15 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_resync_confirm_title)) },
             text = { Text(stringResource(R.string.settings_resync_confirm_body)) },
             confirmButton = {
-                androidx.compose.material3.FilledTonalButton(
+                androidx.compose.material3.Button(
                     onClick = {
                         viewModel.forceResyncFromTelephony()
                         showResyncConfirm = false
                     },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandBlue,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
                 ) { Text(stringResource(R.string.action_confirm)) }
             },
             dismissButton = {
@@ -676,6 +773,9 @@ fun SettingsScreen(
     // v1.8.0 — Dialog de confirmation : Réinitialiser tous les réglages.
     // Pattern Files Tech : autofocus Cancel — l'user qui tape rapidement après
     // un précédent dialog ne réinitialise pas par réflexe.
+    // v1.10.0 — confirm BrandBlue + blanc (demande user 2026-05-21).
+    // Action remet les réglages aux défauts mais NE touche PAS aux messages
+    // (donc non-destructive au sens contenu utilisateur).
     if (showResetAllConfirm) {
         val cancelFocus = remember { FocusRequester() }
         LaunchedEffect(Unit) { cancelFocus.requestFocus() }
@@ -684,11 +784,15 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_reset_all_confirm_title)) },
             text = { Text(stringResource(R.string.settings_reset_all_confirm_body)) },
             confirmButton = {
-                androidx.compose.material3.FilledTonalButton(
+                androidx.compose.material3.Button(
                     onClick = {
                         viewModel.resetAll()
                         showResetAllConfirm = false
                     },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandBlue,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
                 ) { Text(stringResource(R.string.action_confirm)) }
             },
             dismissButton = {
@@ -719,8 +823,11 @@ fun SettingsScreen(
                         showPurgeBlockedConfirm = false
                     },
                     colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        // v1.9.0 — passe de `errorContainer` (rose pâle Material 3)
+                        // à `BrandDanger` (rouge logo) pour cohérence cross-app
+                        // avec les autres boutons destructifs.
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
                     ),
                 ) { Text(stringResource(R.string.action_delete)) }
             },
@@ -869,6 +976,12 @@ private fun ReactionFormatPickerDialog(
                     hint = stringResource(R.string.settings_reaction_format_en_hint),
                     selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN,
                     onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN) },
+                )
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_reaction_format_emoji_quote),
+                    hint = stringResource(R.string.settings_reaction_format_emoji_quote_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_WITH_QUOTE,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_WITH_QUOTE) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_reaction_format_emoji),
@@ -1872,8 +1985,9 @@ private fun PurgeNowConfirmDialog(
                 onClick = onConfirm,
                 enabled = (count ?: 0) > 0,
                 colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                    containerColor = cs.errorContainer,
-                    contentColor = cs.onErrorContainer,
+                    // v1.9.0 — `BrandDanger` (rouge logo) au lieu d'`errorContainer`.
+                    containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                    contentColor = androidx.compose.ui.graphics.Color.White,
                 ),
             ) {
                 Text(stringResource(R.string.action_delete_now))
@@ -1888,4 +2002,167 @@ private fun PurgeNowConfirmDialog(
             }
         },
     )
+}
+
+/**
+ * v1.9.0 — Récap visuel d'un Safety call armé, affiché dans Settings →
+ * section Safety Call à la place du `NavigationRow` simple quand
+ * `enabled=true`. Donne à l'utilisateur la confirmation visuelle que la
+ * config a bien été sauvée + tous ses détails clés sans avoir à rouvrir
+ * le wizard.
+ *
+ * Affiche :
+ *  - Chip "Armé" coloré (`primaryContainer`)
+ *  - Durée totale configurée (formatée via [SafetyCallTemplate.formatDuration])
+ *  - Temps restant avant déclenchement (heures, ou "Moins de 2h" si imminent)
+ *  - Liste des contacts (1 ligne avec noms concaténés + "+N autres" si > 2)
+ *  - Modèle de message choisi (libellé localisé)
+ *  - 2 boutons d'action : "Modifier" (→ setup) + "Je vais bien" (reset timer)
+ *
+ * Les noms des contacts utilisent [SafetyCallContact.sanitizedDisplayName]
+ * ou le numéro si pas de nom — cohérent avec l'écran setup.
+ */
+@Composable
+private fun SafetyCallArmedRecap(
+    config: com.filestech.sms.domain.safetycall.SafetyCallConfig,
+    remainingMs: Long,
+    onModify: () -> Unit,
+    onImOk: () -> Unit,
+) {
+    val durationLabel = com.filestech.sms.domain.safetycall.SafetyCallTemplate
+        .formatDuration(config.timeoutMs)
+    // v1.10.0 perf P2 — [remainingMs] vient du ViewModel (StateFlow tick 60s),
+    // plus de System.currentTimeMillis() à chaque recomposition.
+    val remainingLabel = when {
+        remainingMs <= 0L -> stringResource(R.string.settings_safety_call_armed_remaining_imminent)
+        remainingMs < 2 * 3_600_000L ->
+            stringResource(R.string.settings_safety_call_armed_remaining_imminent)
+        else -> {
+            val hours = (remainingMs / 3_600_000L).toInt()
+            val niceHours = if (hours >= 24) {
+                val days = hours / 24
+                val rem = hours % 24
+                if (rem == 0) {
+                    if (days == 1) "1 jour" else "$days jours"
+                } else "$days j ${rem} h"
+            } else {
+                "$hours h"
+            }
+            stringResource(R.string.settings_safety_call_armed_remaining, niceHours)
+        }
+    }
+    val contactsLabel = run {
+        val labels = config.contacts.map { c ->
+            c.sanitizedDisplayName() ?: c.phoneNumber
+        }
+        when {
+            labels.isEmpty() -> ""
+            labels.size == 1 -> stringResource(
+                R.string.settings_safety_call_armed_contacts_one,
+                labels[0],
+            )
+            labels.size <= 2 -> stringResource(
+                R.string.settings_safety_call_armed_contacts_one,
+                labels.joinToString(", "),
+            )
+            else -> stringResource(
+                R.string.settings_safety_call_armed_contacts_many,
+                labels.take(2).joinToString(", "),
+                labels.size - 2,
+            )
+        }
+    }
+    val templateLabel = stringResource(
+        when (config.template) {
+            com.filestech.sms.domain.safetycall.SafetyCallTemplate.CHECK_IN ->
+                R.string.safety_call_setup_template_check_in
+            com.filestech.sms.domain.safetycall.SafetyCallTemplate.URGENT ->
+                R.string.safety_call_setup_template_urgent
+            com.filestech.sms.domain.safetycall.SafetyCallTemplate.FOLLOW_UP ->
+                R.string.safety_call_setup_template_follow_up
+            com.filestech.sms.domain.safetycall.SafetyCallTemplate.CUSTOM ->
+                R.string.safety_call_setup_template_custom
+        }
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        // Header : titre + chip "Armé"
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.settings_safety_call_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Bolt,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_safety_call_armed_chip),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.size(8.dp))
+        // Détails — chaque ligne en bodyMedium / onSurfaceVariant pour
+        // hiérarchie visuelle (titre en gros, détails en plus discret).
+        Text(
+            text = stringResource(R.string.settings_safety_call_armed_duration, durationLabel),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = remainingLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (contactsLabel.isNotEmpty()) {
+            Text(
+                text = contactsLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_safety_call_armed_template, templateLabel),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.size(12.dp))
+        // 2 actions côte à côte. v1.9.0 UX :
+        //  - "Modifier" → OutlinedButton (action secondaire, neutre)
+        //  - "Je vais bien" → Button filled `primary` (bleu BrandBlue
+        //    du logo) car c'est l'action positive principale du récap.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = onModify,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.settings_safety_call_armed_modify))
+            }
+            Button(
+                onClick = onImOk,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.settings_safety_call_armed_im_ok_short))
+            }
+        }
+    }
 }

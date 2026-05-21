@@ -15,6 +15,9 @@ import com.filestech.sms.ui.navigation.Backup
 import com.filestech.sms.ui.navigation.Blocked
 import com.filestech.sms.ui.navigation.Compose
 import com.filestech.sms.ui.navigation.Conversations
+import com.filestech.sms.ui.navigation.Emergency
+import com.filestech.sms.ui.navigation.EmergencySetup
+import com.filestech.sms.ui.navigation.SafetyCallSetup
 import com.filestech.sms.ui.navigation.Lock
 import com.filestech.sms.ui.navigation.Migration
 import com.filestech.sms.ui.navigation.Onboarding
@@ -70,9 +73,20 @@ fun AppRoot() {
 
     // Panic-decoy nav guard: if we land on the Vault route while in decoy state (saved nav,
     // share-target shortcut, app-link, future deep-link), pop it immediately back to the list.
+    // v1.10.0 audit SEC-1 — étendu aux routes Emergency / EmergencySetup : un agresseur
+    // en session decoy ne doit même pas SAVOIR que l'app dispose d'un Mode urgence (l'illusion
+    // "app SMS ordinaire" doit tenir). Le UseCase a déjà une garde PanicDecoy pour le trigger,
+    // mais ce guard navigation empêche d'arriver sur l'écran et de voir le bouton URGENCE.
     LaunchedEffect(isPanicDecoy, nav.currentDestination?.route) {
-        if (isPanicDecoy && nav.currentDestination?.route?.contains("Vault") == true) {
-            nav.popBackStack(route = Vault, inclusive = true)
+        if (!isPanicDecoy) return@LaunchedEffect
+        val route = nav.currentDestination?.route ?: return@LaunchedEffect
+        when {
+            route.contains("Vault") ->
+                nav.popBackStack(route = Vault, inclusive = true)
+            route.contains("EmergencySetup") ->
+                nav.popBackStack(route = EmergencySetup, inclusive = true)
+            route.contains("Emergency") ->
+                nav.popBackStack(route = Emergency, inclusive = true)
         }
     }
 
@@ -209,6 +223,26 @@ fun AppRoot() {
                 onOpenBackup = { nav.navigate(Backup) },
                 onOpenMigration = { nav.navigate(Migration) },
                 onOpenBlocked = { nav.navigate(Blocked) },
+                onOpenSafetyCall = { nav.navigate(SafetyCallSetup) },
+                onOpenEmergency = { nav.navigate(Emergency) },
+                onOpenEmergencySetup = { nav.navigate(EmergencySetup) },
+            )
+        }
+        composable<SafetyCallSetup> {
+            com.filestech.sms.ui.screens.safetycall.SafetyCallSetupScreen(
+                onBack = { nav.popBackStack() },
+            )
+        }
+        composable<Emergency> {
+            com.filestech.sms.ui.screens.emergency.EmergencyScreen(
+                onBack = { nav.popBackStack() },
+                onOpenSetup = { nav.navigate(EmergencySetup) },
+            )
+        }
+        composable<EmergencySetup> {
+            com.filestech.sms.ui.screens.emergency.EmergencySetupScreen(
+                onBack = { nav.popBackStack() },
+                onOpenSafetyCallSetup = { nav.navigate(SafetyCallSetup) },
             )
         }
         composable<Backup> { BackupScreen(onBack = { nav.popBackStack() }) }

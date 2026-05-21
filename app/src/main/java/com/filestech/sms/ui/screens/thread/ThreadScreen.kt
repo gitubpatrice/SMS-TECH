@@ -104,6 +104,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.data.voice.VoicePlaybackController
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.SmsTechSnackbarVisuals
+import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.theme.BrandDanger
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.ui.components.AttachmentPickerSheet
@@ -387,33 +390,10 @@ fun ThreadScreen(
             //   - notifications d'échec (`isError = true`, posé par les call sites
             //     d'erreur via `showError` ou `Event.ShowSnackbar(isError = true)`) →
             //     fond [BrandDanger] (`#C62828`), le rouge fort utilisé partout dans
-            //     l'app pour les destructives (bouton X attachment, boutons Supprimer,
-            //     dialogs panique). Volontairement PAS `errorContainer` Material 3 qui
-            //     est pâle en light mode et incohérent avec l'identité visuelle de la
-            //     marque. Texte blanc sur `BrandDanger` → contraste 5.5:1 (WCAG AA ✓).
-            // Le flag voyage dans le `SnackbarVisuals` custom `SmsTechSnackbarVisuals`
-            // pour respecter le pattern Material 3 officiel — pas de state externe.
-            SnackbarHost(hostState = snackbarHost) { data ->
-                val isError = (data.visuals as? SmsTechSnackbarVisuals)?.isError == true
-                androidx.compose.material3.Snackbar(
-                    snackbarData = data,
-                    containerColor = if (isError) {
-                        BrandDanger
-                    } else {
-                        MaterialTheme.colorScheme.inverseSurface
-                    },
-                    contentColor = if (isError) {
-                        androidx.compose.ui.graphics.Color.White
-                    } else {
-                        MaterialTheme.colorScheme.inverseOnSurface
-                    },
-                    actionColor = if (isError) {
-                        androidx.compose.ui.graphics.Color.White
-                    } else {
-                        MaterialTheme.colorScheme.inversePrimary
-                    },
-                )
-            }
+            //     l'app pour les destructives. Volontairement PAS `errorContainer`
+            //     Material 3 qui est pâle en light mode. v1.9.0 — extrait dans
+            //     `ui.components.SmsTechSnackbarHost` pour partage cross-écrans.
+            SmsTechSnackbarHost(snackbarHost)
         },
         bottomBar = {
             Column {
@@ -1610,39 +1590,7 @@ private fun DateSeparator(label: String) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Snackbar variant (v1.3.7)
+//  Snackbar variant — extracted to shared `ui.components.SmsTechSnackbar` in
+//  v1.9.0 for re-use by all screens (Settings, Backup, SafetyCallSetup…).
+//  Local copies removed ; this file now imports from there.
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * v1.3.7 — Snackbar custom porteur d'un flag [isError]. Pattern Material 3 officiel pour
- * passer du métadonné à un `SnackbarHost` qui rend différemment selon la nature du message.
- *
- * **Convention SMS Tech** :
- *   - `isError = false` (défaut) → fond slate-blue de marque (`inverseSurface` overridé en
- *     [com.filestech.sms.ui.theme.SnackbarBg] = `BrandBlue`). Pour toutes les confirmations
- *     positives ("Message vocal envoyé", "Numéro bloqué", "PJ envoyée"…).
- *   - `isError = true` → fond rouge `errorContainer` (Material 3, dérivé du `error` token
- *     du thème). Pour les notifications d'échec ("Échec d'envoi", "Échec traduction",
- *     "PDF export failed", "Permission micro refusée"…).
- *
- * Le contraste texte/fond est calibré côté tokens Material 3 :
- *   - `BrandBlue` + `White` ≈ 5.8:1 → WCAG AA ✓
- *   - `errorContainer` (light/dark) + `onErrorContainer` → garanti WCAG AA par Material 3.
- */
-private data class SmsTechSnackbarVisuals(
-    override val message: String,
-    val isError: Boolean,
-    override val actionLabel: String? = null,
-    override val duration: SnackbarDuration = SnackbarDuration.Short,
-    override val withDismissAction: Boolean = false,
-) : SnackbarVisuals
-
-/**
- * v1.3.7 — helper utilisé par tous les call sites qui veulent signaler une erreur sans
- * répéter la construction de [SmsTechSnackbarVisuals]. Préfère cette fonction à
- * `showSnackbar(message)` pour tout message d'échec — sinon le snackbar s'affichera en
- * bleu (confirmation) au lieu de rouge (alerte).
- */
-private suspend fun SnackbarHostState.showError(message: String) {
-    showSnackbar(SmsTechSnackbarVisuals(message = message, isError = true))
-}

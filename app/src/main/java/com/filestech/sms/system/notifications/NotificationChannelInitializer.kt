@@ -67,8 +67,21 @@ class NotificationChannelInitializer @Inject constructor(
             context.getString(LABEL_BACKGROUND_RES),
             NotificationManager.IMPORTANCE_MIN,
         ).apply { description = context.getString(DESC_BACKGROUND_RES) }
+        // v1.9.0 audit fix C3 — canal dédié au warning Safety Call. Sans ça,
+        // le warning partageait `CHANNEL_INCOMING` avec les SMS reçus →
+        // l'user ne pouvait pas régler son/vibration séparément.
+        val safetyCallWarning = NotificationChannel(
+            CHANNEL_SAFETY_CALL_WARNING,
+            context.getString(LABEL_SAFETY_CALL_WARNING_RES),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = context.getString(DESC_SAFETY_CALL_WARNING_RES)
+            enableLights(true)
+            enableVibration(true)
+            setShowBadge(true)
+        }
         nm.createNotificationChannels(
-            listOf(incoming, incomingSilent, sent, failed, background),
+            listOf(incoming, incomingSilent, sent, failed, background, safetyCallWarning),
         )
     }
 
@@ -78,6 +91,8 @@ class NotificationChannelInitializer @Inject constructor(
         const val CHANNEL_SENT = "sent_messages"
         const val CHANNEL_FAILED = "failed_messages"
         const val CHANNEL_BACKGROUND = "background_tasks"
+        /** v1.9.0 — canal dédié au warning Safety Call (avant trigger). */
+        const val CHANNEL_SAFETY_CALL_WARNING = "safety_call_warning"
 
         private val LABEL_INCOMING_RES = com.filestech.sms.R.string.channel_incoming_label
         private val DESC_INCOMING_RES = com.filestech.sms.R.string.channel_incoming_desc
@@ -89,5 +104,7 @@ class NotificationChannelInitializer @Inject constructor(
         private val DESC_FAILED_RES = com.filestech.sms.R.string.channel_failed_desc
         private val LABEL_BACKGROUND_RES = com.filestech.sms.R.string.channel_background_label
         private val DESC_BACKGROUND_RES = com.filestech.sms.R.string.channel_background_desc
+        private val LABEL_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_label
+        private val DESC_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_desc
     }
 }

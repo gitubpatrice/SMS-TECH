@@ -279,11 +279,98 @@
     <string name="settings_reaction_format_en_hint">« Reacted ❤️ to «aperçu» ». Détecté automatiquement par iMessage (iPhone) et Google Messages récents comme une bulle réaction native. Moins naturel pour les destinataires francophones.</string>
     <string name="settings_reaction_format_emoji">Emoji seul</string>
     <string name="settings_reaction_format_emoji_hint">« ❤️ » nu. Plus propre sur les vieilles apps SMS, mais le destinataire perd tout contexte — il ne peut plus savoir à quel message vous avez réagi.</string>
+    <!-- v1.9.0 — emoji + citation compacte -->
+    <string name="settings_reaction_format_emoji_quote">Emoji + citation</string>
+    <string name="settings_reaction_format_emoji_quote_hint">« ❤️ «votre message» ». Compact tout en gardant le contexte. Le destinataire voit l\'emoji suivi de la citation typographique du message d\'origine.</string>
     <!-- v1.8.1 — nom de l\'expéditeur -->
     <string name="settings_sender_name_title">Votre nom affiché</string>
     <string name="settings_sender_name_desc">Inclus dans les SMS de réaction sortants pour aider le destinataire à identifier l\'auteur. Laisser vide pour utiliser le nom de votre profil Android (sinon, fallback anonyme « Réagi par ❤️… »).</string>
     <string name="settings_sender_name_label">Nom affiché (max 40)</string>
     <string name="settings_sender_name_auto">Détection automatique depuis votre profil Android</string>
+
+    <!-- v1.9.0 — Safety call -->
+    <string name="settings_section_safety_call">Safety call</string>
+    <string name="settings_safety_call_title">Safety call</string>
+    <string name="settings_safety_call_desc">Envoie un SMS automatique à vos contacts d\'urgence si vous n\'ouvrez pas SMS Tech pendant une durée configurée. Conçu pour les voyages solo, les personnes vivant seules, les professions à risque.</string>
+    <string name="settings_safety_call_disabled">Désactivé</string>
+    <string name="settings_safety_call_enabled">Armé · réinitialise dans %1$s</string>
+    <string name="settings_safety_call_im_ok">Je vais bien — réinitialiser le minuteur</string>
+    <string name="settings_safety_call_im_ok_snack">Minuteur réinitialisé.</string>
+    <!-- v1.9.0 — bloc récap actif (visible uniquement si Safety call armé) -->
+    <string name="settings_safety_call_armed_chip">Armé</string>
+    <string name="settings_safety_call_armed_duration">Durée : %1$s</string>
+    <string name="settings_safety_call_armed_remaining">Restant : %1$s avant déclenchement</string>
+    <string name="settings_safety_call_armed_remaining_imminent">Moins de 2 h avant déclenchement</string>
+    <string name="settings_safety_call_armed_contacts_one">Contact : %1$s</string>
+    <string name="settings_safety_call_armed_contacts_many">Contacts : %1$s (+%2$d autres)</string>
+    <string name="settings_safety_call_armed_template">Modèle : %1$s</string>
+    <string name="settings_safety_call_armed_modify">Modifier</string>
+    <string name="settings_safety_call_armed_im_ok_short">Je vais bien</string>
+    <string name="safety_call_setup_title">Safety call</string>
+    <string name="safety_call_setup_section_status">État</string>
+    <string name="safety_call_setup_section_duration">Durée</string>
+    <string name="safety_call_setup_section_contacts">Contacts d\'urgence (max 4)</string>
+    <string name="safety_call_setup_section_template">Message</string>
+    <string name="safety_call_setup_toggle_enable">Activer le Safety call</string>
+    <string name="safety_call_setup_toggle_desc">Quand activé, ouvrir SMS Tech réinitialise le minuteur. Si vous ne l\'ouvrez pas dans la durée choisie, vos contacts reçoivent un SMS automatique.</string>
+    <string name="safety_call_setup_duration_24h">24 heures</string>
+    <string name="safety_call_setup_duration_48h">48 heures</string>
+    <string name="safety_call_setup_duration_72h">72 heures</string>
+    <string name="safety_call_setup_duration_custom">Personnalisée</string>
+    <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="safety_call_setup_duration_custom_hint">En heures · 168 h = 1 semaine · max 720 h (30 jours)</string>
+    <string name="safety_call_setup_add_contact">Ajouter un contact</string>
+    <string name="safety_call_setup_contact_name_label">Nom (facultatif)</string>
+    <string name="safety_call_setup_contact_phone_label">Numéro de téléphone</string>
+    <string name="safety_call_setup_contact_invalid">Numéro invalide.</string>
+    <string name="safety_call_setup_contact_max_reached">Maximum 4 contacts.</string>
+    <string name="safety_call_setup_remove_contact">Supprimer</string>
+    <string name="safety_call_setup_template_check_in">Vérification (défaut)</string>
+    <string name="safety_call_setup_template_urgent">Urgent</string>
+    <string name="safety_call_setup_template_follow_up">Suivi</string>
+    <string name="safety_call_setup_template_custom">Personnalisé</string>
+    <string name="safety_call_setup_template_custom_label">Votre message (max 140 caractères)</string>
+    <string name="safety_call_setup_template_preview">Aperçu</string>
+    <string name="safety_call_setup_save">Enregistrer</string>
+    <string name="safety_call_setup_save_validation_no_contacts">Ajoutez au moins un contact avant d\'activer.</string>
+    <string name="safety_call_setup_save_validation_custom_empty">Le message personnalisé ne peut pas être vide.</string>
+    <string name="safety_call_warning_title">SMS Tech — confirme que tu vas bien</string>
+    <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Tape pour réinitialiser le minuteur.</string>
+    <string name="safety_call_warning_body_imminent">Le Safety call se déclenchera dans moins de 2 heures. Tape pour réinitialiser maintenant.</string>
+    <!-- v1.10.0 — Mode urgence (actif, déclenché par l\'user via hold 3s) -->
+    <string name="settings_section_emergency">Mode urgence</string>
+    <string name="settings_emergency_title">Mode urgence</string>
+    <string name="settings_emergency_desc">Un bouton maintenu 3 s envoie un SMS à vos contacts d\'urgence avec votre position actuelle. Distinct du Safety call (qui est automatique sur inactivité). Désactivé par défaut.</string>
+    <string name="settings_emergency_disabled">Désactivé</string>
+    <string name="settings_emergency_enabled">Armé</string>
+    <string name="settings_emergency_open">Ouvrir l\'urgence</string>
+    <string name="emergency_title">Mode urgence</string>
+    <string name="emergency_setup_title">Réglages du mode urgence</string>
+    <string name="emergency_button_label">URGENCE</string>
+    <string name="emergency_button_hint_hold_3s">Urgence — maintenez 3 secondes pour envoyer</string>
+    <string name="emergency_preview_title">Message qui sera envoyé</string>
+    <string name="emergency_status_disabled">Le mode urgence est désactivé. Activez-le dans les réglages.</string>
+    <string name="emergency_status_no_contacts">Aucun contact d\'urgence configuré. Ajoutez-en dans les réglages Safety call.</string>
+    <string name="emergency_status_cooldown">Envoyé à l\'instant. Réutilisable dans une minute.</string>
+    <string name="emergency_status_ready">Maintenez le bouton 3 secondes pour alerter vos contacts.</string>
+    <string name="emergency_triggered_ok">Urgence envoyée à %1$d contact(s).</string>
+    <string name="emergency_triggered_no_location">Urgence envoyée à %1$d contact(s) — position indisponible.</string>
+    <string name="emergency_triggered_all_failed">Échec de l\'envoi (%1$d). Vérifiez votre app SMS par défaut.</string>
+    <string name="emergency_setup_enable_title">Activer le mode urgence</string>
+    <string name="emergency_setup_enable_desc">Quand activé, un bouton URGENCE apparaît dans l\'écran dédié. Maintenez 3 secondes pour envoyer un SMS avec votre position à vos contacts d\'urgence.</string>
+    <string name="emergency_setup_template_title">Modèle de message</string>
+    <string name="emergency_setup_template_need_help">J\'ai besoin d\'aide</string>
+    <string name="emergency_setup_template_danger">Danger</string>
+    <string name="emergency_setup_template_discreet">Discret</string>
+    <string name="emergency_setup_location_title">Inclure la position</string>
+    <string name="emergency_setup_location_desc">Ajoute une URL Google Maps au SMS. Nécessite la permission Localisation. Si désactivée (ou permission refusée), le SMS est envoyé sans coordonnées.</string>
+    <string name="emergency_setup_location_permission_warning">Permission Localisation non accordée. Le SMS d\'urgence sera envoyé sans coordonnées. Accordez la permission dans les réglages Android pour corriger.</string>
+    <string name="emergency_setup_contacts_title">Contacts d\'urgence</string>
+    <string name="emergency_setup_contacts_empty">Aucun contact configuré.</string>
+    <string name="emergency_setup_contacts_count">%1$d contact(s) configuré(s).</string>
+    <string name="emergency_setup_contacts_cta">Gérer les contacts</string>
+    <string name="action_edit">Modifier</string>
+    <string name="snack_generic_error">Une erreur s\'est produite.</string>
     <string name="reaction_send_confirm_title">Envoyer la réaction ?</string>
     <string name="reaction_send_confirm_body">Un SMS contenant uniquement cet emoji sera envoyé à votre correspondant. Cela compte comme un SMS normal (tarif forfait). Vous pouvez désactiver cet envoi dans Réglages → Envoi.</string>
     <string name="reaction_send_confirm_never_ask">Ne plus demander, envoyer directement</string>
@@ -347,7 +434,6 @@
     <string name="settings_notif_channel_disabled_warn">Les notifications sont désactivées pour SMS Tech dans les réglages système. Appuyez ci-dessous pour corriger.</string>
 
     <string name="settings_section_security">Sécurité &amp; confidentialité</string>
-    <string name="settings_lock_mode">Verrouillage</string>
     <string name="settings_flag_secure">Masquer l\'aperçu dans les Récents</string>
     <string name="settings_flag_secure_desc">Cache le contenu des conversations dans le sélecteur de tâches Android et bloque les captures / enregistrements d\'écran tant que l\'application est ouverte.</string>
     <string name="settings_lock_vault_on_leave">Verrouiller le coffre à la sortie</string>
@@ -398,6 +484,8 @@
     <string name="channel_failed_desc">Erreurs et suggestions de réessai.</string>
     <string name="channel_background_label">Tâches en arrière-plan</string>
     <string name="channel_background_desc">Imports, sauvegardes, envois programmés.</string>
+    <string name="channel_safety_call_warning_label">Avertissement Safety call</string>
+    <string name="channel_safety_call_warning_desc">Rappel avant l\'envoi automatique de SMS à vos contacts d\'urgence.</string>
 
     <string name="notif_reply_label">Répondre</string>
     <string name="notif_mark_read_label">Marquer comme lu</string>

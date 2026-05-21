@@ -20,8 +20,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.filestech.sms.ui.components.showError
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -100,7 +100,7 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 is BackupViewModel.Event.ExportDone -> snackbarHost.showSnackbar(
                     context.getString(R.string.backup_export_success),
                 )
-                BackupViewModel.Event.ExportFailed -> snackbarHost.showSnackbar(
+                BackupViewModel.Event.ExportFailed -> snackbarHost.showError(
                     context.getString(R.string.backup_export_failed),
                 )
             }
@@ -121,7 +121,7 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 },
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHost) },
+        snackbarHost = { com.filestech.sms.ui.components.SmsTechSnackbarHost(snackbarHost) },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
             Text(

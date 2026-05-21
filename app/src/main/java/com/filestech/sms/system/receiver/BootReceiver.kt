@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.ApplicationScope
+import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.ScheduledMessageScheduler
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
 import com.filestech.sms.system.service.KeepAliveService
@@ -42,6 +43,14 @@ class BootReceiver : BroadcastReceiver() {
             action != Intent.ACTION_USER_UNLOCKED
         ) return
         TelephonySyncWorker.enqueueOneShot(context)
+        // v1.9.0 audit fix SEC-2 — Safety call : reschedule le worker
+        // périodique au boot pour résister aux force-stop OEM (Xiaomi,
+        // Huawei) qui cancellent les jobs WorkManager. Sans ça, un user qui
+        // a armé le Safety call mais redémarre son device verra le deadman
+        // ne plus s'exécuter jusqu'à ouverture manuelle de l'app — or par
+        // définition du deadman, l'user n'est pas censé ouvrir l'app.
+        // Idempotent (KEEP policy).
+        SafetyCallWorker.schedulePeriodic(context)
         val pending = goAsync()
         scope.launch {
             try {

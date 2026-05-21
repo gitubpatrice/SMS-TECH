@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,6 +25,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.system.notifications.SafetyCallIntentToken
+import com.filestech.sms.system.notifications.SafetyCallWarningNotifier
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.notifications.PendingNavHolder
 import com.filestech.sms.system.share.IncomingShareHolder
@@ -51,6 +54,7 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var appLock: AppLockManager
     @Inject lateinit var incomingShare: IncomingShareHolder
+    @Inject lateinit var safetyCallIntentToken: SafetyCallIntentToken
 
     /**
      * v1.8.0 (bug 4 fix) — holder partagé pour le `conversationId` cliqué via
@@ -227,6 +231,59 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
+     * v1.9.0 — Safety call : reset du timer à chaque resume de l'app.
+     * Le contract du Safety call est "si tu n'ouvres pas SMS Tech pendant
+     * X heures, j'envoie un SMS à tes proches" — donc chaque ouverture
+     * d'app est la preuve d'activité attendue. On délègue à un coroutine
+     * lifecycleScope pour ne pas bloquer le main thread (DataStore async).
+     *
+     * **Audit fix SEC-9** : reset uniquement si l'app est réellement
+     * déverrouillée par l'utilisateur ([AppLockManager.LockState.Unlocked]
+     * ou [AppLockManager.LockState.Disabled] = pas de lock configuré). Ne
+     * PAS reset si :
+     *  - [AppLockManager.LockState.Locked] : l'attaquant a juste ouvert
+     *    l'app sans connaître le PIN, ne doit pas pouvoir neutraliser le
+     *    deadman.
+     *  - [AppLockManager.LockState.PanicDecoy] : l'user est sous contrainte
+     *    et a saisi le PIN panic ; le deadman doit continuer à courir pour
+     *    que les contacts d'urgence soient alertés.
+     *
+     * Lecture conditionnelle : on ne fait l'update que si `enabled = true`.
+     * Sinon, c'est une écriture DataStore inutile à chaque resume (la
+     * majorité des users n'utilisera pas Safety call). Coût quand activé :
+     * 1 écriture DataStore par resume = ~5 ms, négligeable.
+     */
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch {
+            runCatching {
+                val lockState = appLock.state.value
+                val isRealOpen = lockState is AppLockManager.LockState.Unlocked ||
+                    lockState is AppLockManager.LockState.Disabled
+                if (!isRealOpen) {
+                    Timber.d("MainActivity: skipping Safety call reset (lockState=%s)", lockState)
+                    return@runCatching
+                }
+                val current = settings.state.value.security.safetyCall
+                if (current.enabled) {
+                    settings.update { s ->
+                        s.copy(
+                            security = s.security.copy(
+                                safetyCall = s.security.safetyCall.copy(
+                                    lastActivityAt = System.currentTimeMillis(),
+                                    // v1.10.0 SEC-11 — couple mono+wall à chaque reset.
+                                    monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                                ),
+                            ),
+                        )
+                    }
+                    Timber.d("MainActivity: Safety call timer reset on resume")
+                }
+            }
+        }
+    }
+
+    /**
      * v1.3.3 bug #4 — parse [Intent.ACTION_SEND] / [Intent.ACTION_SEND_MULTIPLE] et
      * pose le résultat dans [IncomingShareHolder]. L'UI (AppRoot) prend le relais pour
      * naviguer vers le picker de conversation. No-op pour tout autre type d'intent.
@@ -265,6 +322,43 @@ class MainActivity : FragmentActivity() {
                         ),
                     )
                 }
+            }
+            SafetyCallWarningNotifier.ACTION_SAFETY_CALL_RESET -> {
+                // v1.9.0 — tap sur la notification "Confirme que tu vas bien" :
+                // reset immédiat du timer + dismiss de la notif. On délègue à
+                // un usecase coroutine via lifecycleScope pour ne pas bloquer
+                // onNewIntent / onCreate.
+                //
+                // **Audit fix SEC-10** : valide le nonce mono-usage avant
+                // de reset. MainActivity est `exported="true"` (rôle SMS)
+                // donc une app tierce pourrait forger ACTION_SAFETY_CALL_RESET ;
+                // sans le bon token (re-genéré à chaque pose de notif et
+                // connu uniquement du process SMS Tech), l'intent est ignoré.
+                val token = intent.getLongExtra(
+                    SafetyCallWarningNotifier.EXTRA_RESET_TOKEN, 0L,
+                )
+                if (!safetyCallIntentToken.consume(token)) {
+                    Timber.w("MainActivity: rejecting SAFETY_CALL_RESET — invalid/missing token")
+                    incomingShare.clear()
+                    return
+                }
+                lifecycleScope.launch {
+                    runCatching {
+                        settings.update { s ->
+                            s.copy(
+                                security = s.security.copy(
+                                    safetyCall = s.security.safetyCall.copy(
+                                        lastActivityAt = System.currentTimeMillis(),
+                                        // v1.10.0 SEC-11 — couple mono+wall.
+                                        monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                                    ),
+                                ),
+                            )
+                        }
+                        Timber.i("MainActivity: deadman timer reset via warning notif tap")
+                    }
+                }
+                incomingShare.clear()
             }
             IncomingMessageNotifier.ACTION_OPEN_CONVERSATION -> {
                 // v1.8.0 (bug 4 fix) — l'utilisateur a tapé une notif de message

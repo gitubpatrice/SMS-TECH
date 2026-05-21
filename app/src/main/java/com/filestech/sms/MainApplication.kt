@@ -1,6 +1,7 @@
 package com.filestech.sms
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.filestech.sms.core.logging.LineNumberDebugTree
@@ -15,6 +16,7 @@ import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
 import com.filestech.sms.system.notifications.NotificationChannelInitializer
+import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
 import com.filestech.sms.system.service.KeepAliveService
 import kotlinx.coroutines.flow.collect
@@ -139,6 +141,56 @@ class MainApplication : Application(), Configuration.Provider {
         // so we still converge even if the observer never fires (rare OEM bug, force-stop).
         telephonySyncManager.start()
         TelephonySyncWorker.schedulePeriodic(this)
+        // v1.9.0 — schedule du SafetyCall worker (idempotent KEEP policy).
+        // Même si la config deadman est désactivée, le worker tourne en no-op
+        // (1 lecture DataStore par heure, négligeable batterie). Avantage : un
+        // enable ultérieur via Settings n'a pas besoin de cold-start pour
+        // commencer à fonctionner — le tick suivant arme déjà le timer.
+        SafetyCallWorker.schedulePeriodic(this)
+
+        // v1.10.0 SEC-11 — drift recovery post-reboot. `elapsedRealtime` est
+        // remis à 0 par un reboot tandis que la valeur persistée
+        // `monotonicLastActivityAt` reste celle d'avant-reboot. Sans ce filet,
+        // un attaquant pourrait simuler un reboot pour neutraliser la mono
+        // clock indéfiniment ; et un user honnête verrait son deadman pausé
+        // jusqu'à ce que `nowMono` rattrape l'ancienne valeur.
+        //
+        // Stratégie : si la valeur stockée > nowMono → on la ramène à nowMono
+        // (le compteur mono redémarre du boot, la wall-clock continue à
+        // compter normalement → le deadman est effectivement prolongé du
+        // post-reboot uptime). Async, ne bloque pas le main thread.
+        appScope.launch {
+            runCatching {
+                val security = settingsRepository.flow.first().security
+                val nowMono = SystemClock.elapsedRealtime()
+                val safetyDrift = security.safetyCall.monotonicLastActivityAt > 0L &&
+                    security.safetyCall.monotonicLastActivityAt > nowMono
+                // v1.10.0 audit S2 — même drift recovery sur le cooldown
+                // anti-spam emergency. Sans ça, après reboot, mono > nowMono
+                // verrouillerait le bouton URGENCE indéfiniment puisque
+                // `nowMono - mono` est négatif (< ANTI_SPAM_WINDOW_MS).
+                val emergencyDrift = security.emergency.monotonicLastTriggeredAt > 0L &&
+                    security.emergency.monotonicLastTriggeredAt > nowMono
+                if (safetyDrift || emergencyDrift) {
+                    Timber.i(
+                        "MonotonicDriftRecovery: post-reboot realign (safety=%s, emergency=%s, nowMono=%d)",
+                        safetyDrift, emergencyDrift, nowMono,
+                    )
+                    settingsRepository.update { s ->
+                        s.copy(
+                            security = s.security.copy(
+                                safetyCall = if (safetyDrift) {
+                                    s.security.safetyCall.copy(monotonicLastActivityAt = nowMono)
+                                } else s.security.safetyCall,
+                                emergency = if (emergencyDrift) {
+                                    s.security.emergency.copy(monotonicLastTriggeredAt = nowMono)
+                                } else s.security.emergency,
+                            ),
+                        )
+                    }
+                }
+            }.onFailure { Timber.w(it, "MonotonicDriftRecovery: failed") }
+        }
         // Order matters at first boot: mirror the OS-wide blocked-numbers list **first**, then
         // kick the SMS import. Otherwise the worker may scan `content://sms` before the Room
         // blocklist is populated, and the user sees blocked correspondents resurface in the
