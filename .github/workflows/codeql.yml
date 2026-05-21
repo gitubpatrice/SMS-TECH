@@ -46,25 +46,21 @@ jobs:
           java-version: '17'
 
       - name: Initialize CodeQL
-        # v1.3.10 — upgrade v3 → v4. v3 deprecated December 2026 + son
-        # extracteur Kotlin échouait sur les versions récentes de Kotlin/AGP
+        # v1.8.1 — `build-mode: none` (extraction source pure). CodeQL v4 pour
+        # Kotlin a abandonné l'instrumentation Gradle automatique : le build
+        # réussit mais l'extracteur ne voit aucun bytecode Kotlin
         # ("CodeQL detected code written in Java/Kotlin but could not process
-        # any of it" — runs en configuration error en série mai 2026).
+        # any of it"). Le mode `none` scanne directement les `.kt` / `.java`
+        # source — plus rapide (~3× moins long, pas de build), et c'est la
+        # recommandation officielle pour Kotlin natif (GitHub docs Code Scanning
+        # for compiled languages, v4 Kotlin extractor notes).
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
+          build-mode: none
           # Pack additionnel "security-extended" : règles CWE moins fréquentes
           # mais pertinentes pour une app SMS (parsing PDU, chiffrement, etc.).
           queries: security-extended,security-and-quality
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build with Gradle (debug variant, no signing required)
-        # `assembleDebug` est suffisant pour que CodeQL voie tout le bytecode
-        # de l'app (mêmes classes que release sans la minification R8 qui
-        # masquerait les noms de symboles dans les alertes).
-        run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
