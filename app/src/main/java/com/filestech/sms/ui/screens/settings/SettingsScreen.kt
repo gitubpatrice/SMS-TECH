@@ -95,6 +95,18 @@ fun SettingsScreen(
     var autoDeletePickerOpen by remember { mutableStateOf(false) }
     var autoDeletePurgeConfirmOpen by remember { mutableStateOf(false) }
     var pinSetupOpen by remember { mutableStateOf(false) }
+    // v1.8.0 (bug 3 fix) — pickers PreviewMode + NotificationStyle.
+    var previewModePickerOpen by remember { mutableStateOf(false) }
+    var notifStylePickerOpen by remember { mutableStateOf(false) }
+    // v1.8.0 (bug 5 fix) — picker ReactionFormat (3 options).
+    var reactionFormatPickerOpen by remember { mutableStateOf(false) }
+    // v1.8.0 — 3 nouveaux dialogs de confirmation pour les actions destructives :
+    //  - resync depuis le téléphone (réimporte tout)
+    //  - reset all settings (defaults)
+    //  - purge conversations bloquées
+    var showResyncConfirm by remember { mutableStateOf(false) }
+    var showResetAllConfirm by remember { mutableStateOf(false) }
+    var showPurgeBlockedConfirm by remember { mutableStateOf(false) }
 
     val defaultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* no-op */ }
 
@@ -212,29 +224,35 @@ fun SettingsScreen(
                         viewModel.update { it.copy(sending = it.sending.copy(sendReactionsToRecipient = v)) }
                     },
                 )
-                // v1.3.6 — format du SMS de réaction. OFF (défaut) = format Tapback complet
-                // "Reacted ❤️ to «aperçu»" (iPhone et Google Messages récent affichent la
-                // bulle réaction native). ON = emoji seul (plus propre côté apps SMS legacy
-                // type Mi Messages mais on perd la fusion bulle native sur iPhone/Google).
-                // Affiché uniquement si l'envoi des réactions est activé (cohérence UX).
+                // v1.8.0 (bug 5 fix) — format du SMS de réaction. 3 options
+                // (anciennement boolean reactionEmojiOnly à 2 valeurs) :
+                //  - READABLE_FR (nouveau défaut) : "J'ai réagi par ❤️ à : «…»"
+                //    — naturel et lisible pour les destinataires francophones Android
+                //  - TAPBACK_EN (ancien défaut v1.7.x) : "Reacted ❤️ to «…»"
+                //    — compat iMessage iPhone + Google Messages récent
+                //  - EMOJI_ONLY : "❤️" seul — minimal, perd le contexte côté destinataire
                 //
-                // v1.3.7 P2 audit — `AnimatedVisibility` (fade + slide vertical) au lieu d'un
-                // `if {}` brut. Sans ce wrapper, le toggle apparaissait / disparaissait sans
-                // transition (layout jump 1 frame) quand l'utilisateur basculait le toggle
-                // parent. La transition reste rapide (~300 ms par défaut) pour ne pas freiner
-                // l'usage, juste assez pour signaler visuellement la dépendance entre les 2.
+                // Affiché uniquement si l'envoi des réactions est activé. La transition
+                // AnimatedVisibility v1.3.7 reste, on remplace juste le ToggleRow par
+                // un NavigationRow + picker (cohérent avec PreviewMode / NotificationStyle
+                // ajoutés en v1.8.0).
                 AnimatedVisibility(
                     visible = state.sending.sendReactionsToRecipient,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically(),
                 ) {
-                    ToggleRow(
+                    val reactionFormatLabel = when (state.sending.reactionFormat) {
+                        com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR ->
+                            stringResource(R.string.settings_reaction_format_fr)
+                        com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN ->
+                            stringResource(R.string.settings_reaction_format_en)
+                        com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY ->
+                            stringResource(R.string.settings_reaction_format_emoji)
+                    }
+                    NavigationRow(
                         title = stringResource(R.string.settings_reaction_format_title),
-                        description = stringResource(R.string.settings_reaction_format_desc),
-                        value = state.sending.reactionEmojiOnly,
-                        onChange = { v ->
-                            viewModel.update { it.copy(sending = it.sending.copy(reactionEmojiOnly = v)) }
-                        },
+                        description = reactionFormatLabel,
+                        onClick = { reactionFormatPickerOpen = true },
                     )
                 }
             }
@@ -257,6 +275,54 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_vibrate),
                     value = state.notifications.vibrate,
                     onChange = { v -> viewModel.update { it.copy(notifications = it.notifications.copy(vibrate = v)) } },
+                )
+                // v1.8.0 (bug 3 fix HIGH 3a) — expose PreviewMode dans l'UI.
+                // L'option existait en DataStore mais aucun toggle ne l'exposait.
+                // Sous-titre = libellé localisé de la valeur actuelle pour que
+                // l'utilisateur voit du premier coup d'œil son réglage actif.
+                val previewLabel = when (state.notifications.previewMode) {
+                    com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS ->
+                        stringResource(R.string.settings_notif_preview_always)
+                    com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED ->
+                        stringResource(R.string.settings_notif_preview_unlocked)
+                    com.filestech.sms.data.local.datastore.PreviewMode.NEVER ->
+                        stringResource(R.string.settings_notif_preview_never)
+                }
+                NavigationRow(
+                    title = stringResource(R.string.settings_notif_preview),
+                    description = previewLabel,
+                    onClick = { previewModePickerOpen = true },
+                )
+                // v1.8.0 (bug 3 fix MEDIUM 3b) — wire NotificationStyle (dead field).
+                val styleLabel = when (state.notifications.style) {
+                    com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP ->
+                        stringResource(R.string.settings_notif_style_heads_up)
+                    com.filestech.sms.data.local.datastore.NotificationStyle.BANNER ->
+                        stringResource(R.string.settings_notif_style_banner)
+                    com.filestech.sms.data.local.datastore.NotificationStyle.SILENT ->
+                        stringResource(R.string.settings_notif_style_silent)
+                }
+                NavigationRow(
+                    title = stringResource(R.string.settings_notif_style),
+                    description = styleLabel,
+                    onClick = { notifStylePickerOpen = true },
+                )
+                // v1.8.0 (bug 3 fix MEDIUM 3c) — deeplink réglages système app.
+                // ACTION_APP_NOTIFICATION_SETTINGS (API 26+) ouvre directement la
+                // page Paramètres → Apps → SMS Tech → Notifications, où l'user
+                // peut vérifier que ses canaux ne sont pas désactivés.
+                NavigationRow(
+                    title = stringResource(R.string.settings_notif_open_system),
+                    description = stringResource(R.string.settings_notif_open_system_desc),
+                    onClick = {
+                        val intent = android.content.Intent(
+                            android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS,
+                        ).putExtra(
+                            android.provider.Settings.EXTRA_APP_PACKAGE,
+                            ctx.packageName,
+                        )
+                        runCatching { ctx.startActivity(intent) }
+                    },
                 )
             }
 
@@ -291,7 +357,8 @@ fun SettingsScreen(
                 NavigationRow(
                     title = stringResource(R.string.settings_purge_blocked),
                     description = stringResource(R.string.settings_purge_blocked_desc),
-                    onClick = { viewModel.purgeBlockedConversations() },
+                    // v1.8.0 — dialog de confirmation (action irréversible).
+                    onClick = { showPurgeBlockedConfirm = true },
                 )
                 // v1.3.0 — auto-purge historique selon rétention choisie. Description sur
                 // 2 lignes : statut courant + rappel du filet de sécurité 5 j + favoris.
@@ -356,7 +423,10 @@ fun SettingsScreen(
                 NavigationRow(
                     title = stringResource(R.string.settings_resync_title),
                     description = stringResource(R.string.settings_resync_desc),
-                    onClick = { viewModel.forceResyncFromTelephony() },
+                    // v1.8.0 — dialog de confirmation (peut faire ré-apparaître
+                    // des conversations précédemment supprimées si toujours
+                    // présentes dans le content provider système).
+                    onClick = { showResyncConfirm = true },
                 )
                 // v1.3.10 + v1.4.1 — Mode résistant OPT-IN (KeepAliveService foreground
                 // permanent). Toggle exposé pour TOUS les téléphones car la détection ROM
@@ -381,7 +451,12 @@ fun SettingsScreen(
                         viewModel.update { it.copy(advanced = it.advanced.copy(keepAliveService = v)) }
                     },
                 )
-                NavigationRow(stringResource(R.string.settings_reset_all), onClick = { viewModel.resetAll() })
+                // v1.8.0 — dialog de confirmation (les préférences revient
+                // aux defaults, mais les conversations restent intactes).
+                NavigationRow(
+                    stringResource(R.string.settings_reset_all),
+                    onClick = { showResetAllConfirm = true },
+                )
                 NavigationRow(
                     stringResource(R.string.settings_nuke_data),
                     onClick = { showNuke = true },
@@ -520,6 +595,307 @@ fun SettingsScreen(
             onDismiss = { pinSetupOpen = false },
         )
     }
+
+    if (previewModePickerOpen) {
+        PreviewModePickerDialog(
+            current = state.notifications.previewMode,
+            onSelect = { mode ->
+                viewModel.update {
+                    it.copy(notifications = it.notifications.copy(previewMode = mode))
+                }
+                previewModePickerOpen = false
+            },
+            onDismiss = { previewModePickerOpen = false },
+        )
+    }
+
+    if (notifStylePickerOpen) {
+        NotificationStylePickerDialog(
+            current = state.notifications.style,
+            onSelect = { style ->
+                viewModel.update {
+                    it.copy(notifications = it.notifications.copy(style = style))
+                }
+                notifStylePickerOpen = false
+            },
+            onDismiss = { notifStylePickerOpen = false },
+        )
+    }
+
+    // v1.8.0 — Dialog de confirmation : Resync depuis le téléphone.
+    // Pattern Files Tech : autofocus Cancel + FilledTonalButton primary action.
+    if (showResyncConfirm) {
+        val cancelFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+        AlertDialog(
+            onDismissRequest = { showResyncConfirm = false },
+            title = { Text(stringResource(R.string.settings_resync_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_resync_confirm_body)) },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.forceResyncFromTelephony()
+                        showResyncConfirm = false
+                    },
+                ) { Text(stringResource(R.string.action_confirm)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showResyncConfirm = false },
+                    modifier = Modifier
+                        .focusRequester(cancelFocus)
+                        .focusable(),
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
+    // v1.8.0 — Dialog de confirmation : Réinitialiser tous les réglages.
+    // Pattern Files Tech : autofocus Cancel — l'user qui tape rapidement après
+    // un précédent dialog ne réinitialise pas par réflexe.
+    if (showResetAllConfirm) {
+        val cancelFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+        AlertDialog(
+            onDismissRequest = { showResetAllConfirm = false },
+            title = { Text(stringResource(R.string.settings_reset_all_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_reset_all_confirm_body)) },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.resetAll()
+                        showResetAllConfirm = false
+                    },
+                ) { Text(stringResource(R.string.action_confirm)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showResetAllConfirm = false },
+                    modifier = Modifier
+                        .focusRequester(cancelFocus)
+                        .focusable(),
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
+    // v1.8.0 — Dialog de confirmation : Purger les conversations bloquées.
+    // Action IRRÉVERSIBLE → autofocus Cancel critique + couleur error pour
+    // éviter qu'un user clique "OK" par réflexe et perde ses conv.
+    if (showPurgeBlockedConfirm) {
+        val cancelFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+        AlertDialog(
+            onDismissRequest = { showPurgeBlockedConfirm = false },
+            title = { Text(stringResource(R.string.settings_purge_blocked_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_purge_blocked_confirm_body)) },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.purgeBlockedConversations()
+                        showPurgeBlockedConfirm = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                ) { Text(stringResource(R.string.action_delete)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showPurgeBlockedConfirm = false },
+                    modifier = Modifier
+                        .focusRequester(cancelFocus)
+                        .focusable(),
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
+    if (reactionFormatPickerOpen) {
+        ReactionFormatPickerDialog(
+            current = state.sending.reactionFormat,
+            onSelect = { fmt ->
+                viewModel.update {
+                    // v1.8.0 (bug 5 fix) — synchronise le legacy `reactionEmojiOnly`
+                    // au passage pour qu'un downgrade éventuel vers v1.7.x retrouve
+                    // un état cohérent (EMOJI_ONLY → true, autres → false).
+                    val legacyEmojiOnly = fmt == com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY
+                    it.copy(
+                        sending = it.sending.copy(
+                            reactionFormat = fmt,
+                            reactionEmojiOnly = legacyEmojiOnly,
+                        ),
+                    )
+                }
+                reactionFormatPickerOpen = false
+            },
+            onDismiss = { reactionFormatPickerOpen = false },
+        )
+    }
+}
+
+/**
+ * v1.8.0 (bug 3 fix HIGH 3a) — picker pour [com.filestech.sms.data.local.datastore
+ * .PreviewMode]. Pattern strictement aligné sur [LockModePickerDialog] (radio + label +
+ * hint sous-titre pour les options dont l'effet est non-évident).
+ *
+ * Le hint sous l'option `NEVER` est crucial : c'est exactement le scénario du bug 3
+ * remonté par l'utilisateur (son joué, notif invisible). Documenter explicitement
+ * "le son est joué mais rien ne s'affiche sur l'écran de verrouillage" élimine la
+ * confusion.
+ */
+@Composable
+private fun PreviewModePickerDialog(
+    current: com.filestech.sms.data.local.datastore.PreviewMode,
+    onSelect: (com.filestech.sms.data.local.datastore.PreviewMode) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_notif_preview)) },
+        text = {
+            Column {
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_notif_preview_always),
+                    hint = null,
+                    selected = current == com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS) },
+                )
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_notif_preview_unlocked),
+                    hint = stringResource(R.string.settings_notif_preview_unlocked_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED) },
+                )
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_notif_preview_never),
+                    hint = stringResource(R.string.settings_notif_preview_never_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.PreviewMode.NEVER,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.PreviewMode.NEVER) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun PreviewModeOption(
+    label: String,
+    hint: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        androidx.compose.material3.RadioButton(selected = selected, onClick = onClick)
+        Spacer(Modifier.size(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label)
+            if (hint != null) {
+                Text(
+                    hint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * v1.8.0 (bug 3 fix MEDIUM 3b) — picker pour [com.filestech.sms.data.local.datastore
+ * .NotificationStyle] (anciennement dead field). Wire l'enum à l'effet réel côté
+ * [com.filestech.sms.system.notifications.IncomingMessageNotifier] :
+ *  - HEADS_UP → canal IMPORTANCE_HIGH (default Android, heads-up + son)
+ *  - BANNER → canal IMPORTANCE_HIGH mais son désactivé côté builder (badge seul)
+ *  - SILENT → canal IMPORTANCE_LOW dédié (heads-up et son masqués par l'OS)
+ */
+/**
+ * v1.8.0 (bug 5 fix) — picker pour [com.filestech.sms.data.local.datastore.ReactionFormat].
+ * 3 options avec hints expliquant clairement le trade-off (lisibilité francophone vs
+ * compat iMessage vs minimalisme).
+ */
+@Composable
+private fun ReactionFormatPickerDialog(
+    current: com.filestech.sms.data.local.datastore.ReactionFormat,
+    onSelect: (com.filestech.sms.data.local.datastore.ReactionFormat) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_reaction_format_title)) },
+        text = {
+            Column {
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_reaction_format_fr),
+                    hint = stringResource(R.string.settings_reaction_format_fr_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR) },
+                )
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_reaction_format_en),
+                    hint = stringResource(R.string.settings_reaction_format_en_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN) },
+                )
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_reaction_format_emoji),
+                    hint = stringResource(R.string.settings_reaction_format_emoji_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun NotificationStylePickerDialog(
+    current: com.filestech.sms.data.local.datastore.NotificationStyle,
+    onSelect: (com.filestech.sms.data.local.datastore.NotificationStyle) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_notif_style)) },
+        text = {
+            Column {
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_notif_style_heads_up),
+                    hint = stringResource(R.string.settings_notif_style_heads_up_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP) },
+                )
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_notif_style_banner),
+                    hint = stringResource(R.string.settings_notif_style_banner_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.NotificationStyle.BANNER,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.NotificationStyle.BANNER) },
+                )
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_notif_style_silent),
+                    hint = stringResource(R.string.settings_notif_style_silent_hint),
+                    selected = current == com.filestech.sms.data.local.datastore.NotificationStyle.SILENT,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.NotificationStyle.SILENT) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
 }
 
 /**

@@ -1,0 +1,12 @@
+v1.8.0 — audit profond
+
+• Tap notification ouvre la conversation
+• Badges non lus enfin alignés sur la réalité
+• Settings → Notifications : aperçu, style, lien système
+• Réactions : nouveau format FR lisible par défaut
+• Tapback iMessage + emoji seul toujours dispo
+• MMS plus robuste sur Samsung
+• Blocs Téléphone système respectés
+• "Tout marquer comme lu" dans menu
+• Confirmations sur actions destructives
+• État lu propagé système (survit désinstall)

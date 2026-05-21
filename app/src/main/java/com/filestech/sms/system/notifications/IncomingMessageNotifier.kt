@@ -15,6 +15,7 @@ import androidx.core.app.Person
 import androidx.core.content.ContextCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
+import com.filestech.sms.data.local.datastore.NotificationStyle
 import com.filestech.sms.data.local.datastore.PreviewMode
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.IoDispatcher
@@ -57,6 +58,25 @@ class IncomingMessageNotifier @Inject constructor(
             ) return@withContext
         }
 
+        // v1.8.0 (bug 3 fix) — route vers le canal silent quand l'utilisateur a
+        // explicitement choisi `NotificationStyle.SILENT` dans Paramètres →
+        // Notifications. Le canal silent est IMPORTANCE_LOW → pas de heads-up,
+        // son masqué par le système. L'utilisateur garde l'icône de notif dans
+        // le shade (utile pour ne pas rater un message) mais sans dérangement
+        // sonore ni visuel intrusif.
+        //
+        // Pour `BANNER` (Heads-up désactivé mais son conservé), on reste sur le
+        // canal HIGH mais on coupe le son côté NotificationCompat — Android
+        // tente d'afficher un heads-up pour les notifs HIGH "qui font du bruit",
+        // donc en désamorçant le son on neutralise effectivement le pop-up tout
+        // en conservant le badge + icône shade. Compromis volontairement
+        // documenté dans le toggle UI ([R.string.settings_notif_style_desc]).
+        val channelId = when (s.notifications.style) {
+            NotificationStyle.SILENT -> NotificationChannelInitializer.CHANNEL_INCOMING_SILENT
+            NotificationStyle.HEADS_UP, NotificationStyle.BANNER ->
+                NotificationChannelInitializer.CHANNEL_INCOMING
+        }
+
         // Audit F15: the legacy "WHEN_UNLOCKED" branch leaked the body in setContentText on some
         // OEMs that disregarded VISIBILITY_PRIVATE. Both WHEN_UNLOCKED and NEVER now ship a
         // placeholder for setContentText; the real body only flows through MessagingStyle, which
@@ -75,9 +95,15 @@ class IncomingMessageNotifier @Inject constructor(
             context,
             notificationId,
             Intent(context, MainActivity::class.java)
-                .setAction("com.filestech.sms.OPEN_CONVERSATION")
-                .putExtra("address", address)
-                .putExtra("messageId", messageId)
+                .setAction(ACTION_OPEN_CONVERSATION)
+                .putExtra(EXTRA_ADDRESS, address)
+                .putExtra(EXTRA_MESSAGE_ID, messageId)
+                // v1.8.0 (bug 4 fix) — on passe le `conversationId` en extra pour
+                // que MainActivity.handleSharedIntent puisse le déposer dans
+                // PendingNavHolder sans avoir à résoudre `address → conversationId`
+                // de manière asynchrone (qui aurait nécessité une requête Room
+                // côté MainActivity, source potentielle de race avec l'import).
+                .putExtra(EXTRA_CONVERSATION_ID, conversationId)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -93,7 +119,7 @@ class IncomingMessageNotifier @Inject constructor(
         // sans timer/coroutine custom côté app (Android s'en charge atomiquement).
         val isActiveConversation = activeConversationTracker.isActive(conversationId)
 
-        val notif = NotificationCompat.Builder(context, NotificationChannelInitializer.CHANNEL_INCOMING)
+        val notif = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification_message)
             .setContentTitle(senderName)
             .setContentText(visiblePreview)
@@ -136,6 +162,16 @@ class IncomingMessageNotifier @Inject constructor(
                 b.addAction(buildMarkReadAction(address, messageId, notificationId))
                 if (isActiveConversation) {
                     b.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)
+                }
+                // v1.8.0 (bug 3 fix) — mode BANNER : neutralise le son côté notif
+                // pour empêcher Android d'inférer un heads-up. Le canal reste HIGH
+                // (conservé pour ne pas perturber les users en HEADS_UP existants),
+                // mais sans son la notif retombe à un simple badge dans le shade.
+                // En SILENT, le canal LOW se charge déjà de masquer son + heads-up,
+                // donc pas besoin de setSound ici.
+                if (s.notifications.style == NotificationStyle.BANNER) {
+                    b.setSound(null)
+                    b.setDefaults(0)
                 }
             }
             .build()
@@ -221,6 +257,34 @@ class IncomingMessageNotifier @Inject constructor(
     }
 
     /**
+     * v1.8.0 (bug 3 fix, MEDIUM 3c) — détecte si l'utilisateur a désactivé soit
+     * les notifications de l'app au global, soit le canal `incoming_messages`
+     * spécifiquement dans les Paramètres système Android. Dans ce cas
+     * `NotificationManagerCompat.notify()` poste silencieusement sans rien
+     * afficher — confusion garantie côté utilisateur ("Tiens, je ne reçois
+     * plus de notifs alors que SMS Tech est activée…").
+     *
+     * Appelé depuis le SettingsScreen pour afficher un warning rouge + bouton
+     * deeplink vers les réglages système quand l'état est dégradé. Le check
+     * est read-only et idempotent — safe à appeler à chaque recomposition.
+     *
+     * Retourne `true` quand les notifs incoming peuvent réellement s'afficher,
+     * `false` quand elles sont muettes (app globale désactivée OU canal
+     * désactivé par l'utilisateur dans Paramètres → Apps → SMS Tech →
+     * Notifications → Messages entrants).
+     */
+    fun isIncomingChannelEffectivelyEnabled(): Boolean {
+        val nmc = NotificationManagerCompat.from(context)
+        if (!nmc.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
+            as NotificationManager? ?: return true
+        val channel = nm.getNotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING)
+            ?: return true // not created yet = ensure step pending, not "disabled"
+        return channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    /**
      * v1.3.3 bug #6 — cancel TOUTES les notifications affichées qui appartiennent à la
      * conversation [conversationId]. Appelé depuis `ConversationRepositoryImpl.markRead`
      * pour que l'ouverture de la thread depuis l'app efface le pavé de notifs cumulées
@@ -258,6 +322,17 @@ class IncomingMessageNotifier @Inject constructor(
 
     companion object {
         const val KEY_REPLY = "key_reply_text"
+
+        /**
+         * v1.8.0 (bug 4 fix) — constantes partagées avec [com.filestech.sms.MainActivity]
+         * et les tests, pour éviter la duplication littérale source de bugs (typo
+         * silencieuse type "OPEN_CONVERSARTION" → handler jamais déclenché, etc.).
+         */
+        const val ACTION_OPEN_CONVERSATION = "com.filestech.sms.OPEN_CONVERSATION"
+        const val EXTRA_ADDRESS = "address"
+        const val EXTRA_MESSAGE_ID = "messageId"
+        const val EXTRA_CONVERSATION_ID = "conversationId"
+
         private const val BASE_TAG = 0x10000 // ensures non-zero notif ids
         private const val REPLY_REQUEST_SALT = 0x52455050 // 'REPL'
         private const val MARK_READ_REQUEST_SALT = 0x4D524541 // 'MREA'

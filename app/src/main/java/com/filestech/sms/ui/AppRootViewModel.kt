@@ -2,6 +2,7 @@ package com.filestech.sms.ui
 
 import androidx.lifecycle.ViewModel
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.system.notifications.PendingNavHolder
 import com.filestech.sms.system.share.IncomingShareHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -17,4 +18,13 @@ class AppRootViewModel @Inject constructor(
      * felt like the share had been dropped on the floor.
      */
     val incomingShare: IncomingShareHolder,
+    /**
+     * v1.8.0 (bug 4 fix) — exposed so [AppRoot] can observe `pending` and navigate
+     * to [com.filestech.sms.ui.navigation.Thread] whenever the user taps an incoming
+     * message notification. Previously [com.filestech.sms.MainActivity.handleSharedIntent]
+     * received the `OPEN_CONVERSATION` action but no handler navigated anywhere — the
+     * app would simply open on the conversations list, leaving the user wondering why
+     * the tap "did nothing".
+     */
+    val pendingNav: PendingNavHolder,
 ) : ViewModel()

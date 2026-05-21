@@ -1,0 +1,12 @@
+v1.8.0 — deep audit
+
+• Tap on notification opens the conversation
+• Unread badges match reality (no leftovers)
+• Settings → Notifications: lock-screen preview, style, OS link
+• Reactions: new readable French default
+• Tapback iMessage + emoji-only still available
+• Better MMS on older Samsung
+• Blocks from system Phone app honoured
+• "Mark all as read" in the overflow menu
+• Confirmations on destructive actions
+• Read state pushed to system

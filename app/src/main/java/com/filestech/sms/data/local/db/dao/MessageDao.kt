@@ -73,6 +73,22 @@ interface MessageDao {
     @Query("UPDATE messages SET read = 1 WHERE conversation_id = :conversationId AND read = 0")
     suspend fun markConversationRead(conversationId: Long)
 
+    /**
+     * v1.8.0 (post-audit fix unread badges) — marque TOUS les messages INCOMING
+     * comme lus en masse. Utilisé pour la migration one-shot vers v1.8.0 qui
+     * purge l'état legacy v1.7.1 (compteurs inflated + flags `read=0`
+     * désynchronisés du système Android). Aligne le cache Room sur la réalité
+     * usuelle de l'utilisateur (les messages anciens sont déjà lus, dans
+     * SMS Tech ou ailleurs).
+     *
+     * Direction INCOMING = `0`. Idempotent — re-exécuter ne change rien.
+     * Aussi exposé via Settings → Avancé "Tout marquer comme lu" pour permettre
+     * à l'utilisateur de re-aligner à tout moment si Room se désynchronise
+     * à nouveau (lecture dans une autre app SMS).
+     */
+    @Query("UPDATE messages SET read = 1 WHERE direction = 0 AND read = 0")
+    suspend fun markAllIncomingAsRead(): Int
+
     @Query("UPDATE messages SET read = :read WHERE id = :id")
     suspend fun setRead(id: Long, read: Boolean)
 

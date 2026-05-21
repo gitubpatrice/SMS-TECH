@@ -7,6 +7,8 @@ import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.datastore.SortMode
+import com.filestech.sms.data.local.db.dao.ConversationDao
+import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sync.TelephonySyncManager
@@ -57,6 +59,16 @@ class ConversationsViewModel @Inject constructor(
     // v1.6.1 (audit QUAL-03) — privé : la screen passe désormais par
     // [buildChangeDefaultIntent] au lieu de manipuler le manager directement.
     private val defaultAppManager: DefaultSmsAppManager,
+    // v1.8.0 — utilisés par [markAllAsRead] pour purger à la demande les
+    // badges non-lus persistants (ex: messages déjà lus dans une autre app
+    // SMS dont SMS Tech ne voit pas le `READ=1` côté système).
+    private val messageDao: MessageDao,
+    private val conversationDao: ConversationDao,
+    // v1.8.0 — propagation `READ=1` vers `content://sms` et `content://mms`
+    // dans [markAllAsRead], pour que SMS Tech ne ré-importe pas les messages
+    // comme non-lus après désinstallation / réinstallation (bug post-audit
+    // confirmé S24).
+    private val telephonyReader: com.filestech.sms.data.sms.TelephonyReader,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel() {
 
@@ -169,6 +181,39 @@ class ConversationsViewModel @Inject constructor(
      */
     fun requestSyncNow() {
         syncManager.requestSync(reason = "permission granted")
+    }
+
+    /**
+     * v1.8.0 — action utilisateur "Tout marquer comme lu" depuis le menu
+     * overflow de la liste. Marque tous les messages INCOMING `read=0`
+     * comme lus EN MASSE puis recalcule les `conversations.unread_count`
+     * pour repasser tous les badges à 0. Très utile quand l'utilisateur a
+     * lu ses messages dans une autre app SMS sans ouvrir SMS Tech : sans
+     * cette action, les badges restent indéfiniment car SMS Tech ne re-lit
+     * pas le flag `READ` système pour les messages déjà mirror-és.
+     *
+     * Le dialog de confirmation est géré côté UI ([ConversationsScreen]).
+     */
+    fun markAllAsRead() {
+        viewModelScope.launch {
+            kotlinx.coroutines.withContext(io) {
+                runCatching {
+                    // 1) Local Room : marque tous les incoming `read=1` + recompute
+                    //    les unread_count à 0.
+                    messageDao.markAllIncomingAsRead()
+                    conversationDao.recomputeAllUnreadCounts()
+                    // 2) v1.8.0 (post-audit fix S24) — propage `READ=1` côté
+                    //    `content://sms` et `content://mms` du système Android.
+                    //    Sans cette propagation, une désinstallation + réinstall
+                    //    de SMS Tech ré-importe les messages avec `READ=0` (le
+                    //    système n'a jamais été notifié de la lecture) → badges
+                    //    réapparaissent. Wrapped en runCatching à l'intérieur
+                    //    de la helper pour ne pas faire foirer le markRead Room
+                    //    si le content provider est indisponible.
+                    telephonyReader.markAllIncomingReadInSystem()
+                }
+            }
+        }
     }
 
     fun setQuery(q: String) { query.update { q } }

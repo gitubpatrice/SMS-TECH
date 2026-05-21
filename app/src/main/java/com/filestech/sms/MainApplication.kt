@@ -7,7 +7,10 @@ import com.filestech.sms.core.logging.LineNumberDebugTree
 import com.filestech.sms.core.logging.NoOpReleaseTree
 import com.filestech.sms.data.blocking.BlockedNumbersImporter
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.data.local.db.dao.ConversationDao
+import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.sync.TelephonySyncManager
+import kotlinx.coroutines.flow.first
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
@@ -20,7 +23,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -41,6 +47,21 @@ class MainApplication : Application(), Configuration.Provider {
 
     @Inject lateinit var settingsRepository: SettingsRepository
 
+    /**
+     * v1.8.0 (post-audit fix unread badges) — utilisé une fois au cold-start
+     * pour recalculer les compteurs `conversations.unread_count` à partir des
+     * vrais messages non lus en Room. Purge l'état legacy hérité de v1.7.1
+     * (cf. doc [ConversationDao.recomputeAllUnreadCounts]).
+     */
+    @Inject lateinit var conversationDao: ConversationDao
+
+    /**
+     * v1.8.0 (post-audit fix unread badges) — utilisé pour la migration one-shot
+     * qui marque tous les messages INCOMING comme lus, en complément du reset
+     * `conversations.unread_count`. Cf. doc [MessageDao.markAllIncomingAsRead].
+     */
+    @Inject lateinit var messageDao: MessageDao
+
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     override val workManagerConfiguration: Configuration
@@ -58,6 +79,54 @@ class MainApplication : Application(), Configuration.Provider {
         }
         notificationChannelInitializer.ensureDefaultChannels()
         autoLockObserver.register()
+
+        // v1.8.0 (post-audit fix unread badges) — migration ONE-SHOT pour
+        // purger les badges hérités v1.7.1 ET les flags `read=0` désynchronisés
+        // du système. Exécutée AVANT que l'Activity ne soit créée et que la
+        // liste ne soit subscribée, en synchrone (`runBlocking` cap 1 s) pour
+        // ne pas laisser l'UI afficher 1 frame de compteurs legacy.
+        //
+        // Pourquoi le simple recompute SQL ne suffit pas : il s'appuie sur
+        // `messages.read` qui est lui-même désynchronisé. Si l'user a lu un
+        // message dans Google Messages SANS ouvrir SMS Tech, le système pose
+        // `READ=1` mais SMS Tech ne re-lit jamais le `read` pour les messages
+        // déjà mirror-és → `messages.read` reste à 0 indéfiniment → recompute
+        // calcule `unread_count > 0` à juste titre selon Room, mais incorrect
+        // selon l'expérience utilisateur réelle.
+        //
+        // Solution : reset brutal mais idempotent via flag DataStore. Le user
+        // perd l'info "10 vrais messages non lus" si elle existait — acceptable
+        // pour purger l'état pourri. Les futurs SMS live arrivent via
+        // `SmsDeliverReceiver` avec `read=0` + `touchConversation(+1)`, et
+        // le badge s'affichera correctement à partir de là.
+        //
+        // Le flag `unreadResetV180` empêche cette purge de se rejouer à chaque
+        // cold-start (sinon les vrais nouveaux non-lus seraient effacés).
+        val migrationStartedAt = System.currentTimeMillis()
+        runBlocking {
+            withTimeoutOrNull(1_000L) {
+                runCatching {
+                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        val current = settingsRepository.flow.first().advanced
+                        if (!current.unreadResetV180) {
+                            val touched = messageDao.markAllIncomingAsRead()
+                            conversationDao.recomputeAllUnreadCounts()
+                            settingsRepository.update { s ->
+                                s.copy(advanced = s.advanced.copy(unreadResetV180 = true))
+                            }
+                            Timber.i(
+                                "v1.8.0 migration unreadResetV180 done: marked %d incoming messages as read",
+                                touched,
+                            )
+                        }
+                    }
+                }.onFailure { Timber.w(it, "v1.8.0 migration unreadResetV180 failed") }
+            }
+        }
+        val migrationElapsed = System.currentTimeMillis() - migrationStartedAt
+        if (migrationElapsed >= 1_000L) {
+            Timber.w("v1.8.0 migration unreadResetV180 TIMEOUT after %d ms", migrationElapsed)
+        }
         // Audit P-P0-5: the historical R6 fix used `runBlocking(IO) { appLock.resolveInitialState() }`
         // here to pre-resolve the lock state before any broadcast receiver could read it. That
         // blocked the main thread for 50-200 ms on DataStore on cold-start. We now kick the
@@ -82,6 +151,13 @@ class MainApplication : Application(), Configuration.Provider {
         // belt-and-braces.
         appScope.launch {
             runCatching { blockedNumbersImporter.importFromSystem() }
+            // v1.8.0 — second recompute après l'import blocklist + en async.
+            // L'import peut avoir purgé des conversations, donc on relance pour
+            // ré-aligner les compteurs sur l'état final. Le 1er recompute
+            // synchrone (au-dessus, avant Activity) a déjà supprimé l'état
+            // legacy v1.7.1, donc ici on capture juste les delta de la purge.
+            runCatching { conversationDao.recomputeAllUnreadCounts() }
+                .onFailure { Timber.w(it, "recomputeAllUnreadCounts (async post-block) failed") }
             TelephonySyncWorker.enqueueOneShot(this@MainApplication)
         }
 

@@ -105,6 +105,41 @@ interface ConversationDao {
     @Query("UPDATE conversations SET unread_count = 0 WHERE id = :id")
     suspend fun clearUnread(id: Long)
 
+    /**
+     * v1.8.0 (post-audit fix badges après désinstallation) — retourne le
+     * `threadId` système AOSP correspondant au `id` Room. Utilisé par
+     * [com.filestech.sms.data.repository.ConversationRepositoryImpl.markRead]
+     * pour propager `READ=1` vers `content://sms` + `content://mms` filtré
+     * par `thread_id`.
+     */
+    @Query("SELECT thread_id FROM conversations WHERE id = :id LIMIT 1")
+    suspend fun findThreadIdById(id: Long): Long?
+
+    /**
+     * v1.8.0 (post-audit fix) — recalcule `unread_count` à partir des `messages.read=0`
+     * réellement présents dans Room. Corrige l'état legacy hérité de v1.7.1 où les
+     * syncs successifs incrémentaient le compteur même pour les rows déjà mirror-ées
+     * (cf. fix dans `ConversationMirror.bulkImportFromTelephony`). Appelé une fois
+     * au cold-start de v1.8.0 depuis `MainApplication.onCreate` pour purger les
+     * compteurs inflated. Idempotent — coût négligeable (~10 ms pour 100 conv).
+     *
+     * Direction INCOMING = `0` (cf. [com.filestech.sms.data.local.db.entity.MessageDirection]).
+     * Cap absolu à 999 pour éviter qu'un compteur explose visuellement même si
+     * un edge case poserait des milliers de messages non lus (le badge UI tronque
+     * à "999+" au-delà de toute façon).
+     */
+    @Query(
+        """
+        UPDATE conversations SET unread_count = (
+          SELECT COUNT(*) FROM messages
+          WHERE messages.conversation_id = conversations.id
+            AND messages.direction = 0
+            AND messages.read = 0
+        )
+        """,
+    )
+    suspend fun recomputeAllUnreadCounts()
+
     @Query("DELETE FROM conversations WHERE id = :id")
     suspend fun delete(id: Long)
 

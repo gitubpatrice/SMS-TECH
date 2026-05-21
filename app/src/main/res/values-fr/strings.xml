@@ -270,8 +270,15 @@
     <string name="settings_resync_started">Resynchronisation lancée en arrière-plan.</string>
     <string name="settings_send_reactions_title">Envoyer mes réactions au correspondant</string>
     <string name="settings_send_reactions_desc">Quand vous posez une réaction emoji (cœur, pouce…), un SMS contenant uniquement l\'emoji est envoyé au correspondant. Cela compte comme un SMS normal au tarif de votre forfait. Le retrait ou le changement d\'une réaction ne renvoie rien.</string>
-    <string name="settings_reaction_format_title">Envoyer l\'emoji nu (sans contexte)</string>
-    <string name="settings_reaction_format_desc">DÉSACTIVÉ (recommandé) : format Tapback « Reacted ❤️ to «aperçu» » — sur SMS Tech, iPhone et Google Messages récents, le destinataire voit l\'emoji directement en BADGE sur votre message d\'origine (pas de bulle texte parasite).\n\nACTIVÉ : envoie juste l\'emoji « ❤️ » comme un SMS texte simple. Plus propre sur les vieux téléphones qui n\'affichent pas le badge, MAIS le destinataire ne peut plus savoir À QUEL message vous avez réagi (la fusion automatique sur le bon message ne marche que pour le dernier message envoyé dans les 5 dernières minutes).</string>
+    <!-- v1.8.0 — bug 5 fix : 3 options en un coup d\'œil. -->
+    <string name="settings_reaction_format_title">Format des réactions</string>
+    <string name="settings_reaction_format_desc">Choisissez comment vos réactions partent par SMS aux destinataires qui n\'utilisent pas SMS Tech.</string>
+    <string name="settings_reaction_format_fr">Français lisible (défaut)</string>
+    <string name="settings_reaction_format_fr_hint">« J\'ai réagi par ❤️ à : «aperçu» ». Naturel et compréhensible pour tout destinataire francophone Android. Décodé par SMS Tech comme un badge de réaction natif.</string>
+    <string name="settings_reaction_format_en">Tapback (compat iMessage)</string>
+    <string name="settings_reaction_format_en_hint">« Reacted ❤️ to «aperçu» ». Détecté automatiquement par iMessage (iPhone) et Google Messages récents comme une bulle réaction native. Moins naturel pour les destinataires francophones.</string>
+    <string name="settings_reaction_format_emoji">Emoji seul</string>
+    <string name="settings_reaction_format_emoji_hint">« ❤️ » nu. Plus propre sur les vieilles apps SMS, mais le destinataire perd tout contexte — il ne peut plus savoir à quel message vous avez réagi.</string>
     <string name="reaction_send_confirm_title">Envoyer la réaction ?</string>
     <string name="reaction_send_confirm_body">Un SMS contenant uniquement cet emoji sera envoyé à votre correspondant. Cela compte comme un SMS normal (tarif forfait). Vous pouvez désactiver cet envoi dans Réglages → Envoi.</string>
     <string name="reaction_send_confirm_never_ask">Ne plus demander, envoyer directement</string>
@@ -299,10 +306,40 @@
     <!-- v1.6.1 — snackbar quand l'export PDF échoue (audit QUAL-07 i18n fix) -->
     <string name="snack_pdf_export_failed">Échec de l\'export PDF</string>
 
+    <!-- v1.8.0 — dialogs de confirmation + action "Tout marquer comme lu" dans le menu overflow -->
+    <string name="action_mark_all_read">Tout marquer comme lu</string>
+    <string name="mark_all_read_confirm_body">Tous les badges non lus actuels seront effacés. Les nouveaux messages entrants afficheront leurs badges normalement ensuite.</string>
+    <string name="settings_resync_confirm_title">Resynchroniser depuis le téléphone ?</string>
+    <string name="settings_resync_confirm_body">Réimporte les messages depuis le fournisseur SMS/MMS système. Les messages existants restent (dédup via ID unique) ; des messages précédemment supprimés peuvent réapparaître s\'ils existent encore dans la base système. Continuer ?</string>
+    <string name="settings_reset_all_confirm_title">Réinitialiser tous les réglages ?</string>
+    <string name="settings_reset_all_confirm_body">Toutes vos préférences (thème, notifications, envoi, etc.) reviendront aux valeurs par défaut. Vos conversations et messages ne sont PAS affectés.</string>
+    <string name="settings_purge_blocked_confirm_title">Purger les conversations bloquées ?</string>
+    <string name="settings_purge_blocked_confirm_body">Supprime toute conversation dont les participants sont entièrement dans la liste de blocage. Les supprime aussi du fournisseur SMS système. Irréversible.</string>
+
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Activer les notifications</string>
     <string name="settings_inline_reply">Répondre depuis la notification</string>
     <string name="settings_vibrate">Vibration</string>
+
+    <!-- v1.8.0 — bug 3 fix : expose PreviewMode + NotificationStyle dans l\'UI. -->
+    <string name="settings_notif_preview">Aperçu sur l\'écran de verrouillage</string>
+    <string name="settings_notif_preview_desc">Contrôle ce qui s\'affiche sur l\'écran de verrouillage et dans les notifications heads-up.</string>
+    <string name="settings_notif_preview_always">Toujours afficher nom et contenu</string>
+    <string name="settings_notif_preview_unlocked">Uniquement après déverrouillage</string>
+    <string name="settings_notif_preview_unlocked_hint">Le nom de l\'expéditeur et un aperçu masqué s\'affichent sur l\'écran de verrouillage ; le contenu complet apparaît après déverrouillage.</string>
+    <string name="settings_notif_preview_never">Jamais sur l\'écran de verrouillage</string>
+    <string name="settings_notif_preview_never_hint">Le son est joué mais rien ne s\'affiche sur l\'écran de verrouillage — totalement invisible jusqu\'au déverrouillage et l\'ouverture de l\'app.</string>
+    <string name="settings_notif_style">Style de notification</string>
+    <string name="settings_notif_style_desc">Comment les notifications entrantes vous interrompent.</string>
+    <string name="settings_notif_style_heads_up">Pop-up (défaut)</string>
+    <string name="settings_notif_style_heads_up_hint">Une bannière s\'affiche par-dessus l\'écran avec le son, puis se range dans le shade.</string>
+    <string name="settings_notif_style_banner">Bannière seule</string>
+    <string name="settings_notif_style_banner_hint">Pas de pop-up, pas de son. Juste une icône dans le shade.</string>
+    <string name="settings_notif_style_silent">Silencieux</string>
+    <string name="settings_notif_style_silent_hint">Routé vers un canal d\'importance faible. Le système masque le son et la pop-up.</string>
+    <string name="settings_notif_open_system">Ouvrir les réglages système</string>
+    <string name="settings_notif_open_system_desc">Vérifier ou corriger les permissions, canaux et son au niveau du système.</string>
+    <string name="settings_notif_channel_disabled_warn">Les notifications sont désactivées pour SMS Tech dans les réglages système. Appuyez ci-dessous pour corriger.</string>
 
     <string name="settings_section_security">Sécurité &amp; confidentialité</string>
     <string name="settings_lock_mode">Verrouillage</string>
@@ -346,6 +383,9 @@
     <string name="about_version">Version %1$s (%2$d)</string>
 
     <string name="channel_incoming_label">Messages entrants</string>
+    <!-- v1.8.0 — canal silent pour NotificationStyle.SILENT -->
+    <string name="channel_incoming_silent_label">Messages entrants (silencieux)</string>
+    <string name="channel_incoming_silent_desc">Notifications quand SMS Tech est en mode \"Silencieux\". Pas de pop-up, pas de son.</string>
     <string name="channel_incoming_desc">Notifications des SMS et MMS reçus.</string>
     <string name="channel_sent_label">Messages envoyés</string>
     <string name="channel_sent_desc">État des messages envoyés.</string>

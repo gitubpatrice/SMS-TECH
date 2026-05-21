@@ -40,6 +40,7 @@ fun AppRoot() {
     val rootViewModel: AppRootViewModel = hiltViewModel()
     val appLock: AppLockManager = rootViewModel.appLock
     val incomingShare = rootViewModel.incomingShare
+    val pendingNav = rootViewModel.pendingNav
     val nav = rememberNavController()
     val lockState by appLock.state.collectAsStateWithLifecycle()
     // Fail-closed: anything that is NOT an explicit "open" state requires the lock screen.
@@ -113,6 +114,48 @@ fun AppRoot() {
             return@LaunchedEffect
         }
         nav.navigate(Compose())
+    }
+
+    // v1.8.0 (bug 4 fix) — auto-navigate to Thread on notification tap.
+    //
+    // `PendingNavHolder` is posted by `MainActivity.handleSharedIntent` whenever
+    // the activity is launched/resumed with an `OPEN_CONVERSATION` intent. Before
+    // v1.8.0, the action fell into the `else` branch of `handleSharedIntent` and
+    // no handler navigated anywhere — the user tapped a notification, the app
+    // opened on the conversations list, and the tap felt broken.
+    //
+    // Guard rails — strictly mirror the `incomingShare` flow above :
+    //   - skip if the lock screen is up (user must unlock first; the 30 s TTL
+    //     on `PendingNavHolder.Pending` covers a quick biometric unlock),
+    //   - skip in panic-decoy state (sharing/navigating into the decoy session
+    //     is forbidden by design — the user's real conversations are not
+    //     available there, navigating to a real conv id would crash or leak),
+    //   - skip if already on the target Thread (avoid double-push that would
+    //     create a redundant backstack entry).
+    val pendingNavValue by pendingNav.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingNavValue, showLock, isPanicDecoy) {
+        val current = pendingNavValue ?: return@LaunchedEffect
+        if (showLock || isPanicDecoy) return@LaunchedEffect
+        if (current.isExpired()) {
+            // Holder oublié (user a déverrouillé après >30 s) — on nettoie.
+            pendingNav.clear()
+            return@LaunchedEffect
+        }
+        // Si on est déjà sur ce thread précis, on consomme sans push (évite
+        // doublon backstack). Le check est best-effort : `currentDestination
+        // .arguments` peut être null pendant une transition de nav.
+        val currentRoute = nav.currentDestination?.route
+        if (currentRoute?.contains("Thread") == true) {
+            val args = nav.currentBackStackEntry?.arguments
+            val currentId = args?.getLong("conversationId", -1L) ?: -1L
+            if (currentId == current.conversationId) {
+                pendingNav.clear()
+                return@LaunchedEffect
+            }
+        }
+        // Consomme via `.consume()` qui re-vérifie expiration + clear atomique.
+        val consumed = pendingNav.consume() ?: return@LaunchedEffect
+        nav.navigate(Thread(conversationId = consumed.conversationId))
     }
 
     // v1.3.7 — startDestination = Splash. Le SplashScreen se charge lui-même de :

@@ -27,6 +27,24 @@ class NotificationChannelInitializer @Inject constructor(
             enableVibration(true)
             setShowBadge(true)
         }
+        // v1.8.0 (bug 3 fix) — canal SILENT pour le mode
+        // `NotificationStyle.SILENT` (anciennement dead field). IMPORTANCE_LOW
+        // garantit qu'aucun heads-up ne s'affiche et le son est masqué côté OS.
+        // Routage côté [IncomingMessageNotifier.notifyIncoming] selon
+        // `settings.notifications.style`. Le canal reste séparé pour que
+        // l'utilisateur puisse régler indépendamment ses préférences son /
+        // vibration depuis le système (Paramètres → Apps → SMS Tech →
+        // Notifications → "Messages entrants" vs "Messages entrants silencieux").
+        val incomingSilent = NotificationChannel(
+            CHANNEL_INCOMING_SILENT,
+            context.getString(LABEL_INCOMING_SILENT_RES),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(DESC_INCOMING_SILENT_RES)
+            enableLights(false)
+            enableVibration(false)
+            setShowBadge(true)
+        }
         val sent = NotificationChannel(
             CHANNEL_SENT,
             context.getString(LABEL_SENT_RES),
@@ -49,17 +67,22 @@ class NotificationChannelInitializer @Inject constructor(
             context.getString(LABEL_BACKGROUND_RES),
             NotificationManager.IMPORTANCE_MIN,
         ).apply { description = context.getString(DESC_BACKGROUND_RES) }
-        nm.createNotificationChannels(listOf(incoming, sent, failed, background))
+        nm.createNotificationChannels(
+            listOf(incoming, incomingSilent, sent, failed, background),
+        )
     }
 
     companion object {
         const val CHANNEL_INCOMING = "incoming_messages"
+        const val CHANNEL_INCOMING_SILENT = "incoming_messages_silent"
         const val CHANNEL_SENT = "sent_messages"
         const val CHANNEL_FAILED = "failed_messages"
         const val CHANNEL_BACKGROUND = "background_tasks"
 
         private val LABEL_INCOMING_RES = com.filestech.sms.R.string.channel_incoming_label
         private val DESC_INCOMING_RES = com.filestech.sms.R.string.channel_incoming_desc
+        private val LABEL_INCOMING_SILENT_RES = com.filestech.sms.R.string.channel_incoming_silent_label
+        private val DESC_INCOMING_SILENT_RES = com.filestech.sms.R.string.channel_incoming_silent_desc
         private val LABEL_SENT_RES = com.filestech.sms.R.string.channel_sent_label
         private val DESC_SENT_RES = com.filestech.sms.R.string.channel_sent_desc
         private val LABEL_FAILED_RES = com.filestech.sms.R.string.channel_failed_label

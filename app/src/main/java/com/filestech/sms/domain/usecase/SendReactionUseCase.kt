@@ -2,6 +2,7 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.data.local.datastore.ReactionFormat
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ConversationRepository
 import javax.inject.Inject
@@ -55,15 +56,19 @@ class SendReactionUseCase @Inject constructor(
      *   - Le [Outcome] de [SendSmsUseCase] (Success avec l'id Room du SMS envoyé, ou
      *     Failure propagée).
      *
-     * @param emojiOnly v1.3.6 — si `true`, envoie l'emoji seul (ex. "❤️") au lieu du
-     *   format Apple/Google Tapback "Reacted ❤️ to «aperçu»". Voir
-     *   [com.filestech.sms.data.local.datastore.SendingSettings.reactionEmojiOnly] pour
-     *   le trade-off (compat iPhone/Google récent vs propreté legacy).
+     * @param format v1.8.0 (bug 5 fix) — format du SMS sortant :
+     *   - [ReactionFormat.READABLE_FR] (nouveau défaut) :
+     *     "J'ai réagi par ❤️ à : «aperçu»" — naturel et compréhensible pour tout
+     *     destinataire francophone Android. Décodé côté SMS Tech via la regex FR.
+     *   - [ReactionFormat.TAPBACK_EN] :
+     *     "Reacted ❤️ to «aperçu»" — compat iMessage iPhone + Google Messages.
+     *   - [ReactionFormat.EMOJI_ONLY] :
+     *     "❤️" — minimal, perd le contexte du message d'origine côté destinataire.
      */
     suspend operator fun invoke(
         messageId: Long,
         emoji: String,
-        emojiOnly: Boolean = false,
+        format: ReactionFormat = ReactionFormat.READABLE_FR,
     ): Outcome<List<Long>> {
         if (emoji.isBlank()) return Outcome.Failure(AppError.Validation("empty reaction emoji"))
 
@@ -104,17 +109,17 @@ class SendReactionUseCase @Inject constructor(
 
         return sendSms(
             recipients = listOf(target),
-            // v1.3.2 — format Apple/Google Tapback : "Reacted ❤️ to «aperçu»". Détecté
-            // automatiquement par iMessage (iPhone) et Google Messages récent qui
-            // l'affichent comme une bulle réaction visuelle attachée au message d'origine.
-            // Les autres apps SMS affichent le texte brut, qui reste compréhensible.
-            //
-            // v1.3.6 — quand [emojiOnly], on envoie l'emoji nu (ex. "❤️") à la place :
-            // plus propre côté apps legacy (Mi Messages, vieux Samsung) mais on perd la
-            // fusion bulle native sur iPhone/Google récent — chez eux l'emoji apparaît
-            // comme un message isolé suivant le message d'origine. Choix exposé en
-            // Réglages → Envoi → "Format des réactions".
-            body = if (emojiOnly) emoji else buildTapbackBody(emoji, message.body),
+            // v1.8.0 (bug 5 fix) — switch sur les 3 formats de réaction. Le format
+            // par défaut [ReactionFormat.READABLE_FR] est le naturel francophone
+            // "J'ai réagi par ❤️ à : «...»" — lisible pour tout destinataire
+            // Android non-SMS Tech. Les autres formats restent disponibles pour les
+            // users qui ont beaucoup de contacts iPhone (TAPBACK_EN) ou qui
+            // préfèrent un envoi minimaliste (EMOJI_ONLY).
+            body = when (format) {
+                ReactionFormat.EMOJI_ONLY -> emoji
+                ReactionFormat.TAPBACK_EN -> buildTapbackBody(emoji, message.body)
+                ReactionFormat.READABLE_FR -> buildReadableFrBody(emoji, message.body)
+            },
             // F3 — pas de signature pour une réaction.
             appendSignature = false,
             // Pas de réponse contextuelle (la réaction est ponctuelle, ajouter un
@@ -170,6 +175,14 @@ private const val SMS_UCS2_SEGMENT_CAP = 70
 
 /** v1.3.2 — wrap fixe `"Reacted "` (8) + `" to «"` (5) + `"»"` (1) + `"…"` éventuel (1). */
 private const val TAPBACK_WRAP_LENGTH = 8 + 5 + 1 + 1
+
+/**
+ * v1.8.0 (bug 5 fix) — wrap fixe pour le format français lisible :
+ * `"J'ai réagi par "` (15 chars, sans l'apostrophe ASCII qui pourrait être typographique)
+ * + `" à : «"` (6) + `"»"` (1) + `"…"` éventuel (1). On utilise l'apostrophe typographique
+ * `'` (U+2019) qui force déjà UCS-2 sur le wrap, alignant le budget calcul.
+ */
+private const val READABLE_FR_WRAP_LENGTH = 15 + 6 + 1 + 1
 
 /**
  * v1.3.2 — borne SUPÉRIEURE stricte de l'aperçu, indépendante de l'emoji. Limite
@@ -233,6 +246,53 @@ internal fun buildTapbackBody(emoji: String, originalBody: String): String {
     }
     return "Reacted $emoji to «$preview»"
 }
+
+/**
+ * v1.8.0 (bug 5 fix) — construit le corps SMS au format français lisible.
+ * Wrap : `"J'ai réagi par <emoji> à : «<preview>»"`.
+ *
+ * Pourquoi ce format précis :
+ *  - 1ʳᵉ personne (`J'ai réagi`) — sonne comme un vrai SMS écrit par moi, pas
+ *    comme un message machine. Le destinataire voit déjà QUI envoie (carnet
+ *    de contacts), donc inutile de répéter le nom.
+ *  - guillemets typographiques `«»` — uniformes avec [buildTapbackBody]
+ *    (forcent UCS-2 single-segment, et matchent le décodage côté SMS Tech).
+ *  - apostrophe typographique `'` (U+2019) au lieu de `'` ASCII — alignement
+ *    typographique français + évite de mélanger les deux dans le décodeur.
+ *  - troncature à `…` identique aux autres formats.
+ *
+ * Garanties (cf. [buildTapbackBody]) :
+ *  - Body vide (MMS image pure) → fallback `"J'ai réagi par <emoji>"`.
+ *  - Caractères dangereux (C0/C1, bidi controls, BOM) strippés via
+ *    [FORBIDDEN_BODY_CHARS].
+ *  - Aperçu tronqué grapheme-safe via [safeTake] pour rester dans 1 segment
+ *    UCS-2.
+ */
+internal fun buildReadableFrBody(emoji: String, originalBody: String): String {
+    val sanitized = originalBody
+        .replace(FORBIDDEN_BODY_CHARS, " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+    if (sanitized.isEmpty()) {
+        return "J’ai réagi par $emoji"
+    }
+    val budget = previewBudgetForFr(emoji)
+    val preview = if (sanitized.length <= budget) {
+        sanitized
+    } else {
+        sanitized.safeTake(budget).trimEnd() + "…"
+    }
+    return "J’ai réagi par $emoji à : «$preview»"
+}
+
+/**
+ * v1.8.0 (bug 5 fix) — budget chars UTF-16 pour l'aperçu du format FR.
+ * Symétrique de [previewBudget] mais avec [READABLE_FR_WRAP_LENGTH].
+ */
+private fun previewBudgetForFr(emoji: String): Int =
+    (SMS_UCS2_SEGMENT_CAP - READABLE_FR_WRAP_LENGTH - emoji.length)
+        .coerceAtMost(PREVIEW_HARD_MAX)
+        .coerceAtLeast(8)
 
 /**
  * v1.3.2 — budget chars UTF-16 pour l'aperçu, calculé pour que le SMS final tienne

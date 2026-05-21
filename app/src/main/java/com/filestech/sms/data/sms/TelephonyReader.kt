@@ -10,6 +10,7 @@ import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.local.db.entity.MessageType
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -218,6 +219,91 @@ class TelephonyReader @Inject constructor(
         resolver.update(uri, cv, null, null)
     }
 
+    /**
+     * v1.8.0 (post-audit fix badges après désinstallation) — propage massivement
+     * `READ=1` + `SEEN=1` côté système Android pour TOUS les SMS et MMS incoming
+     * non lus. Sans cette propagation, un user qui désinstalle/réinstalle
+     * SMS Tech récupère ses messages avec `READ=0` côté `content://sms` (jamais
+     * mis à jour par SMS Tech à la lecture) → l'import les voit comme non-lus
+     * → les badges réapparaissent.
+     *
+     * Le markRead côté Room ne propage volontairement PAS toujours côté système
+     * pour éviter des écritures inutiles, mais l'action utilisateur "Tout
+     * marquer comme lu" DOIT propager — c'est exactement le sens de l'action.
+     *
+     * Wrapped en runCatching pour ne pas crasher si le content provider est
+     * indisponible (ROM custom, panic mode, etc.). Retourne le nombre total
+     * de rows touchées (sms + mms).
+     */
+    /**
+     * v1.8.0 (post-audit fix badges) — propage `READ=1` + `SEEN=1` côté système
+     * pour TOUS les messages incoming non lus appartenant au `threadId` système.
+     * Appelé en complément de `markConversationRead` côté Room quand l'user
+     * ouvre une conversation dans SMS Tech, pour aligner Android sur l'état lu.
+     *
+     * Sans cette propagation, désinstaller + réinstaller SMS Tech ramène les
+     * badges sur la conversation car le système SMS Provider conserve toujours
+     * `READ=0` (jamais notifié de la lecture côté SMS Tech).
+     */
+    fun markConversationReadInSystem(systemThreadId: Long): Int {
+        val cv = ContentValues().apply {
+            put(Telephony.Sms.READ, 1)
+            put(Telephony.Sms.SEEN, 1)
+        }
+        val smsUpdated = runCatching {
+            resolver.update(
+                Telephony.Sms.CONTENT_URI,
+                cv,
+                "${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.READ} = 0 " +
+                    "AND ${Telephony.Sms.TYPE} = ${Telephony.Sms.MESSAGE_TYPE_INBOX}",
+                arrayOf(systemThreadId.toString()),
+            )
+        }.getOrDefault(0)
+        val cvMms = ContentValues().apply {
+            put("read", 1)
+            put("seen", 1)
+        }
+        val mmsUpdated = runCatching {
+            resolver.update(
+                Uri.parse("content://mms"),
+                cvMms,
+                "thread_id = ? AND read = 0 AND msg_box = $MMS_MSG_BOX_INBOX",
+                arrayOf(systemThreadId.toString()),
+            )
+        }.getOrDefault(0)
+        return smsUpdated + mmsUpdated
+    }
+
+    fun markAllIncomingReadInSystem(): Int {
+        val cv = ContentValues().apply {
+            put(Telephony.Sms.READ, 1)
+            put(Telephony.Sms.SEEN, 1)
+        }
+        val smsUpdated = runCatching {
+            resolver.update(
+                Telephony.Sms.CONTENT_URI,
+                cv,
+                "${Telephony.Sms.READ} = 0 AND ${Telephony.Sms.TYPE} = ${Telephony.Sms.MESSAGE_TYPE_INBOX}",
+                null,
+            )
+        }.getOrDefault(0)
+        // MMS utilise les mêmes noms de colonnes "read" / "seen" mais pas via
+        // Telephony.Sms (qui est SMS-only). On utilise les URIs MMS standard.
+        val cvMms = ContentValues().apply {
+            put("read", 1)
+            put("seen", 1)
+        }
+        val mmsUpdated = runCatching {
+            resolver.update(
+                Uri.parse("content://mms"),
+                cvMms,
+                "read = 0 AND msg_box = $MMS_MSG_BOX_INBOX",
+                null,
+            )
+        }.getOrDefault(0)
+        return smsUpdated + mmsUpdated
+    }
+
     private fun android.database.Cursor.toSms(): MessageEntity? {
         val id = getLong(getColumnIndexOrThrow(Telephony.Sms._ID))
         val addr = getString(getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: return null
@@ -339,7 +425,22 @@ class TelephonyReader @Inject constructor(
                 }
 
                 // Adresse FROM/TO reste N+1 (URI `addr` non-batchable de façon fiable côté AOSP).
-                val address = readMmsAddress(mmsId, direction).takeIf { it.isNotBlank() } ?: continue
+                val resolvedAddress = readMmsAddress(mmsId, direction)
+                if (resolvedAddress.isBlank()) {
+                    // v1.8.0 (bug 1 fix) — Timber log quand un MMS est skippé pour
+                    // adresse vide. Permet de diagnostiquer les régressions OEM
+                    // (Samsung One UI, Xiaomi MIUI, Huawei HMS) où le provider
+                    // utilise des types d'adresse non-standards (autres que les
+                    // 137/151/129 AOSP). Sans ce log, le MMS disparaît
+                    // silencieusement et l'user n'a aucun moyen de comprendre
+                    // pourquoi un message reçu n'apparaît pas dans SMS Tech.
+                    Timber.w(
+                        "TelephonyReader: MMS %d skipped (empty address after FROM=137/151/129 fallback, direction=%d, threadId=%d)",
+                        mmsId, direction, threadId,
+                    )
+                    continue
+                }
+                val address = resolvedAddress
 
                 pending += PendingMms(
                     telephonyId = mmsId,
@@ -446,12 +547,21 @@ class TelephonyReader @Inject constructor(
     )
 
     /**
-     * Picks the relevant address from `content://mms/{id}/addr`: FROM (type 137) for incoming,
-     * the first TO (type 151) for outgoing. Skips the AOSP placeholder `insert-address-token`.
+     * Picks the relevant address from `content://mms/{id}/addr`:
+     *  - FROM (type 137) for incoming
+     *  - the first TO (type 151) for outgoing
+     *  - fallback to "FROM-generic" (type 129) when neither 137 nor 151 yields
+     *    anything — observed on some OEM ROMs (older Samsung One UI, Xiaomi MIUI
+     *    legacy) that store the originator under the generic AOSP type 129
+     *    instead of the standard 137. Without this fallback, those MMS were
+     *    silently skipped at import time (v1.8.0 bug 1).
+     *
+     * Skips the AOSP placeholder `insert-address-token`.
      */
     private fun readMmsAddress(mmsId: Long, direction: Int): String {
         var from = ""
         var firstTo = ""
+        var fallbackGeneric = ""
         resolver.query(
             Uri.parse("content://mms/$mmsId/addr"),
             arrayOf("address", "type"),
@@ -466,10 +576,23 @@ class TelephonyReader @Inject constructor(
                 when (type) {
                     137 -> if (from.isBlank()) from = addr
                     151 -> if (firstTo.isBlank()) firstTo = addr
+                    // v1.8.0 (bug 1 fix) — type 129 = "FROM" générique AOSP
+                    // (constante non publique `PduHeaders.FROM` = 0x89 = 129).
+                    // Certains OEM (Samsung One UI < 5 sur S9 d'après le retour
+                    // user, MIUI legacy) y stockent l'originateur au lieu du
+                    // type 137. Capturé en fallback : utilisé uniquement si
+                    // ni 137 (FROM) ni 151 (TO) ne donnent rien.
+                    129 -> if (fallbackGeneric.isBlank()) fallbackGeneric = addr
                 }
             }
         }
-        return if (direction == MessageDirection.INCOMING) from else firstTo.ifBlank { from }
+        // Pour l'incoming, ordre de préférence : 137 (FROM standard) → 129 (FROM générique OEM).
+        // Pour l'outgoing, ordre : 151 (TO premier) → 137 (FROM de l'utilisateur lui-même) → 129.
+        return if (direction == MessageDirection.INCOMING) {
+            from.ifBlank { fallbackGeneric }
+        } else {
+            firstTo.ifBlank { from.ifBlank { fallbackGeneric } }
+        }
     }
 
     /**

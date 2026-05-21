@@ -78,20 +78,42 @@ data class SendingSettings(
      */
     val reactionConfirmDismissed: Boolean = false,
     /**
-     * v1.3.6 — format du SMS envoyé au correspondant lors d'une réaction emoji.
-     *
-     *   - `false` (défaut) : format **Apple/Google Tapback** "Reacted ❤️ to «aperçu»".
-     *     Détecté nativement par iMessage (iPhone) et Google Messages récent qui
-     *     l'affichent comme une bulle réaction visuelle attachée au message d'origine.
-     *     Sur les apps SMS legacy (Mi Messages, Samsung anciens), le texte brut s'affiche.
-     *   - `true` (compact) : **emoji seul** (ex. "❤️"). Plus propre sur apps legacy mais
-     *     casse l'affichage bulle natif sur iPhone / Google Messages récent — chez eux
-     *     l'emoji apparaît comme un nouveau message isolé, pas fusionné sous le message.
-     *
-     * Trade-off documenté dans le toggle UI ([R.string.settings_reaction_format_desc]).
+     * v1.3.6 (legacy) — flag boolean conservé pour rétro-compat DataStore. Supplanté
+     * en v1.8.0 par [reactionFormat] qui propose 3 options. Migration côté
+     * [com.filestech.sms.data.local.datastore.SettingsRepository] : pour un user
+     * existant, `reactionEmojiOnly=true` → `reactionFormat=EMOJI_ONLY`, `false` →
+     * `reactionFormat=TAPBACK_EN` (l'ancien défaut). Pour les nouveaux users, le
+     * défaut est désormais `READABLE_FR`. La valeur reste écrite à chaque persist
+     * pour ne pas perdre la rétro-compat si un downgrade vers v1.7.x se produit.
      */
     val reactionEmojiOnly: Boolean = false,
+    /**
+     * v1.8.0 (bug 5 fix) — format du SMS envoyé au correspondant lors d'une réaction
+     * emoji. Trois options exposées dans Settings → Envoi → "Format des réactions" :
+     *
+     *   - [ReactionFormat.READABLE_FR] (défaut) : `"J'ai réagi par ❤️ à : «aperçu»"`.
+     *     Format français lisible que tout destinataire Android francophone
+     *     comprend immédiatement. Décodé par SMS Tech (regex FR) pour afficher
+     *     la bulle de réaction native.
+     *   - [ReactionFormat.TAPBACK_EN] : `"Reacted ❤️ to «aperçu»"`. Format
+     *     Apple/Google Tapback détecté nativement par iMessage (iPhone) et
+     *     Google Messages récent qui l'affichent comme une bulle réaction
+     *     visuelle attachée au message d'origine. Conserve la compat iPhone.
+     *   - [ReactionFormat.EMOJI_ONLY] : `"❤️"` seul. Plus propre sur apps SMS
+     *     legacy mais le destinataire perd tout contexte du message d'origine.
+     */
+    val reactionFormat: ReactionFormat = ReactionFormat.READABLE_FR,
 )
+
+/**
+ * v1.8.0 (bug 5 fix) — format du SMS de réaction envoyé au correspondant.
+ *
+ * Pour le décodage entrant (réception d'une réaction de l'autre côté), voir
+ * [com.filestech.sms.domain.reaction.IncomingReactionDecoder] qui supporte les
+ * 3 formats en parallèle (rétro-compatibilité totale avec les v1.7.x et avec
+ * les Tapbacks iMessage entrants).
+ */
+enum class ReactionFormat { READABLE_FR, TAPBACK_EN, EMOJI_ONLY }
 
 enum class MmsImageQuality { HIGH, BALANCED, ECONOMY }
 
@@ -179,6 +201,23 @@ data class AdvancedSettings(
      * ouverture" du point de vue de l'utilisateur).
      */
     val splashShown: Boolean = false,
+    /**
+     * v1.8.0 (post-audit fix unread badges) — migration one-shot pour purger
+     * l'état legacy v1.7.1 : au 1er cold-start v1.8.0, on RESET tous les
+     * `conversations.unread_count` à 0 ET on marque tous les `messages.read`
+     * INCOMING à 1 (pour aligner Room sur la réalité — le user a très
+     * probablement déjà lu ces messages dans une autre app ou les considère
+     * comme lus). Sans cette purge, les badges hérités de v1.7.1 (compteurs
+     * inflated + flag `read=0` désynchronisé du système) persistent
+     * indéfiniment et ne se cleanent jamais — le simple recompute SQL ne
+     * suffit pas car il s'appuie sur `messages.read` qui est lui-même
+     * désynchronisé.
+     *
+     * `true` une fois la migration faite. Les futurs SMS live arrivent
+     * ensuite via `SmsDeliverReceiver` avec `read=false` + `unread_count++`
+     * normalement — comportement préservé pour la vraie nouveauté.
+     */
+    val unreadResetV180: Boolean = false,
     /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante

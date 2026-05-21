@@ -24,6 +24,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.system.notifications.IncomingMessageNotifier
+import com.filestech.sms.system.notifications.PendingNavHolder
 import com.filestech.sms.system.share.IncomingShareHolder
 import com.filestech.sms.ui.AppRoot
 import com.filestech.sms.ui.theme.SmsTechTheme
@@ -49,6 +51,16 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var appLock: AppLockManager
     @Inject lateinit var incomingShare: IncomingShareHolder
+
+    /**
+     * v1.8.0 (bug 4 fix) — holder partagé pour le `conversationId` cliqué via
+     * notification. Posé dans [handleSharedIntent] quand l'action vaut
+     * [IncomingMessageNotifier.ACTION_OPEN_CONVERSATION], consommé dans
+     * [com.filestech.sms.ui.AppRoot] par un `LaunchedEffect` après que le
+     * `NavController` Compose est instancié et les guards (lock screen /
+     * panic-decoy / déjà sur ce thread) sont validés.
+     */
+    @Inject lateinit var pendingNav: PendingNavHolder
 
     private val initialSettings = MutableStateFlow<AppSettings?>(null)
 
@@ -254,12 +266,37 @@ class MainActivity : FragmentActivity() {
                     )
                 }
             }
+            IncomingMessageNotifier.ACTION_OPEN_CONVERSATION -> {
+                // v1.8.0 (bug 4 fix) — l'utilisateur a tapé une notif de message
+                // entrant. On extrait le `conversationId` mis en extra par
+                // [IncomingMessageNotifier] et on le dépose dans [pendingNav].
+                // [AppRoot] consommera ce holder dans un `LaunchedEffect` après
+                // que le `NavController` Compose est instancié, avec les guards
+                // habituels (lock actif, panic-decoy, déjà sur ce thread).
+                //
+                // **Important** : on `clear()` aussi le `incomingShare` ici —
+                // un tap notif est une intention de navigation pure, pas un
+                // partage. Si un share traînait dans le holder depuis une
+                // session précédente, on ne veut surtout pas qu'il s'attache
+                // à la conversation qu'on vient d'ouvrir.
+                incomingShare.clear()
+                val conversationId =
+                    intent.getLongExtra(IncomingMessageNotifier.EXTRA_CONVERSATION_ID, -1L)
+                if (conversationId > 0L) {
+                    pendingNav.set(PendingNavHolder.Pending(conversationId = conversationId))
+                } else {
+                    Timber.w(
+                        "MainActivity: OPEN_CONVERSATION intent missing valid conversationId (got %d)",
+                        conversationId,
+                    )
+                }
+            }
             else -> {
                 // v1.3.3 G2 audit fix — l'app a été relancée via un intent NON-SEND
-                // (icône launcher, tap notif `OPEN_CONVERSATION`, deep-link sms:…).
-                // Si un partage attend depuis une session précédente, on l'efface :
-                // l'intention de l'utilisateur a changé, pas question d'attacher
-                // une PJ oubliée à la conversation qu'il vient d'ouvrir.
+                // (icône launcher, deep-link sms:…). Si un partage attend depuis
+                // une session précédente, on l'efface : l'intention de l'utilisateur
+                // a changé, pas question d'attacher une PJ oubliée à la conversation
+                // qu'il vient d'ouvrir.
                 incomingShare.clear()
             }
         }

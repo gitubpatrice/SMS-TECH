@@ -59,6 +59,23 @@ class TelephonySyncManager @Inject constructor(
     private val messageDao: MessageDao,
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
+    /**
+     * v1.8.0 (audit bug "numéros bloqués importés") — la blocklist système était
+     * mirror-ée vers Room **uniquement** au cold-start (`MainApplication.onCreate`).
+     * Conséquence : sur fresh install d'un user qui était sur Samsung Messages avec
+     * des numéros bloqués via le Téléphone Samsung (qui posent dans
+     * `BlockedNumberContract` AOSP standard), si SMS Tech n'avait pas encore le
+     * rôle SMS-default au cold-start, `listSystemBlocked()` retournait empty
+     * (lecture refusée par l'OS). Une fois le rôle accordé, le mirror n'était
+     * plus jamais re-tenté tant que l'app n'était pas redémarrée. Les
+     * conversations des numéros bloqués étaient donc importées sans filtre puis
+     * persistaient indéfiniment.
+     *
+     * Le fix : appeler `importFromSystem()` (qui mirror la blocklist ET purge
+     * les conversations matching) au début de chaque `runSync()`. Idempotent et
+     * rapide (~50 ms typique d'après doc `MainApplication.kt`).
+     */
+    private val blockedNumbersImporter: com.filestech.sms.data.blocking.BlockedNumbersImporter,
     @ApplicationScope private val appScope: CoroutineScope,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
@@ -128,6 +145,23 @@ class TelephonySyncManager @Inject constructor(
             Timber.i("runSync(%s) waiting for in-flight sync", reason)
         }
         syncMutex.withLock {
+            // v1.8.0 fix — mirror system blocklist into Room AT THE START of every sync.
+            // Critical for the fresh-install case where the user grants SMS-default role
+            // AFTER the first cold-start sync: at that first sync `listSystemBlocked()`
+            // returned empty (no role yet), the messages were imported unfiltered, and
+            // the blocklist mirror was never retried until app restart. Now each sync
+            // re-mirrors + re-purges, so the very first `requestSync("permission granted")`
+            // after the user accepts the SMS role purges any blocked conversation that
+            // slipped in during the role-less import. Idempotent: re-running on every
+            // tick is cheap (~50 ms) when nothing has changed.
+            //
+            // Wrapped in runCatching so a blocklist failure (provider quirks on OEM ROMs)
+            // never blocks the SMS sync itself — silent log + continue.
+            runCatching { blockedNumbersImporter.importFromSystem() }
+                .onFailure {
+                    Timber.w(it, "runSync(%s): system blocklist mirror failed; continuing", reason)
+                }
+
             // Read a fresh cursor snapshot inside the lock; another concurrent caller may have
             // just advanced it.
             val current = settings.flow.first().advanced.lastSyncedSmsId
@@ -154,8 +188,20 @@ class TelephonySyncManager @Inject constructor(
                     // against per-page overhead.
                     var imported = 0
                     telephonyReader.readMmsBatched(pageSize = 200) { page ->
-                        mirror.bulkImportMmsFromTelephony(page)
-                        imported += page.size
+                        // v1.8.0 (post-audit fix badges fresh install S24) — au 1er
+                        // sync (Room vide), tous les messages historiques sont
+                        // considérés comme déjà vus. Sans ça, l'user voit des
+                        // badges sur des messages parfois vieux de plusieurs jours/
+                        // mois à la 1ʳᵉ ouverture, alors qu'il les a évidemment
+                        // déjà lus dans son ancienne app SMS. Comportement aligné
+                        // sur Google Messages / Samsung Messages.
+                        // Les vrais nouveaux MMS arrivent ensuite via
+                        // `MmsDownloadedReceiver` avec `read=false` → badge normal.
+                        val pageForImport = if (isFirstRun) {
+                            page.map { it.copy(read = true) }
+                        } else page
+                        mirror.bulkImportMmsFromTelephony(pageForImport)
+                        imported += pageForImport.size
                     }
                     if (imported > 0) {
                         Timber.i("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, imported, isFirstRun, hasAnyMms)
@@ -186,7 +232,21 @@ class TelephonySyncManager @Inject constructor(
                     else page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }
                     skipped += page.size - filtered.size
                     if (filtered.isNotEmpty()) {
-                        mirror.bulkImportFromTelephony(filtered.map { it.entity })
+                        // v1.8.0 (post-audit fix badges fresh install S24) — au
+                        // 1er sync, on force `read = true` sur tous les messages
+                        // historiques. Sinon l'user voit des badges sur des
+                        // messages vieux de plusieurs jours/mois à l'ouverture
+                        // initiale (le système Android conserve `READ=0` pour
+                        // les messages jamais notifiés "lus" par une app SMS,
+                        // ce qui est très fréquent après changement d'app).
+                        // Les vrais nouveaux SMS arrivent ensuite via
+                        // `SmsDeliverReceiver` avec `read=false` → badge normal.
+                        val entitiesForImport = if (isFirstRun) {
+                            filtered.map { it.entity.copy(read = true) }
+                        } else {
+                            filtered.map { it.entity }
+                        }
+                        mirror.bulkImportFromTelephony(entitiesForImport)
                         imported += filtered.size
                     }
                     _state.value = State.Running(isFirstRun = isFirstRun, importedSoFar = imported)

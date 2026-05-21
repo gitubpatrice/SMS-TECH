@@ -282,8 +282,16 @@
     <string name="settings_resync_started">Resync started in background.</string>
     <string name="settings_send_reactions_title">Send my reactions to recipient</string>
     <string name="settings_send_reactions_desc">When you post an emoji reaction (heart, thumbs-up…), a SMS containing only the emoji is sent to the recipient. Counts as a normal SMS at your plan\'s rate. Removing or changing a reaction does not resend anything.</string>
-    <string name="settings_reaction_format_title">Send bare emoji (without context)</string>
-    <string name="settings_reaction_format_desc">OFF (recommended): Tapback format "Reacted ❤️ to «preview»" — on SMS Tech, iPhone and recent Google Messages, the recipient sees the emoji directly as a BADGE on your original message (no extra text bubble).\n\nON: sends just the emoji "❤️" as a plain text SMS. Cleaner on old phones that don\'t render the badge, BUT the recipient can no longer tell WHICH message you reacted to (automatic merging only works for the most recent message sent within the last 5 minutes).</string>
+    <!-- v1.8.0 — bug 5 fix : 3 options at a glance.
+         Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
+    <string name="settings_reaction_format_title">Reaction format</string>
+    <string name="settings_reaction_format_desc">Choose how reactions are sent over SMS to recipients who don\'t use SMS Tech.</string>
+    <string name="settings_reaction_format_fr">Readable French (default)</string>
+    <string name="settings_reaction_format_fr_hint">"J\'ai réagi par ❤️ à : «preview»". Natural and understandable for any French-speaking Android recipient. Decoded by SMS Tech as a native reaction badge.</string>
+    <string name="settings_reaction_format_en">Tapback (iMessage compat)</string>
+    <string name="settings_reaction_format_en_hint">"Reacted ❤️ to «preview»". Detected automatically by iMessage (iPhone) and recent Google Messages as a native reaction bubble. Less natural for French recipients.</string>
+    <string name="settings_reaction_format_emoji">Emoji only</string>
+    <string name="settings_reaction_format_emoji_hint">"❤️" alone. Cleaner on older SMS apps, but the recipient loses all context — they can\'t tell which message you reacted to.</string>
     <string name="reaction_send_confirm_title">Send reaction?</string>
     <string name="reaction_send_confirm_body">An SMS containing only this emoji will be sent to your recipient. Counts as a regular SMS (plan rate). You can disable this in Settings → Sending.</string>
     <string name="reaction_send_confirm_never_ask">Don\'t ask again, send directly</string>
@@ -311,10 +319,40 @@
     <!-- v1.6.1 — snackbar shown when PDF export fails (audit QUAL-07 i18n fix) -->
     <string name="snack_pdf_export_failed">PDF export failed</string>
 
+    <!-- v1.8.0 — confirmation dialogs + "Mark all as read" action in overflow menu -->
+    <string name="action_mark_all_read">Mark all as read</string>
+    <string name="mark_all_read_confirm_body">All current unread badges will be cleared. New incoming messages will display badges normally afterwards.</string>
+    <string name="settings_resync_confirm_title">Resync from phone?</string>
+    <string name="settings_resync_confirm_body">Re-imports messages from the system SMS/MMS provider. Existing messages stay (deduped via unique ID); previously deleted messages may reappear if they still exist in the system database. Continue?</string>
+    <string name="settings_reset_all_confirm_title">Reset all settings?</string>
+    <string name="settings_reset_all_confirm_body">All your preferences (theme, notifications, sending, etc.) will return to default. Your conversations and messages are NOT affected.</string>
+    <string name="settings_purge_blocked_confirm_title">Purge blocked conversations?</string>
+    <string name="settings_purge_blocked_confirm_body">Deletes every conversation whose participants are entirely in the blocklist. This also removes them from the system SMS provider. Irreversible.</string>
+
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>
     <string name="settings_inline_reply">Reply from notification</string>
     <string name="settings_vibrate">Vibrate</string>
+
+    <!-- v1.8.0 — bug 3 fix: exposes PreviewMode + NotificationStyle in the UI. -->
+    <string name="settings_notif_preview">Lock-screen preview</string>
+    <string name="settings_notif_preview_desc">Controls what shows up on the lock screen and in heads-up notifications.</string>
+    <string name="settings_notif_preview_always">Always show name and content</string>
+    <string name="settings_notif_preview_unlocked">Only after unlock</string>
+    <string name="settings_notif_preview_unlocked_hint">Sender name and a redacted body show on the lock screen; the full content appears once unlocked.</string>
+    <string name="settings_notif_preview_never">Never on lock screen</string>
+    <string name="settings_notif_preview_never_hint">Plays the sound but nothing appears on the lock screen — fully invisible until you unlock and open the app.</string>
+    <string name="settings_notif_style">Notification style</string>
+    <string name="settings_notif_style_desc">How incoming notifications interrupt you.</string>
+    <string name="settings_notif_style_heads_up">Heads-up (default)</string>
+    <string name="settings_notif_style_heads_up_hint">Banner pops over the current screen with sound, then docks in the shade.</string>
+    <string name="settings_notif_style_banner">Banner only</string>
+    <string name="settings_notif_style_banner_hint">No pop-up, no sound. Just an icon in the shade.</string>
+    <string name="settings_notif_style_silent">Silent</string>
+    <string name="settings_notif_style_silent_hint">Routed to a low-importance channel. The system masks sound and the heads-up pop-up.</string>
+    <string name="settings_notif_open_system">Open system notification settings</string>
+    <string name="settings_notif_open_system_desc">Check or fix permissions, channels, and sound at the OS level.</string>
+    <string name="settings_notif_channel_disabled_warn">Notifications are disabled for SMS Tech in the system settings. Tap below to fix.</string>
 
     <string name="settings_section_security">Security &amp; privacy</string>
     <string name="settings_lock_mode">App lock</string>
@@ -361,6 +399,9 @@
     <!-- Notification channels -->
     <string name="channel_incoming_label">Incoming messages</string>
     <string name="channel_incoming_desc">Notifications for SMS and MMS you receive.</string>
+    <!-- v1.8.0 — silent channel for NotificationStyle.SILENT -->
+    <string name="channel_incoming_silent_label">Incoming messages (silent)</string>
+    <string name="channel_incoming_silent_desc">Notifications when SMS Tech is set to "Silent" mode. No heads-up, no sound.</string>
     <string name="channel_sent_label">Sent messages</string>
     <string name="channel_sent_desc">Status of messages you sent.</string>
     <string name="channel_failed_label">Failed messages</string>

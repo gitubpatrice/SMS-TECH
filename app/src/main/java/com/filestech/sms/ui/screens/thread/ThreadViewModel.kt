@@ -416,7 +416,7 @@ class ThreadViewModel @Inject constructor(
                 // and dispatch silently.
                 val isFirstEver = result is SetReactionResult.First
                 if (sending.reactionConfirmDismissed || !isFirstEver) {
-                    dispatchReactionSms(targetMessageId, targetEmoji, sending.reactionEmojiOnly)
+                    dispatchReactionSms(targetMessageId, targetEmoji, sending.reactionFormat)
                 } else {
                     _events.tryEmit(Event.RequestReactionConfirm(targetMessageId, targetEmoji))
                 }
@@ -459,11 +459,13 @@ class ThreadViewModel @Inject constructor(
                 // dialog pour la prochaine fois. Seul un Sent confirme le contrat user.
                 //
                 // v1.3.6 audit P1 — lit le snapshot sending une seule fois et passe
-                // `reactionEmojiOnly` au dispatcher (au lieu d'un second `cachedSettings.value`
-                // dans le dispatcher lui-même → 2 lectures DataStore par envoi).
+                // au dispatcher (au lieu d'un second `cachedSettings.value` dans le
+                // dispatcher lui-même → 2 lectures DataStore par envoi).
                 // v1.6.1 audit PERF-01 — lecture synchrone zéro-I/O via cachedSettings.
-                val emojiOnly = cachedSettings.value.sending.reactionEmojiOnly
-                val outcome = dispatchReactionSms(messageId, emoji, emojiOnly)
+                // v1.8.0 (bug 5 fix) — passe désormais le `ReactionFormat` (3 options)
+                // au lieu du boolean `reactionEmojiOnly` (legacy 2 options).
+                val reactionFormat = cachedSettings.value.sending.reactionFormat
+                val outcome = dispatchReactionSms(messageId, emoji, reactionFormat)
                 if (outcome == DispatchOutcome.Sent && neverAskAgain) {
                     settings.update {
                         it.copy(sending = it.sending.copy(reactionConfirmDismissed = true))
@@ -490,15 +492,15 @@ class ThreadViewModel @Inject constructor(
      *   - [DispatchOutcome.Sent] : le use case a renvoyé [Outcome.Success]
      *   - [DispatchOutcome.Failed] : tentative effectuée mais échouée (snack émis)
      *
-     * @param emojiOnly v1.3.6 audit P1 — passé par le caller qui a déjà lu le snapshot
-     *   `sending` une fois ; évite une 2e lecture DataStore par envoi de réaction. `false`
-     *   = format Tapback "Reacted ❤️ to «aperçu»" (compat iPhone/Google récent), `true` =
-     *   emoji seul (plus propre legacy).
+     * @param format v1.8.0 (bug 5 fix) — passé par le caller qui a déjà lu le snapshot
+     *   `sending` une fois ; évite une 2e lecture DataStore par envoi de réaction.
+     *   Voir [com.filestech.sms.data.local.datastore.ReactionFormat] pour les 3 options
+     *   (READABLE_FR par défaut, TAPBACK_EN pour compat iPhone, EMOJI_ONLY minimal).
      */
     private suspend fun dispatchReactionSms(
         messageId: Long,
         emoji: String,
-        emojiOnly: Boolean,
+        format: com.filestech.sms.data.local.datastore.ReactionFormat,
     ): DispatchOutcome {
         val now = System.currentTimeMillis()
         // v1.3.5 G7 audit fix — purge opportuniste des entries expirées AVANT lecture
@@ -515,7 +517,7 @@ class ThreadViewModel @Inject constructor(
             return DispatchOutcome.DedupSkipped
         }
         recentlySentReactionFor[messageId] = ReactionDispatch(emoji = emoji, timestamp = now)
-        return when (val res = sendReaction(messageId, emoji, emojiOnly)) {
+        return when (val res = sendReaction(messageId, emoji, format)) {
             is Outcome.Success -> DispatchOutcome.Sent
             is Outcome.Failure -> {
                 _events.tryEmit(Event.SendError(res.error))

@@ -86,6 +86,20 @@ class SettingsRepository @Inject constructor(
                 sendReactionsToRecipient = p[K.sendReactionsToRecipient] ?: true,
                 reactionConfirmDismissed = p[K.reactionConfirmDismissed] ?: false,
                 reactionEmojiOnly = p[K.reactionEmojiOnly] ?: false,
+                // v1.8.0 (bug 5 fix) — migration douce. Si la nouvelle clé existe,
+                // on l'utilise. Sinon (user qui upgrade depuis v1.7.x) :
+                //  - reactionEmojiOnly=true → EMOJI_ONLY (préserve son choix)
+                //  - reactionEmojiOnly=false → TAPBACK_EN (préserve l'ancien défaut
+                //    "Reacted X to «…»" — l'user avait peut-être beaucoup de contacts
+                //    iPhone et compte sur le parsing Tapback)
+                //  - aucune clé présente (fresh install) → READABLE_FR (nouveau défaut)
+                reactionFormat = p[K.reactionFormat]?.let {
+                    runCatching { ReactionFormat.valueOf(it) }.getOrNull()
+                } ?: when {
+                    p[K.reactionEmojiOnly] == true -> ReactionFormat.EMOJI_ONLY
+                    p[K.reactionEmojiOnly] == false -> ReactionFormat.TAPBACK_EN
+                    else -> ReactionFormat.READABLE_FR
+                },
             ),
             notifications = NotificationSettings(
                 enabled = p[K.notifEnabled] ?: true,
@@ -123,6 +137,7 @@ class SettingsRepository @Inject constructor(
                 lastSyncedSmsId = p[K.lastSyncedSmsId] ?: 0L,
                 splashShown = p[K.splashShown] ?: false,
                 keepAliveService = p[K.keepAliveService] ?: false,
+                unreadResetV180 = p[K.unreadResetV180] ?: false,
             ),
         )
     }
@@ -154,6 +169,10 @@ class SettingsRepository @Inject constructor(
         this[K.sendReactionsToRecipient] = s.sending.sendReactionsToRecipient
         this[K.reactionConfirmDismissed] = s.sending.reactionConfirmDismissed
         this[K.reactionEmojiOnly] = s.sending.reactionEmojiOnly
+        // v1.8.0 (bug 5 fix) — persiste le nouveau format. La clé legacy
+        // `reactionEmojiOnly` continue à être écrite au-dessus pour ne pas
+        // casser un éventuel downgrade vers v1.7.x.
+        this[K.reactionFormat] = s.sending.reactionFormat.name
 
         this[K.notifEnabled] = s.notifications.enabled
         this[K.notifStyle] = s.notifications.style.name
@@ -191,6 +210,7 @@ class SettingsRepository @Inject constructor(
         this[K.lastSyncedSmsId] = s.advanced.lastSyncedSmsId
         this[K.splashShown] = s.advanced.splashShown
         this[K.keepAliveService] = s.advanced.keepAliveService
+        this[K.unreadResetV180] = s.advanced.unreadResetV180
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -220,6 +240,10 @@ class SettingsRepository @Inject constructor(
         val sendReactionsToRecipient = booleanPreferencesKey("send.reactions.toRecipient")
         val reactionConfirmDismissed = booleanPreferencesKey("send.reactions.confirmDismissed")
         val reactionEmojiOnly = booleanPreferencesKey("send.reactions.emojiOnly")
+        // v1.8.0 (bug 5 fix) — nouveau format avec 3 valeurs (READABLE_FR / TAPBACK_EN
+        // / EMOJI_ONLY). La clé `reactionEmojiOnly` ci-dessus reste écrite pour la
+        // rétro-compat v1.7.x si un downgrade se produit.
+        val reactionFormat = stringPreferencesKey("send.reactions.format")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")
@@ -250,5 +274,7 @@ class SettingsRepository @Inject constructor(
         val lastSyncedSmsId = longPreferencesKey("advanced.lastSyncedSmsId")
         val splashShown = booleanPreferencesKey("advanced.splashShown")
         val keepAliveService = booleanPreferencesKey("advanced.keepAliveService")
+        // v1.8.0 — flag one-shot pour la migration de purge des badges hérités v1.7.1.
+        val unreadResetV180 = booleanPreferencesKey("advanced.unreadResetV180")
     }
 }

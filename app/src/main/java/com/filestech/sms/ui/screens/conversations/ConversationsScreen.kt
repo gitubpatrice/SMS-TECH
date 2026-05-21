@@ -110,7 +110,25 @@ fun ConversationsScreen(
                 androidx.core.content.ContextCompat.checkSelfPermission(context, it) !=
                     android.content.pm.PackageManager.PERMISSION_GRANTED
             }
-            if (needed.isNotEmpty()) smsPermsLauncher.launch(needed.toTypedArray())
+            if (needed.isNotEmpty()) {
+                smsPermsLauncher.launch(needed.toTypedArray())
+            } else {
+                // v1.8.0 (fix bug S9 fresh install) — permissions déjà toutes
+                // accordées (cas du `GRANTED_BY_ROLE` automatique Android qui
+                // marche sur Pixel mais aussi sur Samsung One UI quand le rôle
+                // SMS-default vient juste d'être accordé). Sans ce `else`, le
+                // `smsPermsLauncher` n'était jamais déclenché et donc
+                // `requestSyncNow()` n'était JAMAIS appelé → l'utilisateur
+                // devait fermer/rouvrir l'app manuellement (au prochain cold-
+                // start, `MainApplication.onCreate` re-tentait `start()` avec
+                // `READ_SMS` désormais granted, et l'import démarrait enfin).
+                //
+                // En appelant `requestSyncNow()` directement ici, l'import
+                // démarre dans la foulée du grant, sans nécessiter un 2ème
+                // lancement de l'app. Mirror blocklist + filter inclus via
+                // `TelephonySyncManager.runSync` (cf. v1.8.0 fix).
+                viewModel.requestSyncNow()
+            }
         }
     }
 
@@ -128,6 +146,8 @@ fun ConversationsScreen(
     }
 
     var overflowOpen by remember { mutableStateOf(false) }
+    // v1.8.0 — dialog de confirmation pour "Tout marquer comme lu".
+    var showMarkAllReadConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -198,6 +218,17 @@ fun ConversationsScreen(
                         expanded = overflowOpen,
                         onDismissRequest = { overflowOpen = false },
                     ) {
+                        // v1.8.0 — action "Tout marquer comme lu". Utile quand l'user a
+                        // lu ses messages dans une autre app SMS et que les badges SMS
+                        // Tech persistent (cache `messages.read` désynchronisé du système).
+                        DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Outlined.Check, contentDescription = null) },
+                            text = { Text(stringResource(R.string.action_mark_all_read)) },
+                            onClick = {
+                                overflowOpen = false
+                                showMarkAllReadConfirm = true
+                            },
+                        )
                         DropdownMenuItem(
                             leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
                             text = { Text(stringResource(R.string.settings_title)) },
@@ -310,6 +341,30 @@ fun ConversationsScreen(
                 }
             }
         }
+    }
+
+    // v1.8.0 — Dialog de confirmation pour "Tout marquer comme lu".
+    // Action non destructive, dialog simple (pas d'autofocus complexe — c'est
+    // de l'UX, pas une action irreversible).
+    if (showMarkAllReadConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showMarkAllReadConfirm = false },
+            title = { Text(stringResource(R.string.action_mark_all_read)) },
+            text = { Text(stringResource(R.string.mark_all_read_confirm_body)) },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.markAllAsRead()
+                        showMarkAllReadConfirm = false
+                    },
+                ) { Text(stringResource(R.string.action_confirm)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showMarkAllReadConfirm = false },
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
 }
 

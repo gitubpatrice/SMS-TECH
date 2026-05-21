@@ -44,6 +44,11 @@ class ConversationRepositoryImpl @Inject constructor(
     private val appLock: AppLockManager,
     private val blockedRepo: BlockedNumberRepository,
     private val notifier: IncomingMessageNotifier,
+    // v1.8.0 (post-audit fix badges après désinstallation) — propage `READ=1`
+    // côté système quand l'user ouvre une conversation. Sans ça, désinstaller
+    // + réinstaller SMS Tech ramène les badges (le système avait toujours
+    // `READ=0`, jamais aligné par SMS Tech).
+    private val telephonyReader: com.filestech.sms.data.sms.TelephonyReader,
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ConversationRepository {
@@ -191,6 +196,18 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun markRead(id: Long) = withContext(io) {
         messageDao.markConversationRead(id)
         conversationDao.clearUnread(id)
+        // v1.8.0 (post-audit fix badges après désinstallation) — propage
+        // `READ=1` côté `content://sms` + `content://mms` pour les messages
+        // incoming de cette conversation. Récupère le `threadId` système
+        // depuis Room (ConversationEntity.threadId stocke le mapping AOSP).
+        // Wrapped en runCatching pour ne pas bloquer le markRead Room si le
+        // content provider est indisponible (panic mode, ROM custom).
+        runCatching {
+            val systemThreadId = conversationDao.findThreadIdById(id)
+            if (systemThreadId != null && systemThreadId > 0L) {
+                telephonyReader.markConversationReadInSystem(systemThreadId)
+            }
+        }
         // v1.3.3 bug #6 — efface aussi les notifications encore affichées dans la
         // barre système pour cette conversation. Sans ça, ouvrir une thread depuis l'app
         // (et non depuis la notif elle-même) laissait les notifs s'accumuler dans le

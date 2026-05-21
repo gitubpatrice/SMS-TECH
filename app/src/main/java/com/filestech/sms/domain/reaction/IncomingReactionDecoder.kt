@@ -109,6 +109,40 @@ object IncomingReactionDecoder {
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return null
 
+        // v1.8.0 (bug 5 fix) — French readable format with preview :
+        // `J'ai réagi par <emoji> à : «<preview>»`. Sent by SMS Tech v1.8.0+
+        // when [com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR]
+        // is selected (new default). Both apostrophes (typographic `'` U+2019 and
+        // ASCII `'`) are accepted defensively — some keyboards or SMS gateways
+        // normalise punctuation. Same `«»` / `"..."` guillemet tolerance as the
+        // English Tapback. Run BEFORE the English regex since the FR sentence
+        // never starts with `Reacted`, so no ambiguity.
+        READABLE_FR_WITH_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
+            val emoji = m.groupValues[1].trim()
+            val rawPreview = m.groupValues[2]
+            val wasTruncated = rawPreview.trimEnd().endsWith(TRUNCATION_MARKER)
+            val preview = rawPreview.removeSuffix(TRUNCATION_MARKER).trim()
+            if (emoji.isEmpty() || preview.isEmpty()) return null
+            return DecodedReaction(
+                emoji = emoji,
+                previewPrefix = preview,
+                kind = DecodedReaction.Kind.Tapback,
+                wasTruncated = wasTruncated,
+            )
+        }
+
+        // v1.8.0 — French readable format without preview (MMS image pure case) :
+        // `J'ai réagi par <emoji>`.
+        READABLE_FR_NO_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
+            val emoji = m.groupValues[1]
+            if (emoji.isEmpty() || emoji.all { it.code < 128 }) return null
+            return DecodedReaction(
+                emoji = emoji,
+                previewPrefix = null,
+                kind = DecodedReaction.Kind.Tapback,
+            )
+        }
+
         // Tapback with preview : `Reacted <emoji> to «<preview>»`. The `«` and `»` are
         // the Unicode guillemets that SMS Tech emits (forces UCS-2 single-segment).
         TAPBACK_WITH_PREVIEW_REGEX.matchEntire(trimmed)?.let { m ->
@@ -205,4 +239,32 @@ object IncomingReactionDecoder {
      * one non-ASCII codepoint).
      */
     private val TAPBACK_NO_PREVIEW_REGEX = Regex("""^Reacted\s+(\S+)$""")
+
+    /**
+     * v1.8.0 (bug 5 fix) — French readable format with preview :
+     * `J'ai réagi par <emoji> à : «<preview>»`. Accepts both apostrophes
+     * (typographic `'` U+2019 emitted by [buildReadableFrBody] AND ASCII `'`
+     * in case a gateway normalises it). Accepts both Unicode `«»` and ASCII
+     * `"..."` guillemets defensively. Emoji group is non-greedy and the preview
+     * group accepts any char (`DOT_MATCHES_ALL`) — same defensive shape as the
+     * English Tapback regex.
+     *
+     * Anchored start (no `\s*` prefix) — `decode` already trim()s the body.
+     * The leading `J` is case-sensitive : a body starting with a lower-case
+     * `j'ai` is rejected (likely a casual chat sentence, not our SMS Tech
+     * output which always capitalises).
+     */
+    private val READABLE_FR_WITH_PREVIEW_REGEX = Regex(
+        """^J['’]ai\s+réagi\s+par\s+(.+?)\s+à\s*:\s*[«"](.+?)[»"]$""",
+        RegexOption.DOT_MATCHES_ALL,
+    )
+
+    /**
+     * v1.8.0 — French readable format without preview (original message had no
+     * text body) : `J'ai réagi par <emoji>`. Single non-whitespace token like
+     * the English equivalent ; `decode` rejects pure-ASCII tokens.
+     */
+    private val READABLE_FR_NO_PREVIEW_REGEX = Regex(
+        """^J['’]ai\s+réagi\s+par\s+(\S+)$""",
+    )
 }

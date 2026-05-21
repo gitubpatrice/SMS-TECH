@@ -717,10 +717,26 @@ class ConversationMirror @Inject constructor(
                     addresses = listOf(PhoneAddress.of(first.address)),
                 )
                 val withConv = group.map { it.copy(conversationId = convId) }
-                messageDao.insertAll(withConv)
+                // v1.8.0 (bug 2 fix) — Room's @Insert(OnConflictStrategy.IGNORE) returns
+                // -1L for each row that conflicted with the UNIQUE (telephony_uri) index
+                // (i.e. already mirrored), and the new row id for fresh inserts. Before
+                // this fix the unread delta was calculated over the WHOLE group — every
+                // re-sync (12h worker or manual pull-to-refresh) re-bumped the badge by
+                // the count of incoming-unread rows even when the user had already opened
+                // the thread and Room had cleared its unread counter. Now we count ONLY
+                // rows that actually inserted, so the badge reflects truly new arrivals.
+                //
+                // The MMS path above (`bulkImportMmsFromTelephony`, line ~620) is not
+                // affected by the same regression because it iterates row-by-row with a
+                // `if (insertedId <= 0L) continue` that already skips the delta increment
+                // for conflicting rows. Keep both branches symmetric in spirit even if
+                // the syntactic shape differs.
+                val insertedIds = messageDao.insertAll(withConv)
                 val last = group.maxBy { it.date }
-                val unreadDelta = group.count {
-                    it.direction == MessageDirection.INCOMING && !it.read
+                val unreadDelta = withConv.withIndex().count { (idx, m) ->
+                    insertedIds.getOrElse(idx) { -1L } > 0L &&
+                        m.direction == MessageDirection.INCOMING &&
+                        !m.read
                 }
                 touchConversation(convId, last.date, last.body, deltaUnread = unreadDelta)
             }
