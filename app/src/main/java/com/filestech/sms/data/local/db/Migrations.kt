@@ -104,6 +104,44 @@ internal object Migrations {
         }
     }
 
+    /**
+     * v6 → v7 (2026-05-22, v1.11.0) — apparence par contact (Sujet 5).
+     *
+     *  - Ajoute `conversations.bubble_color_argb INTEGER` (nullable). NULL pour
+     *    les legacy rows = utilise le bleu marque par défaut pour la bulle
+     *    sortante. L'user choisit une couleur dans la palette WCAG-safe via
+     *    le dialog "Personnaliser apparence".
+     *  - Ajoute `conversations.avatar_uri TEXT` (nullable). NULL = fallback à
+     *    l'avatar contact Android natif. URI `content://` persistée via
+     *    `takePersistableUriPermission` au pick.
+     *
+     * Strictement additive — `ALTER TABLE ADD COLUMN` × 2, aucune row touchée.
+     * Downgrade v7 → v6 safe : Room ignore les colonnes inconnues, données
+     * préservées dans la DB tant qu'on ne ré-écrit pas la row.
+     *
+     * **NOTE atomicité** (v1.11.0 audit SEC-V7) : `ALTER TABLE ADD COLUMN`
+     * n'est PAS idempotente en SQLite (pas de `IF NOT EXISTS` pour cette
+     * directive). Room wrappe le `migrate()` entier dans une transaction
+     * SQLite via `db.beginTransaction()` / `setTransactionSuccessful()`. Si
+     * le process est killé entre les deux `execSQL`, SQLite rollback la
+     * transaction (WAL) — la version reste 6 et la migration sera ré-exécutée
+     * intégralement au prochain démarrage. Re-exécution partielle impossible.
+     * NE PAS ajouter de guard `IF NOT EXISTS` ici (syntax-error garantie).
+     */
+    val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE conversations ADD COLUMN bubble_color_argb INTEGER")
+            db.execSQL("ALTER TABLE conversations ADD COLUMN avatar_uri TEXT")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+    val ALL: Array<Migration> = arrayOf(
+        MIGRATION_1_2,
+        MIGRATION_2_3,
+        MIGRATION_3_4,
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7,
+    )
 }

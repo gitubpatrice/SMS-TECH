@@ -394,6 +394,17 @@ fun SettingsScreen(
                     value = state.security.lockVaultOnLeave,
                     onChange = { v -> viewModel.update { it.copy(security = it.security.copy(lockVaultOnLeave = v)) } },
                 )
+                // v1.11.0 — Sujet 3 anti-smishing.
+                ToggleRow(
+                    title = stringResource(R.string.settings_smishing_detection),
+                    description = stringResource(R.string.settings_smishing_detection_desc),
+                    value = state.security.smishingDetectionEnabled,
+                    onChange = { v ->
+                        viewModel.update {
+                            it.copy(security = it.security.copy(smishingDetectionEnabled = v))
+                        }
+                    },
+                )
                 NavigationRow(
                     title = stringResource(R.string.settings_purge_blocked),
                     description = stringResource(R.string.settings_purge_blocked_desc),
@@ -471,17 +482,23 @@ fun SettingsScreen(
                     icon = Icons.Outlined.WarningAmber,
                 ) {
                     val emergency = state.security.emergency
-                    NavigationRow(
-                        title = stringResource(R.string.settings_emergency_title),
-                        description = if (emergency.enabled) {
-                            stringResource(R.string.settings_emergency_enabled) +
-                                "\n" + stringResource(R.string.settings_emergency_open)
-                        } else {
-                            stringResource(R.string.settings_emergency_disabled) +
-                                "\n" + stringResource(R.string.settings_emergency_desc)
-                        },
-                        onClick = if (emergency.enabled) onOpenEmergency else onOpenEmergencySetup,
-                    )
+                    if (emergency.enabled) {
+                        // v1.10.0 polish — récap visuel quand armé (parallèle
+                        // exact de SafetyCallArmedRecap pour cohérence UX).
+                        EmergencyArmedRecap(
+                            config = emergency,
+                            contacts = state.security.safetyCall.contacts,
+                            onModify = onOpenEmergencySetup,
+                            onOpen = onOpenEmergency,
+                        )
+                    } else {
+                        NavigationRow(
+                            title = stringResource(R.string.settings_emergency_title),
+                            description = stringResource(R.string.settings_emergency_disabled) +
+                                "\n" + stringResource(R.string.settings_emergency_desc),
+                            onClick = onOpenEmergencySetup,
+                        )
+                    }
                 }
             }
 
@@ -2162,6 +2179,134 @@ private fun SafetyCallArmedRecap(
                 modifier = Modifier.weight(1f),
             ) {
                 Text(stringResource(R.string.settings_safety_call_armed_im_ok_short))
+            }
+        }
+    }
+}
+
+/**
+ * v1.10.0 — Récap visuel d'un Mode urgence armé, affiché dans Settings →
+ * section Mode urgence à la place du `NavigationRow` quand `enabled=true`.
+ * Pendant exact de [SafetyCallArmedRecap] pour cohérence visuelle.
+ *
+ * Affiche :
+ *  - Chip "Armé" coloré (`primary` brand-blue) avec icône WarningAmber
+ *  - Modèle de message choisi (NEED_HELP / DANGER / DISCREET)
+ *  - Géoloc incluse oui/non
+ *  - Liste des contacts (réutilise la liste Safety Call)
+ *  - 2 actions : "Modifier" (→ setup) + "Ouvrir" (→ EmergencyScreen pour
+ *    accéder au bouton URGENCE hold 3 s)
+ *
+ * **Note d'UX** : pas de bouton "trigger" ici car l'écran Settings est
+ * la mauvaise surface pour un trigger d'urgence (parcours mental "je
+ * configure" vs "j'ai besoin"). Le bouton URGENCE rouge vit uniquement
+ * dans [com.filestech.sms.ui.screens.emergency.EmergencyScreen].
+ */
+@Composable
+private fun EmergencyArmedRecap(
+    config: com.filestech.sms.domain.emergency.EmergencyConfig,
+    contacts: List<com.filestech.sms.domain.safetycall.SafetyCallContact>,
+    onModify: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    val templateLabel = stringResource(
+        when (config.template) {
+            com.filestech.sms.domain.emergency.EmergencyTemplate.NEED_HELP ->
+                R.string.emergency_setup_template_need_help
+            com.filestech.sms.domain.emergency.EmergencyTemplate.DANGER ->
+                R.string.emergency_setup_template_danger
+            com.filestech.sms.domain.emergency.EmergencyTemplate.DISCREET ->
+                R.string.emergency_setup_template_discreet
+        },
+    )
+    val locationLabel = stringResource(
+        if (config.includeLocation) R.string.settings_emergency_armed_location
+        else R.string.settings_emergency_armed_no_location,
+    )
+    val contactsLabel = run {
+        val labels = contacts.map { c -> c.sanitizedDisplayName() ?: c.phoneNumber }
+        when {
+            labels.isEmpty() -> stringResource(R.string.settings_emergency_armed_no_contacts)
+            labels.size <= 2 -> stringResource(
+                R.string.settings_emergency_armed_contacts_one,
+                labels.joinToString(", "),
+            )
+            else -> stringResource(
+                R.string.settings_emergency_armed_contacts_many,
+                labels.take(2).joinToString(", "),
+                labels.size - 2,
+            )
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        // Header : titre + chip "Armé" identique à SafetyCallArmedRecap.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.settings_emergency_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.WarningAmber,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_emergency_armed_chip),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = stringResource(R.string.settings_emergency_armed_template, templateLabel),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = locationLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = contactsLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.size(12.dp))
+        // 2 actions côte à côte (mêmes types que SafetyCallArmedRecap) :
+        //  - "Modifier" → OutlinedButton (secondaire)
+        //  - "Ouvrir" → Button filled `primary` (BrandBlue) car c'est
+        //    l'action de référence (accéder au bouton URGENCE).
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = onModify,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.settings_emergency_armed_modify))
+            }
+            Button(
+                onClick = onOpen,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.settings_emergency_armed_open))
             }
         }
     }

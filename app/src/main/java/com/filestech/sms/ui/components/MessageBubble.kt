@@ -74,6 +74,22 @@ fun MessageBubble(
      * que sur la 1ʳᵉ bulle d'un burst pour ne pas surcharger visuellement.
      */
     senderLabel: String? = null,
+    /**
+     * v1.11.0 — Sujet 5 apparence : couleur ARGB personnalisée pour la bulle
+     * SORTANTE de cette conversation. `null` = utilise `cs.primary` (bleu
+     * marque par défaut). Sélectionnée par l'user dans `AppearanceDialog`
+     * parmi [com.filestech.sms.ui.theme.BubbleColorPalette.OPTIONS]
+     * (palette WCAG-safe). Aucun effet sur les bulles entrantes.
+     */
+    customBubbleColorArgb: Int? = null,
+    /**
+     * v1.11.0 — Sujet 3 anti-smishing : raisons détectées sur le corps de ce
+     * message. Si non-vide ET message entrant, affiche un
+     * [com.filestech.sms.ui.components.SmishingBanner] rouge sous la bulle.
+     * Calculé en amont (ThreadScreen via [com.filestech.sms.domain.smishing
+     * .SmishingDetector]) — MessageBubble ne fait que le rendu.
+     */
+    smishingReasons: List<com.filestech.sms.domain.smishing.SmishingReason> = emptyList(),
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
@@ -81,12 +97,22 @@ fun MessageBubble(
     // Outgoing bubbles use a subtle vertical gradient on top of the primary color — gives the
     // bubble depth without committing to a hard shadow or a custom drawable. Incoming bubbles
     // stay flat surfaceContainerHigh so reading them remains restful.
+    // v1.11.0 — Sujet 5 apparence : si l'user a customisé la couleur de bulle
+    // pour cette conversation, on substitue à `cs.primary`. Texte blanc dans
+    // tous les cas (la palette est calibrée pour le contraste).
+    val outgoingBaseColor = customBubbleColorArgb?.let { androidx.compose.ui.graphics.Color(it) }
+        ?: cs.primary
     val outgoingBrush = Brush.linearGradient(
-        colors = listOf(cs.primary, cs.primary.copy(alpha = 0.88f)),
+        colors = listOf(outgoingBaseColor, outgoingBaseColor.copy(alpha = 0.88f)),
         start = Offset(0f, 0f),
         end = Offset(0f, Float.POSITIVE_INFINITY),
     )
-    val textColor = if (isOut) cs.onPrimary else cs.onSurface
+    val textColor = if (isOut) {
+        // Si couleur custom → blanc forcé (palette WCAG-safe contre blanc).
+        // Sinon `onPrimary` du thème (= blanc dans les schemes par défaut).
+        if (customBubbleColorArgb != null) androidx.compose.ui.graphics.Color.White
+        else cs.onPrimary
+    } else cs.onSurface
 
     val shape = bubbleShape(isOut, burstPosition)
 
@@ -206,6 +232,13 @@ fun MessageBubble(
                 onDelete = onDelete,
             )
         }
+    }
+    // v1.11.0 — Sujet 3 anti-smishing : bandeau rouge sous la bulle entrante
+    // si le SmishingDetector a flaggé le contenu. Tap → dialog "Pourquoi".
+    // N'affecte JAMAIS les bulles sortantes (l'user fait confiance à ce
+    // qu'il écrit). Full-width pour maximiser la visibilité.
+    if (!isOut && smishingReasons.isNotEmpty()) {
+        SmishingBanner(reasons = smishingReasons)
     }
     if (showTimestamp || message.status == Message.Status.FAILED) {
         val label = when (message.status) {

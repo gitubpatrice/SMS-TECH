@@ -289,12 +289,23 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE telephony_uri IN (:uris)")
     suspend fun deleteByTelephonyUris(uris: List<String>): Int
 
-    /** FTS search across body + address. Returns matching message ids ordered by relevance. */
+    /**
+     * FTS search across body + address. Returns matching message ids ordered by relevance.
+     *
+     * v1.11.0 audit SEC-V1 — JOIN sur `conversations` avec filtre `in_vault = 0`
+     * pour ne PAS exposer les messages d'une conv déplacée dans le coffre.
+     * Sans ce filtre, l'utilisateur (ou un agresseur en PanicDecoy) pourrait
+     * voir le body d'un message vault dans les résultats de recherche, alors
+     * que la conv parente est cachée de la liste. L'index FTS reste indexé
+     * pour tous les messages (refacto FTS architectural différé v1.12.x).
+     */
     @Query(
         """
         SELECT m.* FROM messages m
         JOIN messages_fts ON messages_fts.rowid = m.id
+        JOIN conversations c ON c.id = m.conversation_id
         WHERE messages_fts MATCH :query
+          AND c.in_vault = 0
         ORDER BY m.date DESC
         LIMIT :limit
         """,

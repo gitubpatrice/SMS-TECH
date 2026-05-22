@@ -585,19 +585,19 @@ private data class Feature(val icon: ImageVector, val label: String, val desc: S
 
 private val FEATURES = listOf(
     Feature(Icons.Outlined.ChatBubbleOutline, "SMS & MMS", "App SMS par défaut Android 8 → 15+. Import historique complet, sans duplication."),
-    Feature(Icons.Outlined.Mic, "Messages vocaux", "Push-to-talk type Google Messages. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR."),
+    Feature(Icons.Outlined.Mic, "Messages vocaux", "Push-to-talk en MMS. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR."),
     Feature(Icons.Outlined.Security, "Coffre chiffré", "Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android."),
     Feature(Icons.Outlined.Shield, "Code panique", "Second code qui ouvre l'app en mode leurre — coffre invisible et inaccessible."),
     Feature(Icons.Outlined.Fingerprint, "Biométrie", "Empreinte ou visage pour déverrouiller, avec PIN de secours obligatoire."),
     Feature(Icons.AutoMirrored.Outlined.Reply, "Réponse contextuelle", "Mini-cartouche au-dessus du composer + bulle réponse avec quote dans le thread."),
-    Feature(Icons.Outlined.Translate, "Traduction locale", "Modèles ML Kit on-device (~30 Mo par paire). Aucun texte n'est envoyé sur le réseau."),
+    Feature(Icons.Outlined.Translate, "Traduction déléguée", "Long-press → \"Traduire\" délègue à l'app de traduction installée (Google Translate, DeepL, Aves Translate FLOSS …) via Intent système. Aucun modèle bundlé."),
     Feature(Icons.Outlined.Block, "Blocage synchronisé", "Import auto des numéros bloqués Téléphone / Samsung Messages. Purge rétroactive."),
     Feature(Icons.Outlined.Search, "Recherche FTS", "Plein texte SQLite FTS4 sur corps, numéros et noms de contact."),
     Feature(Icons.Outlined.PictureAsPdf, "Export PDF", "Exporter une conversation en PDF (date, expéditeur, corps) pour archive ou preuve."),
     Feature(Icons.Outlined.Backup, "Backup chiffré", "Sauvegarde locale AES-256-GCM via passphrase distincte du PIN."),
     Feature(Icons.Outlined.DarkMode, "Thèmes", "Clair, sombre, AMOLED, Dark Tech (slate-blue + accent bleu). Coins arrondis personnalisables."),
     Feature(Icons.Outlined.GraphicEq, "UI fluide", "Compose + recomposition isolée par bulle. Tri des conversations dans le menu 3 points."),
-    Feature(Icons.Outlined.QuestionAnswer, "Zéro pub, zéro traceur", "Aucune analytics. Seule connexion réseau : ton MMSC opérateur et ML Kit pour la traduction."),
+    Feature(Icons.Outlined.QuestionAnswer, "Zéro pub, zéro traceur", "Aucune analytics. Seule connexion réseau : le MMSC de l'opérateur pour le transport MMS."),
 )
 
 private data class HelpRecipe(val title: String, val steps: List<String>)
@@ -638,8 +638,9 @@ private val HELP_RECIPES = listOf(
         title = "Traduire un message reçu",
         steps = listOf(
             "Long press sur la bulle → \"Traduire\"",
-            "Si le modèle ML Kit n'est pas téléchargé, ça se fait en ~30 s",
-            "Re-tap dessus pour masquer la traduction",
+            "Un sélecteur s'ouvre avec toutes les apps de traduction installées",
+            "Choisis Google Translate, DeepL, Aves Translate (FLOSS) ou autre",
+            "Si aucune n'est installée, un message t'invite à en installer une",
         ),
     ),
     HelpRecipe(

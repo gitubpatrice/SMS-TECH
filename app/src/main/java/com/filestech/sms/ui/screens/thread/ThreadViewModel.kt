@@ -64,6 +64,7 @@ class ThreadViewModel @Inject constructor(
     private val incomingShare: com.filestech.sms.system.share.IncomingShareHolder,
     private val activeConversationTracker: ActiveConversationTracker,
     @ApplicationContext private val context: android.content.Context,
+    @com.filestech.sms.di.IoDispatcher private val io: kotlinx.coroutines.CoroutineDispatcher,
 ) : ViewModel() {
 
     /** Live playback state, surfaced for the composer's preview UI. */
@@ -135,6 +136,20 @@ class ThreadViewModel @Inject constructor(
         val pendingAttachments: List<PendingAttachment> = emptyList(),
         /** Voice MMS staged for confirmation (toggle "Confirmer avant envoi" ON). */
         val pendingVoiceConfirm: Boolean = false,
+        /**
+         * v1.11.0 — Sujet 3 anti-smishing : toggle Settings exposé dans le state
+         * pour gater l'application de [com.filestech.sms.domain.smishing.SmishingDetector]
+         * sur les bulles entrantes côté [com.filestech.sms.ui.screens.thread.ThreadScreen].
+         */
+        val smishingDetectionEnabled: Boolean = true,
+        /**
+         * v1.11.0 audit P1 — verdicts smishing calculés côté ViewModel sur IO
+         * dispatcher (ne plus bloquer le main thread dans `remember` côté
+         * ThreadScreen). Clef = message.id, valeur = liste des raisons
+         * détectées (vide si non-suspect ou sortant). Mis à jour quand
+         * `messages` change ou que le toggle bascule.
+         */
+        val smishingVerdicts: Map<Long, List<com.filestech.sms.domain.smishing.SmishingReason>> = emptyMap(),
     )
 
     /** Staged attachment awaiting user confirmation in the composer. */
@@ -198,6 +213,46 @@ class ThreadViewModel @Inject constructor(
      */
     private val cachedSettings: StateFlow<AppSettings> get() = settings.state
 
+    /**
+     * v1.11.0 audit P1 — recompute smishing verdicts sur IO dispatcher. Le
+     * calcul des regex + Levenshtein peut prendre 3-15 ms par message sur
+     * low-end ; sur thread 200 messages cela bloquerait le main thread
+     * pendant 600 ms à 3 s en première composition. Ici on calcule sur IO,
+     * on émet une seule fois le Map résultant — la recomposition Compose
+     * sur changement de StateFlow ne fait que lire un Map (O(1) par bulle).
+     *
+     * Optimisation cache : on PRÉSERVE les verdicts déjà calculés pour les
+     * mêmes message.id si le body n'a pas changé (rare en SMS — un message
+     * ne change pas son contenu). En pratique on récalcule seulement les
+     * nouveaux IDs apparus dans `msgs`, ce qui rend le coût O(delta).
+     */
+    // v1.11.0 audit SEC-V6 — job courant annulé avant re-lancement pour
+    // éviter qu'un toggle rapide ON→OFF→ON ne produise deux compute IO
+    // concurrents avec un snapshot stale → Map smishingVerdicts incohérent.
+    private var smishingJob: Job? = null
+
+    private fun recomputeSmishingVerdicts(
+        msgs: List<com.filestech.sms.domain.model.Message>,
+    ) {
+        smishingJob?.cancel()
+        smishingJob = viewModelScope.launch(io) {
+            val previous = _state.value.smishingVerdicts
+            val verdicts = msgs.asSequence()
+                .filter { it.isIncoming && it.body.isNotBlank() }
+                .associate { msg ->
+                    val cached = previous[msg.id]
+                    val reasons = cached ?: com.filestech.sms.domain.smishing.SmishingDetector
+                        .analyze(msg.body)
+                        .takeIf { it.shouldWarn }
+                        ?.reasons
+                        ?: emptyList()
+                    msg.id to reasons
+                }
+                .filterValues { it.isNotEmpty() } // ne stocke que les positifs
+            _state.update { it.copy(smishingVerdicts = verdicts) }
+        }
+    }
+
     init {
         // v1.3.9 — déclare la conversation comme "active foreground" pour que
         // `IncomingMessageNotifier` puisse poser un `setTimeoutAfter` court (~1500 ms)
@@ -205,6 +260,24 @@ class ThreadViewModel @Inject constructor(
         // heads-up jouent (signal sonore préservé), puis Android cancel la notif
         // automatiquement — l'utilisateur n'a pas à la dismiss à la main.
         activeConversationTracker.setActive(conversationId)
+
+        // v1.11.0 — Sujet 3 anti-smishing : propage le toggle Settings + RE-
+        // CALCULE les verdicts pour les messages quand toggle bascule. Une
+        // seule collect sur `settings.state` (hot StateFlow Eagerly), zéro
+        // coût supplémentaire en lecture.
+        viewModelScope.launch {
+            settings.state.collect { snapshot ->
+                val enabled = snapshot.security.smishingDetectionEnabled
+                _state.update { it.copy(smishingDetectionEnabled = enabled) }
+                // Audit P1 : recompute sur IO lorsque le toggle change.
+                if (enabled) {
+                    recomputeSmishingVerdicts(_state.value.messages)
+                } else {
+                    _state.update { it.copy(smishingVerdicts = emptyMap()) }
+                }
+            }
+        }
+
 
         // Audit Q3: ONE observation of the conversation row (seeds the draft on first emission
         // only — subsequent emissions don't overwrite what the user is typing).
@@ -249,6 +322,13 @@ class ThreadViewModel @Inject constructor(
                     firstMessageAt = msgs.minOfOrNull { m -> m.date },
                     lastMessageAt = msgs.maxOfOrNull { m -> m.date },
                 )
+            }
+            // v1.11.0 audit P1 — recompute les verdicts smishing sur IO
+            // dispatcher quand la liste de messages change (ajout, suppression,
+            // edit). Le calcul reste limité aux INCOMING messages qui n'ont
+            // pas encore de verdict cached → coût O(delta) en pratique.
+            if (_state.value.smishingDetectionEnabled) {
+                recomputeSmishingVerdicts(msgs)
             }
             if (msgs.isNotEmpty() && !markedReadAtLeastOnce) {
                 markedReadAtLeastOnce = true
@@ -775,6 +855,21 @@ class ThreadViewModel @Inject constructor(
 
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch { repo.deleteMessage(messageId) }
+    }
+
+    /**
+     * v1.11.0 — Sujet 5 apparence : couleur bulle sortante + avatar custom
+     * (URI `content://` persistée par l'appelant via
+     * `takePersistableUriPermission`). `null` sur un argument = reset à la
+     * valeur par défaut.
+     */
+    fun setAppearance(bubbleColorArgb: Int?, avatarUri: String?) {
+        viewModelScope.launch {
+            toggleConvState.setAppearance(conversationId, bubbleColorArgb, avatarUri)
+            _events.tryEmit(
+                Event.ShowSnackbar(context.getString(com.filestech.sms.R.string.appearance_saved)),
+            )
+        }
     }
 
     // ──────────────────────────── Voice MMS composer ────────────────────────────

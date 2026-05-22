@@ -1,0 +1,11 @@
+v1.11.0 — Vault + Anti-smishing + Appearance
+
+• Vault v2: long-press list to move a conv,
+  BiometricPrompt on entry, notif gated
+• Local anti-smishing: "⚠️ Possibly fraudulent"
+  banner (short URLs, urgency, premium numbers,
+  lookalike domains), 100% offline, opt-in
+• Per-conv appearance: bubble color + avatar
+• Avatar palette extended 7→14 shades
+• Visual "Armed" recap for Emergency mode
+• 7 security audit fixes (IDOR FTS, vault race…)

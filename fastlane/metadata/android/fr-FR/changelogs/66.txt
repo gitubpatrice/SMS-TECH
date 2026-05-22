@@ -1,0 +1,11 @@
+v1.11.0 — Coffre + Anti-smishing + Apparence
+
+• Coffre v2 : long-press liste pour déplacer une
+  conv, BiometricPrompt à l'entrée, notif gates
+• Anti-smishing local : bandeau "⚠️ Possiblement
+  frauduleux" (URL raccourcies, urgence, surtaxés,
+  domaines usurpés), 100% offline, opt-in
+• Apparence par conv : couleur bulle + avatar
+• Palette avatars étendue 7→14 nuances
+• Récap visuel "Armé" Mode urgence
+• 7 fixes audit sécu (IDOR FTS, race coffre, etc.)

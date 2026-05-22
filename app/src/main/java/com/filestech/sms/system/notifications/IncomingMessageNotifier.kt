@@ -18,11 +18,13 @@ import com.filestech.sms.R
 import com.filestech.sms.data.local.datastore.NotificationStyle
 import com.filestech.sms.data.local.datastore.PreviewMode
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.repository.ContactRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +34,7 @@ class IncomingMessageNotifier @Inject constructor(
     private val settings: SettingsRepository,
     private val contacts: ContactRepository,
     private val activeConversationTracker: ActiveConversationTracker,
+    private val conversationDao: ConversationDao,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -41,6 +44,25 @@ class IncomingMessageNotifier @Inject constructor(
         messageId: Long,
         conversationId: Long,
     ) = withContext(io) {
+        // v1.11.0 — Vault gate. Si la conversation est dans le coffre, on
+        // n'affiche AUCUNE notification — ni nom, ni preview, ni heads-up,
+        // ni icône silencieuse. Cohérent avec la promesse Vault "les conv
+        // déplacées disparaissent ET des notifications". Le badge unread
+        // côté Vault reste comptabilisé (via Room) pour le récap à l'ouverture
+        // explicite du coffre.
+        //
+        // Lecture synchrone Room (~1-3 ms) acceptable sur SMS entrant — bien
+        // moins coûteuse qu'un round-trip DataStore (10-15 ms) qu'on évite
+        // déjà via `settings.state.value` ci-dessous.
+        val inVault = runCatching { conversationDao.findById(conversationId)?.inVault == true }
+            .onFailure { Timber.w(it, "IncomingMessageNotifier: inVault lookup failed, defaulting to false") }
+            .getOrDefault(false)
+        // v1.11.0 audit S3 — pas de log explicite "conv #N suppressed in vault"
+        // pour éviter qu'un ReleaseTree mal configuré (Crashlytics bêta, OEM
+        // logcat persistant) corrèle le conversationId avec le fait qu'il
+        // s'agit d'une conv vault. Le silence du return suffit côté debug.
+        if (inVault) return@withContext
+
         // Resolve the contact name so the notification shows "Marie" instead of "+33612345678".
         // Falls back gracefully if READ_CONTACTS is denied or no match exists.
         val senderName = runCatching { contacts.lookupByPhone(address)?.displayName }.getOrNull()

@@ -102,6 +102,15 @@ interface ConversationDao {
     @Query("UPDATE conversations SET draft = :draft WHERE id = :id")
     suspend fun setDraft(id: Long, draft: String?)
 
+    /**
+     * v1.11.0 — Apparence par contact. `bubbleColorArgb` = null pour reset au
+     * thème, sinon ARGB Int issu de la palette WCAG-safe ([BubbleColorPalette]).
+     * `avatarUri` = null pour reset au fallback contact natif, sinon URI
+     * `content://` persistée via [takePersistableUriPermission].
+     */
+    @Query("UPDATE conversations SET bubble_color_argb = :bubbleColorArgb, avatar_uri = :avatarUri WHERE id = :id")
+    suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?)
+
     @Query("UPDATE conversations SET unread_count = 0 WHERE id = :id")
     suspend fun clearUnread(id: Long)
 

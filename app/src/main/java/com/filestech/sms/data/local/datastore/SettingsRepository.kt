@@ -152,6 +152,9 @@ class SettingsRepository @Inject constructor(
                     lastTriggeredAt = p[K.emergencyLastTriggeredAt] ?: 0L,
                     monotonicLastTriggeredAt = p[K.emergencyMonotonicLastTriggeredAt] ?: 0L,
                 ),
+                // v1.11.0 — Sujet 3 anti-smishing. Défaut `true` (opt-in
+                // sécurité, désactivable par l'user dans Settings).
+                smishingDetectionEnabled = p[K.smishingDetectionEnabled] ?: true,
             ),
             blocking = BlockingSettings(
                 blockUnknown = p[K.blockUnknown] ?: false,
@@ -241,6 +244,8 @@ class SettingsRepository @Inject constructor(
         this[K.emergencyIncludeLocation] = s.security.emergency.includeLocation
         this[K.emergencyLastTriggeredAt] = s.security.emergency.lastTriggeredAt
         this[K.emergencyMonotonicLastTriggeredAt] = s.security.emergency.monotonicLastTriggeredAt
+        // v1.11.0 — Sujet 3 anti-smishing.
+        this[K.smishingDetectionEnabled] = s.security.smishingDetectionEnabled
 
         this[K.blockUnknown] = s.blocking.blockUnknown
         // v1.3.5 G6 + audit F3 — `blockShortCodes` retiré (champ fantôme, voir
@@ -319,6 +324,8 @@ class SettingsRepository @Inject constructor(
         // v1.10.0 audit S2 — snapshot monotonic du dernier trigger urgence.
         val emergencyMonotonicLastTriggeredAt =
             longPreferencesKey("security.emergency.monotonicLastTriggeredAt")
+        // v1.11.0 — Sujet 3 anti-smishing.
+        val smishingDetectionEnabled = booleanPreferencesKey("security.smishingDetectionEnabled")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")

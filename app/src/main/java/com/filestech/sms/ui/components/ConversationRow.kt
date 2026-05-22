@@ -86,7 +86,9 @@ fun ConversationRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (showAvatars) {
-                Avatar(label = title)
+                // v1.11.0 — Sujet 5 : avatar custom optionnel posé via
+                // AppearanceDialog. `null` = fallback initiales + gradient marque.
+                Avatar(label = title, customUri = conversation.avatarUri)
                 Spacer(Modifier.width(12.dp))
             }
             Column(modifier = Modifier.weight(1f)) {

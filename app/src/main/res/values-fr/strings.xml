@@ -186,6 +186,45 @@
     <string name="vault_explanation_body">Les conversations placées ici sont masquées de la liste principale. Elles restent sur votre appareil (chiffrées via SQLCipher). À noter : le SMS n\'est pas chiffré sur le réseau opérateur. Pour un chiffrement de bout en bout, utilisez Signal ou Matrix.</string>
     <string name="vault_move_in">Déplacer dans le coffre</string>
     <string name="vault_move_out">Sortir du coffre</string>
+    <!-- v1.11.0 — feedback snackbar (Coffre polish) -->
+    <string name="vault_move_in_done">Conversation déplacée dans le coffre</string>
+    <string name="vault_move_in_failed">Impossible de déplacer cette conversation</string>
+    <string name="vault_move_out_done">Conversation sortie du coffre</string>
+    <string name="vault_move_out_failed">Impossible de déplacer cette conversation</string>
+    <string name="vault_actions_title">Actions du coffre</string>
+    <string name="vault_biometric_title">Déverrouiller le coffre</string>
+    <string name="vault_biometric_subtitle">Confirmez votre identité pour ouvrir le dossier privé.</string>
+    <string name="vault_biometric_pending">En attente de l\'empreinte…</string>
+    <!-- v1.11.0 — Sujet 5 apparence par contact -->
+    <string name="thread_overflow_appearance">Apparence…</string>
+    <string name="appearance_dialog_title">Apparence de la conversation</string>
+    <string name="appearance_section_bubble_color">Couleur de bulle sortante</string>
+    <string name="appearance_section_avatar">Avatar du contact</string>
+    <string name="appearance_pick_avatar">Choisir depuis la galerie</string>
+    <string name="appearance_reset_avatar">Utiliser l\'avatar par défaut</string>
+    <string name="appearance_saved">Apparence mise à jour</string>
+    <!-- v1.11.0 — Sujet 3 anti-smishing -->
+    <string name="settings_smishing_detection">Détection d\'arnaque (hors-ligne)</string>
+    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). 100 % local, aucun cloud. Peut produire des faux positifs.</string>
+    <string name="smishing_banner_title">⚠️ Possiblement frauduleux</string>
+    <string name="smishing_banner_subtitle">Toucher pour voir pourquoi</string>
+    <string name="smishing_dialog_title">Pourquoi cet avertissement ?</string>
+    <string name="smishing_dialog_intro">SMS Tech a détecté les signaux suspects ci-dessous dans ce message. Aucun contenu n\'a été envoyé ailleurs — tout est calculé localement.</string>
+    <string name="smishing_reason_url_shortener">URL raccourcie (bit.ly, t.co, tinyurl…). Les raccourcisseurs peuvent masquer la vraie destination — vérifiez avant de cliquer.</string>
+    <string name="smishing_reason_urgency">Mots d\'urgence ou de pression (urgent, expire, cliquez ici…). Tactique classique d\'ingénierie sociale pour pousser à la panique.</string>
+    <string name="smishing_reason_premium">Numéro surtaxé (3xxx, 0899xxx, 081x…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
+    <string name="smishing_reason_typosquatting">Domaine ressemblant à un officiel (ex. « 1mpots.gouv.fr » au lieu de « impots.gouv.fr »). Saisissez toujours les adresses officielles à la main.</string>
+    <string name="smishing_dialog_dismiss">OK</string>
+    <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
+    <string name="appearance_color_brand_blue">Bleu marque (par défaut)</string>
+    <string name="appearance_color_forest_green">Vert forêt</string>
+    <string name="appearance_color_deep_purple">Violet profond</string>
+    <string name="appearance_color_brand_red">Rouge marque</string>
+    <string name="appearance_color_burnt_orange">Orange brûlé</string>
+    <string name="appearance_color_slate_blue_grey">Bleu-gris ardoise</string>
+    <string name="appearance_color_deep_indigo">Indigo profond</string>
+    <string name="appearance_color_dark_teal">Teal foncé</string>
+    <string name="appearance_color_selected">sélectionnée</string>
 
     <!-- Backup / restore -->
     <string name="backup_explainer">La sauvegarde chiffrée utilise AES-256-GCM et PBKDF2-HMAC-SHA512. Choisissez une phrase de passe solide — sans elle le fichier est irrécupérable.</string>
@@ -334,9 +373,9 @@
     <string name="safety_call_setup_save">Enregistrer</string>
     <string name="safety_call_setup_save_validation_no_contacts">Ajoutez au moins un contact avant d\'activer.</string>
     <string name="safety_call_setup_save_validation_custom_empty">Le message personnalisé ne peut pas être vide.</string>
-    <string name="safety_call_warning_title">SMS Tech — confirme que tu vas bien</string>
-    <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Tape pour réinitialiser le minuteur.</string>
-    <string name="safety_call_warning_body_imminent">Le Safety call se déclenchera dans moins de 2 heures. Tape pour réinitialiser maintenant.</string>
+    <string name="safety_call_warning_title">SMS Tech — confirmez que vous allez bien</string>
+    <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Appuyez pour réinitialiser le minuteur.</string>
+    <string name="safety_call_warning_body_imminent">Le Safety call se déclenchera dans moins de 2 heures. Appuyez pour réinitialiser maintenant.</string>
     <!-- v1.10.0 — Mode urgence (actif, déclenché par l\'user via hold 3s) -->
     <string name="settings_section_emergency">Mode urgence</string>
     <string name="settings_emergency_title">Mode urgence</string>
@@ -344,6 +383,16 @@
     <string name="settings_emergency_disabled">Désactivé</string>
     <string name="settings_emergency_enabled">Armé</string>
     <string name="settings_emergency_open">Ouvrir l\'urgence</string>
+    <!-- v1.10.0+ — Récap Mode urgence armé (miroir de safety_call_armed_*) -->
+    <string name="settings_emergency_armed_chip">Armé</string>
+    <string name="settings_emergency_armed_template">Modèle : %1$s</string>
+    <string name="settings_emergency_armed_location">Position GPS incluse</string>
+    <string name="settings_emergency_armed_no_location">Sans position GPS</string>
+    <string name="settings_emergency_armed_contacts_one">Contacts : %1$s</string>
+    <string name="settings_emergency_armed_contacts_many">Contacts : %1$s +%2$d autres</string>
+    <string name="settings_emergency_armed_no_contacts">Aucun contact configuré</string>
+    <string name="settings_emergency_armed_modify">Modifier</string>
+    <string name="settings_emergency_armed_open">Ouvrir</string>
     <string name="emergency_title">Mode urgence</string>
     <string name="emergency_setup_title">Réglages du mode urgence</string>
     <string name="emergency_button_label">URGENCE</string>
@@ -384,7 +433,7 @@
     <string name="action_react">Réagir</string>
     <string name="reaction_picker_other">Autre emoji</string>
     <string name="reaction_picker_other_title">Emoji personnalisé</string>
-    <string name="reaction_picker_other_body">Tape ou colle un emoji</string>
+    <string name="reaction_picker_other_body">Tapez ou collez un emoji</string>
     <string name="reaction_picker_other_hint">😀</string>
     <!-- v1.5.0 — bouton valider du picker multi-emoji -->
     <string name="reaction_picker_validate_empty">Sélectionnez un ou plusieurs emojis</string>

@@ -15,6 +15,10 @@ data class Conversation(
     val muted: Boolean,
     val inVault: Boolean,
     val draft: String?,
+    /** v1.11.0 — couleur ARGB de la bulle sortante. `null` = bleu marque par défaut. */
+    val bubbleColorArgb: Int? = null,
+    /** v1.11.0 — URI `content://` d'un avatar custom choisi par l'user. `null` = fallback contact natif. */
+    val avatarUri: String? = null,
 ) {
     val isGroup: Boolean get() = addresses.size > 1
     val firstAddress: PhoneAddress? get() = addresses.firstOrNull()
@@ -33,4 +37,6 @@ fun ConversationEntity.toDomain(): Conversation = Conversation(
     muted = muted,
     inVault = inVault,
     draft = draft,
+    bubbleColorArgb = bubbleColorArgb,
+    avatarUri = avatarUri,
 )

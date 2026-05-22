@@ -193,6 +193,20 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun setMuted(id: Long, muted: Boolean) = withContext(io) { conversationDao.setMuted(id, muted) }
     override suspend fun moveToVault(id: Long, inVault: Boolean) = withContext(io) { conversationDao.setInVault(id, inVault) }
     override suspend fun setDraft(id: Long, draft: String?) = withContext(io) { conversationDao.setDraft(id, draft) }
+    override suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?) =
+        withContext(io) {
+            // v1.11.0 audit S5 — whitelist `content://` pour avatar_uri.
+            // PickVisualMedia ne retourne que ce scheme par contrat Android,
+            // mais on défend en profondeur : un bug futur ou un test qui
+            // passerait `file://` ou `http://` serait neutralisé ici (Coil
+            // chargerait sinon depuis fichier local ou réseau → fuite ou
+            // path traversal). null reste valide (= reset).
+            val safeAvatarUri = avatarUri?.takeIf { uri ->
+                val scheme = android.net.Uri.parse(uri).scheme?.lowercase()
+                scheme == "content"
+            }
+            conversationDao.setAppearance(id, bubbleColorArgb, safeAvatarUri)
+        }
     override suspend fun markRead(id: Long) = withContext(io) {
         messageDao.markConversationRead(id)
         conversationDao.clearUnread(id)
@@ -304,7 +318,18 @@ class ConversationRepositoryImpl @Inject constructor(
         // SendReactionUseCase — n'en a pas besoin). Si un futur caller le demande, ajouter
         // un overload `findMessageByIdWithAttachments`. Volontairement minimal pour rester
         // O(1) sur la lecture la plus chaude (chaque tap réaction).
-        messageDao.findById(id)?.toDomain()
+        //
+        // v1.11.0 audit SEC-V1 — guard inVault : ce point d'entrée ne doit
+        // pas exposer un message dont la conversation parente est dans le
+        // coffre. Sans ce guard, un caller futur (deep link, intent,
+        // reaction sur un id résolu via une autre voie) pourrait lire le
+        // body d'un message vault. PanicDecoy a déjà sa propre garde via
+        // `observeOne`/`observeMessages` — celui-ci est complémentaire pour
+        // les chemins suspend non-flow.
+        val entity = messageDao.findById(id) ?: return@withContext null
+        val parent = conversationDao.findById(entity.conversationId)
+        if (parent?.inVault == true) return@withContext null
+        entity.toDomain()
     }
 
     // v1.6.1 (audit QUAL-18) — délégation à la fonction top-level pure

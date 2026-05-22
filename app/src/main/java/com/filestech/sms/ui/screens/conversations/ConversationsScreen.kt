@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
@@ -45,6 +46,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import com.filestech.sms.ui.components.showError
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -148,8 +150,23 @@ fun ConversationsScreen(
     var overflowOpen by remember { mutableStateOf(false) }
     // v1.8.0 — dialog de confirmation pour "Tout marquer comme lu".
     var showMarkAllReadConfirm by remember { mutableStateOf(false) }
+    // v1.11.0 — Snackbar feedback pour les déplacements Vault. Utilise
+    // SmsTechSnackbarHost (bleu marque succès / rouge erreur).
+    val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                ConversationsViewModel.Event.MovedToVault ->
+                    snackbarHost.showSnackbar(ctx.getString(R.string.vault_move_in_done))
+                ConversationsViewModel.Event.MoveToVaultFailed ->
+                    snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { com.filestech.sms.ui.components.SmsTechSnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
                 title = {
@@ -335,6 +352,13 @@ fun ConversationsScreen(
                             onOpenThread = { onOpenThread(conv.id) },
                             onDelete = { viewModel.delete(conv.id) },
                             onBlock = { viewModel.block(conv) },
+                            // v1.11.0 — Trou #2 Vault polish : callback passé
+                            // UNIQUEMENT hors PanicDecoy. L'item de menu n'apparaît
+                            // donc pas en session decoy (cohérent avec masquage
+                            // de l'icône cadenas top-bar).
+                            onMoveToVault = if (state.isPanicDecoy) null else {
+                                { viewModel.moveConversationToVault(conv.id) }
+                            },
                         )
                         HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
                     }
@@ -452,6 +476,7 @@ private fun SwipeableConversationRow(
     onOpenThread: () -> Unit,
     onDelete: () -> Unit,
     onBlock: () -> Unit,
+    onMoveToVault: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -538,6 +563,14 @@ private fun SwipeableConversationRow(
                 actionsSheetOpen = false
                 pendingDelete = true
             },
+            // v1.11.0 — null en PanicDecoy (le parent ne passe pas le callback)
+            // → l'item de menu "Déplacer vers le coffre" n'apparaît pas.
+            onMoveToVaultRequested = onMoveToVault?.let { handler ->
+                {
+                    actionsSheetOpen = false
+                    handler()
+                }
+            },
         )
     }
 
@@ -611,6 +644,7 @@ private fun ConversationActionsSheet(
     onDismiss: () -> Unit,
     onBlockRequested: () -> Unit,
     onDeleteRequested: () -> Unit,
+    onMoveToVaultRequested: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -630,6 +664,18 @@ private fun ConversationActionsSheet(
                 color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
             )
+            // v1.11.0 — Trou #2 Vault polish : action "Déplacer vers le coffre"
+            // exposée dans le menu long-press. Visible UNIQUEMENT hors PanicDecoy
+            // (le caller passe `null` en decoy pour ne pas révéler l'existence du
+            // coffre à un agresseur — défense en profondeur sur le guard VaultManager
+            // qui refuse aussi côté domain).
+            if (onMoveToVaultRequested != null) {
+                androidx.compose.material3.ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                    headlineContent = { Text(stringResource(R.string.vault_move_in)) },
+                    modifier = Modifier.clickable(onClick = onMoveToVaultRequested),
+                )
+            }
             androidx.compose.material3.ListItem(
                 leadingContent = { Icon(Icons.Outlined.Block, contentDescription = null) },
                 headlineContent = { Text(stringResource(R.string.action_block)) },

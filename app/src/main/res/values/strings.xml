@@ -196,6 +196,45 @@
     <string name="vault_explanation_body">Conversations you place here are hidden from the main list. They remain stored on your device (encrypted with SQLCipher). Note: SMS is unencrypted on the carrier network. For end-to-end encryption use Signal or Matrix.</string>
     <string name="vault_move_in">Move to vault</string>
     <string name="vault_move_out">Move out of vault</string>
+    <!-- v1.11.0 — feedback snackbar (Vault polish) -->
+    <string name="vault_move_in_done">Conversation moved to the vault</string>
+    <string name="vault_move_in_failed">Could not move this conversation</string>
+    <string name="vault_move_out_done">Conversation moved out of the vault</string>
+    <string name="vault_move_out_failed">Could not move this conversation</string>
+    <string name="vault_actions_title">Vault actions</string>
+    <string name="vault_biometric_title">Unlock the vault</string>
+    <string name="vault_biometric_subtitle">Confirm your identity to open the private folder.</string>
+    <string name="vault_biometric_pending">Waiting for fingerprint…</string>
+    <!-- v1.11.0 — Sujet 5 apparence par contact -->
+    <string name="thread_overflow_appearance">Appearance…</string>
+    <string name="appearance_dialog_title">Conversation appearance</string>
+    <string name="appearance_section_bubble_color">Outgoing bubble color</string>
+    <string name="appearance_section_avatar">Contact avatar</string>
+    <string name="appearance_pick_avatar">Choose from gallery</string>
+    <string name="appearance_reset_avatar">Use default avatar</string>
+    <string name="appearance_saved">Appearance updated</string>
+    <!-- v1.11.0 — Sujet 3 anti-smishing -->
+    <string name="settings_smishing_detection">Scam detection (offline)</string>
+    <string name="settings_smishing_detection_desc">Flags suspicious incoming SMS (shortened URLs, urgency wording, premium-rate numbers, lookalike domains). 100% local, no cloud. May produce false positives.</string>
+    <string name="smishing_banner_title">⚠️ Possibly fraudulent</string>
+    <string name="smishing_banner_subtitle">Tap to see why</string>
+    <string name="smishing_dialog_title">Why this warning?</string>
+    <string name="smishing_dialog_intro">SMS Tech detected the following suspicious signals in this message. No SMS content was sent anywhere — everything is computed locally.</string>
+    <string name="smishing_reason_url_shortener">Shortened URL (bit.ly, t.co, tinyurl…). Shorteners can hide the real destination — verify before tapping.</string>
+    <string name="smishing_reason_urgency">Urgency or pressure wording (urgent, expires, click here…). A common social-engineering tactic to trigger panic.</string>
+    <string name="smishing_reason_premium">Premium-rate phone number (3xxx, 0899xxx, 081x…). Calling these numbers is expensive and often part of a scam.</string>
+    <string name="smishing_reason_typosquatting">Look-alike domain (e.g. "1mpots.gouv.fr" instead of "impots.gouv.fr"). Always type official addresses by hand.</string>
+    <string name="smishing_dialog_dismiss">OK</string>
+    <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
+    <string name="appearance_color_brand_blue">Brand blue (default)</string>
+    <string name="appearance_color_forest_green">Forest green</string>
+    <string name="appearance_color_deep_purple">Deep purple</string>
+    <string name="appearance_color_brand_red">Brand red</string>
+    <string name="appearance_color_burnt_orange">Burnt orange</string>
+    <string name="appearance_color_slate_blue_grey">Slate blue-grey</string>
+    <string name="appearance_color_deep_indigo">Deep indigo</string>
+    <string name="appearance_color_dark_teal">Dark teal</string>
+    <string name="appearance_color_selected">selected</string>
 
     <!-- Backup / restore dialogs -->
     <string name="backup_explainer">Encrypted backup uses AES-256-GCM with PBKDF2-HMAC-SHA512 key derivation. Pick a strong passphrase — without it the file cannot be recovered.</string>
@@ -357,6 +396,16 @@
     <string name="settings_emergency_disabled">Disabled</string>
     <string name="settings_emergency_enabled">Armed</string>
     <string name="settings_emergency_open">Open emergency</string>
+    <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
+    <string name="settings_emergency_armed_chip">Armed</string>
+    <string name="settings_emergency_armed_template">Template: %1$s</string>
+    <string name="settings_emergency_armed_location">GPS location included</string>
+    <string name="settings_emergency_armed_no_location">No GPS location</string>
+    <string name="settings_emergency_armed_contacts_one">Contacts: %1$s</string>
+    <string name="settings_emergency_armed_contacts_many">Contacts: %1$s +%2$d more</string>
+    <string name="settings_emergency_armed_no_contacts">No contacts configured</string>
+    <string name="settings_emergency_armed_modify">Edit</string>
+    <string name="settings_emergency_armed_open">Open</string>
     <string name="emergency_title">Emergency mode</string>
     <string name="emergency_setup_title">Emergency mode setup</string>
     <string name="emergency_button_label">EMERGENCY</string>

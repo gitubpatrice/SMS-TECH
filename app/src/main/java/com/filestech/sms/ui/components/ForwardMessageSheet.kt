@@ -145,7 +145,12 @@ fun ForwardMessageSheet(
                             supportingContent = conv.lastMessagePreview
                                 ?.takeIf { it.isNotBlank() }
                                 ?.let { preview -> { Text(preview, maxLines = 1) } },
-                            leadingContent = { Avatar(label = label) },
+                            // v1.11.0 audit C4 — propage avatarUri custom de la
+                            // conversation (Sujet 5 Apparence). Sans ce param, l'user
+                            // voyait des initiales-gradient au lieu de l'avatar
+                            // qu'il a configuré — incohérence visuelle entre
+                            // l'écran principal et le ForwardSheet.
+                            leadingContent = { Avatar(label = label, customUri = conv.avatarUri) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onPickConversation(conv.id) },

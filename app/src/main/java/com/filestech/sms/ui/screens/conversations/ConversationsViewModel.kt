@@ -21,6 +21,8 @@ import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,9 +30,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.filestech.sms.core.result.Outcome
 import javax.inject.Inject
 
 /**
@@ -268,5 +272,30 @@ class ConversationsViewModel @Inject constructor(
             runCatching { blockNumber.invoke(addr.raw, conversation.displayName) }
         }
         runCatching { toggle.delete(conversation.id) }
+    }
+
+    /**
+     * v1.11.0 — déplace la conversation dans le coffre depuis la liste
+     * principale. Délègue à [ToggleConversationStateUseCase.requestMoveToVault]
+     * qui check `AppLockState` (refuse PanicDecoy + Locked, auto-arme
+     * `sessionUnlocked` sinon). Émet un [Event] de résultat pour que l'UI
+     * affiche le snackbar de confirmation ou d'erreur.
+     */
+    fun moveConversationToVault(conversationId: Long) = viewModelScope.launch {
+        val outcome = toggle.requestMoveToVault(conversationId, intoVault = true)
+        _events.trySend(
+            when (outcome) {
+                is Outcome.Success -> Event.MovedToVault
+                is Outcome.Failure -> Event.MoveToVaultFailed
+            },
+        )
+    }
+
+    private val _events = Channel<Event>(Channel.BUFFERED)
+    val events: Flow<Event> = _events.receiveAsFlow()
+
+    sealed interface Event {
+        data object MovedToVault : Event
+        data object MoveToVaultFailed : Event
     }
 }

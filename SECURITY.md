@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.10.0** (2026-05-21)
+Current release : **v1.11.0** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,65 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.10.0 (this release) — Emergency mode + clock-monotonic hardening + refactors
+### v1.11.0 (this release) — Vault polish + Anti-smishing + Appearance + 7 audit fixes
+
+MINOR release fortifiant la feature Vault (3 trous comblés), introduisant un détecteur anti-smishing 100 % offline, et l'apparence personnalisée par conversation (couleur de bulle WCAG-safe + avatar custom).
+
+A pre-release audit (3 axes + deep-dive security final + architecture coherence + i18n) surfaced **7 HIGH and 14 MEDIUM** findings, all fixed before tag :
+
+- **HIGH SEC-V1** — `MessageDao.search` join `conversations` avec filtre `in_vault = 0` ; `ConversationRepositoryImpl.findMessageById` guard `inVault`. Sans ces 2 fixes, la recherche FTS exposait le body des messages vault (IDOR : `1mpots scam` cherché dans la search ramenait les messages vault).
+- **HIGH SEC-V2** — `VaultManager.sessionUnlocked` migré `@Volatile Boolean` → `AtomicBoolean`. Sémantique correcte pour un flag partagé coroutines IO/UI (tearing impossible). Double-check `PanicDecoy` post-suspend dans `requestMoveToVault` (race window fermée).
+- **HIGH SEC-V3** — `AppearanceDialog` conditionne `pickedAvatarUri` au succès de `takePersistableUriPermission`. Sans, une URI révoquée entre pick et take polluait Room en silence (Coil échouait au render).
+- **HIGH P1** — `SmishingDetector.analyze()` déplacé sur IO dispatcher dans `ThreadViewModel.recomputeSmishingVerdicts`, exposé via `Map<Long, List<SmishingReason>>` dans state. Plus de jank 600 ms à 3 s sur thread 200 msgs low-end (Cortex-A53).
+- **HIGH U1** — `ColorChip` accessibilité TalkBack : `contentDescription` + `role = RadioButton` + `selected` semantics + 9 noms de couleurs FR/EN. `FlowRow` pour adaptation petits écrans 320 dp.
+- **HIGH C4** — `ForwardMessageSheet` propage `customUri = conv.avatarUri` au composable `Avatar` (cohérence avec ConversationRow — sinon avatar custom invisible dans le sheet de partage).
+- **HIGH S1** — `VaultScreen.LaunchedEffect(Unit)` (au lieu de `lockMode` comme clef) : empêche un double `BiometricPrompt` empilé sur certains OEM si lockMode change pendant que le prompt est en vol.
+
+#### Vault polish (3 trous comblés)
+
+1. **Notifications gates `inVault`** — `IncomingMessageNotifier.notifyIncoming` injecte `ConversationDao` et early-returns si la conv est dans le coffre. SMS + MMS couverts (1 seul point). Aucune notif, aucun son, aucun badge système ne fuite pour les conv vault.
+2. **UI move-in/move-out** — Long-press conv dans `ConversationsScreen` → ActionsSheet avec "Déplacer vers le coffre" (masqué en PanicDecoy). Long-press conv dans `VaultScreen` → "Sortir du coffre". Strings `vault_move_in/out` (jusque-là orphelines) câblées. Snackbar feedback (bleu marque succès / rouge erreur).
+3. **BiometricPrompt à l'entrée** — Si `lockMode = BIOMETRIC`, prompt à l'entrée VaultScreen comme second-factor. Si refusé/annulé → `onBack()`. Si biométrie indisponible → fallback gracieux à l'entrée directe.
+4. **Nouveau `VaultManager.requestMoveToVault(id, intoVault)`** — wrap pour appels hors-VaultScreen (long-press liste, futur overflow Thread). Refuse `PanicDecoy` + `Locked`, auto-`markUnlocked` sinon. Double-check `PanicDecoy` post-suspend (SEC-V2).
+
+#### Anti-smishing local (Sujet 3)
+
+Détecteur 100 % offline, sans modèle, sans cloud. 4 heuristiques composables :
+- **URL shortener** (17 hosts : bit.ly, t.co, tinyurl, rebrand.ly…)
+- **Mots d'urgence** (~40 patterns FR + EN : urgent, compte bloqué, colis bloqué, click here, impots impayés…)
+- **Numéros surtaxés FR** (regex avec lookaround non-digit : `32xx`-`36xx`, `0899xxxxxx`, `081x/088x/089x`)
+- **Typosquatting de domaines officiels FR** (Levenshtein bornée ≤ 2 sur 28 hosts officiels : impots.gouv.fr, ameli.fr, banques, opérateurs, paypal…)
+
+Seuil par défaut = 2 heuristiques positives (anti faux positif). Cap 1000c sur le body inspecté. Cap 20 URLs + 30 domaines inspectés par body (anti-DoS Levenshtein × matches). Bandeau rouge cliquable dans la bulle SMS entrante → dialog "Pourquoi" listant les raisons localisées. Toggle Settings opt-in par défaut, désactivable.
+
+20 tests garde-régression : cas véritables (colissimo phishing, fake impots, scam Amazon EN) + faux positifs FR officiels (banque, impots, ameli) + edges (vide, body > 1000c, Levenshtein symétrique).
+
+#### Apparence par conversation (Sujet 5)
+
+Room migration v6→v7 strictement additive : `conversations.bubble_color_argb INTEGER?` + `avatar_uri TEXT?`. Downgrade safe. `ALTER TABLE ADD COLUMN` × 2 wrappés atomiquement par Room (SQLCipher WAL rollback en cas de kill).
+
+UI : dialog "Apparence" depuis l'overflow ThreadScreen. Palette `BubbleColorPalette` 8 couleurs WCAG-safe contre texte blanc (BRAND_BLUE par défaut = reset null). Avatar picker via `PickVisualMedia` Android 13+ → URI `content://` persistée via `takePersistableUriPermission` (release de l'ancienne URI avant prise de la nouvelle, anti-accumulation grants). Scheme `content://` whitelist côté repository (defense in depth path traversal).
+
+Palette avatars auto-générés étendue 7 → 14 nuances (cœur bleu/teal + transition plum + 5 nuances rouge/grenat/bordeaux), toutes WCAG AA contre blanc, hash déterministe par contact.
+
+#### Refactos + corrections audit MEDIUM (14)
+
+- `IncomingMessageNotifier` : suppression du `Timber.d` "conv vault suppressed" (anti-corrélation builds bêta)
+- `SmishingDetector` : cap `MAX_URL_MATCHES=20` + `MAX_DOMAIN_MATCHES=30` sur `findAll`
+- `ConversationRepositoryImpl.setAppearance` : whitelist scheme `content://`
+- `AppearanceDialog` : release ancienne URI avant prise nouvelle (anti-accumulation)
+- `ThreadViewModel.recomputeSmishingVerdicts` : `smishingJob?.cancel()` avant re-launch (anti-race toggle rapide)
+- `Migrations.MIGRATION_6_7` : KDoc explicite sur non-idempotence d'`ALTER TABLE ADD COLUMN` (transactionnalité Room WAL)
+- `EmergencyArmedRecap` ajouté dans `SettingsScreen` (miroir de `SafetyCallArmedRecap`, chip "Armé" + 3 lignes + 2 boutons)
+- `AboutScreen` nettoyé : références ML Kit + Google Messages retirées (post-v1.7.0 FLOSS compliance + cohérence éditoriale)
+- Tonalité FR : 4 strings tutoiement résiduels v1.9.0 → vouvoiement (cohérence i18n projet)
+- `smishing_reason_typosquatting` : retrait balises HTML `<i>` (non rendues par Compose Text) → guillemets typographiques
+
+**Reporté v1.12.0** : overflow Thread "Déplacer vers coffre", PIN/pass distinct pour coffre (second hash crypto), multi-sélection de conv pour coffre, options de partage depuis coffre, répondre depuis coffre.
+
+Cert SHA-256 stable `b09a9511…687d`. Aucune dépendance NonFreeDep ajoutée.
+
+### v1.10.0 — Emergency mode + clock-monotonic hardening + refactors
 
 MINOR release introducing the **Emergency mode** feature (opt-in active hold-3s SMS button that sends a personalised template + GPS location URL to the user's safety-call contacts) plus a monotonic-clock complementary check (SEC-11) on the existing Safety call deadman.
 

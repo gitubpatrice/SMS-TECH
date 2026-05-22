@@ -19,6 +19,12 @@ interface ConversationRepository {
     suspend fun setMuted(id: Long, muted: Boolean)
     suspend fun moveToVault(id: Long, inVault: Boolean)
     suspend fun setDraft(id: Long, draft: String?)
+    /**
+     * v1.11.0 — apparence personnalisée par conversation (Sujet 5). `null` sur
+     * un argument = reset à la valeur par défaut (bleu marque pour la bulle,
+     * avatar contact natif). Voir [com.filestech.sms.data.local.db.dao.ConversationDao.setAppearance].
+     */
+    suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?)
     suspend fun markRead(id: Long)
     suspend fun delete(id: Long)
     suspend fun deleteMessage(messageId: Long)

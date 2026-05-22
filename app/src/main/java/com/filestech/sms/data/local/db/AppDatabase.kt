@@ -55,6 +55,10 @@ abstract class AppDatabase : RoomDatabase() {
         //   morte (entity + DAO existaient mais aucun consommateur métier). Confirmé
         //   via grep transversal : seulement référencé par AppDatabase + DatabaseModule.
         //   Migration v5→v6 `DROP TABLE IF EXISTS conversation_overrides` (idempotente).
-        const val SCHEMA_VERSION = 6
+        // v7 (2026-05-22, v1.11.0): adds `conversations.bubble_color_argb INTEGER` +
+        //   `conversations.avatar_uri TEXT` (both nullable) for the per-contact appearance
+        //   feature. Strictly additive — legacy rows project NULL = default bubble color
+        //   + default contact avatar. Migration v6→v7 in `Migrations.kt`.
+        const val SCHEMA_VERSION = 7
     }
 }

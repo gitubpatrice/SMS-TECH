@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Stop
@@ -228,6 +229,8 @@ fun ThreadScreen(
 
     var menuOpen by remember { mutableStateOf(false) }
     var detailsOpen by remember { mutableStateOf(false) }
+    // v1.11.0 — Sujet 5 apparence : dialog ouvert depuis l'overflow menu.
+    var appearanceOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Message?>(null) }
     var askBlock by remember { mutableStateOf(false) }
     // v1.3.0 — état des dialogs/sheets de réaction emoji.
@@ -377,6 +380,7 @@ fun ThreadScreen(
                         onAddContact = { menuOpen = false; viewModel.requestAddContact() },
                         onDetails = { menuOpen = false; detailsOpen = true },
                         onExportPdf = { menuOpen = false; viewModel.exportToPdf() },
+                        onAppearance = { menuOpen = false; appearanceOpen = true },
                         onBlock = { menuOpen = false; askBlock = true },
                         onDelete = { menuOpen = false; askDelete = true },
                     )
@@ -641,6 +645,15 @@ fun ThreadScreen(
                         },
                         repliedToPreview = previewFor(msg),
                         senderLabel = senderLabel,
+                        // v1.11.0 — Sujet 5 apparence : couleur bulle sortante
+                        // personnalisée si l'user a fait un choix dans le dialog
+                        // Apparence. `null` = bleu marque par défaut.
+                        customBubbleColorArgb = state.conversation?.bubbleColorArgb,
+                        // v1.11.0 audit P1 — verdict pré-calculé sur IO dans
+                        // ThreadViewModel.recomputeSmishingVerdicts, lecture
+                        // O(1) ici. Plus de SmishingDetector.analyze() sur
+                        // le main thread (~3-15 ms/bulle sur low-end).
+                        smishingReasons = state.smishingVerdicts[msg.id] ?: emptyList(),
                     )
                 }
             }
@@ -784,6 +797,18 @@ fun ThreadScreen(
             onDismiss = { detailsOpen = false },
         )
     }
+    // v1.11.0 — Sujet 5 apparence : dialog couleur bulle + avatar.
+    if (appearanceOpen) {
+        com.filestech.sms.ui.components.AppearanceDialog(
+            currentBubbleColorArgb = state.conversation?.bubbleColorArgb,
+            currentAvatarUri = state.conversation?.avatarUri,
+            onDismiss = { appearanceOpen = false },
+            onConfirm = { color, avatar ->
+                viewModel.setAppearance(color, avatar)
+                appearanceOpen = false
+            },
+        )
+    }
     if (askBlock) {
         DestructiveConfirmDialog(
             title = stringResource(R.string.action_block),
@@ -879,6 +904,7 @@ private fun ThreadActionsMenu(
     onAddContact: () -> Unit,
     onDetails: () -> Unit,
     onExportPdf: () -> Unit,
+    onAppearance: () -> Unit,
     onBlock: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -900,6 +926,12 @@ private fun ThreadActionsMenu(
             text = { Text(stringResource(R.string.action_export_pdf)) },
             enabled = canExport && !isExporting,
             onClick = onExportPdf,
+        )
+        // v1.11.0 — Sujet 5 apparence par contact.
+        DropdownMenuItem(
+            leadingIcon = { Icon(Icons.Outlined.Palette, contentDescription = null) },
+            text = { Text(stringResource(R.string.thread_overflow_appearance)) },
+            onClick = onAppearance,
         )
         DropdownMenuItem(
             leadingIcon = {

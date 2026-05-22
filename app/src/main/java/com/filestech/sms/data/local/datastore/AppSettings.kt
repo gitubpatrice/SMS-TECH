@@ -189,6 +189,15 @@ data class SecuritySettings(
     val emergency: com.filestech.sms.domain.emergency.EmergencyConfig =
         com.filestech.sms.domain.emergency.EmergencyConfig(),
     /**
+     * v1.11.0 — Sujet 3 anti-smishing : active la détection locale d'arnaque
+     * (URL raccourcies, mots d'urgence, numéros premium, typosquatting) et
+     * l'affichage d'un bandeau rouge "⚠️ Possiblement frauduleux" sous les
+     * messages reçus suspects. Opt-in par défaut (valeur ajoutée significative
+     * face à la vague de smishing FR 2024-2025), désactivable dans Settings →
+     * Sécurité si l'user trouve les faux positifs gênants.
+     */
+    val smishingDetectionEnabled: Boolean = true,
+    /**
      * Profondeur de l'auto-nettoyage : NULL ou 0 = désactivé, sinon nombre de jours
      * au-delà duquel les messages sont effacés. L'auto-nettoyage tourne au plus une fois
      * par mois (voir [lastAutoPurgeAt]) ; le bouton "Effacer maintenant" du dialog
