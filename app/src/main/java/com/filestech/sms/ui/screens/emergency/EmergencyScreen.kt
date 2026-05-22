@@ -23,10 +23,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +74,10 @@ fun EmergencyScreen(
     val contactsCount by viewModel.safetyCallContactsCount.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val ctx = LocalContext.current
+    // v1.12.0 audit U2 — needed pour afficher un snackbar si aucun dialer
+    // n'est installé (ACTION_DIAL ActivityNotFoundException). Sinon le tap
+    // du bouton 112/17 reste silencieux et l'user croit que l'appel passe.
+    val scope = rememberCoroutineScope()
     // v1.10.0 audit U1 — preview reflète le statut RÉEL de la permission
     // (pas juste la préférence config). Évite un faux sentiment de sécurité.
     val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -163,6 +170,54 @@ fun EmergencyScreen(
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(onClick = onOpenSetup) {
                     Text(stringResource(R.string.emergency_setup_contacts_cta))
+                }
+            }
+
+            // v1.12.0 — Mode urgence VOCAL (appel téléphonique).
+            // Indépendant du Mode SMS : utile même sans contacts d'urgence
+            // configurés. ACTION_DIAL = composeur pré-rempli, l'user
+            // confirme manuellement dans le dialer (pas d'appel auto, donc
+            // pas besoin de hold-3s pour anti-faux-déclenchement).
+            //
+            //  - 112 = SOS européen unifié, toujours visible (toute UE)
+            //  - 17 = Police nationale FR, opt-in via Settings (FR-specific)
+            Spacer(Modifier.height(32.dp))
+            val callPolice by viewModel.callPoliceEnabled.collectAsStateWithLifecycle()
+            val noDialerMsg = stringResource(R.string.emergency_shortcut_no_app_to_dial)
+            androidx.compose.material3.Button(
+                onClick = {
+                    val dial = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                        data = android.net.Uri.parse("tel:112")
+                        // v1.12.0 audit U1 — Context.startActivity(...) hors d'une
+                        // Activity peut crash sans NEW_TASK ; ici on est dans une
+                        // Activity, mais le flag est défensif (multi-task safe).
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    runCatching { ctx.startActivity(dial) }
+                        .onFailure { scope.launch { snackbarHost.showError(noDialerMsg) } }
+                },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                    contentColor = Color.White,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.emergency_shortcut_action_112))
+            }
+            if (callPolice) {
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        val dial = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                            data = android.net.Uri.parse("tel:17")
+                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        runCatching { ctx.startActivity(dial) }
+                            .onFailure { scope.launch { snackbarHost.showError(noDialerMsg) } }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.emergency_shortcut_action_police))
                 }
             }
         }

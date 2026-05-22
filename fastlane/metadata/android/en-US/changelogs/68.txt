@@ -1,0 +1,12 @@
+v1.12.0 — Accessible Emergency + Vault UX
+
+• Emergency: persistent lock-screen notif
+  (URGENCY + 112 + 17 opt-in) — one-tap
+  access without unlock
+• 112 (EU) and 17 (FR Police opt-in) buttons —
+  ACTION_DIAL, user confirms (no auto-call)
+• Vault from thread overflow: "Move to vault"
+  / "Move out" (hidden in panic-decoy mode)
+• Fix: contact name shown from very first SMS
+• Avatar palette: 14 blue/teal shades (WCAG AA)
+• 3 audit fixes (S1 decoy leak, S2/U2 UX)

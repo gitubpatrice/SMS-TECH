@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.11.0** (2026-05-22)
+Current release : **v1.12.0** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,55 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.11.0 (this release) — Vault polish + Anti-smishing + Appearance + 7 audit fixes
+### v1.12.0 (this release) — Avatar palette (blue family) + ComposeScreen contact name fix + ThreadScreen vault overflow + Emergency lock-screen shortcut (112 / 17) + 3 audit fixes
+
+MINOR release with UX-focused polish on the Emergency mode (accessibility on lock screen + voice-grade emergency call buttons) and on the conversation list (all-blue avatar palette WCAG AA, contact name now resolved at compose time). No DB / vault / Keystore changes — `adb install -r` non-destructive.
+
+A pre-release final audit (3-axes + cohérence) surfaced **2 HIGH and 1 MEDIUM bloquants**, all fixed before tag :
+
+- **HIGH S1** — `MainApplication.kt` emergency-shortcut observation now `combine(settings.flow, appLock.state)` and cancels the persistent lock-screen notification whenever `LockState.PanicDecoy` becomes active. Without this guard, an attacker who coerces a panic-PIN unlock would still see the "URGENCE / 112 / 17" notification on the lock screen, learning that SMS Tech has an Emergency mode configured (info leak + lateral attack vector — the URGENCE action itself is already gated by `TriggerEmergencyUseCase`'s PanicDecoy check, but the *presence* of the shortcut was leaking).
+- **HIGH S2** — `SettingsScreen` Toggle "Appel police FR (17)" is now gated behind `if (state.security.emergencyShortcutEnabled)` so it cannot be configured as an orphan. Without the shortcut enabled, the toggle had no observable effect (the in-app EmergencyScreen 17 button reads the same flag, so it stayed visible, but the lock-screen notification — the only consumer that visibly differs — wasn't posted) — confusing UX + spurious DataStore writes.
+- **MEDIUM U2** — Emergency 112 and 17 buttons in `EmergencyScreen` now catch `ActivityNotFoundException` (no dialer installed — rare but possible on stripped AOSP builds and corporate MDM profiles) and surface a snackbar `emergency_shortcut_no_app_to_dial`. Without feedback, the user would believe the call is in progress while nothing happens — a silent failure in an emergency context. Also added `FLAG_ACTIVITY_NEW_TASK` defensively (currently invoked from Activity context, so non-blocking, but matches the BroadcastReceiver path which strictly requires it).
+
+#### Avatar palette refactor (Sujet 1)
+
+The v1.11.0 palette mixed 5 reds + 1 plum with blues and greens. Red is visually anxiogenic in a messaging context and reserved by Files Tech for destructive/danger states (BrandDanger). v1.12.0 ships a 14-shade pure blue / teal / navy / cyan palette, every stop verified ≥ 4.5:1 against `Color.White` for initials legibility (WCAG AA). The light teals and cyans that didn't meet contrast were darkened; the hue family is uniform but the spread across royal/electric/navy/teal/cyan keeps avatars distinguishable in long conversation lists.
+
+#### ComposeScreen contact name fix (Sujet 7)
+
+`ConversationRepositoryImpl.findOrCreate(addresses)` used to insert new conversations with `displayName = null`, leaving the conversation labelled by raw phone number until the next system contact sync. With single-recipient compose, we now :
+
+1. Look up `ContactRepository.lookupByPhone(addresses[0].raw)` **outside the transaction** (hot lookup, no DB write).
+2. Sanitise the result through `stripInvisibleChars()` + `trim()` to defeat homoglyph / bidi / RLO smuggling in the contact's name field (a malicious vCard import could otherwise inject a `‮` override).
+3. Pass the resolved name to `insertOrIgnoreConversation` so the new row is labelled correctly on the first frame.
+4. **Back-fill an existing conversation** whose `displayName` is null/blank — covers the legacy data created by v1.11.x before this fix.
+
+Single-recipient only (group MMS keeps `null` and lets the UI compose participants).
+
+#### ThreadScreen "Move to vault" overflow (Sujet 2)
+
+Overflow menu in `ThreadActionsMenu` now exposes "Move to vault" / "Move out of vault" with `Lock` / `LockOpen` icons. The action :
+
+- Hidden in PanicDecoy (UI layer guard).
+- Refused by `VaultManager.requestMoveToVault` in PanicDecoy + Locked (domain layer guard).
+- Snackbar distinguishes Locked (`error_session_locked`) vs generic failure (`snack_generic_error`).
+- No data-layer-only feature flag — the row simply doesn't render in PanicDecoy, defeating the snoop-the-menu sidechannel.
+
+#### Emergency lock-screen shortcut (Sujet "vigilance vocale")
+
+The Emergency mode in v1.10.0/v1.11.0 required unlock + nav into Settings to reach. In a real emergency that's too many taps. v1.12.0 adds :
+
+1. **`EmergencyShortcutReceiver`** (`exported = false`) — BroadcastReceiver with 3 actions :
+   - `ACTION_TRIGGER_EMERGENCY` → delegates to `TriggerEmergencyUseCase` (PanicDecoy-guarded). Uses `goAsync()` + `ApplicationScope`, so the SMS send + location resolve continues even if the notif is dismissed.
+   - `ACTION_DIAL_112` and `ACTION_DIAL_POLICE` → `ACTION_DIAL` intents pre-filled with 112 (EU) or 17 (FR). `ACTION_DIAL` opens the dialer with the number pre-typed but DOES NOT call automatically — the user confirms by tapping the green button. This avoids requiring `CALL_PHONE` runtime permission AND prevents pocket-dial of emergency services.
+2. **`EmergencyShortcutNotifier`** — persistent ongoing notification on `CHANNEL_EMERGENCY_SHORTCUT` (`IMPORTANCE_LOW` to avoid heads-up / sound / vibration), `VISIBILITY_PUBLIC` so the actions are tappable from the lock screen. Up to 3 actions (URGENCE + 112 + 17 if police opt-in enabled).
+3. **`MainApplication`** observes `(emergencyShortcutEnabled, emergencyCallPoliceEnabled)` paired with `appLock.state` (audit fix S1) — posts the notification only when the shortcut is enabled AND the session is not PanicDecoy.
+4. **`BootReceiver`** re-posts the notification after device reboot (with a 3 s `withTimeoutOrNull` cap on the DataStore read to keep the boot path bounded).
+5. **`EmergencyScreen`** also exposes the 112 and 17 buttons (in-app counterpart). Both surface a snackbar on `ActivityNotFoundException` (audit fix U2).
+
+The numbers `112` and `17` are hard-coded in companion objects — they cannot be hijacked by intent extras to dial an arbitrary number. The "URGENCE" action piggybacks on the existing PanicDecoy / wall-clock-monotonic / single-flight defences from v1.10.0 SEC-11.
+
+### v1.11.0 — Vault polish + Anti-smishing + Appearance + 7 audit fixes
 
 MINOR release fortifiant la feature Vault (3 trous comblés), introduisant un détecteur anti-smishing 100 % offline, et l'apparence personnalisée par conversation (couleur de bulle WCAG-safe + avatar custom).
 

@@ -235,6 +235,21 @@
     <string name="appearance_color_deep_indigo">Deep indigo</string>
     <string name="appearance_color_dark_teal">Dark teal</string>
     <string name="appearance_color_selected">selected</string>
+    <!-- v1.12.0 — vault move with locked session -->
+    <string name="error_session_locked">Unlock the app to move this conversation</string>
+    <!-- v1.12.0 — Emergency shortcut (lock-screen persistent notification) -->
+    <string name="channel_emergency_shortcut_label">Emergency shortcut</string>
+    <string name="channel_emergency_shortcut_desc">Silent persistent notification with one-tap actions to trigger emergency mode or dial 112, accessible from the lock screen.</string>
+    <string name="emergency_shortcut_notif_title">SMS Tech — emergency shortcut</string>
+    <string name="emergency_shortcut_notif_text">One tap to send the emergency SMS or dial 112.</string>
+    <string name="emergency_shortcut_action_emergency">EMERGENCY</string>
+    <string name="emergency_shortcut_action_112">Dial 112</string>
+    <string name="settings_emergency_shortcut_title">Lock-screen shortcut</string>
+    <string name="settings_emergency_shortcut_desc">Show a persistent notification with EMERGENCY + 112 actions, accessible without unlocking the phone. Off by default.</string>
+    <string name="emergency_shortcut_no_app_to_dial">No app installed to dial 112</string>
+    <string name="emergency_shortcut_action_police">Dial 17</string>
+    <string name="settings_emergency_call_police_title">Police button (FR — 17)</string>
+    <string name="settings_emergency_call_police_desc">Show an additional "Dial 17" button (French Police). The 112 (Europe-wide SOS) remains always available. Off by default.</string>
 
     <!-- Backup / restore dialogs -->
     <string name="backup_explainer">Encrypted backup uses AES-256-GCM with PBKDF2-HMAC-SHA512 key derivation. Pick a strong passphrase — without it the file cannot be recovered.</string>

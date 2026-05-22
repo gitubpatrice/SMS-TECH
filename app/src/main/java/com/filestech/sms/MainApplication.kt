@@ -49,6 +49,9 @@ class MainApplication : Application(), Configuration.Provider {
 
     @Inject lateinit var settingsRepository: SettingsRepository
 
+    /** v1.12.0 — observed dynamically + posted/cancelled by `appScope` loop. */
+    @Inject lateinit var emergencyShortcutNotifier: com.filestech.sms.system.notifications.EmergencyShortcutNotifier
+
     /**
      * v1.8.0 (post-audit fix unread badges) — utilisé une fois au cold-start
      * pour recalculer les compteurs `conversations.unread_count` à partir des
@@ -231,6 +234,41 @@ class MainApplication : Application(), Configuration.Provider {
                         KeepAliveService.start(this@MainApplication)
                     } else {
                         KeepAliveService.stop(this@MainApplication)
+                    }
+                }
+                .collect()
+        }
+
+        // v1.12.0 — Observe le flag `security.emergencyShortcutEnabled` pour
+        // poster/canceler la notification persistante du raccourci urgence
+        // (URGENCE + 112). Même pattern que KeepAliveService : idempotent,
+        // hot, distinctUntilChanged.
+        // v1.12.0 — combine shortcutEnabled + policeEnabled : à chaque
+        // changement de l'un ou de l'autre, on re-poste (ou annule) avec
+        // le bon set d'actions. Notifier `postShortcut` est idempotent.
+        // v1.12.0 audit fix S1 — combiner aussi `appLock.state` : si l'user
+        // entre en PanicDecoy (PIN panique), la notif persistante doit être
+        // CANCEL même si `emergencyShortcutEnabled = true`. Sinon un attaquant
+        // qui pose la main sur le téléphone en mode décoy voit toujours la
+        // notif "URGENCE/112/17" depuis le lock screen et peut déclencher
+        // l'envoi SMS aux contacts urgence (qui passerait quand même la garde
+        // PanicDecoy du UseCase, mais leak la *présence* du raccourci ⇒ leak
+        // d'info que SMS Tech a un mode urgence configuré).
+        appScope.launch {
+            kotlinx.coroutines.flow.combine(
+                settingsRepository.flow
+                    .map { it.security.emergencyShortcutEnabled to it.security.emergencyCallPoliceEnabled }
+                    .distinctUntilChanged(),
+                appLock.state,
+            ) { (enabled, policeEnabled), lockState ->
+                Triple(enabled, policeEnabled, lockState is AppLockManager.LockState.PanicDecoy)
+            }
+                .distinctUntilChanged()
+                .onEach { (enabled, policeEnabled, isPanicDecoy) ->
+                    if (enabled && !isPanicDecoy) {
+                        emergencyShortcutNotifier.postShortcut(policeEnabled = policeEnabled)
+                    } else {
+                        emergencyShortcutNotifier.cancelShortcut()
                     }
                 }
                 .collect()

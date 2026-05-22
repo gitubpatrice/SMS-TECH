@@ -29,6 +29,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
+import com.filestech.sms.core.ext.stripInvisibleChars
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -44,6 +45,11 @@ class ConversationRepositoryImpl @Inject constructor(
     private val appLock: AppLockManager,
     private val blockedRepo: BlockedNumberRepository,
     private val notifier: IncomingMessageNotifier,
+    // v1.12.0 — résolution du displayName à la création d'une conv via
+    // ComposeScreen. Sans ça, `findOrCreate` créait toujours
+    // `displayName = null`, ce qui faisait afficher le numéro brut dans le
+    // TopAppBar ThreadScreen au lieu du nom du contact pourtant choisi.
+    private val contactRepo: com.filestech.sms.domain.repository.ContactRepository,
     // v1.8.0 (post-audit fix badges après désinstallation) — propage `READ=1`
     // côté système quand l'user ouvre une conversation. Sans ça, désinstaller
     // + réinstaller SMS Tech ramène les badges (le système avait toujours
@@ -168,18 +174,56 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun findOrCreate(addresses: List<PhoneAddress>): Outcome<Conversation> = withContext(io) {
         if (addresses.isEmpty()) return@withContext Outcome.Failure(AppError.Validation("empty addresses"))
         val csv = canonicalCsv(addresses)
+        // v1.12.0 — resolve le displayName AVANT la transaction Room pour le
+        // cas single-recipient (parcours classique ComposeScreen). En groupe
+        // (≥ 2 recipients), on garde null : le rendu UI joint les numéros / les
+        // noms côté présentation (cf. `ConversationRow`), poser un seul
+        // displayName tronqué serait trompeur.
+        //
+        // Lookup hors-transaction pour ne pas tenir le verrou Room pendant
+        // l'appel `ContentResolver` (qui peut bloquer ~5-30 ms si la base
+        // contacts est froide). En cas d'échec (READ_CONTACTS révoqué,
+        // contact inexistant), `displayName` reste null et l'UI tombera
+        // gracieusement sur `addresses.joinToString { it.raw }` — comportement
+        // pré-v1.12.0 préservé.
+        //
+        // v1.12.0 audit B2 — sanitization Bidi/invisible via
+        // `stripInvisibleChars()` (helper existant) : neutralise les
+        // caractères RLO/LRO/ZWJ/BOM qui pourraient être présents dans un
+        // nom de contact vCard importé. Sans ça, un nom avec U+202E pourrait
+        // inverser le rendu du TopAppBar ThreadScreen.
+        val resolvedDisplayName: String? = if (addresses.size == 1) {
+            runCatching { contactRepo.lookupByPhone(addresses[0].raw)?.displayName }
+                .getOrNull()
+                ?.stripInvisibleChars()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+        } else null
+
         val id = database.withTransaction {
             val existing = conversationDao.findByAddressesCsv(csv)
-            existing?.id ?: conversationDao.upsert(
-                ConversationEntity(
-                    threadId = 0L,
-                    addressesCsv = csv,
-                    displayName = null,
-                    lastMessageAt = System.currentTimeMillis(),
-                    lastMessagePreview = null,
-                    unreadCount = 0,
-                ),
-            )
+            if (existing != null) {
+                // v1.12.0 audit B1 — back-fill displayName si la conv existe
+                // déjà mais avec displayName null/blanc ET qu'on vient d'en
+                // résoudre un. Sans ça, les conv créées avant v1.12.0 (où le
+                // resolve n'était pas fait) gardent leur numéro brut même
+                // après ré-ouverture via ComposeScreen.
+                if (existing.displayName.isNullOrBlank() && !resolvedDisplayName.isNullOrBlank()) {
+                    conversationDao.setDisplayName(existing.id, resolvedDisplayName)
+                }
+                existing.id
+            } else {
+                conversationDao.upsert(
+                    ConversationEntity(
+                        threadId = 0L,
+                        addressesCsv = csv,
+                        displayName = resolvedDisplayName,
+                        lastMessageAt = System.currentTimeMillis(),
+                        lastMessagePreview = null,
+                        unreadCount = 0,
+                    ),
+                )
+            }
         }
         Outcome.Success(requireNotNull(conversationDao.findById(id)?.toDomain()))
     }

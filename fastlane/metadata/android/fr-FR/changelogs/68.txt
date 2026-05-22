@@ -1,0 +1,13 @@
+v1.12.0 — Urgence accessible + UX coffre
+
+• Mode urgence : notif persistante écran
+  verrouillé (URGENCE + 112 + 17 opt-in) —
+  accès en un tap sans déverrouiller
+• Boutons 112 (Europe) et 17 (Police FR opt-in)
+  — ACTION_DIAL, l'user confirme (pas d'appel
+  auto)
+• Coffre depuis overflow du fil : "Déplacer
+  vers le coffre" / "Sortir" (masqué en décoy)
+• Fix : nom contact affiché dès 1ᵉʳ SMS
+• Palette avatars 14 nuances bleu (WCAG AA)
+• 3 fixes audit (S1 leak décoy, S2/U2 UX)

@@ -189,6 +189,27 @@ data class SecuritySettings(
     val emergency: com.filestech.sms.domain.emergency.EmergencyConfig =
         com.filestech.sms.domain.emergency.EmergencyConfig(),
     /**
+     * v1.12.0 — Raccourci urgence en notification persistante. Quand `true`,
+     * SMS Tech pose une notif `IMPORTANCE_LOW` (silencieuse, persistante)
+     * visible sur l'écran verrouillé avec 2 actions :
+     *  - "URGENCE" → déclenche [TriggerEmergencyUseCase] directement
+     *  - "112" → ouvre le composeur téléphone pré-rempli (ACTION_DIAL)
+     *
+     * Désactivé par défaut. Opt-in via Settings → Mode urgence. Nécessite
+     * `emergency.enabled = true` pour avoir un sens (sinon le bouton URGENCE
+     * tape dans le vide). Le canal `CHANNEL_EMERGENCY_SHORTCUT` est posé
+     * avec `VISIBILITY_PUBLIC` pour l'affichage lock-screen.
+     */
+    val emergencyShortcutEnabled: Boolean = false,
+    /**
+     * v1.12.0 — Bouton "Appeler 17 (Police FR)" dans EmergencyScreen ET
+     * action 17 dans la notification raccourci lock-screen. Opt-in spécifique
+     * France — désactivé par défaut car le 112 (SOS européen) couvre déjà
+     * police + SAMU + pompiers pour tous les pays UE. Activer 17 = accès
+     * direct à la police nationale FR depuis l'écran verrouillé.
+     */
+    val emergencyCallPoliceEnabled: Boolean = false,
+    /**
      * v1.11.0 — Sujet 3 anti-smishing : active la détection locale d'arnaque
      * (URL raccourcies, mots d'urgence, numéros premium, typosquatting) et
      * l'affichage d'un bandeau rouge "⚠️ Possiblement frauduleux" sous les

@@ -61,6 +61,15 @@ class EmergencyViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0)
 
     /**
+     * v1.12.0 — exposé pour afficher le bouton "Appeler 17" dans
+     * [EmergencyScreen] uniquement quand l'user a opt-in dans Settings.
+     * Le 112 reste toujours visible (SOS européen, pas de toggle).
+     */
+    val callPoliceEnabled: StateFlow<Boolean> = settings.flow
+        .map { it.security.emergencyCallPoliceEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+    /**
      * Draft local édité par l'écran setup. Hydraté one-shot via `first()`
      * (même pattern que SafetyCallSetupViewModel — évite l'écrasement
      * concurrent par un trigger qui pose `lastTriggeredAt`).

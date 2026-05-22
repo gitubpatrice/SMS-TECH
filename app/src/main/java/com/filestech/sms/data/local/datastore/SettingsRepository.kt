@@ -155,6 +155,9 @@ class SettingsRepository @Inject constructor(
                 // v1.11.0 — Sujet 3 anti-smishing. Défaut `true` (opt-in
                 // sécurité, désactivable par l'user dans Settings).
                 smishingDetectionEnabled = p[K.smishingDetectionEnabled] ?: true,
+                // v1.12.0 — raccourci urgence. Défaut false (opt-in strict).
+                emergencyShortcutEnabled = p[K.emergencyShortcutEnabled] ?: false,
+                emergencyCallPoliceEnabled = p[K.emergencyCallPoliceEnabled] ?: false,
             ),
             blocking = BlockingSettings(
                 blockUnknown = p[K.blockUnknown] ?: false,
@@ -246,6 +249,9 @@ class SettingsRepository @Inject constructor(
         this[K.emergencyMonotonicLastTriggeredAt] = s.security.emergency.monotonicLastTriggeredAt
         // v1.11.0 — Sujet 3 anti-smishing.
         this[K.smishingDetectionEnabled] = s.security.smishingDetectionEnabled
+        // v1.12.0 — raccourci urgence.
+        this[K.emergencyShortcutEnabled] = s.security.emergencyShortcutEnabled
+        this[K.emergencyCallPoliceEnabled] = s.security.emergencyCallPoliceEnabled
 
         this[K.blockUnknown] = s.blocking.blockUnknown
         // v1.3.5 G6 + audit F3 — `blockShortCodes` retiré (champ fantôme, voir
@@ -326,6 +332,10 @@ class SettingsRepository @Inject constructor(
             longPreferencesKey("security.emergency.monotonicLastTriggeredAt")
         // v1.11.0 — Sujet 3 anti-smishing.
         val smishingDetectionEnabled = booleanPreferencesKey("security.smishingDetectionEnabled")
+        // v1.12.0 — raccourci urgence (notif persistante lock-screen).
+        val emergencyShortcutEnabled = booleanPreferencesKey("security.emergencyShortcutEnabled")
+        // v1.12.0 — bouton Appeler Police 17 (FR uniquement, opt-in).
+        val emergencyCallPoliceEnabled = booleanPreferencesKey("security.emergencyCallPoliceEnabled")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")

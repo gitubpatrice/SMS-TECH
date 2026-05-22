@@ -499,6 +499,38 @@ fun SettingsScreen(
                             onClick = onOpenEmergencySetup,
                         )
                     }
+                    // v1.12.0 — Toggle raccourci urgence en notification persistante
+                    // lock-screen. Disponible uniquement si emergency.enabled (un
+                    // raccourci qui ouvre dans le vide n'a aucun sens).
+                    if (emergency.enabled) {
+                        ToggleRow(
+                            title = stringResource(R.string.settings_emergency_shortcut_title),
+                            description = stringResource(R.string.settings_emergency_shortcut_desc),
+                            value = state.security.emergencyShortcutEnabled,
+                            onChange = { v ->
+                                viewModel.update {
+                                    it.copy(security = it.security.copy(emergencyShortcutEnabled = v))
+                                }
+                            },
+                        )
+                        // v1.12.0 — Toggle bouton Police FR 17 (FR-specific opt-in).
+                        // Audit fix S2 : disponible uniquement si le raccourci urgence
+                        // est lui-même ON. Le toggle Police agit sur les actions de la
+                        // notif persistante + l'écran Emergency : sans raccourci, il
+                        // reste un orphelin qui dupliquerait juste le bouton 112.
+                        if (state.security.emergencyShortcutEnabled) {
+                            ToggleRow(
+                                title = stringResource(R.string.settings_emergency_call_police_title),
+                                description = stringResource(R.string.settings_emergency_call_police_desc),
+                                value = state.security.emergencyCallPoliceEnabled,
+                                onChange = { v ->
+                                    viewModel.update {
+                                        it.copy(security = it.security.copy(emergencyCallPoliceEnabled = v))
+                                    }
+                                },
+                            )
+                        }
+                    }
                 }
             }
 

@@ -80,8 +80,23 @@ class NotificationChannelInitializer @Inject constructor(
             enableVibration(true)
             setShowBadge(true)
         }
+        // v1.12.0 — canal dédié pour le raccourci d'urgence (notification
+        // persistante posée si l'user active "Bouton URGENCE dans les notifs").
+        // IMPORTANCE_LOW : pas de son, pas de heads-up, pas de vibration —
+        // c'est un raccourci silencieux, pas une alerte. setShowBadge(false)
+        // pour ne pas polluer le badge launcher.
+        val emergencyShortcut = NotificationChannel(
+            CHANNEL_EMERGENCY_SHORTCUT,
+            context.getString(LABEL_EMERGENCY_SHORTCUT_RES),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(DESC_EMERGENCY_SHORTCUT_RES)
+            setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
+        }
         nm.createNotificationChannels(
-            listOf(incoming, incomingSilent, sent, failed, background, safetyCallWarning),
+            listOf(incoming, incomingSilent, sent, failed, background, safetyCallWarning, emergencyShortcut),
         )
     }
 
@@ -93,6 +108,8 @@ class NotificationChannelInitializer @Inject constructor(
         const val CHANNEL_BACKGROUND = "background_tasks"
         /** v1.9.0 — canal dédié au warning Safety Call (avant trigger). */
         const val CHANNEL_SAFETY_CALL_WARNING = "safety_call_warning"
+        /** v1.12.0 — canal pour le raccourci d'urgence (action URGENCE + action 112). */
+        const val CHANNEL_EMERGENCY_SHORTCUT = "emergency_shortcut"
 
         private val LABEL_INCOMING_RES = com.filestech.sms.R.string.channel_incoming_label
         private val DESC_INCOMING_RES = com.filestech.sms.R.string.channel_incoming_desc
@@ -106,5 +123,7 @@ class NotificationChannelInitializer @Inject constructor(
         private val DESC_BACKGROUND_RES = com.filestech.sms.R.string.channel_background_desc
         private val LABEL_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_label
         private val DESC_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_desc
+        private val LABEL_EMERGENCY_SHORTCUT_RES = com.filestech.sms.R.string.channel_emergency_shortcut_label
+        private val DESC_EMERGENCY_SHORTCUT_RES = com.filestech.sms.R.string.channel_emergency_shortcut_desc
     }
 }

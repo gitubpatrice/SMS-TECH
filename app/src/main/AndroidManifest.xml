@@ -243,6 +243,21 @@
             android:name=".system.notifications.NotificationActionReceiver"
             android:exported="false" />
 
+        <!-- v1.12.0 — Raccourci urgence (notification persistante lock-screen).
+             `exported=false` : seul SMS Tech peut déclencher les actions
+             SHORTCUT_TRIGGER_EMERGENCY / SHORTCUT_DIAL_112 via PendingIntent
+             interne. Une app tierce ne peut pas forger un Intent et déclencher
+             le SMS d'urgence. -->
+        <receiver
+            android:name=".system.receiver.EmergencyShortcutReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.filestech.sms.SHORTCUT_TRIGGER_EMERGENCY" />
+                <action android:name="com.filestech.sms.SHORTCUT_DIAL_112" />
+                <action android:name="com.filestech.sms.SHORTCUT_DIAL_POLICE" />
+            </intent-filter>
+        </receiver>
+
         <!-- 6) HeadlessSmsSendService — required for default SMS app -->
         <service
             android:name=".system.service.HeadlessSmsSendService"

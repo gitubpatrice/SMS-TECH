@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.ApplicationScope
+import com.filestech.sms.system.notifications.EmergencyShortcutNotifier
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.ScheduledMessageScheduler
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
@@ -21,6 +22,7 @@ class BootReceiver : BroadcastReceiver() {
 
     @Inject lateinit var scheduler: ScheduledMessageScheduler
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var emergencyShortcutNotifier: EmergencyShortcutNotifier
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -76,6 +78,18 @@ class BootReceiver : BroadcastReceiver() {
                 } ?: false
                 if (enabled) {
                     KeepAliveService.start(context)
+                }
+                // v1.12.0 — re-poster la notification persistante du raccourci
+                // urgence si l'user l'a activée. Sans ça, après reboot, la notif
+                // disparaît et l'user perd son accès rapide sans le savoir.
+                val (shortcutEnabled, policeEnabled) = withTimeoutOrNull(3_000L) {
+                    runCatching {
+                        val sec = settingsRepository.flow.first().security
+                        sec.emergencyShortcutEnabled to sec.emergencyCallPoliceEnabled
+                    }.getOrDefault(false to false)
+                } ?: (false to false)
+                if (shortcutEnabled) {
+                    emergencyShortcutNotifier.postShortcut(policeEnabled = policeEnabled)
                 }
             } finally {
                 pending.finish()

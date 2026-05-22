@@ -65,6 +65,11 @@ class ThreadViewModel @Inject constructor(
     private val activeConversationTracker: ActiveConversationTracker,
     @ApplicationContext private val context: android.content.Context,
     @com.filestech.sms.di.IoDispatcher private val io: kotlinx.coroutines.CoroutineDispatcher,
+    // v1.12.0 — overflow "Déplacer vers le coffre" : on a besoin du flag
+    // PanicDecoy pour gater l'item (cohérence avec masquage liste +
+    // Settings + filtre nav AppRoot). En decoy, l'item NE DOIT PAS
+    // apparaître (l'agresseur ne doit pas savoir qu'un coffre existe).
+    private val appLock: com.filestech.sms.security.AppLockManager,
 ) : ViewModel() {
 
     /** Live playback state, surfaced for the composer's preview UI. */
@@ -150,6 +155,12 @@ class ThreadViewModel @Inject constructor(
          * `messages` change ou que le toggle bascule.
          */
         val smishingVerdicts: Map<Long, List<com.filestech.sms.domain.smishing.SmishingReason>> = emptyMap(),
+        /**
+         * v1.12.0 — flag PanicDecoy pour gater l'overflow item "Déplacer
+         * vers le coffre" / "Sortir du coffre". En decoy, l'option ne doit
+         * pas apparaître (preserve l'illusion app SMS ordinaire).
+         */
+        val isPanicDecoy: Boolean = false,
     )
 
     /** Staged attachment awaiting user confirmation in the composer. */
@@ -260,6 +271,17 @@ class ThreadViewModel @Inject constructor(
         // heads-up jouent (signal sonore préservé), puis Android cancel la notif
         // automatiquement — l'utilisateur n'a pas à la dismiss à la main.
         activeConversationTracker.setActive(conversationId)
+
+        // v1.12.0 — propage `isPanicDecoy` dans le state pour gater
+        // l'overflow item "Déplacer vers le coffre" côté UI.
+        viewModelScope.launch {
+            appLock.state.collect { lockState ->
+                val inDecoy = lockState is com.filestech.sms.security.AppLockManager.LockState.PanicDecoy
+                if (_state.value.isPanicDecoy != inDecoy) {
+                    _state.update { it.copy(isPanicDecoy = inDecoy) }
+                }
+            }
+        }
 
         // v1.11.0 — Sujet 3 anti-smishing : propage le toggle Settings + RE-
         // CALCULE les verdicts pour les messages quand toggle bascule. Une
@@ -855,6 +877,44 @@ class ThreadViewModel @Inject constructor(
 
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch { repo.deleteMessage(messageId) }
+    }
+
+    /**
+     * v1.12.0 — Déplace la conversation courante DANS le coffre ou L'EN
+     * SORT depuis l'overflow ThreadScreen. Délègue à
+     * [ToggleConversationStateUseCase.requestMoveToVault] qui check
+     * `AppLockState` (refuse PanicDecoy + Locked, auto-`markUnlocked` sinon).
+     * Émet un snackbar `ShowSnackbar` de confirmation succès / échec.
+     *
+     * En PanicDecoy, l'overflow item est masqué côté UI (cf. `state.isPanicDecoy`)
+     * — defense in depth : le UseCase refuse aussi en domain.
+     */
+    fun moveCurrentConversationToVault(intoVault: Boolean) {
+        viewModelScope.launch {
+            val outcome = toggleConvState.requestMoveToVault(conversationId, intoVault)
+            // v1.12.0 audit B3 — différencier l'échec "session verrouillée"
+            // (AppError.Locked, retourné par requestMoveToVault si lockState
+            // = Locked ou PanicDecoy) du failure générique : message UX clair
+            // au lieu d'un "Déplacement échoué" ambigu.
+            val msgRes = when (outcome) {
+                is com.filestech.sms.core.result.Outcome.Success ->
+                    if (intoVault) com.filestech.sms.R.string.vault_move_in_done
+                    else com.filestech.sms.R.string.vault_move_out_done
+                is com.filestech.sms.core.result.Outcome.Failure -> when (outcome.error) {
+                    is com.filestech.sms.core.result.AppError.Locked ->
+                        com.filestech.sms.R.string.error_session_locked
+                    else ->
+                        if (intoVault) com.filestech.sms.R.string.vault_move_in_failed
+                        else com.filestech.sms.R.string.vault_move_out_failed
+                }
+            }
+            _events.tryEmit(
+                Event.ShowSnackbar(
+                    message = context.getString(msgRes),
+                    isError = outcome is com.filestech.sms.core.result.Outcome.Failure,
+                ),
+            )
+        }
     }
 
     /**

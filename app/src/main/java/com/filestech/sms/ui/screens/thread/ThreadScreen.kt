@@ -46,6 +46,8 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -376,6 +378,16 @@ fun ThreadScreen(
                         hasContact = state.hasContact,
                         isExporting = state.isExporting,
                         canExport = state.messages.isNotEmpty(),
+                        // v1.12.0 — vault overflow item, masqué en PanicDecoy.
+                        inVault = state.conversation?.inVault == true,
+                        onMoveVault = if (state.isPanicDecoy) null else {
+                            {
+                                menuOpen = false
+                                viewModel.moveCurrentConversationToVault(
+                                    intoVault = state.conversation?.inVault != true,
+                                )
+                            }
+                        },
                         onDismiss = { menuOpen = false },
                         onAddContact = { menuOpen = false; viewModel.requestAddContact() },
                         onDetails = { menuOpen = false; detailsOpen = true },
@@ -900,6 +912,9 @@ private fun ThreadActionsMenu(
     hasContact: Boolean,
     isExporting: Boolean,
     canExport: Boolean,
+    // v1.12.0 — vault move-in/out via overflow ; `null` = item absent (PanicDecoy).
+    inVault: Boolean,
+    onMoveVault: (() -> Unit)?,
     onDismiss: () -> Unit,
     onAddContact: () -> Unit,
     onDetails: () -> Unit,
@@ -933,6 +948,27 @@ private fun ThreadActionsMenu(
             text = { Text(stringResource(R.string.thread_overflow_appearance)) },
             onClick = onAppearance,
         )
+        // v1.12.0 — Déplacer vers le coffre / sortir du coffre.
+        // Absent en PanicDecoy (onMoveVault == null).
+        if (onMoveVault != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        if (inVault) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+                        contentDescription = null,
+                    )
+                },
+                text = {
+                    Text(
+                        stringResource(
+                            if (inVault) R.string.vault_move_out
+                            else R.string.vault_move_in,
+                        ),
+                    )
+                },
+                onClick = onMoveVault,
+            )
+        }
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
