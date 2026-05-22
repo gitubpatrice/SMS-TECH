@@ -413,10 +413,14 @@ fun ConversationsScreen(
                             onMoveToVault = if (state.isPanicDecoy || state.selectionMode) null else {
                                 { viewModel.moveConversationToVault(conv.id) }
                             },
-                            // v1.13.0 — long-press hors sélection = entrer en sélection
-                            // avec ce conv comme 1ᵉʳ item. Long-press en sélection =
-                            // toggle (cohérent avec Gmail / Google Messages).
-                            onLongClickOverride = if (state.isPanicDecoy) null else {
+                            // v1.13.1 — restaure ActionsSheet legacy en long-press
+                            // (quick actions Block/Delete/Move to vault). Ajoute en
+                            // plus l'option "Sélectionner plusieurs" qui entre en
+                            // mode sélection multi. Hors mode sélection seulement
+                            // (en mode sélection le long-press toggle, comportement
+                            // Gmail). PanicDecoy : pas de selection toggle non plus,
+                            // l'ActionsSheet legacy sans item Vault est rendu.
+                            onSelectMultiple = if (state.isPanicDecoy) null else {
                                 { viewModel.toggleSelection(conv.id) }
                             },
                             selected = isSelected,
@@ -540,13 +544,14 @@ private fun SwipeableConversationRow(
     onBlock: () -> Unit,
     onMoveToVault: (() -> Unit)? = null,
     /**
-     * v1.13.0 — surcharge du long-press par défaut (qui ouvre `ActionsSheet`).
-     * Non-null en mode normal pour entrer en sélection ; null en PanicDecoy.
+     * v1.13.1 — callback "entrer en mode sélection multiple" exposé comme item
+     * dans l'ActionsSheet legacy long-press. Non-null hors PanicDecoy. Restaure
+     * le pattern "appui long → menu" attendu en v1.12, sans perdre le multi.
      */
-    onLongClickOverride: (() -> Unit)? = null,
+    onSelectMultiple: (() -> Unit)? = null,
     /** v1.13.0 — visuel sélectionné (background tinted + check icon). */
     selected: Boolean = false,
-    /** v1.13.0 — désactive le swipe et l'ActionsSheet pour éviter conflits. */
+    /** v1.13.0 — désactive le swipe et le menu legacy en mode sélection. */
     selectionMode: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -618,14 +623,15 @@ private fun SwipeableConversationRow(
                 onClick = onOpenThread,
                 showAvatars = showAvatars,
                 previewLines = previewLines,
-                // v1.13.0 — long-press route :
-                //  - `onLongClickOverride` non-null (mode normal) → entrer en
-                //    sélection (1ᵉʳ item) ou toggle (sélection en cours).
-                //  - sinon (PanicDecoy) → ActionsSheet legacy.
+                // v1.13.1 — long-press routing :
+                //  - en mode sélection multiple → toggle de l'item (pattern Gmail).
+                //  - sinon → ActionsSheet legacy (Block/Delete/Move to vault +
+                //    "Sélectionner plusieurs" si onSelectMultiple non-null).
                 // Haptic pulse dans les deux cas (Material guideline).
                 onLongClick = {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    if (onLongClickOverride != null) onLongClickOverride() else actionsSheetOpen = true
+                    if (selectionMode && onSelectMultiple != null) onSelectMultiple()
+                    else actionsSheetOpen = true
                 },
             )
             // v1.13.0 — check icon en overlay quand sélectionné. Placé en bas-
@@ -666,6 +672,15 @@ private fun SwipeableConversationRow(
             // v1.11.0 — null en PanicDecoy (le parent ne passe pas le callback)
             // → l'item de menu "Déplacer vers le coffre" n'apparaît pas.
             onMoveToVaultRequested = onMoveToVault?.let { handler ->
+                {
+                    actionsSheetOpen = false
+                    handler()
+                }
+            },
+            // v1.13.1 — item "Sélectionner plusieurs" qui entre en mode sélection
+            // multi. null en PanicDecoy (le sélection-mode TopAppBar est aussi
+            // masquée en decoy, cohérence cross-écran).
+            onSelectMultipleRequested = onSelectMultiple?.let { handler ->
                 {
                     actionsSheetOpen = false
                     handler()
@@ -745,6 +760,7 @@ private fun ConversationActionsSheet(
     onBlockRequested: () -> Unit,
     onDeleteRequested: () -> Unit,
     onMoveToVaultRequested: (() -> Unit)? = null,
+    onSelectMultipleRequested: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -774,6 +790,14 @@ private fun ConversationActionsSheet(
                     leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
                     headlineContent = { Text(stringResource(R.string.vault_move_in)) },
                     modifier = Modifier.clickable(onClick = onMoveToVaultRequested),
+                )
+            }
+            // v1.13.1 — entrée mode sélection multiple via long-press menu.
+            if (onSelectMultipleRequested != null) {
+                androidx.compose.material3.ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Check, contentDescription = null) },
+                    headlineContent = { Text(stringResource(R.string.bulk_select_multiple)) },
+                    modifier = Modifier.clickable(onClick = onSelectMultipleRequested),
                 )
             }
             androidx.compose.material3.ListItem(

@@ -95,18 +95,20 @@ fun Avatar(
  * premier (haut-gauche de l'avatar), `dark` donne la profondeur sans
  * casser la palette.
  *
- * v1.13.0 — palette **strictement bleue** (11 nuances). Les 3 dernières
- * entrées à teinte verdâtre de v1.12.0 (teal, dark teal, cyan) ont été
- * retirées sur demande user : la liste doit ne contenir que les bleus
- * "originaux" de l'identité de marque. Reste donc royal / electric /
- * cobalt / brand-blue / sky / periwinkle / azure / navy / cool-steel
- * + slate / gunmetal (blue-grey neutre, considéré famille bleue).
+ * v1.13.1 — palette **purement bleue, 9 nuances**. Les 2 dernières entrées
+ * blue-grey de v1.13.0 (slate `0xFF546E7A` G≈B et gunmetal `0xFF455A64`
+ * G≈B) ont été retirées sur demande user : elles peuvent apparaître
+ * verdâtres selon la calibration écran. Reste donc 4 royal/electric/
+ * cobalt + 3 sky/periwinkle/azure + 2 navy/cool-steel + indigo deep
+ * pour compenser le retrait. Tous strictement R<G<B (composante bleu
+ * dominante), donc aucun risque de tilt vert.
  *
  * Historique :
  *  - v1.10.x = 7 nuances (palette d'origine)
  *  - v1.11.0 = 14 nuances (5 rouges + 1 plum + 8 bleu/teal — retiré v1.12)
  *  - v1.12.0 = 14 nuances pure blue/teal/cyan/navy (rouges retirés)
- *  - v1.13.0 = 11 nuances **bleu strict** (verts/teals/cyan retirés)
+ *  - v1.13.0 = 11 nuances bleu strict + 2 blue-grey (retiré v1.13.1)
+ *  - v1.13.1 = 9 nuances **purement bleues** (retrait slate + gunmetal)
  *
  * Toutes les couleurs vérifiées WCAG AA (ratio ≥ 4.5:1) contre `Color.White`
  * pour le texte initiales. Hash déterministe via `deterministicHue` modulo
@@ -123,9 +125,7 @@ private val BRAND_PALETTE: List<Pair<Color, Color>> = listOf(
     Color(0xFF2E7DA0) to Color(0xFF1F6C8B), // sky
     Color(0xFF4C6FA8) to Color(0xFF3A579E), // periwinkle
     Color(0xFF1A75C8) to Color(0xFF1565C0), // azure
-    // ── Navy & slate (4) ──
+    // ── Navy & deep indigo (2) ──
     Color(0xFF4A6090) to Color(0xFF2E3F6E), // navy
-    Color(0xFF5E72A0) to Color(0xFF3E5288), // cool steel
-    Color(0xFF546E7A) to Color(0xFF29434E), // slate
-    Color(0xFF455A64) to Color(0xFF1C313A), // gunmetal
+    Color(0xFF3949AB) to Color(0xFF1A237E), // indigo deep (Material Indigo 600→900)
 )

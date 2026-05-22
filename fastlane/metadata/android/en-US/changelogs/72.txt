@@ -1,0 +1,13 @@
+v1.13.1 — UX hotfix on top of v1.13.0
+
+• Long-press on a conv inside the vault → menu
+  "Move out of vault" (quick action) + "Select
+  multiple" entry
+• Same in main list: legacy Block/Delete/Move
+  to vault + Select multiple
+• PIN re-entry suppressed when going back from
+  a conv (session unlock preserved through
+  VaultManager Singleton)
+• Avatar palette: removed slate + gunmetal
+  shades that could look greenish. 9 shades
+  now strictly blue.

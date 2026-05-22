@@ -1,0 +1,13 @@
+v1.13.1 — Hotfix UX post-v1.13.0
+
+• Appui long sur conv dans le coffre → menu
+  "Sortir du coffre" (action rapide) + entrée
+  "Sélectionner plusieurs"
+• Idem dans la liste principale : menu legacy
+  Bloquer/Supprimer/Déplacer + Sélection multi
+• Re-saisie PIN coffre supprimée au retour
+  arrière depuis une conv (session unlock
+  préservée via VaultManager Singleton)
+• Palette avatars : retrait slate + gunmetal
+  qui pouvaient paraître verdâtres. 9 nuances
+  désormais purement bleues.

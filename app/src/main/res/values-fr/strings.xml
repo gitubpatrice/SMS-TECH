@@ -195,6 +195,8 @@
     <string name="bulk_vault_move_in">Déplacer dans le coffre</string>
     <string name="bulk_vault_move_out">Sortir du coffre</string>
     <string name="selected">Sélectionné</string>
+    <!-- v1.13.1 — entrée mode sélection multiple depuis l'ActionsSheet long-press -->
+    <string name="bulk_select_multiple">Sélectionner plusieurs</string>
     <!-- v1.13.0 — PIN/pass distinct coffre (second-factor) -->
     <string name="pin_entry_label">PIN ou mot de passe</string>
     <string name="pin_error_invalid">PIN ou mot de passe incorrect</string>

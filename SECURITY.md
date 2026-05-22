@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.13.0** (2026-05-22)
+Current release : **v1.13.1** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,17 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.13.0 (this release) — Multi-selection bulk vault + distinct vault PIN/password (second-factor) + biometric vault unlock + avatar palette strict-blue + 6 audit fixes
+### v1.13.1 (this release) — Hotfix UX on top of v1.13.0
+
+PATCH release fixing three user-reported regressions after v1.13.0:
+
+- **Long-press → ActionsSheet legacy** restored on both `ConversationsScreen` and `VaultScreen`. v1.13.0 had collapsed the long-press behaviour into "enter multi-selection mode" — discoverability of the legacy quick actions (Move to vault / Move out of vault / Block / Delete) was lost. v1.13.1 restores the ModalBottomSheet on long-press AND adds a new item "Sélectionner plusieurs" (Select multiple) which enters multi-selection mode for users who want batch ops.
+- **Vault PIN re-prompt bug** on return from `ThreadScreen` to `VaultScreen`. The `vaultPinPassed` Compose `remember` local state was reset on re-composition, causing the PIN dialog to briefly re-flash. Fix: initialise `vaultPinPassed` (and `unlocked`) from `VaultManager.sessionUnlocked` (Singleton AtomicBoolean) which persists for the app session. PIN re-entry now only happens after auto-lock / panic / process kill — the expected behaviour.
+- **Avatar palette : retrait slate + gunmetal**. v1.13.0 kept these two blue-grey shades but on some displays they could appear greenish (G ≈ B in RGB). v1.13.1 ships **9 strictly-blue stops** : 4 royal/electric/cobalt/brand-blue + 3 sky/periwinkle/azure + navy + indigo-deep (Material Indigo 600→900). All WCAG AA ≥ 4.5:1 vs white confirmed.
+
+No threat-model change, no DB / SQLCipher / Keystore change, no schema change. `adb install -r` non-destructive.
+
+### v1.13.0 — Multi-selection bulk vault + distinct vault PIN/password (second-factor) + biometric vault unlock + avatar palette strict-blue + 6 audit fixes
 
 MINOR release adding two requested features: **multi-selection bulk move into / out of the vault** (both lists), and a **dedicated PIN-or-password second-factor for the vault** (separate from the app PIN, with biometric fallback). Plus a palette cleanup removing the last three green-tinted avatar shades. No DB / SQLCipher / Keystore schema changes — `adb install -r` non-destructive.
 

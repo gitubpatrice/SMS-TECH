@@ -1,9 +1,12 @@
 package com.filestech.sms.ui.screens.vault
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -104,6 +107,20 @@ class VaultViewModel @Inject constructor(
 
     /** v1.13.0 — verify suspend pour le `PinEntryDialog`. */
     suspend fun verifyVaultPin(candidate: CharArray): Boolean = vaultPin.verifyVaultPin(candidate)
+
+    /**
+     * v1.13.1 — `true` si l'user a déjà déverrouillé le coffre dans la session
+     * courante (via PIN coffre OU biométrie OU `lockMode != BIOMETRIC`). Le
+     * flag vit dans [VaultManager.sessionUnlocked] (Singleton, AtomicBoolean),
+     * donc persiste à travers les navigations ThreadScreen ↔ VaultScreen et
+     * les recompositions Compose. Évite le re-prompt PIN à chaque retour
+     * arrière sur le VaultScreen.
+     *
+     * `lock()` est appelé sur autoLock / panic / process kill → reset à false
+     * → l'user re-saisira son PIN coffre au prochain accès, comportement
+     * attendu.
+     */
+    fun isVaultSessionUnlocked(): Boolean = vault.isVaultUnlockedInSession
 
     private val _events = Channel<Event>(Channel.BUFFERED)
     val events: Flow<Event> = _events.receiveAsFlow()
@@ -209,14 +226,27 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     //
     // `null` = pas encore évalué. `true` = autorisé, liste visible.
     // `false` = refusé, on revient en arrière sans rien dévoiler.
-    var unlocked by remember { mutableStateOf<Boolean?>(null) }
+    // v1.13.1 — init depuis `VaultManager.sessionUnlocked` pour ne pas re-déclencher
+    // BiometricPrompt sur un retour ThreadScreen → VaultScreen. Le Singleton state
+    // est l'autorité pour "déjà déverrouillé dans la session courante".
+    var unlocked by remember {
+        mutableStateOf<Boolean?>(if (viewModel.isVaultSessionUnlocked()) true else null)
+    }
     val ctx = LocalContext.current
 
     // v1.13.0 — si le PIN/pass distinct coffre est ON, on attend la validation
     // du PinEntryDialog avant d'enchaîner sur le flow biométrique. Le PinDialog
     // est rendu plus bas, son onSuccess flippe `vaultPinPassed=true` puis le
     // LaunchedEffect ci-dessous se relance via la clé composite et procède.
-    var vaultPinPassed by remember { mutableStateOf(false) }
+    // v1.13.1 — initialisation depuis `VaultManager.sessionUnlocked` (Singleton,
+    // AtomicBoolean) pour préserver le déverrouillage à travers les navigations
+    // ThreadScreen ↔ VaultScreen. Sans ça, le retour arrière depuis ThreadScreen
+    // recompose VaultScreen, le `remember` revient à `false`, et le dialog PIN
+    // ré-apparaît furtivement (bug v1.13.0 remonté user). Le sessionUnlocked
+    // est reset par autoLock / panic / process kill → re-prompt attendu.
+    var vaultPinPassed by remember {
+        mutableStateOf(viewModel.isVaultSessionUnlocked())
+    }
     val pinGateOpen = vaultPinRequired && !vaultPinPassed
 
     // v1.13.0 — détecte la présence d'un capteur biométrique pour proposer le
@@ -319,9 +349,11 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         }
     }
 
-    // v1.13.0 — long-press = entrer en sélection multiple (cf. `viewModel.toggleSelection`).
-    // Le ModalBottomSheet single-conv legacy de v1.11.0 a été retiré, la sélection
-    // multiple sert aussi pour 1 seul item (uniforme, pas de UX divergente).
+    // v1.13.1 — long-press hors sélection ouvre un ActionsSheet (single-conv
+    // quick action "Sortir du coffre" + entrée mode sélection multiple). Le
+    // legacy ModalBottomSheet v1.11.0 est ressuscité pour préserver la UX
+    // "appui long → action rapide" attendue par les utilisateurs.
+    var vaultSheetTarget by remember { mutableStateOf<Long?>(null) }
     val snackbarHost = remember { SnackbarHostState() }
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -430,10 +462,16 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                                             if (selectionMode) viewModel.toggleSelection(c.id)
                                             else onOpenThread(c.id)
                                         },
-                                        // v1.13.0 — long-press = toggle sélection (entre en
-                                        // mode si nécessaire). Le ModalBottomSheet legacy
-                                        // n'est plus utilisé : la sélection multi remplace.
-                                        onLongClick = { viewModel.toggleSelection(c.id) },
+                                        // v1.13.1 — long-press : si en sélection, toggle
+                                        // (cohérent avec Gmail). Sinon, ouvre l'ActionsSheet
+                                        // legacy qui offre (a) "Sortir du coffre" quick action
+                                        // single-conv, (b) "Sélection multiple..." pour
+                                        // entrer en mode batch. Restaure le flow v1.12 que
+                                        // l'user attend, sans perdre le multi-select v1.13.
+                                        onLongClick = {
+                                            if (selectionMode) viewModel.toggleSelection(c.id)
+                                            else vaultSheetTarget = c.id
+                                        },
                                     )
                                     if (isSelected) {
                                         Box(
@@ -492,6 +530,51 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                 }
             } else null,
         )
+    }
+
+    // v1.13.1 — ActionsSheet single-conv : long-press sur un row vault ouvre
+    // ce sheet avec (a) action rapide "Sortir du coffre" pour la conv ciblée,
+    // (b) entrée en mode sélection multiple si l'user veut batch. Restaure le
+    // pattern v1.12 attendu (appui long = action rapide) sans perdre le multi.
+    val pendingSheet = vaultSheetTarget
+    if (pendingSheet != null) {
+        val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+        )
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { vaultSheetTarget = null },
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = 12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.vault_actions_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                )
+                androidx.compose.material3.ListItem(
+                    leadingContent = { Icon(Icons.Outlined.LockOpen, contentDescription = null) },
+                    headlineContent = { Text(stringResource(R.string.vault_move_out)) },
+                    modifier = Modifier.clickable {
+                        viewModel.moveOutOfVault(pendingSheet)
+                        vaultSheetTarget = null
+                    },
+                )
+                androidx.compose.material3.ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Check, contentDescription = null) },
+                    headlineContent = { Text(stringResource(R.string.bulk_select_multiple)) },
+                    modifier = Modifier.clickable {
+                        viewModel.toggleSelection(pendingSheet)
+                        vaultSheetTarget = null
+                    },
+                )
+            }
+        }
     }
 }
 
