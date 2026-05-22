@@ -241,6 +241,22 @@
     <string name="emergency_dry_run_loc_unavailable">GPS unavailable (permission, hardware off, or no fix). SMS sent without coordinates.</string>
     <string name="emergency_dry_run_call_behavior_label">Call buttons behavior:</string>
     <string name="emergency_dry_run_loading">Resolving GPS…</string>
+    <!-- v1.14.1 — full-page emergency redesign : 4 colored call tiles + disable + open-from-notif -->
+    <string name="emergency_call_112_label">SOS European</string>
+    <string name="emergency_call_15_label">SAMU (medical)</string>
+    <string name="emergency_call_17_label">Police</string>
+    <string name="emergency_call_18_label">Firefighters</string>
+    <string name="emergency_section_call_title">Call directly</string>
+    <string name="emergency_section_sms_title">Send SOS SMS</string>
+    <string name="emergency_section_other_title">Other actions</string>
+    <string name="emergency_disable_button">Disable emergency mode</string>
+    <string name="emergency_disable_confirm_title">Disable emergency mode?</string>
+    <string name="emergency_disable_confirm_body">The big URGENCE button and the lock-screen shortcut will stop working until you reactivate them in Settings. You can always come back to this page later.</string>
+    <string name="emergency_disable_done">Emergency mode disabled.</string>
+    <string name="emergency_call_phone_permission_request">Allow direct calling</string>
+    <string name="emergency_call_phone_permission_body">To call 112 / 15 / 17 / 18 directly without going through the dialer, SMS Tech needs the CALL_PHONE permission. If you refuse, taps will fall back to the dialer (you confirm).</string>
+    <string name="emergency_call_close_label">Call a relative</string>
+    <string name="emergency_call_close_picker_title">Which relative do you want to call?</string>
     <!-- v1.13.0 — distinct vault PIN/pass (second-factor) -->
     <string name="pin_entry_label">PIN or password</string>
     <string name="pin_error_invalid">Incorrect PIN or password</string>
@@ -307,8 +323,8 @@
     <string name="settings_emergency_shortcut_desc">Show a persistent notification with EMERGENCY + 112 actions, accessible without unlocking the phone. Off by default.</string>
     <string name="emergency_shortcut_no_app_to_dial">No app installed to dial 112</string>
     <string name="emergency_shortcut_action_police">Dial 17</string>
-    <string name="settings_emergency_call_police_title">Police button (FR — 17)</string>
-    <string name="settings_emergency_call_police_desc">Show an additional "Dial 17" button (French Police). The 112 (Europe-wide SOS) remains always available. Off by default.</string>
+    <string name="settings_emergency_call_police_title">Police 17 quick action in lock-screen notif</string>
+    <string name="settings_emergency_call_police_desc">Add a "Dial 17" quick action to the persistent emergency lock-screen notification. The 17 button is always visible in the in-app Emergency page regardless of this setting. Off by default.</string>
 
     <!-- Backup / restore dialogs -->
     <string name="backup_explainer">Encrypted backup uses AES-256-GCM with PBKDF2-HMAC-SHA512 key derivation. Pick a strong passphrase — without it the file cannot be recovered.</string>

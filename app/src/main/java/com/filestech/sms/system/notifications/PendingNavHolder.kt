@@ -46,11 +46,22 @@ class PendingNavHolder @Inject constructor() {
      * [isExpired].
      */
     data class Pending(
-        val conversationId: Long,
+        val conversationId: Long = -1L,
+        /**
+         * v1.14.1 — `true` si la cible de navigation est l'écran Mode urgence
+         * (tap sur le corps de la notification persistante lock-screen). Au
+         * moins un de `conversationId > 0` ou `openEmergency = true` doit être
+         * vrai pour que le pending soit considéré valide ([isValid]).
+         */
+        val openEmergency: Boolean = false,
         val postedAt: Long = System.currentTimeMillis(),
     ) {
         fun isExpired(now: Long = System.currentTimeMillis()): Boolean =
             now - postedAt > PENDING_TTL_MS
+
+        /** v1.14.1 — accepte conv tap (id valid) OU emergency tap. */
+        val isValid: Boolean
+            get() = conversationId > 0L || openEmergency
     }
 
     private val _pending = MutableStateFlow<Pending?>(null)
@@ -60,10 +71,10 @@ class PendingNavHolder @Inject constructor() {
      * Pose une navigation en attente. Écrase silencieusement la précédente —
      * comportement souhaité : si deux notifs sont tapées rapidement, seule la
      * dernière compte (celle dont l'utilisateur veut voir le thread).
-     * Refuse silencieusement un `conversationId` ≤ 0 (id Room invalide).
+     * Refuse silencieusement un pending invalide (ni conv ni emergency).
      */
     fun set(pending: Pending) {
-        if (pending.conversationId <= 0L) return
+        if (!pending.isValid) return
         _pending.value = pending
     }
 

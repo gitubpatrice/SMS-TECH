@@ -40,8 +40,14 @@ object EmergencyCallHelper {
      * Numéros d'urgence autorisés. Hardcodés ici pour empêcher tout chemin
      * d'attaque "intent extra → CALL n'importe quel numéro premium" depuis
      * un caller mal intentionné (BroadcastReceiver exported par accident).
+     *
+     * v1.14.1 — ajout 15 (SAMU FR) et 18 (Pompiers FR). 112 reste le SOS
+     * EU unifié. Tous les numéros français sont 24/7/365 gratuits. Ils
+     * sont reconnus par l'OS Android comme "emergency numbers" et peuvent
+     * être composés même quand l'écran est verrouillé sur la plupart des
+     * devices (comportement OS standard).
      */
-    private val ALLOWED_NUMBERS = setOf("112", "17")
+    private val ALLOWED_NUMBERS = setOf("15", "17", "18", "112")
 
     enum class CallOutcome {
         /** Appel placé (DIALER ouvert OU CALL_PHONE exécuté). */
@@ -79,9 +85,10 @@ object EmergencyCallHelper {
     }
 
     /**
-     * `ACTION_CALL` — appel DIRECT via CALL_PHONE permission. À utiliser
-     * UNIQUEMENT après hold-3s côté UI (anti-pocket-dial). Requires
-     * `CALL_PHONE` runtime permission accordée.
+     * `ACTION_CALL` — appel DIRECT via CALL_PHONE permission. Whitelist
+     * stricte aux numéros d'urgence officiels (112 / 15 / 17 / 18) :
+     * un numéro hors whitelist est rejeté AVANT toute interaction avec
+     * `startActivity`. Anti redirect via Intent extra forgé.
      *
      * Retourne `PERMISSION_DENIED` si la permission n'est pas accordée — le
      * caller doit fallback en `openDialer` et afficher un warning UX.
@@ -91,11 +98,44 @@ object EmergencyCallHelper {
             Timber.w("EmergencyCallHelper.placeCall: rejected non-whitelisted number %s", number)
             return CallOutcome.INVALID_NUMBER
         }
+        return executeCall(context, number, isWhitelistedEmergency = true)
+    }
+
+    /**
+     * v1.14.1 — appel DIRECT à un contact SafetyCall configuré par l'user
+     * (`AppSettings.security.safetyCall.contacts`). PAS de whitelist sur
+     * le numéro : le contact est sous le contrôle de l'user, persisté en
+     * DataStore, pas passé en intent extra. Le caller doit s'assurer que
+     * `phoneNumber` vient bien d'un `SafetyCallContact.phoneNumber` lu
+     * depuis Settings — JAMAIS d'une source non-contrôlée.
+     *
+     * Même flow PERMISSION_DENIED / OS_ERROR que [placeCall]. Caller doit
+     * gérer fallback `openDialer` si refusé.
+     */
+    fun placeTrustedContactCall(context: Context, phoneNumber: String): CallOutcome {
+        val cleaned = phoneNumber.trim()
+        if (cleaned.isBlank()) {
+            Timber.w("EmergencyCallHelper.placeTrustedContactCall: blank number rejected")
+            return CallOutcome.INVALID_NUMBER
+        }
+        return executeCall(context, cleaned, isWhitelistedEmergency = false)
+    }
+
+    /**
+     * Common back-end: permission check + ACTION_CALL intent + try/catch.
+     * Le paramètre `isWhitelistedEmergency` n'a aucun effet runtime — il
+     * sert uniquement à différencier les logs en cas d'erreur.
+     */
+    private fun executeCall(
+        context: Context,
+        number: String,
+        isWhitelistedEmergency: Boolean,
+    ): CallOutcome {
         val granted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.CALL_PHONE,
         ) == PackageManager.PERMISSION_GRANTED
         if (!granted) {
-            Timber.w("EmergencyCallHelper.placeCall: CALL_PHONE not granted for %s", number)
+            Timber.w("EmergencyCallHelper.placeCall: CALL_PHONE not granted (emergency=%s)", isWhitelistedEmergency)
             return CallOutcome.PERMISSION_DENIED
         }
         val intent = Intent(Intent.ACTION_CALL).apply {
@@ -106,10 +146,10 @@ object EmergencyCallHelper {
             context.startActivity(intent)
             CallOutcome.SUCCESS
         } catch (se: SecurityException) {
-            Timber.w(se, "EmergencyCallHelper.placeCall: SecurityException for %s", number)
+            Timber.w(se, "EmergencyCallHelper.placeCall: SecurityException (emergency=%s)", isWhitelistedEmergency)
             CallOutcome.OS_ERROR
         } catch (t: Throwable) {
-            Timber.w(t, "EmergencyCallHelper.placeCall: failed for %s", number)
+            Timber.w(t, "EmergencyCallHelper.placeCall: failed (emergency=%s)", isWhitelistedEmergency)
             CallOutcome.OS_ERROR
         }
     }

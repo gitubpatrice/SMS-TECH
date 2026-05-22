@@ -92,6 +92,15 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
         const val ACTION_DIAL_112 = "com.filestech.sms.SHORTCUT_DIAL_112"
         const val ACTION_DIAL_POLICE = "com.filestech.sms.SHORTCUT_DIAL_POLICE"
 
+        /**
+         * v1.14.1 — action portée par le `setContentIntent` de la notification
+         * persistante : tap sur le corps de la notif → ouvre la page Mode
+         * urgence in-app (full screen avec tous les boutons d'urgence visibles).
+         * Distinct des 3 quick actions qui restent ACTION_DIAL_* (lock-screen
+         * sécurité, l'OS gère le unlock si besoin).
+         */
+        const val ACTION_OPEN_EMERGENCY = "com.filestech.sms.SHORTCUT_OPEN_EMERGENCY"
+
         /** ID unique de la notif persistante (jamais collisionne avec celles SMS). */
         const val NOTIF_ID_EMERGENCY_SHORTCUT = 0x53484f52 // 'SHOR'
 

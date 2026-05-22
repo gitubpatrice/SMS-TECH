@@ -360,6 +360,16 @@ class MainActivity : FragmentActivity() {
                 }
                 incomingShare.clear()
             }
+            com.filestech.sms.system.receiver.EmergencyShortcutReceiver.ACTION_OPEN_EMERGENCY -> {
+                // v1.14.1 — l'utilisateur a tapé le corps de la notification
+                // persistante du raccourci urgence (PendingIntent setContentIntent
+                // posé par EmergencyShortcutNotifier). On marque pending nav
+                // openEmergency=true ; AppRoot consommera dans un LaunchedEffect
+                // après hydratation du NavController + guards (lock actif → pas
+                // de pop, panic-decoy → pas de pop).
+                incomingShare.clear()
+                pendingNav.set(PendingNavHolder.Pending(openEmergency = true))
+            }
             IncomingMessageNotifier.ACTION_OPEN_CONVERSATION -> {
                 // v1.8.0 (bug 4 fix) — l'utilisateur a tapé une notif de message
                 // entrant. On extrait le `conversationId` mis en extra par

@@ -1,0 +1,12 @@
+v1.14.1 — Page Mode urgence refonte
+
+• 5 gros boutons direct-call sur une seule
+  page : 112 / 15 SAMU / 17 Police / 18 Pompiers
+  / ★ Appeler un proche (SafetyCall)
+• Tap = appel direct (CALL_PHONE), fallback
+  composeur si permission refusée
+• Picker si ≥ 2 proches configurés
+• Bouton "Désactiver mode urgence" + confirm
+• Tap notif lock-screen → ouvre la page
+• 7 fixes audit (hooks Compose, orphelins,
+  perf, i18n)

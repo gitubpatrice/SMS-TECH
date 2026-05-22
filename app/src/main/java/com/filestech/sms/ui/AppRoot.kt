@@ -155,6 +155,19 @@ fun AppRoot() {
             pendingNav.clear()
             return@LaunchedEffect
         }
+        // v1.14.1 — branche openEmergency : tap sur le corps de la notif
+        // persistante raccourci urgence → nav vers Emergency. Si on est
+        // déjà sur Emergency, consomme sans push.
+        if (current.openEmergency) {
+            val currentRoute = nav.currentDestination?.route
+            if (currentRoute?.contains("Emergency") == true) {
+                pendingNav.clear()
+                return@LaunchedEffect
+            }
+            pendingNav.consume() ?: return@LaunchedEffect
+            nav.navigate(Emergency)
+            return@LaunchedEffect
+        }
         // Si on est déjà sur ce thread précis, on consomme sans push (évite
         // doublon backstack). Le check est best-effort : `currentDestination
         // .arguments` peut être null pendant une transition de nav.

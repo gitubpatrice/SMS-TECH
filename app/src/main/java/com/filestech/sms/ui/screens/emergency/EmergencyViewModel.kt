@@ -62,6 +62,16 @@ class EmergencyViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0)
 
     /**
+     * v1.14.1 — liste complète des contacts SafetyCall pour le bouton
+     * "Appeler un proche" : si 1 contact → call direct, si ≥2 → picker
+     * dialog. Réutilise la même source que `safetyCallContactsCount`.
+     */
+    val safetyCallContacts: StateFlow<List<com.filestech.sms.domain.safetycall.SafetyCallContact>> =
+        settings.flow
+            .map { it.security.safetyCall.contacts }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+    /**
      * v1.12.0 — exposé pour afficher le bouton "Appeler 17" dans
      * [EmergencyScreen] uniquement quand l'user a opt-in dans Settings.
      * Le 112 reste toujours visible (SOS européen, pas de toggle).
@@ -70,42 +80,10 @@ class EmergencyViewModel @Inject constructor(
         .map { it.security.emergencyCallPoliceEnabled }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
 
-    /**
-     * v1.14.0 — comportement boutons 112/17 :
-     *  - [com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY] (default) : tap → composeur pré-rempli.
-     *  - [com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL] : hold-3s → appel direct CALL_PHONE.
-     */
-    val callBehavior: StateFlow<com.filestech.sms.data.local.datastore.EmergencyCallBehavior> = settings.flow
-        .map { it.security.emergencyCallBehavior }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000L),
-            com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
-        )
-
-    /**
-     * v1.14.0 audit SEC-1 — appelé par l'UI au ON_RESUME pour détecter qu'un
-     * user a révoqué CALL_PHONE depuis Paramètres Android. Si la permission
-     * est absente alors que `emergencyCallBehavior = HOLD_3S_DIRECT_CALL`,
-     * on revert le setting à DIALER_ONLY pour aligner état app + OS.
-     * Sans ça, chaque tap sur 112/17 retournerait `PERMISSION_DENIED` →
-     * l'user croit que l'app est cassée en situation d'urgence.
-     */
-    fun revertCallBehaviorIfPermissionRevoked(hasCallPhonePermission: Boolean) {
-        if (hasCallPhonePermission) return
-        val current = callBehavior.value
-        if (current == com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL) {
-            viewModelScope.launch {
-                settings.update { s ->
-                    s.copy(
-                        security = s.security.copy(
-                            emergencyCallBehavior = com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
-                        ),
-                    )
-                }
-            }
-        }
-    }
+    // v1.14.0 `callBehavior` + `revertCallBehaviorIfPermissionRevoked` retirés
+    // v1.14.1 : la refonte EmergencyScreen full-page utilise direct-call +
+    // fallback automatique au composeur, le setting `emergencyCallBehavior`
+    // est dead (clé DataStore préservée pour compat ascendante).
 
     /**
      * Draft local édité par l'écran setup. Hydraté one-shot via `first()`
@@ -257,7 +235,6 @@ class EmergencyViewModel @Inject constructor(
                     body = body,
                     contactsCount = contacts.size,
                     redactedContacts = contacts.map { redactPhoneNumber(it.phoneNumber) },
-                    callBehavior = snapshot.security.emergencyCallBehavior,
                 )
             } finally {
                 _isPreviewLoading.value = false
@@ -268,6 +245,32 @@ class EmergencyViewModel @Inject constructor(
     /** Ferme le dialog dry-run. */
     fun dismissPreview() {
         _previewState.value = null
+    }
+
+    /**
+     * v1.14.1 — bouton "Désactiver le mode urgence" sur EmergencyScreen.
+     * Pose `emergency.enabled = false` dans DataStore. Effets :
+     *  - le gros bouton URGENCE devient `enabled = false` (grisé)
+     *  - le `MainApplication` flow combine cancel la notif persistante
+     *    lock-screen (raccourci 112/17 disparaît)
+     *  - les sections Settings → Mode urgence montrent "désactivé"
+     *  - le `BootReceiver` ne re-poste plus la notif au boot
+     *
+     * L'user peut re-activer en allant dans Réglages → Mode urgence ou
+     * en re-cliquant sur l'icône Edit en haut de cette page (qui ouvre
+     * EmergencySetupScreen). Le reset est immédiat, sans envoi SMS.
+     *
+     * PanicDecoy guard non nécessaire ici : l'écran lui-même est gated
+     * en PanicDecoy via `AppRoot` (cf. v1.10.0 SEC-1).
+     */
+    fun disableEmergencyMode() = viewModelScope.launch {
+        settings.update { s ->
+            s.copy(
+                security = s.security.copy(
+                    emergency = s.security.emergency.copy(enabled = false),
+                ),
+            )
+        }
     }
 
     /**
@@ -298,6 +301,5 @@ class EmergencyViewModel @Inject constructor(
         val body: String,
         val contactsCount: Int,
         val redactedContacts: List<String>,
-        val callBehavior: com.filestech.sms.data.local.datastore.EmergencyCallBehavior,
     )
 }

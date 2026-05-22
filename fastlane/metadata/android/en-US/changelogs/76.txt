@@ -1,0 +1,12 @@
+v1.14.1 — Full-page Emergency redesign
+
+• 5 big direct-call buttons on one page:
+  112 / 15 SAMU / 17 Police / 18 Firefighters
+  / ★ Call a relative (SafetyCall)
+• Tap = direct call (CALL_PHONE), dialer
+  fallback if permission refused
+• Picker if ≥ 2 relatives configured
+• "Disable emergency mode" button + confirm
+• Tap lock-screen notif → opens the page
+• 7 audit fixes (Compose hooks, orphan
+  settings, perf, i18n)

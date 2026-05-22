@@ -231,6 +231,22 @@
     <string name="emergency_dry_run_loc_unavailable">GPS indisponible (permission, matériel éteint, ou pas de fix). SMS envoyé sans coordonnées.</string>
     <string name="emergency_dry_run_call_behavior_label">Comportement des boutons d\'appel :</string>
     <string name="emergency_dry_run_loading">Résolution GPS…</string>
+    <!-- v1.14.1 — redesign page urgence complète : 4 tuiles couleurs + désactiver + tap-notif-ouvre-page -->
+    <string name="emergency_call_112_label">SOS européen</string>
+    <string name="emergency_call_15_label">SAMU (médical)</string>
+    <string name="emergency_call_17_label">Police</string>
+    <string name="emergency_call_18_label">Pompiers</string>
+    <string name="emergency_section_call_title">Appeler directement</string>
+    <string name="emergency_section_sms_title">Envoyer un SOS aux proches</string>
+    <string name="emergency_section_other_title">Autres actions</string>
+    <string name="emergency_disable_button">Désactiver le mode urgence</string>
+    <string name="emergency_disable_confirm_title">Désactiver le mode urgence ?</string>
+    <string name="emergency_disable_confirm_body">Le gros bouton URGENCE et le raccourci écran verrouillé cesseront de fonctionner jusqu\'à réactivation dans les Réglages. Vous pourrez toujours revenir sur cette page plus tard.</string>
+    <string name="emergency_disable_done">Mode urgence désactivé.</string>
+    <string name="emergency_call_phone_permission_request">Autoriser l\'appel direct</string>
+    <string name="emergency_call_phone_permission_body">Pour appeler 112 / 15 / 17 / 18 directement sans passer par le composeur, SMS Tech a besoin de la permission CALL_PHONE. Si vous refusez, les taps repassent par le composeur (vous confirmez).</string>
+    <string name="emergency_call_close_label">Appeler un proche</string>
+    <string name="emergency_call_close_picker_title">Quel proche voulez-vous appeler ?</string>
     <!-- v1.13.0 — PIN/pass distinct coffre (second-factor) -->
     <string name="pin_entry_label">PIN ou mot de passe</string>
     <string name="pin_error_invalid">PIN ou mot de passe incorrect</string>
@@ -297,8 +313,8 @@
     <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec actions URGENCE + 112, accessible sans déverrouiller le téléphone. Désactivé par défaut.</string>
     <string name="emergency_shortcut_no_app_to_dial">Aucune application pour composer le 112</string>
     <string name="emergency_shortcut_action_police">Appeler 17</string>
-    <string name="settings_emergency_call_police_title">Bouton Police (FR — 17)</string>
-    <string name="settings_emergency_call_police_desc">Affiche un bouton supplémentaire « Appeler 17 » (Police nationale). Le 112 (SOS européen) reste toujours disponible. Désactivé par défaut.</string>
+    <string name="settings_emergency_call_police_title">Action rapide Police 17 sur la notif lock-screen</string>
+    <string name="settings_emergency_call_police_desc">Ajoute une action rapide « Appeler 17 » sur la notification persistante d\'urgence. Le bouton 17 reste toujours visible dans la page Mode urgence in-app, quel que soit ce réglage. Désactivé par défaut.</string>
 
     <!-- Backup / restore -->
     <string name="backup_explainer">La sauvegarde chiffrée utilise AES-256-GCM et PBKDF2-HMAC-SHA512. Choisissez une phrase de passe solide — sans elle le fichier est irrécupérable.</string>

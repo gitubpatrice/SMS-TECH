@@ -86,6 +86,29 @@ class EmergencyShortcutNotifier @Inject constructor(
             )
         } else null
 
+        // v1.14.1 — Tap sur le corps de la notif (hors actions) → ouvre la page
+        // Mode urgence in-app. PendingIntent vers MainActivity avec un extra
+        // `ACTION_OPEN_EMERGENCY` que MainActivity.onNewIntent route vers
+        // `PendingNavHolder.set(openEmergency=true)` → AppRoot navigate Emergency.
+        val openEmergencyIntent = android.content.Intent(
+            context,
+            com.filestech.sms.MainActivity::class.java,
+        ).apply {
+            action = EmergencyShortcutReceiver.ACTION_OPEN_EMERGENCY
+            // SINGLE_TOP + CLEAR_TOP : si MainActivity est déjà en haut, on évite
+            // de l'empiler. Si une autre Activity SMS Tech est en haut, on la
+            // pop et on revient sur MainActivity (qui re-route Emergency).
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openEmergencyPI = PendingIntent.getActivity(
+            context,
+            REQUEST_OPEN_EMERGENCY,
+            openEmergencyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val builder = NotificationCompat.Builder(
             context,
             NotificationChannelInitializer.CHANNEL_EMERGENCY_SHORTCUT,
@@ -93,6 +116,7 @@ class EmergencyShortcutNotifier @Inject constructor(
             .setSmallIcon(R.drawable.ic_notification_message)
             .setContentTitle(context.getString(R.string.emergency_shortcut_notif_title))
             .setContentText(context.getString(R.string.emergency_shortcut_notif_text))
+            .setContentIntent(openEmergencyPI)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .setShowWhen(false)
@@ -143,5 +167,7 @@ class EmergencyShortcutNotifier @Inject constructor(
         private const val REQUEST_TRIGGER = 0x54524947 // 'TRIG'
         private const val REQUEST_DIAL_112 = 0x44313132 // 'D112'
         private const val REQUEST_DIAL_POLICE = 0x44504f4c // 'DPOL'
+        // v1.14.1 — content-intent request code, distinct des 3 actions.
+        private const val REQUEST_OPEN_EMERGENCY = 0x4f50454e // 'OPEN'
     }
 }

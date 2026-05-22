@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.0** (2026-05-22)
+Current release : **v1.14.1** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,50 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.14.0 (this release) — Vault auto-lock + Emergency hold-3s call (CALL_PHONE) + kill-switch "I am OK" + dry-run preview + 4 audit fixes
+### v1.14.1 (this release) — Emergency screen full-page redesign + 15 SAMU + 18 Pompiers + "Call a relative" + Disable mode + tap-notif-opens-page + 5 audit fixes
+
+PATCH release post-v1.14.0 répondant à un retour user pour rendre la page Mode urgence "plus claire avec toutes les actions visibles, sans manipulation". Toutes les actions urgence sont désormais regroupées sur un seul écran avec gros boutons couleurs.
+
+**4 sujets livrés** :
+
+1. **EmergencyScreen full-page redesign** — 3 sections claires : "Appeler directement" (5 tuiles), "Envoyer un SOS aux proches" (preview + hold-3s SMS), "Autres actions" (Tester / Désactiver). Scroll vertical pour petits écrans. Toutes les actions urgence sur la même page, plus de navigation cachée.
+
+2. **Numéros français complets — 4 tuiles d'appel direct + 1 tuile proches** :
+   - **112** (SOS européen, BrandDanger rouge)
+   - **15** (SAMU, teal `#00796B`)
+   - **17** (Police, navy `#1565C0`)
+   - **18** (Pompiers, orange `#E65100`)
+   - **★ Appeler un proche** (primary brand-blue, si ≥1 contact SafetyCall) — si 1 contact, call direct ; si ≥2, picker dialog
+   - Toutes les couleurs WCAG AA ≥ 4.5:1 vs white text.
+   - **Tap = appel direct** (`ACTION_CALL`) sans passer par le composeur. Fallback automatique sur composeur si CALL_PHONE refusée.
+
+3. **Bouton "Désactiver le mode urgence"** — sur la page elle-même, avec dialog de confirmation. Met `emergency.enabled = false` en DataStore. Effet immédiat : URGENCE button grisé, notif lock-screen cancel, sections Settings affichent "désactivé". Réactivable depuis Settings ou re-setup. PanicDecoy déjà gated en amont (cf. v1.10.0 SEC-1).
+
+4. **Tap notification persistante → ouvre la page in-app** — `setContentIntent` ajouté sur le NotificationCompat.Builder avec PendingIntent `getActivity` vers MainActivity, action `ACTION_OPEN_EMERGENCY`. `MainActivity.handleSharedIntent` route → `pendingNav.set(Pending(openEmergency = true))`. `AppRoot.LaunchedEffect` consume → `nav.navigate(Emergency)`. Préserve PanicDecoy guard : si décoy actif, le pending est holding 30s sans push (TTL `PENDING_TTL_MS`). Reprise normale si user sort du décoy avant expiration.
+
+#### Sécurité — élargissement whitelist `EmergencyCallHelper`
+
+- `ALLOWED_NUMBERS = setOf("15", "17", "18", "112")` (étendu de 2 à 4).
+- Nouvelle méthode `placeTrustedContactCall(context, phoneNumber)` SANS whitelist par design (le numéro vient du DataStore SafetyCall configuré user, pas d'une source intent extra). Refacto interne `executeCall(...)` privé partagé entre `placeCall` (whitelist stricte) et `placeTrustedContactCall` (contact trusted).
+- L'UI route les contacts SafetyCall via `viewModel.safetyCallContacts` (StateFlow → DataStore privé) ; aucun chemin Intent extra → `placeTrustedContactCall`. Vérifié par audit.
+
+**Audit final multi-axes** (sécurité + perf + qualité + branchements + cohérence + vulnérabilités) — 2 MEDIUM + 5 LOW findings, tous fixés :
+
+- **MEDIUM SEC-1** — `safetyCallContacts.collectAsStateWithLifecycle()` hoisté au top du Composable EmergencyScreen (vs body Scaffold conditionnel) pour respecter les règles de position des hooks Compose. Suppression du double `.let { _ -> }` mort qui masquait la précédente `state`.
+- **MEDIUM COH-1** — Setting `emergencyCallBehavior` (DIALER_ONLY / HOLD_3S_DIRECT_CALL ajouté v1.14.0) devenu orphelin avec le redesign v1.14.1 (la page utilise toujours direct-call avec fallback). Nettoyage : suppression `EmergencyCallBehaviorPickerDialog` + `EmergencyBehaviorRadioRow` de SettingsScreen + suppression `EmergencyViewModel.callBehavior` StateFlow + suppression `revertCallBehaviorIfPermissionRevoked()` + suppression `DryRunPreview.callBehavior` field. La clé DataStore `emergencyCallBehavior` est PRÉSERVÉE pour backward compat (downgrade safe) mais n'est plus consommée par l'UI.
+- **LOW SEC-2** — Commentaire explicatif ajouté sur la séparation `ACTION_OPEN_EMERGENCY` (handled par MainActivity, pas par EmergencyShortcutReceiver) pour maintenance future.
+- **LOW COH-2** — Strings `settings_emergency_call_police_title/desc` FR+EN mises à jour pour clarifier que le toggle ne contrôle plus que la 3e action de la notif lock-screen (le bouton 17 in-app est toujours visible v1.14.1).
+- **LOW PERF-1+PERF-2** — `callPhonePermLauncher` hoisté au top du Composable. `callPhoneGranted` lu à chaque recomposition (cheap), captureur recompose au retour ON_RESUME → status à jour.
+- **LOW UI-1** — String orpheline `emergency_call_close_no_contacts` retirée FR + EN (le bouton "Appeler un proche" est conditionné par `if (safetyContacts.isNotEmpty())`, pas d'état "disabled" affiché).
+
+#### Threat model — précisions
+
+- Direct call via CALL_PHONE permission : risque pocket-dial mitigé par (a) nav explicite vers EmergencyScreen + (b) tuiles disposées en colonne (pas un seul tap accidentel sur tap-target oublié) + (c) confirm Désactiver mode pour annuler. Acceptable pour la feature demandée.
+- Le picker "Appeler un proche" ne montre que les contacts SafetyCall (déjà configurés par user, autorisés par défaut). Pas d'accès Contacts Android natif → pas de leak `READ_CONTACTS`.
+- Le bouton "Désactiver le mode urgence" : action réversible (Settings re-enable). Pas d'effet destructif sur les contacts ni le template. PanicDecoy déjà gated par `AppRoot` upstream.
+- `ACTION_OPEN_EMERGENCY` : action constante, PendingIntent FLAG_IMMUTABLE, targeting `MainActivity::class.java` explicite. Pas exposé en intent-filter manifest → pas d'exfiltration possible par une autre app.
+
+### v1.14.0 — Vault auto-lock + Emergency hold-3s call (CALL_PHONE) + kill-switch "I am OK" + dry-run preview + 4 audit fixes
 
 MINOR release plafonnant le mode urgence de SMS Tech avant la sortie d'une app dédiée **SOS Tech** (Files Tech n°8) pour les features étendues (vocal, sirène, GPS live). Quatre sujets livrés :
 
