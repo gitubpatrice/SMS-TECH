@@ -320,25 +320,10 @@ fun EmergencyScreen(
             )
             Spacer(Modifier.height(12.dp))
 
-            // "Tester sans envoyer".
-            val isLoading by viewModel.isPreviewLoading.collectAsStateWithLifecycle()
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.previewTrigger() },
-                enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (isLoading) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(Modifier.size(8.dp))
-                    Text(stringResource(R.string.emergency_dry_run_loading))
-                } else {
-                    Text(stringResource(R.string.emergency_dry_run_button))
-                }
-            }
-            Spacer(Modifier.height(8.dp))
+            // v1.14.5 — bouton "Tester sans envoyer" retiré sur demande user
+            // (encombrait la page urgence — le mode actif est déjà visible via
+            // la section recap au-dessus). Le dry-run reste accessible via
+            // SettingsScreen → Mode urgence pour debug avancé.
 
             // "Désactiver le mode urgence" — confirm dialog.
             var disableConfirmOpen by remember { mutableStateOf(false) }
@@ -380,88 +365,8 @@ fun EmergencyScreen(
         }
     }
 
-    // v1.14.0 — Dialog dry-run "Tester sans envoyer".
-    val preview by viewModel.previewState.collectAsStateWithLifecycle()
-    preview?.let { p ->
-        EmergencyDryRunDialog(preview = p, onDismiss = { viewModel.dismissPreview() })
-    }
-}
-
-/**
- * v1.14.0 — Dialog qui affiche EXACTEMENT ce qui serait envoyé/appelé si
- * l'user déclenchait le trigger MAINTENANT. Pas d'effet de bord — read-only
- * snapshot calculé une fois par `viewModel.previewTrigger()`.
- */
-@Composable
-private fun EmergencyDryRunDialog(
-    preview: EmergencyViewModel.DryRunPreview,
-    onDismiss: () -> Unit,
-) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.emergency_dry_run_title)) },
-        text = {
-            Column {
-                if (!preview.enabled) {
-                    Text(
-                        text = stringResource(R.string.emergency_dry_run_disabled),
-                        color = com.filestech.sms.ui.theme.BrandDanger,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-                Text(
-                    text = stringResource(R.string.emergency_dry_run_body_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp),
-                ) {
-                    Text(
-                        text = preview.body.ifBlank { stringResource(R.string.emergency_dry_run_body_empty) },
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
-                Text(
-                    text = stringResource(
-                        R.string.emergency_dry_run_contacts_label,
-                        preview.contactsCount,
-                    ),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                preview.redactedContacts.forEach { redacted ->
-                    Text(
-                        text = "• $redacted",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                val locStatusRes = when {
-                    !preview.includeLocation -> R.string.emergency_dry_run_loc_disabled
-                    preview.locationResolved -> R.string.emergency_dry_run_loc_resolved
-                    else -> R.string.emergency_dry_run_loc_unavailable
-                }
-                Text(
-                    text = stringResource(locStatusRes),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                // v1.14.1 — `callBehavior` retiré du dry-run (setting orphelin
-                // post-refonte EmergencyScreen). La logique direct-call est
-                // implicite dans la nouvelle UI ; pas besoin de la rappeler ici.
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.action_close))
-            }
-        },
-    )
+    // v1.14.5 — dry-run dialog + composable EmergencyDryRunDialog supprimés
+    // (le bouton "Tester sans envoyer" était la seule entrée vers eux).
 }
 
 /**

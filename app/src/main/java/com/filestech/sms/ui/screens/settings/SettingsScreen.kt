@@ -161,6 +161,26 @@ fun SettingsScreen(
         }
     }
 
+    // v1.14.5 — Launcher permission ACCESS_FINE_LOCATION pour le ToggleRow
+    // "Inclure position GPS" du Mode urgence. Audit SEC-1 fix : si l'user
+    // refuse la permission, on REVERT `includeLocation = false` en DataStore
+    // pour éviter un état sale (toggle ON mais SMS sans coords). Pattern
+    // miroir de `revertCallBehaviorIfPermissionRevoked` (v1.10.0/v1.14.1).
+    val locationPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (!granted) {
+            viewModel.update {
+                it.copy(security = it.security.copy(
+                    emergency = it.security.emergency.copy(includeLocation = false),
+                ))
+            }
+            rootScope.launch {
+                snackbarHost.showError(ctx.getString(R.string.settings_emergency_include_location_denied))
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -586,6 +606,34 @@ fun SettingsScreen(
                             onChange = { v ->
                                 viewModel.update {
                                     it.copy(security = it.security.copy(sendIAmOkSmsOnReset = v))
+                                }
+                            },
+                        )
+                        // v1.14.5 — Toggle "Inclure position GPS dans le SMS"
+                        // accessible directement depuis Settings (avant : seul
+                        // EmergencySetupScreen exposait ce toggle, l'user
+                        // devait y naviguer pour activer la géoloc). Quand
+                        // l'user passe OFF→ON, on demande la permission
+                        // ACCESS_FINE_LOCATION runtime immédiatement (avec
+                        // les mêmes considérations que dans EmergencySetupScreen).
+                        ToggleRow(
+                            title = stringResource(R.string.settings_emergency_include_location_title),
+                            description = stringResource(R.string.settings_emergency_include_location_desc),
+                            value = emergency.includeLocation,
+                            onChange = { v ->
+                                viewModel.update {
+                                    it.copy(security = it.security.copy(
+                                        emergency = it.security.emergency.copy(includeLocation = v),
+                                    ))
+                                }
+                                // Au passage OFF→ON sans perm déjà accordée → demande runtime.
+                                if (v) {
+                                    val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                                        ctx, android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    if (!granted) {
+                                        locationPermLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                    }
                                 }
                             },
                         )

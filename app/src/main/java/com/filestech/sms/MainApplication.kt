@@ -251,18 +251,32 @@ class MainApplication : Application(), Configuration.Provider {
         appScope.launch {
             val snapshot = settingsRepository.flow.first()
             val sec = snapshot.security
-            val needsRepair = !sec.emergency.enabled &&
+            // v1.14.5 — étendu : repair AUSSI `lastTriggeredAt` si emergency
+            // désactivé (user remonté 2026-05-22 : banner "Alerte urgence
+            // déclenchée récemment" persistait 30 min même après désactivation
+            // du mode urgence). `lastTriggeredAt > 0` post-disable n'a aucun
+            // usage légitime (cooldown moot car !enabled, chip masqué attendu).
+            val hasOrphanShortcut = !sec.emergency.enabled &&
                 (sec.emergencyShortcutEnabled || sec.emergencyCallPoliceEnabled)
+            val hasOrphanTrigger = !sec.emergency.enabled &&
+                (sec.emergency.lastTriggeredAt != 0L ||
+                    sec.emergency.monotonicLastTriggeredAt != 0L)
+            val needsRepair = hasOrphanShortcut || hasOrphanTrigger
             if (needsRepair) {
                 Timber.i(
-                    "MainApplication: repairing dirty emergency state (enabled=%s shortcut=%s police=%s) → cascade-disable",
+                    "MainApplication: repairing dirty emergency state (enabled=%s shortcut=%s police=%s lastTriggeredAt=%d) → cascade-disable",
                     sec.emergency.enabled,
                     sec.emergencyShortcutEnabled,
                     sec.emergencyCallPoliceEnabled,
+                    sec.emergency.lastTriggeredAt,
                 )
                 settingsRepository.update { s ->
                     s.copy(
                         security = s.security.copy(
+                            emergency = s.security.emergency.copy(
+                                lastTriggeredAt = 0L,
+                                monotonicLastTriggeredAt = 0L,
+                            ),
                             emergencyShortcutEnabled = false,
                             emergencyCallPoliceEnabled = false,
                         ),

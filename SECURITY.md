@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.4** (2026-05-22)
+Current release : **v1.14.5** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,25 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.14.4 (this release) — Reaction default `EMOJI_WITH_QUOTE` (user request)
+### v1.14.5 (this release) — Mode urgence polish UX : emoji ⚠️ + toggle GPS direct + reset complet sur disable + nettoyage dry-run + splash carré
+
+UX polish post-v1.14.4 sur 6 axes :
+
+1. **Emoji ⚠️ en tête du corps SMS d'urgence** (templates NEED_HELP + DANGER). Quand le destinataire reçoit le SMS, la notification heads-up affiche immédiatement le triangle d'alerte en preview → caractère d'urgence visuellement reconnaissable avant même d'ouvrir le SMS. **Trade-off accepté** : le ⚠️ (U+26A0 + U+FE0F variation selector) force l'encodage UCS-2 → 70 chars/segment au lieu de 160 GSM-7 → potentiel multi-segment. Audit SEC-5 v1.10.0 préservait 1-segment GSM-7 par défaut pour fiabilité en zone radio faible. **Décision v1.14.5** : la visibilité du caractère d'urgence prime sur la robustesse marginale (opérateurs FR 2026 fiables sur multi-segment). Tests `AuditV1100Test` mis à jour (`startsWith("⚠️ URGENCE")`). **DISCREET PAS modifié** : la variante neutre/anxiogène-évitante préserve son but (signaler malaise sans alarmer, éviter de révéler la situation à un agresseur lookant l'écran). Reste 1-segment GSM-7.
+
+2. **Toggle "Inclure position GPS dans le SMS" directement dans Settings → Mode urgence**. Avant : seul `EmergencySetupScreen` exposait ce toggle. v1.14.5 : `ToggleRow` direct accessible dans `SettingsScreen` principal. Au passage OFF→ON, demande `ACCESS_FINE_LOCATION` runtime immédiatement via `rememberLauncherForActivityResult`. **Audit SEC-1 fix** : si l'user refuse la permission, le callback `revert` automatiquement `includeLocation = false` en DataStore + snackbar erreur "Permission refusée — inclusion GPS désactivée". Pattern miroir de `revertCallBehaviorIfPermissionRevoked` (v1.10/v1.14.1) — pas d'état sale "toggle ON mais SMS sans coords".
+
+3. **Hotfix banner "Je vais bien" orphelin** (user remonté 2026-05-22). `EmergencyViewModel.disableEmergencyMode()` clear désormais AUSSI `lastTriggeredAt = 0L` + `monotonicLastTriggeredAt = 0L` en plus de `enabled = false` + `emergencyShortcutEnabled = false` + `emergencyCallPoliceEnabled = false`. Reset complet en une transaction atomique DataStore. **Cold-start repair migration étendue** : `MainApplication.onCreate` détecte `hasOrphanShortcut || hasOrphanTrigger` (cooldown actif alors que mode désactivé) et repair automatiquement → users existants avec état sale post-v1.14.x sont nettoyés au prochain démarrage. Idempotente.
+
+4. **Cleanup "Tester sans envoyer"** retiré de la page urgence sur demande user (encombrait l'UI, le mode actif est déjà visible via la section recap). Suppression : bouton + composable `EmergencyDryRunDialog` + `EmergencyViewModel.previewTrigger/dismissPreview/_previewState/_isPreviewLoading/DryRunPreview/redactPhoneNumber` + constructor param `locationResolver` + 12 strings `emergency_dry_run_*` (FR+EN). Zéro référence orpheline.
+
+5. **Splash logo carré** (user remonté : "c'est en cercle le logo c'est pas beau, mon logo est carré"). Nouveau `drawable/splash_logo.xml` (inset 20% wrap `sms_tech_icon.png`). `windowSplashScreenAnimatedIcon` → `@drawable/splash_logo`. Ajout `windowSplashScreenIconBackgroundColor` matching `windowSplashScreenBackground` (light + dark) → le masque circulaire Android 12+ devient visuellement invisible, le logo carré branded apparaît tel quel.
+
+6. **AboutScreen + site files-tech.com sms-tech.php** : nouvelle entrée `Feature` "Mode urgence" + nouvelle `HelpRecipe` "Utiliser le mode urgence" (4 étapes concises). Site web : nouvelle carte feature ⚠️ + ligne permissions `ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION` (optionnelle, mode urgence). Version site bumpée à v1.14.5.
+
+Audit final 3 axes (sécu / perf+qualité / UI+branchements) — 1 MEDIUM finding fixé (SEC-1 revert toggle GPS sur permission denied), aucun Critical/High. Pas de changement crypto / Room / Keystore / threat-model. Pas de migration Room. `lintVitalRelease` clean, `testReleaseUnitTest` green.
+
+### v1.14.4 — Reaction default `EMOJI_WITH_QUOTE` (user request)
 
 Petite release UX : le format par défaut des SMS de réaction emoji passe de `READABLE_FR` ("J'ai réagi par ❤️ à : «…»") à `EMOJI_WITH_QUOTE` ("❤️ «…»"). Demande user 2026-05-22.
 

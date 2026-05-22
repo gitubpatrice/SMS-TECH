@@ -1,0 +1,12 @@
+v1.14.5 — Emergency: visible ⚠️ + GPS in Settings
+
+• Emergency SMS templates (NEED_HELP + DANGER)
+  prefixed with ⚠️ → the recipient sees the
+  warning triangle in the heads-up notification
+  preview immediately. DISCREET variant
+  unchanged (preserves the neutral intent).
+
+• "Include GPS location in SMS" toggle now
+  directly accessible from Settings → Emergency
+  (before: only Setup screen exposed it).
+  Permission requested immediately on OFF→ON.

@@ -28,19 +28,32 @@ enum class EmergencyTemplate {
      */
     NEED_HELP {
         override fun renderBody(locationUrl: String?): String =
-            "URGENCE - j'ai besoin d'aide. Ma position : ${locOrFallback(locationUrl)}"
+            // v1.14.5 — emoji `⚠️` (U+26A0 + U+FE0F variation selector) en
+            // tête pour que la notif SMS côté destinataire affiche
+            // visiblement le caractère d'urgence dans le preview heads-up.
+            // Trade-off accepté : l'emoji force UCS-2 (70 chars/segment au
+            // lieu de 160 GSM-7) → potentiel multi-segment, mais opérateurs
+            // FR 2026 fiables sur multi-segment. La visibilité prime sur la
+            // robustesse marginale d'un 1-segment sans emoji.
+            "⚠️ URGENCE - j'ai besoin d'aide. Ma position : ${locOrFallback(locationUrl)}"
     },
 
     /** Danger imminent / agression / accident. Plus pressant. */
     DANGER {
         override fun renderBody(locationUrl: String?): String =
-            "DANGER - situation critique, contacte-moi ou viens. Position : ${locOrFallback(locationUrl)}"
+            // v1.14.5 — emoji `⚠️` en tête, cf. KDoc NEED_HELP pour rationale.
+            "⚠️ DANGER - situation critique, contacte-moi ou viens. Position : ${locOrFallback(locationUrl)}"
     },
 
     /**
      * Variante neutre, moins anxiogène, pour signaler malaise sans alarmer.
      * v1.10.0 audit SEC-5 — uniquement chars GSM-7 (Ù U+00D9 hors-charset,
      * remplacé par "Position :" qui ne perd pas le sens).
+     *
+     * v1.14.5 — **PAS d'emoji ⚠️** ajouté ici : la variante DISCREET est
+     * volontairement neutre. Un triangle d'alerte rouge défait le but
+     * (signaler un malaise sans alarmer / éviter de révéler la situation
+     * d'urgence à un agresseur lookant l'écran). Reste 1-segment GSM-7.
      */
     DISCREET {
         override fun renderBody(locationUrl: String?): String =

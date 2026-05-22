@@ -1,0 +1,13 @@
+v1.14.5 — Mode urgence : ⚠️ visible + GPS Settings
+
+• Templates SMS d'urgence (NEED_HELP + DANGER)
+  préfixés par ⚠️ → le destinataire voit le
+  triangle d'alerte dès la notification heads-up.
+  Variante DISCREET inchangée (préserve le but
+  neutre).
+
+• Toggle "Inclure position GPS dans le SMS"
+  accessible directement dans Réglages → Mode
+  urgence (avant : seul Setup l'exposait).
+  Permission demandée immédiatement au passage
+  OFF→ON.

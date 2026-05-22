@@ -588,6 +588,7 @@ private val FEATURES = listOf(
     Feature(Icons.Outlined.Mic, "Messages vocaux", "Push-to-talk en MMS. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR."),
     Feature(Icons.Outlined.Security, "Coffre chiffré", "Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android."),
     Feature(Icons.Outlined.Shield, "Code panique", "Second code qui ouvre l'app en mode leurre — coffre invisible et inaccessible."),
+    Feature(Icons.Outlined.Warning, "Mode urgence", "Bouton maintenu 3 s sur la page Urgence → SMS d'alerte préfixé ⚠️ à vos contacts Safety Call avec position GPS optionnelle. Accès rapide 112 / 15 / 17 / 18 + raccourcis dans la notification écran verrouillé."),
     Feature(Icons.Outlined.Fingerprint, "Biométrie", "Empreinte ou visage pour déverrouiller, avec PIN de secours obligatoire."),
     Feature(Icons.AutoMirrored.Outlined.Reply, "Réponse contextuelle", "Mini-cartouche au-dessus du composer + bulle réponse avec quote dans le thread."),
     Feature(Icons.Outlined.Translate, "Traduction déléguée", "Long-press → \"Traduire\" délègue à l'app de traduction installée (Google Translate, DeepL, Aves Translate FLOSS …) via Intent système. Aucun modèle bundlé."),
@@ -641,6 +642,15 @@ private val HELP_RECIPES = listOf(
             "Un sélecteur s'ouvre avec toutes les apps de traduction installées",
             "Choisis Google Translate, DeepL, Aves Translate (FLOSS) ou autre",
             "Si aucune n'est installée, un message t'invite à en installer une",
+        ),
+    ),
+    HelpRecipe(
+        title = "Utiliser le mode urgence",
+        steps = listOf(
+            "Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety Call",
+            "Page Urgence : appels directs 112 / 15 / 17 / 18 ; bouton rouge tenu 3 s → SMS aux proches",
+            "Notification écran verrouillé (opt-in) : raccourcis 112 + 17 sans déverrouiller",
+            "« Je vais bien » dans la liste des conversations annule l'alerte en cas de fausse manip",
         ),
     ),
     HelpRecipe(

@@ -216,7 +216,10 @@ class AuditV1100Test {
         val url = "https://maps.google.com/?q=48.85661,2.35222"
         val body = EmergencyTemplate.NEED_HELP.renderBody(url)
         assertThat(body).contains(url)
-        assertThat(body).startsWith("URGENCE")
+        // v1.14.5 — emoji ⚠️ prepended pour visibilité notif côté destinataire.
+        // Garde-régression sur le prefix (⚠️ + URGENCE).
+        assertThat(body).startsWith("⚠️ URGENCE")
+        assertThat(body).contains("URGENCE")
     }
 
     @Test fun `EmergencyTemplate falls back to explicit mention when location is null`() {

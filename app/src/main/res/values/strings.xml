@@ -229,18 +229,13 @@
     <string name="emergency_i_am_ok_send_failed">Cooldown reset, but no contact received the SMS. Try again or contact them manually.</string>
     <string name="settings_send_i_am_ok_sms_title">Send "I am OK" SMS on reset</string>
     <string name="settings_send_i_am_ok_sms_desc">When you tap "I am OK" after a false-alarm trigger, also send a short SMS to your safety-call contacts saying it was a false alert.</string>
-    <!-- v1.14.0 — dry-run "Test without sending" -->
-    <string name="emergency_dry_run_button">Test without sending</string>
-    <string name="emergency_dry_run_title">What would be sent</string>
-    <string name="emergency_dry_run_disabled">Emergency mode is currently disabled. Nothing would actually be sent or called.</string>
-    <string name="emergency_dry_run_body_label">SMS body that would be sent:</string>
-    <string name="emergency_dry_run_body_empty">(empty body — check your template)</string>
-    <string name="emergency_dry_run_contacts_label">Contacts that would receive the SMS (%1$d):</string>
-    <string name="emergency_dry_run_loc_disabled">GPS link disabled. SMS sent without coordinates.</string>
-    <string name="emergency_dry_run_loc_resolved">GPS resolved. Maps link will be included.</string>
-    <string name="emergency_dry_run_loc_unavailable">GPS unavailable (permission, hardware off, or no fix). SMS sent without coordinates.</string>
-    <string name="emergency_dry_run_call_behavior_label">Call buttons behavior:</string>
-    <string name="emergency_dry_run_loading">Resolving GPS…</string>
+    <!-- v1.14.5 — strings emergency_dry_run_* removed (button "Test without sending" deleted). -->
+    <!-- v1.14.5 — Settings → Mode urgence : ToggleRow direct accès GPS opt-in -->
+    <string name="settings_emergency_include_location_title">Include GPS in emergency SMS</string>
+    <string name="settings_emergency_include_location_desc">Adds a Google Maps link with your current location to the emergency SMS body. Requires location permission. If refused, the SMS is sent without coordinates.</string>
+    <string name="settings_emergency_include_location_denied">Location permission denied. GPS inclusion disabled.</string>
+    <!-- v1.14.5 — visual warning indicator on Emergency page -->
+    <string name="emergency_topbar_warning_cd">Emergency mode</string>
     <!-- v1.14.1 — full-page emergency redesign : 4 colored call tiles + disable + open-from-notif -->
     <string name="emergency_call_112_label">SOS European</string>
     <string name="emergency_call_15_label">SAMU (medical)</string>

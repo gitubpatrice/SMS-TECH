@@ -219,18 +219,13 @@
     <string name="emergency_i_am_ok_send_failed">Cooldown réinitialisé, mais aucun contact n\'a reçu le SMS. Réessayez ou contactez-les manuellement.</string>
     <string name="settings_send_i_am_ok_sms_title">Envoyer un SMS « Je vais bien » au reset</string>
     <string name="settings_send_i_am_ok_sms_desc">Quand vous appuyez sur « Je vais bien » après un déclenchement par erreur, envoie aussi un SMS court à vos contacts Safety Call pour leur indiquer qu\'il s\'agissait d\'une fausse alerte.</string>
-    <!-- v1.14.0 — dry-run « Tester sans envoyer » -->
-    <string name="emergency_dry_run_button">Tester sans envoyer</string>
-    <string name="emergency_dry_run_title">Ce qui serait envoyé</string>
-    <string name="emergency_dry_run_disabled">Le mode urgence est actuellement désactivé. Aucun SMS ni appel ne partirait vraiment.</string>
-    <string name="emergency_dry_run_body_label">Corps du SMS qui partirait :</string>
-    <string name="emergency_dry_run_body_empty">(corps vide — vérifiez le template)</string>
-    <string name="emergency_dry_run_contacts_label">Contacts qui recevraient le SMS (%1$d) :</string>
-    <string name="emergency_dry_run_loc_disabled">Lien GPS désactivé. SMS envoyé sans coordonnées.</string>
-    <string name="emergency_dry_run_loc_resolved">GPS résolu. Le lien Maps sera inclus.</string>
-    <string name="emergency_dry_run_loc_unavailable">GPS indisponible (permission, matériel éteint, ou pas de fix). SMS envoyé sans coordonnées.</string>
-    <string name="emergency_dry_run_call_behavior_label">Comportement des boutons d\'appel :</string>
-    <string name="emergency_dry_run_loading">Résolution GPS…</string>
+    <!-- v1.14.5 — strings emergency_dry_run_* retirées (bouton « Tester sans envoyer » supprimé). -->
+    <!-- v1.14.5 — Settings → Mode urgence : ToggleRow direct accès GPS opt-in -->
+    <string name="settings_emergency_include_location_title">Inclure la position GPS dans le SMS</string>
+    <string name="settings_emergency_include_location_desc">Ajoute un lien Google Maps avec votre position au corps du SMS d\'urgence. Demande la permission de localisation. Si refusée, le SMS est envoyé sans coordonnées.</string>
+    <string name="settings_emergency_include_location_denied">Permission de localisation refusée. Inclusion GPS désactivée.</string>
+    <!-- v1.14.5 — indicateur visuel d'urgence sur la page Mode urgence -->
+    <string name="emergency_topbar_warning_cd">Mode urgence</string>
     <!-- v1.14.1 — redesign page urgence complète : 4 tuiles couleurs + désactiver + tap-notif-ouvre-page -->
     <string name="emergency_call_112_label">SOS européen</string>
     <string name="emergency_call_15_label">SAMU (médical)</string>
