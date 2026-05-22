@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.5** (2026-05-22)
+Current release : **v1.14.6** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,11 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.14.5 (this release) — Mode urgence polish UX : emoji ⚠️ + toggle GPS direct + reset complet sur disable + nettoyage dry-run + splash carré
+### v1.14.6 (this release) — Label `(défaut)` du picker de réactions
+
+Le picker `Réglages → Format des réactions` portait `(défaut)` sur "Français lisible" alors que la valeur réelle par défaut a été basculée sur `EMOJI_WITH_QUOTE` en v1.14.4 (cf. section ci-dessous). Strings FR+EN corrigées (`settings_reaction_format_fr` retire `(défaut)`, `settings_reaction_format_emoji_quote` ajoute `(défaut)`). Aucun changement comportemental, uniquement étiquette d'interface. Aucun changement crypto / Room / Keystore / threat-model.
+
+### v1.14.5 — Mode urgence polish UX : emoji ⚠️ + toggle GPS direct + reset complet sur disable + nettoyage dry-run + splash carré
 
 UX polish post-v1.14.4 sur 6 axes :
 

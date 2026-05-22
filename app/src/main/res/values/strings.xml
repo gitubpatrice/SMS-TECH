@@ -421,14 +421,14 @@
          Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
     <string name="settings_reaction_format_title">Reaction format</string>
     <string name="settings_reaction_format_desc">Choose how reactions are sent over SMS to recipients who don\'t use SMS Tech.</string>
-    <string name="settings_reaction_format_fr">Readable French (default)</string>
+    <string name="settings_reaction_format_fr">Readable French</string>
     <string name="settings_reaction_format_fr_hint">"J\'ai réagi par ❤️ à : «preview»". Natural and understandable for any French-speaking Android recipient. Decoded by SMS Tech as a native reaction badge.</string>
     <string name="settings_reaction_format_en">Tapback (iMessage compat)</string>
     <string name="settings_reaction_format_en_hint">"Reacted ❤️ to «preview»". Detected automatically by iMessage (iPhone) and recent Google Messages as a native reaction bubble. Less natural for French recipients.</string>
     <string name="settings_reaction_format_emoji">Emoji only</string>
     <string name="settings_reaction_format_emoji_hint">"❤️" alone. Cleaner on older SMS apps, but the recipient loses all context — they can\'t tell which message you reacted to.</string>
     <!-- v1.9.0 — compact emoji + quote -->
-    <string name="settings_reaction_format_emoji_quote">Emoji + quote</string>
+    <string name="settings_reaction_format_emoji_quote">Emoji + quote (default)</string>
     <string name="settings_reaction_format_emoji_quote_hint">"❤️ «your message»". Compact and context-preserving. Recipient sees emoji followed by the quoted original message.</string>
     <!-- v1.8.1 — sender display name -->
     <string name="settings_sender_name_title">Your display name</string>

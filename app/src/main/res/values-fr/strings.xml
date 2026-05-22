@@ -408,14 +408,14 @@
     <!-- v1.8.0 — bug 5 fix : 3 options en un coup d\'œil. -->
     <string name="settings_reaction_format_title">Format des réactions</string>
     <string name="settings_reaction_format_desc">Choisissez comment vos réactions partent par SMS aux destinataires qui n\'utilisent pas SMS Tech.</string>
-    <string name="settings_reaction_format_fr">Français lisible (défaut)</string>
+    <string name="settings_reaction_format_fr">Français lisible</string>
     <string name="settings_reaction_format_fr_hint">« J\'ai réagi par ❤️ à : «aperçu» ». Naturel et compréhensible pour tout destinataire francophone Android. Décodé par SMS Tech comme un badge de réaction natif.</string>
     <string name="settings_reaction_format_en">Tapback (compat iMessage)</string>
     <string name="settings_reaction_format_en_hint">« Reacted ❤️ to «aperçu» ». Détecté automatiquement par iMessage (iPhone) et Google Messages récents comme une bulle réaction native. Moins naturel pour les destinataires francophones.</string>
     <string name="settings_reaction_format_emoji">Emoji seul</string>
     <string name="settings_reaction_format_emoji_hint">« ❤️ » nu. Plus propre sur les vieilles apps SMS, mais le destinataire perd tout contexte — il ne peut plus savoir à quel message vous avez réagi.</string>
     <!-- v1.9.0 — emoji + citation compacte -->
-    <string name="settings_reaction_format_emoji_quote">Emoji + citation</string>
+    <string name="settings_reaction_format_emoji_quote">Emoji + citation (défaut)</string>
     <string name="settings_reaction_format_emoji_quote_hint">« ❤️ «votre message» ». Compact tout en gardant le contexte. Le destinataire voit l\'emoji suivi de la citation typographique du message d\'origine.</string>
     <!-- v1.8.1 — nom de l\'expéditeur -->
     <string name="settings_sender_name_title">Votre nom affiché</string>

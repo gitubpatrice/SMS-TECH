@@ -1,0 +1,9 @@
+v1.14.6 — Label "Emoji + quote (default)"
+
+• The "(default)" label on the SMS reaction
+  format picker still pointed to "Readable
+  French" even though the actual default was
+  switched to "Emoji + quote" in v1.14.4.
+  Settings labels corrected.
+
+• Text-only change — no behavioral difference.

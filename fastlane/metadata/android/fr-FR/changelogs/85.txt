@@ -1,0 +1,10 @@
+v1.14.6 — Label "Emoji + citation (défaut)"
+
+• Le label "(défaut)" du choix de format de
+  réaction SMS pointait toujours vers
+  "Français lisible" alors que le défaut réel
+  a été basculé sur "Emoji + citation" en
+  v1.14.4. Étiquettes Settings corrigées.
+
+• Aucun changement de comportement — uniquement
+  texte d'interface.
