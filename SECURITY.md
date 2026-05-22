@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.12.0** (2026-05-22)
+Current release : **v1.13.0** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,39 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.12.0 (this release) — Avatar palette (blue family) + ComposeScreen contact name fix + ThreadScreen vault overflow + Emergency lock-screen shortcut (112 / 17) + 3 audit fixes
+### v1.13.0 (this release) — Multi-selection bulk vault + distinct vault PIN/password (second-factor) + biometric vault unlock + avatar palette strict-blue + 6 audit fixes
+
+MINOR release adding two requested features: **multi-selection bulk move into / out of the vault** (both lists), and a **dedicated PIN-or-password second-factor for the vault** (separate from the app PIN, with biometric fallback). Plus a palette cleanup removing the last three green-tinted avatar shades. No DB / SQLCipher / Keystore schema changes — `adb install -r` non-destructive.
+
+A pre-release final audit run twice (consolidation pass) surfaced **2 HIGH + 4 MEDIUM + 2 LOW** findings, all fixed before tag :
+
+- **HIGH SEC-1** — `PinEntryDialog` now sets `pin = ""` BEFORE the `scope.launch { onVerify(...) }` coroutine. Without this, the `String pin` lingered in JVM heap during the ~100 ms PBKDF2 derivation, exposed to heap-dump forensics (a vector documented as "out of scope" in the threat model, but the fix is one line). The `snapshot: CharArray` is always wiped in `finally`, including under `CancellationException` (rotation Activity).
+- **HIGH SEC-2** — `VaultViewModel.vaultPinRequired` flow now calls `vaultPin.isVaultPinConfigured()` inside `withContext(io) { ... }`. The function performs a `DataStore.first()` which is technically I/O; on cold-start with a sluggish DataStore it could have blocked the Main thread for tens of milliseconds. Routed through `@IoDispatcher` injected via Hilt.
+- **MEDIUM SEC-4** — The `selectedIds: MutableStateFlow<Set<Long>>` purge on PanicDecoy entry was moved out of the `combine { ... }` lambda (anti-pattern — mutating a flow from inside its own transform) into a dedicated `init { viewModelScope.launch { appLock.state.collect { ... } } }`. Cleaner separation of concerns ; the `combine` keeps a defensive `effectiveSelection = emptySet()` fallback regardless.
+- **MEDIUM UX-2** — The "Distinct vault PIN" toggle and its "Change vault PIN" row in `SettingsScreen` are now wrapped in `if (!isPanicDecoy) { ... }`. Without this, a coerced PanicDecoy session would still see the toggle in Settings — leaking the existence of a configured vault (the top-bar lock icon and navigation to Vault are already hidden in decoy; this completes the cross-screen consistency).
+- **MEDIUM NEW-5** — `VaultPinManager.setVaultPin` now writes the `settings.vaultPinEnabled = true` flag **inside** the `try { hash; storeHash; flag }` block, immediately after `securityStore.setVaultPinHash()`. Symmetrically, `clearVaultPin` flips the flag BEFORE removing the hash. Without this ordering, a rare DataStore IOException between hash-write and flag-write would leave the vault in an "orphan hash, flag=false" state where `isVaultPinConfigured()` would detect the inconsistency and gracefully treat as disabled — but the inverse (flag=true with no hash) would lock the user out.
+- **LOW NEW-1** — Removed orphan string `settings_vault_pin_confirm_subtitle` (declared FR + EN, used nowhere). APK cleanup.
+
+#### Multi-selection bulk vault (Sujet A)
+
+`ConversationsScreen` and `VaultScreen` both expose a Gmail-style multi-selection mode: long-press a row → enters selection mode, tap toggles inclusion, top-bar swaps to a contextual title (count) + bulk action (`Move to vault` / `Move out of vault`) + a Cancel (X) icon. System back exits selection mode (BackHandler). The bulk action loops through `requestMoveToVault(id, intoVault)` per ID — the existing PanicDecoy + Locked guards are re-evaluated on each call (defensive, no batch transaction bypass). A single snackbar is emitted with the success count (plurals FR + EN). The `selectedIds` is purged on PanicDecoy entry (audit SEC-4).
+
+#### Distinct vault PIN/password + biometric (Sujet B)
+
+New `VaultPinManager` Singleton:
+- **Crypto**: PBKDF2-HMAC-SHA512, 16-byte salt + ≥ 210 000 iterations (calibrated). Hash stored in `SecurityStore` under `vault.salt` / `vault.hash` / `vault.iters` — totally separated from `pin.*` (app) and `panic.*` (decoy). Comparison via `MessageDigest.isEqual` (constant-time).
+- **Threat model**: defends against "I shoulder-surfed your app PIN, now I'll open your vault" and "I lent you my app PIN to retrieve a SMS, but my vault is private". The second-factor is a UI / domain gate — at-rest crypto is still the single SQLCipher master key from v1.0.
+- **Out of scope**: forensics with Keystore + decrypted SQLCipher key. The vault PIN does NOT add a second envelope.
+- **Fallback**: if the device has biometrics, the entry dialog also exposes a "Use biometrics" button. Either path (PIN/pass OR biometric) unlocks the vault. When the PIN-or-biometric succeeds, the app's regular biometric prompt (gated on `lockMode = BIOMETRIC`) is skipped — no double second-factor.
+- **Reset**: from Settings → Security toggle (requires app already unlocked, so a user who forgot the vault PIN but knows the app PIN can disable & reconfigure). No recovery if both are forgotten — panic-code unlock remains the escape hatch into the decoy session (vault stays sealed but rest of app usable).
+
+New `PinEntryDialog` reusable composable (kept under `ui/components/`) with `PasswordVisualTransformation` + `KeyboardType.Password` (alphanumeric — user picks PIN or passphrase), optional biometric button slot, suspend `(CharArray) -> Boolean` callback contract, single error string `pin_error_invalid` (no leak between "no PIN set" and "wrong PIN").
+
+#### Avatar palette strict-blue (Sujet 0)
+
+The 14-shade palette of v1.12.0 was reduced to **11 strict-blue stops** by removing the 3 green-leaning entries (`teal`, `dark teal`, `cyan`). The remaining 11 are pure blue / cobalt / sky / periwinkle / azure / navy / cool-steel / slate / gunmetal — all WCAG AA ≥ 4.5:1 against white initials. Deterministic hash distribution unchanged ; existing users will see some contacts shift to a new slot (size 14 → 11), which is acceptable for a UX refinement.
+
+### v1.12.0 — Avatar palette (blue family) + ComposeScreen contact name fix + ThreadScreen vault overflow + Emergency lock-screen shortcut (112 / 17) + 3 audit fixes
 
 MINOR release with UX-focused polish on the Emergency mode (accessibility on lock screen + voice-grade emergency call buttons) and on the conversation list (all-blue avatar palette WCAG AA, contact name now resolved at compose time). No DB / vault / Keystore changes — `adb install -r` non-destructive.
 

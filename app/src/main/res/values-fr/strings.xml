@@ -191,6 +191,29 @@
     <string name="vault_move_in_failed">Impossible de déplacer cette conversation</string>
     <string name="vault_move_out_done">Conversation sortie du coffre</string>
     <string name="vault_move_out_failed">Impossible de déplacer cette conversation</string>
+    <!-- v1.13.0 — sélection multiple bulk move to/from vault -->
+    <string name="bulk_vault_move_in">Déplacer dans le coffre</string>
+    <string name="bulk_vault_move_out">Sortir du coffre</string>
+    <string name="selected">Sélectionné</string>
+    <!-- v1.13.0 — PIN/pass distinct coffre (second-factor) -->
+    <string name="pin_entry_label">PIN ou mot de passe</string>
+    <string name="pin_error_invalid">PIN ou mot de passe incorrect</string>
+    <string name="vault_pin_dialog_title">Second facteur du coffre</string>
+    <string name="vault_pin_dialog_subtitle">Saisissez le PIN ou mot de passe qui protège le coffre. Vous pouvez aussi utiliser la biométrie si disponible.</string>
+    <string name="vault_pin_dialog_unlock">Déverrouiller</string>
+    <string name="vault_use_biometric">Utiliser la biométrie</string>
+    <string name="settings_vault_pin_title">PIN ou mot de passe distinct pour le coffre</string>
+    <string name="settings_vault_pin_desc">Quand activé, l\'ouverture du coffre demande un PIN/mot de passe dédié (et éventuellement la biométrie) même si l\'app est déjà déverrouillée. Hash séparé du PIN d\'app.</string>
+    <string name="settings_vault_pin_set_title">Définir le PIN du coffre</string>
+    <string name="settings_vault_pin_set_subtitle">Choisissez un PIN différent de votre PIN d\'app.</string>
+    <string name="settings_vault_pin_confirm_title">Confirmer le PIN du coffre</string>
+    <string name="settings_vault_pin_change">Changer le PIN du coffre</string>
+    <string name="settings_vault_pin_mismatch">Les PIN ne correspondent pas. Réessayez.</string>
+    <string name="settings_vault_pin_too_short">Le PIN doit faire au moins 4 caractères.</string>
+    <string name="settings_vault_pin_same_as_app">Choisissez un PIN différent de votre PIN d\'app.</string>
+    <string name="settings_vault_pin_saved">PIN du coffre enregistré.</string>
+    <string name="settings_vault_pin_cleared">PIN du coffre retiré.</string>
+    <string name="action_disable">Désactiver</string>
     <string name="vault_actions_title">Actions du coffre</string>
     <string name="vault_biometric_title">Déverrouiller le coffre</string>
     <string name="vault_biometric_subtitle">Confirmez votre identité pour ouvrir le dossier privé.</string>
@@ -561,4 +584,17 @@
     <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
     <string name="error_send_failed">Échec de l\'envoi du message.</string>
 
+    <!-- v1.13.0 — pluriels pour la sélection multiple -->
+    <plurals name="conversations_selection_count">
+        <item quantity="one">%d sélectionnée</item>
+        <item quantity="other">%d sélectionnées</item>
+    </plurals>
+    <plurals name="vault_bulk_move_in_done">
+        <item quantity="one">%d conversation déplacée dans le coffre</item>
+        <item quantity="other">%d conversations déplacées dans le coffre</item>
+    </plurals>
+    <plurals name="vault_bulk_move_out_done">
+        <item quantity="one">%d conversation sortie du coffre</item>
+        <item quantity="other">%d conversations sorties du coffre</item>
+    </plurals>
 </resources>

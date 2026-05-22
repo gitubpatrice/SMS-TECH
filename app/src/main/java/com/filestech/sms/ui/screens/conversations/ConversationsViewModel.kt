@@ -92,6 +92,18 @@ class ConversationsViewModel @Inject constructor(
         // Backfill contact names for conversations that existed before READ_CONTACTS was granted
         // or that imported with displayName=null. Cheap when there's nothing to do.
         viewModelScope.launch { runCatching { mirror.refreshContactNames() } }
+        // v1.13.0 audit SEC-4 — purge la sélection multiple à chaque entrée
+        // en PanicDecoy (séparé du combine pour éviter une mutation depuis un
+        // flow transform — anti-pattern fragile face à un futur changement de
+        // .stateIn → .shareIn). collect distinctUntilChanged-equivalent via
+        // StateFlow sémantique : aucune cascade.
+        viewModelScope.launch {
+            appLock.state.collect { lockState ->
+                if (lockState is AppLockManager.LockState.PanicDecoy) {
+                    selectedIds.value = emptySet()
+                }
+            }
+        }
     }
 
     // v1.6.1 (audit QUAL-17) — @Stable : Compose traite la classe comme stable et
@@ -115,7 +127,17 @@ class ConversationsViewModel @Inject constructor(
          * the panic decoy a real privacy backstop (audit S-P0-1).
          */
         val isPanicDecoy: Boolean = false,
-    )
+        /**
+         * v1.13.0 — sélection multiple de conversations pour action en masse
+         * "Déplacer vers le coffre". `selectedIds` non vide ⇒ TopAppBar bascule en
+         * mode contextuel (titre = count, action principale = déplacer, navigation
+         * icon = X annule). Toujours vide quand `isPanicDecoy=true` (toute entrée
+         * en mode décoy vide la sélection par `clearSelection`).
+         */
+        val selectedIds: Set<Long> = emptySet(),
+    ) {
+        val selectionMode: Boolean get() = selectedIds.isNotEmpty()
+    }
 
     /**
      * v1.6.1 (audit PERF-06) — `debounce(200ms)` sur la query de recherche pour éviter
@@ -130,21 +152,43 @@ class ConversationsViewModel @Inject constructor(
         .debounce { q -> if (q.isEmpty()) 0L else 200L }
         .distinctUntilChanged()
 
+    /**
+     * v1.13.0 — IDs des conversations actuellement sélectionnées pour une action
+     * en masse. Mutée par [toggleSelection] / [clearSelection] depuis l'UI.
+     * Mergée dans le `combine` via le tuple `(defaultRefreshTick, appLock.state)`
+     * pour conserver le 5-arg cap typé de kotlinx-coroutines.
+     */
+    private val selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+
     val state: StateFlow<UiState> = combine(
         repo.observeAll(includeArchived = archivedFlag),
         settings.flow,
         debouncedQuery,
-        // Merge the default-SMS-refresh tick with the lock state stream so we stay at 5 typed
-        // arguments to `combine` (kotlinx coroutines's typed overloads cap at 5; beyond that we
-        // would have to fall back to the `Array<*>` variadic form, which loses type safety).
-        // Both inputs are pure triggers for a re-evaluation, so collapsing them is sound.
-        combine(defaultRefreshTick, appLock.state) { _, lockState -> lockState },
+        // v1.13.0 — Triple : on packe defaultRefreshTick + appLock.state + selectedIds
+        // pour rester dans la limite 5-args typée. Tous sont des inputs de
+        // recomposition pure ; le packing est sound.
+        combine(defaultRefreshTick, appLock.state, selectedIds) { _, lockState, sel ->
+            lockState to sel
+        },
         syncManager.state,
-    ) { rows, s, q, lockState, syncState ->
+    ) { rows, s, q, lockAndSelection, syncState ->
+        val (lockState, sel) = lockAndSelection
         val matched = filterConversations(rows, q)
+        val sorted = sortConversations(matched, s.conversations.sortMode)
+        // v1.13.0 — sélection effective filtrée :
+        //  - PanicDecoy → purge via le collector dans `init {}` (audit SEC-4),
+        //    ici on rend juste emptySet par sécurité défensive.
+        //  - sinon → intersect avec les conv présentes (filtre les IDs orphelins
+        //    si une conv est supprimée pendant la sélection multi).
+        val effectiveSelection: Set<Long> = if (lockState is AppLockManager.LockState.PanicDecoy) {
+            emptySet()
+        } else {
+            val present = sorted.mapTo(HashSet(sorted.size)) { it.id }
+            sel.intersect(present)
+        }
         UiState(
             isLoading = false,
-            conversations = sortConversations(matched, s.conversations.sortMode),
+            conversations = sorted,
             settings = s,
             isDefaultSmsApp = defaultAppManager.isDefault(),
             archived = archivedFlag,
@@ -155,6 +199,7 @@ class ConversationsViewModel @Inject constructor(
             isImporting = syncState is TelephonySyncManager.State.Running && syncState.isFirstRun,
             importedCount = (syncState as? TelephonySyncManager.State.Running)?.importedSoFar ?: 0,
             isPanicDecoy = lockState is AppLockManager.LockState.PanicDecoy,
+            selectedIds = effectiveSelection,
         )
     }
         // v1.6.1 (audit QUAL-02) — `defaultAppManager.isDefault()` est un IPC Binder
@@ -285,17 +330,72 @@ class ConversationsViewModel @Inject constructor(
         val outcome = toggle.requestMoveToVault(conversationId, intoVault = true)
         _events.trySend(
             when (outcome) {
-                is Outcome.Success -> Event.MovedToVault
-                is Outcome.Failure -> Event.MoveToVaultFailed
+                is Outcome.Success -> Event.MovedToVault(count = 1)
+                is Outcome.Failure -> Event.MoveToVaultFailed(count = 1)
             },
+        )
+    }
+
+    /**
+     * v1.13.0 — entre en mode sélection multiple sur un long-press d'item, OU
+     * toggle l'appartenance d'un item dans la sélection si on est déjà en mode
+     * sélection. Pas d'effet si `id` n'existe plus (la sélection effective est
+     * filtrée dans le `combine` à chaque émission).
+     */
+    fun toggleSelection(id: Long) {
+        selectedIds.update { current ->
+            if (current.contains(id)) current - id else current + id
+        }
+    }
+
+    /**
+     * v1.13.0 — sort du mode sélection (TopAppBar `navigationIcon = X`,
+     * `onBack`, sortie vers `VaultScreen`, etc.). Idempotent.
+     */
+    fun clearSelection() {
+        selectedIds.update { emptySet() }
+    }
+
+    /**
+     * v1.13.0 — action "Déplacer les N conv sélectionnées vers le coffre".
+     * Boucle séquentielle (pas batch transactionnel — Room WAL absorbe et la
+     * défense PanicDecoy est ré-évaluée à chaque appel). Émet un seul
+     * [Event.MovedToVault] avec le count effectif (`success`) ; si TOUTES les
+     * conv échouent (e.g. décoy actif), émet `MoveToVaultFailed`. Mixed
+     * outcome rare en pratique mais traité défensivement.
+     */
+    fun bulkMoveSelectedToVault() = viewModelScope.launch {
+        val ids = selectedIds.value.toList()
+        if (ids.isEmpty()) return@launch
+        var success = 0
+        var failure = 0
+        for (id in ids) {
+            when (toggle.requestMoveToVault(id, intoVault = true)) {
+                is Outcome.Success -> success++
+                is Outcome.Failure -> failure++
+            }
+        }
+        // Vide la sélection avant d'émettre — l'UI revient au mode normal pendant
+        // que le snackbar s'affiche, plus naturel qu'un retour en mode sélection
+        // avec 0 sélectionné (les IDs ont été filtrés par `effectiveSelection`).
+        clearSelection()
+        _events.trySend(
+            if (success > 0) Event.MovedToVault(count = success)
+            else Event.MoveToVaultFailed(count = failure),
         )
     }
 
     private val _events = Channel<Event>(Channel.BUFFERED)
     val events: Flow<Event> = _events.receiveAsFlow()
 
+    /**
+     * v1.13.0 — le count permet à l'UI d'afficher le bon snackbar
+     * ("N déplacées" au pluriel) sans dupliquer les events. count = 1 pour
+     * un mouvement single (long-press → menu), count = N pour la sélection
+     * multiple.
+     */
     sealed interface Event {
-        data object MovedToVault : Event
-        data object MoveToVaultFailed : Event
+        data class MovedToVault(val count: Int) : Event
+        data class MoveToVaultFailed(val count: Int) : Event
     }
 }

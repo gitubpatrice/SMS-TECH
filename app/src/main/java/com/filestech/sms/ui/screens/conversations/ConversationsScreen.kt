@@ -157,17 +157,62 @@ fun ConversationsScreen(
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                ConversationsViewModel.Event.MovedToVault ->
-                    snackbarHost.showSnackbar(ctx.getString(R.string.vault_move_in_done))
-                ConversationsViewModel.Event.MoveToVaultFailed ->
+                is ConversationsViewModel.Event.MovedToVault -> {
+                    val msg = if (event.count <= 1) ctx.getString(R.string.vault_move_in_done)
+                    else ctx.resources.getQuantityString(
+                        R.plurals.vault_bulk_move_in_done, event.count, event.count,
+                    )
+                    snackbarHost.showSnackbar(msg)
+                }
+                is ConversationsViewModel.Event.MoveToVaultFailed ->
                     snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))
             }
         }
     }
 
+    // v1.13.0 — système back en mode sélection ⇒ sortir du mode sélection,
+    // pas quitter l'écran. Pattern Gmail / Google Messages : préserve l'écran.
+    androidx.activity.compose.BackHandler(enabled = state.selectionMode) {
+        viewModel.clearSelection()
+    }
+
     Scaffold(
         snackbarHost = { com.filestech.sms.ui.components.SmsTechSnackbarHost(snackbarHost) },
-        topBar = {
+        topBar = topBar@{
+            if (state.selectionMode && !state.isPanicDecoy) {
+                // v1.13.0 — TopAppBar contextuelle en mode sélection : count + action
+                // "Déplacer N vers le coffre" + croix annule. Masquée en PanicDecoy
+                // (re-entry via le `combine` purge la sélection ; on dé-render aussi
+                // côté UI pour ne pas laisser un état zombie pendant la transition).
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = androidx.compose.ui.res.pluralStringResource(
+                                id = R.plurals.conversations_selection_count,
+                                count = state.selectedIds.size,
+                                state.selectedIds.size,
+                            ),
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = stringResource(R.string.action_cancel),
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.bulkMoveSelectedToVault() }) {
+                            Icon(
+                                Icons.Outlined.Lock,
+                                contentDescription = stringResource(R.string.bulk_vault_move_in),
+                            )
+                        }
+                    },
+                )
+                return@topBar
+            }
             TopAppBar(
                 title = {
                     androidx.compose.foundation.layout.Row(
@@ -345,20 +390,37 @@ fun ConversationsScreen(
                     contentPadding = PaddingValues(bottom = 96.dp),
                 ) {
                     items(state.conversations, key = { it.id }) { conv ->
+                        val isSelected = state.selectedIds.contains(conv.id)
                         SwipeableConversationRow(
                             conversation = conv,
                             showAvatars = state.settings.conversations.showAvatars,
                             previewLines = state.settings.conversations.previewLines.coerceIn(1, 2),
-                            onOpenThread = { onOpenThread(conv.id) },
+                            // v1.13.0 — en mode sélection, tap = toggle de l'item, pas
+                            // ouverture du thread. Hors mode sélection, comportement
+                            // normal. Le swipe est désactivé en mode sélection pour
+                            // éviter les conflits de gestes.
+                            onOpenThread = {
+                                if (state.selectionMode) viewModel.toggleSelection(conv.id)
+                                else onOpenThread(conv.id)
+                            },
                             onDelete = { viewModel.delete(conv.id) },
                             onBlock = { viewModel.block(conv) },
                             // v1.11.0 — Trou #2 Vault polish : callback passé
                             // UNIQUEMENT hors PanicDecoy. L'item de menu n'apparaît
                             // donc pas en session decoy (cohérent avec masquage
-                            // de l'icône cadenas top-bar).
-                            onMoveToVault = if (state.isPanicDecoy) null else {
+                            // de l'icône cadenas top-bar). Désactivé aussi en mode
+                            // sélection (l'action passe par la TopAppBar bulk).
+                            onMoveToVault = if (state.isPanicDecoy || state.selectionMode) null else {
                                 { viewModel.moveConversationToVault(conv.id) }
                             },
+                            // v1.13.0 — long-press hors sélection = entrer en sélection
+                            // avec ce conv comme 1ᵉʳ item. Long-press en sélection =
+                            // toggle (cohérent avec Gmail / Google Messages).
+                            onLongClickOverride = if (state.isPanicDecoy) null else {
+                                { viewModel.toggleSelection(conv.id) }
+                            },
+                            selected = isSelected,
+                            selectionMode = state.selectionMode,
                         )
                         HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
                     }
@@ -477,6 +539,15 @@ private fun SwipeableConversationRow(
     onDelete: () -> Unit,
     onBlock: () -> Unit,
     onMoveToVault: (() -> Unit)? = null,
+    /**
+     * v1.13.0 — surcharge du long-press par défaut (qui ouvre `ActionsSheet`).
+     * Non-null en mode normal pour entrer en sélection ; null en PanicDecoy.
+     */
+    onLongClickOverride: (() -> Unit)? = null,
+    /** v1.13.0 — visuel sélectionné (background tinted + check icon). */
+    selected: Boolean = false,
+    /** v1.13.0 — désactive le swipe et l'ActionsSheet pour éviter conflits. */
+    selectionMode: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -504,8 +575,10 @@ private fun SwipeableConversationRow(
 
     androidx.compose.material3.SwipeToDismissBox(
         state = dismissState,
-        enableDismissFromStartToEnd = true,
-        enableDismissFromEndToStart = true,
+        // v1.13.0 — swipe désactivé en mode sélection (cohérent avec absence
+        // d'ActionsSheet sur long-press et avec le pattern Gmail / Messages).
+        enableDismissFromStartToEnd = !selectionMode,
+        enableDismissFromEndToStart = !selectionMode,
         backgroundContent = {
             // v1.2.3 audit U6: use the brand/error tokens so swipe backgrounds adapt to the
             // current theme. Hardcoded 0xFFC62828 / 0xFF1565C0 broke on Dark Tech.
@@ -534,21 +607,48 @@ private fun SwipeableConversationRow(
             }
         },
     ) {
-        androidx.compose.foundation.layout.Box(modifier = Modifier.background(cs.surface)) {
+        // v1.13.0 — background `primaryContainer.copy(alpha=.35f)` quand
+        // sélectionné. Subtil mais lisible WCAG AA face au `onSurface` du
+        // texte (le `primaryContainer` est déjà un ton clair sur thème clair
+        // et un ton sombre sur thème sombre ; α=0.35 préserve la lisibilité).
+        val rowBg = if (selected) cs.primaryContainer.copy(alpha = 0.35f) else cs.surface
+        androidx.compose.foundation.layout.Box(modifier = Modifier.background(rowBg)) {
             ConversationRow(
                 conversation = conversation,
                 onClick = onOpenThread,
                 showAvatars = showAvatars,
                 previewLines = previewLines,
-                // Long-press opens a contextual sheet with Block / Delete. The previous flow
-                // (long-press → straight delete dialog) didn't expose the block action that
-                // already lived deeper in the menu hierarchy. v1.2.3 audit U9: emit a haptic
-                // pulse so the user knows the gesture was recognised — Material guideline.
+                // v1.13.0 — long-press route :
+                //  - `onLongClickOverride` non-null (mode normal) → entrer en
+                //    sélection (1ᵉʳ item) ou toggle (sélection en cours).
+                //  - sinon (PanicDecoy) → ActionsSheet legacy.
+                // Haptic pulse dans les deux cas (Material guideline).
                 onLongClick = {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    actionsSheetOpen = true
+                    if (onLongClickOverride != null) onLongClickOverride() else actionsSheetOpen = true
                 },
             )
+            // v1.13.0 — check icon en overlay quand sélectionné. Placé en bas-
+            // droite pour ne pas masquer l'avatar ; tinté `primary` pour lisibilité
+            // sur le background sélectionné.
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(cs.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = stringResource(R.string.selected),
+                        tint = cs.onPrimary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
     }
 

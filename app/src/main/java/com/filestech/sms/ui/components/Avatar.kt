@@ -95,38 +95,37 @@ fun Avatar(
  * premier (haut-gauche de l'avatar), `dark` donne la profondeur sans
  * casser la palette.
  *
- * v1.12.0 — palette **bleu pur** étendue à 14 nuances. Les 5 rouges + 1
- * plum de v1.11.0 ont été retirés (demande user : la liste de
- * conversations doit rester cohérente avec l'identité bleue de l'app,
- * sans virer au rainbow). Plus de variantes navy / cobalt / cyan ajoutées
- * à la place pour conserver la richesse visuelle.
+ * v1.13.0 — palette **strictement bleue** (11 nuances). Les 3 dernières
+ * entrées à teinte verdâtre de v1.12.0 (teal, dark teal, cyan) ont été
+ * retirées sur demande user : la liste doit ne contenir que les bleus
+ * "originaux" de l'identité de marque. Reste donc royal / electric /
+ * cobalt / brand-blue / sky / periwinkle / azure / navy / cool-steel
+ * + slate / gunmetal (blue-grey neutre, considéré famille bleue).
+ *
+ * Historique :
+ *  - v1.10.x = 7 nuances (palette d'origine)
+ *  - v1.11.0 = 14 nuances (5 rouges + 1 plum + 8 bleu/teal — retiré v1.12)
+ *  - v1.12.0 = 14 nuances pure blue/teal/cyan/navy (rouges retirés)
+ *  - v1.13.0 = 11 nuances **bleu strict** (verts/teals/cyan retirés)
  *
  * Toutes les couleurs vérifiées WCAG AA (ratio ≥ 4.5:1) contre `Color.White`
  * pour le texte initiales. Hash déterministe via `deterministicHue` modulo
  * `BRAND_PALETTE.size` → chaque contact garde toujours la même couleur,
- * mais répartition globale plus riche qu'en v1.10.x (7 → 14).
+ * mais répartition globale homogène.
  */
 private val BRAND_PALETTE: List<Pair<Color, Color>> = listOf(
     // ── Bleus royaux & électriques (4) ──
-    Color(0xFF3870BC) to Color(0xFF1F4E8F), // royal blue (corrigé WCAG)
-    Color(0xFF4C6FCB) to Color(0xFF2E4FA6), // electric blue (corrigé WCAG)
+    Color(0xFF3870BC) to Color(0xFF1F4E8F), // royal blue
+    Color(0xFF4C6FCB) to Color(0xFF2E4FA6), // electric blue
     Color(0xFF3F6BAA) to Color(0xFF1A4078), // deep cobalt
     Color(0xFF1976D2) to Color(0xFF0D47A1), // brand blue strong
     // ── Bleus doux & ciel (3) ──
-    // v1.12.0 audit A1 — `light` stops assombris pour assurer WCAG AA ≥ 4.5:1
-    // contre Color.White même sur le coin top-left du gradient (zone la plus
-    // claire). Avant : 4 paires < 4.5 moyennes (sky, azure, teal, dark teal),
-    // 5 autres < 4.5 sur le stop light isolé. Corrigées chirurgicalement.
-    Color(0xFF2E7DA0) to Color(0xFF1F6C8B), // sky (corrigé)
-    Color(0xFF4C6FA8) to Color(0xFF3A579E), // periwinkle (corrigé)
-    Color(0xFF1A75C8) to Color(0xFF1565C0), // azure (corrigé)
+    Color(0xFF2E7DA0) to Color(0xFF1F6C8B), // sky
+    Color(0xFF4C6FA8) to Color(0xFF3A579E), // periwinkle
+    Color(0xFF1A75C8) to Color(0xFF1565C0), // azure
     // ── Navy & slate (4) ──
-    Color(0xFF4A6090) to Color(0xFF2E3F6E), // navy (corrigé)
-    Color(0xFF5E72A0) to Color(0xFF3E5288), // cool steel (corrigé)
+    Color(0xFF4A6090) to Color(0xFF2E3F6E), // navy
+    Color(0xFF5E72A0) to Color(0xFF3E5288), // cool steel
     Color(0xFF546E7A) to Color(0xFF29434E), // slate
     Color(0xFF455A64) to Color(0xFF1C313A), // gunmetal
-    // ── Teal & cyan (3) ──
-    Color(0xFF1F7A96) to Color(0xFF1E6B85), // teal (corrigé)
-    Color(0xFF00796B) to Color(0xFF00695C), // dark teal (corrigé)
-    Color(0xFF007E92) to Color(0xFF006064), // cyan (corrigé)
 )

@@ -119,6 +119,9 @@ fun SettingsScreen(
     var showResyncConfirm by remember { mutableStateOf(false) }
     var showResetAllConfirm by remember { mutableStateOf(false) }
     var showPurgeBlockedConfirm by remember { mutableStateOf(false) }
+    // v1.13.0 — PIN/pass distinct coffre.
+    var vaultPinSetupOpen by remember { mutableStateOf(false) }
+    var vaultPinClearConfirmOpen by remember { mutableStateOf(false) }
 
     val defaultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* no-op */ }
 
@@ -405,6 +408,33 @@ fun SettingsScreen(
                         }
                     },
                 )
+                // v1.13.0 — PIN/pass distinct pour le coffre (second-factor).
+                // ToggleRow non-onChange (le toggle déclenche un setup dialog
+                // au lieu d'écrire directement la valeur, sinon on activerait
+                // le gate sans avoir posé de hash, ce qui dégraderait l'UX au
+                // prochain unlock vault). C'est le `vaultPinSetupOpen` qui
+                // contrôle la suite.
+                // v1.13.0 audit UX-2 — masqué en PanicDecoy : l'existence du
+                // toggle révélerait la présence d'un coffre dans Settings,
+                // alors que le cadenas TopAppBar et la nav vers Vault sont
+                // déjà masqués en décoy. Cohérence cross-écran.
+                if (!isPanicDecoy) {
+                    ToggleRow(
+                        title = stringResource(R.string.settings_vault_pin_title),
+                        description = stringResource(R.string.settings_vault_pin_desc),
+                        value = state.security.vaultPinEnabled,
+                        onChange = { v ->
+                            if (v) vaultPinSetupOpen = true
+                            else vaultPinClearConfirmOpen = true
+                        },
+                    )
+                    if (state.security.vaultPinEnabled) {
+                        NavigationRow(
+                            title = stringResource(R.string.settings_vault_pin_change),
+                            onClick = { vaultPinSetupOpen = true },
+                        )
+                    }
+                }
                 NavigationRow(
                     title = stringResource(R.string.settings_purge_blocked),
                     description = stringResource(R.string.settings_purge_blocked_desc),
@@ -910,6 +940,57 @@ fun SettingsScreen(
                 reactionFormatPickerOpen = false
             },
             onDismiss = { reactionFormatPickerOpen = false },
+        )
+    }
+
+    // v1.13.0 — Dialog setup PIN/pass coffre : saisie + confirmation.
+    if (vaultPinSetupOpen) {
+        VaultPinSetupDialog(
+            appPinHint = state.security.lockMode == com.filestech.sms.data.local.datastore.LockMode.PIN ||
+                state.security.lockMode == com.filestech.sms.data.local.datastore.LockMode.BIOMETRIC,
+            onConfirm = { pin ->
+                viewModel.setVaultPin(pin)
+                vaultPinSetupOpen = false
+                rootScope.launch {
+                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_saved))
+                }
+            },
+            onDismiss = { vaultPinSetupOpen = false },
+        )
+    }
+
+    // v1.13.0 — Dialog confirmation retrait PIN/pass coffre (l'user désactive
+    // le toggle). Action non destructive (rien n'est effacé sauf le hash),
+    // mais on confirme pour éviter un toggle accidentel qui réduirait la
+    // sécurité. Pattern : confirm Button BrandDanger, Cancel autofocus.
+    if (vaultPinClearConfirmOpen) {
+        val cancelFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+        AlertDialog(
+            onDismissRequest = { vaultPinClearConfirmOpen = false },
+            title = { Text(stringResource(R.string.settings_vault_pin_title)) },
+            text = { Text(stringResource(R.string.settings_vault_pin_desc)) },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.clearVaultPin()
+                        vaultPinClearConfirmOpen = false
+                        rootScope.launch {
+                            snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_cleared))
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
+                ) { Text(stringResource(R.string.action_disable)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { vaultPinClearConfirmOpen = false },
+                    modifier = Modifier.focusRequester(cancelFocus).focusable(),
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
         )
     }
 }
@@ -2342,4 +2423,114 @@ private fun EmergencyArmedRecap(
             }
         }
     }
+}
+
+/**
+ * v1.13.0 — Dialog setup PIN/pass coffre : 2 étapes (saisie + confirmation).
+ * Bouton "Sauver" actif uniquement si :
+ *  - PIN ≥ 4 caractères
+ *  - confirmation == PIN
+ *
+ * **Sécurité** :
+ *  - 2 champs `PasswordVisualTransformation` (jamais en clair).
+ *  - 2 `String` locaux au composable, jamais persistés. Conversion en
+ *    `CharArray` UNIQUEMENT à la validation, immédiatement passé à
+ *    [VaultPinManager.setVaultPin] qui le wipe.
+ *  - Pas d'autofill, pas de prédictions (`KeyboardType.Password`).
+ *  - [appPinHint] = true si l'user a un PIN d'app configuré → warning UX
+ *    visible "choisis un PIN différent" (pas une validation crypto — l'user
+ *    DOIT pouvoir choisir le même PIN s'il insiste, c'est sa décision).
+ *  - v1.13.0 audit NEW-2 : limitation acceptée — les `String pin` et
+ *    `String confirm` sont des objets JVM immutable. Chaque frappe
+ *    crée une nouvelle String, l'ancienne reste en heap jusqu'au GC.
+ *    Acceptable car : (1) durée de vie < temps de saisie (~30 s), (2)
+ *    `FLAG_SECURE` actif empêche screen-capture, (3) heap dump nécessite
+ *    root (vecteur déjà hors-threat-model). Mitigation max appliquée :
+ *    `confirm = ""` AVANT `onConfirm(snapshot)` pour minimiser la fenêtre
+ *    (cf. ligne ~2515).
+ */
+@Composable
+private fun VaultPinSetupDialog(
+    appPinHint: Boolean,
+    onConfirm: (CharArray) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var pin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    val tooShort = pin.isNotEmpty() && pin.length < 4
+    val mismatch = confirm.isNotEmpty() && confirm != pin
+    val canConfirm = pin.length >= 4 && confirm == pin
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_vault_pin_set_title)) },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                Text(
+                    text = stringResource(R.string.settings_vault_pin_set_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (appPinHint) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.settings_vault_pin_same_as_app),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it.take(64) },
+                    label = { Text(stringResource(R.string.pin_entry_label)) },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                    ),
+                    isError = tooShort,
+                    supportingText = if (tooShort) {
+                        { Text(stringResource(R.string.settings_vault_pin_too_short)) }
+                    } else null,
+                    modifier = Modifier.focusRequester(focusRequester),
+                )
+                Spacer(Modifier.height(12.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = confirm,
+                    onValueChange = { confirm = it.take(64) },
+                    label = { Text(stringResource(R.string.settings_vault_pin_confirm_title)) },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                    isError = mismatch,
+                    supportingText = if (mismatch) {
+                        { Text(stringResource(R.string.settings_vault_pin_mismatch)) }
+                    } else null,
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = canConfirm,
+                onClick = {
+                    val snapshot = pin.toCharArray()
+                    pin = ""
+                    confirm = ""
+                    onConfirm(snapshot)
+                },
+            ) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
 }

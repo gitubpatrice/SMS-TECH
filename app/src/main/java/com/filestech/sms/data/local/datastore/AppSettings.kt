@@ -210,6 +210,18 @@ data class SecuritySettings(
      */
     val emergencyCallPoliceEnabled: Boolean = false,
     /**
+     * v1.13.0 — PIN distinct pour le coffre (second-factor). Quand ON, l'entrée
+     * dans `VaultScreen` est gated derrière la saisie d'un PIN dédié (hash
+     * séparé du PIN d'app), même si l'app principale est déjà déverrouillée.
+     * Pratique pour ceux qui partagent leur PIN d'app à un proche mais veulent
+     * garder le coffre privé.
+     *
+     * Default `false` : opt-in pour ne pas changer la UX existante. Le hash
+     * vit dans [com.filestech.sms.data.local.datastore.SecurityStore], cette
+     * clé n'est que le flag déclaratif "feature active oui/non".
+     */
+    val vaultPinEnabled: Boolean = false,
+    /**
      * v1.11.0 — Sujet 3 anti-smishing : active la détection locale d'arnaque
      * (URL raccourcies, mots d'urgence, numéros premium, typosquatting) et
      * l'affichage d'un bandeau rouge "⚠️ Possiblement frauduleux" sous les

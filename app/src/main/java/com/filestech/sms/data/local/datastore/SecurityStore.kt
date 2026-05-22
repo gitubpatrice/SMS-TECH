@@ -76,6 +76,38 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         return PinSnapshot(salt, hash, iters)
     }
 
+    /**
+     * v1.13.0 — PIN distinct pour le coffre (second-factor). PBKDF2-HMAC-SHA512
+     * indépendant du PIN d'app : compromis du PIN d'app sous coercion (Locked
+     * → tape PIN d'app sous menace, OK) ne donne PAS accès au coffre tant que
+     * le PIN coffre n'est pas révélé. Schéma à plat : 3 prefs idempotentes,
+     * `clear` enlève les 3, `snapshot` retourne null si toute clé manque.
+     *
+     * **Crypto** : pas de second envelope SQLCipher — le coffre reste dans la
+     * même base chiffrée que l'app (clé Keystore commune). Le second-factor
+     * est UN GATE UI : tant que le hash candidat ne matche pas le stocké, on
+     * refuse `markUnlocked()`. C'est de la défense contre l'attaque "j'ai vu
+     * ton PIN d'app, je vais lire ton coffre", pas contre un forensique avec
+     * accès Keystore (qui reste protégé par lockscreen Android).
+     */
+    suspend fun setVaultPinHash(salt: ByteArray, hash: ByteArray, iterations: Int) {
+        context.secStore.edit { p ->
+            p[K.vaultSalt] = salt
+            p[K.vaultHash] = hash
+            p[K.vaultIters] = iterations
+        }
+    }
+    suspend fun clearVaultPin() = context.secStore.edit { p ->
+        p.remove(K.vaultSalt); p.remove(K.vaultHash); p.remove(K.vaultIters)
+    }
+    suspend fun vaultPinSnapshot(): PinSnapshot? {
+        val p = context.secStore.data.first()
+        val salt = p[K.vaultSalt] ?: return null
+        val hash = p[K.vaultHash] ?: return null
+        val iters = p[K.vaultIters] ?: return null
+        return PinSnapshot(salt, hash, iters)
+    }
+
     /** Last time the user successfully unlocked the app. Used by auto-lock. */
     suspend fun setLastUnlock(ts: Long) = context.secStore.edit { it[K.lastUnlock] = ts }
     val lastUnlock: Flow<Long> = context.secStore.data.map { it[K.lastUnlock] ?: 0L }
@@ -87,6 +119,10 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         val panicSalt = byteArrayPreferencesKey("panic.salt")
         val panicHash = byteArrayPreferencesKey("panic.hash")
         val panicIters = intPreferencesKey("panic.iters")
+        // v1.13.0 — PIN distinct coffre (second-factor).
+        val vaultSalt = byteArrayPreferencesKey("vault.salt")
+        val vaultHash = byteArrayPreferencesKey("vault.hash")
+        val vaultIters = intPreferencesKey("vault.iters")
         val failCount = intPreferencesKey("auth.fail")
         val lockoutUntil = longPreferencesKey("auth.lockoutUntil")
         val lastUnlock = longPreferencesKey("auth.lastUnlock")

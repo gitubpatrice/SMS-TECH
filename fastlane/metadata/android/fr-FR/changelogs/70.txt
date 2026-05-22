@@ -1,0 +1,11 @@
+v1.13.0 — Coffre v3 : multi + 2ᵉ facteur
+
+• Multi-sélection : long-press → barre
+  "Déplacer N vers / Sortir N" (les 2 écrans)
+• PIN/pass distinct coffre, hash PBKDF2-SHA512
+  séparé du PIN d'app. Réglages → Sécurité
+• Biométrie aussi : bouton fallback dans le
+  dialog d'ouverture du coffre
+• Palette avatars : 11 nuances bleu strict
+  (les 3 verts retirés)
+• 6 fixes audit (String wipe, IO race, atomicity)

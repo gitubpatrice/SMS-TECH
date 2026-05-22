@@ -158,6 +158,8 @@ class SettingsRepository @Inject constructor(
                 // v1.12.0 — raccourci urgence. Défaut false (opt-in strict).
                 emergencyShortcutEnabled = p[K.emergencyShortcutEnabled] ?: false,
                 emergencyCallPoliceEnabled = p[K.emergencyCallPoliceEnabled] ?: false,
+                // v1.13.0 — PIN distinct coffre. Défaut false (opt-in strict).
+                vaultPinEnabled = p[K.vaultPinEnabled] ?: false,
             ),
             blocking = BlockingSettings(
                 blockUnknown = p[K.blockUnknown] ?: false,
@@ -252,6 +254,8 @@ class SettingsRepository @Inject constructor(
         // v1.12.0 — raccourci urgence.
         this[K.emergencyShortcutEnabled] = s.security.emergencyShortcutEnabled
         this[K.emergencyCallPoliceEnabled] = s.security.emergencyCallPoliceEnabled
+        // v1.13.0 — PIN distinct coffre.
+        this[K.vaultPinEnabled] = s.security.vaultPinEnabled
 
         this[K.blockUnknown] = s.blocking.blockUnknown
         // v1.3.5 G6 + audit F3 — `blockShortCodes` retiré (champ fantôme, voir
@@ -336,6 +340,8 @@ class SettingsRepository @Inject constructor(
         val emergencyShortcutEnabled = booleanPreferencesKey("security.emergencyShortcutEnabled")
         // v1.12.0 — bouton Appeler Police 17 (FR uniquement, opt-in).
         val emergencyCallPoliceEnabled = booleanPreferencesKey("security.emergencyCallPoliceEnabled")
+        // v1.13.0 — PIN distinct coffre (second-factor opt-in).
+        val vaultPinEnabled = booleanPreferencesKey("security.vaultPinEnabled")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")

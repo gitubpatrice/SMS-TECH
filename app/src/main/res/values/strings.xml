@@ -201,6 +201,29 @@
     <string name="vault_move_in_failed">Could not move this conversation</string>
     <string name="vault_move_out_done">Conversation moved out of the vault</string>
     <string name="vault_move_out_failed">Could not move this conversation</string>
+    <!-- v1.13.0 — multi-selection bulk move to/from vault -->
+    <string name="bulk_vault_move_in">Move to vault</string>
+    <string name="bulk_vault_move_out">Move out of vault</string>
+    <string name="selected">Selected</string>
+    <!-- v1.13.0 — distinct vault PIN/pass (second-factor) -->
+    <string name="pin_entry_label">PIN or password</string>
+    <string name="pin_error_invalid">Incorrect PIN or password</string>
+    <string name="vault_pin_dialog_title">Vault second-factor</string>
+    <string name="vault_pin_dialog_subtitle">Enter the PIN or password that protects the vault. You can also use biometrics if available.</string>
+    <string name="vault_pin_dialog_unlock">Unlock</string>
+    <string name="vault_use_biometric">Use biometrics</string>
+    <string name="settings_vault_pin_title">Distinct PIN or password for the vault</string>
+    <string name="settings_vault_pin_desc">When ON, opening the vault asks for a dedicated PIN/password (and optionally biometrics) even if the app is already unlocked. The credential is hashed separately from the app PIN.</string>
+    <string name="settings_vault_pin_set_title">Set the vault PIN</string>
+    <string name="settings_vault_pin_set_subtitle">Pick a PIN that is different from your app PIN.</string>
+    <string name="settings_vault_pin_confirm_title">Confirm the vault PIN</string>
+    <string name="settings_vault_pin_change">Change the vault PIN</string>
+    <string name="settings_vault_pin_mismatch">PINs do not match. Try again.</string>
+    <string name="settings_vault_pin_too_short">PIN must be at least 4 characters.</string>
+    <string name="settings_vault_pin_same_as_app">Choose a PIN that is different from your app PIN.</string>
+    <string name="settings_vault_pin_saved">Vault PIN saved.</string>
+    <string name="settings_vault_pin_cleared">Vault PIN removed.</string>
+    <string name="action_disable">Disable</string>
     <string name="vault_actions_title">Vault actions</string>
     <string name="vault_biometric_title">Unlock the vault</string>
     <string name="vault_biometric_subtitle">Confirm your identity to open the private folder.</string>
@@ -579,4 +602,17 @@
     <string name="error_not_default_app">SMS Tech is not the default SMS app yet.</string>
     <string name="error_send_failed">Failed to send the message.</string>
 
+    <!-- v1.13.0 — plurals for multi-selection counts -->
+    <plurals name="conversations_selection_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <plurals name="vault_bulk_move_in_done">
+        <item quantity="one">%d conversation moved to the vault</item>
+        <item quantity="other">%d conversations moved to the vault</item>
+    </plurals>
+    <plurals name="vault_bulk_move_out_done">
+        <item quantity="one">%d conversation moved out of the vault</item>
+        <item quantity="other">%d conversations moved out of the vault</item>
+    </plurals>
 </resources>

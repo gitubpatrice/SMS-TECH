@@ -34,6 +34,7 @@ class SettingsViewModel @Inject constructor(
     private val appLock: AppLockManager,
     private val blockedImporter: BlockedNumbersImporter,
     private val conversationRepo: ConversationRepository,
+    private val vaultPin: com.filestech.sms.security.VaultPinManager,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -181,5 +182,21 @@ class SettingsViewModel @Inject constructor(
         settings.update { it.copy(advanced = it.advanced.copy(lastSyncedSmsId = 0L)) }
         TelephonySyncWorker.enqueueOneShot(context)
         _events.send(Event.ResyncRequested)
+    }
+
+    /**
+     * v1.13.0 — set/change le PIN/pass coffre. [pin] est wipé par
+     * [com.filestech.sms.security.VaultPinManager]. Le flag `vaultPinEnabled`
+     * est posé `true` côté manager après hash réussi.
+     */
+    fun setVaultPin(pin: CharArray) = viewModelScope.launch {
+        vaultPin.setVaultPin(pin)
+    }
+
+    /**
+     * v1.13.0 — retire le PIN/pass coffre + flip le flag à `false`. Idempotent.
+     */
+    fun clearVaultPin() = viewModelScope.launch {
+        vaultPin.clearVaultPin()
     }
 }

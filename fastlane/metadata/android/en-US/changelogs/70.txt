@@ -1,0 +1,11 @@
+v1.13.0 — Vault v3: multi + 2nd factor
+
+• Multi-select: long-press → contextual bar
+  "Move N to / Move N out" (both screens)
+• Distinct vault PIN/password, PBKDF2-SHA512
+  hash separate from app PIN. Settings → Security
+• Biometric also: fallback button in the
+  vault unlock dialog
+• Avatar palette: 11 strict-blue shades
+  (3 green tones removed)
+• 6 audit fixes (String wipe, IO race, atomicity)
