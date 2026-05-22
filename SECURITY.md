@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.2** (2026-05-22)
+Current release : **v1.14.3** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,15 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.14.2 (this release) — Hotfix CRITIQUE : 3 voies de déclenchement SMS d'urgence accidentel fermées
+### v1.14.3 (this release) — Hotfix migration one-shot : repair dirty `emergencyShortcutEnabled` flag
+
+PATCH urgent post-v1.14.2 — un utilisateur ayant désactivé le Mode urgence en v1.14.0 ou v1.14.1 voyait la notification persistante lock-screen ré-apparaître à chaque lancement de l'app malgré la désactivation. Cause racine : avant le fix cascade-disable de v1.14.2, le bouton "Désactiver le mode urgence" ne flippait QUE `emergency.enabled = false`, laissant `emergencyShortcutEnabled = true` orphelin en DataStore. Le fix v1.14.2 corrige les FUTURES désactivations mais ne nettoie pas l'état dirty existant.
+
+**Fix v1.14.3** : migration one-shot au cold-start de l'app dans `MainApplication.onCreate`. Si `emergency.enabled == false` ET (`emergencyShortcutEnabled == true` OU `emergencyCallPoliceEnabled == true`), force-clear les 2 flags dans la même transaction `settings.update`. Idempotent : si l'invariant est déjà respecté, le `update` ne re-écrit pas. Exécuté UNE fois par cold-start, perf négligeable (`first()` snapshot DataStore + éventuellement 1 write).
+
+Log Timber au repair pour audit trail. Pas de migration Room, pas de changement crypto.
+
+### v1.14.2 — Hotfix CRITIQUE : 3 voies de déclenchement SMS d'urgence accidentel fermées
 
 **HOTFIX URGENT** post-v1.14.1 sur bug critique remonté user 2026-05-22 : "beaucoup de mms envoyés sans rien faire, mode urgence désactivé". Investigation a identifié **3 voies indépendantes** de déclenchement accidentel du SMS d'urgence aux contacts SafetyCall. Toutes fermées dans v1.14.2.
 

@@ -239,6 +239,38 @@ class MainApplication : Application(), Configuration.Provider {
                 .collect()
         }
 
+        // v1.14.3 hotfix — migration one-shot pour aligner l'invariant :
+        // si l'user a désactivé le Mode urgence en v1.14.0 ou v1.14.1 (avant
+        // le fix cascade-disable v1.14.2), le flag `emergency.enabled = false`
+        // mais `emergencyShortcutEnabled` est resté à `true` → la notif
+        // persistante ré-apparaissait à chaque lancement de l'app. Cette
+        // migration corrige rétroactivement l'état DataStore au cold-start.
+        // Idempotente : si l'invariant est déjà respecté, le `update` ne
+        // re-écrit pas (DataStore détecte l'égalité). Exécutée UNE fois
+        // par cold-start, négligeable côté perf.
+        appScope.launch {
+            val snapshot = settingsRepository.flow.first()
+            val sec = snapshot.security
+            val needsRepair = !sec.emergency.enabled &&
+                (sec.emergencyShortcutEnabled || sec.emergencyCallPoliceEnabled)
+            if (needsRepair) {
+                Timber.i(
+                    "MainApplication: repairing dirty emergency state (enabled=%s shortcut=%s police=%s) → cascade-disable",
+                    sec.emergency.enabled,
+                    sec.emergencyShortcutEnabled,
+                    sec.emergencyCallPoliceEnabled,
+                )
+                settingsRepository.update { s ->
+                    s.copy(
+                        security = s.security.copy(
+                            emergencyShortcutEnabled = false,
+                            emergencyCallPoliceEnabled = false,
+                        ),
+                    )
+                }
+            }
+        }
+
         // v1.12.0 — Observe le flag `security.emergencyShortcutEnabled` pour
         // poster/canceler la notification persistante du raccourci urgence
         // (URGENCE + 112). Même pattern que KeepAliveService : idempotent,

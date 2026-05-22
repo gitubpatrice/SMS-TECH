@@ -1,0 +1,15 @@
+v1.14.3 — Hotfix migration notif urgence
+
+Fix sur état dirty post-v1.14.0/v1.14.1 : si tu
+avais désactivé le mode urgence avant v1.14.2,
+la notif lock-screen ré-apparaissait quand même
+à chaque lancement.
+
+Migration one-shot au démarrage : si mode
+urgence désactivé mais flags raccourci notif
+encore ON → force-clear automatique (idempotent,
+1 fois par cold-start).
+
+Combinée avec v1.14.2 : toutes les voies de
+déclenchement SMS accidentel + état dirty
+résiduel sont nettoyés.

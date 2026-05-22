@@ -1,0 +1,15 @@
+v1.14.3 — Hotfix migration emergency notif
+
+Fix for dirty state post-v1.14.0/v1.14.1: if you
+had disabled emergency mode before v1.14.2, the
+lock-screen notif reappeared at each app launch
+regardless.
+
+One-shot migration at startup: if emergency
+mode is disabled but the notif shortcut flags
+are still ON → force-clear automatically
+(idempotent, 1 time per cold-start).
+
+Combined with v1.14.2: all accidental SMS
+trigger paths + residual dirty state are
+cleaned up.
