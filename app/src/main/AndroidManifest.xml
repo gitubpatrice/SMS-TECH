@@ -42,6 +42,16 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- v1.14.0 — Mode urgence : appel direct 112 / 17 sur hold-3s opt-in.
+         Permission demandée RUNTIME uniquement quand l'user active explicitement
+         `emergencyCallBehavior = HOLD_3S_DIRECT_CALL` dans Réglages. Default
+         `DIALER_ONLY` (ACTION_DIAL composeur pré-rempli, zéro permission).
+         Si refusée → fallback automatique vers DIALER_ONLY + warning. Aucun
+         appel automatique : hold-3s est anti-pocket-dial. Numéros 112 et 17
+         hardcodés dans `EmergencyCallHelper.placeEmergencyCall(number)`,
+         pas de paramètre user-modifiable. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+
     <!-- v1.3.5 G3 audit fix — SCHEDULE_EXACT_ALARM + USE_EXACT_ALARM retirées :
          l'envoi planifié passe exclusivement par WorkManager.enqueueUniqueWork (cf.
          ScheduledMessageScheduler) qui n'a PAS besoin de ces permissions. Elles

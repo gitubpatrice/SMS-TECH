@@ -122,6 +122,18 @@ class VaultViewModel @Inject constructor(
      */
     fun isVaultSessionUnlocked(): Boolean = vault.isVaultUnlockedInSession
 
+    /**
+     * v1.14.0 — verrouille explicitement le coffre. Appelé à chaque sortie
+     * EXPLICITE de [VaultScreen] (tap back, system back, cancel PIN dialog,
+     * biometric refused). PAS appelé lors d'une navigation vers une conv
+     * vault (ThreadScreen) — le retour `ON_PAUSE` Compose ne déclenche RIEN,
+     * `sessionUnlocked` persiste à travers l'aller-retour ThreadScreen
+     * ↔ VaultScreen (cf. fix v1.13.1).
+     *
+     * Idempotent. Si déjà locked, no-op.
+     */
+    fun lockVaultSession() = vault.lock()
+
     private val _events = Channel<Event>(Channel.BUFFERED)
     val events: Flow<Event> = _events.receiveAsFlow()
 
@@ -213,9 +225,25 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     val selectionMode by viewModel.selectionMode.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
 
+    // v1.14.0 — wrap onBack pour verrouiller le coffre à CHAQUE sortie
+    // explicite. PAS sur push ThreadScreen (composable ne quitte pas la nav
+    // stack, juste mise en pause par le push d'écran au-dessus). Le wrapping
+    // est centralisé pour ne pas oublier un call site (top-bar back, system
+    // back, PIN cancel, biometric refused).
+    val lockedOnBack: () -> Unit = remember(onBack) {
+        {
+            viewModel.lockVaultSession()
+            onBack()
+        }
+    }
+
     // v1.13.0 — système back en mode sélection ⇒ sortir du mode sélection.
     androidx.activity.compose.BackHandler(enabled = selectionMode) {
         viewModel.clearSelection()
+    }
+    // v1.14.0 — système back HORS mode sélection ⇒ lock + onBack.
+    androidx.activity.compose.BackHandler(enabled = !selectionMode) {
+        lockedOnBack()
     }
 
     // v1.11.0 — Trou #3 Vault polish : BiometricPrompt à l'entrée si l'user
@@ -335,8 +363,11 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                     // User refused or hardware error → on quitte sans dévoiler la
                     // liste. Le markUnlocked n'est PAS appelé → le filtre repo
                     // continue à retourner emptyList() si PanicDecoy + safe fallback.
+                    // v1.14.0 — lockVault + back pour cohérence "session non
+                    // ouverte" (le user n'est jamais entré, pas besoin de lock
+                    // explicite mais defensive — sessionUnlocked est déjà false).
                     unlocked = false
-                    onBack()
+                    lockedOnBack()
                 }
             }
             else -> {
@@ -406,7 +437,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
             TopAppBar(
                 title = { Text(stringResource(R.string.vault_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = lockedOnBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
@@ -519,7 +550,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                 viewModel.markUnlocked()
                 unlocked = true
             },
-            onCancel = { onBack() },
+            onCancel = { lockedOnBack() },
             onUseBiometric = if (biometricAvailable) {
                 {
                     triggerBiometric {

@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.core.app.NotificationManagerCompat
 import com.filestech.sms.R
 import com.filestech.sms.di.ApplicationScope
@@ -75,12 +74,12 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
 
     private fun handleDial(context: Context, number: String) {
         Timber.i("EmergencyShortcutReceiver: dial %s requested", number)
-        val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-            data = Uri.parse("tel:$number")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        runCatching { context.startActivity(dialIntent) }
-            .onFailure { Timber.w(it, "EmergencyShortcutReceiver: no dialer to handle ACTION_DIAL") }
+        // v1.14.0 — délégué au helper centralisé `EmergencyCallHelper.openDialer`
+        // pour cohérence + whitelist stricte des numéros. Lock-screen action =
+        // TOUJOURS dialer (jamais auto-call) : hold-3s direct-call est réservé
+        // aux écrans in-app où la garde gestuelle est applicable. Sur lock-
+        // screen, le tap accidentel poche-pocket est trop probable.
+        com.filestech.sms.system.emergency.EmergencyCallHelper.openDialer(context, number)
     }
 
     companion object {

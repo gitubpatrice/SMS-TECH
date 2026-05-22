@@ -1,0 +1,12 @@
+v1.14.0 — Urgence MINIMAL final + auto-lock coffre
+
+• Coffre : auto-verrouillage à chaque sortie
+  explicite (back arrow / système)
+• Boutons 112 / 17 : composeur (défaut, 0 perm)
+  ou maintien 3 s → appel direct (CALL_PHONE)
+• Kill-switch « Je vais bien » : reset cooldown
+  + (option) SMS « fausse alerte »
+• « Tester sans envoyer » : preview SMS +
+  contacts masqués + GPS, zéro envoi
+• 4 fixes audit (perm sync, SMS partiel,
+  GPS loader, cohérence)

@@ -207,6 +207,40 @@
     <string name="selected">Selected</string>
     <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
     <string name="bulk_select_multiple">Select multiple</string>
+    <!-- v1.14.0 — emergency call behavior + outcomes -->
+    <string name="emergency_call_behavior_title">Behavior of 112 / 17 buttons</string>
+    <string name="emergency_call_behavior_desc">Choose how the emergency call buttons act when tapped.</string>
+    <string name="emergency_call_behavior_dialer_only">Open dialer (you confirm)</string>
+    <string name="emergency_call_behavior_dialer_only_desc">Tap opens the phone app with the number pre-filled. You tap the green button to actually call. No special permission. Default.</string>
+    <string name="emergency_call_behavior_hold_3s">Hold 3s → direct call</string>
+    <string name="emergency_call_behavior_hold_3s_desc">Hold the button 3 seconds → immediate call to 112 or 17 without confirmation. Requires the CALL_PHONE permission. Anti-pocket-dial via mandatory hold-3s.</string>
+    <string name="emergency_call_permission_denied">Call permission denied. Falling back to dialer.</string>
+    <string name="emergency_call_os_error">Unable to place the call.</string>
+    <string name="emergency_call_permission_request_title">Allow direct calling?</string>
+    <string name="emergency_call_permission_request_body">To enable hold-3s direct call, SMS Tech needs the CALL_PHONE permission. If you refuse, the buttons will keep their default behavior (open dialer).</string>
+    <!-- v1.14.0 — kill-switch "Je vais bien" (false-alarm reset) -->
+    <string name="emergency_i_am_ok_body">False alert. I am OK. Please do not worry, no action needed.</string>
+    <string name="emergency_i_am_ok_chip_title">Emergency triggered recently</string>
+    <string name="emergency_i_am_ok_chip_action">I am OK</string>
+    <string name="emergency_i_am_ok_confirm_title">Send the "I am OK" message?</string>
+    <string name="emergency_i_am_ok_confirm_body">This will reset the emergency cooldown and (optionally) send a short SMS to your safety-call contacts so they know it was a false alert. You can disable the SMS in Settings.</string>
+    <string name="emergency_i_am_ok_done">"I am OK" message sent.</string>
+    <string name="emergency_i_am_ok_reset_only">Cooldown reset. No SMS sent.</string>
+    <string name="emergency_i_am_ok_send_failed">Cooldown reset, but no contact received the SMS. Try again or contact them manually.</string>
+    <string name="settings_send_i_am_ok_sms_title">Send "I am OK" SMS on reset</string>
+    <string name="settings_send_i_am_ok_sms_desc">When you tap "I am OK" after a false-alarm trigger, also send a short SMS to your safety-call contacts saying it was a false alert.</string>
+    <!-- v1.14.0 — dry-run "Test without sending" -->
+    <string name="emergency_dry_run_button">Test without sending</string>
+    <string name="emergency_dry_run_title">What would be sent</string>
+    <string name="emergency_dry_run_disabled">Emergency mode is currently disabled. Nothing would actually be sent or called.</string>
+    <string name="emergency_dry_run_body_label">SMS body that would be sent:</string>
+    <string name="emergency_dry_run_body_empty">(empty body — check your template)</string>
+    <string name="emergency_dry_run_contacts_label">Contacts that would receive the SMS (%1$d):</string>
+    <string name="emergency_dry_run_loc_disabled">GPS link disabled. SMS sent without coordinates.</string>
+    <string name="emergency_dry_run_loc_resolved">GPS resolved. Maps link will be included.</string>
+    <string name="emergency_dry_run_loc_unavailable">GPS unavailable (permission, hardware off, or no fix). SMS sent without coordinates.</string>
+    <string name="emergency_dry_run_call_behavior_label">Call buttons behavior:</string>
+    <string name="emergency_dry_run_loading">Resolving GPS…</string>
     <!-- v1.13.0 — distinct vault PIN/pass (second-factor) -->
     <string name="pin_entry_label">PIN or password</string>
     <string name="pin_error_invalid">Incorrect PIN or password</string>

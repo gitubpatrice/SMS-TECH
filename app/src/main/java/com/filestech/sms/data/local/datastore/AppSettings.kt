@@ -222,6 +222,27 @@ data class SecuritySettings(
      */
     val vaultPinEnabled: Boolean = false,
     /**
+     * v1.14.0 — comportement des boutons 112 / 17 (EmergencyScreen + notif
+     * lock-screen raccourci). Deux niveaux :
+     *   - [EmergencyCallBehavior.DIALER_ONLY] (DEFAULT) : ACTION_DIAL ouvre le
+     *     composeur pré-rempli, l'user confirme l'appel manuellement.
+     *     Aucune permission, zéro risque de pocket-dial.
+     *   - [EmergencyCallBehavior.HOLD_3S_DIRECT_CALL] : maintenir le bouton
+     *     3 secondes déclenche un appel direct via CALL_PHONE permission.
+     *     Pour situations vraiment critiques où chaque seconde compte.
+     *     Anneau de progression visible (anti-déclenchement accidentel).
+     *
+     * Niveau 2 (tap unique → call direct) volontairement non implémenté
+     * v1.14.0 : risque pocket-dial trop élevé pour gain marginal.
+     */
+    val emergencyCallBehavior: EmergencyCallBehavior = EmergencyCallBehavior.DIALER_ONLY,
+    /**
+     * v1.14.0 — opt-in du SMS "Je vais bien" envoyé aux contacts SafetyCall
+     * quand l'user appuie sur le bouton kill-switch. Default `true` (assume
+     * que l'user veut rassurer ses contacts), désactivable.
+     */
+    val sendIAmOkSmsOnReset: Boolean = true,
+    /**
      * v1.11.0 — Sujet 3 anti-smishing : active la détection locale d'arnaque
      * (URL raccourcies, mots d'urgence, numéros premium, typosquatting) et
      * l'affichage d'un bandeau rouge "⚠️ Possiblement frauduleux" sous les
@@ -247,6 +268,12 @@ data class SecuritySettings(
 
 enum class LockMode { OFF, PIN, PATTERN, BIOMETRIC }
 enum class AutoLockDelay { IMMEDIATE, FIFTEEN_SECONDS, ONE_MINUTE, FIVE_MINUTES, NEXT_LAUNCH }
+
+/**
+ * v1.14.0 — comportement des boutons 112 / 17 dans EmergencyScreen.
+ * Voir [SecuritySettings.emergencyCallBehavior] pour le KDoc.
+ */
+enum class EmergencyCallBehavior { DIALER_ONLY, HOLD_3S_DIRECT_CALL }
 
 data class BlockingSettings(
     val blockUnknown: Boolean = false,

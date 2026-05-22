@@ -197,6 +197,40 @@
     <string name="selected">Sélectionné</string>
     <!-- v1.13.1 — entrée mode sélection multiple depuis l'ActionsSheet long-press -->
     <string name="bulk_select_multiple">Sélectionner plusieurs</string>
+    <!-- v1.14.0 — comportement boutons d'appel d'urgence + outcomes -->
+    <string name="emergency_call_behavior_title">Comportement des boutons 112 / 17</string>
+    <string name="emergency_call_behavior_desc">Choisissez comment les boutons d\'appel d\'urgence réagissent.</string>
+    <string name="emergency_call_behavior_dialer_only">Ouvrir le composeur (vous confirmez)</string>
+    <string name="emergency_call_behavior_dialer_only_desc">Le tap ouvre l\'app téléphone avec le numéro pré-rempli. Vous tapez sur le bouton vert pour appeler vraiment. Aucune permission spéciale. Défaut.</string>
+    <string name="emergency_call_behavior_hold_3s">Maintenir 3 s → appel direct</string>
+    <string name="emergency_call_behavior_hold_3s_desc">Maintenez le bouton 3 secondes → appel immédiat au 112 ou 17 sans confirmation. Demande la permission CALL_PHONE. Anti-pocket-dial via maintien obligatoire 3 s.</string>
+    <string name="emergency_call_permission_denied">Permission d\'appel refusée. Repli sur le composeur.</string>
+    <string name="emergency_call_os_error">Impossible de passer l\'appel.</string>
+    <string name="emergency_call_permission_request_title">Autoriser l\'appel direct ?</string>
+    <string name="emergency_call_permission_request_body">Pour activer l\'appel direct en maintien 3 s, SMS Tech a besoin de la permission CALL_PHONE. Si vous refusez, les boutons garderont leur comportement par défaut (ouvrir le composeur).</string>
+    <!-- v1.14.0 — kill-switch "Je vais bien" (reset fausse alerte) -->
+    <string name="emergency_i_am_ok_body">Fausse alerte. Je vais bien. Pas de souci à se faire, aucune action nécessaire.</string>
+    <string name="emergency_i_am_ok_chip_title">Alerte urgence déclenchée récemment</string>
+    <string name="emergency_i_am_ok_chip_action">Je vais bien</string>
+    <string name="emergency_i_am_ok_confirm_title">Envoyer le message « Je vais bien » ?</string>
+    <string name="emergency_i_am_ok_confirm_body">Cela va réinitialiser le cooldown urgence et (en option) envoyer un SMS court à vos contacts Safety Call pour leur indiquer qu\'il s\'agissait d\'une fausse alerte. Vous pouvez désactiver l\'envoi du SMS dans les Réglages.</string>
+    <string name="emergency_i_am_ok_done">Message « Je vais bien » envoyé.</string>
+    <string name="emergency_i_am_ok_reset_only">Cooldown réinitialisé. Aucun SMS envoyé.</string>
+    <string name="emergency_i_am_ok_send_failed">Cooldown réinitialisé, mais aucun contact n\'a reçu le SMS. Réessayez ou contactez-les manuellement.</string>
+    <string name="settings_send_i_am_ok_sms_title">Envoyer un SMS « Je vais bien » au reset</string>
+    <string name="settings_send_i_am_ok_sms_desc">Quand vous appuyez sur « Je vais bien » après un déclenchement par erreur, envoie aussi un SMS court à vos contacts Safety Call pour leur indiquer qu\'il s\'agissait d\'une fausse alerte.</string>
+    <!-- v1.14.0 — dry-run « Tester sans envoyer » -->
+    <string name="emergency_dry_run_button">Tester sans envoyer</string>
+    <string name="emergency_dry_run_title">Ce qui serait envoyé</string>
+    <string name="emergency_dry_run_disabled">Le mode urgence est actuellement désactivé. Aucun SMS ni appel ne partirait vraiment.</string>
+    <string name="emergency_dry_run_body_label">Corps du SMS qui partirait :</string>
+    <string name="emergency_dry_run_body_empty">(corps vide — vérifiez le template)</string>
+    <string name="emergency_dry_run_contacts_label">Contacts qui recevraient le SMS (%1$d) :</string>
+    <string name="emergency_dry_run_loc_disabled">Lien GPS désactivé. SMS envoyé sans coordonnées.</string>
+    <string name="emergency_dry_run_loc_resolved">GPS résolu. Le lien Maps sera inclus.</string>
+    <string name="emergency_dry_run_loc_unavailable">GPS indisponible (permission, matériel éteint, ou pas de fix). SMS envoyé sans coordonnées.</string>
+    <string name="emergency_dry_run_call_behavior_label">Comportement des boutons d\'appel :</string>
+    <string name="emergency_dry_run_loading">Résolution GPS…</string>
     <!-- v1.13.0 — PIN/pass distinct coffre (second-factor) -->
     <string name="pin_entry_label">PIN ou mot de passe</string>
     <string name="pin_error_invalid">PIN ou mot de passe incorrect</string>

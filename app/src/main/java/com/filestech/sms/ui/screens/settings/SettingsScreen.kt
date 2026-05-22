@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
+import com.filestech.sms.ui.components.showError
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -122,6 +123,8 @@ fun SettingsScreen(
     // v1.13.0 — PIN/pass distinct coffre.
     var vaultPinSetupOpen by remember { mutableStateOf(false) }
     var vaultPinClearConfirmOpen by remember { mutableStateOf(false) }
+    // v1.14.0 — Comportement boutons 112/17 (DIALER_ONLY vs HOLD_3S_DIRECT_CALL).
+    var emergencyCallBehaviorPickerOpen by remember { mutableStateOf(false) }
 
     val defaultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* no-op */ }
 
@@ -130,6 +133,38 @@ fun SettingsScreen(
     // v1.9.0 — scope partagé pour les actions instantanées qui doivent émettre
     // un snack depuis un onClick callback (ex. bouton "Je vais bien" Safety call).
     val rootScope = rememberCoroutineScope()
+
+    // v1.14.0 — pending permission request pour CALL_PHONE quand l'user
+    // sélectionne HOLD_3S_DIRECT_CALL dans le picker. Permet de chaîner
+    // l'octroi de permission avec le persist du setting (atomicité).
+    val callPhonePermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.update {
+                it.copy(
+                    security = it.security.copy(
+                        emergencyCallBehavior = com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL,
+                    ),
+                )
+            }
+            rootScope.launch {
+                snackbarHost.showSnackbar(ctx.getString(R.string.emergency_call_behavior_hold_3s))
+            }
+        } else {
+            // User refused → revient à DIALER_ONLY (default safe).
+            viewModel.update {
+                it.copy(
+                    security = it.security.copy(
+                        emergencyCallBehavior = com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
+                    ),
+                )
+            }
+            rootScope.launch {
+                snackbarHost.showError(ctx.getString(R.string.emergency_call_permission_denied))
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         viewModel.events.collect { e ->
             when (e) {
@@ -560,6 +595,32 @@ fun SettingsScreen(
                                 },
                             )
                         }
+                        // v1.14.0 — Comportement boutons 112 / 17 : picker 2 choix.
+                        // DIALER_ONLY (default) ne demande aucune permission ;
+                        // HOLD_3S_DIRECT_CALL demande CALL_PHONE runtime au toggle.
+                        // (v1.14.0 audit ARCH-1 — déjà dans le bloc parent
+                        // `if (emergency.enabled)`, suppression du `if` redondant.)
+                        NavigationRow(
+                            title = stringResource(R.string.emergency_call_behavior_title),
+                            description = when (state.security.emergencyCallBehavior) {
+                                com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY ->
+                                    stringResource(R.string.emergency_call_behavior_dialer_only)
+                                com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL ->
+                                    stringResource(R.string.emergency_call_behavior_hold_3s)
+                            },
+                            onClick = { emergencyCallBehaviorPickerOpen = true },
+                        )
+                        // v1.14.0 — opt-in SMS "Je vais bien" sur kill-switch.
+                        ToggleRow(
+                            title = stringResource(R.string.settings_send_i_am_ok_sms_title),
+                            description = stringResource(R.string.settings_send_i_am_ok_sms_desc),
+                            value = state.security.sendIAmOkSmsOnReset,
+                            onChange = { v ->
+                                viewModel.update {
+                                    it.copy(security = it.security.copy(sendIAmOkSmsOnReset = v))
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -992,6 +1053,107 @@ fun SettingsScreen(
                 ) { Text(stringResource(R.string.action_cancel)) }
             },
         )
+    }
+
+    // v1.14.0 — Dialog picker comportement boutons 112/17.
+    if (emergencyCallBehaviorPickerOpen) {
+        EmergencyCallBehaviorPickerDialog(
+            current = state.security.emergencyCallBehavior,
+            onSelect = { mode ->
+                emergencyCallBehaviorPickerOpen = false
+                when (mode) {
+                    com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY -> {
+                        viewModel.update {
+                            it.copy(security = it.security.copy(emergencyCallBehavior = mode))
+                        }
+                    }
+                    com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL -> {
+                        // v1.14.0 — opt-in HOLD_3S nécessite CALL_PHONE runtime.
+                        // Lance la requête permission ; le callback persiste le
+                        // setting OU revient à DIALER_ONLY selon outcome.
+                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                            ctx, android.Manifest.permission.CALL_PHONE,
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if (granted) {
+                            viewModel.update {
+                                it.copy(security = it.security.copy(emergencyCallBehavior = mode))
+                            }
+                        } else {
+                            callPhonePermLauncher.launch(android.Manifest.permission.CALL_PHONE)
+                        }
+                    }
+                }
+            },
+            onDismiss = { emergencyCallBehaviorPickerOpen = false },
+        )
+    }
+}
+
+/**
+ * v1.14.0 — Dialog picker pour [com.filestech.sms.data.local.datastore.EmergencyCallBehavior].
+ * Radio 2 options : DIALER_ONLY (default safe) ou HOLD_3S_DIRECT_CALL (CALL_PHONE perm).
+ * Hint sous chaque option pour clarifier l'impact.
+ */
+@Composable
+private fun EmergencyCallBehaviorPickerDialog(
+    current: com.filestech.sms.data.local.datastore.EmergencyCallBehavior,
+    onSelect: (com.filestech.sms.data.local.datastore.EmergencyCallBehavior) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.emergency_call_behavior_title)) },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                EmergencyBehaviorRadioRow(
+                    label = stringResource(R.string.emergency_call_behavior_dialer_only),
+                    description = stringResource(R.string.emergency_call_behavior_dialer_only_desc),
+                    selected = current == com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY) },
+                )
+                EmergencyBehaviorRadioRow(
+                    label = stringResource(R.string.emergency_call_behavior_hold_3s),
+                    description = stringResource(R.string.emergency_call_behavior_hold_3s_desc),
+                    selected = current == com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL,
+                    onClick = { onSelect(com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun EmergencyBehaviorRadioRow(
+    label: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        androidx.compose.material3.RadioButton(
+            selected = selected,
+            onClick = onClick,
+        )
+        androidx.compose.foundation.layout.Spacer(Modifier.padding(4.dp))
+        androidx.compose.foundation.layout.Column {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

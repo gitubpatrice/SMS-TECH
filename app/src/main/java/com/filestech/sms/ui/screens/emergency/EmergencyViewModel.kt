@@ -39,6 +39,7 @@ import javax.inject.Inject
 class EmergencyViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val triggerEmergency: TriggerEmergencyUseCase,
+    private val locationResolver: com.filestech.sms.data.location.LocationResolver,
 ) : ViewModel() {
 
     /** Config persistée — lue en continu pour refléter les changements live. */
@@ -68,6 +69,43 @@ class EmergencyViewModel @Inject constructor(
     val callPoliceEnabled: StateFlow<Boolean> = settings.flow
         .map { it.security.emergencyCallPoliceEnabled }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+    /**
+     * v1.14.0 — comportement boutons 112/17 :
+     *  - [com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY] (default) : tap → composeur pré-rempli.
+     *  - [com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL] : hold-3s → appel direct CALL_PHONE.
+     */
+    val callBehavior: StateFlow<com.filestech.sms.data.local.datastore.EmergencyCallBehavior> = settings.flow
+        .map { it.security.emergencyCallBehavior }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000L),
+            com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
+        )
+
+    /**
+     * v1.14.0 audit SEC-1 — appelé par l'UI au ON_RESUME pour détecter qu'un
+     * user a révoqué CALL_PHONE depuis Paramètres Android. Si la permission
+     * est absente alors que `emergencyCallBehavior = HOLD_3S_DIRECT_CALL`,
+     * on revert le setting à DIALER_ONLY pour aligner état app + OS.
+     * Sans ça, chaque tap sur 112/17 retournerait `PERMISSION_DENIED` →
+     * l'user croit que l'app est cassée en situation d'urgence.
+     */
+    fun revertCallBehaviorIfPermissionRevoked(hasCallPhonePermission: Boolean) {
+        if (hasCallPhonePermission) return
+        val current = callBehavior.value
+        if (current == com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL) {
+            viewModelScope.launch {
+                settings.update { s ->
+                    s.copy(
+                        security = s.security.copy(
+                            emergencyCallBehavior = com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
+                        ),
+                    )
+                }
+            }
+        }
+    }
 
     /**
      * Draft local édité par l'écran setup. Hydraté one-shot via `first()`
@@ -164,4 +202,102 @@ class EmergencyViewModel @Inject constructor(
         data object Saved : Event
         data class Triggered(val result: TriggerEmergencyUseCase.Result) : Event
     }
+
+    /**
+     * v1.14.0 — état du dry-run "Tester sans envoyer". `null` = pas de preview
+     * en cours. Non-null = preview à afficher (le dialog est rendu côté
+     * EmergencyScreen).
+     */
+    private val _previewState = MutableStateFlow<DryRunPreview?>(null)
+    val previewState: StateFlow<DryRunPreview?> = _previewState.asStateFlow()
+
+    /**
+     * v1.14.0 audit PERF-1 — `true` pendant la résolution GPS (jusqu'à 8s).
+     * UI désactive le bouton "Tester sans envoyer" + affiche un loader pour
+     * éviter double-tap et UX gelée silencieuse.
+     */
+    private val _isPreviewLoading = MutableStateFlow(false)
+    val isPreviewLoading: StateFlow<Boolean> = _isPreviewLoading.asStateFlow()
+
+    /**
+     * v1.14.0 — simule un déclenchement urgence pour QUE L'USER VOIT exactement
+     * ce qui partirait (body SMS rendu + count contacts + location resolved
+     * oui/non + call behavior actif). **AUCUN SMS, AUCUN APPEL, AUCUNE
+     * MUTATION DataStore**. Lit le snapshot config, tente GPS si opt-in
+     * (réutilise [LocationResolver]), rend le body.
+     *
+     * Permet à l'user de configurer son mode urgence et vérifier la sortie
+     * sans flinger ses contacts. Très important UX : un user qui tente
+     * `trigger()` "pour voir" envoie de vrais SMS. Le dry-run élimine cette
+     * peur. Utilisable à n'importe quel moment, jamais bloqué par cooldown.
+     *
+     * v1.14.0 audit PERF-1 — guard double-tap via `_isPreviewLoading` :
+     * re-tap pendant le GPS resolve (8s timeout) = no-op. UI désactive le
+     * bouton + affiche un loader pour la transparence UX.
+     */
+    fun previewTrigger() {
+        if (_isPreviewLoading.value) return
+        viewModelScope.launch {
+            _isPreviewLoading.value = true
+            try {
+                val snapshot = settings.flow.first()
+                val emergency = snapshot.security.emergency
+                val contacts = snapshot.security.safetyCall.contacts
+                val locationUrl: String? = if (emergency.includeLocation) {
+                    runCatching { locationResolver.getCurrentLocation() }
+                        .getOrNull()
+                        ?.let { loc -> "https://maps.google.com/?q=%.5f,%.5f".format(loc.latitude, loc.longitude) }
+                } else null
+                val body = emergency.template.renderBody(locationUrl).trim()
+                _previewState.value = DryRunPreview(
+                    enabled = emergency.enabled,
+                    template = emergency.template,
+                    includeLocation = emergency.includeLocation,
+                    locationResolved = locationUrl != null,
+                    body = body,
+                    contactsCount = contacts.size,
+                    redactedContacts = contacts.map { redactPhoneNumber(it.phoneNumber) },
+                    callBehavior = snapshot.security.emergencyCallBehavior,
+                )
+            } finally {
+                _isPreviewLoading.value = false
+            }
+        }
+    }
+
+    /** Ferme le dialog dry-run. */
+    fun dismissPreview() {
+        _previewState.value = null
+    }
+
+    /**
+     * v1.14.0 — masque un numéro de téléphone pour le preview UI : conserve
+     * les 2 derniers chiffres pour reconnaissance + le préfixe pays s'il
+     * existe. "+33 6 12 34 56 78" → "+33 ... 78". Pas du logging — c'est
+     * un display UX (l'user connaît ses propres contacts), juste un
+     * non-leak en cas de screenshot accidentel partagé.
+     */
+    private fun redactPhoneNumber(raw: String): String {
+        val cleaned = raw.replace("\\s".toRegex(), "")
+        if (cleaned.length <= 4) return "•••"
+        val prefix = if (cleaned.startsWith("+")) cleaned.take(3) else cleaned.take(2)
+        val suffix = cleaned.takeLast(2)
+        return "$prefix … $suffix"
+    }
+
+    /**
+     * v1.14.0 — snapshot du dry-run "Tester sans envoyer" pour affichage UI.
+     * IMMUTABLE : créé une fois côté ViewModel, lu par le dialog Compose.
+     * Aucune action côté UI ne modifie cet objet.
+     */
+    data class DryRunPreview(
+        val enabled: Boolean,
+        val template: EmergencyTemplate,
+        val includeLocation: Boolean,
+        val locationResolved: Boolean,
+        val body: String,
+        val contactsCount: Int,
+        val redactedContacts: List<String>,
+        val callBehavior: com.filestech.sms.data.local.datastore.EmergencyCallBehavior,
+    )
 }

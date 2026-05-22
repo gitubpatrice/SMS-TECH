@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.13.1** (2026-05-22)
+Current release : **v1.14.0** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,48 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.13.1 (this release) — Hotfix UX on top of v1.13.0
+### v1.14.0 (this release) — Vault auto-lock + Emergency hold-3s call (CALL_PHONE) + kill-switch "I am OK" + dry-run preview + 4 audit fixes
+
+MINOR release plafonnant le mode urgence de SMS Tech avant la sortie d'une app dédiée **SOS Tech** (Files Tech n°8) pour les features étendues (vocal, sirène, GPS live). Quatre sujets livrés :
+
+1. **Auto-lock coffre à la sortie explicite de VaultScreen**. Tap back arrow / system back / cancel PIN dialog / biometric refused → `VaultManager.lock()` immédiat. Préserve le fix v1.13.1 sur la navigation ThreadScreen ↔ VaultScreen : le `sessionUnlocked` AtomicBoolean Singleton persiste pendant qu'on ouvre une conv vault et qu'on en revient (composable VaultScreen reste dans le back stack), mais lock dès qu'on sort vraiment. Cohabite avec `lockVaultOnLeave` existant (lock au process-background) — les deux sont idempotents et orthogonaux. Nouveau helper `VaultViewModel.lockVaultSession()`.
+
+2. **Boutons 112 / 17 — 2 niveaux de comportement** :
+   - **DIALER_ONLY** (default, comportement v1.12–v1.13) : `ACTION_DIAL`, le user confirme dans le composeur pré-rempli. Zéro permission requise.
+   - **HOLD_3S_DIRECT_CALL** (opt-in) : maintien 3 secondes sur le bouton → appel direct via `ACTION_CALL` + permission runtime `CALL_PHONE`. Anti-pocket-dial via hold obligatoire (anneau de progression visible). Pas de NIVEAU 2 (tap unique → call direct) volontairement : risque pocket-dial trop élevé pour gain marginal.
+
+   Toute la voie d'appel passe par `EmergencyCallHelper` (nouveau) avec une **whitelist stricte de numéros** : seuls `"112"` et `"17"` sont acceptés, tout autre numéro retourne `INVALID_NUMBER` sans aucun Intent émis. Élimine toute possibilité de redirection vers un numéro premium via Intent extra forgé. `EmergencyShortcutReceiver.handleDial` (lock-screen actions) délégué au même helper pour cohérence ; sur lock-screen on garde `openDialer` (jamais `placeCall`) car le tap accidentel est probabilistiquement plus élevé sur écran verrouillé.
+
+3. **Kill-switch "Je vais bien"**. Nouveau `IAmOkUseCase` qui réinitialise `lastTriggeredAt = 0L` + (opt-in `sendIAmOkSmsOnReset`, default `true`) envoie un SMS court "Je vais bien, fausse alerte" aux contacts SafetyCall. Garde `PanicDecoy` (anti-tampering : un agresseur ne peut pas effacer la trace UI du déclenchement urgence). Sur `ConversationsScreen`, un bandeau `IAmOkBanner` apparaît pendant 30 minutes post-trigger et propose un dialog de confirmation. Snackbar différencié sur succès partiel (`sent=0, failed=N` → message d'erreur explicite, l'user sait que les contacts n'ont PAS été informés).
+
+4. **"Tester sans envoyer"**. Bouton dans `EmergencyScreen` qui lance un dry-run : résolution GPS, rendu du body SMS, comptage contacts, masquage des numéros (`+33 … 78` style). **Aucun side-effect** — pas d'envoi SMS, pas d'écriture DataStore, pas de mutation `lastTriggeredAt`. Loader spinner pendant les ~8s de résolution GPS, guard double-tap. Affiche le call behavior actif + un warning rouge si mode urgence désactivé.
+
+Un audit final HAUTE PRÉCISION a surfacé **3 MEDIUM** bloquants, tous fixés avant tag :
+
+- **MEDIUM SEC-1** — Sur `ON_RESUME` de `EmergencyScreen`, re-vérification de la permission `CALL_PHONE`. Si l'user a révoqué la permission via Paramètres Android entre temps, `emergencyCallBehavior` est auto-revert à `DIALER_ONLY` dans le DataStore. Sans ce check, le setting devenait orphelin (placeCall retournait `PERMISSION_DENIED` à chaque tap, snackbar erreur silencieuse, en situation d'urgence l'user croyait l'app cassée).
+- **MEDIUM SEC-2** — Snackbar `IAmOkDoneWithSms(sent, failed)` différencie maintenant `sent > 0` (succès) vs `sent == 0 && failed > 0` (erreur, contacts non informés malgré le reset). Nouvelle string `emergency_i_am_ok_send_failed` FR+EN. L'user voit clairement quand les SMS de réassurance n'ont pas pu partir.
+- **MEDIUM PERF-1** — Guard double-tap + spinner UI pendant la résolution GPS du dry-run (jusqu'à 8s). `_isPreviewLoading: StateFlow<Boolean>` exposé au `EmergencyScreen` qui désactive le `TextButton` et affiche `CircularProgressIndicator` + label "Résolution GPS…". Sans ça, le bouton semblait non-réactif et l'user pouvait re-tapper créant N coroutines parallèles.
+
+Un **LOW ARCH-1** également corrigé : double `if (emergency.enabled)` imbriqué redondant dans `SettingsScreen` (cosmétique, suppression).
+
+#### Sécurité — checks vérifiés sans finding
+
+- `EmergencyCallHelper` whitelist stricte sur `openDialer` ET `placeCall`. Pas de chemin extra-intent qui injecterait un numéro arbitraire.
+- `EmergencyShortcutReceiver` (`exported=false`) ne passe que les constantes hardcodées `EMERGENCY_NUMBER_EU = "112"` et `EMERGENCY_NUMBER_POLICE_FR = "17"` au helper.
+- Auto-lock coffre couvre tous les chemins de sortie explicite (top-bar back, system back, PIN cancel, biometric refused). Aucun `DisposableEffect` ne lock à la destruction (préserve fix v1.13.1).
+- Anti-pocket-dial hold-3s : `Button(onClick = {})` no-op + `pointerInput` qui ne déclenche que sur hold complet. Cancellation propre à la rotation Activity via clé `LaunchedEffect(isHolding)`.
+- `IAmOkUseCase` : guard PanicDecoy en tête, opt-in `sendIAmOkSmsOnReset` strictement respecté.
+- Dry-run : zéro side-effect confirmé par audit (pas de SendSms, pas de DataStore write, pas de Timber log du body en clair).
+
+#### Manifest
+
+Nouvelle permission `<uses-permission android:name="android.permission.CALL_PHONE" />`. Demandée RUNTIME uniquement quand l'user opt-in `HOLD_3S_DIRECT_CALL` dans Réglages. Refus → fallback automatique à `DIALER_ONLY`. Aucun appel automatique : hold-3s est la garde anti-pocket-dial.
+
+#### Note stratégique — cap mode urgence dans SMS Tech
+
+v1.14.0 est volontairement le **cap supérieur** du mode urgence dans SMS Tech. Les features étendues (mode vocal Vosk, sirène + flash, partage GPS live, recording audio chiffré, webhook diffusion) sont déléguées à une nouvelle app **SOS Tech** (Files Tech n°8) qui sera scaffoldée séparément. Le code partagé (`LocationResolver`, `EmergencyConfig`, `SafetyCallContact`, `PasswordKdf`, `Outcome`) sera factorisé progressivement dans un module AAR `files-tech-emergency-core` consommé par SMS Tech et SOS Tech. Justification : ces features impliqueraient pour 95 % des utilisateurs SMS du poids inutile (foreground service permanent, modèle Vosk ~50 Mo, permissions agressives BACKGROUND_LOCATION / RECORD_AUDIO continu).
+
+### v1.13.1 — Hotfix UX on top of v1.13.0
 
 PATCH release fixing three user-reported regressions after v1.13.0:
 

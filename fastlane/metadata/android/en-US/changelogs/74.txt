@@ -1,0 +1,13 @@
+v1.14.0 — Emergency MINIMAL final + vault auto-lock
+
+• Vault: auto-lock on every explicit exit
+  (back arrow / system back)
+• 112 / 17 buttons: pre-filled dialer
+  (default, 0 perm) or hold 3s → direct
+  call (CALL_PHONE)
+• "I am OK" kill-switch: reset cooldown
+  + (option) "false alert" SMS
+• "Test without sending": preview SMS body
+  + redacted contacts + GPS, zero send
+• 4 audit fixes (perm sync, partial SMS,
+  GPS loader, consistency)

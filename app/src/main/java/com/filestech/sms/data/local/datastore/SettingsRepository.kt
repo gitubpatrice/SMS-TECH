@@ -160,6 +160,13 @@ class SettingsRepository @Inject constructor(
                 emergencyCallPoliceEnabled = p[K.emergencyCallPoliceEnabled] ?: false,
                 // v1.13.0 — PIN distinct coffre. Défaut false (opt-in strict).
                 vaultPinEnabled = p[K.vaultPinEnabled] ?: false,
+                // v1.14.0 — comportement boutons 112/17. Défaut DIALER_ONLY
+                // (zero-risk pocket-dial, behavior v1.12 préservé).
+                emergencyCallBehavior = p[K.emergencyCallBehavior]
+                    ?.let { runCatching { com.filestech.sms.data.local.datastore.EmergencyCallBehavior.valueOf(it) }.getOrNull() }
+                    ?: com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
+                // v1.14.0 — SMS "Je vais bien" sur kill-switch. Default true.
+                sendIAmOkSmsOnReset = p[K.sendIAmOkSmsOnReset] ?: true,
             ),
             blocking = BlockingSettings(
                 blockUnknown = p[K.blockUnknown] ?: false,
@@ -256,6 +263,10 @@ class SettingsRepository @Inject constructor(
         this[K.emergencyCallPoliceEnabled] = s.security.emergencyCallPoliceEnabled
         // v1.13.0 — PIN distinct coffre.
         this[K.vaultPinEnabled] = s.security.vaultPinEnabled
+        // v1.14.0 — call behavior 112/17.
+        this[K.emergencyCallBehavior] = s.security.emergencyCallBehavior.name
+        // v1.14.0 — SMS "Je vais bien" opt-in.
+        this[K.sendIAmOkSmsOnReset] = s.security.sendIAmOkSmsOnReset
 
         this[K.blockUnknown] = s.blocking.blockUnknown
         // v1.3.5 G6 + audit F3 — `blockShortCodes` retiré (champ fantôme, voir
@@ -342,6 +353,10 @@ class SettingsRepository @Inject constructor(
         val emergencyCallPoliceEnabled = booleanPreferencesKey("security.emergencyCallPoliceEnabled")
         // v1.13.0 — PIN distinct coffre (second-factor opt-in).
         val vaultPinEnabled = booleanPreferencesKey("security.vaultPinEnabled")
+        // v1.14.0 — comportement boutons 112/17 (DIALER_ONLY ou HOLD_3S_DIRECT_CALL).
+        val emergencyCallBehavior = stringPreferencesKey("security.emergencyCallBehavior")
+        // v1.14.0 — SMS "Je vais bien" sur kill-switch.
+        val sendIAmOkSmsOnReset = booleanPreferencesKey("security.sendIAmOkSmsOnReset")
         val notifEnabled = booleanPreferencesKey("notif.enabled")
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -166,6 +167,19 @@ fun ConversationsScreen(
                 }
                 is ConversationsViewModel.Event.MoveToVaultFailed ->
                     snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))
+                is ConversationsViewModel.Event.IAmOkDoneWithSms -> {
+                    // v1.14.0 audit SEC-2 — différencier succès partiel vs
+                    // échec total. Si sent=0 mais failed>0, le reset a eu
+                    // lieu mais aucun contact n'a reçu le SMS → l'user doit
+                    // savoir pour relancer manuellement.
+                    if (event.sent > 0) {
+                        snackbarHost.showSnackbar(ctx.getString(R.string.emergency_i_am_ok_done))
+                    } else {
+                        snackbarHost.showError(ctx.getString(R.string.emergency_i_am_ok_send_failed))
+                    }
+                }
+                is ConversationsViewModel.Event.IAmOkDoneNoSms ->
+                    snackbarHost.showSnackbar(ctx.getString(R.string.emergency_i_am_ok_reset_only))
             }
         }
     }
@@ -377,6 +391,31 @@ fun ConversationsScreen(
                 })
                 HorizontalDivider()
             }
+            // v1.14.0 — Chip "Je vais bien" si déclenchement urgence < 30 min.
+            // Masqué en PanicDecoy (cf. derivation showIAmOkChip côté VM).
+            if (state.showIAmOkChip) {
+                var showConfirm by remember { mutableStateOf(false) }
+                IAmOkBanner(onClick = { showConfirm = true })
+                HorizontalDivider()
+                if (showConfirm) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showConfirm = false },
+                        title = { Text(stringResource(R.string.emergency_i_am_ok_confirm_title)) },
+                        text = { Text(stringResource(R.string.emergency_i_am_ok_confirm_body)) },
+                        confirmButton = {
+                            Button(onClick = {
+                                showConfirm = false
+                                viewModel.triggerIAmOk()
+                            }) { Text(stringResource(R.string.emergency_i_am_ok_chip_action)) }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = { showConfirm = false },
+                            ) { Text(stringResource(R.string.action_cancel)) }
+                        },
+                    )
+                }
+            }
             when {
                 state.isImporting -> ImportingPlaceholder(count = state.importedCount)
                 state.isLoading -> Unit
@@ -483,6 +522,55 @@ private fun SearchField(
         singleLine = true,
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
     )
+}
+
+/**
+ * v1.14.0 — bandeau "Vous avez déclenché une alerte récemment / Je vais bien".
+ * Affiché sur [ConversationsScreen] pendant 30 min post-trigger (visibilité
+ * gérée côté ViewModel via `showIAmOkChip`). Tap → confirm dialog → reset
+ * cooldown + (optionnel) SMS "Je vais bien" aux contacts SafetyCall.
+ *
+ * Style aligné sur [DefaultAppBanner] : `surfaceContainer` neutre, icône
+ * Warning amber (rappel visuel : "tu as appuyé sur urgence"), bouton
+ * primary "Je vais bien" pour confirmer reset.
+ */
+@Composable
+private fun IAmOkBanner(onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = cs.surfaceContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.WarningAmber,
+                contentDescription = null,
+                tint = com.filestech.sms.ui.theme.BrandDanger,
+                modifier = Modifier.size(22.dp),
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
+            Text(
+                text = stringResource(R.string.emergency_i_am_ok_chip_title),
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+            androidx.compose.material3.FilledTonalButton(
+                onClick = onClick,
+                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                    containerColor = cs.primary,
+                    contentColor = cs.onPrimary,
+                ),
+            ) { Text(stringResource(R.string.emergency_i_am_ok_chip_action)) }
+        }
+    }
 }
 
 /**

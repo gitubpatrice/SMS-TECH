@@ -60,6 +60,7 @@ class ConversationsViewModel @Inject constructor(
     private val syncManager: TelephonySyncManager,
     private val appLock: AppLockManager,
     private val blockNumber: BlockNumberUseCase,
+    private val iAmOk: com.filestech.sms.domain.usecase.IAmOkUseCase,
     // v1.6.1 (audit QUAL-03) — privé : la screen passe désormais par
     // [buildChangeDefaultIntent] au lieu de manipuler le manager directement.
     private val defaultAppManager: DefaultSmsAppManager,
@@ -128,6 +129,16 @@ class ConversationsViewModel @Inject constructor(
          */
         val isPanicDecoy: Boolean = false,
         /**
+         * v1.14.0 — `true` si l'user a déclenché le mode urgence il y a moins de
+         * [I_AM_OK_WINDOW_MS] (30 min) et la session n'est pas en PanicDecoy.
+         * Quand `true`, ConversationsScreen affiche un chip flottant
+         * "Je vais bien" qui ouvre un dialog de confirmation puis appelle
+         * [com.filestech.sms.domain.usecase.IAmOkUseCase]. Le flag retombe
+         * à `false` automatiquement à l'écoulement de la fenêtre OU dès le
+         * reset (via `lastTriggeredAt = 0L`).
+         */
+        val showIAmOkChip: Boolean = false,
+        /**
          * v1.13.0 — sélection multiple de conversations pour action en masse
          * "Déplacer vers le coffre". `selectedIds` non vide ⇒ TopAppBar bascule en
          * mode contextuel (titre = count, action principale = déplacer, navigation
@@ -186,6 +197,14 @@ class ConversationsViewModel @Inject constructor(
             val present = sorted.mapTo(HashSet(sorted.size)) { it.id }
             sel.intersect(present)
         }
+        // v1.14.0 — chip "Je vais bien" visible si l'user a déclenché urgence
+        // < 30 min ET non-PanicDecoy. Anti-tampering : décoy masque le chip
+        // pour ne pas révéler à l'agresseur qu'un déclenchement a eu lieu.
+        val isPanic = lockState is AppLockManager.LockState.PanicDecoy
+        val triggeredAt = s.security.emergency.lastTriggeredAt
+        val showChip = !isPanic &&
+            triggeredAt > 0L &&
+            (System.currentTimeMillis() - triggeredAt) < I_AM_OK_WINDOW_MS
         UiState(
             isLoading = false,
             conversations = sorted,
@@ -198,7 +217,8 @@ class ConversationsViewModel @Inject constructor(
             // delta syncs touch a handful of rows and complete in milliseconds, no banner needed.
             isImporting = syncState is TelephonySyncManager.State.Running && syncState.isFirstRun,
             importedCount = (syncState as? TelephonySyncManager.State.Running)?.importedSoFar ?: 0,
-            isPanicDecoy = lockState is AppLockManager.LockState.PanicDecoy,
+            isPanicDecoy = isPanic,
+            showIAmOkChip = showChip,
             selectedIds = effectiveSelection,
         )
     }
@@ -389,6 +409,25 @@ class ConversationsViewModel @Inject constructor(
     val events: Flow<Event> = _events.receiveAsFlow()
 
     /**
+     * v1.14.0 — Trigger "Je vais bien" : reset cooldown urgence + (optionnel)
+     * SMS aux contacts safety. Délègue à [com.filestech.sms.domain.usecase.IAmOkUseCase].
+     * Émet un [Event] selon outcome. Idempotent : si pas de trigger récent,
+     * NothingToReset → pas d'event.
+     */
+    fun triggerIAmOk() = viewModelScope.launch {
+        val result = iAmOk()
+        val event = when (result) {
+            is com.filestech.sms.domain.usecase.IAmOkUseCase.Result.ResetAndSmsSent ->
+                Event.IAmOkDoneWithSms(sent = result.sent, failed = result.failed)
+            is com.filestech.sms.domain.usecase.IAmOkUseCase.Result.ResetWithoutSms ->
+                Event.IAmOkDoneNoSms
+            is com.filestech.sms.domain.usecase.IAmOkUseCase.Result.NothingToReset -> null
+            is com.filestech.sms.domain.usecase.IAmOkUseCase.Result.PanicSuppressed -> null
+        }
+        if (event != null) _events.trySend(event)
+    }
+
+    /**
      * v1.13.0 — le count permet à l'UI d'afficher le bon snackbar
      * ("N déplacées" au pluriel) sans dupliquer les events. count = 1 pour
      * un mouvement single (long-press → menu), count = N pour la sélection
@@ -397,5 +436,19 @@ class ConversationsViewModel @Inject constructor(
     sealed interface Event {
         data class MovedToVault(val count: Int) : Event
         data class MoveToVaultFailed(val count: Int) : Event
+        /** v1.14.0 — Reset cooldown + SMS "Je vais bien" envoyé. */
+        data class IAmOkDoneWithSms(val sent: Int, val failed: Int) : Event
+        /** v1.14.0 — Reset cooldown effectué, pas de SMS (opt-in OFF). */
+        data object IAmOkDoneNoSms : Event
+    }
+
+    companion object {
+        /**
+         * v1.14.0 — Fenêtre d'affichage du chip "Je vais bien" sur
+         * [com.filestech.sms.ui.screens.conversations.ConversationsScreen].
+         * 30 minutes post-trigger : assez long pour que l'user constate
+         * que c'était une fausse alerte et envoie une rassurance.
+         */
+        const val I_AM_OK_WINDOW_MS: Long = 30L * 60L * 1000L
     }
 }

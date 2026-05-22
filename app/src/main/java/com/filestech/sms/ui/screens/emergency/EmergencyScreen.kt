@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Edit
@@ -94,6 +95,23 @@ fun EmergencyScreen(
                 is EmergencyViewModel.Event.Saved -> Unit // pas pertinent ici
             }
         }
+    }
+
+    // v1.14.0 audit SEC-1 — re-check CALL_PHONE permission au ON_RESUME.
+    // Si l'user a révoqué la perm via Paramètres Android entre temps, le
+    // setting `emergencyCallBehavior = HOLD_3S_DIRECT_CALL` devient orphelin
+    // (l'OS refusera tout `placeCall` → PERMISSION_DENIED silencieux). On
+    // revert le setting à DIALER_ONLY pour aligner état app + OS, et l'user
+    // verra immédiatement le picker Settings refléter le bon état.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.lifecycle.compose.LifecycleEventEffect(
+        event = androidx.lifecycle.Lifecycle.Event.ON_RESUME,
+        lifecycleOwner = lifecycleOwner,
+    ) {
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            ctx, android.Manifest.permission.CALL_PHONE,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        viewModel.revertCallBehaviorIfPermissionRevoked(granted)
     }
 
     Scaffold(
@@ -183,44 +201,186 @@ fun EmergencyScreen(
             //  - 17 = Police nationale FR, opt-in via Settings (FR-specific)
             Spacer(Modifier.height(32.dp))
             val callPolice by viewModel.callPoliceEnabled.collectAsStateWithLifecycle()
+            val callBehavior by viewModel.callBehavior.collectAsStateWithLifecycle()
+            val holdToCall = callBehavior == com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL
             val noDialerMsg = stringResource(R.string.emergency_shortcut_no_app_to_dial)
-            androidx.compose.material3.Button(
-                onClick = {
-                    val dial = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
-                        data = android.net.Uri.parse("tel:112")
-                        // v1.12.0 audit U1 — Context.startActivity(...) hors d'une
-                        // Activity peut crash sans NEW_TASK ; ici on est dans une
-                        // Activity, mais le flag est défensif (multi-task safe).
-                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            val permDeniedMsg = stringResource(R.string.emergency_call_permission_denied)
+            val osErrorMsg = stringResource(R.string.emergency_call_os_error)
+
+            // v1.14.0 — Bouton 112 : mode selon `emergencyCallBehavior`.
+            // DIALER_ONLY → tap → openDialer (default v1.12).
+            // HOLD_3S_DIRECT_CALL → hold-3s → placeCall (CALL_PHONE permission).
+            // Anti-pocket-dial : seul le hold déclenche CALL_PHONE.
+            com.filestech.sms.ui.components.EmergencyCallButton(
+                label = stringResource(R.string.emergency_shortcut_action_112),
+                holdToCall = holdToCall,
+                filled = true,
+                onTrigger = {
+                    val outcome = if (holdToCall) {
+                        com.filestech.sms.system.emergency.EmergencyCallHelper.placeCall(ctx, "112")
+                    } else {
+                        com.filestech.sms.system.emergency.EmergencyCallHelper.openDialer(ctx, "112")
                     }
-                    runCatching { ctx.startActivity(dial) }
-                        .onFailure { scope.launch { snackbarHost.showError(noDialerMsg) } }
+                    handleCallOutcome(outcome, scope, snackbarHost, noDialerMsg, permDeniedMsg, osErrorMsg)
                 },
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = com.filestech.sms.ui.theme.BrandDanger,
-                    contentColor = Color.White,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.emergency_shortcut_action_112))
-            }
+            )
             if (callPolice) {
                 Spacer(Modifier.height(8.dp))
-                androidx.compose.material3.OutlinedButton(
-                    onClick = {
-                        val dial = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
-                            data = android.net.Uri.parse("tel:17")
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                com.filestech.sms.ui.components.EmergencyCallButton(
+                    label = stringResource(R.string.emergency_shortcut_action_police),
+                    holdToCall = holdToCall,
+                    filled = false,
+                    onTrigger = {
+                        val outcome = if (holdToCall) {
+                            com.filestech.sms.system.emergency.EmergencyCallHelper.placeCall(ctx, "17")
+                        } else {
+                            com.filestech.sms.system.emergency.EmergencyCallHelper.openDialer(ctx, "17")
                         }
-                        runCatching { ctx.startActivity(dial) }
-                            .onFailure { scope.launch { snackbarHost.showError(noDialerMsg) } }
+                        handleCallOutcome(outcome, scope, snackbarHost, noDialerMsg, permDeniedMsg, osErrorMsg)
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.emergency_shortcut_action_police))
+                )
+            }
+
+            // v1.14.0 — "Tester sans envoyer" : dry-run preview. Toujours
+            // visible (même si pas de contacts) car c'est précisément ce qui
+            // permet à l'user de configurer en confiance.
+            // Audit PERF-1 — bouton désactivé + spinner pendant le GPS
+            // resolve (jusqu'à 8s). Guard double-tap géré côté ViewModel.
+            Spacer(Modifier.height(24.dp))
+            val isLoading by viewModel.isPreviewLoading.collectAsStateWithLifecycle()
+            androidx.compose.material3.TextButton(
+                onClick = { viewModel.previewTrigger() },
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (isLoading) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.emergency_dry_run_loading))
+                } else {
+                    Text(stringResource(R.string.emergency_dry_run_button))
                 }
             }
         }
+    }
+
+    // v1.14.0 — Dialog dry-run "Tester sans envoyer".
+    val preview by viewModel.previewState.collectAsStateWithLifecycle()
+    preview?.let { p ->
+        EmergencyDryRunDialog(preview = p, onDismiss = { viewModel.dismissPreview() })
+    }
+}
+
+/**
+ * v1.14.0 — Dialog qui affiche EXACTEMENT ce qui serait envoyé/appelé si
+ * l'user déclenchait le trigger MAINTENANT. Pas d'effet de bord — read-only
+ * snapshot calculé une fois par `viewModel.previewTrigger()`.
+ */
+@Composable
+private fun EmergencyDryRunDialog(
+    preview: EmergencyViewModel.DryRunPreview,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.emergency_dry_run_title)) },
+        text = {
+            Column {
+                if (!preview.enabled) {
+                    Text(
+                        text = stringResource(R.string.emergency_dry_run_disabled),
+                        color = com.filestech.sms.ui.theme.BrandDanger,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                Text(
+                    text = stringResource(R.string.emergency_dry_run_body_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp),
+                ) {
+                    Text(
+                        text = preview.body.ifBlank { stringResource(R.string.emergency_dry_run_body_empty) },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+                Text(
+                    text = stringResource(
+                        R.string.emergency_dry_run_contacts_label,
+                        preview.contactsCount,
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                preview.redactedContacts.forEach { redacted ->
+                    Text(
+                        text = "• $redacted",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                val locStatusRes = when {
+                    !preview.includeLocation -> R.string.emergency_dry_run_loc_disabled
+                    preview.locationResolved -> R.string.emergency_dry_run_loc_resolved
+                    else -> R.string.emergency_dry_run_loc_unavailable
+                }
+                Text(
+                    text = stringResource(locStatusRes),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                val behaviorRes = when (preview.callBehavior) {
+                    com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY ->
+                        R.string.emergency_call_behavior_dialer_only
+                    com.filestech.sms.data.local.datastore.EmergencyCallBehavior.HOLD_3S_DIRECT_CALL ->
+                        R.string.emergency_call_behavior_hold_3s
+                }
+                Text(
+                    text = stringResource(R.string.emergency_dry_run_call_behavior_label) +
+                        " " + stringResource(behaviorRes),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_close))
+            }
+        },
+    )
+}
+
+/**
+ * v1.14.0 — gère le résultat d'un `EmergencyCallHelper.openDialer` ou
+ * `placeCall` côté UI : un seul snackbar différentié selon l'outcome.
+ * SUCCESS = silencieux (l'OS prend le relais et affiche le dialer/call).
+ */
+private fun handleCallOutcome(
+    outcome: com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome,
+    scope: kotlinx.coroutines.CoroutineScope,
+    snackbarHost: androidx.compose.material3.SnackbarHostState,
+    noDialerMsg: String,
+    permDeniedMsg: String,
+    osErrorMsg: String,
+) {
+    when (outcome) {
+        com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome.SUCCESS -> Unit
+        com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome.NO_DIALER ->
+            scope.launch { snackbarHost.showError(noDialerMsg) }
+        com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome.PERMISSION_DENIED ->
+            scope.launch { snackbarHost.showError(permDeniedMsg) }
+        com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome.OS_ERROR,
+        com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome.INVALID_NUMBER ->
+            scope.launch { snackbarHost.showError(osErrorMsg) }
     }
 }
 
