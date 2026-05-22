@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.3** (2026-05-22)
+Current release : **v1.14.4** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,17 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.14.3 (this release) — Hotfix migration one-shot : repair dirty `emergencyShortcutEnabled` flag
+### v1.14.4 (this release) — Reaction default `EMOJI_WITH_QUOTE` (user request)
+
+Petite release UX : le format par défaut des SMS de réaction emoji passe de `READABLE_FR` ("J'ai réagi par ❤️ à : «…»") à `EMOJI_WITH_QUOTE` ("❤️ «…»"). Demande user 2026-05-22.
+
+**Pourquoi** : `EMOJI_WITH_QUOTE` est compact, conserve le contexte (citation du message d'origine), et ne contient pas de phrase explicative parasite. Plus naturel pour les conversations actuelles où les réactions sont nombreuses et où le destinataire n'a pas besoin de relire "j'ai réagi par".
+
+**Périmètre** : default DataStore pour les NOUVEAUX installs uniquement. Les users existants conservent leur choix (DataStore persistant). Le picker Settings → Envoi → "Format des réactions" expose les 4 options inchangé.
+
+Pas de changement crypto / Room / Keystore / threat-model. Pas de migration.
+
+### v1.14.3 — Hotfix migration one-shot : repair dirty `emergencyShortcutEnabled` flag
 
 PATCH urgent post-v1.14.2 — un utilisateur ayant désactivé le Mode urgence en v1.14.0 ou v1.14.1 voyait la notification persistante lock-screen ré-apparaître à chaque lancement de l'app malgré la désactivation. Cause racine : avant le fix cascade-disable de v1.14.2, le bouton "Désactiver le mode urgence" ne flippait QUE `emergency.enabled = false`, laissant `emergencyShortcutEnabled = true` orphelin en DataStore. Le fix v1.14.2 corrige les FUTURES désactivations mais ne nettoie pas l'état dirty existant.
 

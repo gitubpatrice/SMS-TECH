@@ -1,0 +1,14 @@
+v1.14.4 — Reaction default + extended bubble palette
+
+• Reaction format default changed:
+  EMOJI_WITH_QUOTE ("❤️ «preview»").
+  Compact + context preserved.
+  Existing users keep their choice.
+
+• Bubble color palette: 8 → 19 colors.
+  Added: royal blue, crimson, emerald,
+  magenta, brown, eggplant, bordeaux,
+  deep orange, sky blue, navy, steel grey.
+  All WCAG AA vs white text.
+
+Settings → Appearance + Settings → Sending.

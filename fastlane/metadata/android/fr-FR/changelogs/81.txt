@@ -1,0 +1,14 @@
+v1.14.4 — Réactions emoji + palette bulles étendue
+
+• Format réaction par défaut changé :
+  EMOJI_WITH_QUOTE ("❤️ «aperçu»").
+  Compact + contexte préservé.
+  Existing users gardent leur choix.
+
+• Palette couleurs bulles : 8 → 19 couleurs.
+  Ajout : bleu royal, pourpre, vert émeraude,
+  magenta, marron, aubergine, bordeaux,
+  orange profond, bleu ciel, bleu marine,
+  gris acier. Toutes WCAG AA vs texte blanc.
+
+Réglages → Apparence + Réglages → Envoi.

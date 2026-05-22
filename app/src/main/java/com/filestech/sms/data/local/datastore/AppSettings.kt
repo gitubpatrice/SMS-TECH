@@ -89,20 +89,28 @@ data class SendingSettings(
     val reactionEmojiOnly: Boolean = false,
     /**
      * v1.8.0 (bug 5 fix) — format du SMS envoyé au correspondant lors d'une réaction
-     * emoji. Trois options exposées dans Settings → Envoi → "Format des réactions" :
+     * emoji. Quatre options exposées dans Settings → Envoi → "Format des réactions" :
      *
-     *   - [ReactionFormat.READABLE_FR] (défaut) : `"J'ai réagi par ❤️ à : «aperçu»"`.
+     *   - [ReactionFormat.EMOJI_WITH_QUOTE] (défaut v1.14.4) : `"❤️ «aperçu»"`.
+     *     Compact + contexte préservé. Le destinataire voit l'emoji ET le
+     *     bout de message d'origine. Pas de phrase parasite. Pattern proche
+     *     de l'expérience Tapback mais plus court et indépendant de la langue.
+     *   - [ReactionFormat.READABLE_FR] : `"J'ai réagi par ❤️ à : «aperçu»"`.
      *     Format français lisible que tout destinataire Android francophone
      *     comprend immédiatement. Décodé par SMS Tech (regex FR) pour afficher
-     *     la bulle de réaction native.
+     *     la bulle de réaction native. Default v1.8.0–v1.14.3.
      *   - [ReactionFormat.TAPBACK_EN] : `"Reacted ❤️ to «aperçu»"`. Format
      *     Apple/Google Tapback détecté nativement par iMessage (iPhone) et
      *     Google Messages récent qui l'affichent comme une bulle réaction
      *     visuelle attachée au message d'origine. Conserve la compat iPhone.
      *   - [ReactionFormat.EMOJI_ONLY] : `"❤️"` seul. Plus propre sur apps SMS
      *     legacy mais le destinataire perd tout contexte du message d'origine.
+     *
+     * v1.14.4 — défaut changé `READABLE_FR` → `EMOJI_WITH_QUOTE` (demande user).
+     * Les users existants conservent leur choix (DataStore persiste). Seuls les
+     * NOUVEAUX installs voient le nouveau défaut.
      */
-    val reactionFormat: ReactionFormat = ReactionFormat.READABLE_FR,
+    val reactionFormat: ReactionFormat = ReactionFormat.EMOJI_WITH_QUOTE,
     /**
      * v1.8.1 — nom personnel à inclure dans les SMS de réaction sortants
      * (format `"<Nom> a réagi par ❤️ à votre message : «…»"`). Pour aider

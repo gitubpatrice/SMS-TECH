@@ -299,6 +299,18 @@
     <string name="appearance_color_slate_blue_grey">Bleu-gris ardoise</string>
     <string name="appearance_color_deep_indigo">Indigo profond</string>
     <string name="appearance_color_dark_teal">Teal foncé</string>
+    <!-- v1.14.4 — 11 nouvelles couleurs ajoutées (demande user) -->
+    <string name="appearance_color_royal_blue">Bleu royal</string>
+    <string name="appearance_color_crimson">Pourpre</string>
+    <string name="appearance_color_emerald">Vert émeraude</string>
+    <string name="appearance_color_magenta">Magenta</string>
+    <string name="appearance_color_brown">Marron</string>
+    <string name="appearance_color_eggplant">Aubergine</string>
+    <string name="appearance_color_bordeaux">Bordeaux</string>
+    <string name="appearance_color_deep_orange">Orange profond</string>
+    <string name="appearance_color_sky_blue">Bleu ciel</string>
+    <string name="appearance_color_navy">Bleu marine</string>
+    <string name="appearance_color_steel_grey">Gris acier</string>
     <string name="appearance_color_selected">sélectionnée</string>
     <!-- v1.12.0 — déplacement coffre avec session verrouillée -->
     <string name="error_session_locked">Déverrouillez l\'application pour déplacer cette conversation</string>

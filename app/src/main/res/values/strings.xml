@@ -309,6 +309,18 @@
     <string name="appearance_color_slate_blue_grey">Slate blue-grey</string>
     <string name="appearance_color_deep_indigo">Deep indigo</string>
     <string name="appearance_color_dark_teal">Dark teal</string>
+    <!-- v1.14.4 — 11 new colors added (user request) -->
+    <string name="appearance_color_royal_blue">Royal blue</string>
+    <string name="appearance_color_crimson">Crimson</string>
+    <string name="appearance_color_emerald">Emerald green</string>
+    <string name="appearance_color_magenta">Magenta</string>
+    <string name="appearance_color_brown">Brown</string>
+    <string name="appearance_color_eggplant">Eggplant</string>
+    <string name="appearance_color_bordeaux">Bordeaux</string>
+    <string name="appearance_color_deep_orange">Deep orange</string>
+    <string name="appearance_color_sky_blue">Sky blue</string>
+    <string name="appearance_color_navy">Navy blue</string>
+    <string name="appearance_color_steel_grey">Steel grey</string>
     <string name="appearance_color_selected">selected</string>
     <!-- v1.12.0 — vault move with locked session -->
     <string name="error_session_locked">Unlock the app to move this conversation</string>
