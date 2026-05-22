@@ -268,6 +268,14 @@ class EmergencyViewModel @Inject constructor(
             s.copy(
                 security = s.security.copy(
                     emergency = s.security.emergency.copy(enabled = false),
+                    // v1.14.2 hotfix — cascade-disable du raccourci notif
+                    // lock-screen. Avant : `emergencyShortcutEnabled` restait à
+                    // `true` après disable du mode urgence → notif persistante
+                    // ré-apparaissait à chaque lancement de l'app + quick action
+                    // URGENCE encore tappable. Maintenant : désactivation
+                    // complète en un clic.
+                    emergencyShortcutEnabled = false,
+                    emergencyCallPoliceEnabled = false,
                 ),
             )
         }

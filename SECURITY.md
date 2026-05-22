@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.1** (2026-05-22)
+Current release : **v1.14.2** (2026-05-22)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,33 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.14.1 (this release) — Emergency screen full-page redesign + 15 SAMU + 18 Pompiers + "Call a relative" + Disable mode + tap-notif-opens-page + 5 audit fixes
+### v1.14.2 (this release) — Hotfix CRITIQUE : 3 voies de déclenchement SMS d'urgence accidentel fermées
+
+**HOTFIX URGENT** post-v1.14.1 sur bug critique remonté user 2026-05-22 : "beaucoup de mms envoyés sans rien faire, mode urgence désactivé". Investigation a identifié **3 voies indépendantes** de déclenchement accidentel du SMS d'urgence aux contacts SafetyCall. Toutes fermées dans v1.14.2.
+
+**3 fixes critiques** :
+
+1. **`EmergencyHoldButton` interprétait les gestes scroll comme un hold-3s**. v1.14.1 a ajouté `Modifier.verticalScroll(rememberScrollState())` sur la page EmergencyScreen. Quand l'user scrollait verticalement à travers le gros bouton URGENCE, le pointerInput interceptait l'événement DOWN, mettait `isHolding = true`, et le `LaunchedEffect(isHolding) { delay(3000) }` fired le trigger SMS. Le scroll modifier parent prenait ensuite le contrôle visuel (faisait scroller la page), mais le hold logique avait déjà commencé. Un scroll lent ≥ 3 s déclenchait l'envoi SMS aux contacts.
+
+   **Fix** : ajout d'une détection de drag via `viewConfiguration.touchSlop`. Si le pointer bouge de plus que la slop (~24 dp), `isHolding = false` immédiatement + drain les pointer events restants jusqu'au UP pour ne pas re-fire le hold sur le même geste. Code dans `EmergencyHoldButton.kt:121-167`.
+
+2. **Quick action URGENCE retirée de la notif persistante lock-screen**. La notif posée par `EmergencyShortcutNotifier` avait 3 quick actions : URGENCE + 112 + 17 (police opt-in). Le tap sur URGENCE = `ACTION_TRIGGER_EMERGENCY` reçu par `EmergencyShortcutReceiver.handleTrigger` qui appelait `TriggerEmergencyUseCase` → SMS aux contacts. Un mistap (pocket-tap, dismiss confondu avec action, confusion avec body-tap) = SMS broadcasté. Les notif actions Android sont single-tap par design — impossible d'y poser un hold-3s anti-pocket-dial.
+
+   **Fix** : la quick action URGENCE est **supprimée** de la notif lock-screen. Pour déclencher URGENCE depuis le lock-screen, l'user tape désormais le **corps** de la notif → `setContentIntent` (ajouté v1.14.1) ouvre la page in-app Emergency → hold 3 s sur le gros bouton URGENCE (lui-même protégé par le fix #1 ci-dessus). Trois gestes délibérés au lieu d'un mistap. Les quick actions 112 et 17 (Police FR opt-in) restent — elles utilisent `ACTION_DIAL` (composeur, l'user confirme dans le dialer, pas d'auto-call).
+
+3. **`disableEmergencyMode()` n'effaçait pas le raccourci notif**. v1.14.1 ajoutait le bouton "Désactiver le mode urgence" sur EmergencyScreen. Il flippait `emergency.enabled = false` MAIS laissait `emergencyShortcutEnabled = true`. Conséquence : la notif persistante lock-screen ré-apparaissait à chaque lancement de l'app (MainApplication combine flow). User confondu, tap notif (souvent URGENCE quick action AVANT le fix #2), SMS envoyé.
+
+   **Fix** : `disableEmergencyMode()` met maintenant `emergency.enabled = false`, `emergencyShortcutEnabled = false`, ET `emergencyCallPoliceEnabled = false` dans la même transaction DataStore. Désactivation complète en un seul clic, sans setting résiduel actif. `EmergencyViewModel.kt:188-203`.
+
+**Threat model corrigé** :
+
+- Le hold-3s de `EmergencyHoldButton` est désormais une vraie garde anti-pocket-dial (pas seulement contre tap accidentel — aussi contre drag/scroll qui était une voie ouverte v1.14.1).
+- La notif lock-screen ne permet plus de déclencher l'envoi SMS aux contacts en 1 tap. Le déclenchement URGENCE est gated derrière nav-vers-page-in-app + hold-3s = 3 gestes délibérés.
+- La fonction "Désactiver" est atomique : 1 confirm dialog + tap → tous les flags urgence + raccourci off. Aucun setting résiduel ne peut faire repop la notif.
+
+**Verdict** : aucun changement crypto / DB / threat-model étendu. Hotfix purement défensif sur 3 voies de déclenchement non-intentionnel.
+
+### v1.14.1 — Emergency screen full-page redesign + 15 SAMU + 18 Pompiers + "Call a relative" + Disable mode + tap-notif-opens-page + 5 audit fixes
 
 PATCH release post-v1.14.0 répondant à un retour user pour rendre la page Mode urgence "plus claire avec toutes les actions visibles, sans manipulation". Toutes les actions urgence sont désormais regroupées sur un seul écran avec gros boutons couleurs.
 

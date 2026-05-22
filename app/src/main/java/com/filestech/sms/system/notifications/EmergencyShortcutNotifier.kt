@@ -16,36 +16,46 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * v1.12.0 — Raccourci d'urgence : notification persistante avec 2 actions
- * (URGENCE + 112), visible sur l'écran verrouillé.
+ * Raccourci d'urgence : notification persistante visible sur l'écran
+ * verrouillé. Sert de pont entre la situation d'urgence et l'écran in-app.
  *
- * **Pourquoi** : un Mode urgence accessible uniquement après déverrouillage
- * + navigation dans l'app = trop de manipulations en situation d'urgence
- * réelle. Cette notif persistante offre un tap unique depuis le shade,
- * y compris lock screen (`VISIBILITY_PUBLIC`).
+ * **Historique** :
+ *  - v1.12.0 = 2 actions (URGENCE + 112). URGENCE = 1 tap → SMS aux contacts.
+ *  - v1.14.1 = ajout `setContentIntent` : tap sur le corps de la notif ouvre
+ *    la page Mode urgence in-app (au lieu d'une action seule).
+ *  - v1.14.2 HOTFIX = **quick action URGENCE RETIRÉE**. Risque mistap trop
+ *    élevé sur lock-screen (1 tap = SMS broadcasté aux contacts SafetyCall).
+ *    Le bouton URGENCE in-app (`EmergencyHoldButton`) reste, protégé par
+ *    hold-3s + drag detection. Pour déclencher URGENCE depuis lock-screen :
+ *    tap le corps de la notif → page in-app → hold 3 s sur le gros bouton.
+ *
+ * **Actions actuelles** : 112 (toujours visible) + 17 Police FR (opt-in
+ * `emergencyCallPoliceEnabled`). Les deux utilisent `ACTION_DIAL` (composeur
+ * pré-rempli, l'user confirme en appuyant sur le bouton vert du dialer —
+ * pas d'auto-call, pas de permission CALL_PHONE).
  *
  * **Politique d'affichage** :
  *  - Canal [NotificationChannelInitializer.CHANNEL_EMERGENCY_SHORTCUT]
  *    = `IMPORTANCE_LOW` : pas de heads-up, pas de son, pas de vibration.
- *  - `setOngoing(true)` : impossible à dismiss par swipe (sinon l'user
- *    perdrait son raccourci par erreur).
+ *  - `setOngoing(true)` : impossible à dismiss par swipe.
  *  - `setVisibility(VISIBILITY_PUBLIC)` : actions visibles sur lock screen.
  *  - `setLocalOnly(true)` : pas de mirroring vers Wear OS / autre device.
- *  - `setShowWhen(false)` : pas de timestamp (l'user n'a pas besoin de savoir
- *    quand la notif a été postée, c'est un raccourci permanent).
+ *  - `setShowWhen(false)` : pas de timestamp (raccourci permanent).
  *
  * **Sécurité** :
- *  - Les actions sont des broadcasts `PendingIntent.getBroadcast` vers
- *    [EmergencyShortcutReceiver] (`exported=false` dans le Manifest).
- *  - Aucune app tierce ne peut déclencher ces actions.
- *  - L'action URGENCE bénéficie de la garde PanicDecoy du UseCase.
- *  - L'action 112 utilise `ACTION_DIAL` (pré-rempli, pas d'appel auto) —
- *    l'user doit confirmer en appuyant sur le bouton vert du dialer.
+ *  - `setContentIntent` cible `MainActivity::class.java` explicitement,
+ *    action `ACTION_OPEN_EMERGENCY` (constante), `FLAG_IMMUTABLE`.
+ *  - Quick actions 112 / 17 = broadcast vers `EmergencyShortcutReceiver`
+ *    (`exported=false`). Aucune app tierce ne peut déclencher.
+ *  - Numéros 112 et 17 hardcodés dans `EmergencyCallHelper.ALLOWED_NUMBERS`
+ *    whitelist stricte.
  *
  * **Cycle de vie** :
  *  - Posée par [MainApplication] au démarrage si `emergencyShortcutEnabled = true`.
  *  - Re-posée par [com.filestech.sms.system.receiver.BootReceiver] après reboot.
- *  - Cancelée quand l'user désactive le toggle.
+ *  - Cancelée immédiatement par `MainApplication.combine` quand l'user
+ *    désactive le toggle OU entre en PanicDecoy. Cascade-disable via
+ *    `EmergencyViewModel.disableEmergencyMode()` (v1.14.2 hotfix).
  */
 @Singleton
 class EmergencyShortcutNotifier @Inject constructor(
@@ -65,12 +75,18 @@ class EmergencyShortcutNotifier @Inject constructor(
             Timber.w("EmergencyShortcutNotifier: POST_NOTIFICATIONS not granted, skipping")
             return
         }
-        val triggerPI = PendingIntent.getBroadcast(
-            context,
-            REQUEST_TRIGGER,
-            EmergencyShortcutReceiver.intentTrigger(context),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        // v1.14.2 hotfix CRITIQUE — la quick action "URGENCE" qui déclenchait
+        // un envoi SMS direct sur 1 tap a été RETIRÉE. Risque : mistap accidentel
+        // (notif lock-screen, pocket-tap, dismiss confondu avec action) faisait
+        // partir un SMS à TOUS les contacts SafetyCall. Bug user remonté
+        // 2026-05-22 ("beaucoup de mms sans rien faire"). Le hold-3s
+        // anti-pocket-dial existe sur l'écran in-app (EmergencyHoldButton) mais
+        // pas sur une notif (notif actions = single tap par design Android).
+        // Solution : pour déclencher URGENCE depuis lock-screen, l'user tape
+        // le CORPS de la notif → ouvre la page in-app (setContentIntent,
+        // ACTION_OPEN_EMERGENCY) → hold 3s sur le gros bouton URGENCE. Trois
+        // gestes délibérés au lieu d'un mistap. Les 112/17 quick actions
+        // restent (ACTION_DIAL ouvre composeur, user confirme dans dialer).
         val dial112PI = PendingIntent.getBroadcast(
             context,
             REQUEST_DIAL_112,
@@ -123,11 +139,12 @@ class EmergencyShortcutNotifier @Inject constructor(
             .setLocalOnly(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(
-                R.drawable.ic_notification_message,
-                context.getString(R.string.emergency_shortcut_action_emergency),
-                triggerPI,
-            )
+            // v1.14.2 hotfix CRITIQUE — quick action URGENCE retirée (cf. KDoc
+            // au-dessus). Pour déclencher l'urgence depuis le lock-screen,
+            // l'user tape le CORPS de la notif → setContentIntent ouvre la
+            // page in-app → hold 3s sur EmergencyHoldButton. Trois gestes
+            // délibérés au lieu d'un mistap dangereux. Les actions DIAL_112
+            // et DIAL_POLICE restent (ACTION_DIAL = composeur, user confirme).
             .addAction(
                 R.drawable.ic_notification_message,
                 context.getString(R.string.emergency_shortcut_action_112),
@@ -164,10 +181,12 @@ class EmergencyShortcutNotifier @Inject constructor(
     }
 
     companion object {
-        private const val REQUEST_TRIGGER = 0x54524947 // 'TRIG'
+        // v1.14.2 — `REQUEST_TRIGGER` retiré : quick action URGENCE supprimée
+        // de la notif (cf. KDoc + postShortcut). Les codes restants sont
+        // les seules entrées légitimes vers `EmergencyShortcutReceiver`.
         private const val REQUEST_DIAL_112 = 0x44313132 // 'D112'
         private const val REQUEST_DIAL_POLICE = 0x44504f4c // 'DPOL'
-        // v1.14.1 — content-intent request code, distinct des 3 actions.
+        // v1.14.1 — content-intent request code, distinct des actions DIAL.
         private const val REQUEST_OPEN_EMERGENCY = 0x4f50454e // 'OPEN'
     }
 }

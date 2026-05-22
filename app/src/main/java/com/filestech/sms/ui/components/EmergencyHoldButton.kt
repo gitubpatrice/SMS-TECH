@@ -120,18 +120,44 @@ fun EmergencyHoldButton(
                 }
                 .pointerInput(enabled, holdDurationMs) {
                     if (!enabled) return@pointerInput
+                    // v1.14.2 hotfix CRITIQUE — distance au-delà de laquelle on
+                    // considère que ce n'est plus un "hold" mais un "drag" (ex.
+                    // scroll vertical de la page Mode urgence v1.14.1). Sans
+                    // cette protection, un scroll lent qui traversait le bouton
+                    // était interprété comme un appui maintenu 3s → trigger
+                    // SMS d'urgence intempestif (bug user reported 2026-05-22).
+                    // `viewConfiguration.touchSlop` ≈ 24dp en density standard.
+                    val touchSlopPx = viewConfiguration.touchSlop
+                    val slopSq = touchSlopPx * touchSlopPx
                     awaitPointerEventScope {
                         while (true) {
                             // Attend le 1er DOWN, ignore les autres pointeurs.
                             val down = awaitPointerEvent(PointerEventPass.Main)
-                            if (down.changes.any { it.pressed }) {
-                                isHolding = true
-                                // Attend la libération (UP) ou la perte de focus.
-                                while (true) {
-                                    val next = awaitPointerEvent(PointerEventPass.Main)
-                                    if (next.changes.none { it.pressed }) {
+                            val firstPressed = down.changes.firstOrNull { it.pressed }
+                                ?: continue
+                            val startPos = firstPressed.position
+                            isHolding = true
+                            // Attend la libération (UP), la perte de focus, OU
+                            // un mouvement > touchSlop (= drag/scroll, pas hold).
+                            var draining = false
+                            inner@ while (true) {
+                                val next = awaitPointerEvent(PointerEventPass.Main)
+                                val pressed = next.changes.firstOrNull { it.pressed }
+                                if (pressed == null) {
+                                    // UP / cancel — fin propre du geste.
+                                    isHolding = false
+                                    break@inner
+                                }
+                                if (!draining) {
+                                    val dx = pressed.position.x - startPos.x
+                                    val dy = pressed.position.y - startPos.y
+                                    if (dx * dx + dy * dy > slopSq) {
+                                        // Drag détecté (probable scroll parent)
+                                        // → annule le hold et draine jusqu'à UP
+                                        // pour ne pas re-fire isHolding au
+                                        // tour suivant sur le même geste.
                                         isHolding = false
-                                        break
+                                        draining = true
                                     }
                                 }
                             }

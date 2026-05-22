@@ -1,0 +1,14 @@
+v1.14.2 — Hotfix CRITIQUE envois accidentels
+
+3 voies fermées suite à bug user :
+
+• Scroll de la page Mode urgence ne déclenche
+  plus le bouton URGENCE par erreur (drag
+  detection touchSlop)
+• Quick action URGENCE retirée de la notif
+  lock-screen (1 tap = SMS, trop dangereux).
+  Tape le corps → page in-app + hold 3 s
+• "Désactiver mode urgence" supprime aussi
+  le raccourci notif (avant : persistait)
+
+Mise à jour fortement recommandée.

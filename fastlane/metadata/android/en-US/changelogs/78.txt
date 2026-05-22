@@ -1,0 +1,14 @@
+v1.14.2 — CRITICAL hotfix accidental SMS
+
+3 paths closed after user bug:
+
+• Scrolling the Emergency page no longer
+  triggers URGENCE by mistake (drag
+  detection touchSlop)
+• URGENCE quick action removed from the
+  lock-screen notif (1 tap = SMS, too risky).
+  Tap the body → in-app page + hold 3s
+• "Disable emergency mode" also clears the
+  notif shortcut (before: persisted)
+
+Update strongly recommended.

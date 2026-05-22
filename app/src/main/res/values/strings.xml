@@ -316,8 +316,7 @@
     <string name="channel_emergency_shortcut_label">Emergency shortcut</string>
     <string name="channel_emergency_shortcut_desc">Silent persistent notification with one-tap actions to trigger emergency mode or dial 112, accessible from the lock screen.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — emergency shortcut</string>
-    <string name="emergency_shortcut_notif_text">One tap to send the emergency SMS or dial 112.</string>
-    <string name="emergency_shortcut_action_emergency">EMERGENCY</string>
+    <string name="emergency_shortcut_notif_text">Tap to open the emergency page, or dial 112.</string>
     <string name="emergency_shortcut_action_112">Dial 112</string>
     <string name="settings_emergency_shortcut_title">Lock-screen shortcut</string>
     <string name="settings_emergency_shortcut_desc">Show a persistent notification with EMERGENCY + 112 actions, accessible without unlocking the phone. Off by default.</string>

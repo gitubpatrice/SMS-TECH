@@ -306,8 +306,7 @@
     <string name="channel_emergency_shortcut_label">Raccourci urgence</string>
     <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec actions en un tap pour déclencher le Mode urgence ou appeler le 112, accessible depuis l\'écran verrouillé.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — raccourci urgence</string>
-    <string name="emergency_shortcut_notif_text">Un tap pour envoyer le SMS d\'urgence ou appeler le 112.</string>
-    <string name="emergency_shortcut_action_emergency">URGENCE</string>
+    <string name="emergency_shortcut_notif_text">Tapez pour ouvrir la page urgence, ou appeler le 112.</string>
     <string name="emergency_shortcut_action_112">Appeler 112</string>
     <string name="settings_emergency_shortcut_title">Raccourci écran verrouillé</string>
     <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec actions URGENCE + 112, accessible sans déverrouiller le téléphone. Désactivé par défaut.</string>
