@@ -258,17 +258,24 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Writes the bytes to a stable cache file the AttachmentEntity will reference.
+     * Writes the bytes to a stable file the AttachmentEntity will reference.
      *
      * **v1.3.10 (Q5)** : atomic `tmp + rename`. If the process is killed mid-write (OOM, MIUI
      * aggressive background kill), a half-written `in-*.ext` would otherwise be inserted into
      * Room — the user tapping the message would crash the image viewer on the truncated file.
      * Writing to `*.tmp` and only renaming on completion guarantees the consumer sees either
      * the full file or nothing.
+     *
+     * **v1.14.7** : storage moved from `cacheDir/mms_incoming/` to `filesDir/mms_attachments/`.
+     * `cacheDir` est volatile — Android peut le purger en pression mémoire/stockage et "Effacer
+     * le cache" via Réglages → Apps le vide aussi → les fichiers audio MMS reçus disparaissaient
+     * sans bruit alors que les `AttachmentEntity.localUri` Room pointaient toujours vers ces
+     * chemins. `filesDir/mms_attachments/` est persistent et n'est wipé que par PanicService ou
+     * `clearData()`. MainApplication migre rétroactivement les chemins existants au cold-start.
      */
     private fun persistAttachment(appContext: Context, bytes: ByteArray, mime: String): File? {
         return try {
-            val dir = File(appContext.cacheDir, INCOMING_DIR).apply { mkdirs() }
+            val dir = File(appContext.filesDir, ATTACHMENTS_DIR).apply { mkdirs() }
             val ext = mimeExtension(mime)
             val name = "in-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.$ext"
             val finalFile = File(dir, name)
@@ -332,7 +339,14 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
     }
 
     private companion object {
+        /**
+         * Legacy cacheDir subdirectory for incoming MMS attachments (v1.3.10 → v1.14.6).
+         * Conservé comme constante pour la migration MainApplication qui rapatrie les fichiers
+         * existants vers [ATTACHMENTS_DIR].
+         */
         const val INCOMING_DIR: String = "mms_incoming"
+        /** v1.14.7 — nouvelle racine persistante (filesDir) pour les attachments MMS reçus. */
+        const val ATTACHMENTS_DIR: String = "mms_attachments"
         /** Audit M-10: TTL for the in-memory dedup set. 5 min covers real-world carrier replays. */
         const val DEDUP_TTL_MS: Long = 5 * 60 * 1_000L
         /**

@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.6** (2026-05-22)
+Current release : **v1.14.7** (2026-05-23)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -53,7 +53,23 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.14.6 (this release) — Label `(défaut)` du picker de réactions
+### v1.14.7 (this release) — Protection cache MMS reçus + filets sync + splash transparent + audit fixes
+
+User remontée 2026-05-23 : sur S24 (après cycles désinstall/réinstall pour tester v1.14.5/6), les attachments audio MMS reçus avaient disparu et la sync semblait gelée. Root cause identifiée par diag logcat : (a) `cacheDir/mms_incoming/` (où vivaient les fichiers audio des MMS reçus) est volatile — Android Storage Manager le purge sous pression mémoire, et "Effacer le cache" via Réglages → Apps le vide aussi, laissant les `AttachmentEntity.localUri` Room pointer sur des fichiers absents ; (b) sur Samsung S24 Android 15 le ContentObserver système rate parfois des émissions après sleep long + Freecess gèle les workers en background.
+
+**Trois changements + 3 audit fixes** :
+
+1. **Protection cache → filesDir pour les attachments MMS reçus**. `MmsDownloadedReceiver.persistAttachment` écrit désormais dans `filesDir/mms_attachments/` (persistant, ne disparaît qu'avec `PanicService.nukeEverything` ou `clearData`) au lieu de `cacheDir/mms_incoming/`. `FileProvider` paths déjà OK (`files-path "attachments" path="mms_attachments/"` existant). `AutoLockObserver.purgeTransientCaches` doc mise à jour : NE purge PAS le nouveau filesDir/mms_attachments (par design, sinon les attachments disparaîtraient à chaque auto-lock). `PanicService.nukeEverything` continue de wipe filesDir/mms_attachments correctement (déjà dans sa liste, vérifié).
+
+2. **Migration cold-start one-shot** `MainApplication.migrateAttachmentsToFilesDirIfNeeded()`. Flag DataStore `AdvancedSettings.attachmentsMovedToFilesDirV147` idempotent. Pour chaque `AttachmentEntity.local_uri` commençant par `cacheDir/mms_incoming/`, déplace physiquement le fichier vers `filesDir/mms_attachments/` (rename atomique si même partition, fallback copy+delete) puis `attachmentDao.updateLocalUri(id, newPath)`. Edge cases gérés : (a) fichier source absent (cache déjà clearé) → flip quand même le path Room pour cohérence, (b) destination existe déjà → garde dest, delete source. **Audit S1 fix** : `canonicalFile` + `startsWith(newDir.canonicalFile)` check anti path-traversal avant écriture, defense-in-depth contre une régression future du générateur de noms. **Audit P2 fix** : `withContext(Dispatchers.IO)` explicite autour de la migration (les IO `renameTo` / `copyTo` ne saturent plus le thread pool Default). Async dans `appScope.launch` — pas de blocage main thread.
+
+3. **Filet de sécurité sync onResume**. `MainActivity.onResume()` appelle `telephonySyncManager.requestSync("MainActivity.onResume")` (idempotent via Mutex côté manager) + `TelephonySyncWorker.enqueueOneShot(this)` (belt-and-braces si le manager est en état inattendu). **Audit P1 fix** : throttle 30s mono sur le `enqueueOneShot` WorkManager (sans le throttle, switch rapide entre apps spammait WorkManager SQLite interne → risque Freecess throttling). `requestSync` lui ne nécessite pas de cooldown (Mutex single-flight absorbe).
+
+**Polish** : `splash_logo.xml` v1.14.5 retiré (user remontée "préfère l'ancien splash, le rond Android 12+ cache mon logo carré") → nouveau `drawable/splash_transparent.xml` = `<shape rectangle solid transparent />`. `windowSplashScreenAnimatedIcon = @drawable/splash_transparent` (light + night themes) → Android 12+ affiche juste un flash de fond uni, aucun cercle visible. La Compose `SplashScreen.kt` fade-in intro 1re ouverture reste intacte. String `emergency_topbar_warning_cd` orpheline retirée (FR+EN).
+
+**Threat model** inchangé. Aucun changement crypto / Keystore / Room / SQLCipher. Cert SHA-256 stable. Pas de migration Room. `lintVitalRelease` clean, `testReleaseUnitTest` green. Audit final 3 axes — 1 MEDIUM (P1) + 3 LOW TOUS FIXÉS, zéro Critical/High.
+
+### v1.14.6 — Label `(défaut)` du picker de réactions
 
 Le picker `Réglages → Format des réactions` portait `(défaut)` sur "Français lisible" alors que la valeur réelle par défaut a été basculée sur `EMOJI_WITH_QUOTE` en v1.14.4 (cf. section ci-dessous). Strings FR+EN corrigées (`settings_reaction_format_fr` retire `(défaut)`, `settings_reaction_format_emoji_quote` ajoute `(défaut)`). Aucun changement comportemental, uniquement étiquette d'interface. Aucun changement crypto / Room / Keystore / threat-model.
 

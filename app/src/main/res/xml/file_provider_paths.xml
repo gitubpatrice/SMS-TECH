@@ -4,13 +4,18 @@
     that we actually share (MMS attachments and conversation PDFs / backup exports).
     Previously `files-path name="files" path="."` exposed the whole `files/` tree, including
     `files/db/master.key` (which is wrapped, but still a needless leak surface).
+
+    v1.14.7 — `mms_attachments/` (filesDir) is now the canonical storage for INCOMING MMS
+    attachments (audio/image/video/file). Previously they lived in `cacheDir/mms_incoming/`
+    but Android Storage Manager + "Effacer le cache" Réglages → Apps could purge them while
+    Room rows still pointed to those paths → bubbles cassées sur audio MMS reçus.
 -->
 <paths>
     <files-path name="attachments" path="mms_attachments/" />
     <files-path name="exports" path="exports/" />
     <!-- Cache subfolders shared with the OS: outgoing MMS PDU file handed to SmsManager,
-         incoming MMS PDU file SmsManager writes to, recorded voice clips, and the audio bytes
-         extracted from incoming MMS that the AttachmentEntity references via absolute path. -->
+         incoming MMS PDU file SmsManager writes to, recorded voice clips. Kept for v1.14.7
+         retro-compat tap-to-view sur attachments anciens pas encore migrés. -->
     <cache-path name="mms_outgoing" path="mms_outgoing/" />
     <cache-path name="mms_incoming" path="mms_incoming/" />
     <cache-path name="mms_incoming_audio" path="mms_incoming_audio/" />

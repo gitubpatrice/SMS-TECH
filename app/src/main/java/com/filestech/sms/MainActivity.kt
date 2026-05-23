@@ -57,6 +57,26 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var safetyCallIntentToken: SafetyCallIntentToken
 
     /**
+     * v1.14.7 — safety net : déclenche un delta-sync à chaque retour foreground.
+     * Pattern single-flight + Mutex côté manager → re-tap rapides sont free.
+     * Couvre les cas où Samsung Freecess ou un OEM agressif a gelé le worker
+     * pendant que l'app était en background, ou où le ContentObserver système
+     * a manqué une émission.
+     */
+    @Inject lateinit var telephonySyncManager: com.filestech.sms.data.sync.TelephonySyncManager
+
+    /**
+     * v1.14.7 audit P1 — anti-spam `enqueueOneShot` WorkManager. Sans cooldown, un
+     * user qui switche entre apps rapidement enqueue un OneShot à chaque onResume.
+     * KEEP policy évite la dup d'exécution, mais chaque enqueue = 1 write WorkManager
+     * SQLite (interne) → peut déclencher Samsung Freecess throttling. `requestSync()`
+     * via Mutex absorbe déjà le hammering ; WorkManager est notre filet "process killed",
+     * un enqueue toutes les 30s suffit largement (le worker tourne 12h périodique).
+     */
+    @Volatile private var lastOneShotEnqueueElapsed: Long = 0L
+    private val oneShotEnqueueCooldownMs: Long = 30_000L
+
+    /**
      * v1.8.0 (bug 4 fix) — holder partagé pour le `conversationId` cliqué via
      * notification. Posé dans [handleSharedIntent] quand l'action vaut
      * [IncomingMessageNotifier.ACTION_OPEN_CONVERSATION], consommé dans
@@ -255,6 +275,26 @@ class MainActivity : FragmentActivity() {
      */
     override fun onResume() {
         super.onResume()
+        // v1.14.7 — safety net : re-déclenche un delta-sync à chaque retour
+        // foreground. Idempotent (single-flight Mutex). Couvre Samsung Freecess
+        // qui gèle le worker en background + le ContentObserver système qui peut
+        // manquer une émission après un sleep long. Pas de garde lockState ici
+        // car la sync écrit en Room derrière l'AppLockManager, indépendamment
+        // de l'écran de verrouillage UI.
+        runCatching { telephonySyncManager.requestSync(reason = "MainActivity.onResume") }
+            .onFailure { Timber.w(it, "onResume sync trigger failed") }
+        // Belt-and-braces : double-track via WorkManager au cas où le manager
+        // serait dans un état inattendu (started flag bloqué, mutex deadlock).
+        // v1.14.7 audit P1 fix : throttle à 1 enqueue / 30s mono pour éviter de spammer
+        // WorkManager si l'user oscille entre apps rapidement. `requestSync()` ci-dessus
+        // gère déjà le path rapide via Mutex ; le worker est pour le path "process killé".
+        val nowMono = android.os.SystemClock.elapsedRealtime()
+        if (nowMono - lastOneShotEnqueueElapsed >= oneShotEnqueueCooldownMs) {
+            lastOneShotEnqueueElapsed = nowMono
+            runCatching {
+                com.filestech.sms.system.scheduler.TelephonySyncWorker.enqueueOneShot(this)
+            }.onFailure { Timber.w(it, "onResume enqueueOneShot failed") }
+        }
         lifecycleScope.launch {
             runCatching {
                 val lockState = appLock.state.value

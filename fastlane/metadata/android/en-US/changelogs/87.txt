@@ -1,0 +1,13 @@
+v1.14.7 — MMS cache protection + sync safety nets
+
+• Received MMS attachments (audio, image,
+  video) moved from cacheDir to filesDir.
+  No more broken bubbles after Android cache
+  cleanup. Auto cold-start migration.
+
+• Sync safety net: delta-sync retriggered on
+  every foreground resume (Samsung Freecess
+  + system observer missing emissions).
+
+• Splash: transparent icon, no more Android
+  12+ circle hiding the square logo.

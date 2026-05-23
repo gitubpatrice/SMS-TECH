@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.14.7 — Icône splash 100% transparente. Android 12+ SplashScreen API impose
+  un masque circulaire autour de `windowSplashScreenAnimatedIcon`. En fournissant
+  un drawable transparent, le cercle reste invisible et seul le `windowSplashScreenBackground`
+  (couleur unie) flashe brièvement avant que l'Activity ne prenne la main. La Compose
+  SplashScreen (fade-in première ouverture) reste responsable du logo carré + texte.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+</shape>

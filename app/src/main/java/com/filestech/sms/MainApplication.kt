@@ -67,6 +67,13 @@ class MainApplication : Application(), Configuration.Provider {
      */
     @Inject lateinit var messageDao: MessageDao
 
+    /**
+     * v1.14.7 — utilisé par la migration cold-start qui rapatrie les attachments MMS reçus
+     * de `cacheDir/mms_incoming/` (volatile) vers `filesDir/mms_attachments/` (persistant)
+     * et met à jour les `local_uri` Room en conséquence. Cf. infra `migrateAttachmentsToFilesDirIfNeeded`.
+     */
+    @Inject lateinit var attachmentDao: com.filestech.sms.data.local.db.dao.AttachmentDao
+
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     override val workManagerConfiguration: Configuration
@@ -132,6 +139,15 @@ class MainApplication : Application(), Configuration.Provider {
         if (migrationElapsed >= 1_000L) {
             Timber.w("v1.8.0 migration unreadResetV180 TIMEOUT after %d ms", migrationElapsed)
         }
+        // v1.14.7 — migration cold-start one-shot : déplace les attachments MMS reçus
+        // de `cacheDir/mms_incoming/` vers `filesDir/mms_attachments/` puis met à jour
+        // les `local_uri` Room en conséquence. Avant ce fix, `cacheDir` étant volatile
+        // (Storage Manager Android purge sous pression mémoire, "Effacer le cache"
+        // utilisateur depuis Réglages → Apps), les fichiers audio/image/vidéo reçus
+        // pouvaient disparaître silencieusement → bulles audio cassées affichant le nom
+        // de fichier en fallback. `filesDir` n'est wipé que par PanicService / clearData.
+        // Async (appScope.launch) — pas de blocage de la main thread. Idempotent.
+        appScope.launch { migrateAttachmentsToFilesDirIfNeeded() }
         // Audit P-P0-5: the historical R6 fix used `runBlocking(IO) { appLock.resolveInitialState() }`
         // here to pre-resolve the lock state before any broadcast receiver could read it. That
         // blocked the main thread for 50-200 ms on DataStore on cold-start. We now kick the
@@ -318,6 +334,118 @@ class MainApplication : Application(), Configuration.Provider {
                     }
                 }
                 .collect()
+        }
+    }
+
+    /**
+     * v1.14.7 — migration cold-start one-shot. Déplace les fichiers attachments MMS reçus
+     * de `cacheDir/mms_incoming/` (volatile) vers `filesDir/mms_attachments/` (persistant)
+     * et réécrit les `AttachmentEntity.local_uri` pointant vers les anciens chemins.
+     *
+     * Stratégie :
+     *  1. Si flag `attachmentsMovedToFilesDirV147` déjà true → no-op (idempotent).
+     *  2. Sinon : pour chaque row Room dont `local_uri` matche le préfixe `cacheDir/mms_incoming/`,
+     *     on déplace le fichier (rename atomique si même partition, sinon copy+delete fallback)
+     *     puis on UPDATE `local_uri` vers le nouveau chemin.
+     *  3. Le dossier cacheDir/mms_incoming peut contenir des PDU temp files orphelins (déjà
+     *     supposés deleted post-parse) — on les laisse à Android cleanup.
+     *  4. Une seule transaction Room par row : si on crashe au milieu, on reprend au cold-start
+     *     suivant. Les rows déjà migrées (chemin neuf) sont matchées par le `LIKE` du WHERE.
+     *  5. À la fin, on flippe le flag DataStore. Failure isolée par runCatching → flag pas posé,
+     *     retry au prochain cold-start.
+     *
+     * Pas de garde de timeout : runBlocking n'est PAS utilisé, on tourne dans `appScope.launch`
+     * (Dispatchers.Default + SupervisorJob). Si la migration prend du temps (e.g. 200 attachments
+     * à déplacer × 1 ms IO chacun = 200 ms), l'UI continue à fonctionner pendant ce temps.
+     */
+    private suspend fun migrateAttachmentsToFilesDirIfNeeded() = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        // v1.14.7 audit P2 — exécution explicitement sur Dispatchers.IO. La migration fait
+        // des opérations IO disque (File.renameTo, inputStream.copyTo, outputStream) qui
+        // doivent tourner sur le pool IO, pas Default (qui sert au CPU-bound).
+        val current = runCatching { settingsRepository.flow.first().advanced }.getOrNull()
+            ?: return@withContext
+        if (current.attachmentsMovedToFilesDirV147) return@withContext
+
+        val oldDir = java.io.File(cacheDir, "mms_incoming")
+        val newDir = java.io.File(filesDir, "mms_attachments").apply { mkdirs() }
+        // v1.14.7 audit S1 — canonicalFile sur newDir pour le path-traversal check ultérieur.
+        // Sans canonicalisation un attaquant qui maîtriserait `att.localUri` (impossible dans
+        // les flux normaux car persistAttachment génère le nom via UUID, mais defense-in-depth)
+        // pourrait crafter `../../secret` et écrire hors du sandbox attachments.
+        val newDirCanonical = runCatching { newDir.canonicalFile }.getOrNull() ?: run {
+            Timber.w("v1.14.7 migration: cannot canonicalize newDir %s", newDir.absolutePath)
+            return@withContext
+        }
+        val oldPrefixAbs = oldDir.absolutePath + java.io.File.separator
+
+        val candidates = runCatching {
+            attachmentDao.findByLocalUriPrefix(oldPrefixAbs)
+        }.getOrDefault(emptyList())
+
+        if (candidates.isEmpty()) {
+            // Pas de migration à faire (fresh install ou tous les attachments déjà en filesDir).
+            // On flippe le flag pour éviter de re-tenter à chaque cold-start.
+            runCatching {
+                settingsRepository.update { s -> s.copy(advanced = s.advanced.copy(attachmentsMovedToFilesDirV147 = true)) }
+            }
+            return@withContext
+        }
+
+        Timber.i("v1.14.7 attachments migration: %d rows to move from cacheDir to filesDir", candidates.size)
+
+        var moved = 0
+        var skipped = 0
+        for (att in candidates) {
+            val srcFile = java.io.File(att.localUri)
+            // v1.14.7 audit S1 — extraire UNIQUEMENT le basename sans dirs (anti path-traversal).
+            // `srcFile.name` retourne déjà le basename sur Java/Kotlin, mais on contrôle via
+            // canonical check ci-dessous que dstFile reste bien sous newDir. Les noms générés par
+            // `persistAttachment` (in-${ts}-${uuid}.ext) ne peuvent pas contenir de séparateurs,
+            // ce check est une defense-in-depth contre une régression future de generateur de nom.
+            val fileName = srcFile.name
+            val dstFile = java.io.File(newDir, fileName)
+            val dstCanonical = runCatching { dstFile.canonicalFile }.getOrNull()
+            if (dstCanonical == null || !dstCanonical.toPath().startsWith(newDirCanonical.toPath())) {
+                Timber.w("v1.14.7 migration: path traversal rejected for %s → %s", att.localUri, dstFile.absolutePath)
+                continue
+            }
+            runCatching {
+                if (!srcFile.exists()) {
+                    // Fichier source disparu (cache déjà clearé par Android) — on ne peut pas
+                    // restaurer, mais on flippe quand même le local_uri vers le nouveau chemin
+                    // pour que les futurs MMS reçus (qui iront direct dans filesDir) ne soient
+                    // pas confondus avec ce row orphelin. Le bubble affichera de toute façon le
+                    // fallback (fichier introuvable).
+                    skipped++
+                    if (att.localUri != dstFile.absolutePath) {
+                        attachmentDao.updateLocalUri(att.id, dstFile.absolutePath)
+                    }
+                    return@runCatching
+                }
+                if (dstFile.exists()) {
+                    // Destination existe déjà (re-migration partielle, ou collision de nom) — on
+                    // garde la destination + supprime la source pour ne pas laisser de doublon.
+                    runCatching { srcFile.delete() }
+                    attachmentDao.updateLocalUri(att.id, dstFile.absolutePath)
+                    moved++
+                    return@runCatching
+                }
+                val renamed = srcFile.renameTo(dstFile)
+                if (!renamed) {
+                    // Fallback : copy + delete (cas partition différente, rare sur Android moderne).
+                    srcFile.inputStream().use { input ->
+                        dstFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    runCatching { srcFile.delete() }
+                }
+                attachmentDao.updateLocalUri(att.id, dstFile.absolutePath)
+                moved++
+            }.onFailure { Timber.w(it, "v1.14.7 migration: failed to move %s", att.localUri) }
+        }
+
+        Timber.i("v1.14.7 attachments migration: moved=%d skipped=%d", moved, skipped)
+        runCatching {
+            settingsRepository.update { s -> s.copy(advanced = s.advanced.copy(attachmentsMovedToFilesDirV147 = true)) }
         }
     }
 }

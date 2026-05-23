@@ -37,4 +37,21 @@ interface AttachmentDao {
 
     @Query("DELETE FROM attachments WHERE message_id = :messageId")
     suspend fun deleteForMessage(messageId: Long)
+
+    /**
+     * v1.14.7 — récupère toutes les attachments dont [AttachmentEntity.localUri] commence
+     * par [oldPrefix]. Utilisé par la migration cache → filesDir de MainApplication.onCreate
+     * pour ré-écrire les chemins pointant vers `cacheDir/mms_incoming/` (volatile, sujet à
+     * cache-clear Android + clear cache utilisateur) vers `filesDir/mms_attachments/`
+     * (persistant). Cold-start one-shot, idempotent (flag DataStore).
+     */
+    @Query("SELECT * FROM attachments WHERE local_uri LIKE :oldPrefix || '%'")
+    suspend fun findByLocalUriPrefix(oldPrefix: String): List<AttachmentEntity>
+
+    /**
+     * v1.14.7 — réécrit [AttachmentEntity.localUri] d'une row spécifique. Appelé après
+     * que le fichier ait été déplacé physiquement de cacheDir → filesDir par la migration.
+     */
+    @Query("UPDATE attachments SET local_uri = :newUri WHERE id = :id")
+    suspend fun updateLocalUri(id: Long, newUri: String)
 }

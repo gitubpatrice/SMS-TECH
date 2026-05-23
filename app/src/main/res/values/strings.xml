@@ -234,8 +234,7 @@
     <string name="settings_emergency_include_location_title">Include GPS in emergency SMS</string>
     <string name="settings_emergency_include_location_desc">Adds a Google Maps link with your current location to the emergency SMS body. Requires location permission. If refused, the SMS is sent without coordinates.</string>
     <string name="settings_emergency_include_location_denied">Location permission denied. GPS inclusion disabled.</string>
-    <!-- v1.14.5 — visual warning indicator on Emergency page -->
-    <string name="emergency_topbar_warning_cd">Emergency mode</string>
+    <!-- v1.14.7 — string emergency_topbar_warning_cd retirée (orpheline, prévue pour un indicateur visuel jamais branché). -->
     <!-- v1.14.1 — full-page emergency redesign : 4 colored call tiles + disable + open-from-notif -->
     <string name="emergency_call_112_label">SOS European</string>
     <string name="emergency_call_15_label">SAMU (medical)</string>

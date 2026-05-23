@@ -1,0 +1,13 @@
+v1.14.7 — Protection cache MMS + filets sync
+
+• Attachments MMS reçus (audio, image, vidéo)
+  déplacés de cacheDir vers filesDir. Plus de
+  bulles cassées après cache cleanup Android.
+  Migration auto cold-start, idempotente.
+
+• Filet sync : delta-sync re-tenté à chaque
+  retour foreground (Samsung Freecess + obs
+  système qui rate des émissions).
+
+• Splash : icône transparente, plus de cercle
+  Android 12+ qui cache le logo carré.

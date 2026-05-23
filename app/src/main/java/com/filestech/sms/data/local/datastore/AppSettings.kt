@@ -342,6 +342,17 @@ data class AdvancedSettings(
      */
     val unreadResetV180: Boolean = false,
     /**
+     * v1.14.7 — flag de migration one-shot pour rapatrier les attachments MMS reçus
+     * de `cacheDir/mms_incoming/` (volatile, peut être purgé par Android Storage
+     * Manager ou par "Effacer le cache" Réglages → Apps) vers
+     * `filesDir/mms_attachments/` (persistant, ne disparaît qu'avec un wipe app).
+     * Avant ce fix, les MMS audio/image/vidéo reçus disparaissaient silencieusement
+     * quand Android nettoyait le cache, laissant des `AttachmentEntity.localUri`
+     * Room pointant vers des fichiers absents → bulle audio cassée affichant le
+     * nom de fichier en fallback. Migration cold-start idempotente.
+     */
+    val attachmentsMovedToFilesDirV147: Boolean = false,
+    /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante
      * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour

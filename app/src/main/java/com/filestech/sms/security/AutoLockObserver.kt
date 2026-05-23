@@ -78,10 +78,11 @@ class AutoLockObserver @Inject constructor(
      *  - `cache/mms_outgoing/` — built PDU files for in-flight MMS (audit S-P2-3)
      *
      * Recursive delete + isolated `runCatching` per folder so a partial failure on one path does
-     * not skip the others. Inbound caches (`cache/mms_incoming/`, `cache/mms_incoming_audio/`) are
-     * intentionally **not** purged here: they are referenced by `AttachmentEntity.localUri` for
-     * in-app playback / display, and dropping them would surface broken bubbles after every
-     * lock cycle. They are wiped instead by [PanicService.nukeEverything].
+     * not skip the others. Inbound attachments (v1.14.7 = `filesDir/mms_attachments/`,
+     * legacy v1.3.10→v1.14.6 = `cache/mms_incoming/`) are intentionally **not** purged here:
+     * they are referenced by `AttachmentEntity.localUri` for in-app playback / display, and
+     * dropping them would surface broken bubbles after every lock cycle. They are wiped instead
+     * by [PanicService.nukeEverything] (qui wipe filesDir/mms_attachments + cacheDir entier).
      */
     private fun purgeTransientCaches() {
         // Audit P1-5 (v1.2.0): `deleteRecursively()` walks every depth — the previous
