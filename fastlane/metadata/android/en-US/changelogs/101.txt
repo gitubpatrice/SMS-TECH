@@ -1,0 +1,14 @@
+v1.18.0 — Thread screen refactor
+
+• The conversation thread's message item
+  renderer (~140 lines of inline audio /
+  media / text bubble dispatch) is now
+  extracted into a dedicated
+  `ThreadMessageItem` composable with a
+  `@Stable` actions bundle.
+• Recompositions are better scoped: an
+  item re-composes on its own message
+  changes, not on the parent's global
+  state. Smoother scrolling on long
+  threads.
+• No user-visible change.

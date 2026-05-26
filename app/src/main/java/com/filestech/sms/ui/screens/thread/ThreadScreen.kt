@@ -542,6 +542,39 @@ fun ThreadScreen(
                 } else null
             }
         }
+        // v1.18.0 — Bundle de callbacks stable réutilisé par chaque item. Capture les setters
+        // `var by remember` (pendingDelete, pickingReactionFor, forwardingMessage,
+        // pendingRetryWatchdog) + les références ViewModel + les lambdas locales. Recréé
+        // uniquement si viewModel change (singleton scope ViewModel — donc 1 fois par
+        // composition de ThreadScreen). Référence stable → Compose peut skipper la
+        // recomposition des items dont le `msg` n'a pas changé.
+        val itemActions = remember(viewModel) {
+            ThreadMessageItemActions(
+                onTogglePlayback = { audio -> viewModel.togglePlayback(audio.localUri, audio.toPlaybackUri()) },
+                onSeekPlayback = viewModel::seekPlaybackTo,
+                onTapFailed = { msg ->
+                    // Audit R3 (v1.14.8) — WATCHDOG_TIMEOUT → confirmation dialog (risque doublon).
+                    // SYNCHRONOUS = rejeté radio, retry direct sans risque.
+                    if (msg.errorCode == SendErrorCode.WATCHDOG_TIMEOUT) {
+                        pendingRetryWatchdog = msg
+                    } else {
+                        viewModel.retry(msg.id)
+                    }
+                },
+                onDelete = { msg -> pendingDelete = msg },
+                onReply = { msg -> viewModel.startReply(msg) },
+                onReact = { msgId -> pickingReactionFor = msgId },
+                // v1.4.1 — Tap-pour-retirer le badge autorisé uniquement sur incoming (la
+                // réaction a été posée localement par l'user). Pour outgoing (Tapback fold du
+                // destinataire), ignore (sinon désync : badge local disparaît mais reste chez
+                // l'autre — convention iMessage).
+                onRemoveReaction = { msg -> if (msg.isIncoming) viewModel.setReaction(msg.id, null) },
+                onForward = { msg -> forwardingMessage = msg },
+                onTranslate = { msg -> translateMessageExternal(msg) },
+                onCopy = { msg -> copyMessageBody(msg) },
+                onPhoneClick = onPhoneClick,
+            )
+        }
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -562,173 +595,24 @@ fun ThreadScreen(
                     }
                 },
             ) { index, msg ->
-                val prev = state.messages.getOrNull(index - 1)
-                val next = state.messages.getOrNull(index + 1)
-                val showTimestamp = prev?.date?.let { msg.date - it > 5 * 60_000L } ?: true
-
-                // Insert a centered date divider whenever we cross a calendar-day boundary
-                // (including the first message of the thread). v1.6.1 — label pré-calculé.
-                daySeparatorLabels.getOrNull(index)?.let { label ->
-                    DateSeparator(label = label)
-                }
-
-                val burstPosition = computeBurstPosition(prev, msg, next)
-                val audio = msg.audioAttachment
-                // v1.3.3 bug #2 — pour les pièces jointes NON-audio (image/video/file),
-                // on délègue à MediaAttachmentBubble qui ajoute le tap-to-view (ACTION_VIEW
-                // via FileProvider). Sans ce dispatch, l'attachment était silencieusement
-                // ignoré au rendu (juste le body "🖼️ filename.jpg" en texte décoratif).
-                val mediaAttachment = msg.attachments.firstOrNull { !it.isAudio }
-                // v1.3.3 #7 — étiquette d'expéditeur uniquement sur la 1ʳᵉ bulle d'un
-                // burst (Solo ou First) pour ne pas surcharger visuellement les suites
-                // consécutives du même expéditeur.
-                val senderLabel: String? = if (
-                    burstPosition == com.filestech.sms.ui.components.BurstPosition.Solo ||
-                    burstPosition == com.filestech.sms.ui.components.BurstPosition.First
-                ) {
-                    if (msg.isOutgoing) {
-                        stringResource(R.string.bubble_sender_self)
-                    } else {
-                        state.conversation?.displayName?.takeIf { it.isNotBlank() } ?: msg.address
-                    }
-                } else null
-                if (audio != null) {
-                    // Audit P-P1-2: pass the playback state as a **lambda**, not the value.
-                    // The bubble re-reads it only inside its own `derivedStateOf`, so the 5 Hz
-                    // ticker only recomposes the bubble that is actually playing — all the
-                    // other bubbles in the thread stay frozen.
-                    AudioMessageBubble(
-                        message = msg,
-                        audio = audio,
-                        playbackProvider = { playbackState },
-                        onTogglePlay = { viewModel.togglePlayback(audio.localUri, audio.toPlaybackUri()) },
-                        onSeekTo = viewModel::seekPlaybackTo,
-                        onDelete = { pendingDelete = msg },
-                        onReply = { viewModel.startReply(msg) },
-                        // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus : on
-                        // ne réagit pas à son propre envoi (pas de sens UX + cohérent avec
-                        // la garde côté UseCase qui refuse les sender = soi-même).
-                        onReact = if (msg.isIncoming) {
-                            { pickingReactionFor = msg.id }
-                        } else null,
-                        // v1.3.11 (F5) — forward a voice clip.
-                        onForward = { forwardingMessage = msg },
-                        // v1.4.1 — tap-pour-retirer le badge n'est autorisé que sur les
-                        // messages INCOMING (la réaction a été posée localement par
-                        // l'utilisateur). Pour les OUTGOING (la réaction vient du
-                        // destinataire via Tapback fold), on ignore le tap : seul celui
-                        // qui a posé la réaction peut la retirer (convention iMessage).
-                        // Sans ce guard, retirer le badge localement créait une désync
-                        // visible — chez nous le badge disparaît, chez le destinataire il
-                        // reste affiché.
-                        onRemoveReaction = {
-                            if (msg.isIncoming) viewModel.setReaction(msg.id, null)
-                        },
-                        repliedToPreview = previewFor(msg),
-                        showTimestamp = showTimestamp,
-                        senderLabel = senderLabel,
-                    )
-                } else if (mediaAttachment != null) {
-                    // v1.3.3 bug #2 — image / vidéo / fichier rendu avec thumbnail/icône
-                    // cliquable. Tap ouvre la PJ dans l'app système (Galerie, lecteur vidéo,
-                    // chooser pour autres types) via FileProvider URI.
-                    com.filestech.sms.ui.components.MediaAttachmentBubble(
-                        message = msg,
-                        attachment = mediaAttachment,
-                        showTimestamp = showTimestamp,
-                        onDelete = { pendingDelete = msg },
-                        onReply = { viewModel.startReply(msg) },
-                        onReact = if (msg.isIncoming) {
-                            { pickingReactionFor = msg.id }
-                        } else null,
-                        // v1.3.11 (F3) — copy exposed only when the bubble carries a
-                        // user-typed caption (the placeholder body is empty in v1.3.10+).
-                        onCopy = if (msg.body.isNotBlank()) {
-                            { copyMessageBody(msg) }
-                        } else null,
-                        // v1.3.11 (F5) — forward image / video / file attachment.
-                        onForward = { forwardingMessage = msg },
-                        onPhoneClick = onPhoneClick,
-                        // v1.4.1 — tap-pour-retirer le badge n'est autorisé que sur les
-                        // messages INCOMING (la réaction a été posée localement par
-                        // l'utilisateur). Pour les OUTGOING (la réaction vient du
-                        // destinataire via Tapback fold), on ignore le tap : seul celui
-                        // qui a posé la réaction peut la retirer (convention iMessage).
-                        // Sans ce guard, retirer le badge localement créait une désync
-                        // visible — chez nous le badge disparaît, chez le destinataire il
-                        // reste affiché.
-                        onRemoveReaction = {
-                            if (msg.isIncoming) viewModel.setReaction(msg.id, null)
-                        },
-                        repliedToPreview = previewFor(msg),
-                        senderLabel = senderLabel,
-                    )
-                } else {
-                    MessageBubble(
-                        message = msg,
-                        showTimestamp = showTimestamp,
-                        burstPosition = burstPosition,
-                        onTap = {
-                            // Audit R3 (v1.14.8) — Tap sur bulle FAILED : si l'errorCode est
-                            // WATCHDOG_TIMEOUT, on demande confirmation (risque doublon). Sinon
-                            // (SYNCHRONOUS = rejeté par radio) retry direct sans risque.
-                            if (msg.status == Message.Status.FAILED) {
-                                if (msg.errorCode == SendErrorCode.WATCHDOG_TIMEOUT) {
-                                    pendingRetryWatchdog = msg
-                                } else {
-                                    viewModel.retry(msg.id)
-                                }
-                            }
-                        },
-                        onDelete = { pendingDelete = msg },
-                        onReply = { viewModel.startReply(msg) },
-                        // v1.7.1 — "Translate" action delegated to the system via
-                        // ACTION_PROCESS_TEXT (replaces the ML Kit feature removed in
-                        // v1.7.0). User picks their preferred translation app each
-                        // time (Google Translate / DeepL / Aves / LibreTranslate…).
-                        // Only wired when the body is non-blank (nothing to translate
-                        // on attachment-only messages).
-                        onTranslate = if (msg.body.isNotBlank()) {
-                            { translateMessageExternal(msg) }
-                        } else null,
-                        // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus
-                        // (voir AudioMessageBubble ci-dessus pour la même justification).
-                        onReact = if (msg.isIncoming) {
-                            { pickingReactionFor = msg.id }
-                        } else null,
-                        // v1.3.11 (F3) — copy text body to clipboard. Only wired when body is
-                        // non-blank; FAILED rows still allow copy so the user can salvage the
-                        // text they tried to send.
-                        onCopy = if (msg.body.isNotBlank()) {
-                            { copyMessageBody(msg) }
-                        } else null,
-                        // v1.3.11 (F5) — forward a plain text message.
-                        onForward = { forwardingMessage = msg },
-                        onPhoneClick = onPhoneClick,
-                        // v1.4.1 — tap-pour-retirer le badge n'est autorisé que sur les
-                        // messages INCOMING (la réaction a été posée localement par
-                        // l'utilisateur). Pour les OUTGOING (la réaction vient du
-                        // destinataire via Tapback fold), on ignore le tap : seul celui
-                        // qui a posé la réaction peut la retirer (convention iMessage).
-                        // Sans ce guard, retirer le badge localement créait une désync
-                        // visible — chez nous le badge disparaît, chez le destinataire il
-                        // reste affiché.
-                        onRemoveReaction = {
-                            if (msg.isIncoming) viewModel.setReaction(msg.id, null)
-                        },
-                        repliedToPreview = previewFor(msg),
-                        senderLabel = senderLabel,
-                        // v1.11.0 — Sujet 5 apparence : couleur bulle sortante
-                        // personnalisée si l'user a fait un choix dans le dialog
-                        // Apparence. `null` = bleu marque par défaut.
-                        customBubbleColorArgb = state.conversation?.bubbleColorArgb,
-                        // v1.11.0 audit P1 — verdict pré-calculé sur IO dans
-                        // ThreadViewModel.recomputeSmishingVerdicts, lecture
-                        // O(1) ici. Plus de SmishingDetector.analyze() sur
-                        // le main thread (~3-15 ms/bulle sur low-end).
-                        smishingReasons = state.smishingVerdicts[msg.id] ?: emptyList(),
-                    )
-                }
+                // v1.18.0 — Dispatcher extrait vers [ThreadMessageItem]. Avant : ~140 lignes
+                // inline (audio / media / text bubble). Maintenant : 1 appel. Les valeurs
+                // dérivées (showTimestamp, burstPosition, senderLabel) sont calculées DANS
+                // l'item Composable, plus dans le scope LazyColumn. Recompositions
+                // mieux scopées : un item ne re-compose que sur changement de SON msg / prev /
+                // next, pas sur changement du state global du parent.
+                ThreadMessageItem(
+                    msg = msg,
+                    prev = state.messages.getOrNull(index - 1),
+                    next = state.messages.getOrNull(index + 1),
+                    daySeparatorLabel = daySeparatorLabels.getOrNull(index),
+                    conversationDisplayName = state.conversation?.displayName,
+                    bubbleColorArgb = state.conversation?.bubbleColorArgb,
+                    smishingReasons = state.smishingVerdicts[msg.id] ?: emptyList(),
+                    playbackProvider = { playbackState },
+                    repliedToPreview = previewFor(msg),
+                    actions = itemActions,
+                )
             }
         }
         // Audit R4 (v1.14.8) — Chip flottant "↓ N nouveau(x) message(s)" affiché en
@@ -1852,3 +1736,156 @@ private fun DateSeparator(label: String) {
 //  v1.9.0 for re-use by all screens (Settings, Backup, SafetyCallSetup…).
 //  Local copies removed ; this file now imports from there.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ============================================================================
+// v1.18.0 — Refactor ThreadScreen : extraction du dispatcher LazyColumn item en
+// `ThreadMessageItem` private @Composable. Avant : 140 lignes inline avec ~15
+// captures locales (state setters + lambdas + VM refs), fonction principale
+// `ThreadScreen` atteignait ~850 lignes. Bénéfice : lisibilité + recompositions
+// Compose mieux scopées (chaque item ne re-compose que sur changement de SON
+// state, pas sur recomposition globale du parent).
+// ============================================================================
+
+/**
+ * Bundle des callbacks transmis à [ThreadMessageItem]. Annoté `@Stable` : Compose peut
+ * skipper la recomposition de l'item quand la référence d'instance ne change pas. Le parent
+ * (`ThreadScreen`) crée l'instance UNE SEULE FOIS via `remember(viewModel, snackbarHost, ...)`
+ * — donc référence stable sur toute la vie de la composition. Les setters de state Compose
+ * (`pendingDelete = msg`, `pickingReactionFor = msg.id`, …) sont capturés au moment de la
+ * création des lambdas et restent fonctionnels via le delegate `var by remember`.
+ *
+ * Pas de `data class` (ByteArray-equivalent : les lambdas n'ont pas d'`equals` content-based,
+ * data class générerait un `equals` par référence — fragile). Class simple suffisante.
+ */
+@androidx.compose.runtime.Stable
+private class ThreadMessageItemActions(
+    val onTogglePlayback: (com.filestech.sms.domain.model.Attachment) -> Unit,
+    // Position en millisecondes ; aligné sur la signature [ThreadViewModel.seekPlaybackTo].
+    val onSeekPlayback: (Int) -> Unit,
+    /** Tap sur bulle FAILED — l'action interne distingue WATCHDOG_TIMEOUT vs SYNCHRONOUS. */
+    val onTapFailed: (Message) -> Unit,
+    val onDelete: (Message) -> Unit,
+    val onReply: (Message) -> Unit,
+    val onReact: (Long) -> Unit,
+    val onRemoveReaction: (Message) -> Unit,
+    val onForward: (Message) -> Unit,
+    val onTranslate: (Message) -> Unit,
+    val onCopy: (Message) -> Unit,
+    val onPhoneClick: (String) -> Unit,
+)
+
+/**
+ * Item renderer de la LazyColumn thread. Dispatch sur 3 sous-Composables selon le type :
+ * audio → [AudioMessageBubble], image/video/file → [MediaAttachmentBubble], sinon
+ * [MessageBubble] texte. Calcule les valeurs dérivées (showTimestamp, burstPosition,
+ * senderLabel) localement pour minimiser la surface d'API.
+ *
+ * **Compose recomposition** : grâce à `@Stable ThreadMessageItemActions`, l'item ne recompose
+ * que si :
+ *   - le `msg` change (nouvelle instance Message via Room Flow)
+ *   - les voisins `prev`/`next` changent (insert/delete devant)
+ *   - `playbackProvider` re-évalué (mais c'est une `() -> PlaybackState` lambda stable,
+ *     délibérément lambda et pas value pour qu'AudioMessageBubble re-lise via derivedStateOf
+ *     uniquement quand SA propre bulle joue — pas toutes les bulles à chaque tick 5 Hz)
+ *   - le `daySeparatorLabel` change (rare, dépend du jour de la date du message)
+ *
+ * Reads localisés à l'instance : `conversationDisplayName`, `bubbleColorArgb`,
+ * `smishingReasons` sont passés comme valeurs ; pas de capture du `state` global au parent.
+ */
+@Composable
+private fun ThreadMessageItem(
+    msg: Message,
+    prev: Message?,
+    next: Message?,
+    daySeparatorLabel: String?,
+    conversationDisplayName: String?,
+    bubbleColorArgb: Int?,
+    smishingReasons: List<com.filestech.sms.domain.smishing.SmishingReason>,
+    playbackProvider: () -> com.filestech.sms.data.voice.VoicePlaybackController.PlaybackState,
+    repliedToPreview: ReplyQuotePreview?,
+    actions: ThreadMessageItemActions,
+) {
+    // Date separator (calendar day boundary) — affiché au-dessus du 1er msg du jour.
+    daySeparatorLabel?.let { label ->
+        DateSeparator(label = label)
+    }
+
+    val showTimestamp = prev?.date?.let { msg.date - it > 5 * 60_000L } ?: true
+    val burstPosition = computeBurstPosition(prev, msg, next)
+    val audio = msg.audioAttachment
+    // v1.3.3 bug #2 — pour les pièces jointes NON-audio (image/video/file), on délègue à
+    // MediaAttachmentBubble qui ajoute le tap-to-view (ACTION_VIEW via FileProvider).
+    val mediaAttachment = msg.attachments.firstOrNull { !it.isAudio }
+    // v1.3.3 #7 — étiquette d'expéditeur uniquement sur la 1ʳᵉ bulle d'un burst (Solo ou First)
+    // pour ne pas surcharger visuellement les suites consécutives du même expéditeur.
+    val senderLabel: String? = if (
+        burstPosition == BurstPosition.Solo ||
+        burstPosition == BurstPosition.First
+    ) {
+        if (msg.isOutgoing) {
+            stringResource(R.string.bubble_sender_self)
+        } else {
+            conversationDisplayName?.takeIf { it.isNotBlank() } ?: msg.address
+        }
+    } else null
+
+    when {
+        audio != null -> {
+            AudioMessageBubble(
+                message = msg,
+                audio = audio,
+                playbackProvider = playbackProvider,
+                onTogglePlay = { actions.onTogglePlayback(audio) },
+                onSeekTo = actions.onSeekPlayback,
+                onDelete = { actions.onDelete(msg) },
+                onReply = { actions.onReply(msg) },
+                // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus.
+                onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
+                onForward = { actions.onForward(msg) },
+                onRemoveReaction = { actions.onRemoveReaction(msg) },
+                repliedToPreview = repliedToPreview,
+                showTimestamp = showTimestamp,
+                senderLabel = senderLabel,
+            )
+        }
+        mediaAttachment != null -> {
+            com.filestech.sms.ui.components.MediaAttachmentBubble(
+                message = msg,
+                attachment = mediaAttachment,
+                showTimestamp = showTimestamp,
+                onDelete = { actions.onDelete(msg) },
+                onReply = { actions.onReply(msg) },
+                onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
+                // v1.3.11 (F3) — copy exposed only when the bubble carries a user-typed caption.
+                onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
+                onForward = { actions.onForward(msg) },
+                onPhoneClick = actions.onPhoneClick,
+                onRemoveReaction = { actions.onRemoveReaction(msg) },
+                repliedToPreview = repliedToPreview,
+                senderLabel = senderLabel,
+            )
+        }
+        else -> {
+            MessageBubble(
+                message = msg,
+                showTimestamp = showTimestamp,
+                burstPosition = burstPosition,
+                onTap = { if (msg.status == Message.Status.FAILED) actions.onTapFailed(msg) },
+                onDelete = { actions.onDelete(msg) },
+                onReply = { actions.onReply(msg) },
+                // v1.7.1 — Translate via ACTION_PROCESS_TEXT system intent. Only wired when
+                // the body is non-blank (nothing to translate on attachment-only messages).
+                onTranslate = if (msg.body.isNotBlank()) { { actions.onTranslate(msg) } } else null,
+                onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
+                onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
+                onForward = { actions.onForward(msg) },
+                onPhoneClick = actions.onPhoneClick,
+                onRemoveReaction = { actions.onRemoveReaction(msg) },
+                repliedToPreview = repliedToPreview,
+                senderLabel = senderLabel,
+                customBubbleColorArgb = bubbleColorArgb,
+                smishingReasons = smishingReasons,
+            )
+        }
+    }
+}

@@ -1,0 +1,13 @@
+v1.18.0 — Refactor écran conversation
+
+• Le renderer d'item de message (~140
+  lignes de dispatch inline audio /
+  media / texte) est désormais extrait
+  en `ThreadMessageItem` dédié avec un
+  bundle `@Stable` de callbacks.
+• Les recompositions sont mieux scopées :
+  un item ne recompose que sur changement
+  de son propre message, pas sur l'état
+  global du parent. Scroll plus fluide
+  sur threads longs.
+• Pas de changement utilisateur visible.
