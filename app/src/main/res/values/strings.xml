@@ -669,6 +669,23 @@
     <string name="snack_thread_voice_sent">Voice message sent</string>
     <string name="snack_thread_numbers_blocked">Number(s) blocked</string>
 
+    <!-- v1.15.2 — Common a11y + UX strings for passphrase fields. -->
+    <string name="action_show_password">Show passphrase</string>
+    <string name="action_hide_password">Hide passphrase</string>
+    <string name="backup_passphrase_min_length">Minimum %1$d characters</string>
+
+    <!-- v1.15.2 — Backup restore (encrypted .smsbk). -->
+    <string name="backup_restore_explainer">Pick a .smsbk file then enter its passphrase. Conversations with the same recipients are merged with your current ones; existing messages are kept (no duplicates).</string>
+    <string name="backup_restore_pick_file">Pick a .smsbk file</string>
+    <string name="backup_restore_passphrase_title">Restore passphrase</string>
+    <string name="backup_restore_passphrase_field">Passphrase</string>
+    <string name="backup_restore_action">Restore</string>
+    <string name="backup_restore_in_progress">Restoring…</string>
+    <string name="backup_restore_success">%1$d conversations (%2$d new), %3$d messages imported (%4$d already present)</string>
+    <string name="backup_restore_failed_wrong_pass">Wrong passphrase or corrupted file</string>
+    <string name="backup_restore_failed_format">Not a valid SMS Tech backup file</string>
+    <string name="backup_restore_failed_storage">Could not read the file</string>
+
     <!-- v1.15.1 — Scheduled messages screen + Thread schedule flow. -->
     <string name="settings_section_scheduled">Scheduled messages</string>
     <string name="scheduled_title">Scheduled messages</string>

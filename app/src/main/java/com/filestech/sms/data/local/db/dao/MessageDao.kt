@@ -99,6 +99,16 @@ interface MessageDao {
     suspend fun updateStatus(id: Long, status: Int, errorCode: Int? = null)
 
     /**
+     * v1.15.2 — Remapping post-restore du `reply_to_message_id`. Utilisé par
+     * [com.filestech.sms.data.backup.BackupService.importPayload] passe 2 pour réécrire les
+     * citations contextuelles : l'id Room du message cité change entre source et cible, donc
+     * la 1ʳᵉ passe d'insert pose `reply_to_message_id = NULL` et celle-ci remet la cible
+     * via le mapping <oldId → newId> construit pendant la passe 1.
+     */
+    @Query("UPDATE messages SET reply_to_message_id = :replyTargetId WHERE id = :id")
+    suspend fun setReplyTarget(id: Long, replyTargetId: Long)
+
+    /**
      * v1.2.6 audit F2 : stocke l'`_id` `content://mms` que `MmsSystemWriteback.insertOutbox`
      * a renvoyé pour ce message Room. Permet à la prochaine tentative (retry après échec) de
      * détecter et supprimer la row OUTBOX/FAILED précédente avant d'en insérer une nouvelle.

@@ -1,0 +1,14 @@
+v1.15.2 — Restore sauvegarde (nouveau)
+
+• Restaurer une sauvegarde .smsbk
+  chiffrée : Réglages → Sauvegarde →
+  "Choisir un fichier .smsbk" → saisir
+  la passphrase → fusion conv + msgs.
+• Messages existants conservés (pas
+  de doublons via index unique).
+• Transaction atomique : crash en cours
+  de restore = rollback complet.
+• Œil de visibilité sur les 2 dialogues
+  backup et restore.
+
+Boucle complète backup (export + restore).

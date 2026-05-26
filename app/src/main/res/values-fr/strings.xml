@@ -651,6 +651,23 @@
     <string name="snack_thread_voice_sent">Message vocal envoyé</string>
     <string name="snack_thread_numbers_blocked">Numéro(s) bloqué(s)</string>
 
+    <!-- v1.15.2 — Strings communes a11y + UX champs passphrase. -->
+    <string name="action_show_password">Afficher la passphrase</string>
+    <string name="action_hide_password">Masquer la passphrase</string>
+    <string name="backup_passphrase_min_length">Minimum %1$d caractères</string>
+
+    <!-- v1.15.2 — Restore d'une sauvegarde chiffrée .smsbk. -->
+    <string name="backup_restore_explainer">Choisis un fichier .smsbk puis saisis sa passphrase. Les conversations avec les mêmes destinataires sont fusionnées avec les tiennes ; les messages existants sont conservés (pas de doublons).</string>
+    <string name="backup_restore_pick_file">Choisir un fichier .smsbk</string>
+    <string name="backup_restore_passphrase_title">Passphrase de restauration</string>
+    <string name="backup_restore_passphrase_field">Passphrase</string>
+    <string name="backup_restore_action">Restaurer</string>
+    <string name="backup_restore_in_progress">Restauration en cours…</string>
+    <string name="backup_restore_success">%1$d conversations (dont %2$d nouvelles), %3$d messages importés (%4$d déjà présents)</string>
+    <string name="backup_restore_failed_wrong_pass">Passphrase incorrecte ou fichier corrompu</string>
+    <string name="backup_restore_failed_format">Ce n\'est pas une sauvegarde SMS Tech valide</string>
+    <string name="backup_restore_failed_storage">Impossible de lire le fichier</string>
+
     <!-- v1.15.1 — Écran messages programmés + flow scheduling depuis ThreadScreen. -->
     <string name="settings_section_scheduled">Messages programmés</string>
     <string name="scheduled_title">Messages programmés</string>

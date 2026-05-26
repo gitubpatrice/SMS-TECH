@@ -1,0 +1,14 @@
+v1.15.2 — Backup restore (new feature)
+
+• Restore an encrypted .smsbk backup:
+  Settings → Backup → "Pick a .smsbk" →
+  enter the original passphrase →
+  conversations + messages merged.
+• Existing messages kept (no duplicates
+  via unique index).
+• Atomic transaction: a crash mid-restore
+  rolls back everything.
+• Passphrase eye toggle on both backup
+  and restore dialogs.
+
+Closes the backup story (export + restore).
