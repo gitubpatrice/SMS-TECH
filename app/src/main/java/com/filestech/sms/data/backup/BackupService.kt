@@ -164,7 +164,9 @@ class BackupService @Inject constructor(
                 sb.append("  <sms protocol=\"0\"")
                 sb.append(" address=\"").append(xmlEscape(m.address)).append('"')
                 sb.append(" date=\"").append(m.date).append('"')
-                sb.append(" type=\"").append(if (m.direction == 1) 2 else 1).append('"')
+                // v1.16.0 — Direction comparée sur enum (était Int). XML SMS-Backup-Restore
+                // compat conserve les codes AOSP (1=received, 2=sent).
+                sb.append(" type=\"").append(if (m.direction == com.filestech.sms.data.local.db.entity.MessageDirection.OUTGOING) 2 else 1).append('"')
                 sb.append(" body=\"").append(xmlEscape(m.body)).append('"')
                 sb.append(" read=\"").append(if (m.read) 1 else 0).append("\" />\n")
             }
@@ -330,8 +332,15 @@ class BackupService @Inject constructor(
         }
     }
 
-    /** Header parsé après validation magic + version + extraction salt + iter. */
-    private data class ParsedHeader(val salt: ByteArray, val iter: Int, val aad: ByteArray, val aeadOffset: Int)
+    /**
+     * Header parsé après validation magic + version + extraction salt + iter.
+     *
+     * v1.17.0 audit KOTLIN-L3 — Non-`data class` car `data class` avec `ByteArray` génère
+     * un `equals` / `hashCode` par référence (et non par contenu) — piège silencieux pour
+     * tout futur usage `Set<ParsedHeader>` / `Map<ParsedHeader, …>`. Type purement transitoire
+     * (passé par valeur dans le flow restore), pas besoin de `equals` content-based ici.
+     */
+    private class ParsedHeader(val salt: ByteArray, val iter: Int, val aad: ByteArray, val aeadOffset: Int)
 
     private fun parseHeader(bytes: ByteArray): ParsedHeader {
         val minLen = MAGIC.length + 1 + SALT_LEN + ITER_LEN
@@ -490,10 +499,14 @@ class BackupService @Inject constructor(
         private const val READ_CHUNK_BYTES = 8 * 1024
         private const val SALT_LEN = 16
         private const val ITER_LEN = 4
-        // Bornes raisonnables pour le iteration count PBKDF2 ; protège contre un header
-        // forgé qui demanderait des millions d'itérations pour DoS du device au déchiffrement.
-        private const val KDF_ITER_MIN = 10_000
-        private const val KDF_ITER_MAX = 2_000_000
+        // v1.17.0 audit KOTLIN-L2 — Bornes header `.smsbk` alignées sur les constantes
+        // canoniques [com.filestech.sms.core.crypto.PasswordKdf]. Avant : duplicate ici
+        // (10k..2M) divergeant des bornes PasswordKdf (210k..4M) → header avec iter=50k
+        // passait notre validation mais déclenchait `require(iter >= MIN_ITERATIONS)`
+        // dans `kdf.derive` → exception Storage au lieu de Validation, UX dégradée.
+        // Désormais : single source of truth.
+        private val KDF_ITER_MIN = com.filestech.sms.core.crypto.PasswordKdf.MIN_ITERATIONS
+        private val KDF_ITER_MAX = com.filestech.sms.core.crypto.PasswordKdf.MAX_ITERATIONS
         // Audit SECU-M1 v1.15.2 — Caps dur sur le nombre d'objets désérialisés du JSON.
         // Un fichier de 50 MB compressé peut contenir des dizaines de millions d'entités si
         // chaque entité est minimaliste — DoS de boucle d'import. Caps généreux :

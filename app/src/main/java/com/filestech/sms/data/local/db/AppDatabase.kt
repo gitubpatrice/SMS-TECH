@@ -2,6 +2,7 @@ package com.filestech.sms.data.local.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.BlockedNumberDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
@@ -29,6 +30,9 @@ import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
         QuickReplyEntity::class,
     ],
 )
+// v1.16.0 — TypeConverters pour les 3 enums MessageStatus/Type/Direction ↔ Int.
+// Colonnes SQL restent INTEGER NOT NULL ; identityHash Room inchangé.
+@TypeConverters(MessageEnumConverters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
     abstract fun messageDao(): MessageDao

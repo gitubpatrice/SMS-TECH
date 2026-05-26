@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
+import com.filestech.sms.data.local.db.entity.ScheduledState
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -19,8 +20,10 @@ interface ScheduledMessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ScheduledMessageEntity): Long
 
+    // v1.17.0 — Param `state` typé enum (était Int). TypeConverter [MessageEnumConverters]
+    // convertit en Int pour le binding SQL. Cohérence avec MessageDao.updateStatus.
     @Query("UPDATE scheduled_messages SET state = :state WHERE id = :id")
-    suspend fun setState(id: Long, state: Int)
+    suspend fun setState(id: Long, state: ScheduledState)
 
     @Query("UPDATE scheduled_messages SET work_id = :workId WHERE id = :id")
     suspend fun setWorkId(id: Long, workId: String?)

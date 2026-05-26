@@ -68,43 +68,27 @@ fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message
 )
 
 /**
- * Audit K-8 LIGHT (v1.15.0) — Mapping centralisé avec filet de sécurité Timber. Avant : le
- * `when (status) { ... else -> Message.Status.PENDING }` masquait silencieusement un nouveau
- * MessageStatus.* const non-mappé (bug latent si quelqu'un ajoute une const sans toucher au
- * mapping). Maintenant : log explicite + fallback documenté. Une unit test
- * (`MessageStatusMappingTest`) vérifie que toutes les const courantes ont un mapping.
- *
- * La conversion complète Int → enum class est planifiée v1.16.0 (refactor dédié avec Room v8
- * + TypeConverter + migration test). Cette version "light" sécurise le présent sans bouger
- * le schéma Room.
+ * v1.16.0 — Mapping enum DB → enum domain. La conversion `object Int` → `enum class` permet
+ * désormais un `when` EXHAUSTIVE compile-time (pas de `else`) — le compilateur signale tout
+ * cas manquant si on ajoute un statut dans [MessageStatus]. Filet de sécurité K-8 LIGHT
+ * v1.15.0 (Timber + test garde-fou) reste pertinent mais devient redondant en pratique :
+ * le compilateur fait le travail.
  */
-internal fun mapStatus(status: Int): Message.Status = when (status) {
+internal fun mapStatus(status: MessageStatus): Message.Status = when (status) {
     MessageStatus.PENDING -> Message.Status.PENDING
     MessageStatus.SENT -> Message.Status.SENT
     MessageStatus.DELIVERED -> Message.Status.DELIVERED
     MessageStatus.FAILED -> Message.Status.FAILED
     MessageStatus.RECEIVED -> Message.Status.RECEIVED
     MessageStatus.SCHEDULED -> Message.Status.SCHEDULED
-    else -> {
-        timber.log.Timber.w("Unknown MessageStatus int %d — defaulting to PENDING (mapping needs update)", status)
-        Message.Status.PENDING
-    }
 }
 
-internal fun mapType(type: Int): Message.Type = when (type) {
+internal fun mapType(type: MessageType): Message.Type = when (type) {
     MessageType.SMS -> Message.Type.SMS
     MessageType.MMS -> Message.Type.MMS
-    else -> {
-        timber.log.Timber.w("Unknown MessageType int %d — defaulting to SMS (mapping needs update)", type)
-        Message.Type.SMS
-    }
 }
 
-internal fun mapDirection(direction: Int): Message.Direction = when (direction) {
+internal fun mapDirection(direction: MessageDirection): Message.Direction = when (direction) {
     MessageDirection.INCOMING -> Message.Direction.INCOMING
     MessageDirection.OUTGOING -> Message.Direction.OUTGOING
-    else -> {
-        timber.log.Timber.w("Unknown MessageDirection int %d — defaulting to INCOMING (mapping needs update)", direction)
-        Message.Direction.INCOMING
-    }
 }

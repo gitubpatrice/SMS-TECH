@@ -17,10 +17,32 @@ data class ScheduledMessageEntity(
     @ColumnInfo(name = "scheduled_at") val scheduledAt: Long,
     @ColumnInfo(name = "sub_id") val subId: Int? = null,
     @ColumnInfo(name = "attachments_json") val attachmentsJson: String? = null,
-    /** 0 pending, 1 sent, 2 failed, 3 cancelled */
-    @ColumnInfo(name = "state") val state: Int = 0,
+    // v1.17.0 audit BACK-M1 — `state` typé enum (était Int). Stockage SQL inchangé via
+    // [com.filestech.sms.data.local.db.MessageEnumConverters] qui mappe rawValue ↔ Int.
+    // Cohérent avec MessageStatus/Type/Direction convertis en v1.16.0.
+    @ColumnInfo(name = "state") val state: ScheduledState = ScheduledState.PENDING,
     @ColumnInfo(name = "work_id") val workId: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
 )
 
-object ScheduledState { const val PENDING = 0; const val SENT = 1; const val FAILED = 2; const val CANCELLED = 3 }
+/**
+ * v1.17.0 — Conversion `object Int constants` → `enum class` avec `rawValue: Int`. Cohérence
+ * avec [MessageStatus] / [MessageType] / [MessageDirection] convertis en v1.16.0.
+ *
+ * **Pas de @Serializable** : [ScheduledMessageEntity] n'est pas inclus dans `BackupPayload`
+ * (seuls conversations + messages le sont). Donc pas besoin de KSerializer custom — la
+ * conversion enum ne modifie aucun format sérialisé existant.
+ *
+ * Schéma SQL inchangé (colonne `state INTEGER NOT NULL`). Le TypeConverter Room dans
+ * [com.filestech.sms.data.local.db.MessageEnumConverters] gère le binding.
+ */
+enum class ScheduledState(val rawValue: Int) {
+    PENDING(0),
+    SENT(1),
+    FAILED(2),
+    CANCELLED(3);
+    companion object {
+        fun fromRaw(rawValue: Int): ScheduledState = entries.firstOrNull { it.rawValue == rawValue }
+            ?: PENDING.also { timber.log.Timber.w("Unknown ScheduledState int %d — defaulting to PENDING", rawValue) }
+    }
+}

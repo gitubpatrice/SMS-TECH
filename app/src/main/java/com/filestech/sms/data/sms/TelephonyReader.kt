@@ -362,13 +362,15 @@ class TelephonyReader @Inject constructor(
     // We multiply by 1000 for consistency with the rest of the pipeline.
 
     /** One MMS row, ready to be mirrored into Room. */
+    // v1.16.0 — Type sécurisé (était Int). Le mapper [readPendingMms] convertit
+    // depuis les codes AOSP via `MessageDirection.fromRaw` / `MessageStatus.fromRaw`.
     data class MmsImportRow(
         val telephonyId: Long,
         val threadId: Long,
         val dateMs: Long,
         val read: Boolean,
-        val direction: Int,
-        val status: Int,
+        val direction: MessageDirection,
+        val status: MessageStatus,
         val address: String,
         val subId: Int?,
         val textBody: String,
@@ -534,14 +536,15 @@ class TelephonyReader @Inject constructor(
         return acc.mapValues { (_, v) -> v.first.toString() to v.second }
     }
 
-    /** Métadonnées MMS captées en pass 1 avant la résolution batchée des parts en pass 2. */
+    /** Métadonnées MMS captées en pass 1 avant la résolution batchée des parts en pass 2.
+     *  v1.16.0 — direction/status typés enum (était Int). */
     private data class PendingMms(
         val telephonyId: Long,
         val threadId: Long,
         val dateMs: Long,
         val read: Boolean,
-        val direction: Int,
-        val status: Int,
+        val direction: MessageDirection,
+        val status: MessageStatus,
         val address: String,
         val subId: Int?,
     )
@@ -558,7 +561,8 @@ class TelephonyReader @Inject constructor(
      *
      * Skips the AOSP placeholder `insert-address-token`.
      */
-    private fun readMmsAddress(mmsId: Long, direction: Int): String {
+    // v1.16.0 — Param `direction` typé enum (était Int).
+    private fun readMmsAddress(mmsId: Long, direction: MessageDirection): String {
         var from = ""
         var firstTo = ""
         var fallbackGeneric = ""

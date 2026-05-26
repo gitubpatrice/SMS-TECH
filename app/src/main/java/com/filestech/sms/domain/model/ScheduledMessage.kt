@@ -23,12 +23,13 @@ fun ScheduledMessageEntity.toDomain(): ScheduledMessage = ScheduledMessage(
     body = body,
     scheduledAt = scheduledAt,
     subId = subId,
+    // v1.17.0 — `when` exhaustif compile-time (enum class) — `else` retiré ; le compilateur
+    // signale toute valeur manquante si on ajoute un état dans [ScheduledState].
     state = when (state) {
         ScheduledState.PENDING -> ScheduledMessage.State.PENDING
         ScheduledState.SENT -> ScheduledMessage.State.SENT
         ScheduledState.FAILED -> ScheduledMessage.State.FAILED
         ScheduledState.CANCELLED -> ScheduledMessage.State.CANCELLED
-        else -> ScheduledMessage.State.PENDING
     },
     createdAt = createdAt,
 )

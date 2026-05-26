@@ -82,6 +82,9 @@ class BackupViewModel @Inject constructor(
 
     // v1.15.2 — Flag observable pour disabler le bouton "Restaurer" et afficher un indicateur
     // pendant le travail crypto + import (peut prendre quelques secondes sur grosse archive).
+    // v1.17.0 audit KOTLIN-L1 — `MutableStateFlow` expose déjà `compareAndSet` atomique. Le
+    // guard anti-réentrance utilise CAS(false→true) côté `restoreFromUri` plutôt qu'un
+    // read-then-write non-atomique. Sûr même si appelé depuis un dispatcher non-Main.
     private val _isRestoring = MutableStateFlow(false)
     val isRestoring: StateFlow<Boolean> = _isRestoring
 
@@ -104,13 +107,16 @@ class BackupViewModel @Inject constructor(
      * bouton UI et empêcher un double-tap qui produirait 2 imports concurrents.
      */
     fun restoreFromUri(uri: android.net.Uri, passphrase: CharArray) {
-        // Garde anti-réentrance — si un restore est déjà en cours, on refuse le second et on
-        // wipe la passphrase tout de même (pas de fuite mémoire).
-        if (_isRestoring.value) {
+        // v1.17.0 audit KOTLIN-L1 — Anti-réentrance ATOMIQUE via compareAndSet. Avant : `if
+        // (_isRestoring.value) ... else _isRestoring.value = true` n'était pas atomique côté
+        // contrat — un futur refacto qui appellerait restoreFromUri hors Main thread aurait pu
+        // produire une race (deux callers passent le check avant que l'un ne mette à true).
+        // CAS(false → true) garantit qu'un seul caller continue, même hors Main.
+        if (!_isRestoring.compareAndSet(false, true)) {
+            // Restore déjà en cours — refus + wipe passphrase reçue (pas de fuite mémoire).
             passphrase.fill(' ')
             return
         }
-        _isRestoring.value = true
         viewModelScope.launch {
             try {
                 val outcome = restoreBackup(uri, passphrase)

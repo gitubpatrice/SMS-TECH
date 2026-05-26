@@ -309,7 +309,8 @@ class ConversationMirror @Inject constructor(
         date: Long,
         telephonyUri: String?,
         subId: Int? = null,
-        initialStatus: Int = MessageStatus.PENDING,
+        // v1.16.0 — Type sécurisé (était Int). Default PENDING inchangé.
+        initialStatus: MessageStatus = MessageStatus.PENDING,
         replyToMessageId: Long? = null,
         /**
          * v1.4.1 — when non-null, overrides what gets stored in the Room row's `body`
@@ -357,7 +358,8 @@ class ConversationMirror @Inject constructor(
         }
     }
 
-    suspend fun updateOutgoingStatus(localId: Long, status: Int, errorCode: Int? = null) = withContext(io) {
+    // v1.16.0 — Paramètre `status` typé MessageStatus (était Int) — propagation depuis le DAO.
+    suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int? = null) = withContext(io) {
         messageDao.updateStatus(localId, status, errorCode)
     }
 

@@ -5,7 +5,13 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 @Serializable
 @Entity(
@@ -44,16 +50,24 @@ data class MessageEntity(
     @ColumnInfo(name = "telephony_uri") val telephonyUri: String?,
     @ColumnInfo(name = "address") val address: String,
     @ColumnInfo(name = "body") val body: String,
-    /** 0 = SMS, 1 = MMS */
-    @ColumnInfo(name = "type") val type: Int,
-    /** 0 = incoming, 1 = outgoing */
-    @ColumnInfo(name = "direction") val direction: Int,
+    /**
+     * v1.16.0 — type devient `MessageType` enum (était Int). Stockage SQL inchangé via
+     * [com.filestech.sms.data.local.db.MessageEnumConverters] : 0=SMS, 1=MMS en base.
+     */
+    @ColumnInfo(name = "type") val type: MessageType,
+    /**
+     * v1.16.0 — direction devient `MessageDirection` enum (était Int). 0=INCOMING, 1=OUTGOING.
+     */
+    @ColumnInfo(name = "direction") val direction: MessageDirection,
     @ColumnInfo(name = "date") val date: Long,
     @ColumnInfo(name = "date_sent") val dateSent: Long?,
     @ColumnInfo(name = "read") val read: Boolean = false,
     @ColumnInfo(name = "starred") val starred: Boolean = false,
-    /** 0 pending, 1 sent, 2 delivered, 3 failed, 4 received */
-    @ColumnInfo(name = "status") val status: Int = 0,
+    /**
+     * v1.16.0 — status devient `MessageStatus` enum (était Int). Stockage SQL inchangé via
+     * [com.filestech.sms.data.local.db.MessageEnumConverters] : 0=PENDING ... 5=SCHEDULED.
+     */
+    @ColumnInfo(name = "status") val status: MessageStatus = MessageStatus.PENDING,
     @ColumnInfo(name = "error_code") val errorCode: Int? = null,
     @ColumnInfo(name = "sub_id") val subId: Int? = null,
     @ColumnInfo(name = "scheduled_at") val scheduledAt: Long? = null,
@@ -87,16 +101,86 @@ data class MessageEntity(
     @ColumnInfo(name = "reaction_emoji") val reactionEmoji: String? = null,
 )
 
-/** Companion-style constants kept on file scope to avoid object boxing in Room. */
-object MessageType { const val SMS = 0; const val MMS = 1 }
-object MessageDirection { const val INCOMING = 0; const val OUTGOING = 1 }
-object MessageStatus {
-    const val PENDING = 0
-    const val SENT = 1
-    const val DELIVERED = 2
-    const val FAILED = 3
-    const val RECEIVED = 4
-    const val SCHEDULED = 5
+/**
+ * v1.16.0 — Conversion `object` Int constants → `enum class` avec `rawValue: Int`.
+ *
+ * Avant : `object MessageStatus { const val PENDING = 0; const val SENT = 1; ... }` —
+ * primitives Int côté Kotlin, pas d'exhaustivité du compilateur sur les `when`. L'audit
+ * K-8 V1.15.0 avait posé un filet de sécurité (test garde-fou) mais le risque latent
+ * persistait : ajouter une const X sans toucher au mapper en faisait un cas silencieux.
+ *
+ * Maintenant : enum class avec `rawValue` pour le stockage Room via TypeConverter
+ * ([com.filestech.sms.data.local.db.MessageEnumConverters]). Bénéfices :
+ *  - `when (status: MessageStatus) { PENDING, SENT, ... }` exhaustif compile-time
+ *  - Type safety : impossible de passer MessageDirection à une signature MessageStatus
+ *  - Compatibilité Room : la colonne SQL reste INTEGER NOT NULL, le TypeConverter mappe
+ *    `Int ↔ enum`. **Identité schéma identityHash inchangée** (le SQL DDL ne bouge pas).
+ *
+ * Les noms de constantes (PENDING, SENT, …) sont préservés → toutes les call sites
+ * `MessageStatus.PENDING` continuent de résoudre. Le type devient enum, plus Int.
+ */
+/**
+ * v1.16.0 — Sérialisation des enums via leur `rawValue: Int` pour préserver le format JSON
+ * .smsbk historique (v1.5 à v1.15.2 écrivaient `"status": 0` en Int). Sans KSerializer custom,
+ * kotlinx.serialization écrirait `"status": "PENDING"` (nom enum String) → BREAKING CHANGE
+ * sur tous les backups antérieurs, qui deviendraient illisibles à la mise à jour. Audit
+ * BACK-C1 v1.16.0 — preuve : restore d'un .smsbk v1.15.2 sur v1.16.0 sans ce serializer
+ * lèverait `SerializationException` ("expected String, got Int") → AppError.Validation →
+ * perte d'accès au backup au pire moment (changement de téléphone, réinstall).
+ *
+ * Les 3 serializers ci-dessous écrivent/lisent l'enum via [rawValue]. Le format JSON reste
+ * `"field": 0` (Int), strictement identique à v1.15.2 et antérieures.
+ */
+@Serializable(with = MessageTypeSerializer::class)
+enum class MessageType(val rawValue: Int) {
+    SMS(0),
+    MMS(1);
+    companion object {
+        fun fromRaw(rawValue: Int): MessageType = entries.firstOrNull { it.rawValue == rawValue }
+            ?: SMS.also { timber.log.Timber.w("Unknown MessageType int %d — defaulting to SMS", rawValue) }
+    }
+}
+
+object MessageTypeSerializer : KSerializer<MessageType> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("MessageType", PrimitiveKind.INT)
+    override fun serialize(encoder: Encoder, value: MessageType) = encoder.encodeInt(value.rawValue)
+    override fun deserialize(decoder: Decoder): MessageType = MessageType.fromRaw(decoder.decodeInt())
+}
+
+@Serializable(with = MessageDirectionSerializer::class)
+enum class MessageDirection(val rawValue: Int) {
+    INCOMING(0),
+    OUTGOING(1);
+    companion object {
+        fun fromRaw(rawValue: Int): MessageDirection = entries.firstOrNull { it.rawValue == rawValue }
+            ?: INCOMING.also { timber.log.Timber.w("Unknown MessageDirection int %d — defaulting to INCOMING", rawValue) }
+    }
+}
+
+object MessageDirectionSerializer : KSerializer<MessageDirection> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("MessageDirection", PrimitiveKind.INT)
+    override fun serialize(encoder: Encoder, value: MessageDirection) = encoder.encodeInt(value.rawValue)
+    override fun deserialize(decoder: Decoder): MessageDirection = MessageDirection.fromRaw(decoder.decodeInt())
+}
+
+@Serializable(with = MessageStatusSerializer::class)
+enum class MessageStatus(val rawValue: Int) {
+    PENDING(0),
+    SENT(1),
+    DELIVERED(2),
+    FAILED(3),
+    RECEIVED(4),
+    SCHEDULED(5);
+    companion object {
+        fun fromRaw(rawValue: Int): MessageStatus = entries.firstOrNull { it.rawValue == rawValue }
+            ?: PENDING.also { timber.log.Timber.w("Unknown MessageStatus int %d — defaulting to PENDING", rawValue) }
+    }
+}
+
+object MessageStatusSerializer : KSerializer<MessageStatus> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("MessageStatus", PrimitiveKind.INT)
+    override fun serialize(encoder: Encoder, value: MessageStatus) = encoder.encodeInt(value.rawValue)
+    override fun deserialize(decoder: Decoder): MessageStatus = MessageStatus.fromRaw(decoder.decodeInt())
 }
 
 /**

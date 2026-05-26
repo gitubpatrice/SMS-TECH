@@ -1,0 +1,15 @@
+v1.17.0 — Type-safety + polish audit
+
+• MessageStatus / Type / Direction +
+  ScheduledState : constantes Int
+  converties en enum classes type-safe
+  avec TypeConverter Room. Zéro
+  migration de données.
+• KSerializer custom préserve le format
+  .smsbk (rawValue Int sur disque) — les
+  backups restent compatibles entre
+  versions.
+• Garde anti-réentrance restore via
+  compare-and-set atomique.
+• Bornes itérations KDF centralisées.
+• Pas de changement utilisateur visible.
