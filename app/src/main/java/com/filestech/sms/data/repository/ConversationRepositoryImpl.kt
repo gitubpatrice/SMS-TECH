@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import com.filestech.sms.core.ext.stripInvisibleChars
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -132,15 +133,20 @@ class ConversationRepositoryImpl @Inject constructor(
     override fun observeMessages(conversationId: Long): Flow<List<Message>> {
         // v1.6.1 (audit PERF-05) — `appLock.state` isolé du combine principal afin que
         // chaque déverrouillage biométrique / timeout lock NE déclenche PAS la
-        // reconstruction complète des messages + fetch attachments. Avant : tout
-        // changement d'état lock = ~5-15 ms IO inutile sur thread actif de 200 msgs.
-        // Désormais : la reconstruction (incluant le bulk attachment fetch) ne tourne
-        // qu'au changement effectif de la conv ou de la liste messages. Le filtre
-        // panic-decoy s'applique sur le résultat déjà calculé, en O(1).
+        // reconstruction complète des messages + fetch attachments.
+        //
+        // v1.14.9 (audit PERF-M6) — `conv.inVault` extrait via `distinctUntilChanged` AVANT
+        // le combine messages. Avant : chaque write `draft` côté composer → `observeById`
+        // ré-émettait → `combine` réévaluait → `attachmentDao.findForConversation` SQLCipher
+        // re-tourné à chaque caractère tapé. Désormais : on n'observe que la slice utile
+        // (inVault) ; le combine ne ré-évalue que si inVault OU messages changent réellement.
+        val inVaultFlow = conversationDao.observeById(conversationId)
+            .map { it?.inVault == true }
+            .distinctUntilChanged()
         val baseFlow = combine(
-            conversationDao.observeById(conversationId),
+            inVaultFlow,
             messageDao.observeForConversation(conversationId),
-        ) { conv, rows ->
+        ) { inVault, rows ->
             // Single bulk fetch — only hit Room if at least one row claims an attachment.
             // Avoids the SELECT round-trip on text-only conversations entirely.
             val needAttachments = rows.any { it.attachmentsCount > 0 }
@@ -153,10 +159,10 @@ class ConversationRepositoryImpl @Inject constructor(
             val messages = rows.map { entity ->
                 entity.toDomain(attachmentsByMessage[entity.id].orEmpty())
             }
-            conv to messages
+            inVault to messages
         }.flowOn(io)
-        return combine(baseFlow, appLock.state) { (conv, messages), lockState ->
-            if (lockState is AppLockManager.LockState.PanicDecoy && conv?.inVault == true) {
+        return combine(baseFlow, appLock.state) { (inVault, messages), lockState ->
+            if (lockState is AppLockManager.LockState.PanicDecoy && inVault) {
                 emptyList()
             } else {
                 messages

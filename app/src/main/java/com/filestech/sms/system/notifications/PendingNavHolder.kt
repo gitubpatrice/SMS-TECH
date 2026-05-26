@@ -54,14 +54,26 @@ class PendingNavHolder @Inject constructor() {
          * vrai pour que le pending soit considéré valide ([isValid]).
          */
         val openEmergency: Boolean = false,
+        /**
+         * v1.14.8 (bug "Message" depuis Phone app) — adresse téléphone reçue via
+         * `Intent.ACTION_SENDTO` / `ACTION_VIEW` + scheme `sms:`/`smsto:`/`mms:`/`mmsto:`.
+         * AppRoot résout l'adresse via [com.filestech.sms.domain.repository.ConversationRepository.findOrCreate]
+         * (conv existante → ouverte directement ; sinon créée puis ouverte) et navigue vers
+         * [com.filestech.sms.ui.navigation.Thread]. Le body optionnel est staged dans
+         * [com.filestech.sms.system.share.IncomingShareHolder] pour pré-remplir le composer.
+         *
+         * Sécurité : valide phone number côté caller (MainActivity) — pas de chemin de
+         * confiance entre une app tierce et un thread arbitraire. Non-PII en log.
+         */
+        val sendToAddress: String? = null,
         val postedAt: Long = System.currentTimeMillis(),
     ) {
         fun isExpired(now: Long = System.currentTimeMillis()): Boolean =
             now - postedAt > PENDING_TTL_MS
 
-        /** v1.14.1 — accepte conv tap (id valid) OU emergency tap. */
+        /** v1.14.1 — accepte conv tap (id valid) OU emergency tap OU sms: deep-link. */
         val isValid: Boolean
-            get() = conversationId > 0L || openEmergency
+            get() = conversationId > 0L || openEmergency || !sendToAddress.isNullOrBlank()
     }
 
     private val _pending = MutableStateFlow<Pending?>(null)

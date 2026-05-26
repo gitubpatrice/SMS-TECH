@@ -1,0 +1,12 @@
+v1.14.9 — Corrections + parité i18n
+
+• Tap "Message" sur un contact depuis l'app
+  Téléphone ouvre maintenant directement la
+  conversation (avant : liste générale).
+• Écran "À propos" entièrement traduit en
+  anglais (badges, 15 features, 7 recettes
+  d'aide — auparavant FR uniquement).
+• Le composer ne re-interroge plus la base
+  des pièces jointes à chaque caractère
+  tapé (frappe plus fluide sur threads
+  longs).

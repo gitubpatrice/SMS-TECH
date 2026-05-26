@@ -1,0 +1,11 @@
+v1.14.9 — Bug fixes + i18n parity
+
+• Tap "Message" on a contact in the Phone
+  app now opens the conversation directly
+  (was landing on the conversation list).
+• About screen fully translated to English
+  (privacy badges, 15 features, 7 help
+  recipes — was French-only).
+• Composer no longer re-queries the
+  attachments DB on every keystroke
+  (smoother typing on long threads).

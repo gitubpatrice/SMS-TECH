@@ -651,6 +651,77 @@
     <string name="snack_thread_voice_sent">Message vocal envoyé</string>
     <string name="snack_thread_numbers_blocked">Numéro(s) bloqué(s)</string>
 
+    <!-- v1.14.9 audit I18N-M3 — strings AboutScreen extraites en R.string. Source unique. -->
+
+    <!-- Badges confidentialité (4) -->
+    <string name="about_badge_no_ads">Aucune publicité</string>
+    <string name="about_badge_no_tracker">Aucun tracker</string>
+    <string name="about_badge_no_collection">Aucune collecte</string>
+    <string name="about_badge_no_sharing">Zéro partage</string>
+
+    <!-- Features (15) -->
+    <string name="about_feat_sms_label">SMS &amp; MMS</string>
+    <string name="about_feat_sms_desc">App SMS par défaut Android 8 → 15+. Import historique complet, sans duplication.</string>
+    <string name="about_feat_voice_label">Messages vocaux</string>
+    <string name="about_feat_voice_desc">Push-to-talk en MMS. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR.</string>
+    <string name="about_feat_vault_label">Coffre chiffré</string>
+    <string name="about_feat_vault_desc">Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android.</string>
+    <string name="about_feat_panic_label">Code panique</string>
+    <string name="about_feat_panic_desc">Second code qui ouvre l\'app en mode leurre — coffre invisible et inaccessible.</string>
+    <string name="about_feat_emergency_label">Mode urgence</string>
+    <string name="about_feat_emergency_desc">Bouton maintenu 3 s sur la page Urgence → SMS d\'alerte préfixé ⚠️ à vos contacts Safety Call avec position GPS optionnelle. Accès rapide 112 / 15 / 17 / 18 + raccourcis dans la notification écran verrouillé.</string>
+    <string name="about_feat_biometric_label">Biométrie</string>
+    <string name="about_feat_biometric_desc">Empreinte ou visage pour déverrouiller, avec PIN de secours obligatoire.</string>
+    <string name="about_feat_reply_label">Réponse contextuelle</string>
+    <string name="about_feat_reply_desc">Mini-cartouche au-dessus du composer + bulle réponse avec quote dans le thread.</string>
+    <string name="about_feat_translate_label">Traduction déléguée</string>
+    <string name="about_feat_translate_desc">Long-press → \"Traduire\" délègue à l\'app de traduction installée (Google Translate, DeepL, Aves Translate FLOSS …) via Intent système. Aucun modèle bundlé.</string>
+    <string name="about_feat_block_label">Blocage synchronisé</string>
+    <string name="about_feat_block_desc">Import auto des numéros bloqués Téléphone / Samsung Messages. Purge rétroactive.</string>
+    <string name="about_feat_search_label">Recherche FTS</string>
+    <string name="about_feat_search_desc">Plein texte SQLite FTS4 sur corps, numéros et noms de contact.</string>
+    <string name="about_feat_pdf_label">Export PDF</string>
+    <string name="about_feat_pdf_desc">Exporter une conversation en PDF (date, expéditeur, corps) pour archive ou preuve.</string>
+    <string name="about_feat_backup_label">Backup chiffré</string>
+    <string name="about_feat_backup_desc">Sauvegarde locale AES-256-GCM via passphrase distincte du PIN.</string>
+    <string name="about_feat_themes_label">Thèmes</string>
+    <string name="about_feat_themes_desc">Clair, sombre, AMOLED, Dark Tech (slate-blue + accent bleu). Coins arrondis personnalisables.</string>
+    <string name="about_feat_ui_label">UI fluide</string>
+    <string name="about_feat_ui_desc">Compose + recomposition isolée par bulle. Tri des conversations dans le menu 3 points.</string>
+    <string name="about_feat_noads_label">Zéro pub, zéro traceur</string>
+    <string name="about_feat_noads_desc">Aucune analytics. Seule connexion réseau : le MMSC de l\'opérateur pour le transport MMS.</string>
+
+    <!-- Recettes d'aide (7 titres + steps) -->
+    <string name="about_help_default_title">Définir comme app SMS par défaut</string>
+    <string name="about_help_default_step1">Bouton bleu \"Définir par défaut\" en haut de la liste des conversations</string>
+    <string name="about_help_default_step2">Ou Réglages Android → Apps par défaut → SMS → SMS Tech</string>
+    <string name="about_help_voice_title">Envoyer un message vocal</string>
+    <string name="about_help_voice_step1">Appui long sur le micro à droite du composer</string>
+    <string name="about_help_voice_step2">Parle, puis relâche pour envoyer (slide à gauche = annuler)</string>
+    <string name="about_help_voice_step3">Cap 60 s — au-delà l\'enregistrement s\'arrête automatiquement</string>
+    <string name="about_help_vault_title">Mettre une conversation au coffre</string>
+    <string name="about_help_vault_step1">Long press sur la conversation dans la liste → \"Coffre\"</string>
+    <string name="about_help_vault_step2">Déverrouillage : PIN, passphrase ou biométrie selon ton réglage</string>
+    <string name="about_help_vault_step3">Réglages → Sécurité pour configurer le coffre</string>
+    <string name="about_help_block_title">Bloquer un numéro</string>
+    <string name="about_help_block_step1">Dans une conversation : menu ⋮ → Bloquer (= bloque + supprime la conv)</string>
+    <string name="about_help_block_step2">Long press sur une conversation dans la liste → Bloquer (conserve l\'historique)</string>
+    <string name="about_help_block_step3">Le numéro est ajouté à la blocklist système, partagée avec Téléphone</string>
+    <string name="about_help_translate_title">Traduire un message reçu</string>
+    <string name="about_help_translate_step1">Long press sur la bulle → \"Traduire\"</string>
+    <string name="about_help_translate_step2">Un sélecteur s\'ouvre avec toutes les apps de traduction installées</string>
+    <string name="about_help_translate_step3">Choisis Google Translate, DeepL, Aves Translate (FLOSS) ou autre</string>
+    <string name="about_help_translate_step4">Si aucune n\'est installée, un message t\'invite à en installer une</string>
+    <string name="about_help_emergency_title">Utiliser le mode urgence</string>
+    <string name="about_help_emergency_step1">Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety Call</string>
+    <string name="about_help_emergency_step2">Page Urgence : appels directs 112 / 15 / 17 / 18 ; bouton rouge tenu 3 s → SMS aux proches</string>
+    <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis 112 + 17 sans déverrouiller</string>
+    <string name="about_help_emergency_step4">« Je vais bien » dans la liste des conversations annule l\'alerte en cas de fausse manip</string>
+    <string name="about_help_update_title">Vérifier une mise à jour</string>
+    <string name="about_help_update_step1">Bouton \"Voir les mises à jour\" en haut de cette page</string>
+    <string name="about_help_update_step2">Ouvre la page Releases GitHub de SMS Tech</string>
+    <string name="about_help_update_step3">L\'app ne tente jamais d\'auto-update sans ton accord</string>
+
     <!-- v1.14.8 R1/R2 — notification d\'échec MMS entrant (taille trop grande ou erreur MMSC). -->
     <string name="mms_failure_notification_title">MMS non reçu</string>
     <string name="mms_failure_notification_body_too_large">MMS de %1$s trop volumineux (%2$d Ko). Touchez pour ouvrir les paramètres MMS.</string>

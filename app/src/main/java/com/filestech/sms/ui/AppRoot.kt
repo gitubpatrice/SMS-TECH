@@ -168,6 +168,30 @@ fun AppRoot() {
             nav.navigate(Emergency)
             return@LaunchedEffect
         }
+        // v1.14.8 (bug fix "Message" depuis Phone app) — branche sendToAddress :
+        // un deep-link `sms:`/`smsto:`/`mms:`/`mmsto:` a été reçu, MainActivity a
+        // posé l'adresse. On résout (find or create conv) en coroutine via
+        // [AppRootViewModel.resolveSendToAddress] puis on navigue directement vers
+        // le thread cible. Le body éventuel est staged dans incomingShare et sera
+        // consommé par ThreadViewModel.consumeIncomingShareIfAny pour pré-remplir
+        // le composer.
+        val sendToAddress = current.sendToAddress
+        if (!sendToAddress.isNullOrBlank()) {
+            // Consomme avant le résolveur async pour éviter un double-tap qui
+            // re-déclencherait le même pending pendant la coroutine.
+            val consumed = pendingNav.consume() ?: return@LaunchedEffect
+            rootViewModel.resolveSendToAddress(consumed.sendToAddress.orEmpty()) { resolvedId ->
+                if (resolvedId == null || resolvedId <= 0L) {
+                    // Fallback : on bascule sur ComposeScreen avec l'adresse pré-remplie.
+                    // L'user peut alors valider manuellement (ou ajouter d'autres
+                    // destinataires pour un groupe MMS).
+                    nav.navigate(Compose(initialAddress = consumed.sendToAddress))
+                } else {
+                    nav.navigate(Thread(conversationId = resolvedId))
+                }
+            }
+            return@LaunchedEffect
+        }
         // Si on est déjà sur ce thread précis, on consomme sans push (évite
         // doublon backstack). Le check est best-effort : `currentDestination
         // .arguments` peut être null pendant une transition de nav.

@@ -132,7 +132,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.size(24.dp))
             SectionTitle("Fonctionnalités")
             Spacer(Modifier.size(8.dp))
-            FEATURES.forEach { f -> FeatureRow(icon = f.icon, label = f.label, desc = f.desc) }
+            features().forEach { f -> FeatureRow(icon = f.icon, label = f.label, desc = f.desc) }
 
             Spacer(Modifier.size(24.dp))
             SectionTitle("Auteur")
@@ -142,7 +142,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.size(24.dp))
             SectionTitle("Aide rapide")
             Spacer(Modifier.size(8.dp))
-            HELP_RECIPES.forEach { h -> HelpCard(title = h.title, steps = h.steps) }
+            helpRecipes().forEach { h -> HelpCard(title = h.title, steps = h.steps) }
 
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_security_title))
@@ -317,7 +317,7 @@ private fun PrivacyCard() {
             }
             Spacer(Modifier.size(12.dp))
             BadgesFlow(
-                badges = PRIVACY_BADGES,
+                badges = privacyBadges(),
             )
         }
     }
@@ -574,91 +574,98 @@ private const val PRIVACY_URL = "https://github.com/gitubpatrice/sms_tech/blob/m
 
 private data class PrivacyBadge(val icon: ImageVector, val label: String, val color: Color)
 
-private val PRIVACY_BADGES = listOf(
-    PrivacyBadge(Icons.Outlined.Block, "Aucune publicité", Color(0xFFE53935)),
-    PrivacyBadge(Icons.Outlined.VisibilityOff, "Aucun tracker", Color(0xFFFF7043)),
-    PrivacyBadge(Icons.Outlined.Security, "Aucune collecte", Color(0xFF1976D2)),
-    PrivacyBadge(Icons.Outlined.PrivacyTip, "Zéro partage", Color(0xFF7B1FA2)),
+// v1.14.9 audit I18N-M3 — Conversion vers factory @Composable. Avant : `val PRIVACY_BADGES =
+// listOf(...)` top-level avec strings FR hardcodées → un user EN voyait du français dans
+// AboutScreen alors que tout le reste de l'app était en EN. Désormais : factory function
+// qui résout chaque label via [stringResource], parité FR↔EN complète.
+@androidx.compose.runtime.Composable
+private fun privacyBadges(): List<PrivacyBadge> = listOf(
+    PrivacyBadge(Icons.Outlined.Block, stringResource(R.string.about_badge_no_ads), Color(0xFFE53935)),
+    PrivacyBadge(Icons.Outlined.VisibilityOff, stringResource(R.string.about_badge_no_tracker), Color(0xFFFF7043)),
+    PrivacyBadge(Icons.Outlined.Security, stringResource(R.string.about_badge_no_collection), Color(0xFF1976D2)),
+    PrivacyBadge(Icons.Outlined.PrivacyTip, stringResource(R.string.about_badge_no_sharing), Color(0xFF7B1FA2)),
 )
 
 private data class Feature(val icon: ImageVector, val label: String, val desc: String)
 
-private val FEATURES = listOf(
-    Feature(Icons.Outlined.ChatBubbleOutline, "SMS & MMS", "App SMS par défaut Android 8 → 15+. Import historique complet, sans duplication."),
-    Feature(Icons.Outlined.Mic, "Messages vocaux", "Push-to-talk en MMS. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR."),
-    Feature(Icons.Outlined.Security, "Coffre chiffré", "Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android."),
-    Feature(Icons.Outlined.Shield, "Code panique", "Second code qui ouvre l'app en mode leurre — coffre invisible et inaccessible."),
-    Feature(Icons.Outlined.Warning, "Mode urgence", "Bouton maintenu 3 s sur la page Urgence → SMS d'alerte préfixé ⚠️ à vos contacts Safety Call avec position GPS optionnelle. Accès rapide 112 / 15 / 17 / 18 + raccourcis dans la notification écran verrouillé."),
-    Feature(Icons.Outlined.Fingerprint, "Biométrie", "Empreinte ou visage pour déverrouiller, avec PIN de secours obligatoire."),
-    Feature(Icons.AutoMirrored.Outlined.Reply, "Réponse contextuelle", "Mini-cartouche au-dessus du composer + bulle réponse avec quote dans le thread."),
-    Feature(Icons.Outlined.Translate, "Traduction déléguée", "Long-press → \"Traduire\" délègue à l'app de traduction installée (Google Translate, DeepL, Aves Translate FLOSS …) via Intent système. Aucun modèle bundlé."),
-    Feature(Icons.Outlined.Block, "Blocage synchronisé", "Import auto des numéros bloqués Téléphone / Samsung Messages. Purge rétroactive."),
-    Feature(Icons.Outlined.Search, "Recherche FTS", "Plein texte SQLite FTS4 sur corps, numéros et noms de contact."),
-    Feature(Icons.Outlined.PictureAsPdf, "Export PDF", "Exporter une conversation en PDF (date, expéditeur, corps) pour archive ou preuve."),
-    Feature(Icons.Outlined.Backup, "Backup chiffré", "Sauvegarde locale AES-256-GCM via passphrase distincte du PIN."),
-    Feature(Icons.Outlined.DarkMode, "Thèmes", "Clair, sombre, AMOLED, Dark Tech (slate-blue + accent bleu). Coins arrondis personnalisables."),
-    Feature(Icons.Outlined.GraphicEq, "UI fluide", "Compose + recomposition isolée par bulle. Tri des conversations dans le menu 3 points."),
-    Feature(Icons.Outlined.QuestionAnswer, "Zéro pub, zéro traceur", "Aucune analytics. Seule connexion réseau : le MMSC de l'opérateur pour le transport MMS."),
+@androidx.compose.runtime.Composable
+private fun features(): List<Feature> = listOf(
+    Feature(Icons.Outlined.ChatBubbleOutline, stringResource(R.string.about_feat_sms_label), stringResource(R.string.about_feat_sms_desc)),
+    Feature(Icons.Outlined.Mic, stringResource(R.string.about_feat_voice_label), stringResource(R.string.about_feat_voice_desc)),
+    Feature(Icons.Outlined.Security, stringResource(R.string.about_feat_vault_label), stringResource(R.string.about_feat_vault_desc)),
+    Feature(Icons.Outlined.Shield, stringResource(R.string.about_feat_panic_label), stringResource(R.string.about_feat_panic_desc)),
+    Feature(Icons.Outlined.Warning, stringResource(R.string.about_feat_emergency_label), stringResource(R.string.about_feat_emergency_desc)),
+    Feature(Icons.Outlined.Fingerprint, stringResource(R.string.about_feat_biometric_label), stringResource(R.string.about_feat_biometric_desc)),
+    Feature(Icons.AutoMirrored.Outlined.Reply, stringResource(R.string.about_feat_reply_label), stringResource(R.string.about_feat_reply_desc)),
+    Feature(Icons.Outlined.Translate, stringResource(R.string.about_feat_translate_label), stringResource(R.string.about_feat_translate_desc)),
+    Feature(Icons.Outlined.Block, stringResource(R.string.about_feat_block_label), stringResource(R.string.about_feat_block_desc)),
+    Feature(Icons.Outlined.Search, stringResource(R.string.about_feat_search_label), stringResource(R.string.about_feat_search_desc)),
+    Feature(Icons.Outlined.PictureAsPdf, stringResource(R.string.about_feat_pdf_label), stringResource(R.string.about_feat_pdf_desc)),
+    Feature(Icons.Outlined.Backup, stringResource(R.string.about_feat_backup_label), stringResource(R.string.about_feat_backup_desc)),
+    Feature(Icons.Outlined.DarkMode, stringResource(R.string.about_feat_themes_label), stringResource(R.string.about_feat_themes_desc)),
+    Feature(Icons.Outlined.GraphicEq, stringResource(R.string.about_feat_ui_label), stringResource(R.string.about_feat_ui_desc)),
+    Feature(Icons.Outlined.QuestionAnswer, stringResource(R.string.about_feat_noads_label), stringResource(R.string.about_feat_noads_desc)),
 )
 
 private data class HelpRecipe(val title: String, val steps: List<String>)
 
-private val HELP_RECIPES = listOf(
+@androidx.compose.runtime.Composable
+private fun helpRecipes(): List<HelpRecipe> = listOf(
     HelpRecipe(
-        title = "Définir comme app SMS par défaut",
+        title = stringResource(R.string.about_help_default_title),
         steps = listOf(
-            "Bouton bleu \"Définir par défaut\" en haut de la liste des conversations",
-            "Ou Réglages Android → Apps par défaut → SMS → SMS Tech",
+            stringResource(R.string.about_help_default_step1),
+            stringResource(R.string.about_help_default_step2),
         ),
     ),
     HelpRecipe(
-        title = "Envoyer un message vocal",
+        title = stringResource(R.string.about_help_voice_title),
         steps = listOf(
-            "Appui long sur le micro à droite du composer",
-            "Parle, puis relâche pour envoyer (slide à gauche = annuler)",
-            "Cap 60 s — au-delà l'enregistrement s'arrête automatiquement",
+            stringResource(R.string.about_help_voice_step1),
+            stringResource(R.string.about_help_voice_step2),
+            stringResource(R.string.about_help_voice_step3),
         ),
     ),
     HelpRecipe(
-        title = "Mettre une conversation au coffre",
+        title = stringResource(R.string.about_help_vault_title),
         steps = listOf(
-            "Long press sur la conversation dans la liste → \"Coffre\"",
-            "Déverrouillage : PIN, passphrase ou biométrie selon ton réglage",
-            "Réglages → Sécurité pour configurer le coffre",
+            stringResource(R.string.about_help_vault_step1),
+            stringResource(R.string.about_help_vault_step2),
+            stringResource(R.string.about_help_vault_step3),
         ),
     ),
     HelpRecipe(
-        title = "Bloquer un numéro",
+        title = stringResource(R.string.about_help_block_title),
         steps = listOf(
-            "Dans une conversation : menu ⋮ → Bloquer (= bloque + supprime la conv)",
-            "Long press sur une conversation dans la liste → Bloquer (conserve l'historique)",
-            "Le numéro est ajouté à la blocklist système, partagée avec Téléphone",
+            stringResource(R.string.about_help_block_step1),
+            stringResource(R.string.about_help_block_step2),
+            stringResource(R.string.about_help_block_step3),
         ),
     ),
     HelpRecipe(
-        title = "Traduire un message reçu",
+        title = stringResource(R.string.about_help_translate_title),
         steps = listOf(
-            "Long press sur la bulle → \"Traduire\"",
-            "Un sélecteur s'ouvre avec toutes les apps de traduction installées",
-            "Choisis Google Translate, DeepL, Aves Translate (FLOSS) ou autre",
-            "Si aucune n'est installée, un message t'invite à en installer une",
+            stringResource(R.string.about_help_translate_step1),
+            stringResource(R.string.about_help_translate_step2),
+            stringResource(R.string.about_help_translate_step3),
+            stringResource(R.string.about_help_translate_step4),
         ),
     ),
     HelpRecipe(
-        title = "Utiliser le mode urgence",
+        title = stringResource(R.string.about_help_emergency_title),
         steps = listOf(
-            "Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety Call",
-            "Page Urgence : appels directs 112 / 15 / 17 / 18 ; bouton rouge tenu 3 s → SMS aux proches",
-            "Notification écran verrouillé (opt-in) : raccourcis 112 + 17 sans déverrouiller",
-            "« Je vais bien » dans la liste des conversations annule l'alerte en cas de fausse manip",
+            stringResource(R.string.about_help_emergency_step1),
+            stringResource(R.string.about_help_emergency_step2),
+            stringResource(R.string.about_help_emergency_step3),
+            stringResource(R.string.about_help_emergency_step4),
         ),
     ),
     HelpRecipe(
-        title = "Vérifier une mise à jour",
+        title = stringResource(R.string.about_help_update_title),
         steps = listOf(
-            "Bouton \"Voir les mises à jour\" en haut de cette page",
-            "Ouvre la page Releases GitHub de SMS Tech",
-            "L'app ne tente jamais d'auto-update sans ton accord",
+            stringResource(R.string.about_help_update_step1),
+            stringResource(R.string.about_help_update_step2),
+            stringResource(R.string.about_help_update_step3),
         ),
     ),
 )

@@ -435,9 +435,50 @@ class MainActivity : FragmentActivity() {
                     )
                 }
             }
+            Intent.ACTION_SENDTO, Intent.ACTION_VIEW -> {
+                // v1.14.8 bug fix — Avant : l'app Téléphone tapait "Message" sur un contact
+                // → ACTION_SENDTO + URI `smsto:+33xxx` → SMS Tech ouvrait sur la liste des
+                // conversations sans pré-sélection (intent qui retombait dans `else`, juste
+                // un wipe d'incomingShare). Maintenant : on parse le scheme + le numéro,
+                // on stage le body éventuel, et on pose un pendingNav.sendToAddress qu'AppRoot
+                // résout via [ConversationRepository.findOrCreate] → navigation directe sur
+                // le ThreadScreen (conv existante OU nouvelle).
+                val data = intent.data
+                val scheme = data?.scheme?.lowercase()
+                if (scheme == "sms" || scheme == "smsto" || scheme == "mms" || scheme == "mmsto") {
+                    // schemeSpecificPart contient le(s) numéro(s) URL-encodés.
+                    // Multi-recipient possible (séparés par `,` ou `;` selon caller) —
+                    // pour cette v1.14.8, on prend le 1er ; le multi-recipient nécessite
+                    // de passer par ComposeScreen pour confirmer le groupe (v1.15 backlog).
+                    val raw = data?.schemeSpecificPart?.let { Uri.decode(it) }.orEmpty()
+                    val firstRecipient = raw.split(",", ";")
+                        .map { it.trim() }
+                        .firstOrNull { it.isNotEmpty() }
+                    val body = intent.getStringExtra("sms_body")?.takeIf { it.isNotBlank() }
+                        ?: intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+                    incomingShare.clear()
+                    if (!firstRecipient.isNullOrBlank()) {
+                        if (body != null) {
+                            incomingShare.set(
+                                IncomingShareHolder.Pending(
+                                    uris = emptyList(),
+                                    mimeType = null,
+                                    text = body,
+                                ),
+                            )
+                        }
+                        pendingNav.set(
+                            PendingNavHolder.Pending(sendToAddress = firstRecipient),
+                        )
+                    }
+                } else {
+                    // Scheme non-SMS (ex. http://) → comportement antérieur (wipe share).
+                    incomingShare.clear()
+                }
+            }
             else -> {
                 // v1.3.3 G2 audit fix — l'app a été relancée via un intent NON-SEND
-                // (icône launcher, deep-link sms:…). Si un partage attend depuis
+                // (icône launcher, deep-link inconnu). Si un partage attend depuis
                 // une session précédente, on l'efface : l'intention de l'utilisateur
                 // a changé, pas question d'attacher une PJ oubliée à la conversation
                 // qu'il vient d'ouvrir.
