@@ -1,0 +1,13 @@
+v1.15.1 — Scheduled messages (new feature)
+
+• Schedule an SMS for later: type your
+  message, then ⋮ → "Schedule…" → pick
+  a date and time. The SMS is sent
+  automatically at that time, even if
+  the app is closed.
+• Manage scheduled messages from Settings
+  → "Scheduled messages": see the list of
+  pending SMS, cancel any of them.
+
+Infrastructure existed since v1.5 but
+had no UI surface — now fully usable.

@@ -669,6 +669,28 @@
     <string name="snack_thread_voice_sent">Voice message sent</string>
     <string name="snack_thread_numbers_blocked">Number(s) blocked</string>
 
+    <!-- v1.15.1 — Scheduled messages screen + Thread schedule flow. -->
+    <string name="settings_section_scheduled">Scheduled messages</string>
+    <string name="scheduled_title">Scheduled messages</string>
+    <string name="scheduled_empty">No scheduled messages</string>
+    <!-- v1.15.1 — Inline how-to shown alongside the empty state, so the user discovers
+         the entry point even before reading AboutScreen. -->
+    <string name="scheduled_empty_explainer">To schedule an SMS: open a conversation, type your message, then ⋮ → "Schedule…" → pick a date and time. The SMS will be sent automatically at that time, even if the app is closed.</string>
+    <string name="scheduled_to">To: %1$s</string>
+    <string name="scheduled_when">Scheduled for: %1$s</string>
+    <string name="scheduled_cancel_confirm_title">Cancel this scheduled message?</string>
+    <string name="scheduled_cancel_confirm_body">It will not be sent. This action cannot be undone.</string>
+    <string name="scheduled_cancel_confirm_action">Cancel sending</string>
+    <string name="settings_scheduled_messages">Scheduled messages</string>
+    <string name="settings_scheduled_messages_desc">View and manage scheduled SMS</string>
+    <string name="thread_schedule_action">Schedule…</string>
+    <string name="thread_schedule_date_title">Pick a date</string>
+    <string name="thread_schedule_time_title">Pick a time</string>
+    <string name="thread_schedule_invalid_past">The chosen date is in the past</string>
+    <string name="thread_schedule_empty_body">Type a message before scheduling</string>
+    <string name="thread_schedule_success">Message scheduled</string>
+    <string name="thread_schedule_failed">Failed to schedule the message</string>
+
     <!-- v1.14.9 audit I18N-M3 — AboutScreen strings extracted from hardcoded FR to support EN locale. -->
 
     <!-- Privacy badges (4) -->

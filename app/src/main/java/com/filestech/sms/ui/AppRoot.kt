@@ -22,6 +22,7 @@ import com.filestech.sms.ui.navigation.Lock
 import com.filestech.sms.ui.navigation.Migration
 import com.filestech.sms.ui.navigation.Onboarding
 import com.filestech.sms.ui.navigation.Settings
+import com.filestech.sms.ui.navigation.ScheduledMessages
 import com.filestech.sms.ui.navigation.Splash
 import com.filestech.sms.ui.navigation.Thread
 import com.filestech.sms.ui.navigation.Vault
@@ -263,6 +264,14 @@ fun AppRoot() {
                 onOpenSafetyCall = { nav.navigate(SafetyCallSetup) },
                 onOpenEmergency = { nav.navigate(Emergency) },
                 onOpenEmergencySetup = { nav.navigate(EmergencySetup) },
+                // v1.15.1 — accès à la nouvelle screen Messages programmés.
+                onOpenScheduledMessages = { nav.navigate(ScheduledMessages) },
+            )
+        }
+        // v1.15.1 — Liste + annulation des messages programmés.
+        composable<ScheduledMessages> {
+            com.filestech.sms.ui.screens.scheduled.ScheduledMessagesScreen(
+                onBack = { nav.popBackStack() },
             )
         }
         composable<SafetyCallSetup> {

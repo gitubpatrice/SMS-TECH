@@ -51,6 +51,7 @@ import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -253,6 +254,11 @@ fun ThreadScreen(
     // broadcast de confirmation). On confirme via dialog avant retry. SYNCHRONOUS reste
     // un retry direct sans dialog (le radio a rejeté l'envoi, pas de risque doublon).
     var pendingRetryWatchdog by remember { mutableStateOf<Message?>(null) }
+    // v1.15.1 — Flow Programmer un SMS : 2 étapes (DatePicker puis TimePicker).
+    // `scheduleStep` null = aucun picker ouvert ; "date" = DatePicker actif ;
+    // "time" = TimePicker actif (date déjà choisie, stockée dans scheduledEpochMidnight).
+    var scheduleStep by remember { mutableStateOf<String?>(null) }
+    var scheduledEpochMidnight by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
 
     // v1.2.4 audit U12: scroll-to-bottom on new messages only when the user is already at
     // the bottom — preserves their reading position higher up the thread. The first paint
@@ -416,6 +422,14 @@ fun ThreadScreen(
                         onAppearance = { menuOpen = false; appearanceOpen = true },
                         onBlock = { menuOpen = false; askBlock = true },
                         onDelete = { menuOpen = false; askDelete = true },
+                        // v1.15.1 — Programmer le draft pour plus tard. Grisé tant qu'il
+                        // n'y a rien à programmer (draft vide) — évite le tunnel
+                        // date/heure → snackbar "Tape un message avant" frustrant.
+                        canSchedule = state.draft.isNotBlank(),
+                        onScheduleSend = {
+                            menuOpen = false
+                            scheduleStep = "date"
+                        },
                     )
                 },
             )
@@ -764,6 +778,78 @@ fun ThreadScreen(
         )
     }
 
+    // v1.15.1 — DatePicker pour programmer un message. Date d'aujourd'hui min, pas de cap max.
+    if (scheduleStep == "date") {
+        val datePickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = System.currentTimeMillis(),
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { scheduleStep = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    val selected = datePickerState.selectedDateMillis
+                    if (selected != null) {
+                        scheduledEpochMidnight = selected
+                        scheduleStep = "time"
+                    } else {
+                        scheduleStep = null
+                    }
+                }) { Text(stringResource(R.string.action_continue)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { scheduleStep = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        ) {
+            androidx.compose.material3.DatePicker(
+                state = datePickerState,
+                title = { Text(stringResource(R.string.thread_schedule_date_title), modifier = Modifier.padding(start = 24.dp, top = 16.dp)) },
+            )
+        }
+    }
+    // v1.15.1 — TimePicker (étape 2) : compose la date choisie + l'heure pour obtenir l'epoch.
+    if (scheduleStep == "time") {
+        val timePickerState = androidx.compose.material3.rememberTimePickerState(
+            initialHour = 9,
+            initialMinute = 0,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { scheduleStep = null },
+            title = { Text(stringResource(R.string.thread_schedule_time_title)) },
+            text = {
+                androidx.compose.material3.TimePicker(state = timePickerState)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    // Combine date (millis at midnight UTC selon DatePicker) + heure/minute locales.
+                    // DatePicker retourne l'epoch UTC à 00:00 — on rajoute le décalage local pour
+                    // que l'heure choisie soit interprétée dans le fuseau de l'user.
+                    val cal = java.util.Calendar.getInstance()
+                    cal.timeInMillis = scheduledEpochMidnight
+                    cal.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    val year = cal.get(java.util.Calendar.YEAR)
+                    val month = cal.get(java.util.Calendar.MONTH)
+                    val day = cal.get(java.util.Calendar.DAY_OF_MONTH)
+                    val localCal = java.util.Calendar.getInstance().apply {
+                        clear()
+                        set(year, month, day, timePickerState.hour, timePickerState.minute, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }
+                    val epochMs = localCal.timeInMillis
+                    scheduleStep = null
+                    viewModel.scheduleSend(epochMs)
+                }) { Text(stringResource(R.string.action_continue)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { scheduleStep = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     // v1.3.11 (F4) — phone number actions dialog. Triggered from any bubble's
     // [MessageTextWithLinks] (text body or attachment caption) through the
     // [onPhoneClick] lambda built above.
@@ -1014,6 +1100,9 @@ private fun ThreadActionsMenu(
     onAppearance: () -> Unit,
     onBlock: () -> Unit,
     onDelete: () -> Unit,
+    // v1.15.1 — Programme l'envoi du draft pour plus tard. Grisé si pas de draft.
+    canSchedule: Boolean,
+    onScheduleSend: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (!hasContact) {
@@ -1023,6 +1112,15 @@ private fun ThreadActionsMenu(
                 onClick = onAddContact,
             )
         }
+        // v1.15.1 — Programme l'envoi pour plus tard. Place en haut pour visibilité
+        // (action constructive, contraste avec les actions destructives en bas).
+        // Grisé tant qu'il n'y a rien à programmer (draft vide).
+        DropdownMenuItem(
+            leadingIcon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
+            text = { Text(stringResource(R.string.thread_schedule_action)) },
+            enabled = canSchedule,
+            onClick = onScheduleSend,
+        )
         DropdownMenuItem(
             leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
             text = { Text(stringResource(R.string.action_details)) },

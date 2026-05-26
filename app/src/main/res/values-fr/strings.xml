@@ -651,6 +651,28 @@
     <string name="snack_thread_voice_sent">Message vocal envoyé</string>
     <string name="snack_thread_numbers_blocked">Numéro(s) bloqué(s)</string>
 
+    <!-- v1.15.1 — Écran messages programmés + flow scheduling depuis ThreadScreen. -->
+    <string name="settings_section_scheduled">Messages programmés</string>
+    <string name="scheduled_title">Messages programmés</string>
+    <string name="scheduled_empty">Aucun message programmé</string>
+    <!-- v1.15.1 — Mode d'emploi inline affiché à côté de l'empty state, pour que l'user
+         découvre le point d'entrée même sans avoir lu AboutScreen. -->
+    <string name="scheduled_empty_explainer">Pour programmer un SMS : ouvre une conversation, tape ton message, puis ⋮ → "Programmer…" → choisis une date et une heure. Le SMS sera envoyé automatiquement à l\'heure prévue, même si l\'app est fermée.</string>
+    <string name="scheduled_to">À : %1$s</string>
+    <string name="scheduled_when">Programmé pour : %1$s</string>
+    <string name="scheduled_cancel_confirm_title">Annuler ce message programmé ?</string>
+    <string name="scheduled_cancel_confirm_body">Il ne sera pas envoyé. Cette action est irréversible.</string>
+    <string name="scheduled_cancel_confirm_action">Annuler l\'envoi</string>
+    <string name="settings_scheduled_messages">Messages programmés</string>
+    <string name="settings_scheduled_messages_desc">Voir et gérer les SMS programmés</string>
+    <string name="thread_schedule_action">Programmer…</string>
+    <string name="thread_schedule_date_title">Choisir une date</string>
+    <string name="thread_schedule_time_title">Choisir une heure</string>
+    <string name="thread_schedule_invalid_past">La date choisie est dans le passé</string>
+    <string name="thread_schedule_empty_body">Tape un message avant de programmer</string>
+    <string name="thread_schedule_success">Message programmé</string>
+    <string name="thread_schedule_failed">Échec de la programmation</string>
+
     <!-- v1.14.9 audit I18N-M3 — strings AboutScreen extraites en R.string. Source unique. -->
 
     <!-- Badges confidentialité (4) -->

@@ -1,0 +1,15 @@
+v1.15.1 — Messages programmés (nouveau)
+
+• Programme un SMS pour plus tard : tape
+  ton message, puis ⋮ → "Programmer…" →
+  choisis une date et une heure. Le SMS
+  est envoyé automatiquement à l'heure
+  prévue, même si l'app est fermée.
+• Gère les messages programmés depuis
+  Réglages → "Messages programmés" :
+  liste des SMS en attente, annulation
+  d'un envoi.
+
+L'infrastructure existait depuis v1.5
+mais aucune UI ne l'exposait — désormais
+pleinement utilisable.

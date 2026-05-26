@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Tune
@@ -94,6 +95,9 @@ fun SettingsScreen(
     onOpenSafetyCall: () -> Unit,
     onOpenEmergency: () -> Unit,
     onOpenEmergencySetup: () -> Unit,
+    // v1.15.1 — Accès à la nouvelle screen "Messages programmés" (infra existait
+    // déjà mais aucune UI ne l'exposait — feature dormante).
+    onOpenScheduledMessages: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -428,6 +432,20 @@ fun SettingsScreen(
                     onChange = { v -> viewModel.update { it.copy(blocking = it.blocking.copy(blockUnknown = v)) } },
                 )
                 NavigationRow(stringResource(R.string.settings_manage_blocked), onClick = onOpenBlocked)
+            }
+
+            // v1.15.1 — Section dédiée Messages programmés. Avant : noyée dans "Blocage" →
+            // confusion conceptuelle (un message différé n'a rien à voir avec un blocage).
+            // Section autonome plus visible et cohérente avec la nature de la feature.
+            SectionCard(
+                title = stringResource(R.string.settings_section_scheduled),
+                icon = Icons.Outlined.Schedule,
+            ) {
+                NavigationRow(
+                    title = stringResource(R.string.settings_scheduled_messages),
+                    description = stringResource(R.string.settings_scheduled_messages_desc),
+                    onClick = onOpenScheduledMessages,
+                )
             }
 
             SectionCard(

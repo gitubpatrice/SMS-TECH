@@ -19,3 +19,6 @@ import kotlinx.serialization.Serializable
 @Serializable data object EmergencySetup : Route
 @Serializable data class Thread(val conversationId: Long) : Route
 @Serializable data class Compose(val initialAddress: String? = null) : Route
+
+// v1.15.1 — Écran liste des messages programmés (accessible depuis Settings).
+@Serializable data object ScheduledMessages : Route

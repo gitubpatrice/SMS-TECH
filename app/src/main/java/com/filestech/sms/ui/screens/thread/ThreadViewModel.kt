@@ -61,6 +61,8 @@ class ThreadViewModel @Inject constructor(
     private val toggleConvState: com.filestech.sms.domain.usecase.ToggleConversationStateUseCase,
     private val contactRepo: com.filestech.sms.domain.repository.ContactRepository,
     private val sendReaction: SendReactionUseCase,
+    // v1.15.1 — Schedule a SMS for later via WorkManager (infra existait avant, UI nouvelle).
+    private val scheduleMessage: com.filestech.sms.domain.usecase.ScheduleMessageUseCase,
     private val incomingShare: com.filestech.sms.system.share.IncomingShareHolder,
     private val activeConversationTracker: ActiveConversationTracker,
     @ApplicationContext private val context: android.content.Context,
@@ -399,6 +401,70 @@ class ThreadViewModel @Inject constructor(
     /** Dismisses the pending-send confirmation without sending. */
     fun cancelPendingSend() {
         _state.update { it.copy(pendingSend = null) }
+    }
+
+    /**
+     * v1.15.1 — Programme l'envoi du draft courant pour une date/heure future. Le draft est
+     * vidé après scheduling réussi (cohérent avec le comportement `send()` standard) ; l'user
+     * peut consulter / annuler depuis Settings → Messages programmés.
+     *
+     * Le draft est validé non-vide ET la date est validée future côté Use Case. En cas d'échec,
+     * un Event.ShowSnackbar(isError=true) est émis vers la View.
+     */
+    fun scheduleSend(epochMillis: Long) {
+        val body = _state.value.draft.trim()
+        if (body.isEmpty()) {
+            _events.tryEmit(Event.ShowSnackbar(
+                context.getString(com.filestech.sms.R.string.thread_schedule_empty_body),
+                isError = true,
+            ))
+            return
+        }
+        if (epochMillis <= System.currentTimeMillis()) {
+            _events.tryEmit(Event.ShowSnackbar(
+                context.getString(com.filestech.sms.R.string.thread_schedule_invalid_past),
+                isError = true,
+            ))
+            return
+        }
+        viewModelScope.launch {
+            val conv = _state.value.conversation
+            // Les destinataires sont ceux de la conversation courante (cohérent avec sendSms).
+            // `conv.addresses` est la liste normalisée. Si conv est null (cas extrême : avant
+            // hydratation), on bail proprement.
+            val recipients = conv?.addresses ?: emptyList()
+            if (recipients.isEmpty()) {
+                _events.tryEmit(Event.ShowSnackbar(
+                    context.getString(com.filestech.sms.R.string.thread_schedule_failed),
+                    isError = true,
+                ))
+                return@launch
+            }
+            val effectiveSubId = cachedSettings.value.sending.defaultSubId
+            val r = scheduleMessage(
+                conversationId = conversationId,
+                addresses = recipients,
+                body = body,
+                whenEpochMillis = epochMillis,
+                subId = effectiveSubId,
+            )
+            when (r) {
+                is com.filestech.sms.core.result.Outcome.Success -> {
+                    // Vide le draft (le SMS partira automatiquement à l'heure prévue).
+                    _state.update { it.copy(draft = "") }
+                    repo.setDraft(conversationId, null)
+                    _events.tryEmit(Event.ShowSnackbar(
+                        context.getString(com.filestech.sms.R.string.thread_schedule_success),
+                    ))
+                }
+                is com.filestech.sms.core.result.Outcome.Failure -> {
+                    _events.tryEmit(Event.ShowSnackbar(
+                        context.getString(com.filestech.sms.R.string.thread_schedule_failed),
+                        isError = true,
+                    ))
+                }
+            }
+        }
     }
 
     private suspend fun doSend(body: String) {
