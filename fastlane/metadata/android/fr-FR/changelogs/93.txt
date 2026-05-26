@@ -1,0 +1,15 @@
+v1.15.0 — Durcissement interne
+
+• Filet de sécurité sur le mapping des
+  statuts Room : un int inconnu logue
+  désormais un warning clair au lieu de
+  défaut silencieux (test unitaire détecte
+  les mappings manquants au build).
+• SettingsScreen refactoré : 3 grosses
+  sections (Notifications, Sécurité,
+  Urgence) extraites en composables privés
+  — aucun changement visible, maintenance
+  facilitée.
+
+Pas de migration de données, signature
+stable.

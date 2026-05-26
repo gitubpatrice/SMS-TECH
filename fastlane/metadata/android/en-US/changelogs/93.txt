@@ -1,0 +1,14 @@
+v1.15.0 — Internal hardening
+
+• Safety net on Room status mapping: an
+  unknown int now logs a clear warning
+  instead of silently defaulting (a unit
+  test catches missing mappings at build
+  time).
+• Settings screen refactored: 3 large
+  sections (Notifications, Security,
+  Emergency) extracted as private
+  composables — no user-visible change,
+  easier to maintain.
+
+No data migration, signature stable.

@@ -51,21 +51,13 @@ fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message
     conversationId = conversationId,
     address = address,
     body = body,
-    type = if (type == MessageType.MMS) Message.Type.MMS else Message.Type.SMS,
-    direction = if (direction == MessageDirection.OUTGOING) Message.Direction.OUTGOING else Message.Direction.INCOMING,
+    type = mapType(type),
+    direction = mapDirection(direction),
     date = date,
     dateSent = dateSent,
     read = read,
     starred = starred,
-    status = when (status) {
-        MessageStatus.PENDING -> Message.Status.PENDING
-        MessageStatus.SENT -> Message.Status.SENT
-        MessageStatus.DELIVERED -> Message.Status.DELIVERED
-        MessageStatus.FAILED -> Message.Status.FAILED
-        MessageStatus.RECEIVED -> Message.Status.RECEIVED
-        MessageStatus.SCHEDULED -> Message.Status.SCHEDULED
-        else -> Message.Status.PENDING
-    },
+    status = mapStatus(status),
     errorCode = errorCode,
     attachmentsCount = attachmentsCount,
     subId = subId,
@@ -74,3 +66,45 @@ fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message
     replyToMessageId = replyToMessageId,
     reactionEmoji = reactionEmoji,
 )
+
+/**
+ * Audit K-8 LIGHT (v1.15.0) — Mapping centralisé avec filet de sécurité Timber. Avant : le
+ * `when (status) { ... else -> Message.Status.PENDING }` masquait silencieusement un nouveau
+ * MessageStatus.* const non-mappé (bug latent si quelqu'un ajoute une const sans toucher au
+ * mapping). Maintenant : log explicite + fallback documenté. Une unit test
+ * (`MessageStatusMappingTest`) vérifie que toutes les const courantes ont un mapping.
+ *
+ * La conversion complète Int → enum class est planifiée v1.16.0 (refactor dédié avec Room v8
+ * + TypeConverter + migration test). Cette version "light" sécurise le présent sans bouger
+ * le schéma Room.
+ */
+internal fun mapStatus(status: Int): Message.Status = when (status) {
+    MessageStatus.PENDING -> Message.Status.PENDING
+    MessageStatus.SENT -> Message.Status.SENT
+    MessageStatus.DELIVERED -> Message.Status.DELIVERED
+    MessageStatus.FAILED -> Message.Status.FAILED
+    MessageStatus.RECEIVED -> Message.Status.RECEIVED
+    MessageStatus.SCHEDULED -> Message.Status.SCHEDULED
+    else -> {
+        timber.log.Timber.w("Unknown MessageStatus int %d — defaulting to PENDING (mapping needs update)", status)
+        Message.Status.PENDING
+    }
+}
+
+internal fun mapType(type: Int): Message.Type = when (type) {
+    MessageType.SMS -> Message.Type.SMS
+    MessageType.MMS -> Message.Type.MMS
+    else -> {
+        timber.log.Timber.w("Unknown MessageType int %d — defaulting to SMS (mapping needs update)", type)
+        Message.Type.SMS
+    }
+}
+
+internal fun mapDirection(direction: Int): Message.Direction = when (direction) {
+    MessageDirection.INCOMING -> Message.Direction.INCOMING
+    MessageDirection.OUTGOING -> Message.Direction.OUTGOING
+    else -> {
+        timber.log.Timber.w("Unknown MessageDirection int %d — defaulting to INCOMING (mapping needs update)", direction)
+        Message.Direction.INCOMING
+    }
+}

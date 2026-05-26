@@ -330,157 +330,26 @@ fun SettingsScreen(
                 }
             }
 
-            SectionCard(
-                title = stringResource(R.string.settings_section_notifications),
-                icon = Icons.Outlined.Notifications,
-            ) {
-                ToggleRow(
-                    title = stringResource(R.string.settings_notifications_enabled),
-                    value = state.notifications.enabled,
-                    onChange = { v -> viewModel.update { it.copy(notifications = it.notifications.copy(enabled = v)) } },
-                )
-                ToggleRow(
-                    title = stringResource(R.string.settings_inline_reply),
-                    value = state.notifications.inlineReply,
-                    onChange = { v -> viewModel.update { it.copy(notifications = it.notifications.copy(inlineReply = v)) } },
-                )
-                ToggleRow(
-                    title = stringResource(R.string.settings_vibrate),
-                    value = state.notifications.vibrate,
-                    onChange = { v -> viewModel.update { it.copy(notifications = it.notifications.copy(vibrate = v)) } },
-                )
-                // v1.8.0 (bug 3 fix HIGH 3a) — expose PreviewMode dans l'UI.
-                // L'option existait en DataStore mais aucun toggle ne l'exposait.
-                // Sous-titre = libellé localisé de la valeur actuelle pour que
-                // l'utilisateur voit du premier coup d'œil son réglage actif.
-                val previewLabel = when (state.notifications.previewMode) {
-                    com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS ->
-                        stringResource(R.string.settings_notif_preview_always)
-                    com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED ->
-                        stringResource(R.string.settings_notif_preview_unlocked)
-                    com.filestech.sms.data.local.datastore.PreviewMode.NEVER ->
-                        stringResource(R.string.settings_notif_preview_never)
-                }
-                NavigationRow(
-                    title = stringResource(R.string.settings_notif_preview),
-                    description = previewLabel,
-                    onClick = { previewModePickerOpen = true },
-                )
-                // v1.8.0 (bug 3 fix MEDIUM 3b) — wire NotificationStyle (dead field).
-                val styleLabel = when (state.notifications.style) {
-                    com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP ->
-                        stringResource(R.string.settings_notif_style_heads_up)
-                    com.filestech.sms.data.local.datastore.NotificationStyle.BANNER ->
-                        stringResource(R.string.settings_notif_style_banner)
-                    com.filestech.sms.data.local.datastore.NotificationStyle.SILENT ->
-                        stringResource(R.string.settings_notif_style_silent)
-                }
-                NavigationRow(
-                    title = stringResource(R.string.settings_notif_style),
-                    description = styleLabel,
-                    onClick = { notifStylePickerOpen = true },
-                )
-                // v1.8.0 (bug 3 fix MEDIUM 3c) — deeplink réglages système app.
-                // ACTION_APP_NOTIFICATION_SETTINGS (API 26+) ouvre directement la
-                // page Paramètres → Apps → SMS Tech → Notifications, où l'user
-                // peut vérifier que ses canaux ne sont pas désactivés.
-                NavigationRow(
-                    title = stringResource(R.string.settings_notif_open_system),
-                    description = stringResource(R.string.settings_notif_open_system_desc),
-                    onClick = {
-                        val intent = android.content.Intent(
-                            android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS,
-                        ).putExtra(
-                            android.provider.Settings.EXTRA_APP_PACKAGE,
-                            ctx.packageName,
-                        )
-                        runCatching { ctx.startActivity(intent) }
-                    },
-                )
-            }
+            // v1.15.0 — Section extraite vers [NotificationsSection] private @Composable.
+            // Comportement identique, lecture facilitée (avant : 68 lignes inline ici).
+            NotificationsSection(
+                notifications = state.notifications,
+                onUpdate = viewModel::update,
+                onOpenPreviewPicker = { previewModePickerOpen = true },
+                onOpenStylePicker = { notifStylePickerOpen = true },
+            )
 
-            SectionCard(
-                title = stringResource(R.string.settings_section_security),
-                icon = Icons.Outlined.Shield,
-            ) {
-                // App lock entry — opens the lock-mode picker (None / PIN). Subtitle reflects the
-                // current state so the user sees at a glance whether the lock is armed.
-                val currentLockLabel = when (state.security.lockMode) {
-                    com.filestech.sms.data.local.datastore.LockMode.PIN ->
-                        stringResource(R.string.lock_mode_pin)
-                    else -> stringResource(R.string.lock_mode_off)
-                }
-                NavigationRow(
-                    title = stringResource(R.string.settings_app_lock),
-                    description = currentLockLabel,
-                    onClick = { lockModePickerOpen = true },
-                )
-                ToggleRow(
-                    title = stringResource(R.string.settings_flag_secure),
-                    description = stringResource(R.string.settings_flag_secure_desc),
-                    value = state.security.flagSecure,
-                    onChange = { v -> viewModel.update { it.copy(security = it.security.copy(flagSecure = v)) } },
-                )
-                ToggleRow(
-                    title = stringResource(R.string.settings_lock_vault_on_leave),
-                    description = stringResource(R.string.settings_lock_vault_on_leave_desc),
-                    value = state.security.lockVaultOnLeave,
-                    onChange = { v -> viewModel.update { it.copy(security = it.security.copy(lockVaultOnLeave = v)) } },
-                )
-                // v1.11.0 — Sujet 3 anti-smishing.
-                ToggleRow(
-                    title = stringResource(R.string.settings_smishing_detection),
-                    description = stringResource(R.string.settings_smishing_detection_desc),
-                    value = state.security.smishingDetectionEnabled,
-                    onChange = { v ->
-                        viewModel.update {
-                            it.copy(security = it.security.copy(smishingDetectionEnabled = v))
-                        }
-                    },
-                )
-                // v1.13.0 — PIN/pass distinct pour le coffre (second-factor).
-                // ToggleRow non-onChange (le toggle déclenche un setup dialog
-                // au lieu d'écrire directement la valeur, sinon on activerait
-                // le gate sans avoir posé de hash, ce qui dégraderait l'UX au
-                // prochain unlock vault). C'est le `vaultPinSetupOpen` qui
-                // contrôle la suite.
-                // v1.13.0 audit UX-2 — masqué en PanicDecoy : l'existence du
-                // toggle révélerait la présence d'un coffre dans Settings,
-                // alors que le cadenas TopAppBar et la nav vers Vault sont
-                // déjà masqués en décoy. Cohérence cross-écran.
-                if (!isPanicDecoy) {
-                    ToggleRow(
-                        title = stringResource(R.string.settings_vault_pin_title),
-                        description = stringResource(R.string.settings_vault_pin_desc),
-                        value = state.security.vaultPinEnabled,
-                        onChange = { v ->
-                            if (v) vaultPinSetupOpen = true
-                            else vaultPinClearConfirmOpen = true
-                        },
-                    )
-                    if (state.security.vaultPinEnabled) {
-                        NavigationRow(
-                            title = stringResource(R.string.settings_vault_pin_change),
-                            onClick = { vaultPinSetupOpen = true },
-                        )
-                    }
-                }
-                NavigationRow(
-                    title = stringResource(R.string.settings_purge_blocked),
-                    description = stringResource(R.string.settings_purge_blocked_desc),
-                    // v1.8.0 — dialog de confirmation (action irréversible).
-                    onClick = { showPurgeBlockedConfirm = true },
-                )
-                // v1.3.0 — auto-purge historique selon rétention choisie. Description sur
-                // 2 lignes : statut courant + rappel du filet de sécurité 5 j + favoris.
-                val currentRetentionLabel = retentionLabel(state.security.autoDeleteOlderThanDays)
-                val explainer = stringResource(R.string.settings_auto_delete_explainer)
-                NavigationRow(
-                    title = stringResource(R.string.settings_auto_delete_title),
-                    description = "$currentRetentionLabel\n$explainer",
-                    onClick = { autoDeletePickerOpen = true },
-                )
-            }
+            // v1.15.0 — Section extraite vers [SecuritySection] private @Composable.
+            SecuritySection(
+                security = state.security,
+                isPanicDecoy = isPanicDecoy,
+                onUpdate = viewModel::update,
+                onOpenLockModePicker = { lockModePickerOpen = true },
+                onOpenVaultPinSetup = { vaultPinSetupOpen = true },
+                onOpenVaultPinClearConfirm = { vaultPinClearConfirmOpen = true },
+                onOpenPurgeBlockedConfirm = { showPurgeBlockedConfirm = true },
+                onOpenAutoDeletePicker = { autoDeletePickerOpen = true },
+            )
 
             // v1.9.0 — Safety call. Section dédiée pour clarté visuelle :
             // c'est une feature de sécurité PERSONNELLE (envoyer SMS à mes
@@ -536,109 +405,17 @@ fun SettingsScreen(
             // contacts garantie par la réutilisation de la même liste.
             // v1.10.0 audit SEC-1 — entièrement masquée en PanicDecoy
             // (l'agresseur ne doit pas savoir que la feature existe).
+            // v1.15.0 — Section extraite vers [EmergencySection] private @Composable.
             if (!isPanicDecoy) {
-                SectionCard(
-                    title = stringResource(R.string.settings_section_emergency),
-                    icon = Icons.Outlined.WarningAmber,
-                ) {
-                    val emergency = state.security.emergency
-                    if (emergency.enabled) {
-                        // v1.10.0 polish — récap visuel quand armé (parallèle
-                        // exact de SafetyCallArmedRecap pour cohérence UX).
-                        EmergencyArmedRecap(
-                            config = emergency,
-                            contacts = state.security.safetyCall.contacts,
-                            onModify = onOpenEmergencySetup,
-                            onOpen = onOpenEmergency,
-                        )
-                    } else {
-                        NavigationRow(
-                            title = stringResource(R.string.settings_emergency_title),
-                            description = stringResource(R.string.settings_emergency_disabled) +
-                                "\n" + stringResource(R.string.settings_emergency_desc),
-                            onClick = onOpenEmergencySetup,
-                        )
-                    }
-                    // v1.12.0 — Toggle raccourci urgence en notification persistante
-                    // lock-screen. Disponible uniquement si emergency.enabled (un
-                    // raccourci qui ouvre dans le vide n'a aucun sens).
-                    if (emergency.enabled) {
-                        ToggleRow(
-                            title = stringResource(R.string.settings_emergency_shortcut_title),
-                            description = stringResource(R.string.settings_emergency_shortcut_desc),
-                            value = state.security.emergencyShortcutEnabled,
-                            onChange = { v ->
-                                viewModel.update {
-                                    it.copy(security = it.security.copy(emergencyShortcutEnabled = v))
-                                }
-                            },
-                        )
-                        // v1.12.0 — Toggle bouton Police FR 17 (FR-specific opt-in).
-                        // Audit fix S2 : disponible uniquement si le raccourci urgence
-                        // est lui-même ON. Le toggle Police agit sur les actions de la
-                        // notif persistante + l'écran Emergency : sans raccourci, il
-                        // reste un orphelin qui dupliquerait juste le bouton 112.
-                        if (state.security.emergencyShortcutEnabled) {
-                            ToggleRow(
-                                title = stringResource(R.string.settings_emergency_call_police_title),
-                                description = stringResource(R.string.settings_emergency_call_police_desc),
-                                value = state.security.emergencyCallPoliceEnabled,
-                                onChange = { v ->
-                                    viewModel.update {
-                                        it.copy(security = it.security.copy(emergencyCallPoliceEnabled = v))
-                                    }
-                                },
-                            )
-                        }
-                        // v1.14.0 — `emergencyCallBehavior` picker retiré v1.14.1 :
-                        // l'écran Mode urgence v1.14.1 utilise toujours direct
-                        // call (CALL_PHONE permission) avec fallback automatique
-                        // au composeur si permission refusée. Le picker UI ici
-                        // n'aurait plus d'effet → supprimé pour cohérence UX.
-                        // La clé DataStore `emergencyCallBehavior` reste pour
-                        // compat ascendante mais devient un dead field.
-                        //
-                        // v1.14.0 — opt-in SMS "Je vais bien" sur kill-switch.
-                        ToggleRow(
-                            title = stringResource(R.string.settings_send_i_am_ok_sms_title),
-                            description = stringResource(R.string.settings_send_i_am_ok_sms_desc),
-                            value = state.security.sendIAmOkSmsOnReset,
-                            onChange = { v ->
-                                viewModel.update {
-                                    it.copy(security = it.security.copy(sendIAmOkSmsOnReset = v))
-                                }
-                            },
-                        )
-                        // v1.14.5 — Toggle "Inclure position GPS dans le SMS"
-                        // accessible directement depuis Settings (avant : seul
-                        // EmergencySetupScreen exposait ce toggle, l'user
-                        // devait y naviguer pour activer la géoloc). Quand
-                        // l'user passe OFF→ON, on demande la permission
-                        // ACCESS_FINE_LOCATION runtime immédiatement (avec
-                        // les mêmes considérations que dans EmergencySetupScreen).
-                        ToggleRow(
-                            title = stringResource(R.string.settings_emergency_include_location_title),
-                            description = stringResource(R.string.settings_emergency_include_location_desc),
-                            value = emergency.includeLocation,
-                            onChange = { v ->
-                                viewModel.update {
-                                    it.copy(security = it.security.copy(
-                                        emergency = it.security.emergency.copy(includeLocation = v),
-                                    ))
-                                }
-                                // Au passage OFF→ON sans perm déjà accordée → demande runtime.
-                                if (v) {
-                                    val granted = androidx.core.content.ContextCompat.checkSelfPermission(
-                                        ctx, android.Manifest.permission.ACCESS_FINE_LOCATION,
-                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                                    if (!granted) {
-                                        locationPermLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
+                EmergencySection(
+                    security = state.security,
+                    onUpdate = viewModel::update,
+                    onOpenEmergencySetup = onOpenEmergencySetup,
+                    onOpenEmergency = onOpenEmergency,
+                    onRequestLocationPermission = {
+                        locationPermLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    },
+                )
             }
 
             SectionCard(
@@ -2613,4 +2390,315 @@ private fun VaultPinSetupDialog(
             }
         },
     )
+}
+
+// ============================================================================
+// v1.15.0 — Sections extraites de SettingsScreen pour réduire la taille du
+// Composable principal (était >1000 lignes). Comportement strictement identique.
+// ============================================================================
+
+/**
+ * v1.15.0 — Section Notifications. Extraite de [SettingsScreen] (lignes 333-400 v1.14.9).
+ *
+ * Pourquoi extraire ? La fonction `SettingsScreen` dépassait 1000 lignes avec 10 sections
+ * imbriquées + 14 `mutableStateOf` au niveau parent — lisibilité dégradée, previews Compose
+ * impossibles section par section. La factorisation conserve les pickers state au parent
+ * (multi-callsite via callbacks) tout en isolant le rendu par section.
+ */
+@Composable
+private fun NotificationsSection(
+    notifications: com.filestech.sms.data.local.datastore.NotificationSettings,
+    onUpdate: (transform: (com.filestech.sms.data.local.datastore.AppSettings) -> com.filestech.sms.data.local.datastore.AppSettings) -> Unit,
+    onOpenPreviewPicker: () -> Unit,
+    onOpenStylePicker: () -> Unit,
+) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    SectionCard(
+        title = stringResource(R.string.settings_section_notifications),
+        icon = Icons.Outlined.Notifications,
+    ) {
+        ToggleRow(
+            title = stringResource(R.string.settings_notifications_enabled),
+            value = notifications.enabled,
+            onChange = { v -> onUpdate { it.copy(notifications = it.notifications.copy(enabled = v)) } },
+        )
+        ToggleRow(
+            title = stringResource(R.string.settings_inline_reply),
+            value = notifications.inlineReply,
+            onChange = { v -> onUpdate { it.copy(notifications = it.notifications.copy(inlineReply = v)) } },
+        )
+        ToggleRow(
+            title = stringResource(R.string.settings_vibrate),
+            value = notifications.vibrate,
+            onChange = { v -> onUpdate { it.copy(notifications = it.notifications.copy(vibrate = v)) } },
+        )
+        // v1.8.0 (bug 3 fix HIGH 3a) — expose PreviewMode dans l'UI.
+        // L'option existait en DataStore mais aucun toggle ne l'exposait.
+        // Sous-titre = libellé localisé de la valeur actuelle pour que
+        // l'utilisateur voit du premier coup d'œil son réglage actif.
+        val previewLabel = when (notifications.previewMode) {
+            com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS ->
+                stringResource(R.string.settings_notif_preview_always)
+            com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED ->
+                stringResource(R.string.settings_notif_preview_unlocked)
+            com.filestech.sms.data.local.datastore.PreviewMode.NEVER ->
+                stringResource(R.string.settings_notif_preview_never)
+        }
+        NavigationRow(
+            title = stringResource(R.string.settings_notif_preview),
+            description = previewLabel,
+            onClick = onOpenPreviewPicker,
+        )
+        // v1.8.0 (bug 3 fix MEDIUM 3b) — wire NotificationStyle (dead field).
+        val styleLabel = when (notifications.style) {
+            com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP ->
+                stringResource(R.string.settings_notif_style_heads_up)
+            com.filestech.sms.data.local.datastore.NotificationStyle.BANNER ->
+                stringResource(R.string.settings_notif_style_banner)
+            com.filestech.sms.data.local.datastore.NotificationStyle.SILENT ->
+                stringResource(R.string.settings_notif_style_silent)
+        }
+        NavigationRow(
+            title = stringResource(R.string.settings_notif_style),
+            description = styleLabel,
+            onClick = onOpenStylePicker,
+        )
+        // v1.8.0 (bug 3 fix MEDIUM 3c) — deeplink réglages système app.
+        // ACTION_APP_NOTIFICATION_SETTINGS (API 26+) ouvre directement la
+        // page Paramètres → Apps → SMS Tech → Notifications, où l'user
+        // peut vérifier que ses canaux ne sont pas désactivés.
+        NavigationRow(
+            title = stringResource(R.string.settings_notif_open_system),
+            description = stringResource(R.string.settings_notif_open_system_desc),
+            onClick = {
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS,
+                ).putExtra(
+                    android.provider.Settings.EXTRA_APP_PACKAGE,
+                    ctx.packageName,
+                )
+                runCatching { ctx.startActivity(intent) }
+            },
+        )
+    }
+}
+
+/**
+ * v1.15.0 — Section Sécurité. Extraite de [SettingsScreen] (lignes 402-491 v1.14.9).
+ *
+ * Pickers (`lockModePickerOpen`, `vaultPinSetupOpen`, `vaultPinClearConfirmOpen`,
+ * `showPurgeBlockedConfirm`, `autoDeletePickerOpen`) restent gérés par le parent —
+ * la section ne reçoit que les callbacks d'ouverture. Cohérent avec [NotificationsSection].
+ *
+ * Comportement vault-PIN masqué en PanicDecoy préservé (audit UX-2 v1.13.0).
+ */
+@Composable
+private fun SecuritySection(
+    security: com.filestech.sms.data.local.datastore.SecuritySettings,
+    isPanicDecoy: Boolean,
+    onUpdate: (transform: (com.filestech.sms.data.local.datastore.AppSettings) -> com.filestech.sms.data.local.datastore.AppSettings) -> Unit,
+    onOpenLockModePicker: () -> Unit,
+    onOpenVaultPinSetup: () -> Unit,
+    onOpenVaultPinClearConfirm: () -> Unit,
+    onOpenPurgeBlockedConfirm: () -> Unit,
+    onOpenAutoDeletePicker: () -> Unit,
+) {
+    SectionCard(
+        title = stringResource(R.string.settings_section_security),
+        icon = Icons.Outlined.Shield,
+    ) {
+        // App lock entry — opens the lock-mode picker (None / PIN). Subtitle reflects the
+        // current state so the user sees at a glance whether the lock is armed.
+        val currentLockLabel = when (security.lockMode) {
+            com.filestech.sms.data.local.datastore.LockMode.PIN ->
+                stringResource(R.string.lock_mode_pin)
+            else -> stringResource(R.string.lock_mode_off)
+        }
+        NavigationRow(
+            title = stringResource(R.string.settings_app_lock),
+            description = currentLockLabel,
+            onClick = onOpenLockModePicker,
+        )
+        ToggleRow(
+            title = stringResource(R.string.settings_flag_secure),
+            description = stringResource(R.string.settings_flag_secure_desc),
+            value = security.flagSecure,
+            onChange = { v -> onUpdate { it.copy(security = it.security.copy(flagSecure = v)) } },
+        )
+        ToggleRow(
+            title = stringResource(R.string.settings_lock_vault_on_leave),
+            description = stringResource(R.string.settings_lock_vault_on_leave_desc),
+            value = security.lockVaultOnLeave,
+            onChange = { v -> onUpdate { it.copy(security = it.security.copy(lockVaultOnLeave = v)) } },
+        )
+        // v1.11.0 — Sujet 3 anti-smishing.
+        ToggleRow(
+            title = stringResource(R.string.settings_smishing_detection),
+            description = stringResource(R.string.settings_smishing_detection_desc),
+            value = security.smishingDetectionEnabled,
+            onChange = { v ->
+                onUpdate {
+                    it.copy(security = it.security.copy(smishingDetectionEnabled = v))
+                }
+            },
+        )
+        // v1.13.0 — PIN/pass distinct pour le coffre (second-factor).
+        // ToggleRow non-onChange (le toggle déclenche un setup dialog au lieu d'écrire
+        // directement la valeur, sinon on activerait le gate sans avoir posé de hash,
+        // ce qui dégraderait l'UX au prochain unlock vault). C'est le `vaultPinSetupOpen`
+        // qui contrôle la suite.
+        // v1.13.0 audit UX-2 — masqué en PanicDecoy : l'existence du toggle révélerait
+        // la présence d'un coffre dans Settings, alors que le cadenas TopAppBar et la
+        // nav vers Vault sont déjà masqués en décoy. Cohérence cross-écran.
+        if (!isPanicDecoy) {
+            ToggleRow(
+                title = stringResource(R.string.settings_vault_pin_title),
+                description = stringResource(R.string.settings_vault_pin_desc),
+                value = security.vaultPinEnabled,
+                onChange = { v ->
+                    if (v) onOpenVaultPinSetup()
+                    else onOpenVaultPinClearConfirm()
+                },
+            )
+            if (security.vaultPinEnabled) {
+                NavigationRow(
+                    title = stringResource(R.string.settings_vault_pin_change),
+                    onClick = onOpenVaultPinSetup,
+                )
+            }
+        }
+        NavigationRow(
+            title = stringResource(R.string.settings_purge_blocked),
+            description = stringResource(R.string.settings_purge_blocked_desc),
+            // v1.8.0 — dialog de confirmation (action irréversible).
+            onClick = onOpenPurgeBlockedConfirm,
+        )
+        // v1.3.0 — auto-purge historique selon rétention choisie. Description sur
+        // 2 lignes : statut courant + rappel du filet de sécurité 5 j + favoris.
+        val currentRetentionLabel = retentionLabel(security.autoDeleteOlderThanDays)
+        val explainer = stringResource(R.string.settings_auto_delete_explainer)
+        NavigationRow(
+            title = stringResource(R.string.settings_auto_delete_title),
+            description = "$currentRetentionLabel\n$explainer",
+            onClick = onOpenAutoDeletePicker,
+        )
+    }
+}
+
+/**
+ * v1.15.0 — Section Mode urgence. Extraite de [SettingsScreen] (lignes 540-680 v1.14.9, la
+ * section la plus volumineuse — recap + 4 toggles conditionnels).
+ *
+ * Le bouton "Inclure position GPS" déclenche [onRequestLocationPermission] lors d'un toggle
+ * OFF→ON sans permission accordée. La logique de revert sur refus est gérée côté parent via
+ * le `locationPermLauncher` qui appelle [onUpdate] en cas de denied.
+ *
+ * Toute la section est gated par `if (!isPanicDecoy)` au call-site parent (audit SEC-1 v1.10.0).
+ */
+@Composable
+private fun EmergencySection(
+    security: com.filestech.sms.data.local.datastore.SecuritySettings,
+    onUpdate: (transform: (com.filestech.sms.data.local.datastore.AppSettings) -> com.filestech.sms.data.local.datastore.AppSettings) -> Unit,
+    onOpenEmergencySetup: () -> Unit,
+    onOpenEmergency: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
+) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    SectionCard(
+        title = stringResource(R.string.settings_section_emergency),
+        icon = Icons.Outlined.WarningAmber,
+    ) {
+        val emergency = security.emergency
+        if (emergency.enabled) {
+            // v1.10.0 polish — récap visuel quand armé (parallèle exact de SafetyCallArmedRecap
+            // pour cohérence UX).
+            EmergencyArmedRecap(
+                config = emergency,
+                contacts = security.safetyCall.contacts,
+                onModify = onOpenEmergencySetup,
+                onOpen = onOpenEmergency,
+            )
+        } else {
+            NavigationRow(
+                title = stringResource(R.string.settings_emergency_title),
+                description = stringResource(R.string.settings_emergency_disabled) +
+                    "\n" + stringResource(R.string.settings_emergency_desc),
+                onClick = onOpenEmergencySetup,
+            )
+        }
+        // v1.12.0 — Toggle raccourci urgence en notification persistante lock-screen.
+        // Disponible uniquement si emergency.enabled (un raccourci qui ouvre dans le vide
+        // n'a aucun sens).
+        if (emergency.enabled) {
+            ToggleRow(
+                title = stringResource(R.string.settings_emergency_shortcut_title),
+                description = stringResource(R.string.settings_emergency_shortcut_desc),
+                value = security.emergencyShortcutEnabled,
+                onChange = { v ->
+                    onUpdate {
+                        it.copy(security = it.security.copy(emergencyShortcutEnabled = v))
+                    }
+                },
+            )
+            // v1.12.0 — Toggle bouton Police FR 17 (FR-specific opt-in).
+            // Audit fix S2 : disponible uniquement si le raccourci urgence est lui-même ON.
+            // Le toggle Police agit sur les actions de la notif persistante + l'écran
+            // Emergency : sans raccourci, il reste un orphelin qui dupliquerait juste 112.
+            if (security.emergencyShortcutEnabled) {
+                ToggleRow(
+                    title = stringResource(R.string.settings_emergency_call_police_title),
+                    description = stringResource(R.string.settings_emergency_call_police_desc),
+                    value = security.emergencyCallPoliceEnabled,
+                    onChange = { v ->
+                        onUpdate {
+                            it.copy(security = it.security.copy(emergencyCallPoliceEnabled = v))
+                        }
+                    },
+                )
+            }
+            // v1.14.0 — `emergencyCallBehavior` picker retiré v1.14.1 : l'écran Mode urgence
+            // v1.14.1 utilise toujours direct call (CALL_PHONE permission) avec fallback
+            // automatique au composeur si permission refusée. Le picker UI ici n'aurait
+            // plus d'effet → supprimé pour cohérence UX. La clé DataStore reste pour
+            // compat ascendante mais devient un dead field.
+            //
+            // v1.14.0 — opt-in SMS "Je vais bien" sur kill-switch.
+            ToggleRow(
+                title = stringResource(R.string.settings_send_i_am_ok_sms_title),
+                description = stringResource(R.string.settings_send_i_am_ok_sms_desc),
+                value = security.sendIAmOkSmsOnReset,
+                onChange = { v ->
+                    onUpdate {
+                        it.copy(security = it.security.copy(sendIAmOkSmsOnReset = v))
+                    }
+                },
+            )
+            // v1.14.5 — Toggle "Inclure position GPS dans le SMS" accessible directement
+            // depuis Settings (avant : seul EmergencySetupScreen exposait ce toggle, l'user
+            // devait y naviguer pour activer la géoloc). Quand l'user passe OFF→ON, on
+            // demande la permission ACCESS_FINE_LOCATION runtime immédiatement (avec les
+            // mêmes considérations que dans EmergencySetupScreen).
+            ToggleRow(
+                title = stringResource(R.string.settings_emergency_include_location_title),
+                description = stringResource(R.string.settings_emergency_include_location_desc),
+                value = emergency.includeLocation,
+                onChange = { v ->
+                    onUpdate {
+                        it.copy(security = it.security.copy(
+                            emergency = it.security.emergency.copy(includeLocation = v),
+                        ))
+                    }
+                    // Au passage OFF→ON sans perm déjà accordée → demande runtime.
+                    if (v) {
+                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                            ctx, android.Manifest.permission.ACCESS_FINE_LOCATION,
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if (!granted) {
+                            onRequestLocationPermission()
+                        }
+                    }
+                },
+            )
+        }
+    }
 }
