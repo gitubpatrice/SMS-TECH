@@ -59,7 +59,8 @@ class PanicService @Inject constructor(
         // counters and lock the user out before they had a chance to authenticate.
         runCatching {
             securityStore.setFailCount(0)
-            securityStore.setLockoutUntil(0L)
+            // v1.14.8 R7 — clearLockout wipe les 3 fields (wall + mono baseline + duration).
+            securityStore.clearLockout()
         }
         runCatching {
             File(context.filesDir, "mms_attachments").deleteRecursively()

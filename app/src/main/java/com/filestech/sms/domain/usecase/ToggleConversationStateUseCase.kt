@@ -43,5 +43,12 @@ class ToggleConversationStateUseCase @Inject constructor(
     suspend fun requestMoveToVault(id: Long, intoVault: Boolean): Outcome<Unit> =
         vault.requestMoveToVault(id, intoVault)
 
+    /**
+     * v1.14.8 R8 — Bulk move atomique. Wrap [VaultManager.requestBulkMoveToVault] qui
+     * délègue à [ConversationRepository.bulkMoveToVault] (transaction Room).
+     */
+    suspend fun requestBulkMoveToVault(ids: List<Long>, intoVault: Boolean): Outcome<Int> =
+        vault.requestBulkMoveToVault(ids, intoVault)
+
     suspend fun delete(id: Long) = repo.delete(id)
 }

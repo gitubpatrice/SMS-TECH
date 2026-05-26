@@ -1,0 +1,16 @@
+v1.14.8 — Audit fixes + security hardening
+
+• Confirm before resending a timed-out SMS
+  (avoids duplicates).
+• Failed incoming MMS now notify you.
+• "↓ N new" chip in thread when scrolled up
+  with new messages.
+• Lockout countdown ticks every second.
+• Biometric double-tap no longer silently
+  fails.
+• Lockout immune to system clock changes.
+• Vault bulk move atomic.
+• Decoy session no longer persists with
+  "Lock next launch".
+
+Internal: security/perf hardening.

@@ -678,7 +678,7 @@ class ThreadViewModel @Inject constructor(
             val displayName = resolveDisplayName(uri) ?: "Pièce jointe"
             val file = copyAttachmentToCache(uri, mime)
             if (file == null) {
-                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_COPY_FAILED, isError = true))
+                _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))
                 return@launch
             }
             // Auto-compress images bigger than the carrier cap. Most photos pickers hand back
@@ -700,7 +700,7 @@ class ThreadViewModel @Inject constructor(
             val projected = currentTotal + finalFile.length() + draftLen
             if (projected > CARRIER_PAYLOAD_CAP_BYTES) {
                 runCatching { finalFile.delete() }
-                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_CAP_REACHED))
+                _events.tryEmit(Event.ShowSnackbar(snackAttachCapReached()))
                 return@launch
             }
             _state.update {
@@ -739,7 +739,7 @@ class ThreadViewModel @Inject constructor(
         // les PJ et fait dépasser le total).
         val totalBytes = pending.sumOf { it.sizeBytes } + textBody.length.toLong()
         if (totalBytes > CARRIER_PAYLOAD_CAP_BYTES) {
-            _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_CAP_REACHED))
+            _events.tryEmit(Event.ShowSnackbar(snackAttachCapReached()))
             return
         }
 
@@ -763,7 +763,7 @@ class ThreadViewModel @Inject constructor(
                     )
                 }
                 repo.setDraft(conversationId, null)
-                _events.tryEmit(Event.ShowSnackbar(SNACK_ATTACH_SENT))
+                _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
             }
             is Outcome.Failure -> {
                 // Garde les PJ stagées pour retry, ne supprime pas les fichiers cache.
@@ -798,7 +798,7 @@ class ThreadViewModel @Inject constructor(
 
     /** Resolves OpenableColumns.DISPLAY_NAME for a content URI. */
     private suspend fun resolveDisplayName(uri: android.net.Uri): String? =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        kotlinx.coroutines.withContext(io) {
             runCatching {
                 context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                     if (c.moveToFirst()) c.getString(0) else null
@@ -812,7 +812,7 @@ class ThreadViewModel @Inject constructor(
      * (new file in the same dir) or null if everything failed.
      */
     private suspend fun compressImage(src: java.io.File): java.io.File? =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        kotlinx.coroutines.withContext(io) {
             val opts = android.graphics.BitmapFactory.Options()
             opts.inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
             val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, opts) }
@@ -856,7 +856,7 @@ class ThreadViewModel @Inject constructor(
      * the moment the picker activity finishes). Returns `null` on IO error or empty content.
      */
     private suspend fun copyAttachmentToCache(uri: android.net.Uri, mime: String): java.io.File? =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        kotlinx.coroutines.withContext(io) {
             val ext = mime.substringAfter('/', "bin").take(8).replace(Regex("[^A-Za-z0-9]"), "")
             val dir = java.io.File(context.cacheDir, "media_outgoing").apply { mkdirs() }
             val target = java.io.File(
@@ -966,7 +966,7 @@ class ThreadViewModel @Inject constructor(
                             )
                         }
                         if (event.cappedByLimit) {
-                            _events.tryEmit(Event.ShowSnackbar(SNACK_MAX_DURATION))
+                            _events.tryEmit(Event.ShowSnackbar(snackMaxDuration()))
                         }
                     }
                     is VoiceRecorder.Event.Failed -> {
@@ -1065,7 +1065,7 @@ class ThreadViewModel @Inject constructor(
         )) {
             is Outcome.Success -> {
                 _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }
-                _events.tryEmit(Event.ShowSnackbar(SNACK_VOICE_SENT))
+                _events.tryEmit(Event.ShowSnackbar(snackVoiceSent()))
             }
             is Outcome.Failure -> {
                 _state.update { it.copy(isSendingVoice = false) }
@@ -1117,7 +1117,7 @@ class ThreadViewModel @Inject constructor(
         viewModelScope.launch {
             for (addr in addresses) blockNumber.invoke(addr.raw)
             toggleConvState.delete(conversationId)
-            _events.tryEmit(Event.ShowSnackbar("Numéro(s) bloqué(s)"))
+            _events.tryEmit(Event.ShowSnackbar(snackNumbersBlocked()))
             onDone()
         }
     }
@@ -1255,20 +1255,27 @@ class ThreadViewModel @Inject constructor(
         _state.value.pendingAttachments.forEach { p -> runCatching { p.file.delete() } }
     }
 
-    private companion object {
-        // v1.3.0 audit Q8 — calculé depuis `VoiceRecorder.MAX_DURATION_MS` pour qu'un futur
-        // changement du cap soit reflété sans drift dans le snack utilisateur.
-        val SNACK_MAX_DURATION: String = "Limite de ${VoiceRecorder.MAX_DURATION_MS / 1000} s atteinte"
-        const val SNACK_ATTACH_SENT: String = "Pièce jointe envoyée"
-        const val SNACK_ATTACH_COPY_FAILED: String = "Impossible de lire la pièce jointe"
-        const val SNACK_ATTACH_CAP_REACHED: String =
-            "Limite MMS atteinte (280 Ko). Retirez une pièce jointe ou réduisez le texte."
+    // Audit ARCH-M2 (v1.14.8) — Snackbars i18n : strings extraites en R.string FR+EN. Les
+    // anciennes constantes `SNACK_*` (FR hardcodé) sont remplacées par ces helpers instance
+    // qui résolvent via `context.getString`. Cohérent avec le reste de l'app (zéro hardcoded
+    // hors comments / debug).
+    private fun snackMaxDuration(): String = context.getString(
+        com.filestech.sms.R.string.snack_thread_max_duration,
+        (VoiceRecorder.MAX_DURATION_MS / 1000).toInt(),
+    )
+    private fun snackAttachSent(): String = context.getString(com.filestech.sms.R.string.snack_thread_attach_sent)
+    private fun snackAttachCopyFailed(): String = context.getString(com.filestech.sms.R.string.snack_thread_attach_copy_failed)
+    private fun snackAttachCapReached(): String = context.getString(com.filestech.sms.R.string.snack_thread_attach_cap_reached)
+    private fun snackVoiceSent(): String = context.getString(com.filestech.sms.R.string.snack_thread_voice_sent)
+    private fun snackNumbersBlocked(): String = context.getString(com.filestech.sms.R.string.snack_thread_numbers_blocked)
 
+    private companion object {
         // Image compression knobs. The first threshold says "do nothing for tiny images";
         // the second is the hard target used by the quality loop.
         const val IMAGE_COMPRESS_THRESHOLD_BYTES: Long = 250L * 1024L
-        const val CARRIER_PAYLOAD_CAP_BYTES: Long = 280L * 1024L
-        const val SNACK_VOICE_SENT: String = "Message vocal envoyé"
+        // Audit C3 (v1.14.8) — Alias local pointant vers la SOURCE UNIQUE [MmsConstants].
+        // Avant : `280L * 1024L` dupliqué ici ET dans `VoiceRecorder.MAX_SIZE_BYTES`.
+        const val CARRIER_PAYLOAD_CAP_BYTES: Long = com.filestech.sms.core.mms.MmsConstants.CARRIER_PAYLOAD_CAP_BYTES
 
         /**
          * X2 audit v1.3.1 — fenêtre de dédup pour les envois SMS de réaction. Un user qui

@@ -1,5 +1,6 @@
 package com.filestech.sms.security
 
+import android.os.SystemClock
 import com.filestech.sms.core.crypto.PasswordKdf
 import com.filestech.sms.core.crypto.wipe
 import com.filestech.sms.data.local.datastore.SecurityStore
@@ -154,9 +155,13 @@ class AppLockManager @Inject constructor(
 
     suspend fun attemptUnlock(candidate: CharArray): LockState = withContext(io) {
         val now = System.currentTimeMillis()
-        val lockoutUntil = securityStore.lockoutUntil.first()
-        if (lockoutUntil > now) {
-            return@withContext LockState.LockedOut(lockoutUntil).also { _state.value = it }
+        val nowElapsed = SystemClock.elapsedRealtime()
+        // Audit R7 (v1.14.8) — Snapshot mono+wall vs simple wall check. Si mono dit "encore
+        // en lockout" (immune à la manipulation horloge), on respecte le lockout même si wall
+        // dit "expiré". Fallback wall si reboot détecté (nowElapsed < setAtElapsed).
+        val lockoutSnap = securityStore.lockoutSnapshot()
+        if (lockoutSnap.isLockoutActive(now, nowElapsed)) {
+            return@withContext LockState.LockedOut(lockoutSnap.untilWall).also { _state.value = it }
         }
 
         // Audit P1-3 (v1.2.0): both PIN and panic snapshots are evaluated and the failure
@@ -179,7 +184,7 @@ class AppLockManager @Inject constructor(
 
         if (matches(candidate, snap.salt, snap.hash, snap.iterations)) {
             securityStore.setFailCount(0)
-            securityStore.setLockoutUntil(0L)
+            securityStore.clearLockout()
             securityStore.setLastUnlock(now)
             _state.value = LockState.Unlocked
             LockState.Unlocked
@@ -189,7 +194,9 @@ class AppLockManager @Inject constructor(
             if (newFail >= LOCKOUT_THRESHOLD) {
                 val delayMs = backoffMillis(newFail - LOCKOUT_THRESHOLD)
                 val until = now + delayMs
-                securityStore.setLockoutUntil(until)
+                // Audit R7 — Persiste wall + mono baseline + durée pour défense en profondeur
+                // contre la manipulation de l'horloge système.
+                securityStore.setLockout(untilWall = until, durationMs = delayMs, nowElapsed = nowElapsed)
                 _state.value = LockState.LockedOut(until)
                 LockState.LockedOut(until)
             } else {
@@ -223,9 +230,21 @@ class AppLockManager @Inject constructor(
     private val biometricChallenge = java.util.concurrent.atomic.AtomicReference<ByteArray?>(null)
     private val biometricRng = java.security.SecureRandom()
 
+    /**
+     * Audit R6 (v1.14.8) — Double-tap guard. Si un challenge est déjà en vol (prompt biométrie
+     * pas encore consommé), on RÉUTILISE le même token au lieu d'écraser. Avant : un double-tap
+     * rapide produisait token A puis token B (écrasement), si la 1ère réponse arrivait elle
+     * trouvait `getAndSet(null)=B≠A` → échec silencieux + l'user devait taper une 3ème fois.
+     * Maintenant les deux prompts partagent le même challenge → la 1ère consommation réussit,
+     * la 2ème no-op proprement (state déjà Unlocked, ou challenge déjà null).
+     */
     fun beginBiometricChallenge(): ByteArray {
+        biometricChallenge.get()?.let { return it.copyOf() }
         val token = ByteArray(BIO_CHALLENGE_BYTES).also(biometricRng::nextBytes)
-        biometricChallenge.set(token)
+        if (!biometricChallenge.compareAndSet(null, token)) {
+            // Race window perdue : un autre caller a posé un token. Retourne le sien.
+            return biometricChallenge.get()?.copyOf() ?: token.copyOf()
+        }
         return token.copyOf()
     }
 

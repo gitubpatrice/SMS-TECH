@@ -26,10 +26,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -188,10 +191,14 @@ fun LockScreen(
                 singleLine = true,
             )
             Spacer(Modifier.size(16.dp))
+            val isLockedOut = state is AppLockManager.LockState.LockedOut
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(
                     onClick = { viewModel.attempt(pin.toCharArray()); pin = "" },
-                    enabled = pin.isNotEmpty(),
+                    // Audit I1 (v1.14.8) — bouton désactivé pendant LockedOut : avant, l'user
+                    // pouvait tapper "Continuer" sans feedback visible. attemptUnlock re-check
+                    // côté manager et n'incrémente pas l'échec, mais l'UX paraissait cassée.
+                    enabled = pin.isNotEmpty() && !isLockedOut,
                 ) { Text(stringResource(R.string.action_continue)) }
                 // Re-show the biometric prompt manually if the user dismissed it but still wants
                 // to try the finger (only relevant in BIOMETRIC mode).
@@ -206,12 +213,26 @@ fun LockScreen(
                     }
                 }
             }
-            if (state is AppLockManager.LockState.LockedOut) {
-                val remaining = (((state as AppLockManager.LockState.LockedOut).until - System.currentTimeMillis()) / 1000)
-                    .coerceAtLeast(0)
+            if (isLockedOut) {
+                // Audit R5 (v1.14.8) — countdown TICK 1s. Avant : `remaining` calculé une seule
+                // fois à la recomposition (déclenchée seulement par changement de `state`), donc
+                // le chiffre affiché était figé. L'user voyait "60 secondes" sans décrément →
+                // attente faussement longue. Ce LaunchedEffect ne tourne QUE pendant LockedOut.
+                val until = (state as AppLockManager.LockState.LockedOut).until
+                var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(until) {
+                    while (true) {
+                        nowMs = System.currentTimeMillis()
+                        if (nowMs >= until) break
+                        delay(1000L)
+                    }
+                }
+                val remaining by remember(until) {
+                    derivedStateOf { ((until - nowMs) / 1000L).coerceAtLeast(0L).toInt() }
+                }
                 Spacer(Modifier.size(12.dp))
                 Text(
-                    text = stringResource(R.string.lock_lockout_message, remaining.toInt()),
+                    text = stringResource(R.string.lock_lockout_message, remaining),
                     color = MaterialTheme.colorScheme.error,
                 )
             }

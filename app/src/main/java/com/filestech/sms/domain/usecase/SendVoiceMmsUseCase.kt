@@ -42,7 +42,8 @@ class SendVoiceMmsUseCase @Inject constructor(
             return Outcome.Failure(AppError.Validation("audio file missing or empty"))
         }
 
-        val s = settings.flow.first()
+        // Audit H3 (v1.14.8) — `state.value` zéro-I/O au lieu de `flow.first()`.
+        val s = settings.state.value
         val deliveryReports = s.sending.deliveryReports
         val effectiveSubId = subId ?: s.sending.defaultSubId
 

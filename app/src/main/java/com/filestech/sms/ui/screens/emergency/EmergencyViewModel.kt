@@ -70,14 +70,9 @@ class EmergencyViewModel @Inject constructor(
             .map { it.security.safetyCall.contacts }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
-    /**
-     * v1.12.0 — exposé pour afficher le bouton "Appeler 17" dans
-     * [EmergencyScreen] uniquement quand l'user a opt-in dans Settings.
-     * Le 112 reste toujours visible (SOS européen, pas de toggle).
-     */
-    val callPoliceEnabled: StateFlow<Boolean> = settings.flow
-        .map { it.security.emergencyCallPoliceEnabled }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+    // Audit ARCH-L4 (v1.14.8) — `callPoliceEnabled` zombie retiré. Plus aucun consommateur
+    // depuis v1.14.1 (refonte EmergencyScreen direct-call). Le StateFlow restait actif en
+    // mémoire (collect DataStore continu) sans utilité.
 
     // v1.14.0 `callBehavior` + `revertCallBehaviorIfPermissionRevoked` retirés
     // v1.14.1 : la refonte EmergencyScreen full-page utilise direct-call +

@@ -5,7 +5,6 @@ import android.media.MediaRecorder
 import android.os.Build
 import com.filestech.sms.core.result.AppError
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -52,6 +51,9 @@ import javax.inject.Singleton
 @Singleton
 class VoiceRecorder @Inject constructor(
     @ApplicationContext private val context: Context,
+    // Audit M-7 (v1.14.8) — Dispatcher injecté pour le ticker amplitude (cohérence avec
+    // pattern projet `@DefaultDispatcher`). Avant : `Dispatchers.Default` statique non testable.
+    @com.filestech.sms.di.DefaultDispatcher private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher,
 ) {
 
     sealed interface Event {
@@ -172,7 +174,7 @@ class VoiceRecorder @Inject constructor(
         synchronized(lock) { current = session }
 
         // Amplitude ticker. Runs off the main thread so a stalled UI doesn't drop ticks.
-        val tickerJob = launch(Dispatchers.Default) {
+        val tickerJob = launch(defaultDispatcher) {
             while (isActive && !session.finalized) {
                 val elapsed = (System.nanoTime() - session.startNs) / 1_000_000
                 val amp = runCatching { session.recorder.maxAmplitude }.getOrDefault(0)
@@ -322,7 +324,9 @@ class VoiceRecorder @Inject constructor(
          * sous le ceiling carrier le plus strict. Conservé en v1.3.6 malgré la baisse de
          * payload AMR-NB : marge de sécurité supplémentaire pour futurs MMSC inconnus.
          */
-        const val MAX_SIZE_BYTES: Long = 280L * 1024L
+        // Audit C3 (v1.14.8) — Source unique. Avant : valeur dupliquée ici et dans
+        // ThreadViewModel.CARRIER_PAYLOAD_CAP_BYTES (mêmes 280 * 1024, noms différents).
+        const val MAX_SIZE_BYTES: Long = com.filestech.sms.core.mms.MmsConstants.CARRIER_PAYLOAD_CAP_BYTES
 
         /**
          * AMR-NB est fixé par spec à 8 kHz. Passé en hint à MediaRecorder pour documenter

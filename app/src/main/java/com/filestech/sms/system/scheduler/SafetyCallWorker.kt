@@ -64,7 +64,10 @@ class SafetyCallWorker @AssistedInject constructor(
                 warningNotifier.dismiss()
                 return Result.success()
             }
-            val current = settings.flow.first().security.safetyCall
+            // Audit H3/PERF-M5 (v1.14.8) — `state.value` zéro-I/O. Le snapshot StateFlow est
+            // hydraté au boot (SharingStarted.Eagerly) ; tant que le processus est vivant
+            // (et il l'est ici puisque WorkManager nous a réveillés), pas besoin d'ouvrir DataStore.
+            val current = settings.state.value.security.safetyCall
             if (!current.enabled) {
                 Timber.d("SafetyCallWorker: disabled, skipping tick")
                 warningNotifier.dismiss()

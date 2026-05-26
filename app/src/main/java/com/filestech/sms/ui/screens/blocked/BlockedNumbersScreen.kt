@@ -52,7 +52,7 @@ class BlockedNumbersViewModel @Inject constructor(
     private val repo: BlockedNumberRepository,
 ) : ViewModel() {
     val state: StateFlow<List<BlockedNumber>> = repo.observe()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
     fun add(number: String) = viewModelScope.launch { repo.block(number) }
     fun remove(rawNumber: String) = viewModelScope.launch { repo.unblock(rawNumber) }

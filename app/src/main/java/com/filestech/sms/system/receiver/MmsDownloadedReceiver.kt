@@ -14,6 +14,7 @@ import com.filestech.sms.pdu.PduBody
 import com.filestech.sms.pdu.PduParser
 import com.filestech.sms.pdu.RetrieveConf
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
+import com.filestech.sms.system.notifications.MmsFailureNotifier
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -48,6 +49,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         fun mirror(): ConversationMirror
         fun messageDao(): MessageDao
         fun notifier(): IncomingMessageNotifier
+        // Audit R2 (v1.14.8) — Notification user lorsque le download MMS échoue (rc != OK).
+        fun mmsFailureNotifier(): MmsFailureNotifier
 
         @ApplicationScope
         fun applicationScope(): CoroutineScope
@@ -72,13 +75,24 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         val mirror = entry.mirror()
         val messageDao = entry.messageDao()
         val notifier = entry.notifier()
+        val failureNotifier = entry.mmsFailureNotifier()
         val scope = entry.applicationScope()
 
         val pending = goAsync()
         scope.launch {
             try {
                 if (rc != Activity.RESULT_OK) {
+                    // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
+                    // pas qu'un MMS lui était destiné. Maintenant on poste une notification
+                    // sur le canal FAILED pour l'inviter à vérifier le signal et retry depuis
+                    // l'app système (ou ressayer plus tard). `senderHint` peut être null si
+                    // MmsDownloader n'a pas pu l'extraire — le notifier fallback alors sur
+                    // "un contact inconnu".
                     Timber.w("MMS download failed rc=%d path=%s", rc, pduPath)
+                    failureNotifier.notifyFailure(
+                        reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+                        senderAddress = senderHint,
+                    )
                     return@launch
                 }
                 val pduFile = pduPath?.let { File(it) }

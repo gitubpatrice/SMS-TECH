@@ -67,7 +67,7 @@ class DatabaseKeyManager @Inject constructor(
     private fun generateAndWrap(): ByteArray {
         val raw = ByteArray(AeadCipher.KEY_BYTES).also(secureRandom::nextBytes)
         val secretKey = try {
-            keystore.getOrCreateKey(KeystoreManager.ALIAS_DB_MASTER)
+            keystore.getOrCreateKey(KeystoreManager.ALIAS_DB_MASTER, allowUserIv = true)
         } catch (e: KeyPermanentlyInvalidatedException) {
             throw Failure.KeystoreInvalidated(e)
         }
@@ -94,7 +94,7 @@ class DatabaseKeyManager @Inject constructor(
             throw Failure.Io(e)
         }
         val secretKey = try {
-            keystore.getOrCreateKey(KeystoreManager.ALIAS_DB_MASTER)
+            keystore.getOrCreateKey(KeystoreManager.ALIAS_DB_MASTER, allowUserIv = true)
         } catch (e: KeyPermanentlyInvalidatedException) {
             Timber.e("Keystore key invalidated (likely credential change on this device)")
             throw Failure.KeystoreInvalidated(e)

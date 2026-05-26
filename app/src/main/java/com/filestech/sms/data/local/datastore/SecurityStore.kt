@@ -58,6 +58,57 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         it[K.lockoutUntil] = ts.coerceIn(0L, maxHorizon)
     }
 
+    /**
+     * Audit R7 (v1.14.8) — Lockout monotonic baseline. Avant : seul [lockoutUntil] (wall clock)
+     * était stocké → un user pouvant manipuler l'horloge système (Android 8-9 sans root, devices
+     * rootés, fuseau horaire avancé) pouvait expirer le lockout en quelques secondes et brute-force
+     * un PIN 4 chiffres. Maintenant on persiste aussi `setAtElapsed` (`SystemClock.elapsedRealtime`
+     * au moment du write) + `durationMs` (durée originelle). [isLockoutActive] croise les deux
+     * horloges et exige que les DEUX soient expirées pour libérer.
+     *
+     * `elapsedRealtime` est immune aux manipulations user (seul un reboot la réinitialise — c'est
+     * géré par la guard `nowElapsed < setAtElapsed` dans [isLockoutActive] qui fallback alors sur
+     * la wall clock seule, comportement raisonnable post-reboot).
+     */
+    suspend fun setLockout(untilWall: Long, durationMs: Long, nowElapsed: Long) = context.secStore.edit {
+        val now = System.currentTimeMillis()
+        val maxHorizon = now + 24L * 60L * 60L * 1_000L
+        it[K.lockoutUntil] = untilWall.coerceIn(0L, maxHorizon)
+        it[K.lockoutSetAtElapsed] = nowElapsed.coerceAtLeast(0L)
+        it[K.lockoutDurationMs] = durationMs.coerceIn(0L, 24L * 60L * 60L * 1_000L)
+    }
+
+    suspend fun clearLockout() = context.secStore.edit {
+        it[K.lockoutUntil] = 0L
+        it[K.lockoutSetAtElapsed] = 0L
+        it[K.lockoutDurationMs] = 0L
+    }
+
+    /** Snapshot des 3 champs lockout en une seule lecture DataStore (vs 3 .first()). */
+    suspend fun lockoutSnapshot(): LockoutSnapshot {
+        val p = context.secStore.data.first()
+        return LockoutSnapshot(
+            untilWall = p[K.lockoutUntil] ?: 0L,
+            setAtElapsed = p[K.lockoutSetAtElapsed] ?: 0L,
+            durationMs = p[K.lockoutDurationMs] ?: 0L,
+        )
+    }
+
+    data class LockoutSnapshot(val untilWall: Long, val setAtElapsed: Long, val durationMs: Long) {
+        /**
+         * Audit R7 — Lockout actif si l'une des deux horloges (wall OU mono) dit "pas encore
+         * expiré". Mono est autoritaire contre la manipulation fwd de l'horloge système.
+         * Si mono baseline > nowElapsed → reboot détecté → mono check invalidé → fallback wall.
+         */
+        fun isLockoutActive(nowMs: Long, nowElapsed: Long): Boolean {
+            val wallLocked = untilWall > 0L && untilWall > nowMs
+            val monoLocked = setAtElapsed > 0L && durationMs > 0L
+                && nowElapsed >= setAtElapsed
+                && (nowElapsed - setAtElapsed) < durationMs
+            return wallLocked || monoLocked
+        }
+    }
+
     suspend fun setPanicCode(salt: ByteArray, hash: ByteArray, iterations: Int) {
         context.secStore.edit { p ->
             p[K.panicSalt] = salt
@@ -125,6 +176,9 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         val vaultIters = intPreferencesKey("vault.iters")
         val failCount = intPreferencesKey("auth.fail")
         val lockoutUntil = longPreferencesKey("auth.lockoutUntil")
+        // v1.14.8 R7 — anti-wallclock-manipulation : baseline mono + durée d'origine.
+        val lockoutSetAtElapsed = longPreferencesKey("auth.lockoutSetAtElapsed")
+        val lockoutDurationMs = longPreferencesKey("auth.lockoutDurationMs")
         val lastUnlock = longPreferencesKey("auth.lastUnlock")
     }
 

@@ -98,6 +98,9 @@ class SafetyCallWarningNotifier @Inject constructor(
             .setContentIntent(tapIntent)
             .build()
 
+        // Audit lint v1.14.8 — `hasPostPermission()` early-return en début de [showWarning],
+        // faux positif lint (ne suit pas la helper).
+        @android.annotation.SuppressLint("MissingPermission")
         NotificationManagerCompat.from(context).notify(NOTIF_ID_DEADMAN_WARNING, notif)
         Timber.i("SafetyCallWarningNotifier: posted warning (%dh left)", hoursLeft)
     }

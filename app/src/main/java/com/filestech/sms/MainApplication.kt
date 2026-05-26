@@ -25,10 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -76,6 +73,13 @@ class MainApplication : Application(), Configuration.Provider {
 
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
+    /**
+     * Audit K-3 / C-5 (v1.14.8) — Dispatcher IO injecté. Avant : `Dispatchers.IO` hardcodé
+     * dans la migration v1.8.0 et v1.14.7. Cohérence avec le pattern projet (toutes les
+     * couches use `@IoDispatcher` injecté pour permettre le test ET centraliser la politique).
+     */
+    @Inject @com.filestech.sms.di.IoDispatcher lateinit var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -114,30 +118,30 @@ class MainApplication : Application(), Configuration.Provider {
         //
         // Le flag `unreadResetV180` empêche cette purge de se rejouer à chaque
         // cold-start (sinon les vrais nouveaux non-lus seraient effacés).
-        val migrationStartedAt = System.currentTimeMillis()
-        runBlocking {
-            withTimeoutOrNull(1_000L) {
-                runCatching {
-                    kotlinx.coroutines.withContext(Dispatchers.IO) {
-                        val current = settingsRepository.flow.first().advanced
-                        if (!current.unreadResetV180) {
-                            val touched = messageDao.markAllIncomingAsRead()
-                            conversationDao.recomputeAllUnreadCounts()
-                            settingsRepository.update { s ->
-                                s.copy(advanced = s.advanced.copy(unreadResetV180 = true))
-                            }
-                            Timber.i(
-                                "v1.8.0 migration unreadResetV180 done: marked %d incoming messages as read",
-                                touched,
-                            )
+        // Audit H2 (v1.14.8) — Migration unreadResetV180 ASYNCHRONE. Avant : `runBlocking` 1s
+        // sur main thread → risque ANR documenté (Android Vitals > 5s = fatal, mais même 800ms
+        // sur cold-start dégrade le score TTFB). La migration restait synchrone pour éviter "1
+        // frame de badges legacy". Trade-off accepté désormais : les compteurs unread peuvent
+        // afficher l'ancienne valeur 50-300 ms avant que le Flow Room ne re-publie la valeur
+        // post-migration. Identique au pattern déjà retenu pour `migrateAttachmentsToFilesDirIfNeeded`
+        // (v1.14.7). Erreurs catchées et loguées sans crash.
+        appScope.launch {
+            runCatching {
+                kotlinx.coroutines.withContext(ioDispatcher) {
+                    val current = settingsRepository.flow.first().advanced
+                    if (!current.unreadResetV180) {
+                        val touched = messageDao.markAllIncomingAsRead()
+                        conversationDao.recomputeAllUnreadCounts()
+                        settingsRepository.update { s ->
+                            s.copy(advanced = s.advanced.copy(unreadResetV180 = true))
                         }
+                        Timber.i(
+                            "v1.8.0 migration unreadResetV180 done: marked %d incoming messages as read",
+                            touched,
+                        )
                     }
-                }.onFailure { Timber.w(it, "v1.8.0 migration unreadResetV180 failed") }
-            }
-        }
-        val migrationElapsed = System.currentTimeMillis() - migrationStartedAt
-        if (migrationElapsed >= 1_000L) {
-            Timber.w("v1.8.0 migration unreadResetV180 TIMEOUT after %d ms", migrationElapsed)
+                }
+            }.onFailure { Timber.w(it, "v1.8.0 migration unreadResetV180 failed") }
         }
         // v1.14.7 — migration cold-start one-shot : déplace les attachments MMS reçus
         // de `cacheDir/mms_incoming/` vers `filesDir/mms_attachments/` puis met à jour
@@ -358,7 +362,7 @@ class MainApplication : Application(), Configuration.Provider {
      * (Dispatchers.Default + SupervisorJob). Si la migration prend du temps (e.g. 200 attachments
      * à déplacer × 1 ms IO chacun = 200 ms), l'UI continue à fonctionner pendant ce temps.
      */
-    private suspend fun migrateAttachmentsToFilesDirIfNeeded() = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    private suspend fun migrateAttachmentsToFilesDirIfNeeded() = kotlinx.coroutines.withContext(ioDispatcher) {
         // v1.14.7 audit P2 — exécution explicitement sur Dispatchers.IO. La migration fait
         // des opérations IO disque (File.renameTo, inputStream.copyTo, outputStream) qui
         // doivent tourner sur le pool IO, pas Default (qui sert au CPU-bound).

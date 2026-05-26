@@ -158,6 +158,10 @@ class EmergencyShortcutNotifier @Inject constructor(
             )
         }
 
+        // Audit lint v1.14.8 — `@SuppressLint("MissingPermission")` justifié : `hasPostPermission()`
+        // est vérifié au début de [postShortcut] (early-return si denied). Lint ne suit pas la
+        // helper, faux positif documenté Google issuetracker.google.com/138141627.
+        @android.annotation.SuppressLint("MissingPermission")
         NotificationManagerCompat.from(context).notify(
             EmergencyShortcutReceiver.NOTIF_ID_EMERGENCY_SHORTCUT,
             builder.build(),

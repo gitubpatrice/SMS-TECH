@@ -52,7 +52,8 @@ class SendMediaMmsUseCase @Inject constructor(
             return Outcome.Failure(AppError.Validation("payload exceeds 300 KB cap ($totalBytes B)"))
         }
 
-        val s = settings.flow.first()
+        // Audit H3 (v1.14.8) — `state.value` zéro-I/O au lieu de `flow.first()` (DataStore read).
+        val s = settings.state.value
         val effectiveSubId = subId ?: s.sending.defaultSubId
         val deliveryReports = s.sending.deliveryReports
         val now = System.currentTimeMillis()

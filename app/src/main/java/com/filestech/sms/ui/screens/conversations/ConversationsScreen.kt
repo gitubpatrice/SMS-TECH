@@ -47,6 +47,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -62,6 +63,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -191,7 +193,7 @@ fun ConversationsScreen(
     }
 
     Scaffold(
-        snackbarHost = { com.filestech.sms.ui.components.SmsTechSnackbarHost(snackbarHost) },
+        snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
         topBar = topBar@{
             if (state.selectionMode && !state.isPanicDecoy) {
                 // v1.13.0 — TopAppBar contextuelle en mode sélection : count + action
@@ -428,7 +430,19 @@ fun ConversationsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 96.dp),
                 ) {
-                    items(state.conversations, key = { it.id }) { conv ->
+                    // Audit PERF-L4 (v1.14.8) — Couleur divider extraite hors loop pour éviter
+                    // l'allocation `Color.copy(alpha=...)` à chaque recomposition d'item. Sur une
+                    // liste de 200 conv qui se met à jour à chaque SMS entrant, on évite ~200
+                    // allocations Color/frame → moindre pression GC sur low-end.
+                    val dividerColor = cs.outlineVariant.copy(alpha = 0.4f)
+                    items(
+                        state.conversations,
+                        key = { it.id },
+                        // Audit PERF-M2 (v1.14.8) — `contentType` stable indique au recycleur
+                        // que toutes les rows partagent le même layout. Sans ce hint, Compose
+                        // ne peut pas optimiser le recyclage entre rows sélectionnés / non-sél.
+                        contentType = { "row" },
+                    ) { conv ->
                         val isSelected = state.selectedIds.contains(conv.id)
                         SwipeableConversationRow(
                             conversation = conv,
@@ -465,7 +479,7 @@ fun ConversationsScreen(
                             selected = isSelected,
                             selectionMode = state.selectionMode,
                         )
-                        HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
+                        HorizontalDivider(color = dividerColor)
                     }
                 }
             }
@@ -537,12 +551,22 @@ private fun SearchField(
 @Composable
 private fun IAmOkBanner(onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    // Audit A11Y-M4 (v1.14.8) — `mergeDescendants` + `contentDescription` sur le conteneur :
+    // TalkBack annonce une SEULE entité sémantique cohérente ("Alerte urgence déclenchée
+    // récemment, Je vais bien") au lieu d'enchaîner icône (silencieuse) + texte + bouton.
+    // Critique sur un flow d'urgence : l'user en situation de stress doit comprendre la zone
+    // au premier coup d'audition TalkBack.
+    val a11yTitle = stringResource(R.string.emergency_i_am_ok_chip_title)
+    val a11yAction = stringResource(R.string.emergency_i_am_ok_chip_action)
     androidx.compose.material3.Surface(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         color = cs.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$a11yTitle. $a11yAction"
+            },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),

@@ -106,6 +106,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
+import com.filestech.sms.data.local.db.entity.SendErrorCode
 import com.filestech.sms.data.voice.VoicePlaybackController
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.SmsTechSnackbarVisuals
@@ -247,6 +248,11 @@ fun ThreadScreen(
     var reactionConfirmRequest by remember { mutableStateOf<Pair<Long, String>?>(null) }
     var askDelete by remember { mutableStateOf(false) }
     var attachmentSheetOpen by remember { mutableStateOf(false) }
+    // Audit R3 (v1.14.8) — Retry d'un message FAILED avec errorCode WATCHDOG_TIMEOUT
+    // peut produire un doublon (le radio a peut-être livré, on n'a juste pas reçu le
+    // broadcast de confirmation). On confirme via dialog avant retry. SYNCHRONOUS reste
+    // un retry direct sans dialog (le radio a rejeté l'envoi, pas de risque doublon).
+    var pendingRetryWatchdog by remember { mutableStateOf<Message?>(null) }
 
     // v1.2.4 audit U12: scroll-to-bottom on new messages only when the user is already at
     // the bottom — preserves their reading position higher up the thread. The first paint
@@ -259,6 +265,19 @@ fun ThreadScreen(
             li == null || li.index >= state.messages.lastIndex - 1
         }
     }
+    // Audit R4 (v1.14.8) — Compteur de messages non-vus apparus pendant que l'user était
+    // scrollé vers le haut. Affiche un chip "↓ N nouveau(x)" cliquable en bas-droite.
+    // Sans ça, un message arrivait silencieusement et restait invisible. `lastSeenIndex` =
+    // dernier message effectivement vu en bas (réinitialisé quand l'user revient au fond).
+    var lastSeenLastIndex by remember { mutableStateOf(-1) }
+    val unseenCount by remember {
+        androidx.compose.runtime.derivedStateOf {
+            (state.messages.lastIndex - lastSeenLastIndex).coerceAtLeast(0)
+        }
+    }
+    LaunchedEffect(isAtBottom, state.messages.size) {
+        if (isAtBottom) lastSeenLastIndex = state.messages.lastIndex
+    }
     LaunchedEffect(state.messages.size) {
         if (state.messages.isEmpty()) return@LaunchedEffect
         if (!initialScrollDone) {
@@ -266,8 +285,10 @@ fun ThreadScreen(
             // of items is visibly choppy.
             listState.scrollToItem(state.messages.lastIndex)
             initialScrollDone = true
+            lastSeenLastIndex = state.messages.lastIndex
         } else if (isAtBottom) {
             listState.animateScrollToItem(state.messages.lastIndex)
+            lastSeenLastIndex = state.messages.lastIndex
         }
     }
 
@@ -507,11 +528,26 @@ fun ThreadScreen(
                 } else null
             }
         }
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize(),
             state = listState,
         ) {
-            itemsIndexed(state.messages, key = { _, m -> m.id }) { index, msg ->
+            itemsIndexed(
+                state.messages,
+                key = { _, m -> m.id },
+                // Audit PERF-M1 (v1.14.8) — `contentType` indique au recycleur Compose que
+                // les bulles audio / media / texte sont 3 layouts distincts. Sans ce hint
+                // Compose tente de réutiliser des compositions incompatibles → allocations
+                // forcées + jank sur scroll. 3 buckets stables = recyclage propre.
+                contentType = { _, m ->
+                    when {
+                        m.audioAttachment != null -> "audio"
+                        m.attachments.any { !it.isAudio } -> "media"
+                        else -> "text"
+                    }
+                },
+            ) { index, msg ->
                 val prev = state.messages.getOrNull(index - 1)
                 val next = state.messages.getOrNull(index + 1)
                 val showTimestamp = prev?.date?.let { msg.date - it > 5 * 60_000L } ?: true
@@ -618,7 +654,18 @@ fun ThreadScreen(
                         message = msg,
                         showTimestamp = showTimestamp,
                         burstPosition = burstPosition,
-                        onTap = { if (msg.status == Message.Status.FAILED) viewModel.retry(msg.id) },
+                        onTap = {
+                            // Audit R3 (v1.14.8) — Tap sur bulle FAILED : si l'errorCode est
+                            // WATCHDOG_TIMEOUT, on demande confirmation (risque doublon). Sinon
+                            // (SYNCHRONOUS = rejeté par radio) retry direct sans risque.
+                            if (msg.status == Message.Status.FAILED) {
+                                if (msg.errorCode == SendErrorCode.WATCHDOG_TIMEOUT) {
+                                    pendingRetryWatchdog = msg
+                                } else {
+                                    viewModel.retry(msg.id)
+                                }
+                            }
+                        },
                         onDelete = { pendingDelete = msg },
                         onReply = { viewModel.startReply(msg) },
                         // v1.7.1 — "Translate" action delegated to the system via
@@ -670,6 +717,51 @@ fun ThreadScreen(
                 }
             }
         }
+        // Audit R4 (v1.14.8) — Chip flottant "↓ N nouveau(x) message(s)" affiché en
+        // bas-droite quand l'user est scrollé vers le haut ET que de nouveaux messages
+        // sont arrivés. Tap → scroll animé + reset du compteur via le LaunchedEffect.
+        if (!isAtBottom && unseenCount > 0 && state.messages.isNotEmpty()) {
+            FilledTonalButton(
+                onClick = {
+                    scope.launch {
+                        listState.animateScrollToItem(state.messages.lastIndex)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+            ) {
+                Text(
+                    text = androidx.compose.ui.res.pluralStringResource(
+                        id = R.plurals.thread_unseen_messages,
+                        count = unseenCount,
+                        unseenCount,
+                    ),
+                )
+            }
+        }
+        }
+    }
+
+    // Audit R3 (v1.14.8) — Dialog confirmation retry WATCHDOG_TIMEOUT (risque doublon).
+    pendingRetryWatchdog?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { pendingRetryWatchdog = null },
+            title = { Text(stringResource(R.string.thread_retry_watchdog_title)) },
+            text = { Text(stringResource(R.string.thread_retry_watchdog_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = msg.id
+                    pendingRetryWatchdog = null
+                    viewModel.retry(id)
+                }) { Text(stringResource(R.string.thread_retry_watchdog_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRetryWatchdog = null }) {
+                    Text(stringResource(R.string.thread_retry_watchdog_cancel))
+                }
+            },
+        )
     }
 
     // v1.3.11 (F4) — phone number actions dialog. Triggered from any bubble's

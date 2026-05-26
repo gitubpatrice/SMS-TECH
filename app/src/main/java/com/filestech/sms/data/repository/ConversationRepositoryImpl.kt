@@ -236,6 +236,21 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun setArchived(id: Long, archived: Boolean) = withContext(io) { conversationDao.setArchived(id, archived) }
     override suspend fun setMuted(id: Long, muted: Boolean) = withContext(io) { conversationDao.setMuted(id, muted) }
     override suspend fun moveToVault(id: Long, inVault: Boolean) = withContext(io) { conversationDao.setInVault(id, inVault) }
+
+    // v1.14.8 R8 — Bulk move atomique : wrap dans `database.withTransaction` pour qu'un
+    // process-kill au milieu de la boucle laisse la base intacte (rollback) plutôt qu'un
+    // état partiel non-récupérable. Retourne le count effectivement modifié.
+    override suspend fun bulkMoveToVault(ids: List<Long>, inVault: Boolean): Int = withContext(io) {
+        if (ids.isEmpty()) return@withContext 0
+        database.withTransaction {
+            var n = 0
+            for (id in ids) {
+                conversationDao.setInVault(id, inVault)
+                n++
+            }
+            n
+        }
+    }
     override suspend fun setDraft(id: Long, draft: String?) = withContext(io) { conversationDao.setDraft(id, draft) }
     override suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?) =
         withContext(io) {
@@ -273,6 +288,20 @@ class ConversationRepositoryImpl @Inject constructor(
         // groupe `com.filestech.sms.conv.<id>`.
         notifier.cancelAllForConversation(id)
     }
+
+    // v1.14.8 H4 — Implémentation centralisée de "tout marquer comme lu". Encapsule la séquence
+    // Room (markAllIncomingAsRead + recomputeAllUnreadCounts) + propagation content://sms+mms
+    // pour que le badge ne ré-apparaisse pas après désinstall/reinstall. Avant : la VM
+    // orchestrait elle-même en injectant 2 DAOs + le TelephonyReader (layer violation).
+    override suspend fun markAllRead() = withContext(io) {
+        runCatching {
+            messageDao.markAllIncomingAsRead()
+            conversationDao.recomputeAllUnreadCounts()
+            telephonyReader.markAllIncomingReadInSystem()
+        }
+        Unit
+    }
+
     override suspend fun delete(id: Long) = withContext(io) {
         // Propagate to the system SMS/MMS content provider before dropping the local rows.
         // Otherwise a re-import (manual refresh, factory reset, panic + re-grant) would

@@ -7,6 +7,7 @@ import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.pdu.NotificationInd
 import com.filestech.sms.pdu.PduParser
+import com.filestech.sms.system.notifications.MmsFailureNotifier
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -42,6 +43,8 @@ class MmsWapPushReceiver : BroadcastReceiver() {
     @InstallIn(SingletonComponent::class)
     interface MmsWapPushEntryPoint {
         fun mmsDownloader(): MmsDownloader
+        // Audit R1 (v1.14.8) — notification user lorsque le MMS dépasse le cap auto-download.
+        fun mmsFailureNotifier(): MmsFailureNotifier
 
         @ApplicationScope
         fun applicationScope(): CoroutineScope
@@ -65,6 +68,7 @@ class MmsWapPushReceiver : BroadcastReceiver() {
             return
         }
         val downloader = entry.mmsDownloader()
+        val failureNotifier = entry.mmsFailureNotifier()
         val scope = entry.applicationScope()
 
         val pending = goAsync()
@@ -101,7 +105,17 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                     // c'était lisible par toute app détentrice de READ_LOGS.
                     Timber.i("MMS auto-download triggered size=%d outcome=%s", size, res)
                 } else {
+                    // Audit R1 (v1.14.8) — avant : silence total côté user. Maintenant on
+                    // notifie : "MMS de %sender% trop volumineux (%size% KB) — touchez pour
+                    // ouvrir les paramètres MMS". L'user peut soit augmenter le cap dans les
+                    // settings opérateur, soit demander à l'expéditeur de réduire/refragmenter.
                     Timber.w("MMS auto-download skipped (size=%d > %d)", size, MAX_AUTO_DOWNLOAD_BYTES)
+                    val sender = parsed.from?.string
+                    failureNotifier.notifyFailure(
+                        reason = MmsFailureNotifier.Reason.TOO_LARGE,
+                        senderAddress = sender,
+                        sizeBytes = size,
+                    )
                 }
             } finally {
                 pending.finish()

@@ -7,8 +7,6 @@ import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.datastore.SortMode
-import com.filestech.sms.data.local.db.dao.ConversationDao
-import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sync.TelephonySyncManager
@@ -64,16 +62,9 @@ class ConversationsViewModel @Inject constructor(
     // v1.6.1 (audit QUAL-03) — privé : la screen passe désormais par
     // [buildChangeDefaultIntent] au lieu de manipuler le manager directement.
     private val defaultAppManager: DefaultSmsAppManager,
-    // v1.8.0 — utilisés par [markAllAsRead] pour purger à la demande les
-    // badges non-lus persistants (ex: messages déjà lus dans une autre app
-    // SMS dont SMS Tech ne voit pas le `READ=1` côté système).
-    private val messageDao: MessageDao,
-    private val conversationDao: ConversationDao,
-    // v1.8.0 — propagation `READ=1` vers `content://sms` et `content://mms`
-    // dans [markAllAsRead], pour que SMS Tech ne ré-importe pas les messages
-    // comme non-lus après désinstallation / réinstallation (bug post-audit
-    // confirmé S24).
-    private val telephonyReader: com.filestech.sms.data.sms.TelephonyReader,
+    // Audit H4 (v1.14.8) — `MessageDao`, `ConversationDao` et `TelephonyReader` retirés des
+    // dépendances directes du VM. La logique "tout marquer comme lu" est désormais dans
+    // [ConversationRepository.markAllRead]. Le VM respecte data → domain → presentation.
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel() {
 
@@ -264,25 +255,10 @@ class ConversationsViewModel @Inject constructor(
      * Le dialog de confirmation est géré côté UI ([ConversationsScreen]).
      */
     fun markAllAsRead() {
-        viewModelScope.launch {
-            kotlinx.coroutines.withContext(io) {
-                runCatching {
-                    // 1) Local Room : marque tous les incoming `read=1` + recompute
-                    //    les unread_count à 0.
-                    messageDao.markAllIncomingAsRead()
-                    conversationDao.recomputeAllUnreadCounts()
-                    // 2) v1.8.0 (post-audit fix S24) — propage `READ=1` côté
-                    //    `content://sms` et `content://mms` du système Android.
-                    //    Sans cette propagation, une désinstallation + réinstall
-                    //    de SMS Tech ré-importe les messages avec `READ=0` (le
-                    //    système n'a jamais été notifié de la lecture) → badges
-                    //    réapparaissent. Wrapped en runCatching à l'intérieur
-                    //    de la helper pour ne pas faire foirer le markRead Room
-                    //    si le content provider est indisponible.
-                    telephonyReader.markAllIncomingReadInSystem()
-                }
-            }
-        }
+        // Audit H4 (v1.14.8) — Délégué au [ConversationRepository.markAllRead] qui encapsule
+        // les 3 étapes (Room markAllIncomingAsRead + recomputeAllUnreadCounts + propagation
+        // content://sms+mms). Le VM ne touche plus aux DAOs ni au TelephonyReader directement.
+        viewModelScope.launch { repo.markAllRead() }
     }
 
     fun setQuery(q: String) { query.update { q } }
@@ -387,21 +363,22 @@ class ConversationsViewModel @Inject constructor(
     fun bulkMoveSelectedToVault() = viewModelScope.launch {
         val ids = selectedIds.value.toList()
         if (ids.isEmpty()) return@launch
-        var success = 0
-        var failure = 0
-        for (id in ids) {
-            when (toggle.requestMoveToVault(id, intoVault = true)) {
-                is Outcome.Success -> success++
-                is Outcome.Failure -> failure++
-            }
-        }
+        // v1.14.8 R8 — Wrap atomique Room transaction. Avant : boucle itérative N appels →
+        // process-kill au milieu = état partiel non-récupérable. Maintenant : succès complet
+        // ou rollback complet. Cf. [ConversationRepository.bulkMoveToVault].
+        val outcome = toggle.requestBulkMoveToVault(ids = ids, intoVault = true)
         // Vide la sélection avant d'émettre — l'UI revient au mode normal pendant
         // que le snackbar s'affiche, plus naturel qu'un retour en mode sélection
         // avec 0 sélectionné (les IDs ont été filtrés par `effectiveSelection`).
         clearSelection()
         _events.trySend(
-            if (success > 0) Event.MovedToVault(count = success)
-            else Event.MoveToVaultFailed(count = failure),
+            when (outcome) {
+                is Outcome.Success<Int> -> {
+                    if (outcome.value > 0) Event.MovedToVault(count = outcome.value)
+                    else Event.MoveToVaultFailed(count = ids.size)
+                }
+                is Outcome.Failure -> Event.MoveToVaultFailed(count = ids.size)
+            }
         )
     }
 

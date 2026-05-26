@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -125,7 +126,7 @@ fun SafetyCallSetupScreen(
                 },
             )
         },
-        snackbarHost = { com.filestech.sms.ui.components.SmsTechSnackbarHost(snackbarHost) },
+        snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
     ) { padding ->
         Column(
             modifier = Modifier

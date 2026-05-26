@@ -17,7 +17,9 @@ work = "2.9.1"
 biometric = "1.1.0"
 splashscreen = "1.0.1"
 documentfile = "1.0.1"
-security-crypto = "1.1.0-alpha06"
+# v1.14.8 audit SEC-M4 — `androidx.security:security-crypto:1.1.0-alpha06` retiré
+# (alpha 2021, 0 usage confirmé). Lib + alias [androidx-security-crypto] désormais inertes.
+# security-crypto = "1.1.0-alpha06"
 
 # Hilt
 hilt = "2.57.2"
@@ -68,7 +70,8 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
 androidx-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "splashscreen" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
-androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "security-crypto" }
+# v1.14.8 — alias retiré (dépendance alpha non utilisée).
+# androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "security-crypto" }
 
 # Lifecycle
 androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }

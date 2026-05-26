@@ -80,7 +80,7 @@ class VaultViewModel @Inject constructor(
     @com.filestech.sms.di.IoDispatcher private val io: kotlinx.coroutines.CoroutineDispatcher,
 ) : ViewModel() {
     val state: StateFlow<List<Conversation>> =
-        repo.observeVault().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        repo.observeVault().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
     /**
      * v1.11.0 — Trou #3 Vault polish : lockMode courant, utilisé par
@@ -194,22 +194,24 @@ class VaultViewModel @Inject constructor(
     /**
      * v1.13.0 — bulk move-out symétrique de
      * [com.filestech.sms.ui.screens.conversations.ConversationsViewModel.bulkMoveSelectedToVault].
+     *
+     * v1.14.8 R8 — Remplace la boucle itérative N×requestMoveToVault par UN appel
+     * [VaultManager.requestBulkMoveToVault] qui wrap les N updates dans une transaction Room
+     * atomique. Garantit : soit tout passe, soit rien (rollback en cas de process-kill / erreur).
      */
     fun bulkMoveSelectedOut() = viewModelScope.launch {
         val ids = _selectedIds.value.toList()
         if (ids.isEmpty()) return@launch
-        var success = 0
-        var failure = 0
-        for (id in ids) {
-            when (toggle.requestMoveToVault(id, intoVault = false)) {
-                is Outcome.Success -> success++
-                is Outcome.Failure -> failure++
-            }
-        }
+        val outcome = toggle.requestBulkMoveToVault(ids = ids, intoVault = false)
         clearSelection()
         _events.trySend(
-            if (success > 0) Event.MovedOut(count = success)
-            else Event.MoveOutFailed(count = failure),
+            when (outcome) {
+                is Outcome.Success<Int> -> {
+                    if (outcome.value > 0) Event.MovedOut(count = outcome.value)
+                    else Event.MoveOutFailed(count = ids.size)
+                }
+                is Outcome.Failure -> Event.MoveOutFailed(count = ids.size)
+            }
         )
     }
 }

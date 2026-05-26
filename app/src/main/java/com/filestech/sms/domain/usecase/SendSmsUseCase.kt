@@ -69,7 +69,10 @@ class SendSmsUseCase @Inject constructor(
         if (recipients.isEmpty()) return Outcome.Failure(AppError.Validation("no recipients"))
         if (body.isBlank()) return Outcome.Failure(AppError.Validation("body is blank"))
 
-        val s = settings.flow.first()
+        // Audit H3 (v1.14.8) — `state.value` est le snapshot chaud StateFlow (Eagerly hydraté
+        // au boot via [SettingsRepository.state]) → lecture zéro-I/O. Avant : `flow.first()`
+        // ouvrait DataStore + désérialisation Protobuf sur CHAQUE envoi SMS (5-15 ms).
+        val s = settings.state.value
         val signature = s.conversations.signature?.takeIf { it.isNotBlank() }
         val finalBody = if (appendSignature && signature != null) "$body\n--\n$signature" else body
         val deliveryReports = s.sending.deliveryReports

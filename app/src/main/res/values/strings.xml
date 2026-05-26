@@ -320,12 +320,14 @@
     <string name="error_session_locked">Unlock the app to move this conversation</string>
     <!-- v1.12.0 — Emergency shortcut (lock-screen persistent notification) -->
     <string name="channel_emergency_shortcut_label">Emergency shortcut</string>
-    <string name="channel_emergency_shortcut_desc">Silent persistent notification with one-tap actions to trigger emergency mode or dial 112, accessible from the lock screen.</string>
+    <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
+    <string name="channel_emergency_shortcut_desc">Silent persistent notification with quick-dial actions (112/17). Tap the body to open the Emergency screen, then hold 3 s to send the alert.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — emergency shortcut</string>
     <string name="emergency_shortcut_notif_text">Tap to open the emergency page, or dial 112.</string>
     <string name="emergency_shortcut_action_112">Dial 112</string>
     <string name="settings_emergency_shortcut_title">Lock-screen shortcut</string>
-    <string name="settings_emergency_shortcut_desc">Show a persistent notification with EMERGENCY + 112 actions, accessible without unlocking the phone. Off by default.</string>
+    <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
+    <string name="settings_emergency_shortcut_desc">Show a persistent notification with quick-dial actions (112/17) accessible without unlocking. Tap the body to open the Emergency screen. Off by default.</string>
     <string name="emergency_shortcut_no_app_to_dial">No app installed to dial 112</string>
     <string name="emergency_shortcut_action_police">Dial 17</string>
     <string name="settings_emergency_call_police_title">Police 17 quick action in lock-screen notif</string>
@@ -658,6 +660,32 @@
     <!-- Errors -->
     <string name="error_not_default_app">SMS Tech is not the default SMS app yet.</string>
     <string name="error_send_failed">Failed to send the message.</string>
+
+    <!-- v1.14.8 ARCH-M2 — thread snackbars (i18n) — extracted from hardcoded VM strings. -->
+    <string name="snack_thread_max_duration">Limit reached: %1$d s</string>
+    <string name="snack_thread_attach_sent">Attachment sent</string>
+    <string name="snack_thread_attach_copy_failed">Cannot read attachment</string>
+    <string name="snack_thread_attach_cap_reached">MMS limit reached (280 KB). Remove an attachment or shorten the text.</string>
+    <string name="snack_thread_voice_sent">Voice message sent</string>
+    <string name="snack_thread_numbers_blocked">Number(s) blocked</string>
+
+    <!-- v1.14.8 R1/R2 — incoming MMS failure notification (size cap or MMSC error). -->
+    <string name="mms_failure_notification_title">MMS not received</string>
+    <string name="mms_failure_notification_body_too_large">Message from %1$s too large (%2$d KB). Tap to open MMS settings.</string>
+    <string name="mms_failure_notification_body_download_failed">Failed to download MMS from %1$s. Check signal coverage and retry.</string>
+    <string name="mms_failure_notification_body_unknown_sender">an unknown contact</string>
+
+    <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->
+    <string name="thread_retry_watchdog_title">Resend this message?</string>
+    <string name="thread_retry_watchdog_body">The previous attempt may have already reached the recipient. Resending could create a duplicate.</string>
+    <string name="thread_retry_watchdog_confirm">Resend anyway</string>
+    <string name="thread_retry_watchdog_cancel">Cancel</string>
+
+    <!-- v1.14.8 R4 — floating chip shown when new messages arrive while scrolled up. -->
+    <plurals name="thread_unseen_messages">
+        <item quantity="one">↓ %d new message</item>
+        <item quantity="other">↓ %d new messages</item>
+    </plurals>
 
     <!-- v1.13.0 — plurals for multi-selection counts -->
     <plurals name="conversations_selection_count">

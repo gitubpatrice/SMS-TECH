@@ -27,9 +27,22 @@ class KeystoreManager @Inject constructor() {
         KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     }
 
-    fun getOrCreateKey(alias: String, userAuthRequired: Boolean = false): SecretKey {
+    /**
+     * Audit H1 (v1.14.8) — `allowUserIv` (= `setRandomizedEncryptionRequired(false)`) défaut
+     * **false** désormais (i.e. Keystore impose la randomisation). Avant : valeur globale `false`
+     * sur tous les alias par construction, ce qui désarmait la protection OS sans nécessité
+     * pour 3 alias sur 4. Pratique : seul [ALIAS_DB_MASTER] passe explicitement `allowUserIv =
+     * true` car [com.filestech.sms.data.local.db.DatabaseKeyManager] s'appuie sur la fresh-IV
+     * générée par [com.filestech.sms.core.crypto.AeadCipher]. Les autres aliases conservent le
+     * défaut renforcé tant qu'aucun call site documenté ne requiert un user-IV.
+     */
+    fun getOrCreateKey(
+        alias: String,
+        userAuthRequired: Boolean = false,
+        allowUserIv: Boolean = false,
+    ): SecretKey {
         keyStore.getKey(alias, null)?.let { return it as SecretKey }
-        return generateKey(alias, userAuthRequired)
+        return generateKey(alias, userAuthRequired, allowUserIv)
     }
 
     fun deleteKey(alias: String) {
@@ -39,7 +52,7 @@ class KeystoreManager @Inject constructor() {
 
     fun containsAlias(alias: String): Boolean = keyStore.containsAlias(alias)
 
-    private fun generateKey(alias: String, userAuthRequired: Boolean): SecretKey {
+    private fun generateKey(alias: String, userAuthRequired: Boolean, allowUserIv: Boolean): SecretKey {
         val keyGen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
         val spec = KeyGenParameterSpec.Builder(
             alias,
@@ -48,10 +61,10 @@ class KeystoreManager @Inject constructor() {
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(KEY_SIZE_BITS)
-            // AndroidKeyStore rejects user-supplied IVs when this flag is true. Our [AeadCipher.encrypt]
-            // always generates a fresh 96-bit IV via SecureRandom, so randomization is already
-            // enforced cryptographically. We just need the OS to let us pass that IV through.
-            .setRandomizedEncryptionRequired(false)
+            // Audit H1 — Protection OS contre les IVs prévisibles ACTIVÉE par défaut.
+            // Désactivée uniquement pour les aliases dont l'appelant garantit cryptographiquement
+            // la génération d'un IV fresh via SecureRandom (cf. [AeadCipher.encrypt]).
+            .setRandomizedEncryptionRequired(!allowUserIv)
             .setUserAuthenticationRequired(userAuthRequired)
             .apply {
                 if (userAuthRequired && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {

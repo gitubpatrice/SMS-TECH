@@ -1,0 +1,16 @@
+v1.14.8 — Audit + sécurité
+
+• Confirmation avant renvoi SMS timeout
+  (évite doublons).
+• Échec réception MMS notifié.
+• Chip "↓ N nouveau" si SMS arrivé pendant
+  scroll vers le haut.
+• Compteur verrouillage rafraîchi /seconde.
+• Double-tap biométrie ne rate plus.
+• Verrouillage immune au changement
+  d'horloge système.
+• Sortie groupée coffre atomique.
+• Session leurre ne survit plus à
+  "Verrouiller au prochain lancement".
+
+Interne : durcissement sécu/perf.

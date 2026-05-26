@@ -52,12 +52,18 @@ class AutoLockObserver @Inject constructor(
             val s = settings.flow.first()
             // Audit F33: vault relocks immediately when the user opts in.
             if (s.security.lockVaultOnLeave) vault.lock()
+            // Audit R9 (v1.14.8) — PanicDecoy a un cycle de vie strict : doit se réinitialiser
+            // dès que l'app passe en background, INDÉPENDAMMENT de NEXT_LAUNCH. Sinon la session
+            // décoy persistait indéfiniment et l'user était piégé sans pouvoir revenir à sa
+            // vraie session sans force-close. NEXT_LAUNCH s'applique au flow normal Unlocked,
+            // pas au flow contraint de défense en situation d'urgence.
+            val isPanicDecoy = appLock.state.value is AppLockManager.LockState.PanicDecoy
             val ms = when (s.security.autoLockDelay) {
                 AutoLockDelay.IMMEDIATE -> 0L
                 AutoLockDelay.FIFTEEN_SECONDS -> 15_000L
                 AutoLockDelay.ONE_MINUTE -> 60_000L
                 AutoLockDelay.FIVE_MINUTES -> 5 * 60_000L
-                AutoLockDelay.NEXT_LAUNCH -> Long.MAX_VALUE
+                AutoLockDelay.NEXT_LAUNCH -> if (isPanicDecoy) 0L else Long.MAX_VALUE
             }
             if (ms == Long.MAX_VALUE) return@launch
             if (ms > 0) delay(ms)

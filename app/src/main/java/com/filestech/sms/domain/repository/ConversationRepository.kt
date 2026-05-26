@@ -18,6 +18,15 @@ interface ConversationRepository {
     suspend fun setArchived(id: Long, archived: Boolean)
     suspend fun setMuted(id: Long, muted: Boolean)
     suspend fun moveToVault(id: Long, inVault: Boolean)
+
+    /**
+     * v1.14.8 audit R8 — Move bulk atomique : N conversations vers/depuis le coffre dans une
+     * SEULE transaction Room. Avant : la VM bouclait `for (id in ids) moveToVault(id, ...)` et
+     * un process-kill au milieu laissait l'état partiellement migré sans feedback. Maintenant
+     * `withTransaction { ... }` garantit : soit tout passe, soit rien — pas d'état hybride.
+     * Retourne le nombre de rows effectivement mises à jour.
+     */
+    suspend fun bulkMoveToVault(ids: List<Long>, inVault: Boolean): Int
     suspend fun setDraft(id: Long, draft: String?)
     /**
      * v1.11.0 — apparence personnalisée par conversation (Sujet 5). `null` sur
@@ -26,6 +35,15 @@ interface ConversationRepository {
      */
     suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?)
     suspend fun markRead(id: Long)
+
+    /**
+     * v1.14.8 audit H4 — "Tout marquer comme lu" centralisé. Avant : la
+     * [com.filestech.sms.ui.screens.conversations.ConversationsViewModel] injectait
+     * `MessageDao` + `ConversationDao` + `TelephonyReader` et orchestrait elle-même
+     * la propagation Room + content://sms+mms. Couche presentation court-circuitée.
+     * Maintenant la logique vit dans le repository (qui sait déjà tout ce qu'il faut).
+     */
+    suspend fun markAllRead()
     suspend fun delete(id: Long)
     suspend fun deleteMessage(messageId: Long)
     suspend fun search(query: String): List<Message>

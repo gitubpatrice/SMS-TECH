@@ -133,6 +133,38 @@ class VaultManager @Inject constructor(
         Outcome.Success(Unit)
     }
 
+    /**
+     * v1.14.8 audit R8 — Bulk move atomique. Replace l'ancienne boucle itérative dans
+     * `VaultScreen.bulkMoveSelectedOut` qui appelait `requestMoveToVault` N fois :
+     *  - non atomique (process-kill au milieu = état partiel non-récupérable)
+     *  - feedback "moved out N" potentiellement incorrect en cas d'échec partiel
+     *
+     * Garde les mêmes guards PanicDecoy/Locked (pré + re-check post context-switch), puis
+     * délègue à [ConversationRepository.bulkMoveToVault] qui wrap dans `withTransaction`.
+     * Retourne `Outcome.Success(count)` avec le nombre réel de rows mises à jour.
+     */
+    suspend fun requestBulkMoveToVault(
+        ids: List<Long>,
+        intoVault: Boolean,
+    ): Outcome<Int> = withContext(io) {
+        if (ids.isEmpty()) return@withContext Outcome.Success(0)
+        val pre = appLock.state.value
+        when (pre) {
+            is AppLockManager.LockState.PanicDecoy -> return@withContext Outcome.Failure(AppError.Locked())
+            is AppLockManager.LockState.Locked -> return@withContext Outcome.Failure(AppError.Locked())
+            else -> Unit
+        }
+        // Re-check anti-race PanicDecoy après context-switch IO (cohérent avec
+        // [requestMoveToVault]).
+        val post = appLock.state.value
+        if (post is AppLockManager.LockState.PanicDecoy) {
+            return@withContext Outcome.Failure(AppError.Locked())
+        }
+        sessionUnlocked.set(true)
+        val updated = conversationRepo.bulkMoveToVault(ids, intoVault)
+        Outcome.Success(updated)
+    }
+
     /** Ensures the underlying Keystore alias exists. Called at first vault use. */
     fun ensureKey() {
         keystore.getOrCreateKey(KeystoreManager.ALIAS_VAULT_KEK)

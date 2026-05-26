@@ -35,7 +35,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = gitCommitCount.coerceAtLeast(1)
-        versionName = "1.14.7"
+        versionName = "1.14.8"
 
         testInstrumentationRunner = "com.filestech.sms.HiltTestRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -152,7 +152,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.documentfile)
-    implementation(libs.androidx.security.crypto)
+    // Audit SEC-M4 (v1.14.8) — `androidx.security:security-crypto:1.1.0-alpha06` retiré.
+    // Dépendance ALPHA depuis 2021, ZÉRO usage confirmé dans le code (pas d'EncryptedSharedPrefs,
+    // pas d'EncryptedFile). SMS Tech utilise son propre AeadCipher + KeystoreManager + DataStore.
+    // Surface d'attaque inutile (alpha = pas de security-patches stables).
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)

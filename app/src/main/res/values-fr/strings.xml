@@ -310,12 +310,14 @@
     <string name="error_session_locked">Déverrouillez l\'application pour déplacer cette conversation</string>
     <!-- v1.12.0 — Raccourci urgence (notification persistante visible écran verrouillé) -->
     <string name="channel_emergency_shortcut_label">Raccourci urgence</string>
-    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec actions en un tap pour déclencher le Mode urgence ou appeler le 112, accessible depuis l\'écran verrouillé.</string>
+    <!-- v1.14.8 audit P2 — texte aligné sur le comportement v1.14.2+ (action URGENCE retirée de la notif pour éviter les déclenchements accidentels). -->
+    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112/17). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — raccourci urgence</string>
     <string name="emergency_shortcut_notif_text">Tapez pour ouvrir la page urgence, ou appeler le 112.</string>
     <string name="emergency_shortcut_action_112">Appeler 112</string>
     <string name="settings_emergency_shortcut_title">Raccourci écran verrouillé</string>
-    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec actions URGENCE + 112, accessible sans déverrouiller le téléphone. Désactivé par défaut.</string>
+    <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action URGENCE en un tap a été retirée. -->
+    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112/17), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
     <string name="emergency_shortcut_no_app_to_dial">Aucune application pour composer le 112</string>
     <string name="emergency_shortcut_action_police">Appeler 17</string>
     <string name="settings_emergency_call_police_title">Action rapide Police 17 sur la notif lock-screen</string>
@@ -640,6 +642,32 @@
 
     <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
     <string name="error_send_failed">Échec de l\'envoi du message.</string>
+
+    <!-- v1.14.8 ARCH-M2 — snackbars thread (i18n) — extraites des chaînes hardcodées du VM. -->
+    <string name="snack_thread_max_duration">Limite de %1$d s atteinte</string>
+    <string name="snack_thread_attach_sent">Pièce jointe envoyée</string>
+    <string name="snack_thread_attach_copy_failed">Impossible de lire la pièce jointe</string>
+    <string name="snack_thread_attach_cap_reached">Limite MMS atteinte (280 Ko). Retirez une pièce jointe ou réduisez le texte.</string>
+    <string name="snack_thread_voice_sent">Message vocal envoyé</string>
+    <string name="snack_thread_numbers_blocked">Numéro(s) bloqué(s)</string>
+
+    <!-- v1.14.8 R1/R2 — notification d\'échec MMS entrant (taille trop grande ou erreur MMSC). -->
+    <string name="mms_failure_notification_title">MMS non reçu</string>
+    <string name="mms_failure_notification_body_too_large">MMS de %1$s trop volumineux (%2$d Ko). Touchez pour ouvrir les paramètres MMS.</string>
+    <string name="mms_failure_notification_body_download_failed">Échec du téléchargement du MMS de %1$s. Vérifiez la couverture réseau et réessayez.</string>
+    <string name="mms_failure_notification_body_unknown_sender">un contact inconnu</string>
+
+    <!-- v1.14.8 R3 — confirmation avant retry d\'un message en timeout watchdog (risque doublon). -->
+    <string name="thread_retry_watchdog_title">Renvoyer ce message ?</string>
+    <string name="thread_retry_watchdog_body">L\'envoi précédent a peut-être déjà été reçu. Renvoyer pourrait créer un doublon.</string>
+    <string name="thread_retry_watchdog_confirm">Renvoyer quand même</string>
+    <string name="thread_retry_watchdog_cancel">Annuler</string>
+
+    <!-- v1.14.8 R4 — chip flottant si nouveaux messages arrivés pendant scroll vers le haut. -->
+    <plurals name="thread_unseen_messages">
+        <item quantity="one">↓ %d nouveau message</item>
+        <item quantity="other">↓ %d nouveaux messages</item>
+    </plurals>
 
     <!-- v1.13.0 — pluriels pour la sélection multiple -->
     <plurals name="conversations_selection_count">

@@ -66,7 +66,8 @@ class TelephonySyncWorker @AssistedInject constructor(
             // purge auto) = 2× IO + 2× désérialisation proto. Worker s'exécute toutes
             // les 12 h donc impact absolu faible, mais le pattern est aligné avec
             // PERF-01 dans le reste du code.
-            val snapshot = settings.flow.first()
+            // Audit H3 (v1.14.8) — `state.value` zéro-I/O. Snapshot hydraté au boot.
+            val snapshot = settings.state.value
             runImport(snapshot)
             // Audit M-6: opportunistic housekeeping. Outbound MMS / voice caches accumulate when
             // the `SmsSentReceiver` never fires (process force-killed, OS skips the broadcast);
