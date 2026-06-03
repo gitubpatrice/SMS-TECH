@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -257,6 +258,16 @@ private fun ImagePreview(
             contentDescription = attachment.fileName ?: stringResource(R.string.attachment_image_label),
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(width = 240.dp, height = 240.dp),
+            // F-11 — les MMS importés du système stockent `content://mms/part/N` sans copie
+            // locale (contrairement aux MMS temps réel copiés dans filesDir). Si le provider
+            // Telephony est purgé (réinstallation, changement temporaire d'app SMS par défaut,
+            // suppression cross-app), l'URI devient invalide → Coil échoue. On rend alors un
+            // tile neutre (au lieu d'un trou blanc) et on logue pour diagnostic.
+            error = ColorPainter(bgColor),
+            fallback = ColorPainter(bgColor),
+            onError = {
+                Timber.w("MMS thumbnail load failed for attachment %d", attachment.id)
+            },
         )
     }
 }

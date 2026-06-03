@@ -1,0 +1,11 @@
+v1.18.1 — MMS stability + thumbnails
+
+• More robust MMS reception: a rare error
+  while handling an incoming MMS can no
+  longer crash the app (safety net aligned
+  with the other receivers).
+• MMS thumbnails: if an old MMS image is
+  no longer accessible (SMS app change,
+  reinstall), a neutral tile shows instead
+  of a blank gap.
+• No data or format change. 100% local.

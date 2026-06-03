@@ -1,0 +1,13 @@
+v1.18.1 — Stabilité MMS + vignettes
+
+• Réception MMS plus robuste : une erreur
+  rare pendant le traitement d'un MMS
+  entrant ne peut plus faire planter
+  l'application (filet aligné sur les
+  autres récepteurs).
+• Vignettes MMS : si l'image d'un ancien
+  MMS n'est plus accessible (changement
+  d'app SMS, réinstallation), un cadre
+  neutre s'affiche au lieu d'un vide.
+• Aucun changement de données ni de
+  format. 100 % local.

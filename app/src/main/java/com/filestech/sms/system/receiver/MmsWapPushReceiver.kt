@@ -117,6 +117,13 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                         sizeBytes = size,
                     )
                 }
+            } catch (t: Throwable) {
+                // Symétrie avec SmsDeliverReceiver/MmsDownloadedReceiver/MmsSentReceiver :
+                // une exception dans le pipeline parse → download → notify ne doit JAMAIS
+                // remonter non capturée d'un `launch` sur l'ApplicationScope (SupervisorJob),
+                // sinon elle atteint le handler d'exception global → crash du process.
+                // Le `finally` garantit déjà `pending.finish()` ; ce catch évite le crash.
+                Timber.w(t, "MMS WAP_PUSH handling failed")
             } finally {
                 pending.finish()
             }
