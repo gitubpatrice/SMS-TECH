@@ -1,0 +1,12 @@
+v1.18.2 — Fix back-button crash (One UI 8 / Android 16)
+
+• Fixes a crash that could happen when pressing
+  "back", which appeared after the June 2026
+  One UI / Android update.
+• Cause: a navigation-library bug tied to the
+  animated back gesture (predictive back),
+  triggered by the new system. The animated back
+  gesture is turned off until the library is
+  fixed — back works normally.
+• No data, encryption or feature change.
+  100% local.

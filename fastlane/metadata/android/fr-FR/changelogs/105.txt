@@ -1,0 +1,11 @@
+v1.18.2 — Correctif plantage au retour (One UI 8 / Android 16)
+
+• Corrige un plantage qui pouvait survenir en
+  appuyant sur « retour », apparu après la mise
+  à jour One UI / Android de juin 2026.
+• Cause : un bug de la bibliothèque de
+  navigation lié au geste retour animé,
+  réveillé par le nouveau système. Le geste
+  animé est désactivé le temps que la lib soit
+  corrigée — le retour marche normalement.
+• Aucun changement de données ni de chiffrement.
