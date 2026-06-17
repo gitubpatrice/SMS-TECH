@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.14.7** (2026-05-23)
+Current release : **v1.19.0** (2026-06-17)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the

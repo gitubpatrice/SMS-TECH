@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -28,14 +29,17 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "com.filestech.sms"
-    compileSdk = 35
+    // compileSdk 36 requis par les androidx récents (core-ktx 1.16+, lifecycle 2.11,
+    // compose-bom 2026.x, activity 1.13). targetSdk reste 35 : on compile contre
+    // l'API 36 sans opter dans les changements de comportement Android 16.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.filestech.sms"
         minSdk = 26
         targetSdk = 35
         versionCode = gitCommitCount.coerceAtLeast(1)
-        versionName = "1.18.2"
+        versionName = "1.19.0"
 
         testInstrumentationRunner = "com.filestech.sms.HiltTestRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -95,16 +99,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-opt-in=kotlin.RequiresOptIn",
-            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
-        )
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -144,6 +138,20 @@ android {
             include("arm64-v8a", "armeabi-v7a", "x86_64")
             isUniversalApk = true
         }
+    }
+}
+
+// Kotlin 2.3+ : l'ancien DSL `android { kotlinOptions { ... } }` est supprimé.
+// Migration vers le DSL `compilerOptions` (équivalent strict : jvmTarget 17 + mêmes opt-in).
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            "-opt-in=kotlin.RequiresOptIn",
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
+        )
     }
 }
 

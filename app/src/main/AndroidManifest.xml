@@ -106,14 +106,15 @@
         <package android:name="com.android.contacts" />
     </queries>
 
-    <!-- v1.18.2 — `enableOnBackInvokedCallback` repassé à "false".
-         Bug crash IndexOutOfBoundsException dans androidx.navigation-compose 2.8.4
-         (NavHostKt$NavHost$28$1, gestionnaire interne de predictive back) : sur un
-         geste retour il fait `backStack.get(-1)` → crash. Resté dormant jusqu'à la
-         MAJ One UI / Android 16 (build 2026-06-05) qui a changé le dispatching du
-         geste. Désactiver le callback contourne 100 % du code bugué de la lib.
-         NE PAS repasser à "true" sans avoir bumpé navigation-compose vers une
-         version qui corrige ce crash (puis re-tester sur One UI récent). -->
+    <!-- `enableOnBackInvokedCallback` réactivé (predictive back) après le bump
+         navigation-compose 2.8.4 → 2.9.8.
+         Historique : la 2.8.4 crashait (IndexOutOfBoundsException dans
+         NavHostKt$NavHost$28$1 : `backStack.get(-1)` sur un geste retour), bug
+         réveillé par la MAJ One UI / Android 16 (2026-06-05). Le workaround v1.18.2
+         était de désactiver le callback. La 2.9.8 corrige ce gestionnaire en amont,
+         donc on restaure l'animation predictive back native.
+         OBLIGATOIRE avant release : re-tester le geste retour sur One UI récent
+         (S24/S9) pour confirmer l'absence de régression du crash. -->
     <application
         android:name=".MainApplication"
         android:allowBackup="false"
@@ -123,7 +124,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:enableOnBackInvokedCallback="false"
+        android:enableOnBackInvokedCallback="true"
         android:largeHeap="false"
         android:hardwareAccelerated="true"
         android:theme="@style/Theme.SmsTech.Splash"

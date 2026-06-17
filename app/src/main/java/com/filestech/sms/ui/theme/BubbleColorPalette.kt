@@ -19,10 +19,11 @@ import androidx.compose.ui.graphics.Color
  * `Color(argb)`.
  *
  * **Note d'UX** : la première entrée [BRAND_BLUE] est la valeur par défaut
- * (= `cs.primary` du thème actif). Sélectionner cette valeur est équivalent
- * à un reset (`bubbleColorArgb = null`) du point de vue de l'utilisateur ;
- * l'écran de réglage le réinitialise à `null` pour ne pas pin l'historique
- * sur la couleur thème (qui peut changer avec un futur rebrand).
+ * Sélectionner cette valeur équivaut à un reset (`bubbleColorArgb = null`).
+ * Le rendu d'une bulle `null` utilise désormais [BrandBlue] **fixe** (et non
+ * `cs.primary`) : sous Material You / One UI, `cs.primary` suit le fond d'écran
+ * et dérivait vers un bleu clair — la bulle par défaut doit rester le bleu de
+ * marque foncé, en cohérence avec la bulle entrante (elle aussi couleur fixe).
  */
 internal object BubbleColorPalette {
 
@@ -39,34 +40,29 @@ internal object BubbleColorPalette {
      * v1.11.0 audit U1 — chaque entrée porte aussi une string ressource
      * pour le `contentDescription` TalkBack (a11y).
      *
-     * v1.14.4 — extension de 8 → 16 couleurs (demande user). Ajout :
-     * royal blue, crimson, emerald, magenta, brown, eggplant, bordeaux,
-     * deep orange.
+     * v1.19.0 — palette resserrée (demande user) : retrait des verts (forest,
+     * emerald, teal), du marron et des doublons de teinte (crimson≈red,
+     * deep_orange≈orange, royal≈brand_blue, eggplant≈indigo, bordeaux≈purple,
+     * steel≈slate_grey). Ajout de `mauve` (#6D4AFF, vibe ProtonMail, 5.15:1)
+     * et `framboise` (#C2185B, 5.86:1). 10 teintes distinctes.
      */
     data class Option(val color: Color, val nameRes: Int)
 
     val OPTIONS: List<Option> = listOf(
-        // Palette v1.11.0 (8 couleurs)
+        // Bleus
         Option(BRAND_BLUE, com.filestech.sms.R.string.appearance_color_brand_blue),
-        Option(Color(0xFF1B5E20), com.filestech.sms.R.string.appearance_color_forest_green),
+        Option(Color(0xFF0D47A1), com.filestech.sms.R.string.appearance_color_navy),
+        Option(Color(0xFF01579B), com.filestech.sms.R.string.appearance_color_sky_blue),
+        // Indigo / violet / mauve
+        Option(Color(0xFF4527A0), com.filestech.sms.R.string.appearance_color_deep_indigo),
+        Option(Color(0xFF6D4AFF), com.filestech.sms.R.string.appearance_color_mauve),
         Option(Color(0xFF6A1B9A), com.filestech.sms.R.string.appearance_color_deep_purple),
+        // Rose framboise
+        Option(Color(0xFFC2185B), com.filestech.sms.R.string.appearance_color_framboise),
+        // Rouge / orange
         Option(Color(0xFFC62828), com.filestech.sms.R.string.appearance_color_brand_red),
         Option(Color(0xFFE65100), com.filestech.sms.R.string.appearance_color_burnt_orange),
+        // Gris bleu
         Option(Color(0xFF455A64), com.filestech.sms.R.string.appearance_color_slate_blue_grey),
-        Option(Color(0xFF4527A0), com.filestech.sms.R.string.appearance_color_deep_indigo),
-        Option(Color(0xFF00695C), com.filestech.sms.R.string.appearance_color_dark_teal),
-        // v1.14.4 — 8 nouvelles couleurs Material 700-900 WCAG AA
-        Option(Color(0xFF1565C0), com.filestech.sms.R.string.appearance_color_royal_blue),
-        Option(Color(0xFFB71C1C), com.filestech.sms.R.string.appearance_color_crimson),
-        Option(Color(0xFF2E7D32), com.filestech.sms.R.string.appearance_color_emerald),
-        Option(Color(0xFFAD1457), com.filestech.sms.R.string.appearance_color_magenta),
-        Option(Color(0xFF5D4037), com.filestech.sms.R.string.appearance_color_brown),
-        Option(Color(0xFF311B92), com.filestech.sms.R.string.appearance_color_eggplant),
-        Option(Color(0xFF7B1FA2), com.filestech.sms.R.string.appearance_color_bordeaux),
-        Option(Color(0xFFBF360C), com.filestech.sms.R.string.appearance_color_deep_orange),
-        // v1.14.4 — 3 nuances bleu clair / gris bleu (demande user)
-        Option(Color(0xFF01579B), com.filestech.sms.R.string.appearance_color_sky_blue),
-        Option(Color(0xFF0D47A1), com.filestech.sms.R.string.appearance_color_navy),
-        Option(Color(0xFF37474F), com.filestech.sms.R.string.appearance_color_steel_grey),
     )
 }

@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.filestech.sms.R
 import com.filestech.sms.domain.model.Message
+import com.filestech.sms.ui.theme.BrandBlue
 import com.filestech.sms.ui.util.rememberChatFormatters
 import java.util.Date
 
@@ -76,8 +77,8 @@ fun MessageBubble(
     senderLabel: String? = null,
     /**
      * v1.11.0 — Sujet 5 apparence : couleur ARGB personnalisée pour la bulle
-     * SORTANTE de cette conversation. `null` = utilise `cs.primary` (bleu
-     * marque par défaut). Sélectionnée par l'user dans `AppearanceDialog`
+     * SORTANTE de cette conversation. `null` = utilise [com.filestech.sms.ui
+     * .theme.BrandBlue] fixe (bleu de marque foncé). Sélectionnée par l'user dans `AppearanceDialog`
      * parmi [com.filestech.sms.ui.theme.BubbleColorPalette.OPTIONS]
      * (palette WCAG-safe). Aucun effet sur les bulles entrantes.
      */
@@ -97,22 +98,22 @@ fun MessageBubble(
     // Outgoing bubbles use a subtle vertical gradient on top of the primary color — gives the
     // bubble depth without committing to a hard shadow or a custom drawable. Incoming bubbles
     // stay flat surfaceContainerHigh so reading them remains restful.
-    // v1.11.0 — Sujet 5 apparence : si l'user a customisé la couleur de bulle
-    // pour cette conversation, on substitue à `cs.primary`. Texte blanc dans
-    // tous les cas (la palette est calibrée pour le contraste).
+    // v1.11.0 — Sujet 5 apparence : couleur de bulle sortante personnalisée par
+    // conversation. v1.19.0 — le défaut (`null`) rend désormais [BrandBlue] FIXE
+    // au lieu de `cs.primary` : sous Material You / One UI, `cs.primary` suit le
+    // fond d'écran et virait au bleu clair. La bulle de marque doit rester le
+    // bleu foncé stable (cohérent avec la bulle entrante, elle aussi fixe).
     val outgoingBaseColor = customBubbleColorArgb?.let { androidx.compose.ui.graphics.Color(it) }
-        ?: cs.primary
+        ?: BrandBlue
     val outgoingBrush = Brush.linearGradient(
         colors = listOf(outgoingBaseColor, outgoingBaseColor.copy(alpha = 0.88f)),
         start = Offset(0f, 0f),
         end = Offset(0f, Float.POSITIVE_INFINITY),
     )
-    val textColor = if (isOut) {
-        // Si couleur custom → blanc forcé (palette WCAG-safe contre blanc).
-        // Sinon `onPrimary` du thème (= blanc dans les schemes par défaut).
-        if (customBubbleColorArgb != null) androidx.compose.ui.graphics.Color.White
-        else cs.onPrimary
-    } else cs.onSurface
+    // Texte blanc forcé sur toute bulle sortante : BrandBlue et chaque couleur de
+    // [BubbleColorPalette] sont calibrées WCAG AA ≥ 4.5:1 contre le blanc. On ne
+    // dépend plus de `cs.onPrimary` (qui pouvait dériver avec le scheme dynamique).
+    val textColor = if (isOut) androidx.compose.ui.graphics.Color.White else cs.onSurface
 
     val shape = bubbleShape(isOut, burstPosition)
 

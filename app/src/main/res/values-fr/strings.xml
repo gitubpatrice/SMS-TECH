@@ -286,25 +286,16 @@
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Bleu marque (par défaut)</string>
-    <string name="appearance_color_forest_green">Vert forêt</string>
+    <string name="appearance_color_navy">Bleu marine</string>
+    <string name="appearance_color_sky_blue">Bleu ciel</string>
+    <string name="appearance_color_deep_indigo">Indigo profond</string>
+    <!-- v1.19.0 — ajout mauve (type ProtonMail) + framboise ; retrait verts/marron/doublons -->
+    <string name="appearance_color_mauve">Mauve</string>
     <string name="appearance_color_deep_purple">Violet profond</string>
+    <string name="appearance_color_framboise">Framboise</string>
     <string name="appearance_color_brand_red">Rouge marque</string>
     <string name="appearance_color_burnt_orange">Orange brûlé</string>
     <string name="appearance_color_slate_blue_grey">Bleu-gris ardoise</string>
-    <string name="appearance_color_deep_indigo">Indigo profond</string>
-    <string name="appearance_color_dark_teal">Teal foncé</string>
-    <!-- v1.14.4 — 11 nouvelles couleurs ajoutées (demande user) -->
-    <string name="appearance_color_royal_blue">Bleu royal</string>
-    <string name="appearance_color_crimson">Pourpre</string>
-    <string name="appearance_color_emerald">Vert émeraude</string>
-    <string name="appearance_color_magenta">Magenta</string>
-    <string name="appearance_color_brown">Marron</string>
-    <string name="appearance_color_eggplant">Aubergine</string>
-    <string name="appearance_color_bordeaux">Bordeaux</string>
-    <string name="appearance_color_deep_orange">Orange profond</string>
-    <string name="appearance_color_sky_blue">Bleu ciel</string>
-    <string name="appearance_color_navy">Bleu marine</string>
-    <string name="appearance_color_steel_grey">Gris acier</string>
     <string name="appearance_color_selected">sélectionnée</string>
     <!-- v1.12.0 — déplacement coffre avec session verrouillée -->
     <string name="error_session_locked">Déverrouillez l\'application pour déplacer cette conversation</string>

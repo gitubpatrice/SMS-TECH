@@ -1,0 +1,14 @@
+v1.19.0 — Animated back gesture + new colours
+
+• The animated back gesture (predictive back)
+  is re-enabled: the One UI crash from v1.18.2
+  is fixed upstream by a navigation-library
+  update.
+• Default bubble colour restored to a darker
+  blue (it had turned light since the One UI
+  update).
+• Streamlined colour palette + new mauve and
+  raspberry shades.
+• Internal components updated (including
+  SQLCipher encryption). 100% local, no change
+  to your data.

@@ -1,0 +1,14 @@
+v1.19.0 — Geste retour animé + nouvelles couleurs
+
+• Le geste retour animé est réactivé : le bug
+  One UI de la v1.18.2 est corrigé en amont par
+  la mise à jour de la bibliothèque de
+  navigation.
+• Couleur de bulle par défaut remise en bleu
+  foncé (devenue claire depuis la mise à jour
+  One UI).
+• Palette épurée + nouvelles teintes mauve et
+  framboise.
+• Composants internes mis à jour (dont le
+  chiffrement SQLCipher). 100% local, aucun
+  changement de vos données.
