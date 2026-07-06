@@ -1,0 +1,10 @@
+v1.20.0 — Créer un contact + recherche
+
+• Nouvelle fonction « Créer un contact » :
+  depuis l'écran Nouveau message (en haut) et
+  depuis le menu de la liste des conversations.
+• Recherche améliorée : désormais insensible
+  aux accents ET à la casse (« maite » trouve
+  « Maïté »), et plus rapide.
+• Corrections internes. 100% local, aucun
+  changement de vos données.

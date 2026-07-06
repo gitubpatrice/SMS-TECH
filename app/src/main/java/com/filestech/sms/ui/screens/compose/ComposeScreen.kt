@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -24,19 +25,27 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.ui.components.Avatar
+import com.filestech.sms.ui.components.ContactIntents
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.showError
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +56,10 @@ fun ComposeScreen(
     viewModel: ComposeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val filtered by viewModel.filtered.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHost = remember { SnackbarHostState() }
     LaunchedEffect(Unit) {
         viewModel.events.collect { e ->
             when (e) {
@@ -56,6 +69,7 @@ fun ComposeScreen(
     }
 
     Scaffold(
+        snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.action_new_message)) },
@@ -107,7 +121,30 @@ fun ComposeScreen(
             Spacer(Modifier.size(8.dp))
             HorizontalDivider()
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                val filtered = viewModel.filteredContacts()
+                // Entrée persistante en tête de liste : ouvre l'éditeur de contacts du
+                // système sur un formulaire vierge (choix produit : toujours vierge,
+                // indépendamment de la recherche saisie). Placée au-dessus des résultats
+                // pour rester atteignable même quand la liste est longue.
+                item(key = "create-contact") {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.action_create_contact)) },
+                        leadingContent = {
+                            Icon(Icons.Outlined.PersonAdd, contentDescription = null)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (!ContactIntents.createContact(context)) {
+                                    scope.launch {
+                                        snackbarHost.showError(
+                                            context.getString(R.string.phone_action_no_contacts),
+                                        )
+                                    }
+                                }
+                            },
+                    )
+                    HorizontalDivider()
+                }
                 // Free-entry row: lets the user pick a raw number (or anything they typed) when
                 // it doesn't match any saved contact. Audit Q-BUG-1: previously the modifier ran
                 // `.let { mod -> mod.also { /* clickable */ } }` — a no-op that left the row

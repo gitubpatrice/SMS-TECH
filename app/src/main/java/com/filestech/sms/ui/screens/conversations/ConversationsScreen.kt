@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
@@ -55,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,7 +75,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
+import com.filestech.sms.ui.components.ContactIntents
 import com.filestech.sms.ui.components.ConversationRow
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -157,6 +161,7 @@ fun ConversationsScreen(
     // SmsTechSnackbarHost (bleu marque succès / rouge erreur).
     val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -305,6 +310,22 @@ fun ConversationsScreen(
                             onClick = {
                                 overflowOpen = false
                                 showMarkAllReadConfirm = true
+                            },
+                        )
+                        // Ouvre l'éditeur de contacts du système sur un formulaire vierge
+                        // (aucun numéro de contexte à ce niveau). Feedback snackbar si aucune
+                        // app Contacts n'est installée. Partage le helper ContactIntents avec
+                        // l'écran de composition.
+                        DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Outlined.PersonAdd, contentDescription = null) },
+                            text = { Text(stringResource(R.string.action_create_contact)) },
+                            onClick = {
+                                overflowOpen = false
+                                if (!ContactIntents.createContact(ctx)) {
+                                    scope.launch {
+                                        snackbarHost.showError(ctx.getString(R.string.phone_action_no_contacts))
+                                    }
+                                }
                             },
                         )
                         DropdownMenuItem(

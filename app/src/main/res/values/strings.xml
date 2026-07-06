@@ -112,6 +112,7 @@
     <string name="conversations_search_hint">Search a number, a contact, a message…</string>
     <string name="conversations_no_match">No matching conversation.</string>
     <string name="action_add_contact">Save contact</string>
+    <string name="action_create_contact">Create contact</string>
     <string name="action_details">Conversation details</string>
 
     <string name="thread_details_messages">%1$d messages</string>

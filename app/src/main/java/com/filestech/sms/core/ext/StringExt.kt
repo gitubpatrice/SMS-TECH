@@ -1,5 +1,7 @@
 package com.filestech.sms.core.ext
 
+import java.text.Normalizer
+
 /**
  * Telephony-friendly normalization of a phone number: keeps leading '+', digits and '*#'.
  * Strips spaces, dashes, parentheses. Does not enforce country format (left to libphonenumber if needed).
@@ -16,6 +18,29 @@ fun String.normalizePhone(): String {
     }
     return sb.toString()
 }
+
+/** Pré-compilé une fois : marques diacritiques combinantes (catégorie Unicode Mn). */
+private val COMBINING_MARKS_REGEX = Regex("\\p{Mn}+")
+
+/**
+ * Replie une chaîne pour une recherche insensible à la **casse ET aux accents**.
+ *
+ * Procédé : décomposition Unicode NFD (`é` → `e` + accent aigu combinant, `ç` → `c` +
+ * cédille combinante, `à` → `a` + accent grave…), suppression des marques combinantes
+ * (catégorie `Mn`), puis passage en minuscules **locale-indépendant** (pas de piège
+ * « i turc » : `lowercase()` sans argument utilise la locale invariante).
+ *
+ * Ainsi « MAÏTÉ », « maite », « Maïté » se replient tous vers « maite » et se matchent
+ * mutuellement. À utiliser des DEUX côtés d'un `contains` (requête et cible) pour que le
+ * repli soit symétrique.
+ *
+ * Limite connue : les ligatures sans décomposition canonique (`œ`, `æ`, `ß`) ne sont pas
+ * dépliées (`œ` reste `œ`, pas `oe`) — cas rares en pratique, laissés tels quels.
+ */
+fun String.foldForSearch(): String =
+    Normalizer.normalize(this, Normalizer.Form.NFD)
+        .replace(COMBINING_MARKS_REGEX, "")
+        .lowercase()
 
 /**
  * Permissive phone-number match used by the blocklist (system entry vs mirrored row).

@@ -109,6 +109,7 @@
     <string name="conversations_search_hint">Rechercher un numéro, un contact, un message…</string>
     <string name="conversations_no_match">Aucune conversation correspondante.</string>
     <string name="action_add_contact">Enregistrer le contact</string>
+    <string name="action_create_contact">Créer un contact</string>
     <string name="action_details">Détails de la conversation</string>
 
     <string name="thread_details_messages">%1$d messages</string>

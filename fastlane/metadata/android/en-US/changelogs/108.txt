@@ -1,0 +1,10 @@
+v1.20.0 — Create contact + search
+
+• New "Create contact" action: from the New
+  message screen (top) and from the
+  conversation list menu.
+• Improved search: now ignores both accents
+  AND case ("maite" finds "Maïté"), and is
+  faster.
+• Internal fixes. 100% local, no change to
+  your data.

@@ -37,4 +37,34 @@ class StringExtTest {
         val b = "alice".deterministicHue()
         assertThat(a).isEqualTo(b)
     }
+
+    @Test fun `foldForSearch strips case and accents`() {
+        // Un même nom saisi de plusieurs façons se replie vers la même clé → la recherche
+        // devient insensible à la casse ET aux accents.
+        assertThat("Maïté".foldForSearch()).isEqualTo("maite")
+        assertThat("MAITE".foldForSearch()).isEqualTo("maite")
+        assertThat("maïté".foldForSearch()).isEqualTo("maite")
+        assertThat("Élodie".foldForSearch()).isEqualTo("elodie")
+        assertThat("François".foldForSearch()).isEqualTo("francois")
+        assertThat("Amélie-Noël".foldForSearch()).isEqualTo("amelie-noel")
+    }
+
+    @Test fun `foldForSearch makes a query match an accented name symmetrically`() {
+        // Usage réel : les DEUX côtés du contains sont repliés, donc une requête sans accent
+        // matche une cible avec accent (et inversement).
+        assertThat("Maïté Fructus".foldForSearch()).contains("maite")
+        assertThat("Vanessa".foldForSearch()).contains("VaNeSsA".foldForSearch())
+    }
+
+    @Test fun `foldForSearch preserves spaces and non-accented text`() {
+        assertThat("Jean Dupont".foldForSearch()).isEqualTo("jean dupont")
+        assertThat("".foldForSearch()).isEqualTo("")
+    }
+
+    @Test fun `foldForSearch leaves unrecomposable ligatures folded to lowercase only`() {
+        // Limite connue documentée : `œ`/`æ`/`ß` n'ont pas de décomposition canonique NFD,
+        // donc seule la casse est repliée (pas de dépliage vers "oe"/"ae"/"ss").
+        assertThat("Œuf".foldForSearch()).isEqualTo("œuf")
+        assertThat("CŒUR".foldForSearch()).isEqualTo("cœur")
+    }
 }

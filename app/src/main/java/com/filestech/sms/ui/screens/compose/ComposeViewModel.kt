@@ -3,17 +3,26 @@ package com.filestech.sms.ui.screens.compose
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.filestech.sms.core.ext.foldForSearch
 import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Contact
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,6 +32,7 @@ class ComposeViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val contactRepo: ContactRepository,
     private val conversationRepo: ConversationRepository,
+    @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel() {
 
     // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
@@ -100,17 +110,52 @@ class ComposeViewModel @Inject constructor(
         }
     }
 
-    fun filteredContacts(): List<Contact> {
-        val q = _state.value.query.trim()
-        if (q.isEmpty()) return _state.value.results
-        // v1.2.10 fix : si `q` est du texte pur (ex. "Patrice"), `normalizePhone()` rend "" et
-        // `contains("")` est toujours vrai → le filtre passait sur TOUS les contacts. Guard
-        // `n.isNotBlank()` pour ne tenter le match phone que si l'utilisateur tape des chiffres.
+    /**
+     * Contact « pré-indexé » pour la recherche : le nom est **replié une seule fois**
+     * (casse + accents retirés via [foldForSearch]) et les numéros normalisés une seule
+     * fois, au moment où la liste de contacts change — et non à chaque frappe. Le filtrage
+     * par requête ne fait alors que des `contains` sur ces chaînes déjà calculées.
+     */
+    private data class IndexedContact(
+        val contact: Contact,
+        val foldedName: String,
+        val phoneDigits: List<String>,
+    )
+
+    /**
+     * Résultats filtrés exposés en [StateFlow] dérivé (optimal) plutôt qu'en fonction
+     * rappelée à chaque recomposition : le repli des contacts n'a lieu qu'au changement
+     * de la liste source ([distinctUntilChanged]), et le filtrage qu'au changement de
+     * requête. Recherche insensible à la **casse ET aux accents** (« maite » trouve
+     * « Maïté »), et par numéro si l'utilisateur tape des chiffres.
+     */
+    val filtered: StateFlow<List<Contact>> = combine(
+        _state.map { it.query.trim() }.distinctUntilChanged(),
+        _state.map { it.results }.distinctUntilChanged().map { list ->
+            list.map { c ->
+                IndexedContact(
+                    contact = c,
+                    foldedName = c.displayName?.foldForSearch().orEmpty(),
+                    phoneDigits = c.phones.map { it.normalized },
+                )
+            }
+        },
+    ) { q, indexed ->
+        if (q.isEmpty()) return@combine indexed.map { it.contact }
+        val needle = q.foldForSearch()
+        // v1.2.10 : `normalizePhone()` d'un texte pur (ex. "Patrice") rend "" et
+        // `contains("")` matcherait TOUT → on ne tente le match numéro que si la requête
+        // contient réellement des chiffres (`n.isNotBlank()`).
         val n = q.normalizePhone()
-        return _state.value.results.filter { c ->
-            val nameMatch = c.displayName?.contains(q, ignoreCase = true) == true
-            val phoneMatch = n.isNotBlank() && c.phones.any { p -> p.normalized.contains(n) }
-            nameMatch || phoneMatch
+        indexed.mapNotNull { idx ->
+            val match = idx.foldedName.contains(needle) ||
+                (n.isNotBlank() && idx.phoneDigits.any { it.contains(n) })
+            if (match) idx.contact else null
         }
     }
+        // Le repli NFD (`foldForSearch`) de tous les contacts au chargement de la liste ne doit
+        // pas s'exécuter sur le Main : `combine{}.stateIn` tourne sur Main.immediate par défaut.
+        // `flowOn(io)` déplace le fold + le filtrage sur IO — parité avec ConversationsViewModel.
+        .flowOn(io)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 }

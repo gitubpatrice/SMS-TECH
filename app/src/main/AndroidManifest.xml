@@ -103,6 +103,14 @@
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
+        <!-- Création de contact (ComposeScreen / liste conversations). `startActivity` n'est
+             pas bloqué par la visibilité de packages, mais on déclare l'intent par robustesse
+             et cohérence avec les autres délégations ci-dessus — indépendant du nom de package
+             OEM de l'app Contacts (Samsung `com.samsung.android.app.contacts`, etc.). -->
+        <intent>
+            <action android:name="android.intent.action.INSERT" />
+            <data android:mimeType="vnd.android.cursor.dir/contact" />
+        </intent>
         <package android:name="com.android.contacts" />
     </queries>
 

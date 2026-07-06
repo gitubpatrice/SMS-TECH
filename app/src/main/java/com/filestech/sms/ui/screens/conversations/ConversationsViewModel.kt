@@ -3,6 +3,7 @@ package com.filestech.sms.ui.screens.conversations
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.filestech.sms.core.ext.foldForSearch
 import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
@@ -266,14 +267,17 @@ class ConversationsViewModel @Inject constructor(
 
     private fun filterConversations(rows: List<Conversation>, q: String): List<Conversation> {
         if (q.isBlank()) return rows
-        val needle = q.trim().lowercase()
+        // Repli insensible casse + accents (« maite » trouve « Maïté ») calculé une fois pour la
+        // requête ; le repli par ligne se fait à la volée. `trim()` conservé (parité avec l'ancien
+        // `q.trim().lowercase()`) pour qu'un espace en tête/fin ne casse pas le match.
+        val needle = q.trim().foldForSearch()
         val needleDigits = q.normalizePhone()
         return rows.filter { c ->
-            val nameMatch = c.displayName?.lowercase()?.contains(needle) == true
-            val previewMatch = c.lastMessagePreview?.lowercase()?.contains(needle) == true
-            val phoneMatch = needleDigits.isNotBlank() &&
-                c.addresses.any { it.normalized.contains(needleDigits) }
-            nameMatch || previewMatch || phoneMatch
+            // `||` court-circuite : le repli (coûteux) du preview n'est effectué que si le nom
+            // ne matche pas, et le match numéro que si l'utilisateur a tapé des chiffres.
+            c.displayName?.foldForSearch()?.contains(needle) == true ||
+                c.lastMessagePreview?.foldForSearch()?.contains(needle) == true ||
+                (needleDigits.isNotBlank() && c.addresses.any { it.normalized.contains(needleDigits) })
         }
     }
 
