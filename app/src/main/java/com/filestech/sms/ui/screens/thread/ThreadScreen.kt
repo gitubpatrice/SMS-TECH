@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.PersonSearch
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
@@ -116,6 +117,7 @@ import com.filestech.sms.ui.theme.BrandDanger
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.ui.components.AttachmentPickerSheet
 import com.filestech.sms.ui.components.AudioMessageBubble
+import com.filestech.sms.ui.components.ContactIntents
 import com.filestech.sms.ui.components.BurstPosition
 import com.filestech.sms.ui.components.ComposerReplyChip
 import com.filestech.sms.core.ext.splitGraphemeClusters
@@ -327,6 +329,11 @@ fun ThreadScreen(
                     }
                     runCatching { context.startActivity(intent) }
                 }
+                is ThreadViewModel.Event.OpenCreateContact -> {
+                    // Fiche vierge pré-remplie (ACTION_INSERT) — évite le sélecteur système
+                    // et le défilement jusqu'à "créer un nouveau contact".
+                    ContactIntents.createContact(context, e.rawNumber)
+                }
                 is ThreadViewModel.Event.OpenDialer -> {
                     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(e.rawNumber)}"))
                     runCatching { context.startActivity(intent) }
@@ -416,6 +423,7 @@ fun ThreadScreen(
                             }
                         },
                         onDismiss = { menuOpen = false },
+                        onCreateContact = { menuOpen = false; viewModel.requestCreateContact() },
                         onAddContact = { menuOpen = false; viewModel.requestAddContact() },
                         onDetails = { menuOpen = false; detailsOpen = true },
                         onExportPdf = { menuOpen = false; viewModel.exportToPdf() },
@@ -978,6 +986,7 @@ private fun ThreadActionsMenu(
     inVault: Boolean,
     onMoveVault: (() -> Unit)?,
     onDismiss: () -> Unit,
+    onCreateContact: () -> Unit,
     onAddContact: () -> Unit,
     onDetails: () -> Unit,
     onExportPdf: () -> Unit,
@@ -990,9 +999,17 @@ private fun ThreadActionsMenu(
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (!hasContact) {
+            // Choix clair, sans passer par le sélecteur système + défilement :
+            //  - "Créer un contact"       → fiche vierge pré-remplie (ACTION_INSERT)
+            //  - "Mettre à jour un contact" → sélecteur pour rattacher à un existant (INSERT_OR_EDIT)
             DropdownMenuItem(
                 leadingIcon = { Icon(Icons.Outlined.PersonAdd, contentDescription = null) },
-                text = { Text(stringResource(R.string.action_add_contact)) },
+                text = { Text(stringResource(R.string.thread_create_contact)) },
+                onClick = onCreateContact,
+            )
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Outlined.PersonSearch, contentDescription = null) },
+                text = { Text(stringResource(R.string.thread_update_contact)) },
                 onClick = onAddContact,
             )
         }

@@ -185,8 +185,17 @@ class ThreadViewModel @Inject constructor(
         data class PdfReady(val uri: android.net.Uri, val pages: Int) : Event
         data class SendError(val error: AppError) : Event
 
-        /** Launch the system contact editor pre-filled with the conversation's phone number. */
+        /**
+         * "Mettre à jour un contact" — ouvre l'éditeur système en mode `ACTION_INSERT_OR_EDIT`
+         * (sélecteur : rattacher le numéro à un contact existant, ou en créer un).
+         */
         data class OpenAddContact(val rawNumber: String) : Event
+
+        /**
+         * "Créer un contact" — ouvre l'éditeur système sur une fiche vierge pré-remplie
+         * (`ACTION_INSERT`), sans passer par le sélecteur de contacts existants.
+         */
+        data class OpenCreateContact(val rawNumber: String) : Event
 
         /** Launch the system dialer pre-filled with the conversation's phone number. */
         data class OpenDialer(val rawNumber: String) : Event
@@ -1164,6 +1173,11 @@ class ThreadViewModel @Inject constructor(
     fun requestAddContact() {
         val addr = _state.value.conversation?.addresses?.firstOrNull()?.raw ?: return
         _events.tryEmit(Event.OpenAddContact(addr))
+    }
+
+    fun requestCreateContact() {
+        val addr = _state.value.conversation?.addresses?.firstOrNull()?.raw ?: return
+        _events.tryEmit(Event.OpenCreateContact(addr))
     }
 
     fun requestCall() {

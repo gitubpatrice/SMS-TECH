@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.20.0** (2026-07-06)
+Current release : **v1.21.0** (2026-07-09)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -30,6 +30,28 @@ If you find a vulnerability, please disclose it to **contact@files-tech.com** wi
 | Wall-clock manipulation to fire Safety call early (v1.10.0 SEC-11) | A rooted attacker advances the wall-clock to make `lastActivityAt + timeoutMs < now()` evaluate `true` immediately and trigger the SMS to expose the support network | `SafetyCallConfig.isExpired()` now requires BOTH wall-clock AND monotonic clock to have crossed `timeoutMs`. `SystemClock.elapsedRealtime()` is not manipulable via Settings → Date/time. The drift between the two clocks defeats the attack. Drift recovery in `MainApplication.onCreate` realigns monotonic post-reboot if the stored value exceeds current uptime. |
 | Double-trigger of emergency SMS via UI race (v1.10.0) | A panicked user holds the URGENCE button, releases, and immediately holds again before the DataStore write completes; without protection a second SMS could be sent within ~50–300 ms | `EmergencyViewModel.trigger()` uses `AtomicBoolean compareAndSet(false, true)` as an in-flight guard. A second `trigger()` call while the first is still running returns immediately. The flag is reset in `finally` so any exception in the UseCase still releases it. |
 | Listener leak in `LocationResolver` (v1.10.0) | Theoretical leak of GPS listener if `SecurityException` thrown on NETWORK provider after GPS listener was registered | `awaitFirstFix` uses `AtomicBoolean resumed` to enforce single-resume on `suspendCancellableCoroutine`, and `cleanup()` is always called in the `catch (SecurityException)` block regardless of `resumed` state. Same `cleanup()` is wired in `invokeOnCancellation`. |
+
+---
+
+## Outgoing address normalization (v1.21.0)
+
+Before an SMS / MMS is handed to the telephony stack, the **destination** is normalized to E.164
+(`PhoneNumberUtils.formatNumberToE164`) using the SIM country — or a user-set default region
+(Settings → Sending → "Default country") when set. This fixes silent non-delivery when sending
+from a foreign SIM (a national `06…` is not routable abroad; the network needs `+33…`).
+
+Security-relevant invariants:
+
+- **Only the on-wire address changes.** The `content://sms` / `content://mms` provider rows and
+  the SQLCipher-encrypted Room mirror keep the user's original raw string — threading, display and
+  history are byte-for-byte unchanged. Normalization happens exclusively inside `SmsSender` /
+  `MmsSender` on the wire destination.
+- **Fail-open to raw.** If the region is unknown, the value is a short code / alphanumeric sender,
+  or it is not a valid number for the region, the raw string is sent verbatim — no regression, and
+  never a wrong-country number (an ambiguous foreign national number yields `null` → raw).
+- **No PII logging.** `WireAddress` and `PhoneNumberWireFormatter` never log a phone number.
+- **No new attack surface.** `formatNumberToE164` is a platform API; the pre-existing MMS
+  email-target guard (`MmsBuilder.formatAddressForMms` rejecting `@`) is unaffected.
 
 ---
 

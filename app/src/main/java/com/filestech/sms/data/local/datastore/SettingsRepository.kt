@@ -101,6 +101,7 @@ class SettingsRepository @Inject constructor(
                     else -> ReactionFormat.READABLE_FR
                 },
                 senderDisplayName = p[K.senderDisplayName]?.takeIf { it.isNotBlank() },
+                defaultRegionIso = p[K.defaultRegion]?.takeIf { it.isNotBlank() },
             ),
             notifications = NotificationSettings(
                 enabled = p[K.notifEnabled] ?: true,
@@ -223,6 +224,8 @@ class SettingsRepository @Inject constructor(
         this[K.reactionFormat] = s.sending.reactionFormat.name
         s.sending.senderDisplayName?.takeIf { it.isNotBlank() }?.let { this[K.senderDisplayName] = it }
             ?: remove(K.senderDisplayName)
+        s.sending.defaultRegionIso?.takeIf { it.isNotBlank() }?.let { this[K.defaultRegion] = it }
+            ?: remove(K.defaultRegion)
 
         this[K.notifEnabled] = s.notifications.enabled
         this[K.notifStyle] = s.notifications.style.name
@@ -325,6 +328,9 @@ class SettingsRepository @Inject constructor(
         // v1.8.1 — override personnel du nom inclus dans les SMS de réaction
         // sortants. `null` = résolution auto via `ContactsContract.Profile`.
         val senderDisplayName = stringPreferencesKey("send.senderDisplayName")
+        // v1.21.0 — indicatif pays par défaut pour la conversion E.164 des numéros
+        // nationaux à l'envoi. null/absent = Auto (pays de la SIM).
+        val defaultRegion = stringPreferencesKey("send.defaultRegion")
 
         // v1.9.0 — Safety call (opt-in, désactivé par défaut). 6 clés flat
         // pour rester lisible/debugable, la liste des contacts est sérialisée

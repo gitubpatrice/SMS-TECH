@@ -112,6 +112,8 @@
     <string name="conversations_search_hint">Search a number, a contact, a message…</string>
     <string name="conversations_no_match">No matching conversation.</string>
     <string name="action_add_contact">Save contact</string>
+    <string name="thread_create_contact">Create a contact</string>
+    <string name="thread_update_contact">Update a contact</string>
     <string name="action_create_contact">Create contact</string>
     <string name="action_details">Conversation details</string>
 
@@ -372,6 +374,9 @@
     <string name="settings_signature">Automatic signature</string>
 
     <string name="settings_section_sending">Sending</string>
+    <string name="settings_default_region_title">Default country</string>
+    <string name="settings_default_region_auto">Automatic (SIM country)</string>
+    <string name="settings_default_region_auto_hint">Uses the SIM\'s country to convert national numbers (06…) to international format before sending. Pick a country if your contacts are saved in another country\'s national format — e.g. French 06… numbers on a foreign SIM won\'t be delivered otherwise.</string>
     <string name="settings_confirm_broadcast">Confirm before sending</string>
     <string name="settings_confirm_send_title">Send this message?</string>
     <string name="settings_delivery_reports">Delivery reports</string>

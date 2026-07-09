@@ -46,6 +46,7 @@ class MmsSender @Inject constructor(
     private val builder: MmsBuilder,
     private val systemWriteback: MmsSystemWriteback,
     private val messageDao: MessageDao,
+    private val wireFormatter: com.filestech.sms.data.sms.PhoneNumberWireFormatter,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -71,6 +72,9 @@ class MmsSender @Inject constructor(
         val attachments = listOf(
             MmsBuilder.MmsAttachment(audioFile, mimeType, MmsBuilder.MmsAttachment.Kind.AUDIO),
         )
+        // E.164 normalisation for the PDU "To" field only (foreign-SIM routing). The system
+        // writeback below keeps the raw recipients — symmetric with the SMS path.
+        val wireRecipients = recipients.map { wireFormatter.toWireFormat(it, subId) }
         dispatchMms(
             localMessageId = localMessageId,
             recipients = recipients,
@@ -85,7 +89,7 @@ class MmsSender @Inject constructor(
                 builder.buildVoiceSendReq(
                     audioFile = audioFile,
                     mimeType = mimeType,
-                    recipients = recipients,
+                    recipients = wireRecipients,
                     requestDeliveryReport = requestDeliveryReport,
                 )
             },
@@ -115,6 +119,9 @@ class MmsSender @Inject constructor(
                 return@withContext Outcome.Failure(AppError.Validation("attachment file missing: ${a.file.name}"))
             }
         }
+        // E.164 normalisation for the PDU "To" field only (foreign-SIM routing). The system
+        // writeback below keeps the raw recipients — symmetric with the SMS path.
+        val wireRecipients = recipients.map { wireFormatter.toWireFormat(it, subId) }
         dispatchMms(
             localMessageId = localMessageId,
             recipients = recipients,
@@ -125,7 +132,7 @@ class MmsSender @Inject constructor(
                 builder.buildMultipartSendReq(
                     attachments = attachments,
                     textBody = textBody,
-                    recipients = recipients,
+                    recipients = wireRecipients,
                     requestDeliveryReport = requestDeliveryReport,
                 )
             },

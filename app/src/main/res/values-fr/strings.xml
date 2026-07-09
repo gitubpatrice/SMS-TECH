@@ -109,6 +109,8 @@
     <string name="conversations_search_hint">Rechercher un numéro, un contact, un message…</string>
     <string name="conversations_no_match">Aucune conversation correspondante.</string>
     <string name="action_add_contact">Enregistrer le contact</string>
+    <string name="thread_create_contact">Créer un contact</string>
+    <string name="thread_update_contact">Mettre à jour un contact</string>
     <string name="action_create_contact">Créer un contact</string>
     <string name="action_details">Détails de la conversation</string>
 
@@ -360,6 +362,9 @@
     <string name="settings_signature">Signature automatique</string>
 
     <string name="settings_section_sending">Envoi</string>
+    <string name="settings_default_region_title">Indicatif pays par défaut</string>
+    <string name="settings_default_region_auto">Automatique (pays de la SIM)</string>
+    <string name="settings_default_region_auto_hint">Utilise le pays de la SIM pour convertir les numéros nationaux (06…) au format international avant l\'envoi. Choisissez un pays si vos contacts sont enregistrés au format national d\'un autre pays — sans ça, des 06… français depuis une SIM étrangère ne sont pas délivrés.</string>
     <string name="settings_confirm_broadcast">Confirmer avant envoi</string>
     <string name="settings_confirm_send_title">Envoyer ce message ?</string>
     <string name="settings_delivery_reports">Accusés de réception</string>

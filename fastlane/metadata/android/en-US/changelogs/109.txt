@@ -1,0 +1,12 @@
+v1.21.0 — International SMS + contacts
+
+• Major fix: sending to and from abroad. The
+  recipient number is converted to
+  international format before sending
+  (essential from a foreign SIM, e.g. a
+  Luxembourg one).
+• New "Default country" setting (Sending) to
+  convert national numbers.
+• In a conversation: a clear choice between
+  "Create a contact" and "Update a contact".
+• 100% local, no change to your data.

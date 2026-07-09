@@ -20,6 +20,7 @@ import javax.inject.Singleton
 @Singleton
 class SmsSender @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val wireFormatter: PhoneNumberWireFormatter,
 ) {
 
     fun send(
@@ -31,6 +32,11 @@ class SmsSender @Inject constructor(
     ): Outcome<Unit> {
         return try {
             val manager = subscriptionAwareManager(subId)
+            // Normalise the destination to E.164 for the wire so a foreign SIM (e.g. a Luxembourg
+            // SIM texting a French `06…`) can route it. Falls back to `destination` verbatim when
+            // the region is unknown or the number is a short code — no regression on domestic
+            // sends. Only the wire address is affected; the Room/provider rows keep the raw form.
+            val wireDestination = wireFormatter.toWireFormat(destination, subId)
             val parts = manager.divideMessage(text)
             val sentIntents = ArrayList<PendingIntent>(parts.size)
             val deliveredIntents = ArrayList<PendingIntent>(parts.size)
@@ -39,7 +45,7 @@ class SmsSender @Inject constructor(
                 deliveredIntents += buildPendingIntent(ACTION_SMS_DELIVERED, localMessageId, i, parts.size)
             }
             manager.sendMultipartTextMessage(
-                destination,
+                wireDestination,
                 /* scAddress = */ null,
                 parts,
                 sentIntents,

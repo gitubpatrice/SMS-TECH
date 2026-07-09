@@ -129,6 +129,21 @@ data class SendingSettings(
      *  avec un emoji multi-codepoint et un preview de message d'origine.
      */
     val senderDisplayName: String? = null,
+    /**
+     * v1.21.0 — indicatif pays par défaut (ISO 3166-1 alpha-2, ex. `"FR"`, `"LU"`) utilisé
+     * pour convertir les numéros **nationaux** (`06…`) au format international E.164 **avant
+     * l'envoi**, via [com.filestech.sms.data.sms.PhoneNumberWireFormatter].
+     *
+     *  - `null` / vide = **Auto** : on utilise le pays de la SIM (comportement par défaut).
+     *  - valeur explicite = **override** : indispensable quand la SIM est étrangère mais que
+     *    les contacts sont enregistrés en national d'un autre pays. Ex. amie avec une SIM 🇱🇺
+     *    qui écrit à des contacts français `06…` : régler `FR` fait envoyer `+33…` et les SMS
+     *    arrivent enfin. Sans override, `06…` sur SIM 🇱🇺 est ininterprétable → non routable.
+     *
+     * N'affecte QUE l'adresse sur le fil ; le stockage, le fil de discussion et l'affichage
+     * gardent la forme brute saisie par l'utilisateur.
+     */
+    val defaultRegionIso: String? = null,
 )
 
 /**

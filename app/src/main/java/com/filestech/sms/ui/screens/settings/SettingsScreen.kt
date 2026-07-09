@@ -117,6 +117,8 @@ fun SettingsScreen(
     var notifStylePickerOpen by remember { mutableStateOf(false) }
     // v1.8.0 (bug 5 fix) — picker ReactionFormat (3 options).
     var reactionFormatPickerOpen by remember { mutableStateOf(false) }
+    // v1.21.0 — picker indicatif pays par défaut (conversion E.164 à l'envoi).
+    var defaultRegionPickerOpen by remember { mutableStateOf(false) }
     // v1.8.0 — 3 nouveaux dialogs de confirmation pour les actions destructives :
     //  - resync depuis le téléphone (réimporte tout)
     //  - reset all settings (defaults)
@@ -264,6 +266,18 @@ fun SettingsScreen(
                     onChange = { v ->
                         viewModel.update { it.copy(sending = it.sending.copy(userMsisdn = v?.takeIf { s -> s.isNotBlank() })) }
                     },
+                )
+                // v1.21.0 — indicatif pays par défaut pour convertir les numéros nationaux
+                // au format international (E.164) avant l'envoi. "Auto" = pays de la SIM.
+                // Indispensable pour envoyer des numéros nationaux d'un pays depuis une SIM
+                // étrangère (ex. 06… français depuis une SIM luxembourgeoise).
+                val defaultRegionLabel = state.sending.defaultRegionIso
+                    ?.let { iso -> "${isoToFlagEmoji(iso)} ${regionDisplayName(iso)}" }
+                    ?: stringResource(R.string.settings_default_region_auto)
+                NavigationRow(
+                    title = stringResource(R.string.settings_default_region_title),
+                    description = defaultRegionLabel,
+                    onClick = { defaultRegionPickerOpen = true },
                 )
                 // v1.3.1 — envoi des réactions emoji au correspondant. ON par défaut. Quand
                 // OFF, les réactions restent strictement locales (badge visible uniquement
@@ -815,6 +829,17 @@ fun SettingsScreen(
         )
     }
 
+    if (defaultRegionPickerOpen) {
+        DefaultRegionPickerDialog(
+            current = state.sending.defaultRegionIso,
+            onSelect = { iso ->
+                viewModel.update { it.copy(sending = it.sending.copy(defaultRegionIso = iso)) }
+                defaultRegionPickerOpen = false
+            },
+            onDismiss = { defaultRegionPickerOpen = false },
+        )
+    }
+
     // v1.13.0 — Dialog setup PIN/pass coffre : saisie + confirmation.
     if (vaultPinSetupOpen) {
         VaultPinSetupDialog(
@@ -1000,6 +1025,81 @@ private fun ReactionFormatPickerDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
+}
+
+/**
+ * v1.21.0 — picker de l'indicatif pays par défaut utilisé pour convertir les numéros nationaux
+ * en E.164 avant l'envoi. Première option = "Auto" (pays de la SIM, `null`) ; suivent quelques
+ * pays européens courants. Les noms de pays sont localisés automatiquement par [regionDisplayName]
+ * (pas de chaîne à traduire), le drapeau est dérivé de l'ISO via [isoToFlagEmoji].
+ */
+@Composable
+private fun DefaultRegionPickerDialog(
+    current: String?,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_default_region_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                PreviewModeOption(
+                    label = stringResource(R.string.settings_default_region_auto),
+                    hint = stringResource(R.string.settings_default_region_auto_hint),
+                    selected = current == null,
+                    onClick = { onSelect(null) },
+                )
+                for (opt in DEFAULT_REGION_OPTIONS) {
+                    PreviewModeOption(
+                        label = "${isoToFlagEmoji(opt.iso)} ${regionDisplayName(opt.iso)}",
+                        hint = opt.dialCode,
+                        selected = current.equals(opt.iso, ignoreCase = true),
+                        onClick = { onSelect(opt.iso) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/** ISO 3166-1 alpha-2 + dial code for the default-region picker. */
+private data class RegionOption(val iso: String, val dialCode: String)
+
+/** Curated shortlist — France + the countries her circle most often writes to. "Auto" (SIM) is
+ *  offered separately as the first, default option. For any other country, storing contacts in
+ *  `+CC…` international form already works regardless of this setting. */
+private val DEFAULT_REGION_OPTIONS = listOf(
+    RegionOption("FR", "+33"),
+    RegionOption("BE", "+32"),
+    RegionOption("LU", "+352"),
+    RegionOption("CH", "+41"),
+    RegionOption("DE", "+49"),
+    RegionOption("ES", "+34"),
+    RegionOption("IT", "+39"),
+    RegionOption("PT", "+351"),
+    RegionOption("NL", "+31"),
+    RegionOption("GB", "+44"),
+)
+
+/** Localised country name for an ISO code (e.g. "FR" → "France" / "France"), falling back to the
+ *  raw ISO if the platform has no display name. Uses the JVM `Locale` country DB — zero strings. */
+private fun regionDisplayName(iso: String): String =
+    java.util.Locale("", iso).displayCountry.ifBlank { iso }
+
+/** Flag emoji from an ISO country code by mapping each letter to its Regional Indicator Symbol. */
+private fun isoToFlagEmoji(iso: String): String {
+    if (iso.length != 2) return ""
+    val cc = iso.uppercase()
+    if (cc[0] !in 'A'..'Z' || cc[1] !in 'A'..'Z') return ""
+    val base = 0x1F1E6 // Regional Indicator Symbol Letter A
+    return buildString {
+        appendCodePoint(base + (cc[0] - 'A'))
+        appendCodePoint(base + (cc[1] - 'A'))
+    }
 }
 
 @Composable

@@ -1,0 +1,12 @@
+v1.21.0 — SMS internationaux + contacts
+
+• Correction majeure : envoi vers et depuis
+  l'étranger. Le numéro du destinataire est
+  mis au format international avant l'envoi
+  (indispensable depuis une SIM étrangère).
+• Nouveau réglage « Indicatif pays par défaut »
+  (Envoi) pour les numéros nationaux.
+• Dans une conversation : choix clair entre
+  « Créer un contact » et « Mettre à jour un
+  contact ».
+• 100% local, aucun changement de vos données.
