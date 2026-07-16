@@ -186,6 +186,7 @@ class SettingsRepository @Inject constructor(
                 splashShown = p[K.splashShown] ?: false,
                 keepAliveService = p[K.keepAliveService] ?: false,
                 unreadResetV180 = p[K.unreadResetV180] ?: false,
+                dedupSameNumberV1230 = p[K.dedupSameNumberV1230] ?: false,
                 attachmentsMovedToFilesDirV147 = p[K.attachmentsMovedToFilesDirV147] ?: false,
             ),
         )
@@ -291,6 +292,7 @@ class SettingsRepository @Inject constructor(
         this[K.splashShown] = s.advanced.splashShown
         this[K.keepAliveService] = s.advanced.keepAliveService
         this[K.unreadResetV180] = s.advanced.unreadResetV180
+        this[K.dedupSameNumberV1230] = s.advanced.dedupSameNumberV1230
         this[K.attachmentsMovedToFilesDirV147] = s.advanced.attachmentsMovedToFilesDirV147
     }
 
@@ -397,6 +399,8 @@ class SettingsRepository @Inject constructor(
         val keepAliveService = booleanPreferencesKey("advanced.keepAliveService")
         // v1.8.0 — flag one-shot pour la migration de purge des badges hérités v1.7.1.
         val unreadResetV180 = booleanPreferencesKey("advanced.unreadResetV180")
+        // v1.22.x — flag de complétion de la dédup des conversations du même numéro.
+        val dedupSameNumberV1230 = booleanPreferencesKey("advanced.dedupSameNumberV1230")
         // v1.14.7 — flag one-shot pour la migration des attachments MMS cacheDir → filesDir.
         val attachmentsMovedToFilesDirV147 = booleanPreferencesKey("advanced.attachmentsMovedToFilesDirV147")
     }

@@ -71,6 +71,13 @@ class MainApplication : Application(), Configuration.Provider {
      */
     @Inject lateinit var attachmentDao: com.filestech.sms.data.local.db.dao.AttachmentDao
 
+    /**
+     * v1.22.x — dédup « one-heal » des conversations du même numéro laissées en double par les
+     * versions antérieures aux correctifs de threading. Cf.
+     * [com.filestech.sms.data.repository.ConversationMirror.dedupeSameNumberConversations].
+     */
+    @Inject lateinit var conversationMirror: com.filestech.sms.data.repository.ConversationMirror
+
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     /**
@@ -152,6 +159,29 @@ class MainApplication : Application(), Configuration.Provider {
         // de fichier en fallback. `filesDir` n'est wipé que par PanicService / clearData.
         // Async (appScope.launch) — pas de blocage de la main thread. Idempotent.
         appScope.launch { migrateAttachmentsToFilesDirIfNeeded() }
+        // v1.22.x — dédup one-heal des doublons de conversations du même numéro laissés par les
+        // versions antérieures aux correctifs de threading (suffix-8 réception v1.3.3 + composer
+        // findOrCreate v1.21.1). Async (aucun blocage main thread), idempotent. La clé de fusion
+        // E.164 (plus stricte que le suffix-8) garantit qu'on ne fusionne jamais deux numéros
+        // distincts. Cf. ConversationMirror.dedupeSameNumberConversations.
+        appScope.launch {
+            runCatching {
+                kotlinx.coroutines.withContext(ioDispatcher) {
+                    if (!settingsRepository.flow.first().advanced.dedupSameNumberV1230) {
+                        // On ne mémorise la complétion QUE lorsque la base est propre (retour
+                        // `false` = rien à fusionner). Tant que la passe fusionne encore des
+                        // doublons, on re-scanne au prochain cold-start ; une fois propre, le flag
+                        // évite tout re-scan futur (même logique que `unreadResetV180`).
+                        val merged = conversationMirror.dedupeSameNumberConversations()
+                        if (!merged) {
+                            settingsRepository.update { s ->
+                                s.copy(advanced = s.advanced.copy(dedupSameNumberV1230 = true))
+                            }
+                        }
+                    }
+                }
+            }.onFailure { Timber.w(it, "dedupeSameNumberConversations failed") }
+        }
         // Audit P-P0-5: the historical R6 fix used `runBlocking(IO) { appLock.resolveInitialState() }`
         // here to pre-resolve the lock state before any broadcast receiver could read it. That
         // blocked the main thread for 50-200 ms on DataStore on cold-start. We now kick the

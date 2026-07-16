@@ -118,6 +118,7 @@
     <string name="thread_details_first">Premier message : %1$s</string>
     <string name="thread_details_last">Dernier message : %1$s</string>
     <string name="thread_details_participants">Participants : %1$d</string>
+    <string name="thread_details_number">Numéro : %1$s</string>
 
     <string name="tab_conversations">Conversations</string>
     <string name="tab_archived">Archivées</string>

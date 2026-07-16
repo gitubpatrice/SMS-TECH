@@ -357,6 +357,13 @@ data class AdvancedSettings(
      */
     val unreadResetV180: Boolean = false,
     /**
+     * v1.22.x — flag de complétion de la dédup des conversations du même numéro
+     * ([com.filestech.sms.data.repository.ConversationMirror.dedupeSameNumberConversations]).
+     * Posé à `true` une fois la base propre (aucun doublon restant) pour ne plus re-scanner à
+     * chaque cold-start. Même pattern que `unreadResetV180`.
+     */
+    val dedupSameNumberV1230: Boolean = false,
+    /**
      * v1.14.7 — flag de migration one-shot pour rapatrier les attachments MMS reçus
      * de `cacheDir/mms_incoming/` (volatile, peut être purgé par Android Storage
      * Manager ou par "Effacer le cache" Réglages → Apps) vers

@@ -882,6 +882,9 @@ fun ThreadScreen(
     if (detailsOpen) {
         ConversationDetailsDialog(
             title = title,
+            // v1.22.x — numéro affiché uniquement pour une conversation 1-to-1 (une seule
+            // adresse). `singleOrNull` renvoie null pour un groupe → pas de ligne numéro.
+            phoneNumber = state.conversation?.addresses?.singleOrNull()?.raw,
             participants = state.conversation?.addresses?.size ?: 0,
             messages = state.messageCount,
             firstAt = state.firstMessageAt,
@@ -1109,6 +1112,12 @@ private fun ThreadActionsMenu(
 @Composable
 private fun ConversationDetailsDialog(
     title: String,
+    /**
+     * v1.22.x — numéro du correspondant pour une conversation 1-to-1 (`null` pour un groupe :
+     * le compteur de participants suffit alors). Permet de distinguer deux conversations d'un
+     * même contact portant des numéros différents (ex. FR vs LU).
+     */
+    phoneNumber: String?,
     participants: Int,
     messages: Int,
     firstAt: Long?,
@@ -1123,6 +1132,12 @@ private fun ConversationDetailsDialog(
             Column {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.padding(top = 8.dp))
+                if (!phoneNumber.isNullOrBlank()) {
+                    Text(
+                        stringResource(R.string.thread_details_number, phoneNumber),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 Text(
                     stringResource(R.string.thread_details_participants, participants),
                     style = MaterialTheme.typography.bodyMedium,

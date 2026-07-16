@@ -195,11 +195,16 @@ class BackupService @Inject constructor(
      * Single-shot, transactional read of all conversations + all messages.
      * Fixes audit Q6 (was an N+1 with `Flow.first()` inside `flatMap`).
      */
-    private suspend fun listSync(): Pair<List<ConversationEntity>, List<MessageEntity>> {
-        val convs = conversationDao.listAllIncludingArchived()
-        val msgs = messageDao.listAll()
-        return convs to msgs
-    }
+    private suspend fun listSync(): Pair<List<ConversationEntity>, List<MessageEntity>> =
+        // v1.22.x (audit) — réellement transactionnel : les deux lectures voient un instantané
+        // cohérent. Sinon une écriture concurrente (ex. dédup au cold-start supprimant une
+        // conversation entre les deux SELECT) produirait un `.smsbk` incohérent (conversation
+        // vide → doublon fantôme à la restauration).
+        database.withTransaction {
+            val convs = conversationDao.listAllIncludingArchived()
+            val msgs = messageDao.listAll()
+            convs to msgs
+        }
 
     private fun intToBytesBE(value: Int): ByteArray = byteArrayOf(
         ((value ushr 24) and 0xFF).toByte(),

@@ -119,6 +119,17 @@ interface MessageDao {
     @Query("UPDATE messages SET mms_system_id = :mmsSystemId WHERE id = :id")
     suspend fun setMmsSystemId(id: Long, mmsSystemId: Long?)
 
+    /**
+     * v1.22.x — déplace tous les messages d'une conversation source vers une conversation cible
+     * (fusion des doublons du même numéro, cf. [com.filestech.sms.data.repository.ConversationMirror
+     * .dedupeSameNumberConversations]). **Doit être appelé AVANT** la suppression de la conversation
+     * source : la FK `messages.conversation_id` est `onDelete = CASCADE`, donc supprimer la
+     * conversation d'abord effacerait ses messages. Aucun conflit d'unicité — l'index unique porte
+     * sur `telephony_uri` seul, pas sur `conversation_id`.
+     */
+    @Query("UPDATE messages SET conversation_id = :toConversationId WHERE conversation_id = :fromConversationId")
+    suspend fun reparentMessages(fromConversationId: Long, toConversationId: Long)
+
     /** Inverse de [setMmsSystemId] — utilisé par le retry pour récupérer la row à purger. */
     @Query("SELECT mms_system_id FROM messages WHERE id = :id")
     suspend fun findMmsSystemId(id: Long): Long?

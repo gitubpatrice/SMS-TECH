@@ -5,14 +5,19 @@ import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
+import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.entity.AttachmentEntity
 import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageDirection
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.local.db.entity.MessageType
+import android.telephony.PhoneNumberUtils
+import com.filestech.sms.core.ext.WireAddress
 import com.filestech.sms.core.ext.phoneSuffix8
+import com.filestech.sms.data.sms.PhoneNumberWireFormatter
 import com.filestech.sms.di.IoDispatcher
+import timber.log.Timber
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
@@ -33,8 +38,10 @@ class ConversationMirror @Inject constructor(
     private val database: AppDatabase,
     private val conversationDao: ConversationDao,
     private val messageDao: MessageDao,
+    private val scheduledMessageDao: ScheduledMessageDao,
     private val attachmentDao: AttachmentDao,
     private val contacts: ContactRepository,
+    private val wireFormatter: PhoneNumberWireFormatter,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -880,6 +887,120 @@ class ConversationMirror @Inject constructor(
                 unreadCount = 0,
             ),
         )
+    }
+
+    /**
+     * v1.22.x — dédup « one-heal » des conversations 1-to-1 du MÊME numéro laissées en double par
+     * les versions antérieures aux correctifs de threading (fallback suffix-8 à la réception v1.3.3
+     * + `findOrCreate` au composer v1.21.1). Ces correctifs empêchent les NOUVEAUX doublons mais ne
+     * fusionnent pas ceux déjà en base — cette passe les réunit.
+     *
+     * Appelée au cold-start ([com.filestech.sms.MainApplication]), en tâche de fond ; idempotente
+     * (une 2ᵉ passe ne trouve plus aucun groupe ≥ 2 → no-op).
+     *
+     * Sûreté (« ne jamais fusionner deux personnes différentes ») :
+     *   - clé de fusion = **E.164** (région SIM/réglage résolue une seule fois), PLUS stricte que
+     *     le suffix-8 de la réception : deux numéros distincts partageant leurs 8 derniers chiffres
+     *     (ex. `06…12345678` vs `07…12345678`) obtiennent des clés différentes → non fusionnés. Un
+     *     numéro non normalisable (short code, expéditeur alphanumérique, région inconnue) n'a pas
+     *     de clé `+…` → jamais fusionné.
+     *   - coffre-fort EXCLU (`in_vault` filtré) : contexte sensible jamais touché.
+     *   - reparent des messages AVANT suppression de la conversation source (FK `onDelete = CASCADE`
+     *     sur `messages.conversation_id` — supprimer d'abord effacerait les messages).
+     *   - fusion dans une transaction unique ; `unread_count` recalculé depuis les messages réels.
+     *   - `scheduled_messages.conversation_id` est reparenté vers le survivant (cohérence des
+     *     données, même si l'envoi programmé résout aujourd'hui ses destinataires via `addressesCsv`).
+     *   - le `threadId` système AOSP d'une victime est repris par le survivant s'il n'en avait pas,
+     *     pour ne pas dégrader la propagation `markRead` vers `content://sms|mms`.
+     *
+     * Retourne `true` si au moins un groupe de doublons a été fusionné, `false` si la base était
+     * déjà propre — l'appelant s'en sert pour ne mémoriser la complétion qu'une fois propre.
+     */
+    suspend fun dedupeSameNumberConversations(): Boolean = withContext(io) {
+        val oneToOne = conversationDao.snapshotOneToOneConversations().filterNot { it.inVault }
+        if (oneToOne.size < 2) return@withContext false
+        val region = wireFormatter.defaultRegionIso()
+        val candidates = oneToOne.mapNotNull { conv ->
+            val raw = PhoneAddress.list(conv.addressesCsv).singleOrNull()?.raw ?: return@mapNotNull null
+            DedupCandidate(id = conv.id, rawAddress = raw, lastMessageAt = conv.lastMessageAt)
+        }
+        val plans = planSameNumberMerges(candidates) { raw ->
+            WireAddress.toE164OrRaw(raw, region) { number, r ->
+                PhoneNumberUtils.formatNumberToE164(number, r)
+            }.takeIf { it.startsWith("+") }
+        }
+        if (plans.isEmpty()) return@withContext false
+        database.withTransaction {
+            for (plan in plans) {
+                // 1) reparent AVANT toute suppression (FK CASCADE sur messages.conversation_id).
+                //    scheduled_messages est aussi reparenté (pas de FK, mais cohérence des données).
+                for (victimId in plan.victimIds) {
+                    messageDao.reparentMessages(
+                        fromConversationId = victimId,
+                        toConversationId = plan.survivorId,
+                    )
+                    scheduledMessageDao.reparentConversationId(
+                        fromConversationId = victimId,
+                        toConversationId = plan.survivorId,
+                    )
+                }
+                // 2) fusion des métadonnées sur le survivant. Épinglage/muet = OR (on ne perd pas
+                //    un flag posé sur l'une des deux) ; nom/apparence/brouillon = 1ʳᵉ valeur non
+                //    nulle ; aperçu + date pris sur la conversation la plus récente du groupe.
+                val survivor = conversationDao.findById(plan.survivorId)
+                if (survivor == null) {
+                    // Groupes disjoints + reparent-avant-delete rendent ce cas non atteignable ;
+                    // on loggue au cas où une régression future casserait cet invariant.
+                    Timber.e("dedupe: survivant %d introuvable, groupe ignoré", plan.survivorId)
+                    continue
+                }
+                val victims = plan.victimIds.mapNotNull { conversationDao.findById(it) }
+                val newest = (victims + survivor).maxByOrNull { it.lastMessageAt } ?: survivor
+                conversationDao.update(
+                    survivor.copy(
+                        lastMessageAt = newest.lastMessageAt,
+                        lastMessagePreview = newest.lastMessagePreview,
+                        pinned = survivor.pinned || victims.any { it.pinned },
+                        muted = survivor.muted || victims.any { it.muted },
+                        // D1 (audit) — ne reste archivée QUE si TOUTES l'étaient : sinon une conv
+                        // active fusionnée pourrait disparaître de la liste principale selon quel
+                        // doublon a la date la plus récente (survivant élu).
+                        archived = survivor.archived && victims.all { it.archived },
+                        displayName = survivor.displayName ?: victims.firstNotNullOfOrNull { it.displayName },
+                        avatarUri = survivor.avatarUri ?: victims.firstNotNullOfOrNull { it.avatarUri },
+                        bubbleColorArgb = survivor.bubbleColorArgb ?: victims.firstNotNullOfOrNull { it.bubbleColorArgb },
+                        // D2 (audit) — concatène les brouillons non-vides (survivant + victimes) au
+                        // lieu d'écraser : un texte non envoyé tapé dans un doublon ne doit pas être
+                        // perdu silencieusement à la fusion.
+                        draft = (listOfNotNull(survivor.draft?.takeIf { it.isNotBlank() }) +
+                            victims.mapNotNull { v -> v.draft?.takeIf { it.isNotBlank() } })
+                            .distinct()
+                            .joinToString("\n\n")
+                            .takeIf { it.isNotBlank() },
+                    ),
+                )
+                // 3) suppression des conversations sources (désormais vidées de leurs messages).
+                for (victimId in plan.victimIds) {
+                    conversationDao.delete(victimId)
+                }
+                // 3bis) D3 (audit) — reprise du threadId système AOSP. Si le survivant n'en a pas
+                //   (créé via ensureConversation → threadId=0) mais qu'une victime en portait un
+                //   (créée via ensureConversationByThread à l'import système), on le récupère pour
+                //   que markRead continue de propager READ=1 vers content://sms|mms. FAIT APRÈS le
+                //   delete des victimes : l'index `conversations.thread_id` est UNIQUE, la victime
+                //   détenait encore ce threadId jusqu'à sa suppression.
+                if (survivor.threadId == 0L) {
+                    val recovered = victims.firstNotNullOfOrNull { it.threadId.takeIf { t -> t > 0L } }
+                    if (recovered != null) {
+                        conversationDao.setThreadId(plan.survivorId, recovered)
+                    }
+                }
+            }
+            // 4) recalcule conversations.unread_count depuis les messages réellement non lus.
+            conversationDao.recomputeAllUnreadCounts()
+        }
+        Timber.i("dedupeSameNumberConversations: %d groupe(s) de doublons fusionné(s)", plans.size)
+        true
     }
 
     private suspend fun touchConversation(convId: Long, date: Long, preview: String, deltaUnread: Int) {

@@ -1,0 +1,10 @@
+v1.23.0 — Duplicate conversations & visible number
+
+• Fix: two conversations with the same number
+  (left over from older versions) are now merged
+  automatically into one, at startup — with no
+  message loss.
+• New: the contact's phone number is shown in the
+  conversation details (⋮ menu → Details), handy
+  to tell apart two numbers of the same contact.
+• 100% local, no data leaves your device.

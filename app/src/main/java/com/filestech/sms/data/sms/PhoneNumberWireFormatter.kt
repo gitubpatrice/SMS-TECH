@@ -49,6 +49,14 @@ class PhoneNumberWireFormatter @Inject constructor(
         }
 
     /**
+     * v1.22.x — expose la région par défaut résolue (réglage « Indicatif pays par défaut » sinon
+     * pays de la SIM par défaut). Permet à un consommateur qui normalise plusieurs numéros en lot
+     * (ex. la dédup des conversations du même numéro) de résoudre la région **une seule fois** au
+     * lieu d'un binder `simCountryIso` par numéro. `subId = null` = souscription par défaut.
+     */
+    fun defaultRegionIso(): String? = resolveRegion(null)
+
+    /**
      * The default region for national numbers: the user's explicit override (Settings → Envoi →
      * "Indicatif pays par défaut") when set, otherwise the SIM country. The override is what lets
      * someone on a foreign SIM keep texting national numbers of another country (e.g. a Luxembourg

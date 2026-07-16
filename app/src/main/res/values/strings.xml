@@ -121,6 +121,7 @@
     <string name="thread_details_first">First message: %1$s</string>
     <string name="thread_details_last">Last message: %1$s</string>
     <string name="thread_details_participants">Participants: %1$d</string>
+    <string name="thread_details_number">Number: %1$s</string>
 
     <!-- Tabs / sections -->
     <string name="tab_conversations">Conversations</string>

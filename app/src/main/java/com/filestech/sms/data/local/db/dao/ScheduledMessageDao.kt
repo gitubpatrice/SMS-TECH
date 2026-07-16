@@ -20,6 +20,14 @@ interface ScheduledMessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ScheduledMessageEntity): Long
 
+    /**
+     * v1.22.x — reparent des envois programmés lors de la fusion de doublons de conversation
+     * (dédup même numéro). Pas de FK sur `conversation_id` : reparent explicite par cohérence, pour
+     * qu'un envoi programmé pointe vers la conversation survivante et non vers une ligne supprimée.
+     */
+    @Query("UPDATE scheduled_messages SET conversation_id = :toConversationId WHERE conversation_id = :fromConversationId")
+    suspend fun reparentConversationId(fromConversationId: Long, toConversationId: Long)
+
     // v1.17.0 — Param `state` typé enum (était Int). TypeConverter [MessageEnumConverters]
     // convertit en Int pour le binding SQL. Cohérence avec MessageDao.updateStatus.
     @Query("UPDATE scheduled_messages SET state = :state WHERE id = :id")

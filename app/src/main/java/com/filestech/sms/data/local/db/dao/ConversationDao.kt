@@ -125,6 +125,14 @@ interface ConversationDao {
     suspend fun findThreadIdById(id: Long): Long?
 
     /**
+     * v1.22.x — assigne le `thread_id` système AOSP d'un survivant de fusion (dédup même numéro).
+     * Appelé UNIQUEMENT après suppression de la conversation source qui détenait ce `thread_id` :
+     * l'index `conversations.thread_id` est UNIQUE, un doublon transitoire lèverait une contrainte.
+     */
+    @Query("UPDATE conversations SET thread_id = :threadId WHERE id = :id")
+    suspend fun setThreadId(id: Long, threadId: Long)
+
+    /**
      * v1.8.0 (post-audit fix) — recalcule `unread_count` à partir des `messages.read=0`
      * réellement présents dans Room. Corrige l'état legacy hérité de v1.7.1 où les
      * syncs successifs incrémentaient le compteur même pour les rows déjà mirror-ées

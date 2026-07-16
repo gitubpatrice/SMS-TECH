@@ -1,0 +1,11 @@
+v1.23.0 — Conversations en double & numéro visible
+
+• Correction : deux conversations avec le même
+  numéro (héritées d'anciennes versions) sont
+  désormais réunies automatiquement en une seule,
+  au démarrage — sans aucune perte de message.
+• Nouveau : le numéro du correspondant s'affiche
+  dans le détail de la conversation (menu ⋮ →
+  Détails), pratique pour distinguer deux numéros
+  d'un même contact.
+• 100% local, aucune donnée ne quitte l'appareil.
