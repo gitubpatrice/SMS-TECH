@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.telephony.SubscriptionManager
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.MmsDownloader
@@ -60,6 +61,12 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         if (intent.action != MmsDownloader.ACTION_MMS_DOWNLOADED) return
         val pduPath = intent.getStringExtra(MmsDownloader.EXTRA_PDU_FILE)
         val senderHint = intent.getStringExtra(MmsDownloader.EXTRA_SENDER)
+        // v1.22.0 (fix double SIM) — SIM d'arrivée propagée par [MmsDownloader]. Encodée
+        // INVALID_SUBSCRIPTION_ID quand inconnue → retraduite en `null` (colonne `sub_id`
+        // laissée nulle, comme les MMS reçus avant cette version).
+        val subId = intent
+            .getIntExtra(MmsDownloader.EXTRA_SUBSCRIPTION_ID, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+            .takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
         val rc = resultCode
         val appContext = context.applicationContext
 
@@ -177,6 +184,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     caption = caption,
                     previewLabel = previewLabel,
                     date = date,
+                    subId = subId,
                 )
                 // Symmetric with [SmsDeliverReceiver]: re-fetch the row to get the conversationId
                 // so [IncomingMessageNotifier.cancelAllForConversation] can later clear the

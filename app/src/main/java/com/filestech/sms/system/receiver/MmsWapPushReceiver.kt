@@ -57,6 +57,12 @@ class MmsWapPushReceiver : BroadcastReceiver() {
             Timber.w("WAP_PUSH intent missing PDU data")
             return
         }
+        // v1.22.0 (fix double SIM) — SIM d'arrivée du MMS. Sur un appareil multi-SIM, sans
+        // ce subId le téléchargement partait toujours sur la SIM par défaut ([SmsManager
+        // .getDefault]) → APN/MMSC de la mauvaise SIM → échec silencieux / retry différé pour
+        // tout MMS reçu sur la SIM secondaire (ex. puce étrangère). `null` = comportement
+        // historique inchangé (mono-SIM ou ROM qui ne renseigne pas l'extra).
+        val subId = intent.extractIncomingSubId()
 
         val entry = try {
             EntryPointAccessors.fromApplication(
@@ -98,7 +104,7 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 if (sizeUnknown || sizeAcceptable) {
                     val transactionId = parsed.transactionId?.let { String(it) }
                     val sender = parsed.from?.string
-                    val res = downloader.download(contentLocation, transactionId, sender)
+                    val res = downloader.download(contentLocation, transactionId, sender, subId)
                     // v1.6.1 (audit SEC-06) — `loc=%s` retiré : `contentLocation` est
                     // l'URL MMSC opérateur qui peut contenir un token de session ou un
                     // identifiant de transaction dans le path/query. En debug logcat

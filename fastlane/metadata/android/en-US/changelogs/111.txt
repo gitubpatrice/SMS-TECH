@@ -1,0 +1,11 @@
+v1.22.0 — Dual SIM
+
+• Fix: on a dual-SIM phone, MMS received on the
+  secondary card (e.g. a foreign SIM) could
+  arrive late or not at all. They are now
+  downloaded through the correct SIM.
+• New: the SIM that received each message is
+  shown next to the contact's name (e.g.
+  "Marie · SIM 2"), only when two SIMs are
+  active.
+• 100% local, no change to your data.

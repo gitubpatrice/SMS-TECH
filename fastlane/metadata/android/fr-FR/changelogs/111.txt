@@ -1,0 +1,12 @@
+v1.22.0 — Double SIM
+
+• Correction : sur un téléphone à deux SIM, les
+  MMS reçus sur la carte secondaire (par ex. une
+  SIM étrangère) pouvaient arriver en retard ou
+  pas du tout. Ils sont désormais téléchargés via
+  la bonne carte SIM.
+• Nouveau : la SIM qui a reçu chaque message
+  s'affiche à côté du nom du contact (ex.
+  « Marie · SIM 2 »), uniquement quand deux SIM
+  sont actives.
+• 100% local, aucun changement de vos données.

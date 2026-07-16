@@ -48,6 +48,11 @@ class SmsDeliverReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_DELIVER_ACTION) return
+        // v1.22.0 (double SIM) — SIM d'arrivée du SMS. Alimente `messages.sub_id` (Room) et
+        // `SUBSCRIPTION_ID` côté provider système, ce qui permet d'afficher un tag SIM par
+        // message et fiabilise les accusés de réception sur la SIM secondaire. `null` =
+        // comportement historique (aucune colonne SIM écrite).
+        val subId = intent.extractIncomingSubId()
         val pending = goAsync()
         scope.launch {
             try {
@@ -89,7 +94,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                         // Still write the row to the system inbox so other SMS apps on
                         // the device see the message in their history (legal duty as
                         // default SMS app).
-                        val sysUri = telephonyReader.insertInboxSms(address, body, ts)
+                        val sysUri = telephonyReader.insertInboxSms(address, body, ts, subId)
                         // v1.4.1 (SEC-01) — drop a poison-pill Room row carrying the
                         // same `telephonyUri` so the next [TelephonySyncManager] sweep
                         // sees the UNIQUE constraint already taken and skips the
@@ -146,12 +151,13 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     // blocklist-drop log just above, which also omits the address).
                     Timber.i("Tapback decoded but no matching outgoing message found")
                 }
-                val uri = telephonyReader.insertInboxSms(address, body, ts)
+                val uri = telephonyReader.insertInboxSms(address, body, ts, subId)
                 val msgId = mirror.upsertIncomingSms(
                     address = address,
                     body = body,
                     date = ts,
                     telephonyUri = uri?.toString(),
+                    subId = subId,
                 )
                 // v1.3.3 bug #6 — la notification doit porter le conversationId pour que
                 // [IncomingMessageNotifier.cancelAllForConversation] (appelée à l'ouverture

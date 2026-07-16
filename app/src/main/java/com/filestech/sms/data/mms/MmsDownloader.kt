@@ -76,6 +76,10 @@ class MmsDownloader @Inject constructor(
                 putExtra(EXTRA_PDU_FILE, pduFile.absolutePath)
                 putExtra(EXTRA_TRANSACTION_ID, transactionId)
                 putExtra(EXTRA_SENDER, senderAddress)
+                // v1.22.0 — propage la SIM d'arrivée jusqu'au write-back Room
+                // ([MmsDownloadedReceiver]). `null` (mono-SIM ou ROM sans extra) est encodé
+                // comme INVALID_SUBSCRIPTION_ID et retraduit en `null` côté réception.
+                putExtra(EXTRA_SUBSCRIPTION_ID, subId ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID)
             }
         val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
         val pi = PendingIntent.getBroadcast(
@@ -111,6 +115,8 @@ class MmsDownloader @Inject constructor(
         const val EXTRA_PDU_FILE: String = "com.filestech.sms.extra.PDU_FILE"
         const val EXTRA_TRANSACTION_ID: String = "com.filestech.sms.extra.TRANSACTION_ID"
         const val EXTRA_SENDER: String = "com.filestech.sms.extra.SENDER"
+        /** v1.22.0 — SIM d'arrivée du MMS, propagée du WAP push jusqu'au write-back Room. */
+        const val EXTRA_SUBSCRIPTION_ID: String = "com.filestech.sms.extra.SUBSCRIPTION_ID"
 
         /**
          * Cache subdirectory (relative to [Context.getCacheDir]) where this class drops the

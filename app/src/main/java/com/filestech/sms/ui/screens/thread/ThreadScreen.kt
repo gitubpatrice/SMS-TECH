@@ -127,6 +127,7 @@ import com.filestech.sms.ui.components.ReplyQuotePreview
 import com.filestech.sms.ui.components.toPlaybackUri
 import com.filestech.sms.ui.util.daySeparatorLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
+import com.filestech.sms.ui.util.rememberSimLabeler
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
@@ -583,6 +584,11 @@ fun ThreadScreen(
                 onPhoneClick = onPhoneClick,
             )
         }
+        // v1.22.0 (double SIM) — résolveur SIM (subId → libellé) calculé une fois pour tout le
+        // fil. Retourne `null` en mono-SIM / permission absente / subId inconnu, donc aucun tag
+        // n'apparaît dans ces cas. Lambda stable (mémoïsée) : passable aux items sans casser le
+        // scoping de recomposition de [ThreadMessageItem].
+        val simLabeler = rememberSimLabeler()
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -619,6 +625,11 @@ fun ThreadScreen(
                     smishingReasons = state.smishingVerdicts[msg.id] ?: emptyList(),
                     playbackProvider = { playbackState },
                     repliedToPreview = previewFor(msg),
+                    // v1.22.0 (double SIM) — tag SIM sur les messages REÇUS uniquement (la bulle
+                    // du contact, cf. demande). Les sortants portent aussi un `sub_id` (SIM
+                    // d'envoi par défaut) mais afficher "Vous · SIM 2" sur chaque burst sortant
+                    // serait du bruit non sollicité.
+                    simLabel = if (msg.isIncoming) simLabeler(msg.subId) else null,
                     actions = itemActions,
                 )
             }
@@ -1807,7 +1818,9 @@ private class ThreadMessageItemActions(
  *   - le `daySeparatorLabel` change (rare, dépend du jour de la date du message)
  *
  * Reads localisés à l'instance : `conversationDisplayName`, `bubbleColorArgb`,
- * `smishingReasons` sont passés comme valeurs ; pas de capture du `state` global au parent.
+ * `smishingReasons`, `simLabel` sont passés comme valeurs ; pas de capture du `state` global au
+ * parent. `simLabel` (String `@Stable`) est dérivé de `msg.subId` côté parent — déjà couvert par
+ * le trigger `msg`.
  */
 @Composable
 private fun ThreadMessageItem(
@@ -1820,6 +1833,12 @@ private fun ThreadMessageItem(
     smishingReasons: List<com.filestech.sms.domain.smishing.SmishingReason>,
     playbackProvider: () -> com.filestech.sms.data.voice.VoicePlaybackController.PlaybackState,
     repliedToPreview: ReplyQuotePreview?,
+    /**
+     * v1.22.0 (double SIM) — libellé court de la SIM d'arrivée de ce message (ex. "SIM 2",
+     * "POST", nom donné par l'user). `null` sur mono-SIM / permission absente / message sans
+     * `sub_id` : aucun tag n'est alors ajouté. Résolu par le parent via [rememberSimLabeler].
+     */
+    simLabel: String? = null,
     actions: ThreadMessageItemActions,
 ) {
     // Date separator (calendar day boundary) — affiché au-dessus du 1er msg du jour.
@@ -1835,7 +1854,7 @@ private fun ThreadMessageItem(
     val mediaAttachment = msg.attachments.firstOrNull { !it.isAudio }
     // v1.3.3 #7 — étiquette d'expéditeur uniquement sur la 1ʳᵉ bulle d'un burst (Solo ou First)
     // pour ne pas surcharger visuellement les suites consécutives du même expéditeur.
-    val senderLabel: String? = if (
+    val baseSenderLabel: String? = if (
         burstPosition == BurstPosition.Solo ||
         burstPosition == BurstPosition.First
     ) {
@@ -1845,6 +1864,15 @@ private fun ThreadMessageItem(
             conversationDisplayName?.takeIf { it.isNotBlank() } ?: msg.address
         }
     } else null
+    // v1.22.0 (double SIM) — suffixe le libellé SIM au nom de l'expéditeur sur la 1ʳᵉ bulle du
+    // burst ("Marie · SIM 2"), ce qui distingue d'un coup d'œil les conversations reçues sur la
+    // puce locale vs étrangère. `simLabel` vaut déjà `null` hors multi-SIM (ou message sans
+    // `sub_id`), donc les cas mono-SIM et les messages historiques restent strictement inchangés.
+    val senderLabel: String? = when {
+        baseSenderLabel == null -> null
+        simLabel.isNullOrBlank() -> baseSenderLabel
+        else -> "$baseSenderLabel · $simLabel"
+    }
 
     when {
         audio != null -> {
