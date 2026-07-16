@@ -439,6 +439,18 @@ fun ConversationsScreen(
                     )
                 }
             }
+            // v1.23.x — noms de contact partagés par ≥2 conversations (ex. même contact avec un
+            // numéro FR et un numéro étranger). Sert à n'afficher le numéro sous le nom QUE pour
+            // ces conversations ambiguës — pas de bruit sur les noms uniques. Recalculé seulement
+            // quand la liste change.
+            val duplicateDisplayNames = remember(state.conversations) {
+                state.conversations
+                    .mapNotNull { it.displayName?.takeIf { n -> n.isNotBlank() } }
+                    .groupingBy { it }
+                    .eachCount()
+                    .filterValues { it >= 2 }
+                    .keys
+            }
             when {
                 state.isImporting -> ImportingPlaceholder(count = state.importedCount)
                 state.isLoading -> Unit
@@ -465,8 +477,14 @@ fun ConversationsScreen(
                         contentType = { "row" },
                     ) { conv ->
                         val isSelected = state.selectedIds.contains(conv.id)
+                        // v1.23.x — numéro affiché sous le nom seulement si ce nom est ambigu
+                        // (partagé par ≥2 conversations) et que la conversation est 1-to-1.
+                        val rowSubtitleNumber = conv.displayName
+                            ?.takeIf { it in duplicateDisplayNames && conv.addresses.size == 1 }
+                            ?.let { conv.addresses.firstOrNull()?.raw }
                         SwipeableConversationRow(
                             conversation = conv,
+                            subtitleNumber = rowSubtitleNumber,
                             showAvatars = state.settings.conversations.showAvatars,
                             previewLines = state.settings.conversations.previewLines.coerceIn(1, 2),
                             // v1.13.0 — en mode sélection, tap = toggle de l'item, pas
@@ -670,6 +688,7 @@ private fun DefaultAppBanner(onSetDefault: () -> Unit) {
 @Composable
 private fun SwipeableConversationRow(
     conversation: com.filestech.sms.domain.model.Conversation,
+    subtitleNumber: String? = null,
     showAvatars: Boolean,
     previewLines: Int,
     onOpenThread: () -> Unit,
@@ -753,6 +772,7 @@ private fun SwipeableConversationRow(
         androidx.compose.foundation.layout.Box(modifier = Modifier.background(rowBg)) {
             ConversationRow(
                 conversation = conversation,
+                subtitleNumber = subtitleNumber,
                 onClick = onOpenThread,
                 showAvatars = showAvatars,
                 previewLines = previewLines,

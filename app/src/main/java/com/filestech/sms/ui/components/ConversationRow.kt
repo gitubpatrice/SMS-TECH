@@ -56,6 +56,12 @@ fun ConversationRow(
     onClick: () -> Unit,
     showAvatars: Boolean = true,
     previewLines: Int = 1,
+    /**
+     * v1.23.x — numéro affiché sous le nom UNIQUEMENT pour lever l'ambiguïté quand plusieurs
+     * conversations partagent le même nom de contact (ex. un contact avec un numéro FR et un
+     * numéro étranger). `null` = rien affiché (cas normal). Calculé par l'écran liste.
+     */
+    subtitleNumber: String? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -134,6 +140,17 @@ fun ConversationRow(
                             fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
                         ),
                         color = if (unread) cs.primary else cs.onSurfaceVariant,
+                    )
+                }
+                if (!subtitleNumber.isNullOrBlank()) {
+                    // v1.23.x — numéro sous le nom pour distinguer deux conversations du même
+                    // contact (noms identiques, numéros différents).
+                    Text(
+                        text = subtitleNumber,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cs.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(Modifier.size(2.dp))

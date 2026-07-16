@@ -1,0 +1,9 @@
+v1.23.1 — Tell apart conversations of one contact
+
+• New: when two conversations share the same
+  contact name (e.g. a domestic and a foreign
+  number), the number is shown under the name in
+  the list to tell them apart.
+• The number also appears under the name in a
+  conversation's header.
+• 100% local, no data leaves your device.

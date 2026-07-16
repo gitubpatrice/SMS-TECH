@@ -1,0 +1,9 @@
+v1.23.1 — Distinguer les conversations d'un même contact
+
+• Nouveau : quand deux conversations portent le
+  même nom de contact (par ex. un numéro français
+  et un numéro étranger), le numéro s'affiche sous
+  le nom dans la liste pour les distinguer.
+• Le numéro apparaît aussi sous le nom dans
+  l'en-tête d'une conversation.
+• 100% local, aucune donnée ne quitte l'appareil.

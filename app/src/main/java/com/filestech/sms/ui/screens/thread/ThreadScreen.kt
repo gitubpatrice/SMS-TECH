@@ -357,6 +357,12 @@ fun ThreadScreen(
 
     val title = state.conversation?.displayName
         ?: state.conversation?.addresses?.joinToString { it.raw }.orEmpty()
+    // v1.23.x — numéro en sous-titre de l'en-tête pour une conversation 1-to-1 QUI A un nom de
+    // contact (sinon le titre EST déjà le numéro, inutile de le répéter). Permet de voir tout de
+    // suite quel numéro on a ouvert (ex. distinguer un numéro FR d'un numéro étranger).
+    val headerSubtitleNumber = state.conversation
+        ?.takeIf { it.displayName != null && it.addresses.size == 1 }
+        ?.addresses?.firstOrNull()?.raw
     val canCall = state.conversation?.addresses?.size == 1
 
     // #8 contextual reply — index messages by id so each bubble can resolve its quoted target
@@ -384,7 +390,26 @@ fun ThreadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = {
+                    if (headerSubtitleNumber != null) {
+                        Column {
+                            Text(
+                                title,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                headerSubtitleNumber,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else {
+                        Text(title)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
