@@ -1,0 +1,10 @@
+v1.21.1 — Duplicate conversation fix
+
+• Fix: starting a new message to a contact who
+  already has a conversation no longer creates
+  a second, duplicate thread. National (06…)
+  and international (+33…) forms of the same
+  number now land in the same conversation,
+  matching how incoming messages already
+  behaved.
+• 100% local, no change to your data.

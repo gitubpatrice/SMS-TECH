@@ -219,16 +219,40 @@ class ConversationRepositoryImpl @Inject constructor(
                 }
                 existing.id
             } else {
-                conversationDao.upsert(
-                    ConversationEntity(
-                        threadId = 0L,
-                        addressesCsv = csv,
-                        displayName = resolvedDisplayName,
-                        lastMessageAt = System.currentTimeMillis(),
-                        lastMessagePreview = null,
-                        unreadCount = 0,
-                    ),
-                )
+                // Fix doublon "Nouvelle conversation" — AVANT de créer une nouvelle
+                // conversation, on rejoue le fallback suffix-8 déjà éprouvé côté
+                // [ConversationMirror.ensureConversation]. Sans lui, composer un message
+                // vers un contact dont le numéro est stocké au format national
+                // (`06 12 34 56 78`) alors qu'une conversation existe déjà au format
+                // international (`+33612345678`, tel que reçu du système) ne matchait PAS
+                // l'égalité stricte du CSV (`findByAddressesCsv` compare la forme brute) →
+                // une 2ᵉ conversation était créée pour le même correspondant.
+                // Restreint aux 1-to-1, mêmes garde-fous que le mirror : deux participants
+                // partiels d'un groupe ne doivent jamais être rapprochés par suffixe.
+                val suffixMatch = if (addresses.size == 1) {
+                    matchOneToOneBySuffix8(
+                        conversationDao.snapshotOneToOneConversations(),
+                        addresses.first(),
+                    )
+                } else null
+
+                if (suffixMatch != null) {
+                    if (suffixMatch.displayName.isNullOrBlank() && !resolvedDisplayName.isNullOrBlank()) {
+                        conversationDao.setDisplayName(suffixMatch.id, resolvedDisplayName)
+                    }
+                    suffixMatch.id
+                } else {
+                    conversationDao.upsert(
+                        ConversationEntity(
+                            threadId = 0L,
+                            addressesCsv = csv,
+                            displayName = resolvedDisplayName,
+                            lastMessageAt = System.currentTimeMillis(),
+                            lastMessagePreview = null,
+                            unreadCount = 0,
+                        ),
+                    )
+                }
             }
         }
         Outcome.Success(requireNotNull(conversationDao.findById(id)?.toDomain()))
@@ -237,6 +261,32 @@ class ConversationRepositoryImpl @Inject constructor(
     /** Canonical CSV: addresses sorted by normalized value so reordering does not duplicate threads. */
     private fun canonicalCsv(addresses: List<PhoneAddress>): String =
         addresses.sortedBy { it.normalized }.toCsv()
+
+    companion object {
+        /**
+         * Rapprochement d'une conversation 1-to-1 par ses **8 derniers chiffres**. Extrait ici
+         * en fonction pure (aucune dépendance Room) pour être testable en JVM et appelé depuis
+         * [findOrCreate] : quand l'égalité stricte du CSV échoue (`06 12 34 56 78` composé vs
+         * `+33612345678` stocké), ce fallback réunit les deux formes du même numéro et évite un
+         * doublon de conversation. Même stratégie que [ConversationMirror.ensureConversation]
+         * côté réception.
+         *
+         * Ne matche que si le suffixe fait exactement 8 chiffres : les numéros courts (services,
+         * 3xxx) sont trop peu discriminants pour être rapprochés sans risque de faux positif.
+         * L'appelant restreint déjà aux 1-to-1 ; on ne rapproche jamais deux groupes par suffixe.
+         */
+        internal fun matchOneToOneBySuffix8(
+            oneToOne: List<ConversationEntity>,
+            target: PhoneAddress,
+        ): ConversationEntity? {
+            val targetSuffix = target.raw.phoneSuffix8()
+            if (targetSuffix.length != 8) return null
+            return oneToOne.firstOrNull { conv ->
+                PhoneAddress.list(conv.addressesCsv).firstOrNull()
+                    ?.raw?.phoneSuffix8() == targetSuffix
+            }
+        }
+    }
 
     override suspend fun setPinned(id: Long, pinned: Boolean) = withContext(io) { conversationDao.setPinned(id, pinned) }
     override suspend fun setArchived(id: Long, archived: Boolean) = withContext(io) { conversationDao.setArchived(id, archived) }

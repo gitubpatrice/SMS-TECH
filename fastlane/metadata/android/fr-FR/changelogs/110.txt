@@ -1,0 +1,10 @@
+v1.21.1 — Conversations en double
+
+• Correction : composer un message vers un
+  contact qui a déjà une conversation ne crée
+  plus une 2ᵉ conversation en double. Les
+  numéros au format national (06…) et
+  international (+33…) du même correspondant
+  sont désormais réunis dans la même
+  conversation, comme à la réception.
+• 100% local, aucun changement de vos données.
