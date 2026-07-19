@@ -1,0 +1,11 @@
+v1.23.2 — Retour à la liste après un balayage
+
+• Correction : après avoir balayé une conversation
+  vers la gauche pour répondre, le bouton retour
+  ne ramenait à la liste qu'au bout de plusieurs
+  appuis. Un seul suffit désormais.
+• Même correction pour les conversations ouvertes
+  depuis le Coffre.
+• Nettoyage interne : retrait d'un écran d'accueil
+  devenu inutilisé.
+• 100% local, aucune donnée ne quitte l'appareil.

@@ -711,17 +711,30 @@ private fun SwipeableConversationRow(
     var pendingDelete by remember { mutableStateOf(false) }
     var pendingBlock by remember { mutableStateOf(false) }
     var actionsSheetOpen by remember { mutableStateOf(false) }
+    // v1.23.2 — verrou one-shot du swipe gauche. `confirmValueChange` N'EST PAS un callback
+    // « une fois à la validation » : foundation l'invoque à CHAQUE frame de drag une fois passé
+    // la moitié de la distance vers l'ancre voisine (AnchoredDragScope.dragTo → updateIfNeeded),
+    // puis encore pendant le fling (SnapLayoutInfoProvider.calculateSnapOffset) et pendant
+    // l'animation de retour (anchoredDrag). Sans verrou, un seul swipe empilait N destinations
+    // Thread(id) identiques : chaque retour en dépilait une et réaffichait le même écran, d'où
+    // le « le retour ne marche qu'au bout de 3-4 essais ». Le verrou est réarmé dès que la row
+    // est revenue au repos (cf. LaunchedEffect ci-dessous).
+    var swipeOpenConsumed by remember { mutableStateOf(false) }
     val dismissState = androidx.compose.material3.rememberSwipeToDismissBoxState(
         confirmValueChange = { target ->
             when (target) {
                 androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd -> {
                     // Swipe right → ask for confirmation, do not dismiss yet.
+                    // Idempotent : le multi-appel décrit ci-dessus est sans effet ici.
                     pendingDelete = true
                     false
                 }
                 androidx.compose.material3.SwipeToDismissBoxValue.EndToStart -> {
                     // Swipe left → open thread (= reply). Snap back.
-                    onOpenThread()
+                    if (!swipeOpenConsumed) {
+                        swipeOpenConsumed = true
+                        onOpenThread()
+                    }
                     false
                 }
                 androidx.compose.material3.SwipeToDismissBoxValue.Settled -> false
@@ -729,6 +742,13 @@ private fun SwipeableConversationRow(
         },
         positionalThreshold = { distance -> distance * 0.35f },
     )
+    // v1.23.2 — réarmement du verrou : `currentValue` ne bouge jamais (on veto toujours), donc
+    // on observe `targetValue`, qui redevient Settled quand l'offset est revenu à zéro.
+    androidx.compose.runtime.LaunchedEffect(dismissState.targetValue) {
+        if (dismissState.targetValue == androidx.compose.material3.SwipeToDismissBoxValue.Settled) {
+            swipeOpenConsumed = false
+        }
+    }
 
     androidx.compose.material3.SwipeToDismissBox(
         state = dismissState,

@@ -1,0 +1,11 @@
+v1.23.2 — Going back to the list after a swipe
+
+• Fixed: after swiping a conversation to the left
+  to reply, the back button only returned to the
+  list after several presses. One press is now
+  enough.
+• Same fix for conversations opened from the
+  Vault.
+• Internal cleanup: removed an unused welcome
+  screen.
+• 100% local, no data leaves your device.

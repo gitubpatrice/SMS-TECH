@@ -125,15 +125,6 @@
     <string name="tab_vault">Coffre-fort</string>
     <string name="tab_blocked">Bloqués</string>
 
-    <string name="onboarding_welcome_title">Bienvenue dans SMS Tech</string>
-    <string name="onboarding_welcome_body">Une appli SMS et MMS moderne et privée. Pas de pub, pas de tracker, pas d\'analytique. Vos conversations restent sur votre appareil.</string>
-    <string name="onboarding_permissions_title">Quelques autorisations</string>
-    <string name="onboarding_permissions_body">SMS, MMS, contacts et notifications nous sont nécessaires. Chaque permission est expliquée.</string>
-    <string name="onboarding_default_title">Devenir l\'application SMS par défaut</string>
-    <string name="onboarding_default_body">Android n\'autorise qu\'une seule application à envoyer et recevoir des SMS. Vous pourrez changer d\'avis à tout moment.</string>
-    <string name="onboarding_language_title">Langue &amp; thème</string>
-    <string name="onboarding_language_body">Choisissez votre langue et votre apparence. Modifiable depuis les réglages.</string>
-    <string name="onboarding_done">C\'est parti</string>
 
     <string name="conversations_empty_title">Aucune conversation</string>
     <string name="conversations_empty_body">Dès qu\'un message arrive ou est envoyé, il s\'affichera ici.</string>

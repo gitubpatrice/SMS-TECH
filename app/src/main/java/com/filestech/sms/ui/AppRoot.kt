@@ -20,7 +20,6 @@ import com.filestech.sms.ui.navigation.EmergencySetup
 import com.filestech.sms.ui.navigation.SafetyCallSetup
 import com.filestech.sms.ui.navigation.Lock
 import com.filestech.sms.ui.navigation.Migration
-import com.filestech.sms.ui.navigation.Onboarding
 import com.filestech.sms.ui.navigation.Settings
 import com.filestech.sms.ui.navigation.ScheduledMessages
 import com.filestech.sms.ui.navigation.Splash
@@ -33,7 +32,6 @@ import com.filestech.sms.ui.screens.compose.ComposeScreen
 import com.filestech.sms.ui.screens.conversations.ConversationsScreen
 import com.filestech.sms.ui.screens.lock.LockScreen
 import com.filestech.sms.ui.screens.migration.MigrationScreen
-import com.filestech.sms.ui.screens.onboarding.OnboardingScreen
 import com.filestech.sms.ui.screens.settings.SettingsScreen
 import com.filestech.sms.ui.screens.splash.SplashScreen
 import com.filestech.sms.ui.screens.thread.ThreadScreen
@@ -188,6 +186,11 @@ fun AppRoot() {
                     // destinataires pour un groupe MMS).
                     nav.navigate(Compose(initialAddress = consumed.sendToAddress))
                 } else {
+                    // Pas de `launchSingleTop` ici non plus : un deep-link `sms:` peut
+                    // arriver alors qu'un autre thread est déjà ouvert (cf. note plus
+                    // bas sur la comparaison par identité de destination). Ce callback
+                    // est single-fire de toute façon — `pendingNav.consume()` a vidé
+                    // l'état avant l'appel async, donc aucun double-push possible.
                     nav.navigate(Thread(conversationId = resolvedId))
                 }
             }
@@ -196,6 +199,20 @@ fun AppRoot() {
         // Si on est déjà sur ce thread précis, on consomme sans push (évite
         // doublon backstack). Le check est best-effort : `currentDestination
         // .arguments` peut être null pendant une transition de nav.
+        //
+        // v1.23.2 — NE PAS remplacer ce check par `launchSingleTop = true`, malgré
+        // la ressemblance avec les sites Conversations/Vault. Vérifié dans le bytecode
+        // de navigation-runtime 2.9.8 (`NavControllerImpl.launchSingleTopInternal`) :
+        // la recherche est un `indexOfLast { it.destination === node }` sur TOUT le
+        // backQueue, avec comparaison d'IDENTITÉ sur la `NavDestination` — les
+        // ARGUMENTS sont ignorés. Or avec les routes type-safe, `Thread(A)` et
+        // `Thread(B)` partagent la même et unique `NavDestination` (un seul
+        // `composable<Thread>`). `launchSingleTop` ici écraserait donc le thread
+        // courant au lieu d'en empiler un nouveau : depuis une notif pour B alors
+        // qu'on lit A, le retour ramènerait à la liste au lieu de A.
+        // Règle : `launchSingleTop` sur Thread n'est valide QUE depuis une source
+        // dont on sait qu'aucun Thread n'est dans le backstack (liste, Coffre) ;
+        // les chemins thread → thread exigent ce check précis sur l'argument.
         val currentRoute = nav.currentDestination?.route
         if (currentRoute?.contains("Thread") == true) {
             val args = nav.currentBackStackEntry?.arguments
@@ -237,7 +254,15 @@ fun AppRoot() {
             val args = entry.toRoute<Conversations>()
             ConversationsScreen(
                 archived = args.archived,
-                onOpenThread = { id -> nav.navigate(Thread(id)) },
+                // v1.23.2 — `launchSingleTop` : filet de sécurité contre l'empilement de
+                // destinations Thread(id) identiques. La liste peut émettre plusieurs fois
+                // l'ouverture pour un seul geste (swipe gauche = « répondre »), et chaque
+                // doublon en backstack forçait un appui « retour » supplémentaire pour
+                // revenir à la liste. Le verrou côté row corrige la racine ; ceci garantit
+                // qu'aucune autre source d'événement ne puisse re-produire le symptôme.
+                // Sans risque de collision d'arguments : Conversations est forcément au
+                // sommet quand ce callback est invoqué, donc le 1er appel pousse toujours.
+                onOpenThread = { id -> nav.navigate(Thread(id)) { launchSingleTop = true } },
                 onCompose = { nav.navigate(Compose()) },
                 onOpenSettings = { nav.navigate(Settings) },
                 onOpenVault = { nav.navigate(Vault) },
@@ -250,7 +275,13 @@ fun AppRoot() {
         composable<Vault> {
             VaultScreen(
                 onBack = { nav.popBackStack() },
-                onOpenThread = { id -> nav.navigate(Thread(id)) },
+                // v1.23.2 — aligné sur la liste principale : le Coffre partage le même
+                // composant `ConversationRow` (`combinedClickable`, qui ne débounce pas
+                // un double-tap rapide avant que la destination ne soit committée). Pas
+                // de swipe ici, donc risque plus faible, mais la garde doit être la même
+                // des deux côtés — un doublon `Thread(id)` en backstack coûte à l'user un
+                // appui « retour » supplémentaire.
+                onOpenThread = { id -> nav.navigate(Thread(id)) { launchSingleTop = true } },
             )
         }
         composable<Blocked> { BlockedNumbersScreen(onBack = { nav.popBackStack() }) }
@@ -294,9 +325,6 @@ fun AppRoot() {
         composable<Backup> { BackupScreen(onBack = { nav.popBackStack() }) }
         composable<Migration> { MigrationScreen(onBack = { nav.popBackStack() }) }
         composable<About> { AboutScreen(onBack = { nav.popBackStack() }) }
-        composable<Onboarding> {
-            OnboardingScreen(onFinished = { nav.navigate(Conversations) { popUpTo(Onboarding) { inclusive = true } } })
-        }
         composable<Lock> {
             LockScreen(
                 onUnlocked = { nav.popBackStack(route = Lock, inclusive = true) },

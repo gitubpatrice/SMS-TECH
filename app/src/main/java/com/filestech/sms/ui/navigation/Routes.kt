@@ -11,7 +11,9 @@ import kotlinx.serialization.Serializable
 @Serializable data object Backup : Route
 @Serializable data object Migration : Route
 @Serializable data object About : Route
-@Serializable data object Onboarding : Route
+// v1.23.2 — route `Onboarding` retirée : injoignable depuis v1.2.0 (aucun
+// `navigate(Onboarding)`, pas de startDestination), l'accueil passe par Splash.
+// L'écran et ses 9 strings FR/EN sont récupérables via `git show 9b553d3`.
 @Serializable data object Splash : Route
 @Serializable data object Lock : Route
 @Serializable data object SafetyCallSetup : Route

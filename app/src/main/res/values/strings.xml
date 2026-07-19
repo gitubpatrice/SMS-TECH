@@ -129,16 +129,6 @@
     <string name="tab_vault">Vault</string>
     <string name="tab_blocked">Blocked</string>
 
-    <!-- Onboarding -->
-    <string name="onboarding_welcome_title">Welcome to SMS Tech</string>
-    <string name="onboarding_welcome_body">A modern, private SMS &amp; MMS app. No ads, no trackers, no analytics. Your conversations stay on your device.</string>
-    <string name="onboarding_permissions_title">A few permissions</string>
-    <string name="onboarding_permissions_body">We need SMS, MMS, contacts and notification permissions to work. We explain every single one.</string>
-    <string name="onboarding_default_title">Become the default SMS app</string>
-    <string name="onboarding_default_body">Android only lets a single app send and receive SMS. Once selected, you can change your mind anytime in system settings.</string>
-    <string name="onboarding_language_title">Language &amp; theme</string>
-    <string name="onboarding_language_body">Pick your language and look. You can change them later in Settings.</string>
-    <string name="onboarding_done">Get started</string>
 
     <!-- Conversations list -->
     <string name="conversations_empty_title">No conversations yet</string>
