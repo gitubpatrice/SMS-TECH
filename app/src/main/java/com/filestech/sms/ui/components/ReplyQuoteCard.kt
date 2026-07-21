@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,6 +29,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.filestech.sms.R
+import com.filestech.sms.ui.theme.ReplyStripeOutgoing
 
 /**
  * Compact preview of the message a reply is targeting (#8). Captured at the moment the user
@@ -72,7 +75,9 @@ fun ReplyQuoteCard(
     } else {
         cs.surfaceContainerHighest
     }
-    val stripeColor = if (isOutgoingHost) cs.onPrimary else cs.primary
+    // Liseré d'accent gauche : bleu foncé côté SORTANT (le fond de bulle garde son bleu par
+    // défaut), couleur primary INCHANGÉE côté ENTRANT.
+    val stripeColor = if (isOutgoingHost) ReplyStripeOutgoing else cs.primary
     val labelColor = if (isOutgoingHost) cs.onPrimary else cs.onSurface
     val bodyColor = if (isOutgoingHost) cs.onPrimary.copy(alpha = 0.9f) else cs.onSurfaceVariant
 
@@ -81,17 +86,23 @@ fun ReplyQuoteCard(
             .widthIn(min = 80.dp, max = 320.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(containerColor)
-            .padding(end = 10.dp, top = 6.dp, bottom = 6.dp),
+            // `IntrinsicSize.Min` cale la hauteur de la Row sur celle de son contenu (la Column),
+            // ce qui permet au liseré `fillMaxHeight()` de courir sur TOUTE la hauteur de la
+            // citation, bord à bord. Le padding vertical est porté par la Column (pas par la Row)
+            // pour que le liseré ne soit pas inséré par ce padding. Le `clip(RoundedCornerShape)`
+            // ci-dessus arrondit automatiquement les coins gauches du liseré → effet border-radius
+            // épousant la bulle, des deux côtés.
+            .height(IntrinsicSize.Min),
         verticalAlignment = Alignment.Top,
     ) {
         Box(
             modifier = Modifier
-                .width(3.dp)
-                .height(28.dp)
+                .fillMaxHeight()
+                .width(4.dp)
                 .background(stripeColor),
         )
         Spacer(Modifier.size(8.dp))
-        Column {
+        Column(Modifier.padding(end = 10.dp, top = 6.dp, bottom = 6.dp)) {
             Text(
                 text = preview.senderLabel,
                 color = labelColor,

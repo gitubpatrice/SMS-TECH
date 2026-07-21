@@ -5,6 +5,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.mms.MmsSender
+import com.filestech.sms.data.mms.OutgoingAttachmentStore
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.domain.model.PhoneAddress
@@ -28,6 +29,7 @@ class SendVoiceMmsUseCase @Inject constructor(
     private val mirror: ConversationMirror,
     private val sender: MmsSender,
     private val settings: SettingsRepository,
+    private val attachmentStore: OutgoingAttachmentStore,
 ) {
     suspend operator fun invoke(
         recipients: List<PhoneAddress>,
@@ -47,13 +49,19 @@ class SendVoiceMmsUseCase @Inject constructor(
         val deliveryReports = s.sending.deliveryReports
         val effectiveSubId = subId ?: s.sending.defaultSubId
 
+        // Promote the recorded clip out of `cacheDir/voice_mms/` (wiped on every lock cycle by
+        // AutoLockObserver + pruned by VoiceRecorder.pruneOld) into durable storage BEFORE
+        // mirroring/dispatch, so the sent voice bubble keeps playing back after a lock or a reboot.
+        // Cf. [OutgoingAttachmentStore].
+        val durableAudio = attachmentStore.promoteToDurable(audioFile)
+
         val ids = ArrayList<Long>(recipients.size)
         val now = System.currentTimeMillis()
         for (r in recipients) {
             if (blockedRepo.isBlocked(r.raw)) continue
             val localId = mirror.upsertOutgoingMms(
                 address = r.raw,
-                audioFile = audioFile,
+                audioFile = durableAudio,
                 mimeType = mimeType,
                 durationMs = durationMs,
                 date = now,
@@ -62,7 +70,7 @@ class SendVoiceMmsUseCase @Inject constructor(
             when (val res = sender.sendVoiceMms(
                 localMessageId = localId,
                 recipients = listOf(r.raw),
-                audioFile = audioFile,
+                audioFile = durableAudio,
                 mimeType = mimeType,
                 subId = effectiveSubId,
                 requestDeliveryReport = deliveryReports,

@@ -1,0 +1,9 @@
+v1.23.3 — Sent MMS images kept + cleaner quotes
+
+• Fixed: images (and voice messages) sent over
+  MMS could disappear from the conversation after
+  a day. They are now stored permanently.
+• Improved: the quote shown when replying to a
+  message now has a full-height blue left edge,
+  with no offset white stripe.
+• 100% local, no data leaves your device.

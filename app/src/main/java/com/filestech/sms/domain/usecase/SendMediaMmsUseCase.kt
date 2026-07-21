@@ -6,6 +6,7 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.mms.MmsBuilder
 import com.filestech.sms.data.mms.MmsSender
+import com.filestech.sms.data.mms.OutgoingAttachmentStore
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.domain.model.PhoneAddress
@@ -30,6 +31,7 @@ class SendMediaMmsUseCase @Inject constructor(
     private val mirror: ConversationMirror,
     private val sender: MmsSender,
     private val settings: SettingsRepository,
+    private val attachmentStore: OutgoingAttachmentStore,
 ) {
     suspend operator fun invoke(
         recipients: List<PhoneAddress>,
@@ -52,6 +54,12 @@ class SendMediaMmsUseCase @Inject constructor(
             return Outcome.Failure(AppError.Validation("payload exceeds 300 KB cap ($totalBytes B)"))
         }
 
+        // Promote the UI-staged cache files into durable storage BEFORE mirroring/dispatch so the
+        // `AttachmentEntity.localUri` we persist survives the outbound-cache pruners (otherwise the
+        // sent image shows an empty tile when the thread is reopened days later). Done once, up
+        // front, so every recipient row references the same durable file. Cf. [OutgoingAttachmentStore].
+        val durableAttachments = attachments.map { it.copy(file = attachmentStore.promoteToDurable(it.file)) }
+
         // Audit H3 (v1.14.8) — `state.value` zéro-I/O au lieu de `flow.first()` (DataStore read).
         val s = settings.state.value
         val effectiveSubId = subId ?: s.sending.defaultSubId
@@ -62,7 +70,7 @@ class SendMediaMmsUseCase @Inject constructor(
         for (r in recipients) {
             if (blockedRepo.isBlocked(r.raw)) continue
 
-            val mirrorSpecs = attachments.map {
+            val mirrorSpecs = durableAttachments.map {
                 ConversationMirror.MediaAttachmentSpec(
                     file = it.file,
                     mimeType = it.mimeType,
@@ -79,7 +87,7 @@ class SendMediaMmsUseCase @Inject constructor(
                 subId = effectiveSubId,
             )
 
-            val pduAttachments = attachments.map {
+            val pduAttachments = durableAttachments.map {
                 MmsBuilder.MmsAttachment(
                     file = it.file,
                     mimeType = it.mimeType,

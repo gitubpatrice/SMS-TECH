@@ -9,6 +9,15 @@ internal val BrandBlue = Color(0xFF2460AB)
 internal val BrandBlueDark = Color(0xFFA9C7FF)
 
 /**
+ * Bleu foncé du liseré d'accent gauche des cartes de citation ([com.filestech.sms.ui.components
+ * .ReplyQuoteCard]) côté SORTANT. Volontairement plus sombre que [BrandBlue] pour trancher sur
+ * le fond bleu de la bulle envoyée (qui, lui, garde sa couleur par défaut). Couleur fixe (non
+ * dérivée du thème) : elle reste distinctement « bleu foncé » aussi bien sur le fond primary du
+ * thème clair que sur le fond bleu clair du thème sombre.
+ */
+internal val ReplyStripeOutgoing = Color(0xFF0D2B54)
+
+/**
  * Single source of truth for the "destructive intent" red used by Swipe-to-delete, panic
  * dialogs, and the system-blocklist purge confirm button. Defined once in the theme so any
  * future re-brand only touches one constant; copies of `0xFFC62828` scattered in screen files

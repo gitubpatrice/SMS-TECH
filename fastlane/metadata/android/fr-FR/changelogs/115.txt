@@ -1,0 +1,10 @@
+v1.23.3 — Images MMS conservées + citations plus nettes
+
+• Correction : les images (et messages vocaux)
+  envoyés par MMS pouvaient disparaître de la
+  conversation au bout d'un jour. Elles sont
+  désormais conservées durablement.
+• Amélioration : la citation affichée quand on
+  répond à un message a un bord gauche bleu
+  pleine hauteur, sans liseré blanc décalé.
+• 100% local, aucune donnée ne quitte l'appareil.
