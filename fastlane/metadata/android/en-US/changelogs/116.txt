@@ -1,0 +1,9 @@
+v1.23.4 — Cleaner reply quote borders
+
+• The accent bar on the left of a quote (when you
+  reply to a message) now spans the full height,
+  with rounded corners. No more short stub or
+  offset white stripe.
+• Applies to sent messages (dark blue), received
+  ones, and the reply banner above the keyboard.
+• 100% local, no data leaves your device.

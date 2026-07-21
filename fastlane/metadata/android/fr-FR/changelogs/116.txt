@@ -1,0 +1,9 @@
+v1.23.4 — Bordure des citations plus nette
+
+• La barre d'accent à gauche d'une citation (quand
+  vous répondez à un message) court désormais sur
+  toute la hauteur, coins arrondis. Fini le liseré
+  court et le trait blanc décalé.
+• Vaut pour les messages envoyés (bleu foncé), reçus,
+  et le bandeau de réponse au-dessus du clavier.
+• 100% local, aucune donnée ne quitte l'appareil.

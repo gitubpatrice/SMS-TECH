@@ -4,10 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,28 +81,25 @@ fun ReplyQuoteCard(
     val labelColor = if (isOutgoingHost) cs.onPrimary else cs.onSurface
     val bodyColor = if (isOutgoingHost) cs.onPrimary.copy(alpha = 0.9f) else cs.onSurfaceVariant
 
+    val stripeWidth = 4.dp
     Row(
         modifier = modifier
             .widthIn(min = 80.dp, max = 320.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(containerColor)
-            // `IntrinsicSize.Min` cale la hauteur de la Row sur celle de son contenu (la Column),
-            // ce qui permet au liseré `fillMaxHeight()` de courir sur TOUTE la hauteur de la
-            // citation, bord à bord. Le padding vertical est porté par la Column (pas par la Row)
-            // pour que le liseré ne soit pas inséré par ce padding. Le `clip(RoundedCornerShape)`
-            // ci-dessus arrondit automatiquement les coins gauches du liseré → effet border-radius
-            // épousant la bulle, des deux côtés.
-            .height(IntrinsicSize.Min),
+            // Liseré d'accent gauche PLEINE HAUTEUR, peint avec `drawBehind` sur la hauteur RÉELLE
+            // mesurée de la carte (`size.height`) → bord à bord quelle que soit la hauteur du
+            // contenu, sans dépendre d'`IntrinsicSize`/`fillMaxHeight` (qui ne couvraient pas la
+            // pleine hauteur de façon fiable). Le `clip(RoundedCornerShape)` ci-dessus arrondit ses
+            // coins gauches (effet border-radius épousant la bulle). Bleu foncé côté sortant,
+            // primary côté entrant. Le padding `start` réserve la largeur du liseré + une gouttière.
+            .drawBehind {
+                drawRect(color = stripeColor, size = Size(stripeWidth.toPx(), size.height))
+            }
+            .padding(start = stripeWidth + 8.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(4.dp)
-                .background(stripeColor),
-        )
-        Spacer(Modifier.size(8.dp))
-        Column(Modifier.padding(end = 10.dp, top = 6.dp, bottom = 6.dp)) {
+        Column {
             Text(
                 text = preview.senderLabel,
                 color = labelColor,
@@ -133,12 +130,20 @@ fun ComposerReplyChip(
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
+    val stripeColor = cs.primary
+    val stripeWidth = 4.dp
     Row(
         modifier = modifier
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(cs.surfaceContainerHigh)
-            .padding(start = 0.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            // Bord gauche pleine hauteur (drawBehind sur la hauteur réelle du cartouche), cohérent
+            // avec [ReplyQuoteCard]. Remplace l'ancien Box 3×32 dp fixe qui ne couvrait pas toute
+            // la hauteur. Le padding `start` réserve la largeur du liseré + une gouttière.
+            .drawBehind {
+                drawRect(color = stripeColor, size = Size(stripeWidth.toPx(), size.height))
+            }
+            .padding(start = stripeWidth + 8.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -146,13 +151,6 @@ fun ComposerReplyChip(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(32.dp)
-                    .background(cs.primary),
-            )
-            Spacer(Modifier.size(8.dp))
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
                     text = preview.senderLabel,
