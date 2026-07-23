@@ -781,4 +781,8 @@
         <item quantity="one">%d conversation sortie du coffre</item>
         <item quantity="other">%d conversations sorties du coffre</item>
     </plurals>
+    <!-- v1.24.0 fenêtre glissante : contrôle en tête de fil pour élargir la fenêtre -->
+    <string name="thread_load_older">Charger les messages plus anciens</string>
+    <string name="thread_load_older_remaining">Charger les messages plus anciens (%1$d)</string>
+    <string name="thread_loading_older">Chargement…</string>
 </resources>

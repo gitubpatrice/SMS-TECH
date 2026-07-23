@@ -3,6 +3,7 @@ package com.filestech.sms.domain.repository
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
+import com.filestech.sms.domain.model.MessageWindow
 import com.filestech.sms.domain.model.PhoneAddress
 import kotlinx.coroutines.flow.Flow
 
@@ -10,7 +11,21 @@ interface ConversationRepository {
     fun observeAll(includeArchived: Boolean = false): Flow<List<Conversation>>
     fun observeVault(): Flow<List<Conversation>>
     fun observeOne(id: Long): Flow<Conversation?>
+
+    /**
+     * The **entire** thread. Kept unbounded for consumers that need the full history, such as the
+     * PDF export. The thread UI uses [observeMessagesWindow] instead.
+     */
     fun observeMessages(conversationId: Long): Flow<List<Message>>
+
+    /**
+     * A bounded, growable view of the thread: the most recent messages first paint, older ones on
+     * demand.
+     *
+     * @param limit emits the current window size; raising it widens the window in place.
+     */
+    fun observeMessagesWindow(conversationId: Long, limit: Flow<Int>): Flow<MessageWindow>
+
     fun observeUnreadConversationCount(): Flow<Int>
 
     suspend fun findOrCreate(addresses: List<PhoneAddress>): Outcome<Conversation>

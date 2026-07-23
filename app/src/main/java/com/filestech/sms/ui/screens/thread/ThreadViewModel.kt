@@ -80,6 +80,46 @@ class ThreadViewModel @Inject constructor(
     private val conversationId: Long = checkNotNull(savedStateHandle["conversationId"])
 
     /**
+     * Size of the loaded window. Raising it widens the query in place; the repository re-subscribes
+     * via `flatMapLatest` and the list grows towards the past without losing scroll position
+     * (`LazyColumn` re-anchors on the stable message ids).
+     */
+    private val windowLimit = MutableStateFlow(PAGE_SIZE)
+
+    /** Loads one more page of older messages. No-op when everything is already loaded. */
+    fun loadOlder() {
+        if (!_state.value.hasMoreMessages || _state.value.isLoadingOlder) return
+        _state.update { it.copy(isLoadingOlder = true) }
+        windowLimit.update { it + PAGE_SIZE }
+    }
+
+    /**
+     * Resolves reply targets that are not in the loaded window, so their quote renders properly.
+     *
+     * Idempotent and additive: ids already resolved — or already visible in the window — are
+     * skipped, so the caller can hand over the full set of missing ids on every recomposition
+     * without causing a query storm. Targets that genuinely no longer exist are recorded as
+     * absent by [unresolvableQuoteIds] so they are not retried forever.
+     */
+    fun ensureQuotedResolved(ids: Set<Long>) {
+        val pending = ids - _state.value.quotedOutsideWindow.keys - unresolvableQuoteIds
+        if (pending.isEmpty()) return
+        viewModelScope.launch {
+            val resolved = mutableMapOf<Long, Message>()
+            pending.forEach { id ->
+                val message = runCatching { repo.findMessageById(id) }.getOrNull()
+                if (message != null) resolved[id] = message else unresolvableQuoteIds += id
+            }
+            if (resolved.isNotEmpty()) {
+                _state.update { it.copy(quotedOutsideWindow = it.quotedOutsideWindow + resolved) }
+            }
+        }
+    }
+
+    /** Reply targets confirmed missing — deleted or purged. Prevents endless re-lookups. */
+    private val unresolvableQuoteIds = mutableSetOf<Long>()
+
+    /**
      * Voice composer state machine:
      *   Idle      → no recording, normal text composer
      *   Recording → microphone is live, [elapsedMs]/[amplitude] update every 100 ms
@@ -114,6 +154,18 @@ class ThreadViewModel @Inject constructor(
         val draftSeeded: Boolean = false,
         val hasContact: Boolean = false,
         val messageCount: Int = 0,
+        /** Older messages exist beyond the loaded window. */
+        val hasMoreMessages: Boolean = false,
+        /** A "load older" request is in flight. */
+        val isLoadingOlder: Boolean = false,
+        /**
+         * Reply targets that live OUTSIDE the loaded window, resolved on demand.
+         *
+         * Without this a reply quoting an old message would render as "message supprimé" as soon
+         * as its target scrolled out of the window — telling the user their message is gone when
+         * it is merely not loaded.
+         */
+        val quotedOutsideWindow: Map<Long, Message> = emptyMap(),
         val firstMessageAt: Long? = null,
         val lastMessageAt: Long? = null,
         val voice: VoiceState = VoiceState.Idle,
@@ -346,14 +398,21 @@ class ThreadViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         var markedReadAtLeastOnce = false
-        repo.observeMessages(conversationId).onEach { msgs ->
+        // v1.24.0 (finding A) — fenêtre bornée au lieu du fil entier. Les statistiques
+        // (`messageCount`, `firstMessageAt`, `lastMessageAt`) viennent d'un agrégat SQL sur TOUT
+        // le fil, jamais de la fenêtre : le panneau d'infos décrit la conversation, pas la tranche
+        // chargée en mémoire.
+        repo.observeMessagesWindow(conversationId, windowLimit).onEach { window ->
+            val msgs = window.messages
             _state.update {
                 it.copy(
                     isLoading = false,
                     messages = msgs,
-                    messageCount = msgs.size,
-                    firstMessageAt = msgs.minOfOrNull { m -> m.date },
-                    lastMessageAt = msgs.maxOfOrNull { m -> m.date },
+                    hasMoreMessages = window.hasMore,
+                    isLoadingOlder = false,
+                    messageCount = window.totalCount,
+                    firstMessageAt = window.firstMessageAt,
+                    lastMessageAt = window.lastMessageAt,
                 )
             }
             // v1.11.0 audit P1 — recompute les verdicts smishing sur IO
@@ -1350,6 +1409,13 @@ class ThreadViewModel @Inject constructor(
     private fun snackNumbersBlocked(): String = context.getString(com.filestech.sms.R.string.snack_thread_numbers_blocked)
 
     private companion object {
+        /**
+         * Messages loaded per page. 200 comfortably fills any screen, so the first paint looks
+         * complete, while keeping the per-emission cost flat on very long threads: before v1.24.0
+         * every incoming SMS re-read and re-mapped the entire conversation.
+         */
+        const val PAGE_SIZE: Int = 200
+
         // Image compression knobs. The first threshold says "do nothing for tiny images";
         // the second is the hard target used by the quality loop.
         const val IMAGE_COMPRESS_THRESHOLD_BYTES: Long = 250L * 1024L

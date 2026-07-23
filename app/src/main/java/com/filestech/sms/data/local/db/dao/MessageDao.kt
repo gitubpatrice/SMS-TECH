@@ -51,6 +51,66 @@ interface MessageDao {
     )
     fun observeForConversation(conversationId: Long): Flow<List<MessageEntity>>
 
+    /**
+     * Bounded window: the [limit] most recent messages, returned oldest-first for the UI.
+     *
+     * v1.24.0 (finding A) — [observeForConversation] has no `LIMIT`, so every incoming SMS and
+     * every draft keystroke re-read, re-mapped and re-diffed the whole thread. On a 5 000-message
+     * conversation that is 5 000 rows of work per emission. The thread UI uses this window
+     * instead; [observeForConversation] stays unbounded because the PDF export
+     * (`ExportConversationPdfUseCase`) must see the entire history — bounding it would silently
+     * export a truncated document.
+     *
+     * The `id` tie-breaker is **not optional**. `date` alone is not unique — a multipart MMS lands
+     * with identical timestamps — and without a total order the window boundary is
+     * non-deterministic, so a row can be dropped or duplicated between two emissions.
+     *
+     * The `(conversation_id, date)` index covers this ordering; no new index is needed.
+     *
+     * The exclusion predicate is kept verbatim from [observeForConversation] — it hides the
+     * reaction sentinels documented there.
+     */
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT * FROM messages
+            WHERE conversation_id = :conversationId
+              AND NOT (
+                  body = ''
+                  AND attachments_count = 0
+                  AND reaction_emoji IS NULL
+              )
+            ORDER BY date DESC, id DESC
+            LIMIT :limit
+        ) ORDER BY date ASC, id ASC
+        """
+    )
+    fun observeWindowForConversation(conversationId: Long, limit: Int): Flow<List<MessageEntity>>
+
+    /**
+     * Whole-thread statistics, computed in SQL over **every** message — never over the loaded
+     * window.
+     *
+     * The conversation info panel shows "N messages, from … to …". Deriving those from the window
+     * would quietly report the window's own bounds as the conversation's, so a 5 000-message
+     * thread would claim to hold 200 and to start last Tuesday. `COUNT`/`MIN`/`MAX` over the
+     * indexed `(conversation_id, date)` pair is cheap enough to observe continuously.
+     *
+     * Same exclusion predicate as [observeWindowForConversation].
+     */
+    @Query(
+        """
+        SELECT COUNT(*) AS total, MIN(date) AS firstAt, MAX(date) AS lastAt FROM messages
+        WHERE conversation_id = :conversationId
+          AND NOT (
+              body = ''
+              AND attachments_count = 0
+              AND reaction_emoji IS NULL
+          )
+        """
+    )
+    fun observeStatsForConversation(conversationId: Long): Flow<ThreadStats>
+
     @Query("SELECT * FROM messages WHERE id = :id")
     suspend fun findById(id: Long): MessageEntity?
 

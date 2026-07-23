@@ -3,9 +3,10 @@ package com.filestech.sms.data.repository
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.filestech.sms.core.ext.phoneSuffix8
+import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
@@ -15,6 +16,7 @@ import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Attachment
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
+import com.filestech.sms.domain.model.MessageWindow
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
 import com.filestech.sms.domain.model.toDomain
@@ -28,9 +30,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOn
-import com.filestech.sms.core.ext.stripInvisibleChars
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -166,6 +168,57 @@ class ConversationRepositoryImpl @Inject constructor(
                 emptyList()
             } else {
                 messages
+            }
+        }
+    }
+
+    /**
+     * Bounded counterpart of [observeMessages] — see [MessageDao.observeWindowForConversation] for
+     * why the thread UI must not read the whole history on every emission.
+     *
+     * Deliberately mirrors [observeMessages] rather than replacing it: the `inVault` isolation
+     * (audit PERF-M6), the conditional attachment bulk-fetch (audit P-P0-1) and the `PanicDecoy`
+     * guard are all load-bearing and stay identical. Only the source query is bounded, and the
+     * window widens through [limit] via `flatMapLatest`.
+     */
+    override fun observeMessagesWindow(
+        conversationId: Long,
+        limit: Flow<Int>,
+    ): Flow<MessageWindow> {
+        val inVaultFlow = conversationDao.observeById(conversationId)
+            .map { it?.inVault == true }
+            .distinctUntilChanged()
+        val rowsFlow = limit
+            .distinctUntilChanged()
+            .flatMapLatest { size -> messageDao.observeWindowForConversation(conversationId, size) }
+        val baseFlow = combine(
+            inVaultFlow,
+            rowsFlow,
+            messageDao.observeStatsForConversation(conversationId).distinctUntilChanged(),
+        ) { inVault, rows, stats ->
+            val needAttachments = rows.any { it.attachmentsCount > 0 }
+            val attachmentsByMessage: Map<Long, List<Attachment>> =
+                if (needAttachments) {
+                    attachmentDao.findForConversation(conversationId)
+                        .groupBy { it.messageId }
+                        .mapValues { (_, list) -> list.map { it.toDomain() } }
+                } else emptyMap()
+            val messages = rows.map { entity ->
+                entity.toDomain(attachmentsByMessage[entity.id].orEmpty())
+            }
+            inVault to MessageWindow(
+                messages = messages,
+                totalCount = stats.total,
+                hasMore = messages.size < stats.total,
+                firstMessageAt = stats.firstAt,
+                lastMessageAt = stats.lastAt,
+            )
+        }.flowOn(io)
+        return combine(baseFlow, appLock.state) { (inVault, window), lockState ->
+            if (lockState is AppLockManager.LockState.PanicDecoy && inVault) {
+                MessageWindow()
+            } else {
+                window
             }
         }
     }

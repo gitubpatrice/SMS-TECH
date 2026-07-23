@@ -276,28 +276,44 @@ fun ThreadScreen(
     }
     // Audit R4 (v1.14.8) — Compteur de messages non-vus apparus pendant que l'user était
     // scrollé vers le haut. Affiche un chip "↓ N nouveau(x)" cliquable en bas-droite.
-    // Sans ça, un message arrivait silencieusement et restait invisible. `lastSeenIndex` =
-    // dernier message effectivement vu en bas (réinitialisé quand l'user revient au fond).
-    var lastSeenLastIndex by remember { mutableStateOf(-1) }
+    // Sans ça, un message arrivait silencieusement et restait invisible.
+    //
+    // v1.24.0 (finding A) — le suivi se fait par **id**, plus par index. Avec la fenêtre
+    // glissante, charger des messages plus anciens les insère EN TÊTE et décale tous les index :
+    // une soustraction d'index compterait alors comme "non vus" des messages que l'utilisateur a
+    // déjà lus, voire afficherait un nombre absurde. L'id du dernier message vu est stable quoi
+    // qu'il arrive à la fenêtre.
+    var lastSeenMessageId by remember { androidx.compose.runtime.mutableLongStateOf(-1L) }
     val unseenCount by remember {
         androidx.compose.runtime.derivedStateOf {
-            (state.messages.lastIndex - lastSeenLastIndex).coerceAtLeast(0)
+            if (lastSeenMessageId < 0L) {
+                0
+            } else {
+                val seenIndex = state.messages.indexOfLast { it.id == lastSeenMessageId }
+                // -1 = le message vu est sorti de la fenêtre par le haut (purge, suppression) :
+                // tout ce qui reste est postérieur, donc rien à signaler comme non vu.
+                if (seenIndex < 0) 0 else state.messages.lastIndex - seenIndex
+            }
         }
     }
-    LaunchedEffect(isAtBottom, state.messages.size) {
-        if (isAtBottom) lastSeenLastIndex = state.messages.lastIndex
+    val newestMessageId = state.messages.lastOrNull()?.id
+    LaunchedEffect(isAtBottom, newestMessageId) {
+        if (isAtBottom && newestMessageId != null) lastSeenMessageId = newestMessageId
     }
-    LaunchedEffect(state.messages.size) {
-        if (state.messages.isEmpty()) return@LaunchedEffect
+    // v1.24.0 (finding A) — déclenché par l'id du dernier message, PAS par `size`. Charger des
+    // messages plus anciens augmente `size` : avec l'ancienne clé, chaque « charger plus ancien »
+    // aurait rejeté l'utilisateur en bas du fil, exactement au moment où il remonte l'historique.
+    LaunchedEffect(newestMessageId) {
+        if (newestMessageId == null) return@LaunchedEffect
         if (!initialScrollDone) {
             // Non-animated for first paint — animateScrollToItem from index 0 with hundreds
             // of items is visibly choppy.
             listState.scrollToItem(state.messages.lastIndex)
             initialScrollDone = true
-            lastSeenLastIndex = state.messages.lastIndex
+            lastSeenMessageId = newestMessageId
         } else if (isAtBottom) {
             listState.animateScrollToItem(state.messages.lastIndex)
-            lastSeenLastIndex = state.messages.lastIndex
+            lastSeenMessageId = newestMessageId
         }
     }
 
@@ -380,9 +396,19 @@ fun ThreadScreen(
         body = tgt.body.take(140),
         isFromSelf = tgt.isOutgoing,
     )
+    // v1.24.0 (finding A) — avec la fenêtre glissante, la cible d'une citation peut être hors
+    // de la tranche chargée. Sans ce repli, la bulle afficherait « message supprimé » alors que
+    // le message existe toujours. Les cibles manquantes sont résolues une fois, à la demande.
+    val missingQuoteIds = remember(state.messages, state.quotedOutsideWindow) {
+        state.messages.mapNotNull { it.replyToMessageId }
+            .filterTo(mutableSetOf()) { it !in messageById && it !in state.quotedOutsideWindow }
+    }
+    LaunchedEffect(missingQuoteIds) {
+        if (missingQuoteIds.isNotEmpty()) viewModel.ensureQuotedResolved(missingQuoteIds)
+    }
     fun previewFor(msg: Message): ReplyQuotePreview? {
         val tgtId = msg.replyToMessageId ?: return null
-        val tgt = messageById[tgtId]
+        val tgt = messageById[tgtId] ?: state.quotedOutsideWindow[tgtId]
             ?: return ReplyQuotePreview(senderLabel = "—", body = deletedLabel, isFromSelf = false)
         return previewOf(tgt)
     }
@@ -619,6 +645,17 @@ fun ThreadScreen(
             modifier = Modifier.fillMaxSize(),
             state = listState,
         ) {
+            // v1.24.0 (finding A) — tête de fenêtre. `key` stable pour que l'insertion des
+            // messages plus anciens ne détruise pas la position de scroll.
+            if (state.hasMoreMessages) {
+                item(key = "load-older", contentType = "load-older") {
+                    LoadOlderRow(
+                        isLoading = state.isLoadingOlder,
+                        remaining = (state.messageCount - state.messages.size).coerceAtLeast(0),
+                        onClick = viewModel::loadOlder,
+                    )
+                }
+            }
             itemsIndexed(
                 state.messages,
                 key = { _, m -> m.id },
@@ -1971,6 +2008,43 @@ private fun ThreadMessageItem(
                 customBubbleColorArgb = bubbleColorArgb,
                 smishingReasons = smishingReasons,
             )
+        }
+    }
+}
+
+/**
+ * Head-of-thread control that widens the loaded window (v1.24.0, finding A).
+ *
+ * Sits above the oldest loaded message and states how many older ones remain, so the boundary of
+ * the window is explicit rather than looking like the start of the conversation.
+ */
+@Composable
+private fun LoadOlderRow(
+    isLoading: Boolean,
+    remaining: Int,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        if (isLoading) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            androidx.compose.material3.TextButton(onClick = onClick) {
+                Text(
+                    text = if (remaining > 0) {
+                        stringResource(R.string.thread_load_older_remaining, remaining)
+                    } else {
+                        stringResource(R.string.thread_load_older)
+                    },
+                )
+            }
         }
     }
 }
