@@ -387,6 +387,14 @@ data class AdvancedSettings(
      */
     val startupDbMigrationsDone: Boolean = false,
     /**
+     * v1.24.0 — réparation one-shot des aperçus de conversation périmés par des suppressions de
+     * message sous les versions ≤ 1.23.4 (qui ne recalculaient pas la ligne `conversations`).
+     * `true` une fois la passe [com.filestech.sms.data.local.db.dao.MessageDao.repairStaleConversationPreviews]
+     * exécutée. Indépendant de [startupDbMigrationsDone] : doit tourner même sur une install déjà
+     * migrée qui passe à 1.24.0.
+     */
+    val staleConversationPreviewsRepairedV1240: Boolean = false,
+    /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante
      * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour

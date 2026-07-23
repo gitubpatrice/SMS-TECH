@@ -189,6 +189,7 @@ class SettingsRepository @Inject constructor(
                 dedupSameNumberV1230 = p[K.dedupSameNumberV1230] ?: false,
                 attachmentsMovedToFilesDirV147 = p[K.attachmentsMovedToFilesDirV147] ?: false,
                 startupDbMigrationsDone = p[K.startupDbMigrationsDone] ?: false,
+                staleConversationPreviewsRepairedV1240 = p[K.staleConversationPreviewsRepairedV1240] ?: false,
             ),
         )
     }
@@ -296,6 +297,7 @@ class SettingsRepository @Inject constructor(
         this[K.dedupSameNumberV1230] = s.advanced.dedupSameNumberV1230
         this[K.attachmentsMovedToFilesDirV147] = s.advanced.attachmentsMovedToFilesDirV147
         this[K.startupDbMigrationsDone] = s.advanced.startupDbMigrationsDone
+        this[K.staleConversationPreviewsRepairedV1240] = s.advanced.staleConversationPreviewsRepairedV1240
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -406,5 +408,7 @@ class SettingsRepository @Inject constructor(
         // v1.14.7 — flag one-shot pour la migration des attachments MMS cacheDir → filesDir.
         val attachmentsMovedToFilesDirV147 = booleanPreferencesKey("advanced.attachmentsMovedToFilesDirV147")
         val startupDbMigrationsDone = booleanPreferencesKey("advanced.startupDbMigrationsDone")
+        val staleConversationPreviewsRepairedV1240 =
+            booleanPreferencesKey("advanced.staleConversationPreviewsRepairedV1240")
     }
 }

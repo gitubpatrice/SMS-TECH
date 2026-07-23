@@ -432,7 +432,14 @@ class ConversationRepositoryImpl @Inject constructor(
         // next launch (or a future re-import) doesn't bring it back.
         val msg = messageDao.findById(messageId)
         deleteFromTelephonyProvider(msg?.telephonyUri)
-        messageDao.delete(messageId)
+        // v1.24.0 (bug suppression) — atomique : effacer le message ET recalculer l'aperçu de la
+        // conversation. Sans le refresh, supprimer le dernier message d'un fil laissait la liste
+        // afficher le message supprimé indéfiniment (confirmé sur une vraie sauvegarde 2026-07-23).
+        database.withTransaction {
+            messageDao.delete(messageId)
+            val convId = msg?.conversationId
+            if (convId != null) messageDao.refreshConversationPreview(convId)
+        }
     }
 
     override suspend fun setReaction(messageId: Long, emoji: String?): SetReactionResult =

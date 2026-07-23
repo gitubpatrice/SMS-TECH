@@ -447,6 +447,73 @@ interface MessageDao {
     suspend fun refreshAllConversationPreviewsAfterPurge(): Int
 
     /**
+     * v1.24.0 (bug suppression) — recalcule `last_message_at` + `last_message_preview` pour UNE
+     * conversation, à partir de son message le plus récent restant.
+     *
+     * Sans ça, supprimer le dernier message d'un fil laissait la liste afficher indéfiniment le
+     * message supprimé (`deleteMessage` effaçait la ligne `messages` mais ne touchait jamais la
+     * ligne `conversations`). Bug confirmé sur une vraie sauvegarde le 2026-07-23.
+     *
+     * Exclut les sentinelles de réaction (même prédicat que `observeForConversation`) pour ne pas
+     * exposer un `body` vide. Départage `date DESC, id DESC` — cohérent avec la fenêtre du fil.
+     * Si le fil n'a plus aucun message affichable, `last_message_at = 0` et `preview = NULL`.
+     */
+    @Query(
+        """
+        UPDATE conversations
+        SET
+          last_message_at = COALESCE(
+              (SELECT MAX(date) FROM messages
+               WHERE conversation_id = :conversationId
+                 AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)),
+              0
+          ),
+          last_message_preview = (
+              SELECT body FROM messages
+              WHERE conversation_id = :conversationId
+                AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+              ORDER BY date DESC, id DESC LIMIT 1
+          )
+        WHERE id = :conversationId
+        """,
+    )
+    suspend fun refreshConversationPreview(conversationId: Long)
+
+    /**
+     * v1.24.0 (bug suppression, réparation one-shot) — corrige les aperçus déjà périmés par des
+     * suppressions passées, sur les versions ≤ 1.23.4 qui ne recalculaient pas la conversation.
+     *
+     * **Ciblage strict** : seules les conversations dont le `last_message_at` stocké est SUPÉRIEUR
+     * au `date` du message le plus récent réellement présent (= le dernier message a été supprimé)
+     * sont recalculées. Une conversation saine (`last_message_at == MAX(date)`) n'est jamais
+     * touchée — pas de réordonnancement ni de perte de libellé sur les autres. La détection de
+     * péremption compte TOUS les messages ; l'aperçu se reconstruit hors sentinelles.
+     */
+    @Query(
+        """
+        UPDATE conversations
+        SET
+          last_message_at = COALESCE(
+              (SELECT MAX(date) FROM messages
+               WHERE conversation_id = conversations.id
+                 AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)),
+              0
+          ),
+          last_message_preview = (
+              SELECT body FROM messages
+              WHERE conversation_id = conversations.id
+                AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+              ORDER BY date DESC, id DESC LIMIT 1
+          )
+        WHERE last_message_at > COALESCE(
+            (SELECT MAX(date) FROM messages WHERE conversation_id = conversations.id),
+            0
+        )
+        """,
+    )
+    suspend fun repairStaleConversationPreviews(): Int
+
+    /**
      * v1.3.0 — compte combien de messages seraient effacés par [purgeOlderThan] avec ce
      * même `olderThan`. Sert au bouton "Effacer maintenant" du dialog réglages : on
      * affiche d'abord à l'utilisateur "X messages vont être effacés, continuer ?" pour

@@ -73,6 +73,21 @@ class MessageWindowDaoTest {
         attachmentsCount = 0,
     )
 
+    /** Sets the conversation's stored last-message metadata (there is no dedicated DAO setter). */
+    private fun setConvPreview(at: Long, preview: String) = runBlocking {
+        db.conversationDao().update(
+            ConversationEntity(
+                id = 1,
+                threadId = 1,
+                addressesCsv = "+33612345678",
+                displayName = "Alice",
+                lastMessageAt = at,
+                lastMessagePreview = preview,
+                unreadCount = 0,
+            ),
+        )
+    }
+
     private fun seed(count: Int, sameTimestamp: Boolean = false) = runBlocking {
         (1..count).forEach { i ->
             db.messageDao().insert(message(i.toLong(), if (sameTimestamp) 1_000L else 1_000L + i))
@@ -153,6 +168,85 @@ class MessageWindowDaoTest {
      * computed against a total the window can never reach and the "load older" control would
      * never disappear.
      */
+    /**
+     * The delete-preview bug found on a real backup (2026-07-23): deleting the last message of a
+     * thread left `conversations.last_message_preview` pointing at the deleted message.
+     */
+    @Test
+    fun refreshConversationPreview_updatesToTheNewestRemainingMessage() = runBlocking {
+        db.messageDao().insert(message(1, 1_000L, body = "older"))
+        db.messageDao().insert(message(2, 2_000L, body = "1538")) // the "last" message
+        setConvPreview(2_000L, "1538")
+
+        // Delete the newest, then refresh — exactly what deleteMessage now does.
+        db.messageDao().delete(2)
+        db.messageDao().refreshConversationPreview(1)
+
+        val conv = db.conversationDao().findById(1)!!
+        assertThat(conv.lastMessagePreview).isEqualTo("older")
+        assertThat(conv.lastMessageAt).isEqualTo(1_000L)
+    }
+
+    @Test
+    fun refreshConversationPreview_emptiesThePreviewWhenNoMessageRemains() = runBlocking {
+        db.messageDao().insert(message(1, 1_000L, body = "only"))
+        setConvPreview(1_000L, "only")
+
+        db.messageDao().delete(1)
+        db.messageDao().refreshConversationPreview(1)
+
+        val conv = db.conversationDao().findById(1)!!
+        assertThat(conv.lastMessagePreview).isNull()
+        assertThat(conv.lastMessageAt).isEqualTo(0L)
+    }
+
+    /**
+     * The one-shot repair for previews left stale by pre-1.24.0 deletions. It must fix a
+     * conversation whose stored `last_message_at` is ahead of its real messages, and it must NOT
+     * touch a healthy conversation (no reordering, no label loss).
+     */
+    @Test
+    fun repairStaleConversationPreviews_fixesOnlyTheStaleOnes() = runBlocking {
+        // Conversation 1: stale — points at a deleted message newer than what remains.
+        db.messageDao().insert(message(1, 1_000L, body = "still here"))
+        setConvPreview(5_000L, "deleted-1538") // last_message_at ahead of any real message
+
+        // Conversation 2: healthy — preview matches its real newest message.
+        db.conversationDao().upsert(
+            ConversationEntity(
+                id = 2, threadId = 2, addressesCsv = "+33600000002", displayName = "Bob",
+                lastMessageAt = 3_000L, lastMessagePreview = "hi Bob", unreadCount = 0,
+            ),
+        )
+        db.messageDao().insert(
+            message(2, 3_000L, body = "hi Bob").copy(conversationId = 2, telephonyUri = "content://sms/2"),
+        )
+
+        val fixed = db.messageDao().repairStaleConversationPreviews()
+
+        assertThat(fixed).isEqualTo(1) // only the stale one
+        val stale = db.conversationDao().findById(1)!!
+        assertThat(stale.lastMessagePreview).isEqualTo("still here")
+        assertThat(stale.lastMessageAt).isEqualTo(1_000L)
+        // Healthy conversation is untouched.
+        val healthy = db.conversationDao().findById(2)!!
+        assertThat(healthy.lastMessagePreview).isEqualTo("hi Bob")
+        assertThat(healthy.lastMessageAt).isEqualTo(3_000L)
+    }
+
+    @Test
+    fun refreshConversationPreview_ignoresReactionSentinels() = runBlocking {
+        db.messageDao().insert(message(1, 1_000L, body = "real message"))
+        db.messageDao().insert(message(2, 2_000L, body = "")) // reaction sentinel (newest)
+        setConvPreview(1_000L, "real message")
+
+        db.messageDao().refreshConversationPreview(1)
+
+        // The sentinel must not become the preview — the real message stays.
+        val conv = db.conversationDao().findById(1)!!
+        assertThat(conv.lastMessagePreview).isEqualTo("real message")
+    }
+
     @Test
     fun reactionSentinels_areExcludedFromBothWindowAndStats() = runBlocking {
         seed(10)

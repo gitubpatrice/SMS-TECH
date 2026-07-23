@@ -60,6 +60,21 @@ class StartupMigrations @Inject constructor(
      */
     suspend fun run() = withContext(io) {
         val advanced = runCatching { settings.flow.first().advanced }.getOrNull() ?: return@withContext
+
+        // v1.24.0 — réparation one-shot des aperçus de conversation périmés par des suppressions
+        // sous ≤ 1.23.4. INDÉPENDANTE de la garde globale : elle doit tourner même sur une install
+        // déjà migrée qui passe à 1.24.0. Ciblée (ne touche que les conversations dont le dernier
+        // message a été supprimé), donc sûre à exécuter une fois.
+        if (!advanced.staleConversationPreviewsRepairedV1240) {
+            runCatching {
+                val fixed = messageDao.get().repairStaleConversationPreviews()
+                settings.update { s ->
+                    s.copy(advanced = s.advanced.copy(staleConversationPreviewsRepairedV1240 = true))
+                }
+                if (fixed > 0) Timber.i("Repaired %d stale conversation preview(s)", fixed)
+            }.onFailure { Timber.w(it, "stale conversation preview repair failed") }
+        }
+
         // Global short-circuit: an up-to-date install does no migration work and never opens the
         // database. This is the whole point of the consolidation.
         if (advanced.startupDbMigrationsDone) return@withContext
