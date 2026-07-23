@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.baselineprofile)
 }
 
 // versionCode = nombre de commits si dispo, sinon 1
@@ -164,6 +165,9 @@ kotlin {
 dependencies {
     // Core
     implementation(libs.androidx.core.ktx)
+    // v1.24.0 — installe le baseline profile généré au premier lancement (démarrage plus rapide).
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
     implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.documentfile)
     // Audit SEC-M4 (v1.14.8) — `androidx.security:security-crypto:1.1.0-alpha06` retiré.
