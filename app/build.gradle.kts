@@ -58,6 +58,12 @@ android {
         localeFilters += listOf("en", "fr")
     }
 
+    // v1.24.0 — `MigrationTestHelper` lit les schémas Room depuis les ASSETS de l'APK de test.
+    // Sans cette ligne, `room.schemaLocation` exporte bien les JSON dans `app/schemas/` mais ils
+    // n'atteignent jamais l'appareil : chaque test de migration échoue sur
+    // `FileNotFoundException: Cannot find the schema file in the assets folder`.
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+
     signingConfigs {
         create("release") {
             if (keystoreProps.isNotEmpty()) {
@@ -250,4 +256,11 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.mockk.android)
+    // v1.24.0 — outillage du filet de sécurité instrumenté : assertions Truth, MigrationTestHelper
+    // (tests de migration Room sur le chemin SQLCipher réel), coroutines de test, Hilt.
+    androidTestImplementation(libs.truth)
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
 }

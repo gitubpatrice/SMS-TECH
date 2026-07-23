@@ -19,19 +19,8 @@
         errorLine2="        ~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="36"
+            line="40"
             column="9"/>
-    </issue>
-
-    <issue
-        id="WrongNavigateRouteType"
-        message="The route should be a destination class instance or destination object."
-        errorLine1="            OnboardingScreen(onFinished = { nav.navigate(Conversations) { popUpTo(Onboarding) { inclusive = true } } })"
-        errorLine2="                                                         ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/filestech/sms/ui/AppRoot.kt"
-            line="175"
-            column="58"/>
     </issue>
 
     <issue
@@ -47,7 +36,7 @@
 
     <issue
         id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 8.13.2 is available: 9.2.1"
+        message="A newer version of com.android.application than 8.13.2 is available: 9.3.0"
         errorLine1="agp = &quot;8.13.2&quot;"
         errorLine2="      ~~~~~~~~">
         <location
@@ -58,30 +47,19 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of `compileSdkVersion` than 35 is available: 36"
-        errorLine1="    compileSdk = 35"
-        errorLine2="    ~~~~~~~~~~~~~~~">
-        <location
-            file="build.gradle.kts"
-            line="31"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
         message="A newer version of com.android.tools:desugar_jdk_libs than 2.1.2 is available: 2.1.5"
         errorLine1="    coreLibraryDesugaring(&quot;com.android.tools:desugar_jdk_libs:2.1.2&quot;)"
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="225"
+            line="233"
             column="27"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.compose:compose-bom than 2024.10.01 is available: 2026.05.00"
-        errorLine1="compose-bom = &quot;2024.10.01&quot;"
+        message="A newer version of androidx.compose:compose-bom than 2026.06.00 is available: 2026.06.01"
+        errorLine1="compose-bom = &quot;2026.06.00&quot;"
         errorLine2="              ~~~~~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
@@ -91,86 +69,20 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.core:core-ktx than 1.13.1 is available: 1.18.0"
-        errorLine1="core-ktx = &quot;1.13.1&quot;"
+        message="A newer version of androidx.core:core-ktx than 1.18.0 is available: 1.19.0"
+        errorLine1="core-ktx = &quot;1.18.0&quot;"
         errorLine2="           ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="10"
+            line="12"
             column="12"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
-        errorLine1="activity-compose = &quot;1.9.3&quot;"
-        errorLine2="                   ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="11"
-            column="20"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-process than 2.8.7 is available: 2.10.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="12"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.10.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="12"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.7 is available: 2.10.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="12"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.10.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="12"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.navigation:navigation-compose than 2.8.4 is available: 2.9.8"
-        errorLine1="navigation-compose = &quot;2.8.4&quot;"
-        errorLine2="                     ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="13"
-            column="22"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
-        errorLine1="datastore = &quot;1.1.1&quot;"
-        errorLine2="            ~~~~~~~">
+        message="A newer version of androidx.lifecycle:lifecycle-process than 2.10.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.10.0&quot;"
+        errorLine2="            ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
             line="14"
@@ -179,57 +91,35 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.room:room-compiler than 2.7.2 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.2&quot;"
-        errorLine2="       ~~~~~~~">
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.10.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.10.0&quot;"
+        errorLine2="            ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="15"
-            column="8"/>
+            line="14"
+            column="13"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.room:room-ktx than 2.7.2 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.2&quot;"
-        errorLine2="       ~~~~~~~">
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.10.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.10.0&quot;"
+        errorLine2="            ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="15"
-            column="8"/>
+            line="14"
+            column="13"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.room:room-runtime than 2.7.2 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.2&quot;"
-        errorLine2="       ~~~~~~~">
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.10.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.10.0&quot;"
+        errorLine2="            ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="15"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-testing than 2.7.2 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.2&quot;"
-        errorLine2="       ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="15"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.work:work-runtime-ktx than 2.9.1 is available: 2.11.2"
-        errorLine1="work = &quot;2.9.1&quot;"
-        errorLine2="       ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="16"
-            column="8"/>
+            line="14"
+            column="13"/>
     </issue>
 
     <issue
@@ -239,7 +129,7 @@
         errorLine2="               ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="18"
+            line="20"
             column="16"/>
     </issue>
 
@@ -250,51 +140,40 @@
         errorLine2="               ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="19"
+            line="21"
             column="16"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.security:security-crypto than 1.1.0-alpha06 is available: 1.1.0"
-        errorLine1="security-crypto = &quot;1.1.0-alpha06&quot;"
-        errorLine2="                  ~~~~~~~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="20"
-            column="19"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.3.0"
+        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.4.0"
         errorLine1="hilt-work = &quot;1.2.0&quot;"
         errorLine2="            ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="24"
+            line="29"
             column="13"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.3.0"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
         errorLine1="hilt-work = &quot;1.2.0&quot;"
         errorLine2="            ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="24"
+            line="29"
             column="13"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.3.0"
-        errorLine1="hilt-navigation-compose = &quot;1.2.0&quot;"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.3.0 is available: 1.4.0"
+        errorLine1="hilt-navigation-compose = &quot;1.3.0&quot;"
         errorLine2="                          ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="25"
+            line="30"
             column="27"/>
     </issue>
 
@@ -305,7 +184,7 @@
         errorLine2="                    ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="57"
+            line="62"
             column="21"/>
     </issue>
 
@@ -316,7 +195,7 @@
         errorLine2="                       ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="58"
+            line="63"
             column="24"/>
     </issue>
 
@@ -327,14 +206,14 @@
         errorLine2="           ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="59"
+            line="64"
             column="12"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlin.android than 2.0.21 is available: 2.3.21"
-        errorLine1="kotlin = &quot;2.0.21&quot;"
+        message="A newer version of org.jetbrains.kotlin.android than 2.3.20 is available: 2.4.10"
+        errorLine1="kotlin = &quot;2.3.20&quot;"
         errorLine2="         ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
@@ -344,8 +223,8 @@
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlin.plugin.compose than 2.0.21 is available: 2.3.21"
-        errorLine1="kotlin = &quot;2.0.21&quot;"
+        message="A newer version of org.jetbrains.kotlin.plugin.compose than 2.3.20 is available: 2.4.10"
+        errorLine1="kotlin = &quot;2.3.20&quot;"
         errorLine2="         ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
@@ -355,8 +234,8 @@
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlin.plugin.parcelize than 2.0.21 is available: 2.3.21"
-        errorLine1="kotlin = &quot;2.0.21&quot;"
+        message="A newer version of org.jetbrains.kotlin.plugin.parcelize than 2.3.20 is available: 2.4.10"
+        errorLine1="kotlin = &quot;2.3.20&quot;"
         errorLine2="         ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
@@ -366,8 +245,8 @@
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlin.plugin.serialization than 2.0.21 is available: 2.3.21"
-        errorLine1="kotlin = &quot;2.0.21&quot;"
+        message="A newer version of org.jetbrains.kotlin.plugin.serialization than 2.3.20 is available: 2.4.10"
+        errorLine1="kotlin = &quot;2.3.20&quot;"
         errorLine2="         ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
@@ -377,167 +256,90 @@
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.google.dagger.hilt.android than 2.57.2 is available: 2.59.2"
+        message="A newer version of com.google.dagger.hilt.android than 2.57.2 is available: 2.60.1"
         errorLine1="hilt = &quot;2.57.2&quot;"
         errorLine2="       ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="23"
+            line="28"
             column="8"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.google.dagger:hilt-android than 2.57.2 is available: 2.59.2"
+        message="A newer version of com.google.dagger:hilt-android than 2.57.2 is available: 2.60.1"
         errorLine1="hilt = &quot;2.57.2&quot;"
         errorLine2="       ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="23"
+            line="28"
             column="8"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.google.dagger:hilt-android-compiler than 2.57.2 is available: 2.59.2"
+        message="A newer version of com.google.dagger:hilt-android-compiler than 2.57.2 is available: 2.60.1"
         errorLine1="hilt = &quot;2.57.2&quot;"
         errorLine2="       ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="23"
+            line="28"
             column="8"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of com.google.accompanist:accompanist-permissions than 0.36.0 is available: 0.37.3"
-        errorLine1="accompanist = &quot;0.36.0&quot;"
-        errorLine2="              ~~~~~~~~">
+        message="A newer version of com.google.dagger:hilt-android-testing than 2.57.2 is available: 2.60.1"
+        errorLine1="hilt = &quot;2.57.2&quot;"
+        errorLine2="       ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="31"
-            column="15"/>
+            line="28"
+            column="8"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.9.0 is available: 1.11.0"
-        errorLine1="coroutines = &quot;1.9.0&quot;"
-        errorLine2="             ~~~~~~~">
+        message="A newer version of net.zetetic:sqlcipher-android than 4.16.0 is available: 4.17.0"
+        errorLine1="sqlcipher = &quot;4.16.0&quot;"
+        errorLine2="            ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="34"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-core than 1.9.0 is available: 1.11.0"
-        errorLine1="coroutines = &quot;1.9.0&quot;"
-        errorLine2="             ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="34"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-play-services than 1.9.0 is available: 1.11.0"
-        errorLine1="coroutines = &quot;1.9.0&quot;"
-        errorLine2="             ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="34"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.9.0 is available: 1.11.0"
-        errorLine1="coroutines = &quot;1.9.0&quot;"
-        errorLine2="             ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="34"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.7.3 is available: 1.11.0"
-        errorLine1="kotlinx-serialization = &quot;1.7.3&quot;"
-        errorLine2="                        ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="37"
-            column="25"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of net.zetetic:sqlcipher-android than 4.6.1 is available: 4.16.0"
-        errorLine1="sqlcipher = &quot;4.6.1&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="40"
+            line="45"
             column="13"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.junit.jupiter:junit-jupiter-api than 5.11.3 is available: 6.0.3"
+        message="A newer version of org.junit.jupiter:junit-jupiter-api than 5.11.3 is available: 6.1.2"
         errorLine1="junit5 = &quot;5.11.3&quot;"
         errorLine2="         ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="52"
+            line="57"
             column="10"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.junit.jupiter:junit-jupiter-engine than 5.11.3 is available: 6.0.3"
+        message="A newer version of org.junit.jupiter:junit-jupiter-engine than 5.11.3 is available: 6.1.2"
         errorLine1="junit5 = &quot;5.11.3&quot;"
         errorLine2="         ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="52"
+            line="57"
             column="10"/>
     </issue>
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.junit.jupiter:junit-jupiter-params than 5.11.3 is available: 6.0.3"
+        message="A newer version of org.junit.jupiter:junit-jupiter-params than 5.11.3 is available: 6.1.2"
         errorLine1="junit5 = &quot;5.11.3&quot;"
         errorLine2="         ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="52"
+            line="57"
             column="10"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of io.mockk:mockk than 1.13.13 is available: 1.14.9"
-        errorLine1="mockk = &quot;1.13.13&quot;"
-        errorLine2="        ~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="53"
-            column="9"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of io.mockk:mockk-android than 1.13.13 is available: 1.14.9"
-        errorLine1="mockk = &quot;1.13.13&quot;"
-        errorLine2="        ~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="53"
-            column="9"/>
     </issue>
 
     <issue
@@ -547,7 +349,7 @@
         errorLine2="          ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="54"
+            line="59"
             column="11"/>
     </issue>
 
@@ -558,7 +360,7 @@
         errorLine2="        ~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="55"
+            line="60"
             column="9"/>
     </issue>
 
@@ -569,30 +371,8 @@
         errorLine2="              ~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="56"
+            line="61"
             column="15"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of io.gitlab.arturbosch.detekt than 1.23.7 is available: 1.23.8"
-        errorLine1="detekt = &quot;1.23.7&quot;"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="62"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of io.gitlab.arturbosch.detekt:detekt-formatting than 1.23.7 is available: 1.23.8"
-        errorLine1="detekt = &quot;1.23.7&quot;"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="62"
-            column="10"/>
     </issue>
 
     <issue
@@ -602,8 +382,503 @@
         errorLine2="                ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="63"
+            line="68"
             column="17"/>
+    </issue>
+
+    <issue
+        id="ConfigurationScreenWidthHeight"
+        message="Using Configuration.screenWidthDp instead of LocalWindowInfo.current.containerSize"
+        errorLine1="    val logoSizeDp = (configuration.screenWidthDp * LOGO_SIZE_RATIO)"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/splash/SplashScreen.kt"
+            line="167"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    context.getString(R.string.backup_export_success),"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/backup/BackupScreen.kt"
+            line="184"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    context.getString(R.string.backup_export_failed),"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/backup/BackupScreen.kt"
+            line="187"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    context.getString("
+        errorLine2="                    ^">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/backup/BackupScreen.kt"
+            line="192"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                            context.getString(R.string.backup_restore_failed_wrong_pass)"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/backup/BackupScreen.kt"
+            line="203"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                            context.getString(R.string.backup_restore_failed_format)"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/backup/BackupScreen.kt"
+            line="205"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                            context.getString(R.string.backup_restore_failed_storage)"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/backup/BackupScreen.kt"
+            line="207"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                                            context.getString(R.string.phone_action_no_contacts),"
+        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/compose/ComposeScreen.kt"
+            line="140"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    val msg = if (event.count &lt;= 1) ctx.getString(R.string.vault_move_in_done)"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt"
+            line="169"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt"
+            line="176"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                        snackbarHost.showSnackbar(ctx.getString(R.string.emergency_i_am_ok_done))"
+        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt"
+            line="183"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                        snackbarHost.showError(ctx.getString(R.string.emergency_i_am_ok_send_failed))"
+        errorLine2="                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt"
+            line="185"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showSnackbar(ctx.getString(R.string.emergency_i_am_ok_reset_only))"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt"
+            line="189"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                                        snackbarHost.showError(ctx.getString(R.string.phone_action_no_contacts))"
+        errorLine2="                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt"
+            line="326"
+            column="64"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                                    snackbarHost.showSnackbar(ctx.getString(R.string.emergency_disable_done))"
+        errorLine2="                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/emergency/EmergencyScreen.kt"
+            line="348"
+            column="63"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showSnackbar(ctx.getString(R.string.action_save))"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/emergency/EmergencySetupScreen.kt"
+            line="93"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="            .setTitle(context.getString(R.string.lock_biometric_title))"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/lock/LockScreen.kt"
+            line="161"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="            .setSubtitle(context.getString(R.string.lock_biometric_subtitle))"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/lock/LockScreen.kt"
+            line="162"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="            .setNegativeButtonText(context.getString(R.string.lock_use_pin))"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/lock/LockScreen.kt"
+            line="163"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                            scope.launch { onSnack(context.getString(R.string.phone_action_no_dialer)) }"
+        errorLine2="                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/components/PhoneActionsDialog.kt"
+            line="87"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                        scope.launch { onSnack(context.getString(R.string.toast_copied)) }"
+        errorLine2="                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/components/PhoneActionsDialog.kt"
+            line="97"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                            scope.launch { onSnack(context.getString(R.string.phone_action_no_contacts)) }"
+        errorLine2="                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/components/PhoneActionsDialog.kt"
+            line="115"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showSnackbar(ctx.getString(R.string.action_save))"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/safetycall/SafetyCallSetupScreen.kt"
+            line="94"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showError(ctx.getString(msgRes))"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/safetycall/SafetyCallSetupScreen.kt"
+            line="109"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                        ctx.getString(R.string.settings_purge_blocked_result, e.count)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="154"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    } else ctx.getString(R.string.settings_purge_blocked_none)"
+        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="155"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                        ctx.getString(R.string.settings_auto_delete_purge_done, e.count),"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="160"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_resync_started))"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="164"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                snackbarHost.showError(ctx.getString(R.string.settings_emergency_include_location_denied))"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="185"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                                    ctx.getString(R.string.settings_safety_call_im_ok_snack),"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="405"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                                    biometricCtx.getString(R.string.lock_biometric_unavailable),"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="621"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_saved))"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="852"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                            snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_cleared))"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
+            line="876"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="            val label = context.getString(R.string.toast_copied)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
+            line="192"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                val label = context.getString(R.string.snack_no_translate_app)"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
+            line="220"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showSnackbar(context.getString(R.string.thread_export_success, e.pages))"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
+            line="320"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    context.getString(R.string.error_send_failed),"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
+            line="324"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                                context.getString(R.string.voice_permission_denied),"
+        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
+            line="544"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    .setTitle(ctx.getString(R.string.vault_biometric_title))"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/vault/VaultScreen.kt"
+            line="326"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))"
+        errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/vault/VaultScreen.kt"
+            line="327"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    .setNegativeButtonText(ctx.getString(R.string.action_cancel))"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/vault/VaultScreen.kt"
+            line="328"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    val msg = if (event.count &lt;= 1) ctx.getString(R.string.vault_move_out_done)"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/vault/VaultScreen.kt"
+            line="395"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="LocalContextGetResourceValueCall"
+        message="Querying resource values using LocalContext.current"
+        errorLine1="                    snackbarHost.showError(ctx.getString(R.string.vault_move_out_failed))"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/vault/VaultScreen.kt"
+            line="402"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="LocalContextResourcesRead"
+        message="Reading Resources using LocalContext.current.resources"
+        errorLine1="                    else ctx.resources.getQuantityString("
+        errorLine2="                         ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt"
+            line="170"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="LocalContextResourcesRead"
+        message="Reading Resources using LocalContext.current.resources"
+        errorLine1="                    else ctx.resources.getQuantityString("
+        errorLine2="                         ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/vault/VaultScreen.kt"
+            line="396"
+            column="26"/>
     </issue>
 
     <issue
@@ -629,10 +904,69 @@
     </issue>
 
     <issue
-        id="Aligned16KB"
-        message="The native library `arm64-v8a/libmockkjvmtiagent.so` (from `io.mockk:mockk-agent-android:1.13.13`) is not 16 KB aligned">
+        id="PrivateResource"
+        message="Overriding `@string/selected` which is marked as private in androidx.compose.ui:ui-android:1.11.3. If deliberate, use tools:override=&quot;true&quot;, otherwise pick a different name."
+        errorLine1="    &lt;string name=&quot;selected&quot;>Sélectionné&lt;/string>"
+        errorLine2="                  ~~~~~~~~">
         <location
-            file="E:/.gradle/caches/8.13/transforms/fe3f830c67135bdcd9a1b41462a2edba/transformed/mockk-agent-android-1.13.13/jni/arm64-v8a/libmockkjvmtiagent.so"/>
+            file="src/main/res/values-fr/strings.xml"
+            line="192"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="PrivateResource"
+        message="Overriding `@string/selected` which is marked as private in androidx.compose.ui:ui-android:1.11.3. If deliberate, use tools:override=&quot;true&quot;, otherwise pick a different name."
+        errorLine1="    &lt;string name=&quot;selected&quot;>Selected&lt;/string>"
+        errorLine2="                  ~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="201"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="MissingQuantity"
+        message="For locale &quot;fr&quot; (French) the following quantity should also be defined: `many` (e.g. &quot;1000000 de jours&quot;)"
+        errorLine1="    &lt;plurals name=&quot;thread_unseen_messages&quot;>"
+        errorLine2="    ^">
+        <location
+            file="src/main/res/values-fr/strings.xml"
+            line="766"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="MissingQuantity"
+        message="For locale &quot;fr&quot; (French) the following quantity should also be defined: `many` (e.g. &quot;1000000 de jours&quot;)"
+        errorLine1="    &lt;plurals name=&quot;conversations_selection_count&quot;>"
+        errorLine2="    ^">
+        <location
+            file="src/main/res/values-fr/strings.xml"
+            line="772"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="MissingQuantity"
+        message="For locale &quot;fr&quot; (French) the following quantity should also be defined: `many` (e.g. &quot;1000000 de jours&quot;)"
+        errorLine1="    &lt;plurals name=&quot;vault_bulk_move_in_done&quot;>"
+        errorLine2="    ^">
+        <location
+            file="src/main/res/values-fr/strings.xml"
+            line="776"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="MissingQuantity"
+        message="For locale &quot;fr&quot; (French) the following quantity should also be defined: `many` (e.g. &quot;1000000 de jours&quot;)"
+        errorLine1="    &lt;plurals name=&quot;vault_bulk_move_out_done&quot;>"
+        errorLine2="    ^">
+        <location
+            file="src/main/res/values-fr/strings.xml"
+            line="780"
+            column="5"/>
     </issue>
 
     <issue
@@ -686,7 +1020,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="117"
+            line="120"
             column="5"/>
     </issue>
 
@@ -697,7 +1031,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="145"
+            line="139"
             column="5"/>
     </issue>
 
@@ -708,7 +1042,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="152"
+            line="146"
             column="5"/>
     </issue>
 
@@ -719,7 +1053,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="163"
+            line="157"
             column="5"/>
     </issue>
 
@@ -730,7 +1064,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="272"
+            line="396"
             column="5"/>
     </issue>
 
@@ -741,7 +1075,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="277"
+            line="401"
             column="5"/>
     </issue>
 
@@ -752,7 +1086,73 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="278"
+            line="402"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;others&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;settings_safety_call_armed_contacts_many&quot;>Contacts: %1$s (+%2$d others)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="442"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;hours&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;safety_call_warning_body_hours&quot;>Safety call will trigger in about %1$d hours. Tap to reset the timer.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="475"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;more&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;settings_emergency_armed_contacts_many&quot;>Contacts: %1$s +%2$d more&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="490"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;contact&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;emergency_triggered_ok&quot;>Emergency sent to %1$d contact(s).&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="503"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;contact&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;emergency_triggered_no_location&quot;>Emergency sent to %1$d contact(s) — location unavailable.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="504"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;contact&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;emergency_setup_contacts_count&quot;>%1$d contact(s) configured.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="517"
             column="5"/>
     </issue>
 
@@ -763,7 +1163,29 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="377"
+            line="645"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;characters&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;backup_passphrase_min_length&quot;>Minimum %1$d characters&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="663"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;conversations&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;backup_restore_success&quot;>%1$d conversations (%2$d new), %3$d messages imported (%4$d already present)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="672"
             column="5"/>
     </issue>
 
@@ -774,7 +1196,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt"
-            line="1056"
+            line="1673"
             column="13"/>
     </issue>
 
@@ -879,6 +1301,17 @@
 
     <issue
         id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is never &lt; 26"
+        errorLine1="        if (Build.VERSION.SDK_INT &lt; Build.VERSION_CODES.O) return true"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/system/notifications/IncomingMessageNotifier.kt"
+            line="301"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
         message="Unnecessary; `SDK_INT` is always >= 26"
         errorLine1="                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
@@ -902,11 +1335,22 @@
     <issue
         id="ObsoleteSdkInt"
         message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/data/sms/PhoneNumberWireFormatter.kt"
+            line="81"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
         errorLine1="            val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {"
         errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/data/sync/TelephonySyncManager.kt"
-            line="172"
+            line="218"
             column="37"/>
     </issue>
 
@@ -917,7 +1361,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/system/scheduler/TelephonySyncWorker.kt"
-            line="182"
+            line="183"
             column="33"/>
     </issue>
 
@@ -942,7 +1386,7 @@
         errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values-night/themes.xml"
-            line="14"
+            line="15"
             column="51"/>
     </issue>
 
@@ -953,7 +1397,7 @@
         errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/themes.xml"
-            line="16"
+            line="23"
             column="51"/>
     </issue>
 
@@ -966,6 +1410,17 @@
             file="src/main/java/com/filestech/sms/ui/screens/about/AboutScreen.kt"
             line="92"
             column="32"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        errorLine1="    var lastSeenLastIndex by remember { mutableStateOf(-1) }"
+        errorLine2="                                        ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
+            line="281"
+            column="41"/>
     </issue>
 
     <issue
@@ -1223,12 +1678,23 @@
 
     <issue
         id="UnusedResources"
+        message="The resource `R.string.action_add_contact` appears to be unused"
+        errorLine1="    &lt;string name=&quot;action_add_contact&quot;>Save contact&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="114"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
         message="The resource `R.string.tab_conversations` appears to be unused"
         errorLine1="    &lt;string name=&quot;tab_conversations&quot;>Conversations&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="123"
+            line="127"
             column="13"/>
     </issue>
 
@@ -1239,7 +1705,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="126"
+            line="130"
             column="13"/>
     </issue>
 
@@ -1250,7 +1716,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="159"
+            line="153"
             column="13"/>
     </issue>
 
@@ -1261,7 +1727,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="160"
+            line="154"
             column="13"/>
     </issue>
 
@@ -1272,7 +1738,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="162"
+            line="156"
             column="13"/>
     </issue>
 
@@ -1283,7 +1749,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="173"
+            line="167"
             column="13"/>
     </issue>
 
@@ -1294,7 +1760,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="174"
+            line="168"
             column="13"/>
     </issue>
 
@@ -1305,7 +1771,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="175"
+            line="169"
             column="13"/>
     </issue>
 
@@ -1316,7 +1782,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="177"
+            line="171"
             column="13"/>
     </issue>
 
@@ -1327,7 +1793,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="178"
+            line="172"
             column="13"/>
     </issue>
 
@@ -1338,7 +1804,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="194"
+            line="188"
             column="13"/>
     </issue>
 
@@ -1349,7 +1815,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="195"
+            line="189"
             column="13"/>
     </issue>
 
@@ -1360,29 +1826,128 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="196"
+            line="190"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.vault_move_in` appears to be unused"
-        errorLine1="    &lt;string name=&quot;vault_move_in&quot;>Move to vault&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.emergency_call_behavior_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_behavior_title&quot;>Behavior of 112 / 17 buttons&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="197"
+            line="205"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.vault_move_out` appears to be unused"
-        errorLine1="    &lt;string name=&quot;vault_move_out&quot;>Move out of vault&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.emergency_call_behavior_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_behavior_desc&quot;>Choose how the emergency call buttons act when tapped.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="198"
+            line="206"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_behavior_dialer_only` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_behavior_dialer_only&quot;>Open dialer (you confirm)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="207"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_behavior_dialer_only_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_behavior_dialer_only_desc&quot;>Tap opens the phone app with the number pre-filled. You tap the green button to actually call. No special permission. Default.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="208"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_behavior_hold_3s` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_behavior_hold_3s&quot;>Hold 3s → direct call&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="209"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_behavior_hold_3s_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_behavior_hold_3s_desc&quot;>Hold the button 3 seconds → immediate call to 112 or 17 without confirmation. Requires the CALL_PHONE permission. Anti-pocket-dial via mandatory hold-3s.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="210"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_permission_request_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_permission_request_title&quot;>Allow direct calling?&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="213"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_permission_request_body` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_permission_request_body&quot;>To enable hold-3s direct call, SMS Tech needs the CALL_PHONE permission. If you refuse, the buttons will keep their default behavior (open dialer).&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="214"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_phone_permission_request` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_phone_permission_request&quot;>Allow direct calling&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="244"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.emergency_call_phone_permission_body` appears to be unused"
+        errorLine1="    &lt;string name=&quot;emergency_call_phone_permission_body&quot;>To call 112 / 15 / 17 / 18 directly without going through the dialer, SMS Tech needs the CALL_PHONE permission. If you refuse, taps will fall back to the dialer (you confirm).&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="245"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.backup_restore_coming_v11` appears to be unused"
+        errorLine1="    &lt;string name=&quot;backup_restore_coming_v11&quot;>Restore from encrypted file lands in v1.1 — current export already produces a fully self-contained file.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="330"
             column="13"/>
     </issue>
 
@@ -1393,7 +1958,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="228"
+            line="349"
             column="13"/>
     </issue>
 
@@ -1404,7 +1969,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="239"
+            line="360"
             column="13"/>
     </issue>
 
@@ -1415,7 +1980,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="240"
+            line="361"
             column="13"/>
     </issue>
 
@@ -1426,18 +1991,95 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="244"
+            line="365"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.settings_lock_mode` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_lock_mode&quot;>App lock&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.settings_reaction_format_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_reaction_format_desc&quot;>Choose how reactions are sent over SMS to recipients who don\&apos;t use SMS Tech.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="320"
+            line="412"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_safety_call_enabled` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_safety_call_enabled&quot;>Armed · resets in %1$s&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="433"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_safety_call_im_ok` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_safety_call_im_ok&quot;>I\&apos;m OK — reset timer&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="434"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_emergency_enabled` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_emergency_enabled&quot;>Armed&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="482"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_emergency_open` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_emergency_open&quot;>Open emergency&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="483"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_notif_preview_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_notif_preview_desc&quot;>Controls what shows up on the lock screen and in heads-up notifications.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="565"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_notif_style_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_notif_style_desc&quot;>How incoming notifications interrupt you.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="572"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_notif_channel_disabled_warn` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_notif_channel_disabled_warn&quot;>Notifications are disabled for SMS Tech in the system settings. Tap below to fix.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="581"
             column="13"/>
     </issue>
 
@@ -1448,7 +2090,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="325"
+            line="588"
             column="13"/>
     </issue>
 
@@ -1459,7 +2101,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="326"
+            line="589"
             column="13"/>
     </issue>
 
@@ -1470,7 +2112,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="334"
+            line="597"
             column="13"/>
     </issue>
 
@@ -1481,7 +2123,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="341"
+            line="604"
             column="13"/>
     </issue>
 
@@ -1492,7 +2134,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="359"
+            line="622"
             column="13"/>
     </issue>
 
@@ -1671,6 +2313,28 @@
     <issue
         id="UseKtx"
         message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                            Uri.parse(oldStr),"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/components/AppearanceDialog.kt"
+            line="135"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                                Uri.parse(uriStr),"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/ui/components/AppearanceDialog.kt"
+            line="210"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
         errorLine1="        Uri.parse(raw)"
         errorLine2="        ~~~~~~~~~~~~~~">
         <location
@@ -1686,7 +2350,7 @@
         errorLine2="                                                           ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/data/backup/BackupService.kt"
-            line="80"
+            line="84"
             column="60"/>
     </issue>
 
@@ -1792,12 +2456,67 @@
     <issue
         id="UseKtx"
         message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                val scheme = android.net.Uri.parse(uri).scheme?.lowercase()"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/data/repository/ConversationRepositoryImpl.kt"
+            line="320"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
         errorLine1="            context.contentResolver.delete(Uri.parse(telephonyUri), null, null)"
         errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/data/repository/ConversationRepositoryImpl.kt"
-            line="277"
+            line="437"
             column="44"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;tel:$number&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/system/emergency/EmergencyCallHelper.kt"
+            line="76"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;tel:$number&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/system/emergency/EmergencyCallHelper.kt"
+            line="76"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;tel:$number&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/system/emergency/EmergencyCallHelper.kt"
+            line="142"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;tel:$number&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/system/emergency/EmergencyCallHelper.kt"
+            line="142"
+            column="20"/>
     </issue>
 
     <issue
@@ -1807,7 +2526,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/ui/components/MediaAttachmentBubble.kt"
-            line="234"
+            line="235"
             column="9"/>
     </issue>
 
@@ -1818,7 +2537,7 @@
         errorLine2="               ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/ui/components/MediaAttachmentBubble.kt"
-            line="277"
+            line="288"
             column="16"/>
     </issue>
 
@@ -1880,11 +2599,33 @@
     <issue
         id="UseKtx"
         message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                Uri.parse(&quot;content://mms&quot;),"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/data/sms/TelephonyReader.kt"
+            line="268"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                Uri.parse(&quot;content://mms&quot;),"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/filestech/sms/data/sms/TelephonyReader.kt"
+            line="298"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
         errorLine1="            Uri.parse(&quot;content://mms&quot;),"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/data/sms/TelephonyReader.kt"
-            line="317"
+            line="405"
             column="13"/>
     </issue>
 
@@ -1895,7 +2636,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/data/sms/TelephonyReader.kt"
-            line="404"
+            line="507"
             column="17"/>
     </issue>
 
@@ -1906,7 +2647,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/data/sms/TelephonyReader.kt"
-            line="456"
+            line="570"
             column="13"/>
     </issue>
 
@@ -1917,7 +2658,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/data/sms/TelephonyReader.kt"
-            line="483"
+            line="610"
             column="13"/>
     </issue>
 
@@ -1928,7 +2669,7 @@
         errorLine2="                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
-            line="267"
+            line="339"
             column="61"/>
     </issue>
 
@@ -1939,7 +2680,7 @@
         errorLine2="                ^">
         <location
             file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadViewModel.kt"
-            line="768"
+            line="898"
             column="17"/>
     </issue>
 
@@ -1950,7 +2691,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadViewModel.kt"
-            line="1063"
+            line="1251"
             column="21"/>
     </issue>
 
@@ -1961,7 +2702,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="225"
+            line="233"
             column="27"/>
     </issue>
 
@@ -1972,7 +2713,7 @@
         errorLine2="                 ~">
         <location
             file="src/main/java/com/filestech/sms/domain/usecase/SendReactionUseCase.kt"
-            line="191"
+            line="219"
             column="18"/>
     </issue>
 
@@ -1983,7 +2724,7 @@
         errorLine2="        ~">
         <location
             file="src/main/java/com/filestech/sms/core/ext/StringExt.kt"
-            line="96"
+            line="121"
             column="9"/>
     </issue>
 

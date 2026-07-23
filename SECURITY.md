@@ -59,7 +59,7 @@ Security-relevant invariants:
 
 | Concern | Primitive | Key source | Notes |
 |---|---|---|---|
-| Room database at rest | SQLCipher v4 | 32-byte random passphrase wrapped by Keystore alias `db_master` | The unwrapped passphrase is wiped from the JVM heap immediately after Room consumes it (`SecretBytes.wipe()`). |
+| Room database at rest | SQLCipher v4 | 32-byte random passphrase wrapped by Keystore alias `db_master` | The unwrapped passphrase stays resident for the process lifetime — SQLCipher holds it by reference and needs it to reopen the database after a `close()`. Wiping it earlier (as versions up to 1.23.4 did) meant SQLCipher received an all-zero key; `LegacyZeroKeyRekey` re-encrypts affected databases on first launch of 1.24.0. |
 | Vault wrap key (reserved) | AES-256-GCM | Keystore alias `vault_kek` (Android 9+) | Currently used as a structural anchor; the actual vault gating is enforced at the data layer via `in_vault = 1` + session checks. v1.3.x is planned to add a separate envelope. |
 | App-lock PIN / passphrase | PBKDF2-HMAC-SHA512 | User secret + 16-byte random salt | Iterations calibrated on the device (>= 210 k); stored in DataStore alongside the salt. We never store the secret itself. |
 | Panic code | PBKDF2-HMAC-SHA512 | Same parameters as the PIN | Comparison is constant-time. A panic match resets the fail counter to 0 to avoid leaving fingerprint of attempts in the persisted state. |

@@ -19,6 +19,13 @@ allprojects {
         buildUponDefaultConfig = true
         autoCorrect = false
         parallel = true
+        // v1.24.0 — baseline absorbant la dette de style existante (1 153 issues au 2026-07-23),
+        // même posture que `app/lint-baseline.xml`. Elle permet de rendre `detekt` BLOQUANT en CI
+        // sans chantier cosmétique préalable : seules les violations NOUVELLES font échouer le
+        // build. Régénérer avec `./gradlew :app:detektBaseline` uniquement après avoir résorbé
+        // de la dette — jamais pour faire taire un nouveau problème.
+        val projectBaseline = file("detekt-baseline.xml")
+        if (projectBaseline.exists()) baseline = projectBaseline
     }
 
     dependencies {
