@@ -75,6 +75,46 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.24.0 — SEC-CRIT : la base était chiffrée avec une clé nulle
+
+**Versions affectées : toutes, jusqu'à 1.23.4 incluse.**
+
+`DatabaseFactory` remettait la passphrase SQLCipher à `SupportOpenHelperFactory` puis la zéroïsait
+immédiatement (`raw.wipe()`, soit `Arrays.fill(this, 0)` — une mutation **sur place**). Or aucun
+maillon de SQLCipher ne copie ce tableau : vérifié par désassemblage de `sqlcipher-android-4.16.0`,
+`SupportOpenHelperFactory` en stocke la référence, `SupportHelper` la transmet, et
+`SQLiteOpenHelper` la conserve dans `mPassword` qu'il ne lit que dans `getDatabaseLocked()`,
+c'est-à-dire **à l'ouverture de la base**. Room ouvrant paresseusement, au premier accès DAO,
+SQLCipher recevait 32 octets nuls.
+
+**Conséquence : `smstech.db` était chiffrée avec une clé constante et publique**, et non avec la
+passphrase de 32 octets aléatoires scellée par le Keystore. Le défaut était invisible parce qu'une
+clé nulle est parfaitement stable d'un lancement à l'autre. Il était présent depuis le premier
+commit du fichier — l'affirmation « 32-byte random passphrase wrapped by Keystore » du tableau des
+primitives ci-dessus n'a donc jamais été tenue avant la 1.24.0.
+
+**Portée réelle du risque.** Elle doit être énoncée honnêtement dans les deux sens :
+- en tant qu'application SMS par défaut, SMS Tech est **tenue** de miroiter tous les messages dans
+  `content://sms`, en clair, y compris ceux des conversations du coffre (`in_vault` est un simple
+  drapeau Room). La base SQLCipher est de la défense en profondeur, jamais l'unique copie ;
+- ce que la clé nulle exposait **en plus** : les métadonnées propres à SMS Tech — appartenance au
+  coffre, brouillons, messages programmés, réactions, verdicts anti-smishing — et tout message
+  supprimé par l'utilisateur dans SMS Tech.
+
+**Correctif (`LegacyZeroKeyRekey`).** Au premier lancement de la 1.24.0, avant que Room n'ouvre le
+fichier : checkpoint du WAL, copie vers un fichier temporaire, re-chiffrement de la **copie** avec
+la vraie passphrase, validation de bout en bout (`PRAGMA cipher_integrity_check` + comptage ligne à
+ligne par table), puis bascule. L'original n'est jamais modifié ni supprimé avant que le remplaçant
+ne soit prouvé sain : un arrêt du processus à n'importe quelle étape laisse une base exploitable.
+Une base illisible par les deux clés est signalée, jamais effacée.
+
+**Ce que le correctif ne peut pas faire.** `File.delete()` ne réécrit pas les blocs : les secteurs
+qui contenaient l'ancienne base restent physiquement lisibles jusqu'à ce que le système de fichiers
+les réutilise. Un écrasement applicatif serait illusoire sur f2fs (copy-on-write) et avec le
+wear-levelling des mémoires flash. La seule action qui élimine réellement ce résidu est une
+**réinitialisation d'usine**, qui détruit la clé de chiffrement FBE de l'appareil.
+
+
 ### v1.14.7 (this release) — Protection cache MMS reçus + filets sync + splash transparent + audit fixes
 
 User remontée 2026-05-23 : sur S24 (après cycles désinstall/réinstall pour tester v1.14.5/6), les attachments audio MMS reçus avaient disparu et la sync semblait gelée. Root cause identifiée par diag logcat : (a) `cacheDir/mms_incoming/` (où vivaient les fichiers audio des MMS reçus) est volatile — Android Storage Manager le purge sous pression mémoire, et "Effacer le cache" via Réglages → Apps le vide aussi, laissant les `AttachmentEntity.localUri` Room pointer sur des fichiers absents ; (b) sur Samsung S24 Android 15 le ContentObserver système rate parfois des émissions après sleep long + Freecess gèle les workers en background.

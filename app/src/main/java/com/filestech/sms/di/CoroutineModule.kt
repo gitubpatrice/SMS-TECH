@@ -26,7 +26,20 @@ object CoroutineModule {
     @Provides @DefaultDispatcher fun defaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
     @Provides @MainDispatcher fun mainDispatcher(): CoroutineDispatcher = Dispatchers.Main.immediate
 
+    /**
+     * v1.24.0 — un [kotlinx.coroutines.CoroutineExceptionHandler] est indispensable ici.
+     *
+     * `SupervisorJob` isole les enfants les uns des autres mais **n'attrape rien** : une exception
+     * non rattrapée dans une coroutine racine de ce scope part au gestionnaire par défaut du thread
+     * et tue le processus. Or ce scope porte les chemins les plus sensibles de l'app — réception de
+     * SMS, raccourci d'urgence, migrations de démarrage. Un échec y devient un log, pas un crash.
+     */
     @Provides @Singleton @ApplicationScope
     fun applicationScope(@DefaultDispatcher dispatcher: CoroutineDispatcher): CoroutineScope =
-        CoroutineScope(SupervisorJob() + dispatcher)
+        CoroutineScope(
+            SupervisorJob() + dispatcher +
+                kotlinx.coroutines.CoroutineExceptionHandler { _, t ->
+                    timber.log.Timber.e(t, "unhandled exception in the application scope")
+                },
+        )
 }

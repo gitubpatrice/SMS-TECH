@@ -58,8 +58,8 @@ class BootReceiver : BroadcastReceiver() {
         SafetyCallWorker.schedulePeriodic(context)
         val pending = goAsync()
         scope.launch {
-            val scheduler = schedulerLazy.get()
             try {
+                val scheduler = schedulerLazy.get()
                 scheduler.rescheduleAllPending()
                 // v1.3.10 — redémarre le foreground [KeepAliveService] au boot du device
                 // SI l'utilisateur l'a activé dans Réglages → Avancé → Mode résistant.

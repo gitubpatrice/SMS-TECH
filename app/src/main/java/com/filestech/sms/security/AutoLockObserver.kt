@@ -56,7 +56,14 @@ class AutoLockObserver @Inject constructor(
         pendingLock = scope.launch {
             val s = settings.flow.first()
             // Audit F33: vault relocks immediately when the user opts in.
-            if (s.security.lockVaultOnLeave) vaultLazy.get().lock()
+            // best-effort : le verrouillage du coffre est un flag Room, donc inopérant si la base
+            // est inouvrable — alors que `forceLock()` et la purge des exports EN CLAIR qui suivent
+            // sont inconditionnellement nécessaires. Sans ce `runCatching`, un échec ici les sautait
+            // toutes les deux et laissait les PDF d'export sur le disque.
+            if (s.security.lockVaultOnLeave) {
+                runCatching { vaultLazy.get().lock() }
+                    .onFailure { Timber.w(it, "AutoLockObserver: vault relock skipped") }
+            }
             // Audit R9 (v1.14.8) — PanicDecoy a un cycle de vie strict : doit se réinitialiser
             // dès que l'app passe en background, INDÉPENDAMMENT de NEXT_LAUNCH. Sinon la session
             // décoy persistait indéfiniment et l'user était piégé sans pouvoir revenir à sa

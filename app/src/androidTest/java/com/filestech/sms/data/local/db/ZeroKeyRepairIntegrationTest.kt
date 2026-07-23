@@ -2,6 +2,7 @@ package com.filestech.sms.data.local.db
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
@@ -10,6 +11,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -39,6 +41,15 @@ class ZeroKeyRepairIntegrationTest {
     private val dbName = "zero-key-integration-test.db"
     private val dbFile: File
         get() = context.getDatabasePath(dbName)
+
+    /** Creates databases at an arbitrary past schema, on the real SQLCipher open helper. */
+    @get:Rule
+    val migrationHelper = MigrationTestHelper(
+        InstrumentationRegistry.getInstrumentation(),
+        AppDatabase::class.java,
+        emptyList(),
+        SupportOpenHelperFactory(ByteArray(32)),
+    )
 
     @Before
     fun setUp() {
@@ -116,6 +127,57 @@ class ZeroKeyRepairIntegrationTest {
 
         // And the zero key is definitively out.
         assertThat(opensWith(zeroKey)).isFalse()
+    }
+
+    /**
+     * The case the previous version of this test claimed to cover but did not.
+     *
+     * Seeding through `Room.databaseBuilder` creates the database directly at
+     * [AppDatabase.SCHEMA_VERSION], so reopening it runs **zero** migrations — the assertion was
+     * true but vacuous. A real user upgrading from an older release has an older `user_version` on
+     * disk, and the repair must leave the migration path intact: rebuild first, then let Room
+     * migrate 6 → 7 over the rebuilt file.
+     */
+    @Test
+    fun repairedDatabase_stillMigratesFromAnOlderSchema() {
+        // A v6 database encrypted with the legacy zero key — exactly what a 1.11.0-era install has.
+        migrationHelper.createDatabase(dbName, 6).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (1, 42, '+33612345678', 'Alice', 1700000000000, 'salut', 1, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+        }
+        assertThat(opensWith(zeroKey)).isTrue()
+
+        val result = LegacyZeroKeyRekey.rekeyIfNeeded(context, passphrase, dbFile)
+        assertThat(result).isEqualTo(LegacyZeroKeyRekey.Result.REKEYED)
+
+        // Room now opens the rebuilt file and must apply MIGRATION_6_7 over it.
+        val room = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
+            .openHelperFactory(SupportOpenHelperFactory(passphrase))
+            .addMigrations(*Migrations.ALL)
+            .build()
+        try {
+            val conversations = runBlocking { room.conversationDao().listAllIncludingArchived() }
+            assertThat(conversations).hasSize(1)
+            assertThat(conversations.first().displayName).isEqualTo("Alice")
+            // Column added by MIGRATION_6_7 — proof the migration actually ran on the rebuilt file.
+            assertThat(conversations.first().bubbleColorArgb).isNull()
+        } finally {
+            room.close()
+        }
+
+        val version = SQLiteDatabase.openDatabase(dbFile.absolutePath, passphrase, null, 0, null)
+            .use { db ->
+                db.rawQuery("PRAGMA user_version", null).use { c ->
+                    if (c.moveToFirst()) c.getInt(0) else -1
+                }
+            }
+        assertThat(version).isEqualTo(AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

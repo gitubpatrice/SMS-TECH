@@ -44,8 +44,9 @@ import java.io.File
  *     source);
  *  5. only then swap it in, moving the original aside and deleting it last.
  *
- * The original stays intact and readable at every instant. A process kill at any point leaves a
- * usable database behind — there is no window in which data can be lost.
+ * The original is checkpointed in place (step 1) but never re-encrypted, and never removed before
+ * the replacement is proven good. It stays readable at every instant, and a process kill at any
+ * point leaves a usable database behind — there is no window in which data can be lost.
  *
  * A SQL `ATTACH … KEY "x'…'"` + `sqlcipher_export` would look tidier but is **wrong here**: that
  * syntax declares a RAW key, bypassing PBKDF2, whereas the app opens the database by handing
@@ -179,7 +180,11 @@ internal object LegacyZeroKeyRekey {
             // the copy below is a complete, self-contained snapshot with no sidecar to keep in
             // sync. Room restores its own journal mode when it reopens the database.
             SQLiteDatabase.openDatabase(dbFile.absolutePath, legacyKey, null, 0, null).use { db ->
-                db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+                // `wal_checkpoint` renvoie (busy, log, checkpointed). Un `busy = 1` signifie que le
+                // WAL n'a pas été replié : la copie qui suit serait incomplète. La comparaison des
+                // comptages de `validateExport` finirait par le détecter, mais le diagnostic
+                // remonterait « écart de comptage » au lieu de la vraie cause.
+                checkpointWal(db, dbFile)
                 db.rawQuery("PRAGMA journal_mode = DELETE", null).use { it.moveToFirst() }
                 sourceCounts = rowCounts(db)
             }
@@ -204,6 +209,21 @@ internal object LegacyZeroKeyRekey {
 
         validateExport(tmp, passphrase, sourceCounts, dbFile)
         swapIn(dbFile, tmp)
+    }
+
+    /**
+     * Folds the WAL back into the main file, failing loudly if SQLite refuses.
+     *
+     * `wal_checkpoint` returns (busy, log, checkpointed). A `busy = 1` means the WAL was not
+     * folded, so the copy taken next would be incomplete. `validateExport` would eventually catch
+     * it through the row counts, but would report "count mismatch" instead of the real cause.
+     */
+    private fun checkpointWal(db: SQLiteDatabase, dbFile: File) {
+        db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { c ->
+            if (c.moveToFirst() && c.getInt(0) != 0) {
+                throw Failure("WAL checkpoint refused (busy) on ${dbFile.name}")
+            }
+        }
     }
 
     /**

@@ -50,6 +50,24 @@ class PanicService @Inject constructor(
         }.onFailure { Timber.w(it, "delete keystore aliases") }
         runCatching { context.deleteDatabase(com.filestech.sms.data.local.db.AppDatabase.DATABASE_NAME) }
             .onFailure { Timber.w(it, "deleteDatabase") }
+        // v1.24.0 SEC — `deleteDatabase` ne connaît que `<db>`, `-journal`, `-wal` et `-shm`. La
+        // réparation zéro-clé ([LegacyZeroKeyRekey]) peut laisser un `<db>.rekeyold` ou
+        // `<db>.rekeytmp` si le processus est tué en plein échange. Or un `.rekeyold` est
+        // l'historique COMPLET chiffré avec 32 octets nuls — une constante publique. Sans cette
+        // purge, « supprimer toutes mes données » détruisait tout SAUF le seul fichier lisible
+        // sans clé.
+        runCatching {
+            val dbName = com.filestech.sms.data.local.db.AppDatabase.DATABASE_NAME
+            context.getDatabasePath(dbName).parentFile
+                ?.listFiles { f -> f.name.startsWith(dbName) }
+                ?.forEach { it.delete() }
+        }.onFailure { Timber.w(it, "wipe database residues") }
+        // Le marqueur de complétion de la réparation n'a aucune valeur secrète, mais « tout
+        // effacer » doit être total.
+        runCatching {
+            context.getSharedPreferences("db_repair", android.content.Context.MODE_PRIVATE)
+                .edit().clear().commit()
+        }.onFailure { Timber.w(it, "clear db_repair prefs") }
         runCatching { securityStore.clearPin() }
         runCatching { securityStore.clearPanic() }
         // Audit S-P2-2: clearPin / clearPanic above remove the credential snapshots themselves

@@ -209,7 +209,7 @@ private const val PREVIEW_HARD_MAX = 50
 /**
  * v1.3.2 — caractères Unicode strippés du body avant injection dans le tapback :
  *
- *   - **C0/C1 controls** (` -`, `-`) : CR/LF/NUL/BEL etc.
+ *   - **C0/C1 controls** (`\u0000-`, `-`) : CR/LF/NUL/BEL etc.
  *     pourraient splitter la trame SMS ou injecter un préfixe trompeur.
  *   - **Line/Paragraph separators** (` `, ` `) : sauts de ligne Unicode
  *     que `\\s+` ne capturait pas seul.

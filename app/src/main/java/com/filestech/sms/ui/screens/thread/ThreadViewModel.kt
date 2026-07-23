@@ -409,7 +409,10 @@ class ThreadViewModel @Inject constructor(
                     isLoading = false,
                     messages = msgs,
                     hasMoreMessages = window.hasMore,
-                    isLoadingOlder = false,
+                    // Seule l'émission qui porte la fenêtre élargie clôt le chargement : un SMS
+                    // arrivant entre le tap et cette émission rouvrirait sinon la garde de
+                    // `loadOlder`, et un second tap sauterait deux pages d'un coup.
+                    isLoadingOlder = window.hasMore && msgs.size < windowLimit.value,
                     messageCount = window.totalCount,
                     firstMessageAt = window.firstMessageAt,
                     lastMessageAt = window.lastMessageAt,

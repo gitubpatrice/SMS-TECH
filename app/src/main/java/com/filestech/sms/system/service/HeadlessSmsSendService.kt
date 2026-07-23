@@ -81,8 +81,8 @@ class HeadlessSmsSendService : Service() {
             return
         }
         scope.launch {
-            val sendSms = sendSmsLazy.get()
             try {
+                val sendSms = sendSmsLazy.get()
                 // Audit M-12: bound the service lifetime. SendSmsUseCase opens N Room transactions
                 // (one per recipient) sequentially; a single stuck SQLCipher write or a deadlock
                 // with the import job could keep this Service alive past the OS Service-watchdog,

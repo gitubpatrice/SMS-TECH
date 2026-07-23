@@ -191,11 +191,11 @@ class ConversationRepositoryImpl @Inject constructor(
         val rowsFlow = limit
             .distinctUntilChanged()
             .flatMapLatest { size -> messageDao.observeWindowForConversation(conversationId, size) }
-        val baseFlow = combine(
-            inVaultFlow,
-            rowsFlow,
-            messageDao.observeStatsForConversation(conversationId).distinctUntilChanged(),
-        ) { inVault, rows, stats ->
+        // Les statistiques sont volontairement HORS de ce combine : `messages` et l'agrégat sont
+        // tous deux invalidés par la table `messages`, donc les réunir ici ferait tourner le
+        // bulk-fetch des pièces jointes et le mapping des 200 lignes DEUX fois par message reçu —
+        // annulant la moitié du gain visé. Ici on ne garde que le travail lourd.
+        val mapped = combine(inVaultFlow, rowsFlow) { inVault, rows ->
             val needAttachments = rows.any { it.attachmentsCount > 0 }
             val attachmentsByMessage: Map<Long, List<Attachment>> =
                 if (needAttachments) {
@@ -206,19 +206,25 @@ class ConversationRepositoryImpl @Inject constructor(
             val messages = rows.map { entity ->
                 entity.toDomain(attachmentsByMessage[entity.id].orEmpty())
             }
-            inVault to MessageWindow(
-                messages = messages,
-                totalCount = stats.total,
-                hasMore = messages.size < stats.total,
-                firstMessageAt = stats.firstAt,
-                lastMessageAt = stats.lastAt,
-            )
+            inVault to messages
         }.flowOn(io)
-        return combine(baseFlow, appLock.state) { (inVault, window), lockState ->
+
+        // Assemblage seulement : une ré-émission des stats ne coûte plus qu'une data class.
+        return combine(
+            mapped,
+            messageDao.observeStatsForConversation(conversationId).distinctUntilChanged(),
+            appLock.state,
+        ) { (inVault, messages), stats, lockState ->
             if (lockState is AppLockManager.LockState.PanicDecoy && inVault) {
                 MessageWindow()
             } else {
-                window
+                MessageWindow(
+                    messages = messages,
+                    totalCount = stats.total,
+                    hasMore = messages.size < stats.total,
+                    firstMessageAt = stats.firstAt,
+                    lastMessageAt = stats.lastAt,
+                )
             }
         }
     }

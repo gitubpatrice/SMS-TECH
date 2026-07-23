@@ -87,11 +87,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
 
         val pending = goAsync()
         scope.launch {
-            val mirror = entry.mirror()
-            val messageDao = entry.messageDao()
-            val notifier = entry.notifier()
-            val failureNotifier = entry.mmsFailureNotifier()
             try {
+                val mirror = entry.mirror()
+                val messageDao = entry.messageDao()
+                val notifier = entry.notifier()
+                val failureNotifier = entry.mmsFailureNotifier()
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
                     // pas qu'un MMS lui était destiné. Maintenant on poste une notification

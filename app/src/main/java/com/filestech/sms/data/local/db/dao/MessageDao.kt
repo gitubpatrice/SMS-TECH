@@ -46,7 +46,7 @@ interface MessageDao {
               AND attachments_count = 0
               AND reaction_emoji IS NULL
           )
-        ORDER BY date ASC
+        ORDER BY date ASC, id ASC
         """
     )
     fun observeForConversation(conversationId: Long): Flow<List<MessageEntity>>

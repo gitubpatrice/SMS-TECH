@@ -3,6 +3,29 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.24.0] — 2026-07-23
+
+### Security
+- **CRITIQUE — la base de données était chiffrée avec une clé nulle.** Toutes les versions
+  jusqu'à 1.23.4 incluse remettaient à SQLCipher 32 octets nuls au lieu de la passphrase scellée
+  par le Keystore : la passphrase était zéroïsée sur place avant que Room n'ouvre la base, et
+  SQLCipher ne lit la clé qu'à l'ouverture. Au premier lancement, la base est automatiquement
+  re-chiffrée avec la bonne clé, sans perte de message (copie, validation d'intégrité complète,
+  puis bascule ; l'original reste intact jusqu'à ce que le remplaçant soit prouvé sain).
+  Détail complet et portée réelle du risque dans `SECURITY.md`.
+- Le wipe « supprimer toutes mes données » efface désormais aussi les fichiers résiduels de cette
+  réparation, qui auraient sinon survécu au wipe tout en étant lisibles sans aucune clé.
+
+### Performance
+- **Le fil de discussion ne recharge plus l'intégralité de la conversation** à chaque message reçu
+  ou frappe de brouillon. Il charge les 200 messages les plus récents et élargit à la demande.
+  L'export PDF continue de porter l'historique complet.
+
+### Fixed
+- Correction du compteur « ↓ N nouveaux » et du retour automatique en bas du fil, qui reposaient
+  sur des positions de liste et devenaient faux dès qu'on chargeait des messages plus anciens.
+- Une réponse citant un message non chargé n'affiche plus « message supprimé ».
+
 ## [1.2.9] — 2026-05-16
 
 UX fix sur l'auto-détection du MSISDN dans **Réglages → Envoi → Mon numéro**.

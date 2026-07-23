@@ -30,8 +30,8 @@ class SmsSentReceiver : BroadcastReceiver() {
         val rc = resultCode
         val pending = goAsync()
         scope.launch {
-            val mirror = mirrorLazy.get()
             try {
+                val mirror = mirrorLazy.get()
                 if (rc == Activity.RESULT_OK) {
                     mirror.updateOutgoingStatus(localId, MessageStatus.SENT)
                 } else {

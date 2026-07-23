@@ -268,10 +268,16 @@ fun ThreadScreen(
     // is a special case: opening a conversation must land on the most recent message, not
     // the start. We track `initialScrollDone` to discriminate the two.
     var initialScrollDone by remember { mutableStateOf(false) }
+    // v1.24.0 — `LazyListItemInfo.index` et l'argument de `scrollToItem` vivent dans l'espace
+    // d'index GLOBAL du LazyColumn, où l'item « charger plus ancien » occupe la position 0 quand
+    // il est affiché. `state.messages[i]` est donc à l'index global `i + headOffset`. Confondre
+    // les deux ciblait l'avant-dernier message au lieu du dernier.
+    val headOffset = if (state.hasMoreMessages) 1 else 0
+    val bottomItemIndex = state.messages.lastIndex + headOffset
     val isAtBottom by remember {
         androidx.compose.runtime.derivedStateOf {
             val li = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            li == null || li.index >= state.messages.lastIndex - 1
+            li == null || li.index >= bottomItemIndex - 1
         }
     }
     // Audit R4 (v1.14.8) — Compteur de messages non-vus apparus pendant que l'user était
@@ -308,11 +314,11 @@ fun ThreadScreen(
         if (!initialScrollDone) {
             // Non-animated for first paint — animateScrollToItem from index 0 with hundreds
             // of items is visibly choppy.
-            listState.scrollToItem(state.messages.lastIndex)
+            listState.scrollToItem(bottomItemIndex)
             initialScrollDone = true
             lastSeenMessageId = newestMessageId
         } else if (isAtBottom) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+            listState.animateScrollToItem(bottomItemIndex)
             lastSeenMessageId = newestMessageId
         }
     }
@@ -703,7 +709,7 @@ fun ThreadScreen(
             FilledTonalButton(
                 onClick = {
                     scope.launch {
-                        listState.animateScrollToItem(state.messages.lastIndex)
+                        listState.animateScrollToItem(bottomItemIndex)
                     }
                 },
                 modifier = Modifier
@@ -2028,15 +2034,15 @@ private fun LoadOlderRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        contentAlignment = androidx.compose.ui.Alignment.Center,
+        contentAlignment = Alignment.Center,
     ) {
         if (isLoading) {
-            androidx.compose.material3.CircularProgressIndicator(
+            CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
             )
         } else {
-            androidx.compose.material3.TextButton(onClick = onClick) {
+            TextButton(onClick = onClick) {
                 Text(
                     text = if (remaining > 0) {
                         stringResource(R.string.thread_load_older_remaining, remaining)

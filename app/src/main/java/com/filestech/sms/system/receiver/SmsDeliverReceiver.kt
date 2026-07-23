@@ -70,13 +70,27 @@ class SmsDeliverReceiver : BroadcastReceiver() {
         val subId = intent.extractIncomingSubId()
         val pending = goAsync()
         scope.launch {
-            // Resolution happens here, off the main thread — see the note on the injected fields.
-            val telephonyReader = withContext(ioDispatcher) { telephonyReaderLazy.get() }
-            val mirror = mirrorLazy.get()
-            val blockedRepo = blockedRepoLazy.get()
-            val notifier = notifierLazy.get()
-            val conversationRepo = conversationRepoLazy.get()
             try {
+                // Résolution ici, DANS le `try` : un échec doit passer par le `finally` qui appelle
+                // `pending.finish()`, sinon le broadcast n'est jamais libéré (ANR) et l'exception
+                // remonte au scope applicatif. Et sur le dispatcher IO : c'est `mirrorLazy` qui
+                // construit `AppDatabase` (`telephonyReader` ne prend qu'un Context), et le scope
+                // tourne sur `Dispatchers.Default` — y bloquer un worker pendant la réparation
+                // affamerait le pool CPU au lancement précis où tout en a besoin.
+                val deps = withContext(ioDispatcher) {
+                    Collaborators(
+                        telephonyReader = telephonyReaderLazy.get(),
+                        mirror = mirrorLazy.get(),
+                        blockedRepo = blockedRepoLazy.get(),
+                        notifier = notifierLazy.get(),
+                        conversationRepo = conversationRepoLazy.get(),
+                    )
+                }
+                val telephonyReader = deps.telephonyReader
+                val mirror = deps.mirror
+                val blockedRepo = deps.blockedRepo
+                val notifier = deps.notifier
+                val conversationRepo = deps.conversationRepo
                 val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: emptyArray()
                 if (messages.isEmpty()) return@launch
                 val address = messages.first().displayOriginatingAddress?.stripInvisibleChars()
@@ -205,3 +219,12 @@ class SmsDeliverReceiver : BroadcastReceiver() {
         }
     }
 }
+
+/** Carrier so the five collaborators are resolved in a single hop onto the IO dispatcher. */
+private class Collaborators(
+    val telephonyReader: TelephonyReader,
+    val mirror: ConversationMirror,
+    val blockedRepo: BlockedNumberRepository,
+    val notifier: IncomingMessageNotifier,
+    val conversationRepo: ConversationRepository,
+)

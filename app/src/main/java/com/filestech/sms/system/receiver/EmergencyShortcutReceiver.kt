@@ -64,8 +64,8 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
         Timber.i("EmergencyShortcutReceiver: ACTION_TRIGGER_EMERGENCY received")
         val pending = goAsync()
         scope.launch {
-            val triggerEmergency = triggerEmergencyLazy.get()
             try {
+                val triggerEmergency = triggerEmergencyLazy.get()
                 val result = triggerEmergency()
                 Timber.i("EmergencyShortcutReceiver: trigger result = %s", result::class.simpleName)
             } catch (t: Throwable) {
