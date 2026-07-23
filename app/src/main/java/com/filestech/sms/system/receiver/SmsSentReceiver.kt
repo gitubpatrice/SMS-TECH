@@ -17,7 +17,10 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class SmsSentReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var mirror: ConversationMirror
+    // v1.24.0 SEC-CRIT — `Lazy` : ce collaborateur atteint un DAO, donc `AppDatabase`, donc la
+    // réparation zéro-clé. L'injection de champ Hilt précède le corps de `onReceive`, sur le main
+    // thread : en eager, la reconstruction de la base y tournait sous un timeout ANR de 10 s.
+    @Inject lateinit var mirrorLazy: dagger.Lazy<ConversationMirror>
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -27,6 +30,7 @@ class SmsSentReceiver : BroadcastReceiver() {
         val rc = resultCode
         val pending = goAsync()
         scope.launch {
+            val mirror = mirrorLazy.get()
             try {
                 if (rc == Activity.RESULT_OK) {
                     mirror.updateOutgoingStatus(localId, MessageStatus.SENT)

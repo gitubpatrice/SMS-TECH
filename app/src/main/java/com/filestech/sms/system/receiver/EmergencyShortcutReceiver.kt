@@ -45,7 +45,10 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class EmergencyShortcutReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var triggerEmergency: TriggerEmergencyUseCase
+    // v1.24.0 SEC-CRIT — `Lazy` : ce collaborateur atteint un DAO, donc `AppDatabase`, donc la
+    // réparation zéro-clé. L'injection de champ Hilt précède le corps de `onReceive`, sur le main
+    // thread : en eager, la reconstruction de la base y tournait sous un timeout ANR de 10 s.
+    @Inject lateinit var triggerEmergencyLazy: dagger.Lazy<TriggerEmergencyUseCase>
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -61,6 +64,7 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
         Timber.i("EmergencyShortcutReceiver: ACTION_TRIGGER_EMERGENCY received")
         val pending = goAsync()
         scope.launch {
+            val triggerEmergency = triggerEmergencyLazy.get()
             try {
                 val result = triggerEmergency()
                 Timber.i("EmergencyShortcutReceiver: trigger result = %s", result::class.simpleName)

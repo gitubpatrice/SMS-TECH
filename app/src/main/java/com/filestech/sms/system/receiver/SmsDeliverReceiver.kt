@@ -16,6 +16,7 @@ import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -32,10 +33,19 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class SmsDeliverReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var telephonyReader: TelephonyReader
-    @Inject lateinit var mirror: ConversationMirror
-    @Inject lateinit var blockedRepo: BlockedNumberRepository
-    @Inject lateinit var notifier: IncomingMessageNotifier
+    // v1.24.0 SEC-CRIT — tous ces collaborateurs atteignent un DAO, donc `AppDatabase`, donc la
+    // réparation zéro-clé. L'injection de champ Hilt a lieu AVANT le corps de `onReceive`, sur le
+    // main thread : les résoudre en eager y exécutait plusieurs secondes de reconstruction de base,
+    // avec un timeout ANR de broadcast de 10 s — et le SMS entrant perdu. C'est le chemin de
+    // démarrage dominant d'une app SMS (le processus est mort la plupart du temps), donc le plus
+    // probable pour le lancement de réparation. Résolution différée dans la coroutine ci-dessous.
+    @Inject lateinit var telephonyReaderLazy: dagger.Lazy<TelephonyReader>
+
+    @Inject lateinit var mirrorLazy: dagger.Lazy<ConversationMirror>
+
+    @Inject lateinit var blockedRepoLazy: dagger.Lazy<BlockedNumberRepository>
+
+    @Inject lateinit var notifierLazy: dagger.Lazy<IncomingMessageNotifier>
 
     /**
      * v1.6.1 (audit QUAL-10) — passe désormais par le Repository plutôt que d'accéder
@@ -43,8 +53,13 @@ class SmsDeliverReceiver : BroadcastReceiver() {
      * profite des invariants Repository (mapper Entity → Domain) au lieu de manipuler
      * une row Room nue.
      */
-    @Inject lateinit var conversationRepo: ConversationRepository
+    @Inject lateinit var conversationRepoLazy: dagger.Lazy<ConversationRepository>
+
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
+
+    @Inject
+    @com.filestech.sms.di.IoDispatcher
+    lateinit var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_DELIVER_ACTION) return
@@ -55,6 +70,12 @@ class SmsDeliverReceiver : BroadcastReceiver() {
         val subId = intent.extractIncomingSubId()
         val pending = goAsync()
         scope.launch {
+            // Resolution happens here, off the main thread — see the note on the injected fields.
+            val telephonyReader = withContext(ioDispatcher) { telephonyReaderLazy.get() }
+            val mirror = mirrorLazy.get()
+            val blockedRepo = blockedRepoLazy.get()
+            val notifier = notifierLazy.get()
+            val conversationRepo = conversationRepoLazy.get()
             try {
                 val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: emptyArray()
                 if (messages.isEmpty()) return@launch

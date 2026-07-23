@@ -20,7 +20,10 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var scheduler: ScheduledMessageScheduler
+    // v1.24.0 SEC-CRIT — `Lazy` : ce collaborateur atteint un DAO, donc `AppDatabase`, donc la
+    // réparation zéro-clé. L'injection de champ Hilt précède le corps de `onReceive`, sur le main
+    // thread : en eager, la reconstruction de la base y tournait sous un timeout ANR de 10 s.
+    @Inject lateinit var schedulerLazy: dagger.Lazy<ScheduledMessageScheduler>
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var emergencyShortcutNotifier: EmergencyShortcutNotifier
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
@@ -55,6 +58,7 @@ class BootReceiver : BroadcastReceiver() {
         SafetyCallWorker.schedulePeriodic(context)
         val pending = goAsync()
         scope.launch {
+            val scheduler = schedulerLazy.get()
             try {
                 scheduler.rescheduleAllPending()
                 // v1.3.10 — redémarre le foreground [KeepAliveService] au boot du device

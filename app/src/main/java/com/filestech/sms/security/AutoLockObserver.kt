@@ -30,7 +30,12 @@ import javax.inject.Singleton
 class AutoLockObserver @Inject constructor(
     @ApplicationContext private val context: Context,
     private val appLock: AppLockManager,
-    private val vault: VaultManager,
+    // v1.24.0 SEC-CRIT — `Lazy` obligatoire. `VaultManager` injecte `ConversationRepository`,
+    // donc `AppDatabase` : une résolution eager depuis `MainApplication.onCreate` provisionnait la
+    // base — et avec elle la réparation zéro-clé — sur le main thread. `register()` doit rester sur
+    // le main thread (`ProcessLifecycleOwner`), donc c'est bien la dépendance qui est différée, pas
+    // l'observateur. Le seul usage est déjà dans une coroutine.
+    private val vaultLazy: dagger.Lazy<VaultManager>,
     private val settings: SettingsRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) : DefaultLifecycleObserver {
@@ -51,7 +56,7 @@ class AutoLockObserver @Inject constructor(
         pendingLock = scope.launch {
             val s = settings.flow.first()
             // Audit F33: vault relocks immediately when the user opts in.
-            if (s.security.lockVaultOnLeave) vault.lock()
+            if (s.security.lockVaultOnLeave) vaultLazy.get().lock()
             // Audit R9 (v1.14.8) — PanicDecoy a un cycle de vie strict : doit se réinitialiser
             // dès que l'app passe en background, INDÉPENDAMMENT de NEXT_LAUNCH. Sinon la session
             // décoy persistait indéfiniment et l'user était piégé sans pouvoir revenir à sa

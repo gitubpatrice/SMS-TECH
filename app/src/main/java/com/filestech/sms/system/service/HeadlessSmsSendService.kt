@@ -29,7 +29,9 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class HeadlessSmsSendService : Service() {
 
-    @Inject lateinit var sendSms: SendSmsUseCase
+    // v1.24.0 SEC-CRIT — `Lazy` : atteint un DAO donc `AppDatabase` donc la réparation zéro-clé.
+    // L'injection de champ Hilt précède onCreate/onStartCommand, sur le main thread.
+    @Inject lateinit var sendSmsLazy: dagger.Lazy<SendSmsUseCase>
     @Inject lateinit var appLock: AppLockManager
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
@@ -79,6 +81,7 @@ class HeadlessSmsSendService : Service() {
             return
         }
         scope.launch {
+            val sendSms = sendSmsLazy.get()
             try {
                 // Audit M-12: bound the service lifetime. SendSmsUseCase opens N Room transactions
                 // (one per recipient) sequentially; a single stuck SQLCipher write or a deadlock

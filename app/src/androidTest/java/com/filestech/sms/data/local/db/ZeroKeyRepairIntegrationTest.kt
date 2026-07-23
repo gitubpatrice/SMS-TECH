@@ -43,7 +43,8 @@ class ZeroKeyRepairIntegrationTest {
     @Before
     fun setUp() {
         System.loadLibrary("sqlcipher")
-        context.getSharedPreferences("db_repair", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("db_repair", Context.MODE_PRIVATE)
+            .edit().remove("zero_key_repair_v1240_done_" + dbFile.name).commit()
         cleanUp()
     }
 

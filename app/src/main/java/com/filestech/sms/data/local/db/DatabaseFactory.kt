@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Room
 import com.filestech.sms.BuildConfig
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,16 +27,33 @@ class DatabaseFactory @Inject constructor(
     private val repairState: DatabaseRepairState,
 ) {
 
-    fun build(context: Context): AppDatabase {
+    fun build(context: Context): AppDatabase = try {
+        buildInternal(context)
+    } finally {
+        // Covers the WHOLE body, not just the repair: `loadNativeOnce()` can throw
+        // `UnsatisfiedLinkError` and `getOrCreatePassphrase()` throws `DatabaseKeyManager.Failure`
+        // when the Keystore alias is invalidated (credential change, Knox OTA). Marking settled
+        // only around the repair left the splash screen pinned forever on those paths.
+        repairState.markSettled()
+    }
+
+    private fun buildInternal(context: Context): AppDatabase {
         // v1.24.0 SEC-CRIT regression guard. Provisioning the database also runs the one-shot
         // repair, which is seconds of work on the launch that rebuilds a legacy zero-key file.
         // Every startup collaborator that reaches a DAO is therefore injected through `Lazy` and
         // resolved from a background dispatcher; reintroducing an eager injection would silently
-        // put that work back on the main thread. This makes such a regression loud in debug.
+        // put that work back on the main thread.
+        //
+        // `android.util.Log`, NOT Timber: Hilt injects `@HiltAndroidApp` fields inside
+        // `super.onCreate()`, which runs BEFORE `Timber.plant(...)` in `MainApplication.onCreate`.
+        // A Timber call here would be a silent no-op — precisely for the case this guard exists to
+        // catch. The `Throwable` carries the offending injection stack.
         if (BuildConfig.LOG_ENABLED && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-            Timber.e(
-                "DatabaseFactory.build() ran on the main thread — an eager @Inject reached a DAO. " +
+            android.util.Log.e(
+                "DatabaseFactory",
+                "build() ran on the main thread — an eager @Inject reached a DAO. " +
                     "Wrap it in dagger.Lazy and resolve it off the main thread.",
+                Throwable("eager injection stack"),
             )
         }
         loadNativeOnce()
@@ -51,11 +67,7 @@ class DatabaseFactory @Inject constructor(
         // startup sequence forces this whole provision onto an IO dispatcher and holds the splash
         // screen until `repairState` settles. `markSettled` is in a `finally`: a failure must
         // surface as an exception, never as a splash screen pinned forever.
-        try {
-            LegacyZeroKeyRekey.rekeyIfNeeded(context, raw)
-        } finally {
-            repairState.markSettled()
-        }
+        LegacyZeroKeyRekey.rekeyIfNeeded(context, raw)
 
         val factory = SupportOpenHelperFactory(raw)
         val db = Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)

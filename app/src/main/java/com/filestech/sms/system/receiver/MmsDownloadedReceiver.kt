@@ -79,14 +79,18 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
             Timber.e(t, "Hilt entry point resolution failed in MmsDownloadedReceiver")
             return
         }
-        val mirror = entry.mirror()
-        val messageDao = entry.messageDao()
-        val notifier = entry.notifier()
-        val failureNotifier = entry.mmsFailureNotifier()
+        // v1.24.0 SEC-CRIT — `entry.mirror()` / `entry.messageDao()` provisionnent `AppDatabase`,
+        // donc la réparation zéro-clé. Résoudre ici les exécutait sur le main thread d'`onReceive`,
+        // sous un timeout ANR de broadcast de 10 s. Seul le scope est résolu en amont : il n'ouvre
+        // aucune base.
         val scope = entry.applicationScope()
 
         val pending = goAsync()
         scope.launch {
+            val mirror = entry.mirror()
+            val messageDao = entry.messageDao()
+            val notifier = entry.notifier()
+            val failureNotifier = entry.mmsFailureNotifier()
             try {
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait

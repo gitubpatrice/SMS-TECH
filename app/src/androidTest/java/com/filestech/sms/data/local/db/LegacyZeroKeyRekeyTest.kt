@@ -42,9 +42,11 @@ class LegacyZeroKeyRekeyTest {
     @Before
     fun setUp() {
         System.loadLibrary("sqlcipher")
-        // The repair short-circuits on a persisted marker; clear it so each test exercises the
-        // real probe rather than the fast path left behind by the previous one.
-        context.getSharedPreferences("db_repair", Context.MODE_PRIVATE).edit().clear().commit()
+        // The repair short-circuits on a persisted per-file marker; clear ours so each test
+        // exercises the real probe rather than the fast path left by the previous one. The marker
+        // is keyed by database file name, so this never touches the real `smstech.db` entry.
+        context.getSharedPreferences("db_repair", Context.MODE_PRIVATE)
+            .edit().remove("zero_key_repair_v1240_done_" + dbFile.name).commit()
         cleanUp()
     }
 

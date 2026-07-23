@@ -41,10 +41,17 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MmsSentReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var mirror: ConversationMirror
+    // v1.24.0 SEC-CRIT — `Lazy` : ce collaborateur atteint un DAO, donc `AppDatabase`, donc la
+    // réparation zéro-clé. L'injection de champ Hilt précède le corps de `onReceive`, sur le main
+    // thread : en eager, la reconstruction de la base y tournait sous un timeout ANR de 10 s.
+    @Inject lateinit var mirrorLazy: dagger.Lazy<ConversationMirror>
+
     @Inject lateinit var systemWriteback: MmsSystemWriteback
-    @Inject lateinit var messageDao: MessageDao
+
+    @Inject lateinit var messageDaoLazy: dagger.Lazy<MessageDao>
+
     @Inject lateinit var settings: SettingsRepository
+
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -97,7 +104,7 @@ class MmsSentReceiver : BroadcastReceiver() {
             return
         }
 
-        mirror.updateOutgoingStatus(localId, MessageStatus.SENT)
+        mirrorLazy.get().updateOutgoingStatus(localId, MessageStatus.SENT)
         if (mmsSystemId <= 0L) return
 
         runCatching { systemWriteback.markSent(mmsSystemId) }
@@ -127,7 +134,7 @@ class MmsSentReceiver : BroadcastReceiver() {
      * on peut traiter (id matche ou Room n'a plus de valeur → broadcast peut être traité).
      */
     private suspend fun matchesCurrentRow(localId: Long, broadcastSystemId: Long): Boolean {
-        val current = runCatching { messageDao.findMmsSystemId(localId) }.getOrNull()
+        val current = runCatching { messageDaoLazy.get().findMmsSystemId(localId) }.getOrNull()
         // current == null : la row Room n'a plus de mmsSystemId (rollback ou clear panic).
         //   Dans ce cas on ne devrait pas mettre à jour, donc on retourne false.
         // current == broadcastSystemId : match, on peut traiter.
@@ -149,7 +156,7 @@ class MmsSentReceiver : BroadcastReceiver() {
         }
 
         Timber.w("MMS sent failed for id=%d resultCode=%d", localId, rc)
-        mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc)
+        mirrorLazy.get().updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc)
         if (mmsSystemId > 0L) {
             // Important : on garde `mmsSystemId` côté Room pour que le prochain retry puisse
             // purger cette row stale avant d'en insérer une nouvelle (audit F2 idempotence).

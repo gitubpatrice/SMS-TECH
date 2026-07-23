@@ -30,9 +30,14 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class NotificationActionReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var sendSms: SendSmsUseCase
-    @Inject lateinit var conversationRepo: ConversationRepository
+    // v1.24.0 SEC-CRIT — `Lazy` : atteint un DAO donc `AppDatabase` donc la réparation zéro-clé.
+    // L'injection de champ Hilt précède le corps, sur le main thread.
+    @Inject lateinit var sendSmsLazy: dagger.Lazy<SendSmsUseCase>
+
+    @Inject lateinit var conversationRepoLazy: dagger.Lazy<ConversationRepository>
+
     @Inject lateinit var appLock: AppLockManager
+
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -62,7 +67,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                             ?.toString()
                             ?.takeIf { it.isNotBlank() }
                             ?: return@launch
-                        sendSms.invoke(listOf(PhoneAddress.of(address)), text)
+                        sendSmsLazy.get().invoke(listOf(PhoneAddress.of(address)), text)
                         // Marquer comme lu (et donc clear notifs via le notifier câblé
                         // dans markRead). Cohérent : répondre = avoir vu le message.
                         markReadAndCancelNotifs(address)
@@ -78,9 +83,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
     }
 
     private suspend fun markReadAndCancelNotifs(address: String) {
-        val conv = conversationRepo.findOrCreate(listOf(PhoneAddress.of(address)))
+        val conv = conversationRepoLazy.get().findOrCreate(listOf(PhoneAddress.of(address)))
         if (conv is Outcome.Success) {
-            conversationRepo.markRead(conv.value.id)
+            conversationRepoLazy.get().markRead(conv.value.id)
         }
     }
 

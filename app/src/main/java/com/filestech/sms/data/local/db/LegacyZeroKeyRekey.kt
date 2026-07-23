@@ -78,7 +78,17 @@ internal object LegacyZeroKeyRekey {
      * injection during `Application.onCreate()` — a suspending read is not an option there.
      */
     private const val PREFS = "db_repair"
-    private const val KEY_DONE = "zero_key_repair_v1240_done"
+    private const val KEY_DONE_PREFIX = "zero_key_repair_v1240_done_"
+
+    /**
+     * The marker is keyed **per database file**.
+     *
+     * [rekeyIfNeeded] takes an injectable `dbFile` so tests can target a throwaway database. With a
+     * single global marker, a test repairing its own file would also record "repair done" for the
+     * real `smstech.db` — permanently disabling the repair on that device and leaving the app
+     * unable to ever open its own database.
+     */
+    private fun doneKey(dbFile: File) = KEY_DONE_PREFIX + dbFile.name
 
     private const val TMP_SUFFIX = ".rekeytmp"
     private const val OLD_SUFFIX = ".rekeyold"
@@ -86,6 +96,9 @@ internal object LegacyZeroKeyRekey {
 
     /** Smallest possible SQLite file: one page header. Anything below is not a database. */
     private const val MIN_SQLITE_SIZE = 512L
+
+    /** Head-room for the journal SQLCipher writes while re-encrypting the copy. */
+    private const val FREE_SPACE_MARGIN_BYTES = 16L * 1024L * 1024L
 
     /**
      * Repairs [dbFile] if it is still on the legacy zero key.
@@ -104,7 +117,7 @@ internal object LegacyZeroKeyRekey {
         dbFile: File = context.getDatabasePath(AppDatabase.DATABASE_NAME),
     ): Result {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_DONE, false)) return Result.ALREADY_CORRECT
+        if (prefs.getBoolean(doneKey(dbFile), false)) return Result.ALREADY_CORRECT
 
         // A leftover `.rekeyold` means the swap was interrupted after the original was moved
         // aside. The live file is the freshly exported one; keep it and drop the stale original.
@@ -115,13 +128,13 @@ internal object LegacyZeroKeyRekey {
             // Nothing to repair: fresh install, or a truncated stub Room will recreate anyway.
             recoverInterruptedSwap(dbFile)
             if (!dbFile.exists() || dbFile.length() < MIN_SQLITE_SIZE) {
-                prefs.edit().putBoolean(KEY_DONE, true).apply()
+                prefs.edit().putBoolean(doneKey(dbFile), true).apply()
                 return Result.FRESH_INSTALL
             }
         }
 
         if (canOpen(dbFile, passphrase)) {
-            prefs.edit().putBoolean(KEY_DONE, true).apply()
+            prefs.edit().putBoolean(doneKey(dbFile), true).apply()
             discardOld(dbFile)
             return Result.ALREADY_CORRECT
         }
@@ -137,7 +150,7 @@ internal object LegacyZeroKeyRekey {
 
         Timber.w("LegacyZeroKeyRekey: legacy zero-key database detected — exporting to a new file")
         exportToNewKey(dbFile, legacyKey, passphrase)
-        prefs.edit().putBoolean(KEY_DONE, true).apply()
+        prefs.edit().putBoolean(doneKey(dbFile), true).apply()
         Timber.i("LegacyZeroKeyRekey: database re-encrypted with the Keystore passphrase")
         return Result.REKEYED
     }
@@ -148,8 +161,16 @@ internal object LegacyZeroKeyRekey {
      */
     private fun exportToNewKey(dbFile: File, legacyKey: ByteArray, passphrase: ByteArray) {
         val tmp = File(dbFile.absolutePath + TMP_SUFFIX)
-        require(dbFile.usableSpace > dbFile.length() * 2) {
-            "not enough free space to rebuild ${dbFile.name} (${dbFile.length()} bytes needed twice)"
+        // The original already occupies its own space; only the copy is additional. Requiring
+        // twice the size refused the repair on devices that had ample room, leaving the app
+        // unusable in a loop. `Failure` rather than `require`'s IllegalArgumentException so the
+        // whole function honours the single exception contract documented on `rekeyIfNeeded`.
+        val needed = dbFile.length() + FREE_SPACE_MARGIN_BYTES
+        if (dbFile.usableSpace < needed) {
+            throw Failure(
+                "not enough free space to rebuild ${dbFile.name}: $needed bytes needed, " +
+                    "${dbFile.usableSpace} available",
+            )
         }
 
         val sourceCounts: Map<String, Long>
@@ -284,13 +305,12 @@ internal object LegacyZeroKeyRekey {
         false
     }
 
+    // SIDECAR_SUFFIXES starts with "", so these loops already cover the base file itself.
     private fun discardTemp(dbFile: File) {
         SIDECAR_SUFFIXES.forEach { File(dbFile.absolutePath + TMP_SUFFIX + it).delete() }
-        File(dbFile.absolutePath + TMP_SUFFIX).delete()
     }
 
     private fun discardOld(dbFile: File) {
         SIDECAR_SUFFIXES.forEach { File(dbFile.absolutePath + OLD_SUFFIX + it).delete() }
-        File(dbFile.absolutePath + OLD_SUFFIX).delete()
     }
 }
