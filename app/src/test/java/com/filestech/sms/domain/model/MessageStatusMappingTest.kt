@@ -1,8 +1,5 @@
 package com.filestech.sms.domain.model
 
-import com.filestech.sms.data.local.db.entity.MessageDirection
-import com.filestech.sms.data.local.db.entity.MessageStatus
-import com.filestech.sms.data.local.db.entity.MessageType
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test

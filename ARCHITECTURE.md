@@ -12,9 +12,9 @@
                                               ▼ injected UseCases
 ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                          domain/                                             │
-│  Immutable models, repository interfaces, UseCases (SendSmsUseCase, RetrySendUseCase,        │
-│  ExportConversationPdfUseCase, ScheduleMessageUseCase, …).                                   │
-│  No Android imports here — pure Kotlin.                                                      │
+│  Immutable models + the message enums (MessageStatus/Type/Direction, ScheduledState),        │
+│  repository interfaces, UseCases (SendSmsUseCase, RetrySendUseCase, …).                       │
+│  No Android imports — kotlinx.serialization only (a multiplatform, non-Android library).     │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
                                               │
                                               ▼ Hilt bindings
@@ -47,6 +47,22 @@
 │  Zero dependencies on the rest of the app.                                                   │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Layering debt (honest state, v1.24.0)
+
+The dependency inversion is **not yet complete**, and this doc used to overstate it. Actual state:
+
+- The **message enums** now live in `domain/model` (moved out of `data/local/db/entity` in
+  v1.24.0, Étage 2.1). Room still stores them as `INTEGER` via `MessageEnumConverters`; the
+  backup format still serialises them as `Int` — both package-independent, so nothing changed on
+  disk or on the wire (proven by `MessageEnumSerializationTest`).
+- **Still inverted the wrong way**: the entity → domain mappers (`XxxEntity.toDomain()`) live in
+  `domain/model` and import `data` entities, and several UseCases (`SendSmsUseCase`,
+  `RetrySendUseCase`, `RestoreBackupUseCase`, `ExportConversationPdfUseCase`, …) inject `data`
+  collaborators directly (`ConversationMirror`, `SmsSender`, `BackupService`, …) instead of
+  domain interfaces. Fully removing this coupling means introducing ~20 domain interfaces with
+  data-side implementations — a large, send/backup-path-sensitive refactor, deliberately left for
+  a supervised pass. It is the remaining prerequisite for a `:domain` Gradle module.
 
 ## Lifecycle of an incoming SMS
 

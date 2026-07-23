@@ -6,8 +6,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
-import com.filestech.sms.data.local.db.entity.ScheduledState
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.model.ScheduledState
 import com.filestech.sms.domain.usecase.SendSmsUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject

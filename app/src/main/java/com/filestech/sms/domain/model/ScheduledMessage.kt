@@ -1,7 +1,6 @@
 package com.filestech.sms.domain.model
 
 import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
-import com.filestech.sms.data.local.db.entity.ScheduledState
 
 data class ScheduledMessage(
     val id: Long,

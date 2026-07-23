@@ -5,7 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
-import com.filestech.sms.data.local.db.entity.ScheduledState
+import com.filestech.sms.domain.model.ScheduledState
 import kotlinx.coroutines.flow.Flow
 
 @Dao

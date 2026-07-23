@@ -5,10 +5,10 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.filestech.sms.data.local.db.entity.ConversationEntity
-import com.filestech.sms.data.local.db.entity.MessageDirection
+import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.data.local.db.entity.MessageEntity
-import com.filestech.sms.data.local.db.entity.MessageStatus
-import com.filestech.sms.data.local.db.entity.MessageType
+import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.MessageType
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking

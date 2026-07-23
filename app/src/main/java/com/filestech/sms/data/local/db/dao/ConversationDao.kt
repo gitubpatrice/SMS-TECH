@@ -140,7 +140,7 @@ interface ConversationDao {
      * au cold-start de v1.8.0 depuis `MainApplication.onCreate` pour purger les
      * compteurs inflated. Idempotent — coût négligeable (~10 ms pour 100 conv).
      *
-     * Direction INCOMING = `0` (cf. [com.filestech.sms.data.local.db.entity.MessageDirection]).
+     * Direction INCOMING = `0` (cf. [com.filestech.sms.domain.model.MessageDirection]).
      * Cap absolu à 999 pour éviter qu'un compteur explose visuellement même si
      * un edge case poserait des milliers de messages non lus (le badge UI tronque
      * à "999+" au-delà de toute façon).

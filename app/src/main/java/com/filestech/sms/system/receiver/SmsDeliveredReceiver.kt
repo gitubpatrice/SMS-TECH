@@ -4,10 +4,10 @@ import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.filestech.sms.data.local.db.entity.MessageStatus
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.SmsSender
 import com.filestech.sms.di.ApplicationScope
+import com.filestech.sms.domain.model.MessageStatus
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch

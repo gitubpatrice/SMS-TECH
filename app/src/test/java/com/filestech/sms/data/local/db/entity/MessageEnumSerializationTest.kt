@@ -1,5 +1,8 @@
 package com.filestech.sms.data.local.db.entity
 
+import com.filestech.sms.domain.model.MessageDirection
+import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.MessageType
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.DisplayName

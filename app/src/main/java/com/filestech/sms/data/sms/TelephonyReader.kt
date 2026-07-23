@@ -5,10 +5,10 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.provider.Telephony
-import com.filestech.sms.data.local.db.entity.MessageDirection
 import com.filestech.sms.data.local.db.entity.MessageEntity
-import com.filestech.sms.data.local.db.entity.MessageStatus
-import com.filestech.sms.data.local.db.entity.MessageType
+import com.filestech.sms.domain.model.MessageDirection
+import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.MessageType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject

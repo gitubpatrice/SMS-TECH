@@ -18,6 +18,7 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.model.MessageDirection
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
@@ -166,7 +167,7 @@ class BackupService @Inject constructor(
                 sb.append(" date=\"").append(m.date).append('"')
                 // v1.16.0 — Direction comparée sur enum (était Int). XML SMS-Backup-Restore
                 // compat conserve les codes AOSP (1=received, 2=sent).
-                sb.append(" type=\"").append(if (m.direction == com.filestech.sms.data.local.db.entity.MessageDirection.OUTGOING) 2 else 1).append('"')
+                sb.append(" type=\"").append(if (m.direction == MessageDirection.OUTGOING) 2 else 1).append('"')
                 sb.append(" body=\"").append(xmlEscape(m.body)).append('"')
                 sb.append(" read=\"").append(if (m.read) 1 else 0).append("\" />\n")
             }

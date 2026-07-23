@@ -159,7 +159,7 @@ interface MessageDao {
     // [com.filestech.sms.data.local.db.MessageEnumConverters] convertit en Int pour
     // le binding SQL. Type safety au call-site, schéma DB inchangé.
     @Query("UPDATE messages SET status = :status, error_code = :errorCode WHERE id = :id")
-    suspend fun updateStatus(id: Long, status: com.filestech.sms.data.local.db.entity.MessageStatus, errorCode: Int? = null)
+    suspend fun updateStatus(id: Long, status: com.filestech.sms.domain.model.MessageStatus, errorCode: Int? = null)
 
     /**
      * v1.15.2 — Remapping post-restore du `reply_to_message_id`. Utilisé par

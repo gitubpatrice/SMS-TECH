@@ -1,10 +1,10 @@
 package com.filestech.sms.data.local.db
 
 import androidx.room.TypeConverter
-import com.filestech.sms.data.local.db.entity.MessageDirection
-import com.filestech.sms.data.local.db.entity.MessageStatus
-import com.filestech.sms.data.local.db.entity.MessageType
-import com.filestech.sms.data.local.db.entity.ScheduledState
+import com.filestech.sms.domain.model.MessageDirection
+import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.MessageType
+import com.filestech.sms.domain.model.ScheduledState
 
 /**
  * v1.16.0 — TypeConverter Room pour les enums `MessageStatus` / `MessageType` /

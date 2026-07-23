@@ -1,6 +1,9 @@
 package com.filestech.sms.data.repository
 
+import android.telephony.PhoneNumberUtils
 import androidx.room.withTransaction
+import com.filestech.sms.core.ext.WireAddress
+import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
@@ -8,16 +11,12 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.entity.AttachmentEntity
 import com.filestech.sms.data.local.db.entity.ConversationEntity
-import com.filestech.sms.data.local.db.entity.MessageDirection
 import com.filestech.sms.data.local.db.entity.MessageEntity
-import com.filestech.sms.data.local.db.entity.MessageStatus
-import com.filestech.sms.data.local.db.entity.MessageType
-import android.telephony.PhoneNumberUtils
-import com.filestech.sms.core.ext.WireAddress
-import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.data.sms.PhoneNumberWireFormatter
 import com.filestech.sms.di.IoDispatcher
-import timber.log.Timber
+import com.filestech.sms.domain.model.MessageDirection
+import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.MessageType
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
@@ -25,6 +24,7 @@ import com.filestech.sms.domain.reaction.IncomingReactionDecoder.DecodedReaction
 import com.filestech.sms.domain.repository.ContactRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton

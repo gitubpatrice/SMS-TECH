@@ -1,9 +1,6 @@
 package com.filestech.sms.domain.model
 
-import com.filestech.sms.data.local.db.entity.MessageDirection
 import com.filestech.sms.data.local.db.entity.MessageEntity
-import com.filestech.sms.data.local.db.entity.MessageStatus
-import com.filestech.sms.data.local.db.entity.MessageType
 
 data class Message(
     val id: Long,

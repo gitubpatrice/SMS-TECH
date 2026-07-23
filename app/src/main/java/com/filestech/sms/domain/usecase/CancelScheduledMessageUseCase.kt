@@ -7,7 +7,7 @@ import javax.inject.Inject
 
 /**
  * v1.15.1 — Annule un message programmé : enlève le job WorkManager + marque la row Room en
- * [com.filestech.sms.data.local.db.entity.ScheduledState.CANCELLED]. Idempotent : un appel sur
+ * [com.filestech.sms.domain.model.ScheduledState.CANCELLED]. Idempotent : un appel sur
  * un id déjà annulé est un no-op (le worker filtre déjà sur state==PENDING). Symétrique avec
  * [ScheduleMessageUseCase] qui orchestre repo+scheduler côté création.
  */

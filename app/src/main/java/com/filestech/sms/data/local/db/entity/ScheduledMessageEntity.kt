@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.filestech.sms.domain.model.ScheduledState
 
 @Entity(
     tableName = "scheduled_messages",
@@ -24,25 +25,3 @@ data class ScheduledMessageEntity(
     @ColumnInfo(name = "work_id") val workId: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
 )
-
-/**
- * v1.17.0 — Conversion `object Int constants` → `enum class` avec `rawValue: Int`. Cohérence
- * avec [MessageStatus] / [MessageType] / [MessageDirection] convertis en v1.16.0.
- *
- * **Pas de @Serializable** : [ScheduledMessageEntity] n'est pas inclus dans `BackupPayload`
- * (seuls conversations + messages le sont). Donc pas besoin de KSerializer custom — la
- * conversion enum ne modifie aucun format sérialisé existant.
- *
- * Schéma SQL inchangé (colonne `state INTEGER NOT NULL`). Le TypeConverter Room dans
- * [com.filestech.sms.data.local.db.MessageEnumConverters] gère le binding.
- */
-enum class ScheduledState(val rawValue: Int) {
-    PENDING(0),
-    SENT(1),
-    FAILED(2),
-    CANCELLED(3);
-    companion object {
-        fun fromRaw(rawValue: Int): ScheduledState = entries.firstOrNull { it.rawValue == rawValue }
-            ?: PENDING.also { timber.log.Timber.w("Unknown ScheduledState int %d — defaulting to PENDING", rawValue) }
-    }
-}
