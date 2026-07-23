@@ -39,8 +39,22 @@ class AppRootViewModel @Inject constructor(
      * conversation correspondante puis naviguer directement vers [ThreadScreen]. Sans ce
      * resolver, le user atterrissait sur la liste de conversations au lieu du thread.
      */
-    private val conversationRepo: ConversationRepository,
+    // v1.24.0 SEC-CRIT — `Lazy` : ce ViewModel est instancié sur le main thread pendant la
+    // composition, et `ConversationRepository` tire `AppDatabase`, donc la réparation zéro-clé.
+    // L'unique usage est déjà dans `viewModelScope.launch`.
+    private val conversationRepoLazy: dagger.Lazy<ConversationRepository>,
+    private val databaseRepairState: com.filestech.sms.data.local.db.DatabaseRepairState,
 ) : ViewModel() {
+
+    /**
+     * `true` once the one-shot database repair has settled.
+     *
+     * [AppRoot] withholds the whole navigation graph until then. The splash screen only delays
+     * *drawing* — it does not stop composition, so without this gate the screen ViewModels would
+     * be built on the main thread and provision `AppDatabase` there, which is exactly the work the
+     * repair makes expensive.
+     */
+    val databaseReady: kotlinx.coroutines.flow.StateFlow<Boolean> = databaseRepairState.settled
 
     /**
      * v1.14.8 — Résout une adresse téléphone vers un conversationId Room (existant ou créé).
@@ -58,7 +72,7 @@ class AppRootViewModel @Inject constructor(
                 onResolved(null)
                 return@launch
             }
-            val res = conversationRepo.findOrCreate(listOf(addr))
+            val res = conversationRepoLazy.get().findOrCreate(listOf(addr))
             val id = if (res is Outcome.Success) res.value.id else null
             onResolved(id)
         }

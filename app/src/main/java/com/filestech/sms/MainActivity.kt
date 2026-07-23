@@ -92,6 +92,14 @@ class MainActivity : FragmentActivity() {
     /** Gates the splash screen while the one-shot zero-key repair runs. */
     @Inject lateinit var databaseRepairState: com.filestech.sms.data.local.db.DatabaseRepairState
 
+    /**
+     * Audit K-3 / C-5 : le projet injecte son dispatcher IO partout plutôt que de coder
+     * `Dispatchers.IO` en dur — testabilité et politique centralisée.
+     */
+    @Inject
+    @com.filestech.sms.di.IoDispatcher
+    lateinit var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher
+
     private val initialSettings = MutableStateFlow<AppSettings?>(null)
 
     /**
@@ -295,7 +303,7 @@ class MainActivity : FragmentActivity() {
         // de l'écran de verrouillage UI.
         // v1.24.0 — resolved off the main thread: `Lazy.get()` blocks until `AppDatabase` has been
         // provisioned, which on the repair launch means waiting for [LegacyZeroKeyRekey].
-        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        lifecycleScope.launch(ioDispatcher) {
             runCatching { telephonySyncManagerLazy.get().requestSync(reason = "MainActivity.onResume") }
                 .onFailure { Timber.w(it, "onResume sync trigger failed") }
         }

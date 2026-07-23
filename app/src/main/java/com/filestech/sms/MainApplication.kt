@@ -258,6 +258,11 @@ class MainApplication : Application(), Configuration.Provider {
         // very first import (audit "indésirables à l'import"). The importer is fast (< 50 ms
         // typical) and idempotent on re-runs, so paying this serial cost is harmless.
         //
+        // v1.24.0 — `telephonySyncManager.start()` est désormais asynchrone (résolution `Lazy`
+        // hors main thread), donc l'ordre n'est PLUS garanti par la séquence de `onCreate`. Il
+        // reste correct parce que `runSync` rejoue lui-même `importFromSystem()` en tête de
+        // chaque passe, sous `syncMutex` et avec un curseur — l'opération est idempotente.
+        //
         // The system-side read in `TelephonySyncWorker.runImport` *also* queries
         // `BlockedNumberContract` directly so a fresh-install user who hasn't accepted the
         // default-SMS prompt yet still gets the filter on the next sync tick — this is just

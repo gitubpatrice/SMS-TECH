@@ -217,7 +217,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
 
     /**
      * Decodes a part's content-type bytes. WAP text-strings carry a trailing NUL that
-     * `String(bytes)` would keep, breaking equality / prefix checks ("text/plain " !=
+     * `String(bytes)` would keep, breaking equality / prefix checks ("text/plain\u0000" !=
      * "text/plain"). Also trims content-type parameters (`; charset=...`) so callers can do
      * simple prefix / equality on the bare MIME.
      */

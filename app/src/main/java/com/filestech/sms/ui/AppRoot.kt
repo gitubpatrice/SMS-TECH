@@ -40,6 +40,14 @@ import com.filestech.sms.ui.screens.vault.VaultScreen
 @androidx.compose.runtime.Composable
 fun AppRoot() {
     val rootViewModel: AppRootViewModel = hiltViewModel()
+
+    // v1.24.0 SEC-CRIT — rien ne se compose tant que la base n'est pas prête. `installSplashScreen`
+    // ne retarde que le DESSIN, pas la composition : sans cette garde, `ConversationsViewModel` et
+    // consorts seraient instanciés sur le main thread et y provisionneraient `AppDatabase`, donc la
+    // réparation zéro-clé. Le splash système reste affiché pendant ce temps (même condition).
+    val databaseReady by rootViewModel.databaseReady.collectAsStateWithLifecycle()
+    if (!databaseReady) return
+
     val appLock: AppLockManager = rootViewModel.appLock
     val incomingShare = rootViewModel.incomingShare
     val pendingNav = rootViewModel.pendingNav
