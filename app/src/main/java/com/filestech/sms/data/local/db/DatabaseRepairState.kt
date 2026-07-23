@@ -27,7 +27,21 @@ class DatabaseRepairState @Inject constructor() {
     /** `true` once the repair has run to completion — successfully or not. */
     val settled: StateFlow<Boolean> = _settled.asStateFlow()
 
+    private val _failure = MutableStateFlow<Throwable?>(null)
+
+    /**
+     * Non-null when the database could not be provisioned at all.
+     *
+     * The UI shows a recovery screen instead of the navigation graph: the alternative is a crash
+     * loop with no explanation, on an app whose users read "does not start" as "lost everything".
+     */
+    val failure: StateFlow<Throwable?> = _failure.asStateFlow()
+
     internal fun markSettled() {
         _settled.value = true
+    }
+
+    internal fun markFailed(t: Throwable) {
+        _failure.value = t
     }
 }

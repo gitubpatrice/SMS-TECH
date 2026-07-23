@@ -42,6 +42,9 @@ class LegacyZeroKeyRekeyTest {
     @Before
     fun setUp() {
         System.loadLibrary("sqlcipher")
+        // La mémoïsation d'échec est portée par l'objet : sans reset, un test d'échec
+        // ferait lever tous les suivants du même processus.
+        LegacyZeroKeyRekey.resetFailuresForTest()
         // The repair short-circuits on a persisted per-file marker; clear ours so each test
         // exercises the real probe rather than the fast path left by the previous one. The marker
         // is keyed by database file name, so this never touches the real `smstech.db` entry.

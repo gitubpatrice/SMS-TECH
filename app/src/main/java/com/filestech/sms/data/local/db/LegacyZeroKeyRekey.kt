@@ -112,11 +112,29 @@ internal object LegacyZeroKeyRekey {
      *
      * @throws Failure when the file exists but decrypts with neither key.
      */
+    /**
+     * Remembers a failure for the lifetime of the process.
+     *
+     * Dagger does not memoize a provider that threw, so every later `AppDatabase` request retries
+     * `build()`. Without this, a database that fails to repair would re-run the whole copy and
+     * re-encryption on each attempt — including from the main thread, since a ViewModel created
+     * during composition is a perfectly ordinary requester.
+     *
+     * Keyed by database path: a failure on one file must not block another, and the injectable
+     * `dbFile` means tests legitimately drive several.
+     */
+    private val failures = java.util.concurrent.ConcurrentHashMap<String, Failure>()
+
+    /** Clears the memoized failures. Instrumented tests only — never called by production code. */
+    @androidx.annotation.VisibleForTesting
+    internal fun resetFailuresForTest() = failures.clear()
+
     fun rekeyIfNeeded(
         context: Context,
         passphrase: ByteArray,
         dbFile: File = context.getDatabasePath(AppDatabase.DATABASE_NAME),
     ): Result {
+        failures[dbFile.absolutePath]?.let { throw it }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(doneKey(dbFile), false)) return Result.ALREADY_CORRECT
 
@@ -143,14 +161,20 @@ internal object LegacyZeroKeyRekey {
         val legacyKey = ByteArray(passphrase.size)
         if (!canOpen(dbFile, legacyKey)) {
             // Doctrine (audit F18): a silent wipe is silent data loss. Surface, never delete.
-            throw Failure(
+            failures[dbFile.absolutePath] = Failure(
                 "database ${dbFile.name} decrypts with neither the Keystore passphrase " +
                     "nor the legacy zero key",
             )
+        } else {
+            Timber.w("LegacyZeroKeyRekey: legacy zero-key database detected — rebuilding")
+            runCatching { exportToNewKey(dbFile, legacyKey, passphrase) }
+                .onFailure { t ->
+                    failures[dbFile.absolutePath] = t as? Failure ?: Failure("rebuild failed", t)
+                }
         }
-
-        Timber.w("LegacyZeroKeyRekey: legacy zero-key database detected — exporting to a new file")
-        exportToNewKey(dbFile, legacyKey, passphrase)
+        // Single exit for every failure path: the outcome is memoized in `failed`, so a later
+        // request cannot re-run the rebuild — possibly from the main thread.
+        failures[dbFile.absolutePath]?.let { throw it }
         prefs.edit().putBoolean(doneKey(dbFile), true).apply()
         Timber.i("LegacyZeroKeyRekey: database re-encrypted with the Keystore passphrase")
         return Result.REKEYED

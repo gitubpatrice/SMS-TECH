@@ -56,6 +56,9 @@ class AppRootViewModel @Inject constructor(
      */
     val databaseReady: kotlinx.coroutines.flow.StateFlow<Boolean> = databaseRepairState.settled
 
+    /** Non-null when the database could not be opened at all — drives the recovery screen. */
+    val databaseFailure: kotlinx.coroutines.flow.StateFlow<Throwable?> = databaseRepairState.failure
+
     /**
      * v1.14.8 — Résout une adresse téléphone vers un conversationId Room (existant ou créé).
      * Appelle [ConversationRepository.findOrCreate]. Retourne `null` si l'adresse n'est pas

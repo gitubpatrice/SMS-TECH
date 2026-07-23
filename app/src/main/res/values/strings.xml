@@ -802,4 +802,8 @@
     <string name="thread_load_older">Load older messages</string>
     <string name="thread_load_older_remaining">Load older messages (%1$d)</string>
     <string name="thread_loading_older">Loading…</string>
+    <!-- v1.24.0 : ecran de recuperation quand la base ne peut pas etre ouverte -->
+    <string name="db_recovery_title">SMS Tech cannot open its database</string>
+    <string name="db_recovery_body">Your messages are still on this device — Android keeps its own copy, and SMS Tech has not deleted anything. Only SMS Tech’s own encrypted database is unreadable right now.</string>
+    <string name="db_recovery_hint">This usually happens after the screen lock is changed or the device is restored, which invalidates the key that protects the database. Restarting the phone is worth trying first. If this screen keeps appearing, reinstalling SMS Tech will rebuild its database from the messages Android already holds.</string>
 </resources>

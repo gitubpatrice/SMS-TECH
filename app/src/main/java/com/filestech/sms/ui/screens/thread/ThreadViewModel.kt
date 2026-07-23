@@ -80,9 +80,13 @@ class ThreadViewModel @Inject constructor(
     private val conversationId: Long = checkNotNull(savedStateHandle["conversationId"])
 
     /**
-     * Size of the loaded window. Raising it widens the query in place; the repository re-subscribes
-     * via `flatMapLatest` and the list grows towards the past without losing scroll position
-     * (`LazyColumn` re-anchors on the stable message ids).
+     * Size of the loaded window. Raising it widens the query in place and the repository
+     * re-subscribes via `flatMapLatest`.
+     *
+     * The scroll position is **not** preserved by Compose alone: its key-based re-anchoring only
+     * covers roughly 130 items around the first visible one, and [PAGE_SIZE] is 200. `ThreadScreen`
+     * therefore captures the anchor message and its offset before growing the window, and restores
+     * the position itself once the wider window lands.
      */
     private val windowLimit = MutableStateFlow(PAGE_SIZE)
 

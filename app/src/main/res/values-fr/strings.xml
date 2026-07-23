@@ -785,4 +785,8 @@
     <string name="thread_load_older">Charger les messages plus anciens</string>
     <string name="thread_load_older_remaining">Charger les messages plus anciens (%1$d)</string>
     <string name="thread_loading_older">Chargement…</string>
+    <!-- v1.24.0 : ecran de recuperation quand la base ne peut pas etre ouverte -->
+    <string name="db_recovery_title">SMS Tech ne parvient pas à ouvrir sa base de données</string>
+    <string name="db_recovery_body">Vos messages sont toujours sur cet appareil — Android en conserve sa propre copie, et SMS Tech n’a rien supprimé. Seule la base chiffrée propre à SMS Tech est illisible pour le moment.</string>
+    <string name="db_recovery_hint">Cela arrive généralement après un changement de code de verrouillage ou une restauration de l’appareil, qui invalide la clé protégeant la base. Redémarrer le téléphone vaut la peine d’être tenté en premier. Si cet écran persiste, réinstaller SMS Tech reconstruira sa base à partir des messages qu’Android détient déjà.</string>
 </resources>

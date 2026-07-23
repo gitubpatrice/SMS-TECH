@@ -54,6 +54,9 @@ class ZeroKeyRepairIntegrationTest {
     @Before
     fun setUp() {
         System.loadLibrary("sqlcipher")
+        // La mémoïsation d'échec est portée par l'objet : sans reset, un test d'échec
+        // ferait lever tous les suivants du même processus.
+        LegacyZeroKeyRekey.resetFailuresForTest()
         context.getSharedPreferences("db_repair", Context.MODE_PRIVATE)
             .edit().remove("zero_key_repair_v1240_done_" + dbFile.name).commit()
         cleanUp()

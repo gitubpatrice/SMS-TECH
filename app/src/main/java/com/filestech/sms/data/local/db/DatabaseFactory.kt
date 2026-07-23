@@ -29,6 +29,9 @@ class DatabaseFactory @Inject constructor(
 
     fun build(context: Context): AppDatabase = try {
         buildInternal(context)
+    } catch (t: Throwable) {
+        repairState.markFailed(t)
+        throw t
     } finally {
         // Covers the WHOLE body, not just the repair: `loadNativeOnce()` can throw
         // `UnsatisfiedLinkError` and `getOrCreatePassphrase()` throws `DatabaseKeyManager.Failure`

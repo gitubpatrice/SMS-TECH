@@ -323,6 +323,24 @@ fun ThreadScreen(
         }
     }
 
+    // v1.24.0 — ré-ancrage explicite au « charger plus ancien ».
+    //
+    // Compose ne ré-ancre par clé que dans une fenêtre d'environ 130 items autour du premier
+    // visible (`NearestRangeKeyIndexMap`). Un prepend de PAGE_SIZE = 200 dépasse cette portée :
+    // `findIndexByKey` ne retrouve pas la clé, garde l'index inchangé, et l'utilisateur est
+    // téléporté 200 messages en arrière — exactement quand il remonte son historique. On mémorise
+    // donc le message en tête d'écran et son décalage, et on restaure la position nous-mêmes.
+    var pendingAnchor by remember { mutableStateOf<Pair<Long, Int>?>(null) }
+    val oldestMessageId = state.messages.firstOrNull()?.id
+    LaunchedEffect(oldestMessageId) {
+        val (anchorId, anchorOffset) = pendingAnchor ?: return@LaunchedEffect
+        val index = state.messages.indexOfFirst { it.id == anchorId }
+        if (index >= 0) {
+            listState.scrollToItem(index + headOffset, -anchorOffset)
+            pendingAnchor = null
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.onConversationOpened()
         viewModel.events.collect { e ->
@@ -658,7 +676,14 @@ fun ThreadScreen(
                     LoadOlderRow(
                         isLoading = state.isLoadingOlder,
                         remaining = (state.messageCount - state.messages.size).coerceAtLeast(0),
-                        onClick = viewModel::loadOlder,
+                        onClick = {
+                            // Le premier item visible portant une clé Long est un message : c'est
+                            // lui que l'utilisateur regarde, et sur lui qu'on se ré-ancrera.
+                            pendingAnchor = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.key is Long }
+                                ?.let { (it.key as Long) to it.offset }
+                            viewModel.loadOlder()
+                        },
                     )
                 }
             }

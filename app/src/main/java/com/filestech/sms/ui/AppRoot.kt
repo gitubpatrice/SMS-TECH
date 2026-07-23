@@ -46,7 +46,14 @@ fun AppRoot() {
     // consorts seraient instanciés sur le main thread et y provisionneraient `AppDatabase`, donc la
     // réparation zéro-clé. Le splash système reste affiché pendant ce temps (même condition).
     val databaseReady by rootViewModel.databaseReady.collectAsStateWithLifecycle()
+    val databaseFailure by rootViewModel.databaseFailure.collectAsStateWithLifecycle()
     if (!databaseReady) return
+    databaseFailure?.let { cause ->
+        // La base est inouvrable : composer le graphe de navigation ferait instancier des
+        // ViewModels qui la redemanderaient, donc relèveraient — boucle de crash sans explication.
+        com.filestech.sms.ui.screens.recovery.DatabaseRecoveryScreen(cause)
+        return
+    }
 
     val appLock: AppLockManager = rootViewModel.appLock
     val incomingShare = rootViewModel.incomingShare
