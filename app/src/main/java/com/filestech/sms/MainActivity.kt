@@ -63,7 +63,10 @@ class MainActivity : FragmentActivity() {
      * pendant que l'app était en background, ou où le ContentObserver système
      * a manqué une émission.
      */
-    @Inject lateinit var telephonySyncManager: com.filestech.sms.data.sync.TelephonySyncManager
+    // v1.24.0 SEC-CRIT — `Lazy` on purpose: this collaborator injects DAOs, so an eager
+    // resolution here would build `AppDatabase` (and run [LegacyZeroKeyRekey]) on the main
+    // thread while the activity is being created.
+    @Inject lateinit var telephonySyncManagerLazy: dagger.Lazy<com.filestech.sms.data.sync.TelephonySyncManager>
 
     /**
      * v1.14.7 audit P1 — anti-spam `enqueueOneShot` WorkManager. Sans cooldown, un
@@ -85,6 +88,9 @@ class MainActivity : FragmentActivity() {
      * panic-decoy / déjà sur ce thread) sont validés.
      */
     @Inject lateinit var pendingNav: PendingNavHolder
+
+    /** Gates the splash screen while the one-shot zero-key repair runs. */
+    @Inject lateinit var databaseRepairState: com.filestech.sms.data.local.db.DatabaseRepairState
 
     private val initialSettings = MutableStateFlow<AppSettings?>(null)
 
@@ -159,7 +165,13 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen().setKeepOnScreenCondition { initialSettings.value == null }
+        // v1.24.0 SEC-CRIT — the splash also covers the one-shot database repair
+        // ([LegacyZeroKeyRekey]). On the single launch that rebuilds a legacy zero-key database
+        // that work takes seconds; showing an empty conversation list meanwhile would look like
+        // data loss. `settled` flips even when the repair fails, so this can never pin the splash.
+        installSplashScreen().setKeepOnScreenCondition {
+            initialSettings.value == null || !databaseRepairState.settled.value
+        }
         // Hilt injects @Inject lateinit properties inside super.onCreate via the @AndroidEntryPoint
         // bytecode transform. We must call super FIRST before touching `settings` or `appLock`.
         super.onCreate(savedInstanceState)
@@ -281,8 +293,12 @@ class MainActivity : FragmentActivity() {
         // manquer une émission après un sleep long. Pas de garde lockState ici
         // car la sync écrit en Room derrière l'AppLockManager, indépendamment
         // de l'écran de verrouillage UI.
-        runCatching { telephonySyncManager.requestSync(reason = "MainActivity.onResume") }
-            .onFailure { Timber.w(it, "onResume sync trigger failed") }
+        // v1.24.0 — resolved off the main thread: `Lazy.get()` blocks until `AppDatabase` has been
+        // provisioned, which on the repair launch means waiting for [LegacyZeroKeyRekey].
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { telephonySyncManagerLazy.get().requestSync(reason = "MainActivity.onResume") }
+                .onFailure { Timber.w(it, "onResume sync trigger failed") }
+        }
         // Belt-and-braces : double-track via WorkManager au cas où le manager
         // serait dans un état inattendu (started flag bloqué, mutex deadlock).
         // v1.14.7 audit P1 fix : throttle à 1 enqueue / 30s mono pour éviter de spammer

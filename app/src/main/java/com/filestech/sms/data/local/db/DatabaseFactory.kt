@@ -2,7 +2,9 @@ package com.filestech.sms.data.local.db
 
 import android.content.Context
 import androidx.room.Room
+import com.filestech.sms.BuildConfig
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,16 +25,37 @@ import javax.inject.Singleton
 @Singleton
 class DatabaseFactory @Inject constructor(
     private val keyManager: DatabaseKeyManager,
+    private val repairState: DatabaseRepairState,
 ) {
 
     fun build(context: Context): AppDatabase {
+        // v1.24.0 SEC-CRIT regression guard. Provisioning the database also runs the one-shot
+        // repair, which is seconds of work on the launch that rebuilds a legacy zero-key file.
+        // Every startup collaborator that reaches a DAO is therefore injected through `Lazy` and
+        // resolved from a background dispatcher; reintroducing an eager injection would silently
+        // put that work back on the main thread. This makes such a regression loud in debug.
+        if (BuildConfig.LOG_ENABLED && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            Timber.e(
+                "DatabaseFactory.build() ran on the main thread — an eager @Inject reached a DAO. " +
+                    "Wrap it in dagger.Lazy and resolve it off the main thread.",
+            )
+        }
         loadNativeOnce()
         val raw = keyManager.getOrCreatePassphrase()
 
         // v1.24.0 SEC-CRIT — repair databases still encrypted with the legacy all-zero key.
         // Runs BEFORE Room opens the file, with the very array handed to SQLCipher below.
         // Cf. [LegacyZeroKeyRekey] for the full analysis of the defect.
-        LegacyZeroKeyRekey.rekeyIfNeeded(context, raw)
+        //
+        // On the one launch that actually rebuilds a legacy database this takes seconds, so the
+        // startup sequence forces this whole provision onto an IO dispatcher and holds the splash
+        // screen until `repairState` settles. `markSettled` is in a `finally`: a failure must
+        // surface as an exception, never as a splash screen pinned forever.
+        try {
+            LegacyZeroKeyRekey.rekeyIfNeeded(context, raw)
+        } finally {
+            repairState.markSettled()
+        }
 
         val factory = SupportOpenHelperFactory(raw)
         val db = Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)

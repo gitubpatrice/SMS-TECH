@@ -40,9 +40,9 @@ class MainApplication : Application(), Configuration.Provider {
 
     @Inject lateinit var appLock: AppLockManager
 
-    @Inject lateinit var telephonySyncManager: TelephonySyncManager
+    @Inject lateinit var telephonySyncManagerLazy: dagger.Lazy<TelephonySyncManager>
 
-    @Inject lateinit var blockedNumbersImporter: BlockedNumbersImporter
+    @Inject lateinit var blockedNumbersImporterLazy: dagger.Lazy<BlockedNumbersImporter>
 
     @Inject lateinit var settingsRepository: SettingsRepository
 
@@ -55,28 +55,28 @@ class MainApplication : Application(), Configuration.Provider {
      * vrais messages non lus en Room. Purge l'état legacy hérité de v1.7.1
      * (cf. doc [ConversationDao.recomputeAllUnreadCounts]).
      */
-    @Inject lateinit var conversationDao: ConversationDao
+    @Inject lateinit var conversationDaoLazy: dagger.Lazy<ConversationDao>
 
     /**
      * v1.8.0 (post-audit fix unread badges) — utilisé pour la migration one-shot
      * qui marque tous les messages INCOMING comme lus, en complément du reset
      * `conversations.unread_count`. Cf. doc [MessageDao.markAllIncomingAsRead].
      */
-    @Inject lateinit var messageDao: MessageDao
+    @Inject lateinit var messageDaoLazy: dagger.Lazy<MessageDao>
 
     /**
      * v1.14.7 — utilisé par la migration cold-start qui rapatrie les attachments MMS reçus
      * de `cacheDir/mms_incoming/` (volatile) vers `filesDir/mms_attachments/` (persistant)
      * et met à jour les `local_uri` Room en conséquence. Cf. infra `migrateAttachmentsToFilesDirIfNeeded`.
      */
-    @Inject lateinit var attachmentDao: com.filestech.sms.data.local.db.dao.AttachmentDao
+    @Inject lateinit var attachmentDaoLazy: dagger.Lazy<com.filestech.sms.data.local.db.dao.AttachmentDao>
 
     /**
      * v1.22.x — dédup « one-heal » des conversations du même numéro laissées en double par les
      * versions antérieures aux correctifs de threading. Cf.
      * [com.filestech.sms.data.repository.ConversationMirror.dedupeSameNumberConversations].
      */
-    @Inject lateinit var conversationMirror: com.filestech.sms.data.repository.ConversationMirror
+    @Inject lateinit var conversationMirrorLazy: dagger.Lazy<com.filestech.sms.data.repository.ConversationMirror>
 
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
@@ -137,8 +137,8 @@ class MainApplication : Application(), Configuration.Provider {
                 kotlinx.coroutines.withContext(ioDispatcher) {
                     val current = settingsRepository.flow.first().advanced
                     if (!current.unreadResetV180) {
-                        val touched = messageDao.markAllIncomingAsRead()
-                        conversationDao.recomputeAllUnreadCounts()
+                        val touched = messageDaoLazy.get().markAllIncomingAsRead()
+                        conversationDaoLazy.get().recomputeAllUnreadCounts()
                         settingsRepository.update { s ->
                             s.copy(advanced = s.advanced.copy(unreadResetV180 = true))
                         }
@@ -172,7 +172,7 @@ class MainApplication : Application(), Configuration.Provider {
                         // `false` = rien à fusionner). Tant que la passe fusionne encore des
                         // doublons, on re-scanne au prochain cold-start ; une fois propre, le flag
                         // évite tout re-scan futur (même logique que `unreadResetV180`).
-                        val merged = conversationMirror.dedupeSameNumberConversations()
+                        val merged = conversationMirrorLazy.get().dedupeSameNumberConversations()
                         if (!merged) {
                             settingsRepository.update { s ->
                                 s.copy(advanced = s.advanced.copy(dedupSameNumberV1230 = true))
@@ -192,7 +192,15 @@ class MainApplication : Application(), Configuration.Provider {
         // Telephony sync: register the system-provider ContentObserver + drain anything that
         // accumulated while the process was dead. Schedule a 12 h safety-net WorkManager job
         // so we still converge even if the observer never fires (rare OEM bug, force-stop).
-        telephonySyncManager.start()
+        // v1.24.0 SEC-CRIT — `TelephonySyncManager` injects DAOs, so resolving it here would build
+        // `AppDatabase` on the main thread, and with it run [LegacyZeroKeyRekey]. On the single
+        // launch that rebuilds a legacy zero-key database that is seconds of work: a guaranteed
+        // ANR. Resolution is deferred to the IO coroutine below, which is also what warms the
+        // database for every other startup task.
+        appScope.launch(ioDispatcher) {
+            runCatching { telephonySyncManagerLazy.get().start() }
+                .onFailure { Timber.w(it, "TelephonySyncManager.start failed") }
+        }
         TelephonySyncWorker.schedulePeriodic(this)
         // v1.9.0 — schedule du SafetyCall worker (idempotent KEEP policy).
         // Même si la config deadman est désactivée, le worker tourne en no-op
@@ -255,13 +263,13 @@ class MainApplication : Application(), Configuration.Provider {
         // default-SMS prompt yet still gets the filter on the next sync tick — this is just
         // belt-and-braces.
         appScope.launch {
-            runCatching { blockedNumbersImporter.importFromSystem() }
+            runCatching { blockedNumbersImporterLazy.get().importFromSystem() }
             // v1.8.0 — second recompute après l'import blocklist + en async.
             // L'import peut avoir purgé des conversations, donc on relance pour
             // ré-aligner les compteurs sur l'état final. Le 1er recompute
             // synchrone (au-dessus, avant Activity) a déjà supprimé l'état
             // legacy v1.7.1, donc ici on capture juste les delta de la purge.
-            runCatching { conversationDao.recomputeAllUnreadCounts() }
+            runCatching { conversationDaoLazy.get().recomputeAllUnreadCounts() }
                 .onFailure { Timber.w(it, "recomputeAllUnreadCounts (async post-block) failed") }
             TelephonySyncWorker.enqueueOneShot(this@MainApplication)
         }
@@ -413,7 +421,7 @@ class MainApplication : Application(), Configuration.Provider {
         val oldPrefixAbs = oldDir.absolutePath + java.io.File.separator
 
         val candidates = runCatching {
-            attachmentDao.findByLocalUriPrefix(oldPrefixAbs)
+            attachmentDaoLazy.get().findByLocalUriPrefix(oldPrefixAbs)
         }.getOrDefault(emptyList())
 
         if (candidates.isEmpty()) {
@@ -452,7 +460,7 @@ class MainApplication : Application(), Configuration.Provider {
                     // fallback (fichier introuvable).
                     skipped++
                     if (att.localUri != dstFile.absolutePath) {
-                        attachmentDao.updateLocalUri(att.id, dstFile.absolutePath)
+                        attachmentDaoLazy.get().updateLocalUri(att.id, dstFile.absolutePath)
                     }
                     return@runCatching
                 }
@@ -460,7 +468,7 @@ class MainApplication : Application(), Configuration.Provider {
                     // Destination existe déjà (re-migration partielle, ou collision de nom) — on
                     // garde la destination + supprime la source pour ne pas laisser de doublon.
                     runCatching { srcFile.delete() }
-                    attachmentDao.updateLocalUri(att.id, dstFile.absolutePath)
+                    attachmentDaoLazy.get().updateLocalUri(att.id, dstFile.absolutePath)
                     moved++
                     return@runCatching
                 }
@@ -472,7 +480,7 @@ class MainApplication : Application(), Configuration.Provider {
                     }
                     runCatching { srcFile.delete() }
                 }
-                attachmentDao.updateLocalUri(att.id, dstFile.absolutePath)
+                attachmentDaoLazy.get().updateLocalUri(att.id, dstFile.absolutePath)
                 moved++
             }.onFailure { Timber.w(it, "v1.14.7 migration: failed to move %s", att.localUri) }
         }

@@ -162,7 +162,13 @@ internal object LegacyZeroKeyRekey {
                 db.rawQuery("PRAGMA journal_mode = DELETE", null).use { it.moveToFirst() }
                 sourceCounts = rowCounts(db)
             }
-            dbFile.copyTo(tmp, overwrite = true)
+            // Copied through an explicit fsync: `File.copyTo` returns once the bytes are in the
+            // page cache, and a power loss between here and the swap would leave a temporary file
+            // that validates in memory but is short on disk.
+            java.io.FileOutputStream(tmp).use { out ->
+                dbFile.inputStream().use { it.copyTo(out) }
+                out.fd.sync()
+            }
             // `changePassword` takes the same `byte[]` the app opens the database with, so the KDF
             // treatment is identical on both sides. A SQL `ATTACH ... KEY "x'…'"` would NOT be
             // equivalent: that syntax means a RAW key, bypassing PBKDF2, and the resulting file
