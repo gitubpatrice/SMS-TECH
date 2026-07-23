@@ -1,0 +1,11 @@
+v1.24.0 — Important security fix + fixes
+
+• The local database was encrypted with an incorrect key
+  in every earlier version. It is rebuilt with the correct
+  key on first launch, without losing a message. Details
+  in SECURITY.md.
+• Very long conversations open and scroll much faster;
+  the app also starts up faster.
+• Fixed: a conversation's preview stayed stuck on a
+  deleted message.
+• 100% local, no data leaves your device.

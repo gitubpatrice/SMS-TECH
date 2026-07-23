@@ -1,0 +1,11 @@
+v1.24.0 — Correctif de sécurité important + corrections
+
+• La base locale était chiffrée avec une clé incorrecte
+  depuis les premières versions. Elle est reconstruite
+  avec la bonne clé au premier lancement, sans perdre un
+  message. Détails dans SECURITY.md.
+• Conversations longues bien plus rapides à ouvrir et
+  faire défiler ; démarrage plus rapide.
+• Correction : l'aperçu d'une conversation restait figé
+  sur un message supprimé.
+• 100% local, aucune donnée ne quitte l'appareil.

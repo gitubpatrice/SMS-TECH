@@ -25,6 +25,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 - Correction du compteur « ↓ N nouveaux » et du retour automatique en bas du fil, qui reposaient
   sur des positions de liste et devenaient faux dès qu'on chargeait des messages plus anciens.
 - Une réponse citant un message non chargé n'affiche plus « message supprimé ».
+- **L'aperçu d'une conversation restait bloqué sur un message supprimé.** Supprimer le dernier
+  message d'un fil laissait la liste afficher indéfiniment le message disparu (`deleteMessage` ne
+  recalculait pas la ligne `conversations`). Corrigé, avec une réparation one-shot des aperçus déjà
+  périmés (ciblée : ne touche que les conversations dont le dernier message a été supprimé).
 
 ## [1.2.9] — 2026-05-16
 
