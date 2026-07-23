@@ -375,6 +375,18 @@ data class AdvancedSettings(
      */
     val attachmentsMovedToFilesDirV147: Boolean = false,
     /**
+     * v1.24.0 — court-circuit global des migrations one-shot qui ouvrent la base
+     * ([com.filestech.sms.system.startup.StartupMigrations]).
+     *
+     * Chaque migration garde son propre flag comme **source de vérité** ([unreadResetV180],
+     * [attachmentsMovedToFilesDirV147], [dedupSameNumberV1230]). Ce flag n'est qu'une optimisation :
+     * il est posé UNIQUEMENT lorsque les trois sont déjà à `true`, et il permet alors au cold-start
+     * suivant de sortir sans ouvrir SQLCipher du tout — le vrai gain, puisqu'une install à jour ne
+     * fait plus aucun travail de migration. Sûr par construction : il ne peut jamais sauter une
+     * migration dont le flag individuel n'est pas encore posé.
+     */
+    val startupDbMigrationsDone: Boolean = false,
+    /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante
      * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour

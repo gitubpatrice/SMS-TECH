@@ -41,6 +41,7 @@ class EagerInjectionGuardTest {
             "androidx.hilt.work.HiltWorkerFactory", // holds Providers only
             "com.filestech.sms.system.notifications.NotificationChannelInitializer", // Context only
             "com.filestech.sms.security.AutoLockObserver", // its VaultManager is Lazy (audit T1)
+            "com.filestech.sms.system.startup.StartupMigrations", // holds Lazy<DAO>, opens nothing at construction
             "com.filestech.sms.security.AppLockManager", // DataStore + PasswordKdf, no DAO
             "com.filestech.sms.data.local.datastore.SettingsRepository", // DataStore
             "com.filestech.sms.system.notifications.EmergencyShortcutNotifier", // Context only

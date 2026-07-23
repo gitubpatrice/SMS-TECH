@@ -9,9 +9,7 @@ import com.filestech.sms.core.logging.NoOpReleaseTree
 import com.filestech.sms.data.blocking.BlockedNumbersImporter
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.ConversationDao
-import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.sync.TelephonySyncManager
-import kotlinx.coroutines.flow.first
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
@@ -19,12 +17,13 @@ import com.filestech.sms.system.notifications.NotificationChannelInitializer
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
 import com.filestech.sms.system.service.KeepAliveService
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -50,33 +49,15 @@ class MainApplication : Application(), Configuration.Provider {
     @Inject lateinit var emergencyShortcutNotifier: com.filestech.sms.system.notifications.EmergencyShortcutNotifier
 
     /**
-     * v1.8.0 (post-audit fix unread badges) — utilisé une fois au cold-start
-     * pour recalculer les compteurs `conversations.unread_count` à partir des
-     * vrais messages non lus en Room. Purge l'état legacy hérité de v1.7.1
-     * (cf. doc [ConversationDao.recomputeAllUnreadCounts]).
+     * v1.8.0 (post-audit fix unread badges) — utilisé une fois au cold-start pour recalculer les
+     * compteurs `conversations.unread_count` après l'import blocklist (cf.
+     * [ConversationDao.recomputeAllUnreadCounts]). Les migrations one-shot qui utilisaient aussi
+     * `MessageDao` / `AttachmentDao` / `ConversationMirror` vivent désormais dans [StartupMigrations].
      */
     @Inject lateinit var conversationDaoLazy: dagger.Lazy<ConversationDao>
 
-    /**
-     * v1.8.0 (post-audit fix unread badges) — utilisé pour la migration one-shot
-     * qui marque tous les messages INCOMING comme lus, en complément du reset
-     * `conversations.unread_count`. Cf. doc [MessageDao.markAllIncomingAsRead].
-     */
-    @Inject lateinit var messageDaoLazy: dagger.Lazy<MessageDao>
-
-    /**
-     * v1.14.7 — utilisé par la migration cold-start qui rapatrie les attachments MMS reçus
-     * de `cacheDir/mms_incoming/` (volatile) vers `filesDir/mms_attachments/` (persistant)
-     * et met à jour les `local_uri` Room en conséquence. Cf. infra `migrateAttachmentsToFilesDirIfNeeded`.
-     */
-    @Inject lateinit var attachmentDaoLazy: dagger.Lazy<com.filestech.sms.data.local.db.dao.AttachmentDao>
-
-    /**
-     * v1.22.x — dédup « one-heal » des conversations du même numéro laissées en double par les
-     * versions antérieures aux correctifs de threading. Cf.
-     * [com.filestech.sms.data.repository.ConversationMirror.dedupeSameNumberConversations].
-     */
-    @Inject lateinit var conversationMirrorLazy: dagger.Lazy<com.filestech.sms.data.repository.ConversationMirror>
+    /** v1.24.0 — migrations one-shot cold-start qui ouvrent la base, regroupées et gardées. */
+    @Inject lateinit var startupMigrations: com.filestech.sms.system.startup.StartupMigrations
 
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
@@ -125,63 +106,15 @@ class MainApplication : Application(), Configuration.Provider {
         //
         // Le flag `unreadResetV180` empêche cette purge de se rejouer à chaque
         // cold-start (sinon les vrais nouveaux non-lus seraient effacés).
-        // Audit H2 (v1.14.8) — Migration unreadResetV180 ASYNCHRONE. Avant : `runBlocking` 1s
-        // sur main thread → risque ANR documenté (Android Vitals > 5s = fatal, mais même 800ms
-        // sur cold-start dégrade le score TTFB). La migration restait synchrone pour éviter "1
-        // frame de badges legacy". Trade-off accepté désormais : les compteurs unread peuvent
-        // afficher l'ancienne valeur 50-300 ms avant que le Flow Room ne re-publie la valeur
-        // post-migration. Identique au pattern déjà retenu pour `migrateAttachmentsToFilesDirIfNeeded`
-        // (v1.14.7). Erreurs catchées et loguées sans crash.
-        appScope.launch {
-            runCatching {
-                kotlinx.coroutines.withContext(ioDispatcher) {
-                    val current = settingsRepository.flow.first().advanced
-                    if (!current.unreadResetV180) {
-                        val touched = messageDaoLazy.get().markAllIncomingAsRead()
-                        conversationDaoLazy.get().recomputeAllUnreadCounts()
-                        settingsRepository.update { s ->
-                            s.copy(advanced = s.advanced.copy(unreadResetV180 = true))
-                        }
-                        Timber.i(
-                            "v1.8.0 migration unreadResetV180 done: marked %d incoming messages as read",
-                            touched,
-                        )
-                    }
-                }
-            }.onFailure { Timber.w(it, "v1.8.0 migration unreadResetV180 failed") }
-        }
-        // v1.14.7 — migration cold-start one-shot : déplace les attachments MMS reçus
-        // de `cacheDir/mms_incoming/` vers `filesDir/mms_attachments/` puis met à jour
-        // les `local_uri` Room en conséquence. Avant ce fix, `cacheDir` étant volatile
-        // (Storage Manager Android purge sous pression mémoire, "Effacer le cache"
-        // utilisateur depuis Réglages → Apps), les fichiers audio/image/vidéo reçus
-        // pouvaient disparaître silencieusement → bulles audio cassées affichant le nom
-        // de fichier en fallback. `filesDir` n'est wipé que par PanicService / clearData.
-        // Async (appScope.launch) — pas de blocage de la main thread. Idempotent.
-        appScope.launch { migrateAttachmentsToFilesDirIfNeeded() }
-        // v1.22.x — dédup one-heal des doublons de conversations du même numéro laissés par les
-        // versions antérieures aux correctifs de threading (suffix-8 réception v1.3.3 + composer
-        // findOrCreate v1.21.1). Async (aucun blocage main thread), idempotent. La clé de fusion
-        // E.164 (plus stricte que le suffix-8) garantit qu'on ne fusionne jamais deux numéros
-        // distincts. Cf. ConversationMirror.dedupeSameNumberConversations.
-        appScope.launch {
-            runCatching {
-                kotlinx.coroutines.withContext(ioDispatcher) {
-                    if (!settingsRepository.flow.first().advanced.dedupSameNumberV1230) {
-                        // On ne mémorise la complétion QUE lorsque la base est propre (retour
-                        // `false` = rien à fusionner). Tant que la passe fusionne encore des
-                        // doublons, on re-scanne au prochain cold-start ; une fois propre, le flag
-                        // évite tout re-scan futur (même logique que `unreadResetV180`).
-                        val merged = conversationMirrorLazy.get().dedupeSameNumberConversations()
-                        if (!merged) {
-                            settingsRepository.update { s ->
-                                s.copy(advanced = s.advanced.copy(dedupSameNumberV1230 = true))
-                            }
-                        }
-                    }
-                }
-            }.onFailure { Timber.w(it, "dedupeSameNumberConversations failed") }
-        }
+        //
+        // v1.24.0 — les trois migrations one-shot qui ouvrent SQLCipher (unread-reset v1.8.0,
+        // rapatriement des attachments v1.14.7, dédup v1.22.x) sont regroupées dans
+        // [StartupMigrations] : une seule lecture DataStore, exécution SÉQUENTIELLE (elles tapent
+        // toutes la même base, le parallélisme ne produisait que de la contention de verrou), et
+        // une garde globale qui laisse une install à jour sortir sans ouvrir la base du tout.
+        // Chaque migration garde son propre flag comme source de vérité. Async, aucun blocage du
+        // main thread, erreurs catchées et loguées sans crash.
+        appScope.launch { startupMigrations.run() }
         // Audit P-P0-5: the historical R6 fix used `runBlocking(IO) { appLock.resolveInitialState() }`
         // here to pre-resolve the lock state before any broadcast receiver could read it. That
         // blocked the main thread for 50-200 ms on DataStore on cold-start. We now kick the
@@ -381,118 +314,6 @@ class MainApplication : Application(), Configuration.Provider {
                     }
                 }
                 .collect()
-        }
-    }
-
-    /**
-     * v1.14.7 — migration cold-start one-shot. Déplace les fichiers attachments MMS reçus
-     * de `cacheDir/mms_incoming/` (volatile) vers `filesDir/mms_attachments/` (persistant)
-     * et réécrit les `AttachmentEntity.local_uri` pointant vers les anciens chemins.
-     *
-     * Stratégie :
-     *  1. Si flag `attachmentsMovedToFilesDirV147` déjà true → no-op (idempotent).
-     *  2. Sinon : pour chaque row Room dont `local_uri` matche le préfixe `cacheDir/mms_incoming/`,
-     *     on déplace le fichier (rename atomique si même partition, sinon copy+delete fallback)
-     *     puis on UPDATE `local_uri` vers le nouveau chemin.
-     *  3. Le dossier cacheDir/mms_incoming peut contenir des PDU temp files orphelins (déjà
-     *     supposés deleted post-parse) — on les laisse à Android cleanup.
-     *  4. Une seule transaction Room par row : si on crashe au milieu, on reprend au cold-start
-     *     suivant. Les rows déjà migrées (chemin neuf) sont matchées par le `LIKE` du WHERE.
-     *  5. À la fin, on flippe le flag DataStore. Failure isolée par runCatching → flag pas posé,
-     *     retry au prochain cold-start.
-     *
-     * Pas de garde de timeout : runBlocking n'est PAS utilisé, on tourne dans `appScope.launch`
-     * (Dispatchers.Default + SupervisorJob). Si la migration prend du temps (e.g. 200 attachments
-     * à déplacer × 1 ms IO chacun = 200 ms), l'UI continue à fonctionner pendant ce temps.
-     */
-    private suspend fun migrateAttachmentsToFilesDirIfNeeded() = kotlinx.coroutines.withContext(ioDispatcher) {
-        // v1.14.7 audit P2 — exécution explicitement sur Dispatchers.IO. La migration fait
-        // des opérations IO disque (File.renameTo, inputStream.copyTo, outputStream) qui
-        // doivent tourner sur le pool IO, pas Default (qui sert au CPU-bound).
-        val current = runCatching { settingsRepository.flow.first().advanced }.getOrNull()
-            ?: return@withContext
-        if (current.attachmentsMovedToFilesDirV147) return@withContext
-
-        val oldDir = java.io.File(cacheDir, "mms_incoming")
-        val newDir = java.io.File(filesDir, "mms_attachments").apply { mkdirs() }
-        // v1.14.7 audit S1 — canonicalFile sur newDir pour le path-traversal check ultérieur.
-        // Sans canonicalisation un attaquant qui maîtriserait `att.localUri` (impossible dans
-        // les flux normaux car persistAttachment génère le nom via UUID, mais defense-in-depth)
-        // pourrait crafter `../../secret` et écrire hors du sandbox attachments.
-        val newDirCanonical = runCatching { newDir.canonicalFile }.getOrNull() ?: run {
-            Timber.w("v1.14.7 migration: cannot canonicalize newDir %s", newDir.absolutePath)
-            return@withContext
-        }
-        val oldPrefixAbs = oldDir.absolutePath + java.io.File.separator
-
-        val candidates = runCatching {
-            attachmentDaoLazy.get().findByLocalUriPrefix(oldPrefixAbs)
-        }.getOrDefault(emptyList())
-
-        if (candidates.isEmpty()) {
-            // Pas de migration à faire (fresh install ou tous les attachments déjà en filesDir).
-            // On flippe le flag pour éviter de re-tenter à chaque cold-start.
-            runCatching {
-                settingsRepository.update { s -> s.copy(advanced = s.advanced.copy(attachmentsMovedToFilesDirV147 = true)) }
-            }
-            return@withContext
-        }
-
-        Timber.i("v1.14.7 attachments migration: %d rows to move from cacheDir to filesDir", candidates.size)
-
-        var moved = 0
-        var skipped = 0
-        for (att in candidates) {
-            val srcFile = java.io.File(att.localUri)
-            // v1.14.7 audit S1 — extraire UNIQUEMENT le basename sans dirs (anti path-traversal).
-            // `srcFile.name` retourne déjà le basename sur Java/Kotlin, mais on contrôle via
-            // canonical check ci-dessous que dstFile reste bien sous newDir. Les noms générés par
-            // `persistAttachment` (in-${ts}-${uuid}.ext) ne peuvent pas contenir de séparateurs,
-            // ce check est une defense-in-depth contre une régression future de generateur de nom.
-            val fileName = srcFile.name
-            val dstFile = java.io.File(newDir, fileName)
-            val dstCanonical = runCatching { dstFile.canonicalFile }.getOrNull()
-            if (dstCanonical == null || !dstCanonical.toPath().startsWith(newDirCanonical.toPath())) {
-                Timber.w("v1.14.7 migration: path traversal rejected for %s → %s", att.localUri, dstFile.absolutePath)
-                continue
-            }
-            runCatching {
-                if (!srcFile.exists()) {
-                    // Fichier source disparu (cache déjà clearé par Android) — on ne peut pas
-                    // restaurer, mais on flippe quand même le local_uri vers le nouveau chemin
-                    // pour que les futurs MMS reçus (qui iront direct dans filesDir) ne soient
-                    // pas confondus avec ce row orphelin. Le bubble affichera de toute façon le
-                    // fallback (fichier introuvable).
-                    skipped++
-                    if (att.localUri != dstFile.absolutePath) {
-                        attachmentDaoLazy.get().updateLocalUri(att.id, dstFile.absolutePath)
-                    }
-                    return@runCatching
-                }
-                if (dstFile.exists()) {
-                    // Destination existe déjà (re-migration partielle, ou collision de nom) — on
-                    // garde la destination + supprime la source pour ne pas laisser de doublon.
-                    runCatching { srcFile.delete() }
-                    attachmentDaoLazy.get().updateLocalUri(att.id, dstFile.absolutePath)
-                    moved++
-                    return@runCatching
-                }
-                val renamed = srcFile.renameTo(dstFile)
-                if (!renamed) {
-                    // Fallback : copy + delete (cas partition différente, rare sur Android moderne).
-                    srcFile.inputStream().use { input ->
-                        dstFile.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    runCatching { srcFile.delete() }
-                }
-                attachmentDaoLazy.get().updateLocalUri(att.id, dstFile.absolutePath)
-                moved++
-            }.onFailure { Timber.w(it, "v1.14.7 migration: failed to move %s", att.localUri) }
-        }
-
-        Timber.i("v1.14.7 attachments migration: moved=%d skipped=%d", moved, skipped)
-        runCatching {
-            settingsRepository.update { s -> s.copy(advanced = s.advanced.copy(attachmentsMovedToFilesDirV147 = true)) }
         }
     }
 }
