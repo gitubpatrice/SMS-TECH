@@ -2,10 +2,10 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.SendErrorCode
+import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.sender.SmsSender
 import timber.log.Timber
 import javax.inject.Inject
@@ -21,12 +21,13 @@ import javax.inject.Inject
  * (covered in v1.1 UX polish, the data side is already wired here).
  */
 class RetrySendUseCase @Inject constructor(
-    private val messageDao: MessageDao,
+    private val conversationRepo: ConversationRepository,
     private val sender: SmsSender,
     private val mirror: ConversationMirror,
 ) {
     suspend operator fun invoke(messageId: Long): Outcome<Unit> {
-        val msg = messageDao.findById(messageId) ?: return Outcome.Failure(AppError.NotFound("message"))
+        val msg = conversationRepo.findMessageForResend(messageId)
+            ?: return Outcome.Failure(AppError.NotFound("message"))
         if (msg.errorCode == SendErrorCode.WATCHDOG_TIMEOUT) {
             Timber.w(
                 "Retry of watchdog-timed-out message %d: previous attempt may have reached the recipient",

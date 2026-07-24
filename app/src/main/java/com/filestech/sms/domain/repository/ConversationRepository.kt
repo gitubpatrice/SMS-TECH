@@ -73,6 +73,15 @@ interface ConversationRepository {
     suspend fun findMessageById(id: Long): Message?
 
     /**
+     * Lookup PRIMARY KEY d'un message pour un **re-dispatch** (retry d'envoi), SANS la garde
+     * `inVault` de [findMessageById]. Renvoyer ici un message d'une conversation coffre est
+     * légitime : l'appelant ([com.filestech.sms.domain.usecase.RetrySendUseCase]) ré-émet vers
+     * le destinataire d'origine et n'expose jamais le corps à l'UI. **Ne pas utiliser pour un
+     * affichage** — utiliser [findMessageById] (gardé) pour tout chemin visible par l'utilisateur.
+     */
+    suspend fun findMessageForResend(id: Long): Message?
+
+    /**
      * v1.3.1 — pose / change / retire la réaction emoji locale sur [messageId] et retourne
      * le type de transition pour permettre au caller (ViewModel) de décider d'un éventuel
      * envoi SMS en aval. Sémantique :

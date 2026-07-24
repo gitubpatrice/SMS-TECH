@@ -527,6 +527,14 @@ class ConversationRepositoryImpl @Inject constructor(
         entity.toDomain()
     }
 
+    // Re-dispatch (retry) — lookup PRIMARY KEY SANS garde `inVault` : le renvoi ré-émet vers le
+    // destinataire d'origine sans jamais exposer le corps à l'UI, donc masquer un message de
+    // conversation coffre casserait le retry sans bénéfice de confidentialité. Cf. la garde
+    // délibérée de [findMessageById] pour les chemins visibles par l'utilisateur.
+    override suspend fun findMessageForResend(id: Long): Message? = withContext(io) {
+        messageDao.findById(id)?.toDomain()
+    }
+
     // v1.6.1 (audit QUAL-18) — délégation à la fonction top-level pure
     // [escapeFtsQuery] (testable sans instance ConversationRepositoryImpl).
     private fun escapeFtsQuery(input: String): String =
