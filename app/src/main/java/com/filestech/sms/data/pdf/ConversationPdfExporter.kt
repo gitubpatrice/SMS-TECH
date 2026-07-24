@@ -18,6 +18,8 @@ import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
+import com.filestech.sms.domain.pdf.PdfExportResult
+import com.filestech.sms.domain.pdf.PdfExporter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -40,18 +42,17 @@ import javax.inject.Singleton
 class ConversationPdfExporter @Inject constructor(
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : PdfExporter {
 
-    data class ExportResult(val file: File, val shareUri: android.net.Uri, val pages: Int)
+    override suspend fun export(conversation: Conversation, messages: List<Message>): Outcome<PdfExportResult> =
+        withContext(io) {
+            runCatchingOutcome(
+                block = { renderToFile(conversation, messages) },
+                errorMapper = { AppError.Storage(it) },
+            )
+        }
 
-    suspend fun export(conversation: Conversation, messages: List<Message>): Outcome<ExportResult> = withContext(io) {
-        runCatchingOutcome(
-            block = { renderToFile(conversation, messages) },
-            errorMapper = { AppError.Storage(it) },
-        )
-    }
-
-    private fun renderToFile(conversation: Conversation, messages: List<Message>): ExportResult {
+    private fun renderToFile(conversation: Conversation, messages: List<Message>): PdfExportResult {
         val doc = PdfDocument()
         val pages = renderPages(doc, conversation, messages)
         val dir = File(context.filesDir, "exports").apply { if (!exists()) mkdirs() }
@@ -61,7 +62,7 @@ class ConversationPdfExporter @Inject constructor(
         out.outputStream().use { doc.writeTo(it) }
         doc.close()
         val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", out)
-        return ExportResult(out, uri, pages)
+        return PdfExportResult(shareUri = uri.toString(), pages = pages)
     }
 
     private fun renderPages(doc: PdfDocument, conversation: Conversation, messages: List<Message>): Int {

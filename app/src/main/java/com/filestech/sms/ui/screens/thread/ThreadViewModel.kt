@@ -1222,7 +1222,7 @@ class ThreadViewModel @Inject constructor(
         _state.update { it.copy(isExporting = true) }
         viewModelScope.launch {
             when (val r = exportPdf.invoke(conversationId)) {
-                is Outcome.Success -> _events.tryEmit(Event.PdfReady(r.value.shareUri, r.value.pages))
+                is Outcome.Success -> _events.tryEmit(Event.PdfReady(Uri.parse(r.value.shareUri), r.value.pages))
                 // v1.6.1 (audit QUAL-07) — string localisée (avant : "PDF export failed"
                 // affiché en anglais même sur device FR — regression i18n).
                 is Outcome.Failure -> _events.tryEmit(
