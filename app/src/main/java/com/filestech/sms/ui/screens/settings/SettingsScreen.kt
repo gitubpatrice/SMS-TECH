@@ -1930,7 +1930,7 @@ private fun SenderNameDialog(
                 androidx.compose.material3.OutlinedTextField(
                     value = value,
                     onValueChange = { input ->
-                        // Cap à 40 chars au save (cf. SenderNameProvider.MAX_NAME_LENGTH).
+                        // Cap à 40 chars au save (cf. SenderNameProviderImpl.MAX_NAME_LENGTH).
                         value = input.take(40)
                     },
                     singleLine = true,

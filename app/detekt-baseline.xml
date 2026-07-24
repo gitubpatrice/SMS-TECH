@@ -309,7 +309,7 @@
     <ID>MultiLineIfElse:SendSmsUseCase.kt$SendSmsUseCase$Outcome.Success(ids)</ID>
     <ID>MultiLineIfElse:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$Outcome.Failure(AppError.Telephony("no MMS dispatched"))</ID>
     <ID>MultiLineIfElse:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$Outcome.Success(ids)</ID>
-    <ID>MultiLineIfElse:SenderNameProvider.kt$SenderNameProvider$cleaned</ID>
+    <ID>MultiLineIfElse:SenderNameProviderImpl.kt$SenderNameProviderImpl$cleaned</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$"$days j ${rem} h"</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$MaterialTheme.colorScheme.onSurfaceVariant</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$MaterialTheme.colorScheme.primary</ID>
