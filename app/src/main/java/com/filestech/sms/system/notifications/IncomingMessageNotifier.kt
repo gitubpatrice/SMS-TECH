@@ -18,6 +18,7 @@ import com.filestech.sms.R
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.notification.ConversationNotificationCanceller
 import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.settings.NotificationStyle
 import com.filestech.sms.domain.settings.PreviewMode
@@ -36,7 +37,7 @@ class IncomingMessageNotifier @Inject constructor(
     private val activeConversationTracker: ActiveConversationTracker,
     private val conversationDao: ConversationDao,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : ConversationNotificationCanceller {
 
     suspend fun notifyIncoming(
         address: String,
@@ -320,7 +321,7 @@ class IncomingMessageNotifier @Inject constructor(
      * et raterait les notifs déposées en background) — on demande au système la liste
      * à chaque appel.
      */
-    fun cancelAllForConversation(conversationId: Long) {
+    override fun cancelAllForConversation(conversationId: Long) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?
             ?: return
         val tag = conversationTag(conversationId)

@@ -20,12 +20,12 @@ import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.MessageWindow
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
+import com.filestech.sms.domain.notification.ConversationNotificationCanceller
 import com.filestech.sms.domain.purge.purgeCutoffMs
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
 import com.filestech.sms.security.AppLockManager
-import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -47,7 +47,7 @@ class ConversationRepositoryImpl @Inject constructor(
     private val attachmentDao: AttachmentDao,
     private val appLock: AppLockManager,
     private val blockedRepo: BlockedNumberRepository,
-    private val notifier: IncomingMessageNotifier,
+    private val notifier: ConversationNotificationCanceller,
     // v1.12.0 — résolution du displayName à la création d'une conv via
     // ComposeScreen. Sans ça, `findOrCreate` créait toujours
     // `displayName = null`, ce qui faisait afficher le numéro brut dans le

@@ -22,6 +22,7 @@ import com.filestech.sms.domain.emergency.IAmOkMessageProvider
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
+import com.filestech.sms.domain.notification.ConversationNotificationCanceller
 import com.filestech.sms.domain.pdf.PdfExporter
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ContactRepository
@@ -39,6 +40,7 @@ import com.filestech.sms.domain.settings.AppSettingsSource
 import com.filestech.sms.domain.vault.VaultMover
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.VaultManager
+import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
 import dagger.Binds
 import dagger.Module
@@ -109,4 +111,9 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindAppSettingsSource(impl: SettingsRepository): AppSettingsSource
+
+    @Binds @Singleton
+    abstract fun bindConversationNotificationCanceller(
+        impl: IncomingMessageNotifier,
+    ): ConversationNotificationCanceller
 }
