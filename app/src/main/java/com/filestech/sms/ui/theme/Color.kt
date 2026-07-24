@@ -38,6 +38,18 @@ internal val BubbleIncomingLight = Color(0xFFDDE5F0)
 internal val BubbleIncomingDark = Color(0xFF37414F)
 
 /**
+ * Fond « gris/bleu » des cartes de groupe de l'écran Réglages — volontairement un peu plus clair
+ * et plus bleuté que le `surfaceContainerHigh` neutre dérivé par Material, pour que chaque groupe
+ * se détache du fond de page tout en portant l'identité bleue de la marque. Deux tons sélectionnés
+ * par luminance (cf. [settingsBlockColor]) pour rester corrects sous DarkTech / Amoled.
+ *
+ *  - Light : `#E4EBF6` (gris-bleu pâle, plus clair que le gris neutre).
+ *  - Dark  : `#2B3444` (gris-bleu ardoise, plus clair que le conteneur sombre neutre).
+ */
+internal val SettingsBlockLight = Color(0xFFE4EBF6)
+internal val SettingsBlockDark = Color(0xFF2B3444)
+
+/**
  * Slate-blue palette for [Snackbar] / inverse-surface widgets. The default Material 3 inverse
  * pair is grey/near-black, which looks foreign on a brand-blue app. Both light and dark schemes
  * share the same pair: a confirmation toast always reads against this stable identity, no
@@ -170,4 +182,15 @@ internal fun bubbleIncomingColor(scheme: ColorScheme): Color {
     val s = scheme.surface
     val luma = 0.2126f * s.red + 0.7152f * s.green + 0.0722f * s.blue
     return if (luma < 0.5f) BubbleIncomingDark else BubbleIncomingLight
+}
+
+/**
+ * Fond gris/bleu des cartes de l'écran Réglages, choisi selon la luminance de la surface du thème
+ * (comme [bubbleIncomingColor]) pour couvrir correctement les thèmes clair, sombre, DarkTech et
+ * Amoled.
+ */
+internal fun settingsBlockColor(scheme: ColorScheme): Color {
+    val s = scheme.surface
+    val luma = 0.2126f * s.red + 0.7152f * s.green + 0.0722f * s.blue
+    return if (luma < 0.5f) SettingsBlockDark else SettingsBlockLight
 }

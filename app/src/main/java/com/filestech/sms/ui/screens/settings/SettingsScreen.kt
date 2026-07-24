@@ -8,6 +8,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -548,7 +549,8 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(horizontal = 12.dp)) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                    color = com.filestech.sms.ui.theme.settingsBlockColor(MaterialTheme.colorScheme),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     NavigationRow(stringResource(R.string.about_title), onClick = onOpenAbout)
@@ -1594,7 +1596,10 @@ private fun SectionCard(
         }
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+            // v1.25.1 : fond gris/bleu clair + liseré gris discret (outlineVariant), pour que
+            // chaque groupe de réglages se détache du fond de page sans surcharge visuelle.
+            color = com.filestech.sms.ui.theme.settingsBlockColor(MaterialTheme.colorScheme),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(content = content)

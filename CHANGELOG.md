@@ -3,6 +3,13 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.25.1] — 2026-07-24
+
+### Changed
+- **Réglages : chaque groupe est désormais encadré.** Les blocs de l'écran Paramètres reçoivent un
+  fond gris/bleu clair et un fin liseré gris, pour se détacher nettement du fond de page et
+  améliorer la lisibilité. Aucun changement fonctionnel, aucune string modifiée.
+
 ## [1.25.0] — 2026-07-24
 
 ### Performance

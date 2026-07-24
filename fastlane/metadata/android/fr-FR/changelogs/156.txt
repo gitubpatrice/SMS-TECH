@@ -1,0 +1,6 @@
+v1.25.1 — Réglages plus lisibles
+
+• Chaque groupe de l'écran Paramètres est maintenant encadré :
+  fond gris/bleu clair + fin liseré gris, pour se détacher
+  nettement du fond de page.
+• Aucun changement fonctionnel.

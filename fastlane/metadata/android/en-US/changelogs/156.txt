@@ -1,0 +1,6 @@
+v1.25.1 — Clearer settings
+
+• Each group on the Settings screen is now framed: a light
+  grey/blue background and a thin grey outline, so it stands
+  out clearly from the page.
+• No functional change.
