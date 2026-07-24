@@ -168,8 +168,9 @@ kotlin {
 }
 
 dependencies {
-    // Module :core (crypto / result / ext / logging) — extrait en module Gradle (Étage 2.3)
+    // Modules extraits en Gradle (Étage 2.3)
     implementation(project(":core"))
+    implementation(project(":domain"))
     // Core
     implementation(libs.androidx.core.ktx)
     // v1.24.0 — installe le baseline profile généré au premier lancement (démarrage plus rapide).

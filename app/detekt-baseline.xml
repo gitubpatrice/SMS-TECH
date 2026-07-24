@@ -160,11 +160,6 @@
     <ID>ArgumentListWrapping:ThreadViewModel.kt$ThreadViewModel$(com.filestech.sms.R.string.snack_thread_attach_copy_failed)</ID>
     <ID>ArgumentListWrapping:ThreadViewModel.kt$ThreadViewModel$(com.filestech.sms.R.string.snack_thread_numbers_blocked)</ID>
     <ID>ArgumentListWrapping:ThreadViewModel.kt$ThreadViewModel$(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)</ID>
-    <ID>ArgumentListWrapping:TriggerEmergencyUseCase.kt$TriggerEmergencyUseCase$( "TriggerEmergencyUseCase: TRIGGER done — sent=%d failed=%d hadLocation=%s", sent, failed, hadLocation, )</ID>
-    <ID>ArgumentListWrapping:TriggerEmergencyUseCase.kt$TriggerEmergencyUseCase$( "TriggerEmergencyUseCase: TRIGGER — sending to %d contact(s), template=%s, hadLocation=%s", contacts.size, emergency.template.name, hadLocation, )</ID>
-    <ID>ArgumentListWrapping:TriggerSafetyCallUseCase.kt$TriggerSafetyCallUseCase$( "TriggerSafetyCallUseCase: TRIGGER done — sent=%d failed=%d, deadman now disabled", sent, failed, )</ID>
-    <ID>ArgumentListWrapping:TriggerSafetyCallUseCase.kt$TriggerSafetyCallUseCase$( "TriggerSafetyCallUseCase: TRIGGER — sending to %d contact(s), template=%s, timeout=%dh", current.contacts.size, current.template.name, current.timeoutMs / 3_600_000L, )</ID>
-    <ID>ArgumentListWrapping:TriggerSafetyCallUseCase.kt$TriggerSafetyCallUseCase$( "TriggerSafetyCallUseCase: armed but not expired (lastActivity=%d, timeout=%dh)", current.lastActivityAt, current.timeoutMs / 3_600_000L, )</ID>
     <ID>ArgumentListWrapping:VaultScreen.kt$( R.plurals.vault_bulk_move_out_done, event.count, event.count, )</ID>
     <ID>ArgumentListWrapping:VaultScreen.kt$(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))</ID>
     <ID>ArgumentListWrapping:VaultScreen.kt$(R.string.action_back)</ID>
@@ -245,9 +240,6 @@
     <ID>MaxLineLength:MainApplication.kt$MainApplication$"MainApplication: repairing dirty emergency state (enabled=%s shortcut=%s police=%s lastTriggeredAt=%d) → cascade-disable"</ID>
     <ID>MaxLineLength:MmsSender.kt$MmsSender$Timber.w(persisted.exceptionOrNull(), "dispatchMms: setMmsSystemId(%d, %d) failed — rolling back", localMessageId, mmsSystemId)</ID>
     <ID>MaxLineLength:MmsSystemWriteback.kt$MmsSystemWriteback$Timber.i("MmsSystemWriteback: inserted outbox row id=%d (%d recipient(s), %d attachment(s))", mmsId, recipients.size, attachments.size)</ID>
-    <ID>MaxLineLength:SafetyCallTemplate.kt$SafetyCallTemplate$CHECK_IN -&gt; "Bonjour. Je n'ai pas accédé à mon téléphone depuis [DURÉE]. Pourrais-tu m'appeler ou passer pour vérifier que tout va bien ? Merci."</ID>
-    <ID>MaxLineLength:SafetyCallTemplate.kt$SafetyCallTemplate$FOLLOW_UP -&gt; "Message automatique : pas d'activité sur mon téléphone depuis [DURÉE]. Pourrais-tu m'appeler pour t'assurer que tout va bien ? Merci."</ID>
-    <ID>MaxLineLength:SafetyCallTemplate.kt$SafetyCallTemplate$URGENT -&gt; "Si tu reçois ce SMS, c'est que je n'ai pas pu utiliser mon téléphone depuis [DURÉE]. Afin d'être certain que tout va bien, appelle-moi STP."</ID>
     <ID>MaxLineLength:SettingsScreen.kt$onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -&gt; com.filestech.sms.domain.settings.AppSettings) -&gt; Unit</ID>
     <ID>MaxLineLength:TelephonySyncManager.kt$TelephonySyncManager$Timber.i("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)</ID>
     <ID>MaxLineLength:ThreadScreen.kt$title = { Text(stringResource(R.string.thread_schedule_date_title), modifier = Modifier.padding(start = 24.dp, top = 16.dp)) }</ID>
@@ -296,16 +288,6 @@
     <ID>MultiLineIfElse:MmsDownloader.kt$MmsDownloader$subId</ID>
     <ID>MultiLineIfElse:MmsFailureNotifier.kt$MmsFailureNotifier$return</ID>
     <ID>MultiLineIfElse:MmsSender.kt$MmsSender$subId</ID>
-    <ID>MultiLineIfElse:PhoneAddress.kt$PhoneAddress.Companion$csv.split(';', ',').map { of(it) }.filter { it.raw.isNotEmpty() }</ID>
-    <ID>MultiLineIfElse:PhoneAddress.kt$PhoneAddress.Companion$emptyList()</ID>
-    <ID>MultiLineIfElse:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$Outcome.Failure(AppError.Telephony("no MMS dispatched"))</ID>
-    <ID>MultiLineIfElse:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$Outcome.Success(ids)</ID>
-    <ID>MultiLineIfElse:SendReactionUseCase.kt$"$name a réagi par $emoji à votre message"</ID>
-    <ID>MultiLineIfElse:SendReactionUseCase.kt$"Réagi par $emoji à votre message"</ID>
-    <ID>MultiLineIfElse:SendSmsUseCase.kt$SendSmsUseCase$Outcome.Failure(AppError.Telephony("no message dispatched"))</ID>
-    <ID>MultiLineIfElse:SendSmsUseCase.kt$SendSmsUseCase$Outcome.Success(ids)</ID>
-    <ID>MultiLineIfElse:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$Outcome.Failure(AppError.Telephony("no MMS dispatched"))</ID>
-    <ID>MultiLineIfElse:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$Outcome.Success(ids)</ID>
     <ID>MultiLineIfElse:SenderNameProviderImpl.kt$SenderNameProviderImpl$cleaned</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$"$days j ${rem} h"</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$MaterialTheme.colorScheme.onSurfaceVariant</ID>
@@ -358,17 +340,13 @@
     <ID>MultiLineIfElse:VaultScreen.kt$vaultSheetTarget = c.id</ID>
     <ID>MultiLineIfElse:VaultScreen.kt$viewModel.toggleSelection(c.id)</ID>
     <ID>NoBlankLineBeforeRbrace:EmergencyViewModel.kt$EmergencyViewModel$ </ID>
-    <ID>NoBlankLineBeforeRbrace:SendReactionUseCase.kt$SendReactionUseCase$ </ID>
     <ID>NoConsecutiveBlankLines:AppearanceDialog.kt$ </ID>
     <ID>NoConsecutiveBlankLines:DateTimeFormatters.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ForwardMessageSheet.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:SendReactionUseCase.kt$SendReactionUseCase$ </ID>
     <ID>NoConsecutiveBlankLines:ThreadViewModel.kt$ThreadViewModel$ </ID>
     <ID>NoMultipleSpaces:AuditV1100Test.kt$AuditV1100Test$ </ID>
     <ID>NoMultipleSpaces:EmojiCustomDialog.kt$ </ID>
-    <ID>NoMultipleSpaces:SafetyCallConfig.kt$SafetyCallConfig.Companion$ </ID>
     <ID>NoMultipleSpaces:SafetyCallWarningNotifier.kt$SafetyCallWarningNotifier.Companion$ </ID>
-    <ID>NoMultipleSpaces:SmishingDetector.kt$SmishingDetector$ </ID>
     <ID>NoUnusedImports:AppearanceDialog.kt$com.filestech.sms.ui.components.AppearanceDialog.kt</ID>
     <ID>NoUnusedImports:AudioMessageBubble.kt$com.filestech.sms.ui.components.AudioMessageBubble.kt</ID>
     <ID>NoUnusedImports:BlockedNumbersScreen.kt$com.filestech.sms.ui.screens.blocked.BlockedNumbersScreen.kt</ID>
@@ -388,13 +366,9 @@
     <ID>NoUnusedImports:ReplyQuoteCard.kt$com.filestech.sms.ui.components.ReplyQuoteCard.kt</ID>
     <ID>NoUnusedImports:SafetyCallWorker.kt$com.filestech.sms.system.scheduler.SafetyCallWorker.kt</ID>
     <ID>NoUnusedImports:ScheduledMessagesScreen.kt$com.filestech.sms.ui.screens.scheduled.ScheduledMessagesScreen.kt</ID>
-    <ID>NoUnusedImports:SendMediaMmsUseCase.kt$com.filestech.sms.domain.usecase.SendMediaMmsUseCase.kt</ID>
-    <ID>NoUnusedImports:SendSmsUseCase.kt$com.filestech.sms.domain.usecase.SendSmsUseCase.kt</ID>
-    <ID>NoUnusedImports:SendVoiceMmsUseCase.kt$com.filestech.sms.domain.usecase.SendVoiceMmsUseCase.kt</ID>
     <ID>NoUnusedImports:SettingsRepository.kt$com.filestech.sms.data.local.datastore.SettingsRepository.kt</ID>
     <ID>NoUnusedImports:TelephonySyncWorker.kt$com.filestech.sms.system.scheduler.TelephonySyncWorker.kt</ID>
     <ID>NoUnusedImports:ThreadScreen.kt$com.filestech.sms.ui.screens.thread.ThreadScreen.kt</ID>
-    <ID>NoUnusedImports:ToggleConversationStateUseCase.kt$com.filestech.sms.domain.usecase.ToggleConversationStateUseCase.kt</ID>
     <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(parts: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsPartImport&gt;)</ID>
     <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(rows: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsImportRow&gt;)</ID>
     <ID>ParameterListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id: Long, archived: Boolean)</ID>
@@ -406,14 +380,11 @@
     <ID>ParameterWrapping:SettingsScreen.kt$transform: (com.filestech.sms.domain.settings.AppSettings) -&gt; com.filestech.sms.domain.settings.AppSettings</ID>
     <ID>PropertyWrapping:SettingsScreen.kt$val defaultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* no-op */ }</ID>
     <ID>ReturnCount:IncomingMessageNotifier.kt$IncomingMessageNotifier$fun isIncomingChannelEffectivelyEnabled(): Boolean</ID>
-    <ID>ReturnCount:IncomingReactionDecoder.kt$IncomingReactionDecoder$fun decode(body: String): DecodedReaction?</ID>
     <ID>ReturnCount:LegacyZeroKeyRekey.kt$LegacyZeroKeyRekey$fun rekeyIfNeeded(context: Context, passphrase: ByteArray): Result</ID>
     <ID>ReturnCount:LocationResolver.kt$LocationResolver$suspend fun getCurrentLocation( timeoutMs: Long = DEFAULT_TIMEOUT_MS, ): Location?</ID>
     <ID>ReturnCount:MediaAttachmentBubble.kt$private fun com.filestech.sms.domain.model.Attachment.toShareableUri( context: android.content.Context, ): Uri?</ID>
     <ID>ReturnCount:MmsBuilder.kt$MmsBuilder$fun buildMultipartSendReq( attachments: List&lt;MmsAttachment&gt;, textBody: String?, recipients: List&lt;String&gt;, subject: String? = null, requestDeliveryReport: Boolean = false, ): ByteArray?</ID>
     <ID>ReturnCount:MmsDownloader.kt$MmsDownloader$fun download( contentLocation: String, transactionId: String?, senderAddress: String?, subId: Int? = null, ): Outcome&lt;Unit&gt;</ID>
-    <ID>ReturnCount:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$suspend operator fun invoke( recipients: List&lt;PhoneAddress&gt;, attachments: List&lt;AttachmentPayload&gt;, textBody: String = "", subId: Int? = null, ): Outcome&lt;List&lt;Long&gt;&gt;</ID>
-    <ID>ReturnCount:SendReactionUseCase.kt$SendReactionUseCase$suspend operator fun invoke( messageId: Long, emoji: String, format: ReactionFormat = ReactionFormat.READABLE_FR, ): Outcome&lt;List&lt;Long&gt;&gt;</ID>
     <ID>ReturnCount:SmishingDetector.kt$SmishingDetector$internal fun levenshteinAtMost(a: String, b: String, maxDistance: Int): Boolean</ID>
     <ID>SpacingBetweenDeclarationsWithAnnotations:BootReceiver.kt$BootReceiver$@Inject @ApplicationScope lateinit var scope: CoroutineScope</ID>
     <ID>SpacingBetweenDeclarationsWithAnnotations:BootReceiver.kt$BootReceiver$@Inject lateinit var emergencyShortcutNotifier: EmergencyShortcutNotifier</ID>
@@ -469,7 +440,6 @@
     <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// Audit SECU-M1 v1.15.2 — Caps dur sur le nombre d'objets désérialisés du JSON.</ID>
     <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// v1.15.2 — Cap de sécurité sur la taille d'un .smsbk à restaurer. 50 MB couvre des</ID>
     <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// v1.17.0 audit KOTLIN-L2 — Bornes header `.smsbk` alignées sur les constantes</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:ConversationRepository.kt$ConversationRepository$/** * v1.11.0 — apparence personnalisée par conversation (Sujet 5). `null` sur * un argument = reset à la valeur par défaut (bleu marque pour la bulle, * avatar contact natif). Voir [com.filestech.sms.data.local.db.dao.ConversationDao.setAppearance]. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:ConversationsViewModel.kt$ConversationsViewModel.Event.IAmOkDoneNoSms$/** v1.14.0 — Reset cooldown effectué, pas de SMS (opt-in OFF). */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:ConversationsViewModel.kt$ConversationsViewModel.Event.IAmOkDoneWithSms$/** v1.14.0 — Reset cooldown + SMS "Je vais bien" envoyé. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:EmergencyCallHelper.kt$EmergencyCallHelper.CallOutcome.INVALID_NUMBER$/** Numéro non dans la whitelist. Caller bug. */</ID>
@@ -519,7 +489,6 @@
     <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun generateAndWrap(): ByteArray</ID>
     <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun unwrap(): ByteArray</ID>
     <ID>TooManyFunctions:ConversationDao.kt$ConversationDao</ID>
-    <ID>TooManyFunctions:ConversationRepository.kt$ConversationRepository</ID>
     <ID>TooManyFunctions:MessageDao.kt$MessageDao</ID>
     <ID>TooManyFunctions:ThreadViewModel.kt$ThreadViewModel : ViewModel</ID>
     <ID>UnusedImports:AppearanceDialog.kt$import androidx.compose.foundation.layout.padding</ID>
@@ -544,9 +513,6 @@
     <ID>UnusedImports:ReplyQuoteCard.kt$import androidx.compose.foundation.layout.width</ID>
     <ID>UnusedImports:SafetyCallWorker.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:ScheduledMessagesScreen.kt$import androidx.compose.foundation.layout.Box</ID>
-    <ID>UnusedImports:SendMediaMmsUseCase.kt$import kotlinx.coroutines.flow.first</ID>
-    <ID>UnusedImports:SendSmsUseCase.kt$import kotlinx.coroutines.flow.first</ID>
-    <ID>UnusedImports:SendVoiceMmsUseCase.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:SettingsRepository.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:TelephonySyncWorker.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.foundation.layout.heightIn</ID>
@@ -554,7 +520,6 @@
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.material3.SnackbarDuration</ID>
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.material3.SnackbarHost</ID>
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.material3.SnackbarVisuals</ID>
-    <ID>UnusedImports:ToggleConversationStateUseCase.kt$import com.filestech.sms.core.result.AppError</ID>
     <ID>UnusedParameter:ComposeScreen.kt$initialAddress: String?</ID>
     <ID>UnusedParameter:ConversationsScreen.kt$onOpenBlocked: () -&gt; Unit</ID>
     <ID>UnusedParameter:EmergencyShortcutReceiver.kt$EmergencyShortcutReceiver$context: Context</ID>
@@ -562,9 +527,6 @@
     <ID>UnusedPrivateMember:TelephonyReader.kt$TelephonyReader$private fun readMmsParts(mmsId: Long): Pair&lt;String, List&lt;MmsPartImport&gt;&gt;</ID>
     <ID>UnusedPrivateMember:ThreadScreen.kt$private fun formatFileSize(bytes: Long): String</ID>
     <ID>UnusedPrivateProperty:AudioMessageBubble.kt$val isActiveClip = local is LocalPlayback.Active</ID>
-    <ID>UnusedPrivateProperty:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$val res = sender.sendMediaMms( localMessageId = localId, recipients = listOf(r.raw), attachments = pduAttachments, textBody = textBody.ifBlank { null }, subId = effectiveSubId, requestDeliveryReport = deliveryReports, )</ID>
-    <ID>UnusedPrivateProperty:SendSmsUseCase.kt$SendSmsUseCase$val res = sender.send(localId, r.raw, finalBody, effectiveSubId, deliveryReports)</ID>
-    <ID>UnusedPrivateProperty:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$val res = sender.sendVoiceMms( localMessageId = localId, recipients = listOf(r.raw), audioFile = durableAudio, mimeType = mimeType, subId = effectiveSubId, requestDeliveryReport = deliveryReports, )</ID>
     <ID>Wrapping:BackupScreen.kt$;</ID>
     <ID>Wrapping:BackupService.kt$BackupService$;</ID>
     <ID>Wrapping:BlockedNumbersScreen.kt$;</ID>
@@ -586,8 +548,6 @@
     <ID>Wrapping:MmsSender.kt$MmsSender$(</ID>
     <ID>Wrapping:QuickReplyRepositoryImpl.kt$QuickReplyRepositoryImpl$;</ID>
     <ID>Wrapping:SecurityStore.kt$SecurityStore$;</ID>
-    <ID>Wrapping:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$(</ID>
-    <ID>Wrapping:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$(</ID>
     <ID>Wrapping:SettingsScreen.kt$(</ID>
     <ID>Wrapping:SettingsScreen.kt$/* no-op */</ID>
     <ID>Wrapping:SettingsScreen.kt$;</ID>

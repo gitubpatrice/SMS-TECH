@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ArgumentListWrapping:TriggerEmergencyUseCase.kt$TriggerEmergencyUseCase$( "TriggerEmergencyUseCase: TRIGGER done — sent=%d failed=%d hadLocation=%s", sent, failed, hadLocation, )</ID>
+    <ID>ArgumentListWrapping:TriggerEmergencyUseCase.kt$TriggerEmergencyUseCase$( "TriggerEmergencyUseCase: TRIGGER — sending to %d contact(s), template=%s, hadLocation=%s", contacts.size, emergency.template.name, hadLocation, )</ID>
+    <ID>ArgumentListWrapping:TriggerSafetyCallUseCase.kt$TriggerSafetyCallUseCase$( "TriggerSafetyCallUseCase: TRIGGER done — sent=%d failed=%d, deadman now disabled", sent, failed, )</ID>
+    <ID>ArgumentListWrapping:TriggerSafetyCallUseCase.kt$TriggerSafetyCallUseCase$( "TriggerSafetyCallUseCase: TRIGGER — sending to %d contact(s), template=%s, timeout=%dh", current.contacts.size, current.template.name, current.timeoutMs / 3_600_000L, )</ID>
+    <ID>ArgumentListWrapping:TriggerSafetyCallUseCase.kt$TriggerSafetyCallUseCase$( "TriggerSafetyCallUseCase: armed but not expired (lastActivity=%d, timeout=%dh)", current.lastActivityAt, current.timeoutMs / 3_600_000L, )</ID>
+    <ID>MaxLineLength:SafetyCallTemplate.kt$SafetyCallTemplate$CHECK_IN -&gt; "Bonjour. Je n'ai pas accédé à mon téléphone depuis [DURÉE]. Pourrais-tu m'appeler ou passer pour vérifier que tout va bien ? Merci."</ID>
+    <ID>MaxLineLength:SafetyCallTemplate.kt$SafetyCallTemplate$FOLLOW_UP -&gt; "Message automatique : pas d'activité sur mon téléphone depuis [DURÉE]. Pourrais-tu m'appeler pour t'assurer que tout va bien ? Merci."</ID>
+    <ID>MaxLineLength:SafetyCallTemplate.kt$SafetyCallTemplate$URGENT -&gt; "Si tu reçois ce SMS, c'est que je n'ai pas pu utiliser mon téléphone depuis [DURÉE]. Afin d'être certain que tout va bien, appelle-moi STP."</ID>
+    <ID>MultiLineIfElse:PhoneAddress.kt$PhoneAddress.Companion$csv.split(';', ',').map { of(it) }.filter { it.raw.isNotEmpty() }</ID>
+    <ID>MultiLineIfElse:PhoneAddress.kt$PhoneAddress.Companion$emptyList()</ID>
+    <ID>MultiLineIfElse:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$Outcome.Failure(AppError.Telephony("no MMS dispatched"))</ID>
+    <ID>MultiLineIfElse:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$Outcome.Success(ids)</ID>
+    <ID>MultiLineIfElse:SendReactionUseCase.kt$"$name a réagi par $emoji à votre message"</ID>
+    <ID>MultiLineIfElse:SendReactionUseCase.kt$"Réagi par $emoji à votre message"</ID>
+    <ID>MultiLineIfElse:SendSmsUseCase.kt$SendSmsUseCase$Outcome.Failure(AppError.Telephony("no message dispatched"))</ID>
+    <ID>MultiLineIfElse:SendSmsUseCase.kt$SendSmsUseCase$Outcome.Success(ids)</ID>
+    <ID>MultiLineIfElse:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$Outcome.Failure(AppError.Telephony("no MMS dispatched"))</ID>
+    <ID>MultiLineIfElse:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$Outcome.Success(ids)</ID>
+    <ID>NoBlankLineBeforeRbrace:SendReactionUseCase.kt$SendReactionUseCase$ </ID>
+    <ID>NoConsecutiveBlankLines:SendReactionUseCase.kt$SendReactionUseCase$ </ID>
+    <ID>NoMultipleSpaces:SafetyCallConfig.kt$SafetyCallConfig.Companion$ </ID>
+    <ID>NoMultipleSpaces:SmishingDetector.kt$SmishingDetector$ </ID>
+    <ID>NoUnusedImports:SendMediaMmsUseCase.kt$com.filestech.sms.domain.usecase.SendMediaMmsUseCase.kt</ID>
+    <ID>NoUnusedImports:SendSmsUseCase.kt$com.filestech.sms.domain.usecase.SendSmsUseCase.kt</ID>
+    <ID>NoUnusedImports:SendVoiceMmsUseCase.kt$com.filestech.sms.domain.usecase.SendVoiceMmsUseCase.kt</ID>
+    <ID>NoUnusedImports:ToggleConversationStateUseCase.kt$com.filestech.sms.domain.usecase.ToggleConversationStateUseCase.kt</ID>
+    <ID>ReturnCount:IncomingReactionDecoder.kt$IncomingReactionDecoder$fun decode(body: String): DecodedReaction?</ID>
+    <ID>ReturnCount:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$suspend operator fun invoke( recipients: List&lt;PhoneAddress&gt;, attachments: List&lt;AttachmentPayload&gt;, textBody: String = "", subId: Int? = null, ): Outcome&lt;List&lt;Long&gt;&gt;</ID>
+    <ID>ReturnCount:SendReactionUseCase.kt$SendReactionUseCase$suspend operator fun invoke( messageId: Long, emoji: String, format: ReactionFormat = ReactionFormat.READABLE_FR, ): Outcome&lt;List&lt;Long&gt;&gt;</ID>
+    <ID>ReturnCount:SmishingDetector.kt$SmishingDetector$fun levenshteinAtMost(a: String, b: String, maxDistance: Int): Boolean</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:ConversationRepository.kt$ConversationRepository$/** * v1.11.0 — apparence personnalisée par conversation (Sujet 5). `null` sur * un argument = reset à la valeur par défaut (bleu marque pour la bulle, * avatar contact natif). Voir [com.filestech.sms.data.local.db.dao.ConversationDao.setAppearance]. */</ID>
+    <ID>TooManyFunctions:ConversationRepository.kt$ConversationRepository</ID>
+    <ID>UnusedImports:SendMediaMmsUseCase.kt$import kotlinx.coroutines.flow.first</ID>
+    <ID>UnusedImports:SendSmsUseCase.kt$import kotlinx.coroutines.flow.first</ID>
+    <ID>UnusedImports:SendVoiceMmsUseCase.kt$import kotlinx.coroutines.flow.first</ID>
+    <ID>UnusedImports:ToggleConversationStateUseCase.kt$import com.filestech.sms.core.result.AppError</ID>
+    <ID>UnusedPrivateProperty:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$val res = sender.sendMediaMms( localMessageId = localId, recipients = listOf(r.raw), attachments = pduAttachments, textBody = textBody.ifBlank { null }, subId = effectiveSubId, requestDeliveryReport = deliveryReports, )</ID>
+    <ID>UnusedPrivateProperty:SendSmsUseCase.kt$SendSmsUseCase$val res = sender.send(localId, r.raw, finalBody, effectiveSubId, deliveryReports)</ID>
+    <ID>UnusedPrivateProperty:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$val res = sender.sendVoiceMms( localMessageId = localId, recipients = listOf(r.raw), audioFile = durableAudio, mimeType = mimeType, subId = effectiveSubId, requestDeliveryReport = deliveryReports, )</ID>
+    <ID>Wrapping:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$(</ID>
+    <ID>Wrapping:SendVoiceMmsUseCase.kt$SendVoiceMmsUseCase$(</ID>
+  </CurrentIssues>
+</SmellBaseline>

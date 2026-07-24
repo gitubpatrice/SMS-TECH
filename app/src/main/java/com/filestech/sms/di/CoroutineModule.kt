@@ -8,14 +8,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import javax.inject.Qualifier
 import javax.inject.Singleton
 
-@Qualifier @Retention(AnnotationRetention.BINARY) annotation class IoDispatcher
-@Qualifier @Retention(AnnotationRetention.BINARY) annotation class DefaultDispatcher
-@Qualifier @Retention(AnnotationRetention.BINARY) annotation class MainDispatcher
-@Qualifier @Retention(AnnotationRetention.BINARY) annotation class ApplicationScope
-
+// Les qualifiers @IoDispatcher / @DefaultDispatcher / @MainDispatcher / @ApplicationScope vivent
+// désormais dans le module :core (com.filestech.sms.di.CoroutineQualifiers) pour être visibles de
+// tous les modules ; ce @Module qui les fournit reste dans :app (agrégation Hilt).
 @Module
 @InstallIn(SingletonComponent::class)
 object CoroutineModule {

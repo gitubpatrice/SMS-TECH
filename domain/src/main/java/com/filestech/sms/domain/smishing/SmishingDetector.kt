@@ -273,7 +273,7 @@ object SmishingDetector {
      * [a] et [b] est ≤ [maxDistance]. Implémentation early-exit pour O(n)
      * dans le cas commun où les chaînes sont très différentes.
      */
-    internal fun levenshteinAtMost(a: String, b: String, maxDistance: Int): Boolean {
+    fun levenshteinAtMost(a: String, b: String, maxDistance: Int): Boolean {
         if (kotlin.math.abs(a.length - b.length) > maxDistance) return false
         if (a == b) return true
         val n = a.length

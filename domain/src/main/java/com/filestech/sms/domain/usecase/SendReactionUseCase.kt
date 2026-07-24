@@ -245,7 +245,7 @@ private val FORBIDDEN_BODY_CHARS = Regex(
  *     EXACTEMENT la signature parsée par Apple/Google ; traduire en français
  *     casserait la détection automatique côté iPhone.
  */
-internal fun buildTapbackBody(emoji: String, originalBody: String): String {
+fun buildTapbackBody(emoji: String, originalBody: String): String {
     val sanitized = originalBody
         .replace(FORBIDDEN_BODY_CHARS, " ")
         .replace(Regex("\\s+"), " ")
@@ -291,7 +291,7 @@ internal fun buildTapbackBody(emoji: String, originalBody: String): String {
  *  - Aperçu tronqué grapheme-safe via [safeTake] pour rester dans 1 segment
  *    UCS-2. Le budget est ré-ajusté en fonction de la longueur du nom.
  */
-internal fun buildReadableFrBody(
+fun buildReadableFrBody(
     emoji: String,
     originalBody: String,
     senderName: String? = null,
@@ -334,7 +334,7 @@ private const val EMOJI_WITH_QUOTE_WRAP_LENGTH = 1 + 1 + 1 + 1
  * Body vide (MMS image pure) → fallback `<emoji>` seul (équivalent
  * EMOJI_ONLY pour ce cas, on évite d'envoyer `«»` vides).
  */
-internal fun buildEmojiWithQuoteBody(emoji: String, originalBody: String): String {
+fun buildEmojiWithQuoteBody(emoji: String, originalBody: String): String {
     val sanitized = originalBody
         .replace(FORBIDDEN_BODY_CHARS, " ")
         .replace(Regex("\\s+"), " ")

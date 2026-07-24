@@ -80,7 +80,7 @@ object IncomingReactionDecoder {
      * keeping it out of the public surface follows the project's minimal-visibility
      * convention.
      */
-    internal const val EMOJI_ONLY_REACT_WINDOW_MS: Long = 5 * 60 * 1_000L
+    const val EMOJI_ONLY_REACT_WINDOW_MS: Long = 5 * 60 * 1_000L
 
     /**
      * Max number of UTF-16 code units accepted as a pure-emoji body. 16 covers up
