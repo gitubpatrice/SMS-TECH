@@ -8,9 +8,9 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.mms.MmsSystemWriteback
-import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -44,7 +44,7 @@ class MmsSentReceiver : BroadcastReceiver() {
     // v1.24.0 SEC-CRIT — `Lazy` : ce collaborateur atteint un DAO, donc `AppDatabase`, donc la
     // réparation zéro-clé. L'injection de champ Hilt précède le corps de `onReceive`, sur le main
     // thread : en eager, la reconstruction de la base y tournait sous un timeout ANR de 10 s.
-    @Inject lateinit var mirrorLazy: dagger.Lazy<ConversationMirror>
+    @Inject lateinit var mirrorLazy: dagger.Lazy<OutgoingMessageMirror>
 
     @Inject lateinit var systemWriteback: MmsSystemWriteback
 

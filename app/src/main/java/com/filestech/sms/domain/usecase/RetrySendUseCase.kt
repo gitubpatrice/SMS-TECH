@@ -2,10 +2,10 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.SmsSender
 import timber.log.Timber
 import javax.inject.Inject
@@ -23,7 +23,7 @@ import javax.inject.Inject
 class RetrySendUseCase @Inject constructor(
     private val conversationRepo: ConversationRepository,
     private val sender: SmsSender,
-    private val mirror: ConversationMirror,
+    private val mirror: OutgoingMessageMirror,
 ) {
     suspend operator fun invoke(messageId: Long): Outcome<Unit> {
         val msg = conversationRepo.findMessageForResend(messageId)

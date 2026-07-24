@@ -3,11 +3,11 @@ package com.filestech.sms.domain.usecase
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
+import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SentSmsRecorder
 import com.filestech.sms.domain.sender.SmsSender
@@ -29,7 +29,7 @@ class SendSmsUseCase @Inject constructor(
     private val defaultAppManager: DefaultSmsAppChecker,
     private val sentSmsRecorder: SentSmsRecorder,
     private val sender: SmsSender,
-    private val mirror: ConversationMirror,
+    private val mirror: OutgoingMessageMirror,
     private val blockedRepo: BlockedNumberRepository,
     private val settings: SettingsRepository,
 ) {

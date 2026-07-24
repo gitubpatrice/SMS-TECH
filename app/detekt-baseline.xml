@@ -207,7 +207,7 @@
     <ID>Indentation:SettingsScreen.kt$ </ID>
     <ID>Indentation:SmsTechSnackbar.kt$ </ID>
     <ID>Indentation:ThreadScreen.kt$ </ID>
-    <ID>LargeClass:ConversationMirror.kt$ConversationMirror</ID>
+    <ID>LargeClass:ConversationMirror.kt$ConversationMirror : OutgoingMessageMirror</ID>
     <ID>LargeClass:ThreadViewModel.kt$ThreadViewModel : ViewModel</ID>
     <ID>LongMethod:ConversationsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ConversationsScreen( archived: Boolean = false, onOpenThread: (Long) -&gt; Unit, onCompose: () -&gt; Unit, onOpenSettings: () -&gt; Unit, onOpenVault: () -&gt; Unit, onOpenArchived: () -&gt; Unit, onOpenBlocked: () -&gt; Unit, onOpenAbout: () -&gt; Unit = {}, onBack: (() -&gt; Unit)? = null, viewModel: ConversationsViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onBack: () -&gt; Unit, onOpenAbout: () -&gt; Unit, onOpenBackup: () -&gt; Unit, onOpenMigration: () -&gt; Unit, onOpenBlocked: () -&gt; Unit, onOpenSafetyCall: () -&gt; Unit, onOpenEmergency: () -&gt; Unit, onOpenEmergencySetup: () -&gt; Unit, // v1.15.1 — Accès à la nouvelle screen "Messages programmés" (infra existait // déjà mais aucune UI ne l'exposait — feature dormante). onOpenScheduledMessages: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>

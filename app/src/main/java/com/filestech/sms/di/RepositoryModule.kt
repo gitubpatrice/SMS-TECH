@@ -7,6 +7,7 @@ import com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl
 import com.filestech.sms.data.pdf.ConversationPdfExporter
 import com.filestech.sms.data.repository.BlockedNumberRepositoryImpl
 import com.filestech.sms.data.repository.ContactRepositoryImpl
+import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.repository.ConversationRepositoryImpl
 import com.filestech.sms.data.repository.QuickReplyRepositoryImpl
 import com.filestech.sms.data.repository.ScheduledMessageRepositoryImpl
@@ -22,6 +23,7 @@ import com.filestech.sms.domain.pdf.PdfExporter
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.repository.QuickReplyRepository
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
 import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
@@ -94,4 +96,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindMmsDispatcher(impl: MmsSender): MmsDispatcher
+
+    @Binds @Singleton
+    abstract fun bindOutgoingMessageMirror(impl: ConversationMirror): OutgoingMessageMirror
 }

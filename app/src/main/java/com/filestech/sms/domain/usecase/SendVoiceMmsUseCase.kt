@@ -3,12 +3,12 @@ package com.filestech.sms.domain.usecase
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.BlockedNumberRepository
+import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -26,7 +26,7 @@ import javax.inject.Inject
 class SendVoiceMmsUseCase @Inject constructor(
     private val defaultAppManager: DefaultSmsAppChecker,
     private val blockedRepo: BlockedNumberRepository,
-    private val mirror: ConversationMirror,
+    private val mirror: OutgoingMessageMirror,
     private val sender: MmsDispatcher,
     private val settings: SettingsRepository,
     private val attachmentStore: OutgoingAttachmentStore,

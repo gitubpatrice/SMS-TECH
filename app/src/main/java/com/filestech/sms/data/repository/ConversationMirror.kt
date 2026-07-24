@@ -14,6 +14,7 @@ import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.sms.PhoneNumberWireFormatter
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.mms.MediaAttachmentSpec
 import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.MessageType
@@ -22,6 +23,7 @@ import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder.DecodedReaction.Kind
 import com.filestech.sms.domain.repository.ContactRepository
+import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -43,7 +45,7 @@ class ConversationMirror @Inject constructor(
     private val contacts: ContactRepository,
     private val wireFormatter: PhoneNumberWireFormatter,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : OutgoingMessageMirror {
 
     /**
      * Process-wide cache of `address → displayName` lookups. Avoids re-querying the contacts
@@ -310,15 +312,15 @@ class ConversationMirror @Inject constructor(
     // v1.6.2 — la constante TAPBACK_FALLBACK_LOOKUP_LIMIT vit dans le companion
     // principal en bas du fichier (Kotlin n'accepte qu'un seul companion par classe).
 
-    suspend fun upsertOutgoingSms(
+    override suspend fun upsertOutgoingSms(
         address: String,
         body: String,
         date: Long,
         telephonyUri: String?,
-        subId: Int? = null,
-        // v1.16.0 — Type sécurisé (était Int). Default PENDING inchangé.
-        initialStatus: MessageStatus = MessageStatus.PENDING,
-        replyToMessageId: Long? = null,
+        subId: Int?,
+        // v1.16.0 — Type sécurisé (était Int). Default PENDING vit sur le port OutgoingMessageMirror.
+        initialStatus: MessageStatus,
+        replyToMessageId: Long?,
         /**
          * v1.4.1 — when non-null, overrides what gets stored in the Room row's `body`
          * column (the on-wire SMS body sent via `SmsManager` and mirrored to the
@@ -329,7 +331,7 @@ class ConversationMirror @Inject constructor(
          * query level (`observeForConversation` excludes body=''+0 attach+0 reaction).
          * Default `null` = mirror the wire body as-is (regular text SMS).
          */
-        localMirrorBody: String? = null,
+        localMirrorBody: String?,
     ): Long = withContext(io) {
         val mirrorBody = localMirrorBody ?: body
         database.withTransaction {
@@ -366,7 +368,7 @@ class ConversationMirror @Inject constructor(
     }
 
     // v1.16.0 — Paramètre `status` typé MessageStatus (était Int) — propagation depuis le DAO.
-    suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int? = null) = withContext(io) {
+    override suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int?) = withContext(io) {
         messageDao.updateStatus(localId, status, errorCode)
     }
 
@@ -381,13 +383,13 @@ class ConversationMirror @Inject constructor(
      * Preview/body: emoji + duration label so the conversation list shows something meaningful
      * without having to fetch the attachment table.
      */
-    suspend fun upsertOutgoingMms(
+    override suspend fun upsertOutgoingMms(
         address: String,
         audioFile: File,
         mimeType: String,
         durationMs: Long,
         date: Long,
-        subId: Int? = null,
+        subId: Int?,
     ): Long = withContext(io) {
         val durationLabel = formatDurationLabel(durationMs)
         val preview = "🎤 $durationLabel"
@@ -437,12 +439,12 @@ class ConversationMirror @Inject constructor(
      * The preview line is the user's text body if any, otherwise an emoji + filename fallback so
      * the conversation list still shows something meaningful.
      */
-    suspend fun upsertOutgoingMediaMms(
+    override suspend fun upsertOutgoingMediaMms(
         address: String,
         attachments: List<MediaAttachmentSpec>,
         textBody: String,
         date: Long,
-        subId: Int? = null,
+        subId: Int?,
     ): Long = withContext(io) {
         require(attachments.isNotEmpty()) { "upsertOutgoingMediaMms requires at least one attachment" }
         // v1.3.10 — `messages.body` stores the **user caption verbatim** (possibly empty), so
@@ -489,15 +491,6 @@ class ConversationMirror @Inject constructor(
             msgId
         }
     }
-
-    /** Caller-supplied description of one outgoing MMS attachment. */
-    data class MediaAttachmentSpec(
-        val file: File,
-        val mimeType: String,
-        val width: Int? = null,
-        val height: Int? = null,
-        val durationMs: Long? = null,
-    )
 
     private fun mediaPreviewLabel(a: MediaAttachmentSpec): String = when {
         a.mimeType.startsWith("image/") -> "🖼️ " + a.file.name
