@@ -9,6 +9,7 @@ import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.MessageType
+import com.filestech.sms.domain.sender.SentSmsRecorder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -23,7 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class TelephonyReader @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : SentSmsRecorder {
     private val resolver: ContentResolver get() = context.contentResolver
 
     /** All SMS rows (inbox + sent + drafts + outbox + failed). Use [readSmsBatched] for big imports. */
@@ -170,13 +171,13 @@ class TelephonyReader @Inject constructor(
     }
 
     /** Insert a sent SMS into the system provider (mandatory for default SMS apps). */
-    fun insertSentSms(
+    override fun insertSentSms(
         address: String,
         body: String,
         date: Long,
-        threadId: Long? = null,
-        subId: Int? = null,
-    ): Uri? {
+        threadId: Long?,
+        subId: Int?,
+    ): String? {
         val cv = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, address)
             put(Telephony.Sms.BODY, body)
@@ -188,7 +189,7 @@ class TelephonyReader @Inject constructor(
             threadId?.let { put(Telephony.Sms.THREAD_ID, it) }
             subId?.let { put(Telephony.Sms.SUBSCRIPTION_ID, it) }
         }
-        return resolver.insert(Telephony.Sms.Sent.CONTENT_URI, cv)
+        return resolver.insert(Telephony.Sms.Sent.CONTENT_URI, cv)?.toString()
     }
 
     /** Insert an incoming SMS into the system inbox. Required from SmsDeliverReceiver. */

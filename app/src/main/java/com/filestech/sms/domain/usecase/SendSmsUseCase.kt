@@ -4,12 +4,12 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.repository.ConversationMirror
-import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
+import com.filestech.sms.domain.sender.SentSmsRecorder
 import com.filestech.sms.domain.sender.SmsSender
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -27,7 +27,7 @@ import javax.inject.Inject
  */
 class SendSmsUseCase @Inject constructor(
     private val defaultAppManager: DefaultSmsAppChecker,
-    private val telephonyReader: TelephonyReader,
+    private val sentSmsRecorder: SentSmsRecorder,
     private val sender: SmsSender,
     private val mirror: ConversationMirror,
     private val blockedRepo: BlockedNumberRepository,
@@ -82,7 +82,7 @@ class SendSmsUseCase @Inject constructor(
         val now = System.currentTimeMillis()
         for (r in recipients) {
             if (respectBlocklistOnIncoming && blockedRepo.isBlocked(r.raw)) continue
-            val systemUri = telephonyReader.insertSentSms(
+            val systemUri = sentSmsRecorder.insertSentSms(
                 address = r.raw,
                 body = finalBody,
                 date = now,
@@ -92,7 +92,7 @@ class SendSmsUseCase @Inject constructor(
                 address = r.raw,
                 body = finalBody,
                 date = now,
-                telephonyUri = systemUri?.toString(),
+                telephonyUri = systemUri,
                 subId = effectiveSubId,
                 initialStatus = MessageStatus.PENDING,
                 replyToMessageId = replyToMessageId,

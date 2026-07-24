@@ -12,6 +12,7 @@ import com.filestech.sms.data.repository.ScheduledMessageRepositoryImpl
 import com.filestech.sms.data.sender.SenderNameProviderImpl
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sms.SmsSenderImpl
+import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.domain.backup.BackupRestorer
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
@@ -25,6 +26,7 @@ import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SenderNameProvider
+import com.filestech.sms.domain.sender.SentSmsRecorder
 import com.filestech.sms.domain.sender.SmsSender
 import com.filestech.sms.domain.vault.VaultMover
 import com.filestech.sms.security.AppLockManager
@@ -84,4 +86,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindBackupRestorer(impl: BackupService): BackupRestorer
+
+    @Binds @Singleton
+    abstract fun bindSentSmsRecorder(impl: TelephonyReader): SentSmsRecorder
 }
