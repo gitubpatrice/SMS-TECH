@@ -48,22 +48,40 @@
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Layering debt (honest state, v1.25.0)
+## Dependency inversion — COMPLETE (Étage 2.1, v1.25.0)
 
-The dependency inversion is **not yet complete**, and this doc used to overstate it. Actual state:
+`domain/` is now **100 % free of `data/`, `system/` and `security/` imports** (verified by grep on
+the whole package). The dependency inversion is done; a `:domain` Gradle module is extractable.
 
-- The **message enums** live in `domain/model` (moved out of `data/local/db/entity`, Étage 2.1).
-  Room still stores them as `INTEGER` via `MessageEnumConverters`; the backup format still
-  serialises them as `Int` — both package-independent, so nothing changed on disk or on the wire
-  (proven by `MessageEnumSerializationTest`).
-- The **entity → domain mappers** (`XxxEntity.toDomain()`) now live in `data/local/db/mapper`
-  (moved out of `domain/model`, Étage 2.1). As a result **`domain/model` no longer imports any
-  `data` type** — the models are pure.
-- **Still remaining**: several UseCases (`SendSmsUseCase`, `RetrySendUseCase`, `RestoreBackupUseCase`,
-  `ExportConversationPdfUseCase`, …) inject `data` collaborators directly (`ConversationMirror`,
-  `SmsSender`, `BackupService`, …) instead of domain interfaces. Fully removing this coupling means
-  introducing ~15 domain interfaces with data-side implementations — a send/backup-path-sensitive
-  refactor. It is the remaining prerequisite for a `:domain` Gradle module.
+- **Message enums** live in `domain/model` (out of `data/local/db/entity`). Room still stores them
+  as `INTEGER` via `MessageEnumConverters`; the backup format still serialises them as `Int` — both
+  package-independent, nothing changed on disk/wire (proven by `MessageEnumSerializationTest`).
+- **Entity → domain mappers** (`XxxEntity.toDomain()`) live in `data/local/db/mapper`; `domain/model`
+  imports no `data` type.
+- **All settings types** (`AppSettings` + its 8 nested settings classes + ~14 enums) live in
+  `domain/settings`. They are serialised **by name/key** by `SettingsRepository` (DataStore), so the
+  package move changed nothing on disk (proven by the instrumented `SettingsRoundTripTest`).
+- **Every collaborator the use cases need is now a domain port**, implemented in the layer that owns
+  the Android/data detail and wired by `@Binds` in `di/RepositoryModule`:
+  - `domain/sender`: `SmsSender` (impl `data/sms/SmsSenderImpl`), `DefaultSmsAppChecker`,
+    `SentSmsRecorder` (impl `TelephonyReader`), `SenderNameProvider` (impl `data/sender/…Impl`).
+  - `domain/mms`: `MmsDispatcher` (impl `MmsSender`), `OutgoingAttachmentStore`, value types
+    `MmsAttachment` / `MediaAttachmentSpec`.
+  - `domain/repository`: `OutgoingMessageMirror` (impl `ConversationMirror` — narrow outgoing-write
+    view; the 3 status receivers also use the port so interface-declared param defaults resolve),
+    plus the existing repositories.
+  - `domain/scheduler` `ScheduledMessageScheduler` (impl `system/…SchedulerImpl`),
+    `domain/security` `PanicStateProvider` (impl `AppLockManager`), `domain/vault` `VaultMover`
+    (impl `VaultManager`), `domain/location` `LocationProvider` + `GeoLocation`,
+    `domain/pdf` `PdfExporter` + `PdfExportResult`, `domain/backup` `BackupRestorer` + `RestoreResult`,
+    `domain/settings` `AppSettingsSource` (impl `SettingsRepository`).
+  - `RetrySendUseCase` reads via `ConversationRepository.findMessageForResend` (unguarded by-id
+    lookup — re-dispatch never surfaces the body to the UI) instead of injecting `MessageDao`.
+
+**Ports that intentionally take an opaque `String` instead of an Android type** (to keep `domain/`
+Android-free): `PdfExportResult.shareUri`, `BackupRestorer.restore(uriString)`,
+`SentSmsRecorder.insertSentSms(): String?` — all round-trip `Uri.toString()` / `Uri.parse()` losslessly
+at the UI/data boundary.
 
 ## Lifecycle of an incoming SMS
 
