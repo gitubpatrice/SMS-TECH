@@ -1,6 +1,7 @@
 package com.filestech.sms.di
 
 import com.filestech.sms.data.backup.BackupService
+import com.filestech.sms.data.emergency.IAmOkMessageProviderImpl
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.location.LocationResolver
 import com.filestech.sms.data.mms.MmsSender
@@ -17,6 +18,7 @@ import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sms.SmsSenderImpl
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.domain.backup.BackupRestorer
+import com.filestech.sms.domain.emergency.IAmOkMessageProvider
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
@@ -92,6 +94,9 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindBackupRestorer(impl: BackupService): BackupRestorer
+
+    @Binds @Singleton
+    abstract fun bindIAmOkMessageProvider(impl: IAmOkMessageProviderImpl): IAmOkMessageProvider
 
     @Binds @Singleton
     abstract fun bindSentSmsRecorder(impl: TelephonyReader): SentSmsRecorder

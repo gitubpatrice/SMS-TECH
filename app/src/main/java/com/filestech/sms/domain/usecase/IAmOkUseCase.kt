@@ -1,13 +1,11 @@
 package com.filestech.sms.domain.usecase
 
-import android.content.Context
-import com.filestech.sms.R
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.emergency.IAmOkMessageProvider
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettingsSource
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -44,7 +42,7 @@ class IAmOkUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
     private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
-    @ApplicationContext private val context: Context,
+    private val iAmOkMessage: IAmOkMessageProvider,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -84,7 +82,7 @@ class IAmOkUseCase @Inject constructor(
             return@withContext Result.ResetWithoutSms
         }
 
-        val body = context.getString(R.string.emergency_i_am_ok_body).trim()
+        val body = iAmOkMessage.body().trim()
         if (body.isBlank()) {
             Timber.w("IAmOkUseCase: i_am_ok_body resource is blank — skipping SMS")
             return@withContext Result.ResetWithoutSms
