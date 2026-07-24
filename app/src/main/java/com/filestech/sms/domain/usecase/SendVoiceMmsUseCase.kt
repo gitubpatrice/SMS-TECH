@@ -3,8 +3,8 @@ package com.filestech.sms.domain.usecase
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.repository.ConversationMirror
+import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
@@ -19,7 +19,7 @@ import javax.inject.Inject
  * [SendSmsUseCase]: one MMS row + dispatch per non-blocked recipient. For each recipient:
  *
  *  1. Mirror an OUTGOING/PENDING row in Room (with the audio AttachmentEntity)
- *  2. Encode the SendReq PDU and hand it to [MmsSender]
+ *  2. Encode the SendReq PDU and hand it to [MmsDispatcher]
  *  3. On dispatch failure (synchronous), flip the row to FAILED; the network-side
  *     SENT/FAILED outcome arrives asynchronously via [MmsSentReceiver].
  */
@@ -27,7 +27,7 @@ class SendVoiceMmsUseCase @Inject constructor(
     private val defaultAppManager: DefaultSmsAppChecker,
     private val blockedRepo: BlockedNumberRepository,
     private val mirror: ConversationMirror,
-    private val sender: MmsSender,
+    private val sender: MmsDispatcher,
     private val settings: SettingsRepository,
     private val attachmentStore: OutgoingAttachmentStore,
 ) {

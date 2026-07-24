@@ -3,9 +3,9 @@ package com.filestech.sms.domain.usecase
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.mms.MmsBuilder
-import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.repository.ConversationMirror
+import com.filestech.sms.domain.mms.MmsAttachment
+import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
@@ -18,7 +18,7 @@ import javax.inject.Inject
 /**
  * v1.2.1 — Sends a non-voice MMS (photo / video / file / contact card) to one or more
  * recipients. Mirrors the broadcast semantics of [SendVoiceMmsUseCase]: one MMS row per
- * non-blocked recipient, each independently dispatched via [MmsSender.sendMediaMms].
+ * non-blocked recipient, each independently dispatched via [MmsDispatcher.sendMediaMms].
  *
  * Carrier-friendly cap of **300 KB total payload** per message — matches what most French
  * MMSCs accept (Free is the tightest at ~300 KB; Orange / SFR / Sosh / Bouygues handle up to
@@ -29,7 +29,7 @@ class SendMediaMmsUseCase @Inject constructor(
     private val defaultAppManager: DefaultSmsAppChecker,
     private val blockedRepo: BlockedNumberRepository,
     private val mirror: ConversationMirror,
-    private val sender: MmsSender,
+    private val sender: MmsDispatcher,
     private val settings: SettingsRepository,
     private val attachmentStore: OutgoingAttachmentStore,
 ) {
@@ -88,14 +88,14 @@ class SendMediaMmsUseCase @Inject constructor(
             )
 
             val pduAttachments = durableAttachments.map {
-                MmsBuilder.MmsAttachment(
+                MmsAttachment(
                     file = it.file,
                     mimeType = it.mimeType,
                     kind = when {
-                        it.mimeType.startsWith("image/", ignoreCase = true) -> MmsBuilder.MmsAttachment.Kind.IMAGE
-                        it.mimeType.startsWith("video/", ignoreCase = true) -> MmsBuilder.MmsAttachment.Kind.VIDEO
-                        it.mimeType.startsWith("audio/", ignoreCase = true) -> MmsBuilder.MmsAttachment.Kind.AUDIO
-                        else -> MmsBuilder.MmsAttachment.Kind.OTHER
+                        it.mimeType.startsWith("image/", ignoreCase = true) -> MmsAttachment.Kind.IMAGE
+                        it.mimeType.startsWith("video/", ignoreCase = true) -> MmsAttachment.Kind.VIDEO
+                        it.mimeType.startsWith("audio/", ignoreCase = true) -> MmsAttachment.Kind.AUDIO
+                        else -> MmsAttachment.Kind.OTHER
                     },
                 )
             }

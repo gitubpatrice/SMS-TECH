@@ -162,7 +162,7 @@ fun AttachmentPickerSheet(
 
 /**
  * High-level taxonomy reported back to the parent. The parent maps this to the concrete
- * [com.filestech.sms.data.mms.MmsBuilder.MmsAttachment.Kind] at send time — keeping the UI
+ * [com.filestech.sms.domain.mms.MmsAttachment.Kind] at send time — keeping the UI
  * layer independent of the MMS PDU types.
  */
 enum class AttachmentKind { PHOTO, VIDEO, FILE, CONTACT }

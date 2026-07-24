@@ -1,5 +1,7 @@
 package com.filestech.sms.data.mms
 
+import android.content.Context
+import com.filestech.sms.domain.mms.MmsAttachment
 import com.filestech.sms.pdu.CharacterSets
 import com.filestech.sms.pdu.EncodedStringValue
 import com.filestech.sms.pdu.PduBody
@@ -7,7 +9,6 @@ import com.filestech.sms.pdu.PduComposer
 import com.filestech.sms.pdu.PduHeaders
 import com.filestech.sms.pdu.PduPart
 import com.filestech.sms.pdu.SendReq
-import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.io.File
@@ -26,19 +27,6 @@ import javax.inject.Singleton
 class MmsBuilder @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-
-    /**
-     * Typed description of a single attachment for a multipart MMS. The bytes are read from
-     * disk inside the builder so callers don't have to manage allocation timing.
-     */
-    data class MmsAttachment(
-        val file: File,
-        val mimeType: String,
-        /** Kind drives the SMIL element used for presentation (audio/img/text/ref). */
-        val kind: Kind,
-    ) {
-        enum class Kind { AUDIO, IMAGE, VIDEO, OTHER }
-    }
 
     /**
      * Voice MMS shorthand — preserves the v1.1 API so existing callers compile unchanged.

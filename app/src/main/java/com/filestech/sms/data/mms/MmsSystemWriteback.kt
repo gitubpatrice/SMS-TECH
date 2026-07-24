@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.Telephony
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.mms.MmsAttachment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -71,7 +72,7 @@ class MmsSystemWriteback @Inject constructor(
      * pass arbitrary input. Without these guards an exotic mime string can crash Samsung's
      * `SemMmsProvider` and a `File("/data/data/<other>/secret")` would be streamed into our row.
      */
-    private fun attachmentsAreSafe(attachments: List<MmsBuilder.MmsAttachment>): Boolean {
+    private fun attachmentsAreSafe(attachments: List<MmsAttachment>): Boolean {
         val mimeRegex = Regex("^[a-zA-Z0-9.+/-]{3,80}$")
         val sandboxRoots = listOf(
             runCatching { context.cacheDir.canonicalPath }.getOrNull(),
@@ -108,7 +109,7 @@ class MmsSystemWriteback @Inject constructor(
      */
     suspend fun insertOutbox(
         recipients: List<String>,
-        attachments: List<MmsBuilder.MmsAttachment>,
+        attachments: List<MmsAttachment>,
         textBody: String?,
     ): Long? = withContext(io) {
         if (recipients.isEmpty()) return@withContext null

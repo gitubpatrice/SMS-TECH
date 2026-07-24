@@ -12,15 +12,17 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.mms.MmsAttachment
+import com.filestech.sms.domain.mms.MmsDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.util.concurrent.ConcurrentHashMap
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,7 +50,7 @@ class MmsSender @Inject constructor(
     private val messageDao: MessageDao,
     private val wireFormatter: com.filestech.sms.data.sms.PhoneNumberWireFormatter,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : MmsDispatcher {
 
     /**
      * Encodes and dispatches a voice MMS. Returns immediately after [SmsManager] takes ownership
@@ -57,20 +59,20 @@ class MmsSender @Inject constructor(
      * @param localMessageId the Room id of the outgoing message (passed back via the
      *   PendingIntent so the receiver can update the correct row)
      */
-    suspend fun sendVoiceMms(
+    override suspend fun sendVoiceMms(
         localMessageId: Long,
         recipients: List<String>,
         audioFile: File,
         mimeType: String,
-        subId: Int? = null,
-        requestDeliveryReport: Boolean = false,
+        subId: Int?,
+        requestDeliveryReport: Boolean,
     ): Outcome<Unit> = withContext(io) {
         if (recipients.isEmpty()) return@withContext Outcome.Failure(AppError.Validation("no recipients"))
         if (!audioFile.exists() || audioFile.length() == 0L) {
             return@withContext Outcome.Failure(AppError.Validation("audio file missing"))
         }
         val attachments = listOf(
-            MmsBuilder.MmsAttachment(audioFile, mimeType, MmsBuilder.MmsAttachment.Kind.AUDIO),
+            MmsAttachment(audioFile, mimeType, MmsAttachment.Kind.AUDIO),
         )
         // E.164 normalisation for the PDU "To" field only (foreign-SIM routing). The system
         // writeback below keeps the raw recipients — symmetric with the SMS path.
@@ -102,13 +104,13 @@ class MmsSender @Inject constructor(
      * knows how to encode the multipart SMIL for non-voice MIME types and which uses reflection
      * compat for Samsung One UI 6+.
      */
-    suspend fun sendMediaMms(
+    override suspend fun sendMediaMms(
         localMessageId: Long,
         recipients: List<String>,
-        attachments: List<MmsBuilder.MmsAttachment>,
-        textBody: String? = null,
-        subId: Int? = null,
-        requestDeliveryReport: Boolean = false,
+        attachments: List<MmsAttachment>,
+        textBody: String?,
+        subId: Int?,
+        requestDeliveryReport: Boolean,
     ): Outcome<Unit> = withContext(io) {
         if (recipients.isEmpty()) return@withContext Outcome.Failure(AppError.Validation("no recipients"))
         if (attachments.isEmpty() && textBody.isNullOrBlank()) {
@@ -169,7 +171,7 @@ class MmsSender @Inject constructor(
     private suspend fun dispatchMms(
         localMessageId: Long,
         recipients: List<String>,
-        attachments: List<MmsBuilder.MmsAttachment>,
+        attachments: List<MmsAttachment>,
         textBody: String?,
         subId: Int?,
         encodePdu: () -> ByteArray?,
