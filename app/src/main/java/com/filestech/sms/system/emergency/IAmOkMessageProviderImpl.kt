@@ -1,4 +1,4 @@
-package com.filestech.sms.data.emergency
+package com.filestech.sms.system.emergency
 
 import android.content.Context
 import com.filestech.sms.R

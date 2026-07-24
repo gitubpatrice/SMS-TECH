@@ -91,7 +91,7 @@ fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message
  * v1.15.0 (Timber + test garde-fou) reste pertinent mais devient redondant en pratique :
  * le compilateur fait le travail.
  */
-internal fun mapStatus(status: MessageStatus): Message.Status = when (status) {
+fun mapStatus(status: MessageStatus): Message.Status = when (status) {
     MessageStatus.PENDING -> Message.Status.PENDING
     MessageStatus.SENT -> Message.Status.SENT
     MessageStatus.DELIVERED -> Message.Status.DELIVERED
@@ -100,12 +100,12 @@ internal fun mapStatus(status: MessageStatus): Message.Status = when (status) {
     MessageStatus.SCHEDULED -> Message.Status.SCHEDULED
 }
 
-internal fun mapType(type: MessageType): Message.Type = when (type) {
+fun mapType(type: MessageType): Message.Type = when (type) {
     MessageType.SMS -> Message.Type.SMS
     MessageType.MMS -> Message.Type.MMS
 }
 
-internal fun mapDirection(direction: MessageDirection): Message.Direction = when (direction) {
+fun mapDirection(direction: MessageDirection): Message.Direction = when (direction) {
     MessageDirection.INCOMING -> Message.Direction.INCOMING
     MessageDirection.OUTGOING -> Message.Direction.OUTGOING
 }

@@ -88,12 +88,16 @@ class SmsSenderImpl @Inject constructor(
         // never fired → outgoing SMS rows stuck in PENDING forever (only the 15 min watchdog in
         // TelephonySyncWorker promoted them to FAILED, hiding the real bug). Explicit targeting
         // also removes any need for an `<intent-filter>` on the receiver, keeping it `exported=false`.
-        val targetClass = when (action) {
-            ACTION_SMS_SENT -> com.filestech.sms.system.receiver.SmsSentReceiver::class.java
-            ACTION_SMS_DELIVERED -> com.filestech.sms.system.receiver.SmsDeliveredReceiver::class.java
+        // Composant ciblé par NOM (string) et non `::class.java` : les receivers vivent dans le
+        // module `:app` (system/), inaccessible depuis `:data`. `setClassName(context, fqcn)` cible
+        // le même composant explicite à l'exécution (package = context.packageName, classe = fqcn),
+        // en debug comme en release — le suffixe `.debug` ne change pas le package de la classe.
+        val targetClassName = when (action) {
+            ACTION_SMS_SENT -> "com.filestech.sms.system.receiver.SmsSentReceiver"
+            ACTION_SMS_DELIVERED -> "com.filestech.sms.system.receiver.SmsDeliveredReceiver"
             else -> throw IllegalArgumentException("unknown action: $action")
         }
-        val intent = Intent(action).setClass(context, targetClass).apply {
+        val intent = Intent(action).setClassName(context, targetClassName).apply {
             putExtra(EXTRA_LOCAL_ID, localId)
             putExtra(EXTRA_PART_INDEX, partIndex)
             putExtra(EXTRA_PART_COUNT, total)

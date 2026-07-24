@@ -281,7 +281,7 @@ class MmsSender @Inject constructor(
      */
     private fun buildSentIntent(localMessageId: Long, pduFile: File, mmsSystemId: Long): PendingIntent {
         val intent = Intent(ACTION_MMS_SENT)
-            .setClass(context, com.filestech.sms.system.receiver.MmsSentReceiver::class.java)
+            .setClassName(context, "com.filestech.sms.system.receiver.MmsSentReceiver")
             .apply {
                 putExtra(EXTRA_LOCAL_ID, localMessageId)
                 putExtra(EXTRA_PDU_FILE, pduFile.absolutePath)

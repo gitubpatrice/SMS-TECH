@@ -1,0 +1,116 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>AnnotationOnSeparateLine:MmsDownloader.kt$MmsDownloader$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
+    <ID>AnnotationOnSeparateLine:MmsDownloader.kt$MmsDownloader$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
+    <ID>AnnotationOnSeparateLine:MmsSender.kt$MmsSender$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
+    <ID>AnnotationOnSeparateLine:MmsSender.kt$MmsSender$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
+    <ID>AnnotationOnSeparateLine:SmsSenderImpl.kt$SmsSenderImpl$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
+    <ID>AnnotationOnSeparateLine:SmsSenderImpl.kt$SmsSenderImpl$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
+    <ID>AnnotationOnSeparateLine:VoiceRecorder.kt$VoiceRecorder$@Suppress("DEPRECATION") MediaRecorder()</ID>
+    <ID>ArgumentListWrapping:AppLockManager.kt$AppLockManager.Companion$( 5_000, 10_000, 30_000, 60_000, 120_000, 300_000, )</ID>
+    <ID>ArgumentListWrapping:ConversationMirror.kt$ConversationMirror$(io)</ID>
+    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id, archived)</ID>
+    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id, inVault)</ID>
+    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id, pinned)</ID>
+    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(io)</ID>
+    <ID>ArgumentListWrapping:LocationResolver.kt$LocationResolver$( LocationManager.GPS_PROVIDER, 0L, 0f, listener, handler.looper, )</ID>
+    <ID>ArgumentListWrapping:LocationResolver.kt$LocationResolver$( LocationManager.NETWORK_PROVIDER, 0L, 0f, listener, handler.looper, )</ID>
+    <ID>ArgumentListWrapping:MmsDownloader.kt$MmsDownloader$( context, contentLocation, pduUri, null, pi, )</ID>
+    <ID>ArgumentListWrapping:MmsDownloader.kt$MmsDownloader$( context, reqCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE, )</ID>
+    <ID>ArgumentListWrapping:MmsSender.kt$MmsSender$("dispatchMms: deleting previous system row %d before retry of local=%d", previous, localMessageId)</ID>
+    <ID>ArgumentListWrapping:MmsSender.kt$MmsSender$(persisted.exceptionOrNull(), "dispatchMms: setMmsSystemId(%d, %d) failed — rolling back", localMessageId, mmsSystemId)</ID>
+    <ID>ArgumentListWrapping:MmsSystemWriteback.kt$MmsSystemWriteback$("MmsSystemWriteback: inserted outbox row id=%d (%d recipient(s), %d attachment(s))", mmsId, recipients.size, attachments.size)</ID>
+    <ID>ArgumentListWrapping:ScheduledMessageDao.kt$ScheduledMessageDao$("UPDATE scheduled_messages SET conversation_id = :toConversationId WHERE conversation_id = :fromConversationId")</ID>
+    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$( appScope, SharingStarted.Eagerly, AppSettings(), )</ID>
+    <ID>ArgumentListWrapping:TelephonyReader.kt$TelephonyReader$( "TelephonyReader: MMS %d skipped (empty address after FROM=137/151/129 fallback, direction=%d, threadId=%d)", mmsId, direction, threadId, )</ID>
+    <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)</ID>
+    <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) done; imported=%d skipped(blocked)=%d cursor=%d→%d", reason, imported, skipped, current, newCursor)</ID>
+    <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, imported, isFirstRun, hasAnyMms)</ID>
+    <ID>ArgumentListWrapping:VoiceRecorder.kt$VoiceRecorder$("DEPRECATION")</ID>
+    <ID>ArgumentListWrapping:VoiceRecorder.kt$VoiceRecorder$(context)</ID>
+    <ID>ChainWrapping:SecurityStore.kt$SecurityStore.LockoutSnapshot$&amp;&amp;</ID>
+    <ID>CommentWrapping:SmsSegmentCounter.kt$SmsSegmentCounter$/* use7bitOnly */</ID>
+    <ID>CommentWrapping:SmsSenderImpl.kt$SmsSenderImpl$/* scAddress = */</ID>
+    <ID>CyclomaticComplexMethod:SettingsRepository.kt$SettingsRepository$private fun Preferences.toAppSettings(): AppSettings</ID>
+    <ID>Filename:AppLockManagerTest.kt$com.filestech.sms.security.AppLockManagerTest.kt</ID>
+    <ID>LargeClass:ConversationMirror.kt$ConversationMirror : OutgoingMessageMirror</ID>
+    <ID>LoopWithTooManyJumpStatements:BackupService.kt$BackupService$for</ID>
+    <ID>LoopWithTooManyJumpStatements:BlockedNumbersImporter.kt$BlockedNumbersImporter$for</ID>
+    <ID>LoopWithTooManyJumpStatements:ConversationMirror.kt$ConversationMirror$for</ID>
+    <ID>LoopWithTooManyJumpStatements:TelephonyReader.kt$TelephonyReader$while</ID>
+    <ID>LoopWithTooManyJumpStatements:VoicePlaybackController.kt$VoicePlaybackController$while</ID>
+    <ID>MatchingDeclarationName:AppLockManagerTest.kt$AppLockManagerBackoffTest</ID>
+    <ID>MaxLineLength:MmsSender.kt$MmsSender$Timber.w(persisted.exceptionOrNull(), "dispatchMms: setMmsSystemId(%d, %d) failed — rolling back", localMessageId, mmsSystemId)</ID>
+    <ID>MaxLineLength:MmsSystemWriteback.kt$MmsSystemWriteback$Timber.i("MmsSystemWriteback: inserted outbox row id=%d (%d recipient(s), %d attachment(s))", mmsId, recipients.size, attachments.size)</ID>
+    <ID>MaxLineLength:TelephonySyncManager.kt$TelephonySyncManager$Timber.i("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)</ID>
+    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$emptyList&lt;Conversation&gt;()</ID>
+    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$emptyMap()</ID>
+    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$list.map { it.toDomain() }</ID>
+    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$null</ID>
+    <ID>MultiLineIfElse:DefaultSmsAppManager.kt$DefaultSmsAppManager$null</ID>
+    <ID>MultiLineIfElse:MmsBuilder.kt$MmsBuilder$"5000ms"</ID>
+    <ID>MultiLineIfElse:MmsDownloader.kt$MmsDownloader$subId</ID>
+    <ID>MultiLineIfElse:MmsSender.kt$MmsSender$subId</ID>
+    <ID>MultiLineIfElse:SenderNameProviderImpl.kt$SenderNameProviderImpl$cleaned</ID>
+    <ID>MultiLineIfElse:SmsSenderImpl.kt$SmsSenderImpl$subId</ID>
+    <ID>MultiLineIfElse:TelephonyReader.kt$TelephonyReader$MessageDirection.INCOMING</ID>
+    <ID>MultiLineIfElse:TelephonyReader.kt$TelephonyReader$MessageDirection.OUTGOING</ID>
+    <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$emptyList()</ID>
+    <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$page</ID>
+    <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }</ID>
+    <ID>NoUnusedImports:SettingsRepository.kt$com.filestech.sms.data.local.datastore.SettingsRepository.kt</ID>
+    <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(parts: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsPartImport&gt;)</ID>
+    <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(rows: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsImportRow&gt;)</ID>
+    <ID>ParameterListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id: Long, archived: Boolean)</ID>
+    <ID>ParameterListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id: Long, inVault: Boolean)</ID>
+    <ID>ReturnCount:LocationResolver.kt$LocationResolver$suspend fun getCurrentLocation( timeoutMs: Long = DEFAULT_TIMEOUT_MS, ): Location?</ID>
+    <ID>ReturnCount:MmsBuilder.kt$MmsBuilder$fun buildMultipartSendReq( attachments: List&lt;MmsAttachment&gt;, textBody: String?, recipients: List&lt;String&gt;, subject: String? = null, requestDeliveryReport: Boolean = false, ): ByteArray?</ID>
+    <ID>ReturnCount:MmsDownloader.kt$MmsDownloader$fun download( contentLocation: String, transactionId: String?, senderAddress: String?, subId: Int? = null, ): Outcome&lt;Unit&gt;</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:AppDatabase.kt$AppDatabase.Companion$// v2 (2026-05-15): adds `messages.reply_to_message_id` + matching index for the</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.Locked$/** Lock is configured ON and user has not unlocked yet. UI must be hidden. */</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.LockedOut$/** Too many failed attempts — UI shows the countdown, no PIN accepted yet. */</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.PanicDecoy$/** Panic-code unlock — UI is visible but the vault must remain hidden. */</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.Unlocked$/** User has unlocked successfully. */</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// Audit SECU-M1 v1.15.2 — Caps dur sur le nombre d'objets désérialisés du JSON.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// v1.15.2 — Cap de sécurité sur la taille d'un .smsbk à restaurer. 50 MB couvre des</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// v1.17.0 audit KOTLIN-L2 — Bornes header `.smsbk` alignées sur les constantes</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:MmsDownloader.kt$MmsDownloader.Companion$/** v1.22.0 — SIM d'arrivée du MMS, propagée du WAP push jusqu'au write-back Room. */</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SecurityStore.kt$SecurityStore.K$// v1.13.0 — PIN distinct coffre (second-factor).</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SecurityStore.kt$SecurityStore.K$// v1.14.8 R7 — anti-wallclock-manipulation : baseline mono + durée d'origine.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// Bumped from a boolean ("didInitialSmsImport") to a long cursor: the latter encodes the</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.10.0 SEC-11 — snapshot monotonic du dernier reset, anti clock-forward.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.10.0 audit S2 — snapshot monotonic du dernier trigger urgence.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.10.0 — Mode urgence (réutilise les contacts Safety call).</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.11.0 — Sujet 3 anti-smishing.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.12.0 — bouton Appeler Police 17 (FR uniquement, opt-in).</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.12.0 — raccourci urgence (notif persistante lock-screen).</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.13.0 — PIN distinct coffre (second-factor opt-in).</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.14.0 — SMS "Je vais bien" sur kill-switch.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.14.0 — comportement boutons 112/17 (DIALER_ONLY ou HOLD_3S_DIRECT_CALL).</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.14.7 — flag one-shot pour la migration des attachments MMS cacheDir → filesDir.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.21.0 — indicatif pays par défaut pour la conversion E.164 des numéros</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.22.x — flag de complétion de la dédup des conversations du même numéro.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.8.0 (bug 5 fix) — nouveau format avec 3 valeurs (READABLE_FR / TAPBACK_EN</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.8.0 — flag one-shot pour la migration de purge des badges hérités v1.7.1.</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.8.1 — override personnel du nom inclus dans les SMS de réaction</ID>
+    <ID>SpreadOperator:DatabaseFactory.kt$DatabaseFactory$(*Migrations.ALL)</ID>
+    <ID>StringTemplate:EscapeFtsQuery.kt$${it}</ID>
+    <ID>SwallowedException:BackupService.kt$BackupService$t: Throwable</ID>
+    <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun generateAndWrap(): ByteArray</ID>
+    <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun unwrap(): ByteArray</ID>
+    <ID>TooManyFunctions:ConversationDao.kt$ConversationDao</ID>
+    <ID>TooManyFunctions:MessageDao.kt$MessageDao</ID>
+    <ID>UnusedImports:SettingsRepository.kt$import kotlinx.coroutines.flow.first</ID>
+    <ID>UnusedPrivateMember:TelephonyReader.kt$TelephonyReader$private fun readMmsParts(mmsId: Long): Pair&lt;String, List&lt;MmsPartImport&gt;&gt;</ID>
+    <ID>Wrapping:BackupService.kt$BackupService$;</ID>
+    <ID>Wrapping:ConversationMirror.kt$ConversationMirror$(</ID>
+    <ID>Wrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$conversationDao.setArchived(id, archived)</ID>
+    <ID>Wrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$conversationDao.setInVault(id, inVault)</ID>
+    <ID>Wrapping:MessageEnumSerializationTest.kt$MessageEnumSerializationTest$;</ID>
+    <ID>Wrapping:MmsSender.kt$MmsSender$(</ID>
+    <ID>Wrapping:QuickReplyRepositoryImpl.kt$QuickReplyRepositoryImpl$;</ID>
+    <ID>Wrapping:SecurityStore.kt$SecurityStore$;</ID>
+  </CurrentIssues>
+</SmellBaseline>

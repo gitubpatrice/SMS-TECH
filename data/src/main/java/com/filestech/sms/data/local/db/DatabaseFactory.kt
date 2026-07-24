@@ -2,7 +2,7 @@ package com.filestech.sms.data.local.db
 
 import android.content.Context
 import androidx.room.Room
-import com.filestech.sms.BuildConfig
+import com.filestech.sms.data.BuildConfig
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import javax.inject.Inject
 import javax.inject.Singleton

@@ -71,7 +71,7 @@ class MmsDownloader @Inject constructor(
         // the receiver never runs → the downloaded PDU file (raw audio + sender headers) stays
         // forever in `cache/mms_incoming/`, leaking plaintext on adb-pull / forensics.
         val intent = Intent(ACTION_MMS_DOWNLOADED)
-            .setClass(context, com.filestech.sms.system.receiver.MmsDownloadedReceiver::class.java)
+            .setClassName(context, "com.filestech.sms.system.receiver.MmsDownloadedReceiver")
             .apply {
                 putExtra(EXTRA_PDU_FILE, pduFile.absolutePath)
                 putExtra(EXTRA_TRANSACTION_ID, transactionId)

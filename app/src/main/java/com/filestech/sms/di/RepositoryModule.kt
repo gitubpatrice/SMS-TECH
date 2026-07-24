@@ -1,12 +1,10 @@
 package com.filestech.sms.di
 
 import com.filestech.sms.data.backup.BackupService
-import com.filestech.sms.data.emergency.IAmOkMessageProviderImpl
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.location.LocationResolver
 import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl
-import com.filestech.sms.data.pdf.ConversationPdfExporter
 import com.filestech.sms.data.repository.BlockedNumberRepositoryImpl
 import com.filestech.sms.data.repository.ContactRepositoryImpl
 import com.filestech.sms.data.repository.ConversationMirror
@@ -40,7 +38,9 @@ import com.filestech.sms.domain.settings.AppSettingsSource
 import com.filestech.sms.domain.vault.VaultMover
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.VaultManager
+import com.filestech.sms.system.emergency.IAmOkMessageProviderImpl
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
+import com.filestech.sms.system.pdf.ConversationPdfExporter
 import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
 import dagger.Binds
 import dagger.Module

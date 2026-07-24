@@ -26,7 +26,7 @@ import com.filestech.sms.domain.safetycall.SafetyCallContact
  * (nom historique trompeur — le format n'a jamais été du JSON). La clé
  * DataStore garde le suffixe `Json` pour rétro-compatibilité de stockage.
  */
-internal object SafetyCallContactCodec {
+object SafetyCallContactCodec {
 
     /**
      * Caractères qui DOIVENT être strippés des valeurs avant concaténation

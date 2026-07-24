@@ -53,7 +53,7 @@ import java.io.File
  * SQLCipher a `byte[]` *passphrase*. The exported file would be unreadable by the app. Keeping
  * `changePassword(byte[])` guarantees both sides derive the key identically.
  */
-internal object LegacyZeroKeyRekey {
+object LegacyZeroKeyRekey {
 
     /** Outcome of the probe, for logging and tests. */
     enum class Result {
@@ -127,7 +127,7 @@ internal object LegacyZeroKeyRekey {
 
     /** Clears the memoized failures. Instrumented tests only — never called by production code. */
     @androidx.annotation.VisibleForTesting
-    internal fun resetFailuresForTest() = failures.clear()
+    fun resetFailuresForTest() = failures.clear()
 
     fun rekeyIfNeeded(
         context: Context,

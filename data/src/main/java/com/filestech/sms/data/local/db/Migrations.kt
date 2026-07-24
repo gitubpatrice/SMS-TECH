@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * SQLCipher caveat: `ALTER TABLE` runs through the cipher layer exactly like a normal SQL
  * statement — no special handling required. The migration is wrapped in a transaction by Room.
  */
-internal object Migrations {
+object Migrations {
 
     /**
      * v1 → v2 (2026-05-15) — contextual reply feature (#8).

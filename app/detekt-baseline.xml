@@ -14,20 +14,13 @@
     <ID>AnnotationOnSeparateLine:HeadlessSmsSendService.kt$HeadlessSmsSendService$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:MainApplication.kt$MainApplication$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:MainApplication.kt$MainApplication$@Inject @com.filestech.sms.di.IoDispatcher lateinit</ID>
-    <ID>AnnotationOnSeparateLine:MmsDownloader.kt$MmsDownloader$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
-    <ID>AnnotationOnSeparateLine:MmsDownloader.kt$MmsDownloader$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
-    <ID>AnnotationOnSeparateLine:MmsSender.kt$MmsSender$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
-    <ID>AnnotationOnSeparateLine:MmsSender.kt$MmsSender$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
     <ID>AnnotationOnSeparateLine:MmsSentReceiver.kt$MmsSentReceiver$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:NotificationActionReceiver.kt$NotificationActionReceiver$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:SettingsScreen.kt$@Suppress("UNUSED_EXPRESSION") onPurgeNow</ID>
     <ID>AnnotationOnSeparateLine:SmsDeliverReceiver.kt$SmsDeliverReceiver$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:SmsDeliveredReceiver.kt$SmsDeliveredReceiver$@Inject @ApplicationScope lateinit</ID>
-    <ID>AnnotationOnSeparateLine:SmsSenderImpl.kt$SmsSenderImpl$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
-    <ID>AnnotationOnSeparateLine:SmsSenderImpl.kt$SmsSenderImpl$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
     <ID>AnnotationOnSeparateLine:SmsSentReceiver.kt$SmsSentReceiver$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:ThreadScreen.kt$@Suppress("UNREACHABLE_CODE") Unit</ID>
-    <ID>AnnotationOnSeparateLine:VoiceRecorder.kt$VoiceRecorder$@Suppress("DEPRECATION") MediaRecorder()</ID>
     <ID>AnnotationSpacing:MainActivity.kt$MainActivity$@AndroidEntryPoint</ID>
     <ID>ArgumentListWrapping:AboutScreen.kt$(Icons.AutoMirrored.Outlined.Reply, stringResource(R.string.about_feat_reply_label), stringResource(R.string.about_feat_reply_desc))</ID>
     <ID>ArgumentListWrapping:AboutScreen.kt$(Icons.Outlined.Backup, stringResource(R.string.about_feat_backup_label), stringResource(R.string.about_feat_backup_desc))</ID>
@@ -76,7 +69,6 @@
     <ID>ArgumentListWrapping:AboutScreen.kt$(R.string.about_feat_voice_label)</ID>
     <ID>ArgumentListWrapping:AboutScreen.kt$(fontWeight = FontWeight.SemiBold, fontSize = 13.sp)</ID>
     <ID>ArgumentListWrapping:AboutScreen.kt$(label, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp))</ID>
-    <ID>ArgumentListWrapping:AppLockManager.kt$AppLockManager.Companion$( 5_000, 10_000, 30_000, 60_000, 120_000, 300_000, )</ID>
     <ID>ArgumentListWrapping:AudioMessageBubble.kt$(if (isPlaying &amp;&amp; positionMs &gt; 0) positionMs.toLong() else totalMs.toLong())</ID>
     <ID>ArgumentListWrapping:AuditV180Test.kt$AuditV180Test$( "READABLE_FR", "TAPBACK_EN", "EMOJI_ONLY", "EMOJI_WITH_QUOTE", )</ID>
     <ID>ArgumentListWrapping:BackupService.kt$BackupService$(" type=\"")</ID>
@@ -99,32 +91,18 @@
     <ID>ArgumentListWrapping:ComposeScreen.kt$(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))</ID>
     <ID>ArgumentListWrapping:ComposeScreen.kt$(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(16.dp))</ID>
     <ID>ArgumentListWrapping:ComposeScreen.kt$(R.string.action_back)</ID>
-    <ID>ArgumentListWrapping:ConversationMirror.kt$ConversationMirror$(io)</ID>
     <ID>ArgumentListWrapping:ConversationPdfExporter.kt$ConversationPdfExporter$("[^A-Za-z0-9_-]+")</ID>
     <ID>ArgumentListWrapping:ConversationPdfExporter.kt$ConversationPdfExporter$(48)</ID>
     <ID>ArgumentListWrapping:ConversationPdfExporter.kt$ConversationPdfExporter$(Regex("[^A-Za-z0-9_-]+"), "_")</ID>
-    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id, archived)</ID>
-    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id, inVault)</ID>
-    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id, pinned)</ID>
-    <ID>ArgumentListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(io)</ID>
     <ID>ArgumentListWrapping:ConversationsScreen.kt$( R.plurals.vault_bulk_move_in_done, event.count, event.count, )</ID>
     <ID>ArgumentListWrapping:EmergencyScreen.kt$( horizontal = 16.dp, vertical = 18.dp, )</ID>
-    <ID>ArgumentListWrapping:LocationResolver.kt$LocationResolver$( LocationManager.GPS_PROVIDER, 0L, 0f, listener, handler.looper, )</ID>
-    <ID>ArgumentListWrapping:LocationResolver.kt$LocationResolver$( LocationManager.NETWORK_PROVIDER, 0L, 0f, listener, handler.looper, )</ID>
     <ID>ArgumentListWrapping:MainActivity.kt$MainActivity$( SafetyCallWarningNotifier.EXTRA_RESET_TOKEN, 0L, )</ID>
     <ID>ArgumentListWrapping:MainApplication.kt$MainApplication$( "MonotonicDriftRecovery: post-reboot realign (safety=%s, emergency=%s, nowMono=%d)", safetyDrift, emergencyDrift, nowMono, )</ID>
     <ID>ArgumentListWrapping:MainApplication.kt$MainApplication$(advanced = s.advanced.copy(attachmentsMovedToFilesDirV147 = true))</ID>
     <ID>ArgumentListWrapping:MainApplication.kt$MainApplication$(attachmentsMovedToFilesDirV147 = true)</ID>
     <ID>ArgumentListWrapping:MediaAttachmentBubble.kt$("text/")</ID>
     <ID>ArgumentListWrapping:MediaAttachmentBubble.kt$(onCopy = onCopy, onForward = onForward, onReply = onReply, onReact = onReact, onDelete = onDelete)</ID>
-    <ID>ArgumentListWrapping:MmsDownloader.kt$MmsDownloader$( context, contentLocation, pduUri, null, pi, )</ID>
-    <ID>ArgumentListWrapping:MmsDownloader.kt$MmsDownloader$( context, reqCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE, )</ID>
     <ID>ArgumentListWrapping:MmsFailureNotifier.kt$MmsFailureNotifier$( context, NotificationChannelInitializer.CHANNEL_FAILED, )</ID>
-    <ID>ArgumentListWrapping:MmsSender.kt$MmsSender$("dispatchMms: deleting previous system row %d before retry of local=%d", previous, localMessageId)</ID>
-    <ID>ArgumentListWrapping:MmsSender.kt$MmsSender$(persisted.exceptionOrNull(), "dispatchMms: setMmsSystemId(%d, %d) failed — rolling back", localMessageId, mmsSystemId)</ID>
-    <ID>ArgumentListWrapping:MmsSystemWriteback.kt$MmsSystemWriteback$("MmsSystemWriteback: inserted outbox row id=%d (%d recipient(s), %d attachment(s))", mmsId, recipients.size, attachments.size)</ID>
-    <ID>ArgumentListWrapping:ScheduledMessageDao.kt$ScheduledMessageDao$("UPDATE scheduled_messages SET conversation_id = :toConversationId WHERE conversation_id = :fromConversationId")</ID>
-    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$( appScope, SharingStarted.Eagerly, AppSettings(), )</ID>
     <ID>ArgumentListWrapping:SettingsScreen.kt$(ActivityResultContracts.StartActivityForResult())</ID>
     <ID>ArgumentListWrapping:SettingsScreen.kt$(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))</ID>
     <ID>ArgumentListWrapping:SettingsScreen.kt$(R.string.action_back)</ID>
@@ -143,10 +121,6 @@
     <ID>ArgumentListWrapping:SettingsScreen.kt$(showAvatars = v)</ID>
     <ID>ArgumentListWrapping:SettingsScreen.kt$(themeMode = mode)</ID>
     <ID>ArgumentListWrapping:SettingsScreen.kt$(userMsisdn = v?.takeIf { s -&gt; s.isNotBlank() })</ID>
-    <ID>ArgumentListWrapping:TelephonyReader.kt$TelephonyReader$( "TelephonyReader: MMS %d skipped (empty address after FROM=137/151/129 fallback, direction=%d, threadId=%d)", mmsId, direction, threadId, )</ID>
-    <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)</ID>
-    <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) done; imported=%d skipped(blocked)=%d cursor=%d→%d", reason, imported, skipped, current, newCursor)</ID>
-    <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, imported, isFirstRun, hasAnyMms)</ID>
     <ID>ArgumentListWrapping:TelephonySyncWorker.kt$TelephonySyncWorker$( "Auto-purge: %d messages older than %d days (safety net %d d, next in %d d)", purged, days, SAFETY_NET_DAYS, AUTO_PURGE_INTERVAL_MS / MS_PER_DAY, )</ID>
     <ID>ArgumentListWrapping:TelephonySyncWorker.kt$TelephonySyncWorker$("Auto-purge: first run, anchor set; first purge in %d days", AUTO_PURGE_INTERVAL_MS / MS_PER_DAY)</ID>
     <ID>ArgumentListWrapping:ThreadScreen.kt$( state.messages, todayLabel, yesterdayLabel, )</ID>
@@ -163,17 +137,10 @@
     <ID>ArgumentListWrapping:VaultScreen.kt$( R.plurals.vault_bulk_move_out_done, event.count, event.count, )</ID>
     <ID>ArgumentListWrapping:VaultScreen.kt$(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))</ID>
     <ID>ArgumentListWrapping:VaultScreen.kt$(R.string.action_back)</ID>
-    <ID>ArgumentListWrapping:VoiceRecorder.kt$VoiceRecorder$("DEPRECATION")</ID>
-    <ID>ArgumentListWrapping:VoiceRecorder.kt$VoiceRecorder$(context)</ID>
-    <ID>ChainWrapping:SecurityStore.kt$SecurityStore.LockoutSnapshot$&amp;&amp;</ID>
-    <ID>CommentWrapping:SmsSegmentCounter.kt$SmsSegmentCounter$/* use7bitOnly */</ID>
-    <ID>CommentWrapping:SmsSenderImpl.kt$SmsSenderImpl$/* scAddress = */</ID>
     <ID>ComplexCondition:MainActivity.kt$MainActivity$scheme == "sms" || scheme == "smsto" || scheme == "mms" || scheme == "mmsto"</ID>
     <ID>CyclomaticComplexMethod:AudioMessageBubble.kt$@Composable fun AudioMessageBubble( message: Message, audio: Attachment, /** * Audit P-P1-2: the playback state is passed as a **lambda** rather than the raw * `PlaybackState` value, so the playback controller's 5 Hz progress ticks (see * [VoicePlaybackController.TICK_MS]) only recompose the bubble that is actually * active. Without this indirection, every tick invalidated every audio bubble in * the thread — a 500-message thread with one playing clip was burning ~2.5 k * recompositions/s. * * The lambda is wrapped in `derivedStateOf` below and the value field that drives * the slider (`positionMs`) is only re-read while the slider is mounted in the * active bubble's composition. */ playbackProvider: () -&gt; VoicePlaybackController.PlaybackState, onTogglePlay: () -&gt; Unit, onSeekTo: (Int) -&gt; Unit, onDelete: () -&gt; Unit = {}, onReply: (() -&gt; Unit)? = null, onReact: (() -&gt; Unit)? = null, /** * v1.3.11 (F5) — forward the voice clip + sender label to another conversation. No * `onCopy` here: a voice MMS has no text payload to copy. */ onForward: (() -&gt; Unit)? = null, onRemoveReaction: () -&gt; Unit = {}, repliedToPreview: ReplyQuotePreview? = null, showTimestamp: Boolean = false, /** v1.3.3 #7 — étiquette d'expéditeur ; voir [MessageBubble] pour la sémantique. */ senderLabel: String? = null, )</ID>
-    <ID>CyclomaticComplexMethod:SettingsRepository.kt$SettingsRepository$private fun Preferences.toAppSettings(): AppSettings</ID>
     <ID>CyclomaticComplexMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onBack: () -&gt; Unit, onOpenAbout: () -&gt; Unit, onOpenBackup: () -&gt; Unit, onOpenMigration: () -&gt; Unit, onOpenBlocked: () -&gt; Unit, onOpenSafetyCall: () -&gt; Unit, onOpenEmergency: () -&gt; Unit, onOpenEmergencySetup: () -&gt; Unit, // v1.15.1 — Accès à la nouvelle screen "Messages programmés" (infra existait // déjà mais aucune UI ne l'exposait — feature dormante). onOpenScheduledMessages: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
     <ID>CyclomaticComplexMethod:ThreadScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ThreadScreen( conversationId: Long, onBack: () -&gt; Unit, /** * v1.3.11 (F5) — navigation hook fired when the user picks an existing target * conversation in the forward sheet. The caller (`AppRoot`) typically does * `popBackStack(); navigate(Thread(id))` so the user returns to the conversation list * after the forwarded message is sent rather than stacking thread on top of thread. */ onForwardToConversation: (Long) -&gt; Unit = {}, /** * v1.3.11 (F5) — navigation hook fired when the user picks "Nouveau destinataire" * in the forward sheet. The caller routes to [com.filestech.sms.ui.screens.compose * .ComposeScreen] which then funnels back into a thread once a contact is picked. */ onForwardToNewContact: () -&gt; Unit = {}, viewModel: ThreadViewModel = hiltViewModel(), )</ID>
-    <ID>Filename:AppLockManagerTest.kt$com.filestech.sms.security.AppLockManagerTest.kt</ID>
     <ID>Filename:DateTimeFormatters.kt$com.filestech.sms.ui.util.DateTimeFormatters.kt</ID>
     <ID>ImportOrdering:AboutScreen.kt$import android.content.Intent import android.net.Uri import androidx.compose.foundation.Image import androidx.compose.foundation.background import androidx.compose.foundation.border import androidx.compose.foundation.clickable import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Box import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.PaddingValues import androidx.compose.foundation.layout.Row import androidx.compose.foundation.layout.Spacer import androidx.compose.foundation.layout.fillMaxSize import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.padding import androidx.compose.foundation.layout.size import androidx.compose.foundation.rememberScrollState import androidx.compose.foundation.shape.CircleShape import androidx.compose.foundation.shape.RoundedCornerShape import androidx.compose.foundation.verticalScroll import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.outlined.ArrowBack import androidx.compose.material.icons.outlined.Backup import androidx.compose.material.icons.outlined.Block import androidx.compose.material.icons.outlined.BugReport import androidx.compose.material.icons.outlined.ChatBubbleOutline import androidx.compose.material.icons.outlined.Code import androidx.compose.material.icons.outlined.Contactless import androidx.compose.material.icons.outlined.DarkMode import androidx.compose.material.icons.outlined.Fingerprint import androidx.compose.material.icons.outlined.Gavel import androidx.compose.material.icons.outlined.GraphicEq import androidx.compose.material.icons.outlined.Language import androidx.compose.material.icons.outlined.Mic import androidx.compose.material.icons.outlined.PictureAsPdf import androidx.compose.material.icons.outlined.PrivacyTip import androidx.compose.material.icons.outlined.Public import androidx.compose.material.icons.outlined.QuestionAnswer import androidx.compose.material.icons.automirrored.outlined.Reply import androidx.compose.material.icons.outlined.Search import androidx.compose.material.icons.outlined.Security import androidx.compose.material.icons.outlined.Shield import androidx.compose.material.icons.outlined.SystemUpdate import androidx.compose.material.icons.outlined.Translate import androidx.compose.material.icons.outlined.VisibilityOff import androidx.compose.material.icons.outlined.Warning import androidx.compose.material3.Card import androidx.compose.material3.CardDefaults import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.FilledTonalButton import androidx.compose.material3.HorizontalDivider import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.ListItem import androidx.compose.material3.ListItemDefaults import androidx.compose.material3.MaterialTheme import androidx.compose.material3.Scaffold import androidx.compose.material3.Text import androidx.compose.material3.TopAppBar import androidx.compose.runtime.Composable import androidx.compose.runtime.getValue import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.setValue import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.draw.clip import androidx.compose.ui.graphics.Color import androidx.compose.ui.graphics.vector.ImageVector import androidx.compose.ui.platform.LocalContext import androidx.compose.ui.res.painterResource import androidx.compose.ui.res.stringResource import androidx.compose.ui.text.font.FontWeight import androidx.compose.ui.text.style.TextAlign import androidx.compose.ui.unit.dp import androidx.compose.ui.unit.sp import com.filestech.sms.BuildConfig import com.filestech.sms.R</ID>
     <ID>ImportOrdering:AppRoot.kt$import androidx.compose.runtime.Composable import androidx.compose.runtime.LaunchedEffect import androidx.compose.runtime.getValue import androidx.hilt.navigation.compose.hiltViewModel import androidx.lifecycle.compose.collectAsStateWithLifecycle import androidx.navigation.compose.NavHost import androidx.navigation.compose.composable import androidx.navigation.compose.rememberNavController import androidx.navigation.toRoute import com.filestech.sms.security.AppLockManager import com.filestech.sms.ui.navigation.About import com.filestech.sms.ui.navigation.Backup import com.filestech.sms.ui.navigation.Blocked import com.filestech.sms.ui.navigation.Compose import com.filestech.sms.ui.navigation.Conversations import com.filestech.sms.ui.navigation.Emergency import com.filestech.sms.ui.navigation.EmergencySetup import com.filestech.sms.ui.navigation.SafetyCallSetup import com.filestech.sms.ui.navigation.Lock import com.filestech.sms.ui.navigation.Migration import com.filestech.sms.ui.navigation.Settings import com.filestech.sms.ui.navigation.ScheduledMessages import com.filestech.sms.ui.navigation.Splash import com.filestech.sms.ui.navigation.Thread import com.filestech.sms.ui.navigation.Vault import com.filestech.sms.ui.screens.about.AboutScreen import com.filestech.sms.ui.screens.backup.BackupScreen import com.filestech.sms.ui.screens.blocked.BlockedNumbersScreen import com.filestech.sms.ui.screens.compose.ComposeScreen import com.filestech.sms.ui.screens.conversations.ConversationsScreen import com.filestech.sms.ui.screens.lock.LockScreen import com.filestech.sms.ui.screens.migration.MigrationScreen import com.filestech.sms.ui.screens.settings.SettingsScreen import com.filestech.sms.ui.screens.splash.SplashScreen import com.filestech.sms.ui.screens.thread.ThreadScreen import com.filestech.sms.ui.screens.vault.VaultScreen</ID>
@@ -202,19 +169,12 @@
     <ID>Indentation:SettingsScreen.kt$ </ID>
     <ID>Indentation:SmsTechSnackbar.kt$ </ID>
     <ID>Indentation:ThreadScreen.kt$ </ID>
-    <ID>LargeClass:ConversationMirror.kt$ConversationMirror : OutgoingMessageMirror</ID>
     <ID>LargeClass:ThreadViewModel.kt$ThreadViewModel : ViewModel</ID>
     <ID>LongMethod:ConversationsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ConversationsScreen( archived: Boolean = false, onOpenThread: (Long) -&gt; Unit, onCompose: () -&gt; Unit, onOpenSettings: () -&gt; Unit, onOpenVault: () -&gt; Unit, onOpenArchived: () -&gt; Unit, onOpenBlocked: () -&gt; Unit, onOpenAbout: () -&gt; Unit = {}, onBack: (() -&gt; Unit)? = null, viewModel: ConversationsViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onBack: () -&gt; Unit, onOpenAbout: () -&gt; Unit, onOpenBackup: () -&gt; Unit, onOpenMigration: () -&gt; Unit, onOpenBlocked: () -&gt; Unit, onOpenSafetyCall: () -&gt; Unit, onOpenEmergency: () -&gt; Unit, onOpenEmergencySetup: () -&gt; Unit, // v1.15.1 — Accès à la nouvelle screen "Messages programmés" (infra existait // déjà mais aucune UI ne l'exposait — feature dormante). onOpenScheduledMessages: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:ThreadScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ThreadScreen( conversationId: Long, onBack: () -&gt; Unit, /** * v1.3.11 (F5) — navigation hook fired when the user picks an existing target * conversation in the forward sheet. The caller (`AppRoot`) typically does * `popBackStack(); navigate(Thread(id))` so the user returns to the conversation list * after the forwarded message is sent rather than stacking thread on top of thread. */ onForwardToConversation: (Long) -&gt; Unit = {}, /** * v1.3.11 (F5) — navigation hook fired when the user picks "Nouveau destinataire" * in the forward sheet. The caller routes to [com.filestech.sms.ui.screens.compose * .ComposeScreen] which then funnels back into a thread once a contact is picked. */ onForwardToNewContact: () -&gt; Unit = {}, viewModel: ThreadViewModel = hiltViewModel(), )</ID>
     <ID>LongParameterList:ThreadViewModel.kt$ThreadViewModel$( savedStateHandle: SavedStateHandle, private val repo: ConversationRepository, private val sendSms: SendSmsUseCase, private val sendVoiceMms: SendVoiceMmsUseCase, private val sendMediaMms: SendMediaMmsUseCase, private val retrySend: RetrySendUseCase, private val markRead: MarkConversationReadUseCase, private val segCounter: SmsSegmentCounter, private val exportPdf: ExportConversationPdfUseCase, private val voiceRecorder: VoiceRecorder, private val playbackController: VoicePlaybackController, private val settings: SettingsRepository, private val blockNumber: com.filestech.sms.domain.usecase.BlockNumberUseCase, private val toggleConvState: com.filestech.sms.domain.usecase.ToggleConversationStateUseCase, private val contactRepo: com.filestech.sms.domain.repository.ContactRepository, private val sendReaction: SendReactionUseCase, // v1.15.1 — Schedule a SMS for later via WorkManager (infra existait avant, UI nouvelle). private val scheduleMessage: com.filestech.sms.domain.usecase.ScheduleMessageUseCase, private val incomingShare: com.filestech.sms.system.share.IncomingShareHolder, private val activeConversationTracker: ActiveConversationTracker, @ApplicationContext private val context: android.content.Context, @com.filestech.sms.di.IoDispatcher private val io: kotlinx.coroutines.CoroutineDispatcher, // v1.12.0 — overflow "Déplacer vers le coffre" : on a besoin du flag // PanicDecoy pour gater l'item (cohérence avec masquage liste + // Settings + filtre nav AppRoot). En decoy, l'item NE DOIT PAS // apparaître (l'agresseur ne doit pas savoir qu'un coffre existe). private val appLock: com.filestech.sms.security.AppLockManager, )</ID>
-    <ID>LoopWithTooManyJumpStatements:BackupService.kt$BackupService$for</ID>
-    <ID>LoopWithTooManyJumpStatements:BlockedNumbersImporter.kt$BlockedNumbersImporter$for</ID>
-    <ID>LoopWithTooManyJumpStatements:ConversationMirror.kt$ConversationMirror$for</ID>
     <ID>LoopWithTooManyJumpStatements:MmsDownloadedReceiver.kt$MmsDownloadedReceiver$for</ID>
-    <ID>LoopWithTooManyJumpStatements:TelephonyReader.kt$TelephonyReader$while</ID>
-    <ID>LoopWithTooManyJumpStatements:VoicePlaybackController.kt$VoicePlaybackController$while</ID>
-    <ID>MatchingDeclarationName:AppLockManagerTest.kt$AppLockManagerBackoffTest</ID>
     <ID>MatchingDeclarationName:BackupScreen.kt$BackupViewModel : ViewModel</ID>
     <ID>MatchingDeclarationName:BlockedNumbersScreen.kt$BlockedNumbersViewModel : ViewModel</ID>
     <ID>MatchingDeclarationName:DateTimeFormatters.kt$ChatFormatters</ID>
@@ -238,10 +198,7 @@
     <ID>MaxLineLength:KeepAliveService.kt$KeepAliveService$"KeepAliveService.startForeground failed — likely POST_NOTIFICATIONS revoked or background restriction. Service will not stay alive."</ID>
     <ID>MaxLineLength:MainActivity.kt$MainActivity$"MainActivity: requesting %d missing critical permissions at cold-start (likely Samsung One UI Android 10 GRANTED_BY_ROLE bug)"</ID>
     <ID>MaxLineLength:MainApplication.kt$MainApplication$"MainApplication: repairing dirty emergency state (enabled=%s shortcut=%s police=%s lastTriggeredAt=%d) → cascade-disable"</ID>
-    <ID>MaxLineLength:MmsSender.kt$MmsSender$Timber.w(persisted.exceptionOrNull(), "dispatchMms: setMmsSystemId(%d, %d) failed — rolling back", localMessageId, mmsSystemId)</ID>
-    <ID>MaxLineLength:MmsSystemWriteback.kt$MmsSystemWriteback$Timber.i("MmsSystemWriteback: inserted outbox row id=%d (%d recipient(s), %d attachment(s))", mmsId, recipients.size, attachments.size)</ID>
     <ID>MaxLineLength:SettingsScreen.kt$onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -&gt; com.filestech.sms.domain.settings.AppSettings) -&gt; Unit</ID>
-    <ID>MaxLineLength:TelephonySyncManager.kt$TelephonySyncManager$Timber.i("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)</ID>
     <ID>MaxLineLength:ThreadScreen.kt$title = { Text(stringResource(R.string.thread_schedule_date_title), modifier = Modifier.padding(start = 24.dp, top = 16.dp)) }</ID>
     <ID>MultiLineIfElse:AppearanceDialog.kt$Modifier</ID>
     <ID>MultiLineIfElse:AppearanceDialog.kt$Modifier.border( width = 2.dp, color = borderColor, shape = CircleShape, )</ID>
@@ -254,10 +211,6 @@
     <ID>MultiLineIfElse:BootReceiver.kt$BootReceiver$return</ID>
     <ID>MultiLineIfElse:ComposeScreen.kt$R.string.compose_add_to_group</ID>
     <ID>MultiLineIfElse:ComposeScreen.kt$R.string.compose_use_this_number</ID>
-    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$emptyList&lt;Conversation&gt;()</ID>
-    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$emptyMap()</ID>
-    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$list.map { it.toDomain() }</ID>
-    <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$null</ID>
     <ID>MultiLineIfElse:ConversationRow.kt$conversation.lastMessagePreview.orEmpty()</ID>
     <ID>MultiLineIfElse:ConversationsScreen.kt$actionsSheetOpen = true</ID>
     <ID>MultiLineIfElse:ConversationsScreen.kt$ctx.getString(R.string.vault_move_in_done)</ID>
@@ -271,7 +224,6 @@
     <ID>MultiLineIfElse:ConversationsViewModel.kt$ConversationsViewModel$Event.MoveToVaultFailed(count = ids.size)</ID>
     <ID>MultiLineIfElse:ConversationsViewModel.kt$ConversationsViewModel$Event.MovedToVault(count = outcome.value)</ID>
     <ID>MultiLineIfElse:DateTimeFormatters.kt$return yesterdayLabel</ID>
-    <ID>MultiLineIfElse:DefaultSmsAppManager.kt$DefaultSmsAppManager$null</ID>
     <ID>MultiLineIfElse:EmergencyScreen.kt$null</ID>
     <ID>MultiLineIfElse:EmergencyShortcutNotifier.kt$EmergencyShortcutNotifier$null</ID>
     <ID>MultiLineIfElse:EmojiReactionPickerSheet.kt$Modifier</ID>
@@ -284,11 +236,7 @@
     <ID>MultiLineIfElse:MessageBubble.kt$Modifier.drawBehind { drawRect(outgoingBrush) }</ID>
     <ID>MultiLineIfElse:MigrationScreen.kt$stringResource(R.string.migration_rerun)</ID>
     <ID>MultiLineIfElse:MigrationScreen.kt$stringResource(R.string.migration_run)</ID>
-    <ID>MultiLineIfElse:MmsBuilder.kt$MmsBuilder$"5000ms"</ID>
-    <ID>MultiLineIfElse:MmsDownloader.kt$MmsDownloader$subId</ID>
     <ID>MultiLineIfElse:MmsFailureNotifier.kt$MmsFailureNotifier$return</ID>
-    <ID>MultiLineIfElse:MmsSender.kt$MmsSender$subId</ID>
-    <ID>MultiLineIfElse:SenderNameProviderImpl.kt$SenderNameProviderImpl$cleaned</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$"$days j ${rem} h"</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$MaterialTheme.colorScheme.onSurfaceVariant</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$MaterialTheme.colorScheme.primary</ID>
@@ -302,17 +250,11 @@
     <ID>MultiLineIfElse:SettingsScreen.kt$onOpenVaultPinSetup()</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$stringResource(R.string.error_not_default_app)</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$stringResource(R.string.settings_is_default)</ID>
-    <ID>MultiLineIfElse:SmsSenderImpl.kt$SmsSenderImpl$subId</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$BrandDanger</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$Color.White</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$MaterialTheme.colorScheme.inverseOnSurface</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$MaterialTheme.colorScheme.inversePrimary</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$MaterialTheme.colorScheme.inverseSurface</ID>
-    <ID>MultiLineIfElse:TelephonyReader.kt$TelephonyReader$MessageDirection.INCOMING</ID>
-    <ID>MultiLineIfElse:TelephonyReader.kt$TelephonyReader$MessageDirection.OUTGOING</ID>
-    <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$emptyList()</ID>
-    <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$page</ID>
-    <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }</ID>
     <ID>MultiLineIfElse:TelephonySyncWorker.kt$TelephonySyncWorker$emptyList()</ID>
     <ID>MultiLineIfElse:TelephonySyncWorker.kt$TelephonySyncWorker$page</ID>
     <ID>MultiLineIfElse:TelephonySyncWorker.kt$TelephonySyncWorker$page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }</ID>
@@ -366,13 +308,8 @@
     <ID>NoUnusedImports:ReplyQuoteCard.kt$com.filestech.sms.ui.components.ReplyQuoteCard.kt</ID>
     <ID>NoUnusedImports:SafetyCallWorker.kt$com.filestech.sms.system.scheduler.SafetyCallWorker.kt</ID>
     <ID>NoUnusedImports:ScheduledMessagesScreen.kt$com.filestech.sms.ui.screens.scheduled.ScheduledMessagesScreen.kt</ID>
-    <ID>NoUnusedImports:SettingsRepository.kt$com.filestech.sms.data.local.datastore.SettingsRepository.kt</ID>
     <ID>NoUnusedImports:TelephonySyncWorker.kt$com.filestech.sms.system.scheduler.TelephonySyncWorker.kt</ID>
     <ID>NoUnusedImports:ThreadScreen.kt$com.filestech.sms.ui.screens.thread.ThreadScreen.kt</ID>
-    <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(parts: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsPartImport&gt;)</ID>
-    <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(rows: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsImportRow&gt;)</ID>
-    <ID>ParameterListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id: Long, archived: Boolean)</ID>
-    <ID>ParameterListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id: Long, inVault: Boolean)</ID>
     <ID>ParameterListWrapping:MessageDao.kt$MessageDao$(id: Long, status: com.filestech.sms.data.local.db.entity.MessageStatus, errorCode: Int? = null)</ID>
     <ID>ParameterListWrapping:SettingsScreen.kt$(com.filestech.sms.domain.settings.AppSettings)</ID>
     <ID>ParameterListWrapping:SettingsScreen.kt$(transform: (com.filestech.sms.domain.settings.AppSettings) -&gt; com.filestech.sms.domain.settings.AppSettings)</ID>
@@ -381,10 +318,7 @@
     <ID>PropertyWrapping:SettingsScreen.kt$val defaultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* no-op */ }</ID>
     <ID>ReturnCount:IncomingMessageNotifier.kt$IncomingMessageNotifier$fun isIncomingChannelEffectivelyEnabled(): Boolean</ID>
     <ID>ReturnCount:LegacyZeroKeyRekey.kt$LegacyZeroKeyRekey$fun rekeyIfNeeded(context: Context, passphrase: ByteArray): Result</ID>
-    <ID>ReturnCount:LocationResolver.kt$LocationResolver$suspend fun getCurrentLocation( timeoutMs: Long = DEFAULT_TIMEOUT_MS, ): Location?</ID>
     <ID>ReturnCount:MediaAttachmentBubble.kt$private fun com.filestech.sms.domain.model.Attachment.toShareableUri( context: android.content.Context, ): Uri?</ID>
-    <ID>ReturnCount:MmsBuilder.kt$MmsBuilder$fun buildMultipartSendReq( attachments: List&lt;MmsAttachment&gt;, textBody: String?, recipients: List&lt;String&gt;, subject: String? = null, requestDeliveryReport: Boolean = false, ): ByteArray?</ID>
-    <ID>ReturnCount:MmsDownloader.kt$MmsDownloader$fun download( contentLocation: String, transactionId: String?, senderAddress: String?, subId: Int? = null, ): Outcome&lt;Unit&gt;</ID>
     <ID>ReturnCount:SmishingDetector.kt$SmishingDetector$internal fun levenshteinAtMost(a: String, b: String, maxDistance: Int): Boolean</ID>
     <ID>SpacingBetweenDeclarationsWithAnnotations:BootReceiver.kt$BootReceiver$@Inject @ApplicationScope lateinit var scope: CoroutineScope</ID>
     <ID>SpacingBetweenDeclarationsWithAnnotations:BootReceiver.kt$BootReceiver$@Inject lateinit var emergencyShortcutNotifier: EmergencyShortcutNotifier</ID>
@@ -431,15 +365,7 @@
     <ID>SpacingBetweenDeclarationsWithAnnotations:SmsDeliverReceiver.kt$SmsDeliverReceiver$@Inject lateinit var notifier: IncomingMessageNotifier</ID>
     <ID>SpacingBetweenDeclarationsWithAnnotations:SmsDeliveredReceiver.kt$SmsDeliveredReceiver$@Inject @ApplicationScope lateinit var scope: CoroutineScope</ID>
     <ID>SpacingBetweenDeclarationsWithAnnotations:SmsSentReceiver.kt$SmsSentReceiver$@Inject @ApplicationScope lateinit var scope: CoroutineScope</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:AppDatabase.kt$AppDatabase.Companion$// v2 (2026-05-15): adds `messages.reply_to_message_id` + matching index for the</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.Locked$/** Lock is configured ON and user has not unlocked yet. UI must be hidden. */</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.LockedOut$/** Too many failed attempts — UI shows the countdown, no PIN accepted yet. */</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.PanicDecoy$/** Panic-code unlock — UI is visible but the vault must remain hidden. */</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.Unlocked$/** User has unlocked successfully. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:BackupScreen.kt$BackupViewModel.Event.RestoreDone$// v1.15.2 — Événements restore. Le succès porte le récap chiffré pour l'affichage,</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// Audit SECU-M1 v1.15.2 — Caps dur sur le nombre d'objets désérialisés du JSON.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// v1.15.2 — Cap de sécurité sur la taille d'un .smsbk à restaurer. 50 MB couvre des</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:BackupService.kt$BackupService.Companion$// v1.17.0 audit KOTLIN-L2 — Bornes header `.smsbk` alignées sur les constantes</ID>
     <ID>SpacingBetweenDeclarationsWithComments:ConversationsViewModel.kt$ConversationsViewModel.Event.IAmOkDoneNoSms$/** v1.14.0 — Reset cooldown effectué, pas de SMS (opt-in OFF). */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:ConversationsViewModel.kt$ConversationsViewModel.Event.IAmOkDoneWithSms$/** v1.14.0 — Reset cooldown + SMS "Je vais bien" envoyé. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:EmergencyCallHelper.kt$EmergencyCallHelper.CallOutcome.INVALID_NUMBER$/** Numéro non dans la whitelist. Caller bug. */</ID>
@@ -452,44 +378,18 @@
     <ID>SpacingBetweenDeclarationsWithComments:MmsDownloadedReceiver.kt$MmsDownloadedReceiver.Companion$/** Audit M-10: TTL for the in-memory dedup set. 5 min covers real-world carrier replays. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:MmsDownloadedReceiver.kt$MmsDownloadedReceiver.Companion$/** v1.14.7 — nouvelle racine persistante (filesDir) pour les attachments MMS reçus. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:MmsDownloadedReceiver.kt$MmsDownloadedReceiver.MmsDownloadedEntryPoint$// Audit R2 (v1.14.8) — Notification user lorsque le download MMS échoue (rc != OK).</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:MmsDownloader.kt$MmsDownloader.Companion$/** v1.22.0 — SIM d'arrivée du MMS, propagée du WAP push jusqu'au write-back Room. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:MmsWapPushReceiver.kt$MmsWapPushReceiver.MmsWapPushEntryPoint$// Audit R1 (v1.14.8) — notification user lorsque le MMS dépasse le cap auto-download.</ID>
     <ID>SpacingBetweenDeclarationsWithComments:NotificationChannelInitializer.kt$NotificationChannelInitializer.Companion$/** v1.12.0 — canal pour le raccourci d'urgence (action URGENCE + action 112). */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:NotificationChannelInitializer.kt$NotificationChannelInitializer.Companion$/** v1.9.0 — canal dédié au warning Safety Call (avant trigger). */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:Routes.kt$Splash$// v1.23.2 — route `Onboarding` retirée : injoignable depuis v1.2.0 (aucun</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SecurityStore.kt$SecurityStore.K$// v1.13.0 — PIN distinct coffre (second-factor).</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SecurityStore.kt$SecurityStore.K$// v1.14.8 R7 — anti-wallclock-manipulation : baseline mono + durée d'origine.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// Bumped from a boolean ("didInitialSmsImport") to a long cursor: the latter encodes the</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.10.0 SEC-11 — snapshot monotonic du dernier reset, anti clock-forward.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.10.0 audit S2 — snapshot monotonic du dernier trigger urgence.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.10.0 — Mode urgence (réutilise les contacts Safety call).</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.11.0 — Sujet 3 anti-smishing.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.12.0 — bouton Appeler Police 17 (FR uniquement, opt-in).</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.12.0 — raccourci urgence (notif persistante lock-screen).</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.13.0 — PIN distinct coffre (second-factor opt-in).</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.14.0 — SMS "Je vais bien" sur kill-switch.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.14.0 — comportement boutons 112/17 (DIALER_ONLY ou HOLD_3S_DIRECT_CALL).</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.14.7 — flag one-shot pour la migration des attachments MMS cacheDir → filesDir.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.21.0 — indicatif pays par défaut pour la conversion E.164 des numéros</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.22.x — flag de complétion de la dédup des conversations du même numéro.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.8.0 (bug 5 fix) — nouveau format avec 3 valeurs (READABLE_FR / TAPBACK_EN</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.8.0 — flag one-shot pour la migration de purge des badges hérités v1.7.1.</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:SettingsRepository.kt$SettingsRepository.K$// v1.8.1 — override personnel du nom inclus dans les SMS de réaction</ID>
     <ID>SpacingBetweenDeclarationsWithComments:SettingsViewModel.kt$SettingsViewModel.Event.HistoryPurged$/** v1.3.0 — résultat du nettoyage manuel de l'historique (bouton "Effacer maintenant"). */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:SettingsViewModel.kt$SettingsViewModel.Event.ResyncRequested$/** v1.3.0 — re-sync from content://sms a été enquêtée. Le snack confirme à l'utilisateur. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:TelephonySyncWorker.kt$TelephonySyncWorker.Companion$// v1.6.1 (audit QUAL-16) — `STALE_CACHE_AGE_MS` exprimé via [MS_PER_DAY] (était</ID>
     <ID>SpacingBetweenDeclarationsWithComments:ThreadViewModel.kt$ThreadViewModel.Companion$// Audit C3 (v1.14.8) — Alias local pointant vers la SOURCE UNIQUE [MmsConstants].</ID>
-    <ID>SpreadOperator:DatabaseFactory.kt$DatabaseFactory$(*Migrations.ALL)</ID>
     <ID>SpreadOperator:MessageTextWithLinks.kt$(*URL_TRAILING_PUNCTUATION)</ID>
-    <ID>StringTemplate:EscapeFtsQuery.kt$${it}</ID>
     <ID>StringTemplate:SafetyCallSetupScreen.kt$${rem}</ID>
     <ID>StringTemplate:SettingsScreen.kt$${rem}</ID>
-    <ID>SwallowedException:BackupService.kt$BackupService$t: Throwable</ID>
     <ID>SwallowedException:LegacyZeroKeyRekey.kt$LegacyZeroKeyRekey$t: Throwable</ID>
-    <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun generateAndWrap(): ByteArray</ID>
-    <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun unwrap(): ByteArray</ID>
-    <ID>TooManyFunctions:ConversationDao.kt$ConversationDao</ID>
-    <ID>TooManyFunctions:MessageDao.kt$MessageDao</ID>
     <ID>TooManyFunctions:ThreadViewModel.kt$ThreadViewModel : ViewModel</ID>
     <ID>UnusedImports:AppearanceDialog.kt$import androidx.compose.foundation.layout.padding</ID>
     <ID>UnusedImports:AudioMessageBubble.kt$import androidx.compose.foundation.layout.Spacer</ID>
@@ -513,7 +413,6 @@
     <ID>UnusedImports:ReplyQuoteCard.kt$import androidx.compose.foundation.layout.width</ID>
     <ID>UnusedImports:SafetyCallWorker.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:ScheduledMessagesScreen.kt$import androidx.compose.foundation.layout.Box</ID>
-    <ID>UnusedImports:SettingsRepository.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:TelephonySyncWorker.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.foundation.layout.heightIn</ID>
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.material.icons.outlined.Stop</ID>
@@ -524,11 +423,9 @@
     <ID>UnusedParameter:ConversationsScreen.kt$onOpenBlocked: () -&gt; Unit</ID>
     <ID>UnusedParameter:EmergencyShortcutReceiver.kt$EmergencyShortcutReceiver$context: Context</ID>
     <ID>UnusedParameter:MediaAttachmentBubble.kt$showTimestamp: Boolean</ID>
-    <ID>UnusedPrivateMember:TelephonyReader.kt$TelephonyReader$private fun readMmsParts(mmsId: Long): Pair&lt;String, List&lt;MmsPartImport&gt;&gt;</ID>
     <ID>UnusedPrivateMember:ThreadScreen.kt$private fun formatFileSize(bytes: Long): String</ID>
     <ID>UnusedPrivateProperty:AudioMessageBubble.kt$val isActiveClip = local is LocalPlayback.Active</ID>
     <ID>Wrapping:BackupScreen.kt$;</ID>
-    <ID>Wrapping:BackupService.kt$BackupService$;</ID>
     <ID>Wrapping:BlockedNumbersScreen.kt$;</ID>
     <ID>Wrapping:BlockedNumbersScreen.kt$Text(stringResource(R.string.action_cancel))</ID>
     <ID>Wrapping:BlockedNumbersScreen.kt$TextButton(onClick = { showDialog = false; newNumber = "" }) { Text(stringResource(R.string.action_cancel)) }</ID>
@@ -536,18 +433,11 @@
     <ID>Wrapping:BlockedNumbersScreen.kt$showDialog = false; newNumber = ""</ID>
     <ID>Wrapping:BlockedNumbersScreen.kt$viewModel.add(newNumber); showDialog = false; newNumber = ""</ID>
     <ID>Wrapping:ComposeScreen.kt$(</ID>
-    <ID>Wrapping:ConversationMirror.kt$ConversationMirror$(</ID>
     <ID>Wrapping:ConversationPdfExporter.kt$ConversationPdfExporter$;</ID>
     <ID>Wrapping:ConversationPdfExporter.kt$ConversationPdfExporter$color = Color.parseColor("#CFCFCF"); isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 0.75f</ID>
-    <ID>Wrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$conversationDao.setArchived(id, archived)</ID>
-    <ID>Wrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$conversationDao.setInVault(id, inVault)</ID>
     <ID>Wrapping:ConversationsScreen.kt$;</ID>
     <ID>Wrapping:LockScreen.kt$;</ID>
     <ID>Wrapping:MainApplication.kt$MainApplication$(</ID>
-    <ID>Wrapping:MessageEnumSerializationTest.kt$MessageEnumSerializationTest$;</ID>
-    <ID>Wrapping:MmsSender.kt$MmsSender$(</ID>
-    <ID>Wrapping:QuickReplyRepositoryImpl.kt$QuickReplyRepositoryImpl$;</ID>
-    <ID>Wrapping:SecurityStore.kt$SecurityStore$;</ID>
     <ID>Wrapping:SettingsScreen.kt$(</ID>
     <ID>Wrapping:SettingsScreen.kt$/* no-op */</ID>
     <ID>Wrapping:SettingsScreen.kt$;</ID>
