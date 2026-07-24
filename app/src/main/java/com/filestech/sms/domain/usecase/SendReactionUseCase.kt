@@ -2,8 +2,8 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.ReactionFormat
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.model.ReactionFormat
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.sender.SenderNameProvider
 import javax.inject.Inject

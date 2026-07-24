@@ -308,13 +308,13 @@ fun SettingsScreen(
                     exit = fadeOut() + shrinkVertically(),
                 ) {
                     val reactionFormatLabel = when (state.sending.reactionFormat) {
-                        com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR ->
+                        com.filestech.sms.domain.model.ReactionFormat.READABLE_FR ->
                             stringResource(R.string.settings_reaction_format_fr)
-                        com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN ->
+                        com.filestech.sms.domain.model.ReactionFormat.TAPBACK_EN ->
                             stringResource(R.string.settings_reaction_format_en)
-                        com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY ->
+                        com.filestech.sms.domain.model.ReactionFormat.EMOJI_ONLY ->
                             stringResource(R.string.settings_reaction_format_emoji)
-                        com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_WITH_QUOTE ->
+                        com.filestech.sms.domain.model.ReactionFormat.EMOJI_WITH_QUOTE ->
                             stringResource(R.string.settings_reaction_format_emoji_quote)
                     }
                     NavigationRow(
@@ -329,7 +329,7 @@ fun SettingsScreen(
                 AnimatedVisibility(
                     visible = state.sending.sendReactionsToRecipient &&
                         state.sending.reactionFormat ==
-                            com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR,
+                            com.filestech.sms.domain.model.ReactionFormat.READABLE_FR,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically(),
                 ) {
@@ -815,7 +815,7 @@ fun SettingsScreen(
                     // v1.8.0 (bug 5 fix) — synchronise le legacy `reactionEmojiOnly`
                     // au passage pour qu'un downgrade éventuel vers v1.7.x retrouve
                     // un état cohérent (EMOJI_ONLY → true, autres → false).
-                    val legacyEmojiOnly = fmt == com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY
+                    val legacyEmojiOnly = fmt == com.filestech.sms.domain.model.ReactionFormat.EMOJI_ONLY
                     it.copy(
                         sending = it.sending.copy(
                             reactionFormat = fmt,
@@ -980,14 +980,14 @@ private fun PreviewModeOption(
  *  - SILENT → canal IMPORTANCE_LOW dédié (heads-up et son masqués par l'OS)
  */
 /**
- * v1.8.0 (bug 5 fix) — picker pour [com.filestech.sms.data.local.datastore.ReactionFormat].
+ * v1.8.0 (bug 5 fix) — picker pour [com.filestech.sms.domain.model.ReactionFormat].
  * 3 options avec hints expliquant clairement le trade-off (lisibilité francophone vs
  * compat iMessage vs minimalisme).
  */
 @Composable
 private fun ReactionFormatPickerDialog(
-    current: com.filestech.sms.data.local.datastore.ReactionFormat,
-    onSelect: (com.filestech.sms.data.local.datastore.ReactionFormat) -> Unit,
+    current: com.filestech.sms.domain.model.ReactionFormat,
+    onSelect: (com.filestech.sms.domain.model.ReactionFormat) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -998,26 +998,26 @@ private fun ReactionFormatPickerDialog(
                 PreviewModeOption(
                     label = stringResource(R.string.settings_reaction_format_fr),
                     hint = stringResource(R.string.settings_reaction_format_fr_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.READABLE_FR) },
+                    selected = current == com.filestech.sms.domain.model.ReactionFormat.READABLE_FR,
+                    onClick = { onSelect(com.filestech.sms.domain.model.ReactionFormat.READABLE_FR) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_reaction_format_en),
                     hint = stringResource(R.string.settings_reaction_format_en_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.TAPBACK_EN) },
+                    selected = current == com.filestech.sms.domain.model.ReactionFormat.TAPBACK_EN,
+                    onClick = { onSelect(com.filestech.sms.domain.model.ReactionFormat.TAPBACK_EN) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_reaction_format_emoji_quote),
                     hint = stringResource(R.string.settings_reaction_format_emoji_quote_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_WITH_QUOTE,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_WITH_QUOTE) },
+                    selected = current == com.filestech.sms.domain.model.ReactionFormat.EMOJI_WITH_QUOTE,
+                    onClick = { onSelect(com.filestech.sms.domain.model.ReactionFormat.EMOJI_WITH_QUOTE) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_reaction_format_emoji),
                     hint = stringResource(R.string.settings_reaction_format_emoji_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.ReactionFormat.EMOJI_ONLY) },
+                    selected = current == com.filestech.sms.domain.model.ReactionFormat.EMOJI_ONLY,
+                    onClick = { onSelect(com.filestech.sms.domain.model.ReactionFormat.EMOJI_ONLY) },
                 )
             }
         },

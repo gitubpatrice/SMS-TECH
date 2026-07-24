@@ -737,13 +737,13 @@ class ThreadViewModel @Inject constructor(
      *
      * @param format v1.8.0 (bug 5 fix) — passé par le caller qui a déjà lu le snapshot
      *   `sending` une fois ; évite une 2e lecture DataStore par envoi de réaction.
-     *   Voir [com.filestech.sms.data.local.datastore.ReactionFormat] pour les 3 options
+     *   Voir [com.filestech.sms.domain.model.ReactionFormat] pour les 3 options
      *   (READABLE_FR par défaut, TAPBACK_EN pour compat iPhone, EMOJI_ONLY minimal).
      */
     private suspend fun dispatchReactionSms(
         messageId: Long,
         emoji: String,
-        format: com.filestech.sms.data.local.datastore.ReactionFormat,
+        format: com.filestech.sms.domain.model.ReactionFormat,
     ): DispatchOutcome {
         val now = System.currentTimeMillis()
         // v1.3.5 G7 audit fix — purge opportuniste des entries expirées AVANT lecture

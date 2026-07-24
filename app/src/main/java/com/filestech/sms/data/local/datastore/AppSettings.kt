@@ -1,5 +1,7 @@
 package com.filestech.sms.data.local.datastore
 
+import com.filestech.sms.domain.model.ReactionFormat
+
 /** User-facing immutable snapshot of all preferences. */
 data class AppSettings(
     val appearance: Appearance = Appearance(),
@@ -145,25 +147,6 @@ data class SendingSettings(
      */
     val defaultRegionIso: String? = null,
 )
-
-/**
- * v1.8.0 (bug 5 fix) — format du SMS de réaction envoyé au correspondant.
- *
- * Pour le décodage entrant (réception d'une réaction de l'autre côté), voir
- * [com.filestech.sms.domain.reaction.IncomingReactionDecoder] qui supporte les
- * 3 formats en parallèle (rétro-compatibilité totale avec les v1.7.x et avec
- * les Tapbacks iMessage entrants).
- */
-/**
- * v1.8.0 (bug 5 fix) — format du SMS de réaction envoyé au correspondant.
- *  - READABLE_FR : "Réagi par ❤️ à votre message : «…»"
- *  - TAPBACK_EN  : "Reacted ❤️ to «…»" (Tapback iMessage / Google Messages récent)
- *  - EMOJI_ONLY  : "❤️" seul (compact, perd le contexte)
- *  - **v1.9.0** EMOJI_WITH_QUOTE : "❤️ «aperçu du message»" (compact + contexte
- *    visuel ; pas de mot "Réagi", l'emoji + citation typographique parlent
- *    d'elles-mêmes côté destinataire)
- */
-enum class ReactionFormat { READABLE_FR, TAPBACK_EN, EMOJI_ONLY, EMOJI_WITH_QUOTE }
 
 enum class MmsImageQuality { HIGH, BALANCED, ECONOMY }
 

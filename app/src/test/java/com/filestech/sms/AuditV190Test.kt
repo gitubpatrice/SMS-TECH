@@ -1,7 +1,7 @@
 package com.filestech.sms
 
-import com.filestech.sms.data.local.datastore.ReactionFormat
 import com.filestech.sms.data.local.datastore.SafetyCallContactCodec
+import com.filestech.sms.domain.model.ReactionFormat
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact

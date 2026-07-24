@@ -1,6 +1,6 @@
 package com.filestech.sms
 
-import com.filestech.sms.data.local.datastore.ReactionFormat
+import com.filestech.sms.domain.model.ReactionFormat
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
 import com.filestech.sms.domain.usecase.buildReadableFrBody
 import com.filestech.sms.domain.usecase.buildTapbackBody
