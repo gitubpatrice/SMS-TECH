@@ -7,9 +7,9 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.db.dao.BlockedNumberDao
 import com.filestech.sms.data.local.db.entity.BlockedNumberEntity
+import com.filestech.sms.data.local.db.mapper.toDomain
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.BlockedNumber
-import com.filestech.sms.domain.model.toDomain
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow

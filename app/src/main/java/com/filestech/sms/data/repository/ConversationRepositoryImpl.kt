@@ -12,6 +12,7 @@ import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.entity.ConversationEntity
+import com.filestech.sms.data.local.db.mapper.toDomain
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Attachment
 import com.filestech.sms.domain.model.Conversation
@@ -19,7 +20,6 @@ import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.MessageWindow
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
-import com.filestech.sms.domain.model.toDomain
 import com.filestech.sms.domain.purge.purgeCutoffMs
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository

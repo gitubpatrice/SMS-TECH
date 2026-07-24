@@ -1,9 +1,7 @@
 package com.filestech.sms.domain.model
 
-import com.filestech.sms.data.local.db.entity.AttachmentEntity
-
 /**
- * Domain projection of an [AttachmentEntity]. Carries the MIME type + local file URI so the UI
+ * Domain projection of a stored attachment. Carries the MIME type + local file URI so the UI
  * layer can decide how to render the attachment (audio player, image, generic chip…) without
  * pulling in the Room dependency.
  */
@@ -21,15 +19,3 @@ data class Attachment(
     val isAudio: Boolean get() = mimeType.startsWith("audio/", ignoreCase = true)
     val isImage: Boolean get() = mimeType.startsWith("image/", ignoreCase = true)
 }
-
-fun AttachmentEntity.toDomain(): Attachment = Attachment(
-    id = id,
-    messageId = messageId,
-    mimeType = mimeType,
-    fileName = fileName,
-    sizeBytes = sizeBytes,
-    localUri = localUri,
-    width = width,
-    height = height,
-    durationMs = durationMs,
-)

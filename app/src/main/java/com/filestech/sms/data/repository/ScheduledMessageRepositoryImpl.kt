@@ -4,12 +4,12 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
+import com.filestech.sms.data.local.db.mapper.toDomain
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
 import com.filestech.sms.domain.model.ScheduledMessage
 import com.filestech.sms.domain.model.ScheduledState
-import com.filestech.sms.domain.model.toDomain
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow

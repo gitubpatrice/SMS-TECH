@@ -1,7 +1,5 @@
 package com.filestech.sms.domain.model
 
-import com.filestech.sms.data.local.db.entity.MessageEntity
-
 data class Message(
     val id: Long,
     val conversationId: Long,
@@ -41,51 +39,4 @@ data class Message(
 
     /** First audio attachment, if the message carries one. Convenience for the UI dispatch. */
     val audioAttachment: Attachment? get() = attachments.firstOrNull { it.isAudio }
-}
-
-fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message = Message(
-    id = id,
-    conversationId = conversationId,
-    address = address,
-    body = body,
-    type = mapType(type),
-    direction = mapDirection(direction),
-    date = date,
-    dateSent = dateSent,
-    read = read,
-    starred = starred,
-    status = mapStatus(status),
-    errorCode = errorCode,
-    attachmentsCount = attachmentsCount,
-    subId = subId,
-    scheduledAt = scheduledAt,
-    attachments = attachments,
-    replyToMessageId = replyToMessageId,
-    reactionEmoji = reactionEmoji,
-)
-
-/**
- * v1.16.0 — Mapping enum DB → enum domain. La conversion `object Int` → `enum class` permet
- * désormais un `when` EXHAUSTIVE compile-time (pas de `else`) — le compilateur signale tout
- * cas manquant si on ajoute un statut dans [MessageStatus]. Filet de sécurité K-8 LIGHT
- * v1.15.0 (Timber + test garde-fou) reste pertinent mais devient redondant en pratique :
- * le compilateur fait le travail.
- */
-internal fun mapStatus(status: MessageStatus): Message.Status = when (status) {
-    MessageStatus.PENDING -> Message.Status.PENDING
-    MessageStatus.SENT -> Message.Status.SENT
-    MessageStatus.DELIVERED -> Message.Status.DELIVERED
-    MessageStatus.FAILED -> Message.Status.FAILED
-    MessageStatus.RECEIVED -> Message.Status.RECEIVED
-    MessageStatus.SCHEDULED -> Message.Status.SCHEDULED
-}
-
-internal fun mapType(type: MessageType): Message.Type = when (type) {
-    MessageType.SMS -> Message.Type.SMS
-    MessageType.MMS -> Message.Type.MMS
-}
-
-internal fun mapDirection(direction: MessageDirection): Message.Direction = when (direction) {
-    MessageDirection.INCOMING -> Message.Direction.INCOMING
-    MessageDirection.OUTGOING -> Message.Direction.OUTGOING
 }

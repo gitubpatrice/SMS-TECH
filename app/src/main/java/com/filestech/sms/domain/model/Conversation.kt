@@ -1,7 +1,5 @@
 package com.filestech.sms.domain.model
 
-import com.filestech.sms.data.local.db.entity.ConversationEntity
-
 data class Conversation(
     val id: Long,
     val threadId: Long,
@@ -23,20 +21,3 @@ data class Conversation(
     val isGroup: Boolean get() = addresses.size > 1
     val firstAddress: PhoneAddress? get() = addresses.firstOrNull()
 }
-
-fun ConversationEntity.toDomain(): Conversation = Conversation(
-    id = id,
-    threadId = threadId,
-    addresses = PhoneAddress.list(addressesCsv),
-    displayName = displayName,
-    lastMessageAt = lastMessageAt,
-    lastMessagePreview = lastMessagePreview,
-    unreadCount = unreadCount,
-    pinned = pinned,
-    archived = archived,
-    muted = muted,
-    inVault = inVault,
-    draft = draft,
-    bubbleColorArgb = bubbleColorArgb,
-    avatarUri = avatarUri,
-)

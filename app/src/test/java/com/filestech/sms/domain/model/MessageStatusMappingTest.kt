@@ -1,5 +1,8 @@
 package com.filestech.sms.domain.model
 
+import com.filestech.sms.data.local.db.mapper.mapDirection
+import com.filestech.sms.data.local.db.mapper.mapStatus
+import com.filestech.sms.data.local.db.mapper.mapType
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
