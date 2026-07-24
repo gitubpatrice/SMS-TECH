@@ -1,13 +1,13 @@
 package com.filestech.sms.system.startup
 
 import android.content.Context
-import com.filestech.sms.data.local.datastore.AdvancedSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.settings.AdvancedSettings
 import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher

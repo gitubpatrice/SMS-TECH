@@ -13,8 +13,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import com.filestech.sms.data.local.datastore.Appearance
-import com.filestech.sms.data.local.datastore.ThemeMode
+import com.filestech.sms.domain.settings.Appearance
+import com.filestech.sms.domain.settings.ThemeMode
 
 @Composable
 fun SmsTechTheme(

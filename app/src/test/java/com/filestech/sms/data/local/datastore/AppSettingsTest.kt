@@ -1,5 +1,6 @@
 package com.filestech.sms.data.local.datastore
 
+import com.filestech.sms.domain.settings.AppSettings
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 

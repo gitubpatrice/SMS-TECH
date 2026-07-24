@@ -44,10 +44,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.filestech.sms.R
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.LockMode
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.settings.LockMode
 import com.filestech.sms.domain.usecase.ToggleConversationStateUseCase
 import com.filestech.sms.security.VaultManager
 import com.filestech.sms.ui.components.ConversationRow

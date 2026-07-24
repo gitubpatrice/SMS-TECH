@@ -358,26 +358,26 @@ fun ConversationsScreen(
                         )
                         SortMenuItem(
                             label = stringResource(R.string.sort_date),
-                            selected = state.settings.conversations.sortMode == com.filestech.sms.data.local.datastore.SortMode.DATE,
+                            selected = state.settings.conversations.sortMode == com.filestech.sms.domain.settings.SortMode.DATE,
                             onClick = {
                                 overflowOpen = false
-                                viewModel.setSortMode(com.filestech.sms.data.local.datastore.SortMode.DATE)
+                                viewModel.setSortMode(com.filestech.sms.domain.settings.SortMode.DATE)
                             },
                         )
                         SortMenuItem(
                             label = stringResource(R.string.sort_unread),
-                            selected = state.settings.conversations.sortMode == com.filestech.sms.data.local.datastore.SortMode.UNREAD_FIRST,
+                            selected = state.settings.conversations.sortMode == com.filestech.sms.domain.settings.SortMode.UNREAD_FIRST,
                             onClick = {
                                 overflowOpen = false
-                                viewModel.setSortMode(com.filestech.sms.data.local.datastore.SortMode.UNREAD_FIRST)
+                                viewModel.setSortMode(com.filestech.sms.domain.settings.SortMode.UNREAD_FIRST)
                             },
                         )
                         SortMenuItem(
                             label = stringResource(R.string.sort_pinned),
-                            selected = state.settings.conversations.sortMode == com.filestech.sms.data.local.datastore.SortMode.PINNED_FIRST,
+                            selected = state.settings.conversations.sortMode == com.filestech.sms.domain.settings.SortMode.PINNED_FIRST,
                             onClick = {
                                 overflowOpen = false
-                                viewModel.setSortMode(com.filestech.sms.data.local.datastore.SortMode.PINNED_FIRST)
+                                viewModel.setSortMode(com.filestech.sms.domain.settings.SortMode.PINNED_FIRST)
                             },
                         )
                     }

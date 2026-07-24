@@ -1,10 +1,10 @@
 package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.security.PanicStateProvider
+import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -44,7 +44,7 @@ import javax.inject.Inject
  */
 class TriggerSafetyCallUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
-    private val settings: SettingsRepository,
+    private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {

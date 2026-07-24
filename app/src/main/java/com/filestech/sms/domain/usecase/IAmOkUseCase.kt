@@ -3,10 +3,10 @@ package com.filestech.sms.domain.usecase
 import android.content.Context
 import com.filestech.sms.R
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.security.PanicStateProvider
+import com.filestech.sms.domain.settings.AppSettingsSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
@@ -42,7 +42,7 @@ import javax.inject.Inject
  */
 class IAmOkUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
-    private val settings: SettingsRepository,
+    private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,

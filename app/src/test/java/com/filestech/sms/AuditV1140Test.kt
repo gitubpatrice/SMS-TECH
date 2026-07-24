@@ -1,7 +1,7 @@
 package com.filestech.sms
 
-import com.filestech.sms.data.local.datastore.EmergencyCallBehavior
-import com.filestech.sms.data.local.datastore.SecuritySettings
+import com.filestech.sms.domain.settings.EmergencyCallBehavior
+import com.filestech.sms.domain.settings.SecuritySettings
 import com.filestech.sms.ui.screens.conversations.ConversationsViewModel
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test

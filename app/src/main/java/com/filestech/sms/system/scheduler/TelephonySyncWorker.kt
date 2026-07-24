@@ -157,7 +157,7 @@ class TelephonySyncWorker @AssistedInject constructor(
      * 500-row pages via [ConversationMirror.bulkImportFromTelephony]. Idempotent: the
      * `telephony_uri` UNIQUE index + `OnConflictStrategy.IGNORE` make re-runs safe.
      */
-    private suspend fun runImport(snapshot: com.filestech.sms.data.local.datastore.AppSettings) {
+    private suspend fun runImport(snapshot: com.filestech.sms.domain.settings.AppSettings) {
         val sinceId = snapshot.advanced.lastSyncedSmsId
         val fp = runCatching { reader.snapshotSmsFingerprint() }.getOrNull()
         if (fp == null) {

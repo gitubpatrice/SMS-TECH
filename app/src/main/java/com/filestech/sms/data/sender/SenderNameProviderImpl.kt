@@ -13,7 +13,7 @@ import javax.inject.Singleton
  * v1.8.1 — résout le nom personnel à inclure dans les SMS de réaction sortants.
  *
  * Stratégie :
- *  1. **Override Settings** ([com.filestech.sms.data.local.datastore.SendingSettings
+ *  1. **Override Settings** ([com.filestech.sms.domain.settings.SendingSettings
  *     .senderDisplayName]) — si l'utilisateur a saisi un nom explicite, on l'utilise
  *     tel quel (priorité absolue).
  *  2. **ContactsContract.Profile** — sinon, on tente de lire le profil "moi" du

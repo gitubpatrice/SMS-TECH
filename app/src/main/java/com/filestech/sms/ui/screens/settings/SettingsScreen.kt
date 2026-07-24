@@ -596,20 +596,20 @@ fun SettingsScreen(
             onPick = { mode ->
                 lockModePickerOpen = false
                 when (mode) {
-                    com.filestech.sms.data.local.datastore.LockMode.OFF -> viewModel.clearLock()
-                    com.filestech.sms.data.local.datastore.LockMode.PIN -> {
+                    com.filestech.sms.domain.settings.LockMode.OFF -> viewModel.clearLock()
+                    com.filestech.sms.domain.settings.LockMode.PIN -> {
                         // PIN-only: opens the 2-field setup. If already on BIOMETRIC, this also
                         // strips the biometric flag back down.
-                        if (state.security.lockMode == com.filestech.sms.data.local.datastore.LockMode.BIOMETRIC) {
+                        if (state.security.lockMode == com.filestech.sms.domain.settings.LockMode.BIOMETRIC) {
                             viewModel.disableBiometric()
                         } else {
                             pinSetupOpen = true
                         }
                     }
-                    com.filestech.sms.data.local.datastore.LockMode.BIOMETRIC -> {
+                    com.filestech.sms.domain.settings.LockMode.BIOMETRIC -> {
                         // Biometric requires a PIN as fallback. If none yet → run PIN setup first;
                         // the post-PIN flow will flip to BIOMETRIC. Otherwise just promote in place.
-                        if (state.security.lockMode == com.filestech.sms.data.local.datastore.LockMode.OFF) {
+                        if (state.security.lockMode == com.filestech.sms.domain.settings.LockMode.OFF) {
                             pinSetupOpen = true
                             // We rely on the user re-picking BIOMETRIC after setting the PIN —
                             // safer than auto-switching behind a successful PIN setup.
@@ -843,8 +843,8 @@ fun SettingsScreen(
     // v1.13.0 — Dialog setup PIN/pass coffre : saisie + confirmation.
     if (vaultPinSetupOpen) {
         VaultPinSetupDialog(
-            appPinHint = state.security.lockMode == com.filestech.sms.data.local.datastore.LockMode.PIN ||
-                state.security.lockMode == com.filestech.sms.data.local.datastore.LockMode.BIOMETRIC,
+            appPinHint = state.security.lockMode == com.filestech.sms.domain.settings.LockMode.PIN ||
+                state.security.lockMode == com.filestech.sms.domain.settings.LockMode.BIOMETRIC,
             onConfirm = { pin ->
                 viewModel.setVaultPin(pin)
                 vaultPinSetupOpen = false
@@ -907,8 +907,8 @@ fun SettingsScreen(
  */
 @Composable
 private fun PreviewModePickerDialog(
-    current: com.filestech.sms.data.local.datastore.PreviewMode,
-    onSelect: (com.filestech.sms.data.local.datastore.PreviewMode) -> Unit,
+    current: com.filestech.sms.domain.settings.PreviewMode,
+    onSelect: (com.filestech.sms.domain.settings.PreviewMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -919,20 +919,20 @@ private fun PreviewModePickerDialog(
                 PreviewModeOption(
                     label = stringResource(R.string.settings_notif_preview_always),
                     hint = null,
-                    selected = current == com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS) },
+                    selected = current == com.filestech.sms.domain.settings.PreviewMode.ALWAYS,
+                    onClick = { onSelect(com.filestech.sms.domain.settings.PreviewMode.ALWAYS) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_notif_preview_unlocked),
                     hint = stringResource(R.string.settings_notif_preview_unlocked_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED) },
+                    selected = current == com.filestech.sms.domain.settings.PreviewMode.WHEN_UNLOCKED,
+                    onClick = { onSelect(com.filestech.sms.domain.settings.PreviewMode.WHEN_UNLOCKED) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_notif_preview_never),
                     hint = stringResource(R.string.settings_notif_preview_never_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.PreviewMode.NEVER,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.PreviewMode.NEVER) },
+                    selected = current == com.filestech.sms.domain.settings.PreviewMode.NEVER,
+                    onClick = { onSelect(com.filestech.sms.domain.settings.PreviewMode.NEVER) },
                 )
             }
         },
@@ -1104,8 +1104,8 @@ private fun isoToFlagEmoji(iso: String): String {
 
 @Composable
 private fun NotificationStylePickerDialog(
-    current: com.filestech.sms.data.local.datastore.NotificationStyle,
-    onSelect: (com.filestech.sms.data.local.datastore.NotificationStyle) -> Unit,
+    current: com.filestech.sms.domain.settings.NotificationStyle,
+    onSelect: (com.filestech.sms.domain.settings.NotificationStyle) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -1116,20 +1116,20 @@ private fun NotificationStylePickerDialog(
                 PreviewModeOption(
                     label = stringResource(R.string.settings_notif_style_heads_up),
                     hint = stringResource(R.string.settings_notif_style_heads_up_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP) },
+                    selected = current == com.filestech.sms.domain.settings.NotificationStyle.HEADS_UP,
+                    onClick = { onSelect(com.filestech.sms.domain.settings.NotificationStyle.HEADS_UP) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_notif_style_banner),
                     hint = stringResource(R.string.settings_notif_style_banner_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.NotificationStyle.BANNER,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.NotificationStyle.BANNER) },
+                    selected = current == com.filestech.sms.domain.settings.NotificationStyle.BANNER,
+                    onClick = { onSelect(com.filestech.sms.domain.settings.NotificationStyle.BANNER) },
                 )
                 PreviewModeOption(
                     label = stringResource(R.string.settings_notif_style_silent),
                     hint = stringResource(R.string.settings_notif_style_silent_hint),
-                    selected = current == com.filestech.sms.data.local.datastore.NotificationStyle.SILENT,
-                    onClick = { onSelect(com.filestech.sms.data.local.datastore.NotificationStyle.SILENT) },
+                    selected = current == com.filestech.sms.domain.settings.NotificationStyle.SILENT,
+                    onClick = { onSelect(com.filestech.sms.domain.settings.NotificationStyle.SILENT) },
                 )
             }
         },
@@ -1149,8 +1149,8 @@ private fun NotificationStylePickerDialog(
  */
 @Composable
 private fun LockModePickerDialog(
-    currentMode: com.filestech.sms.data.local.datastore.LockMode,
-    onPick: (com.filestech.sms.data.local.datastore.LockMode) -> Unit,
+    currentMode: com.filestech.sms.domain.settings.LockMode,
+    onPick: (com.filestech.sms.domain.settings.LockMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1161,18 +1161,18 @@ private fun LockModePickerDialog(
             Column {
                 LockModeOption(
                     label = stringResource(R.string.lock_mode_off),
-                    selected = currentMode == com.filestech.sms.data.local.datastore.LockMode.OFF,
-                    onClick = { onPick(com.filestech.sms.data.local.datastore.LockMode.OFF) },
+                    selected = currentMode == com.filestech.sms.domain.settings.LockMode.OFF,
+                    onClick = { onPick(com.filestech.sms.domain.settings.LockMode.OFF) },
                 )
                 LockModeOption(
                     label = stringResource(R.string.lock_mode_pin),
-                    selected = currentMode == com.filestech.sms.data.local.datastore.LockMode.PIN,
-                    onClick = { onPick(com.filestech.sms.data.local.datastore.LockMode.PIN) },
+                    selected = currentMode == com.filestech.sms.domain.settings.LockMode.PIN,
+                    onClick = { onPick(com.filestech.sms.domain.settings.LockMode.PIN) },
                 )
                 LockModeOption(
                     label = stringResource(R.string.lock_mode_biometric),
-                    selected = currentMode == com.filestech.sms.data.local.datastore.LockMode.BIOMETRIC,
-                    onClick = { onPick(com.filestech.sms.data.local.datastore.LockMode.BIOMETRIC) },
+                    selected = currentMode == com.filestech.sms.domain.settings.LockMode.BIOMETRIC,
+                    onClick = { onPick(com.filestech.sms.domain.settings.LockMode.BIOMETRIC) },
                 )
             }
         },
@@ -1398,14 +1398,14 @@ private fun NavigationRow(
  */
 @Composable
 private fun ThemeSwatchPicker(
-    current: com.filestech.sms.data.local.datastore.ThemeMode,
-    onSelect: (com.filestech.sms.data.local.datastore.ThemeMode) -> Unit,
+    current: com.filestech.sms.domain.settings.ThemeMode,
+    onSelect: (com.filestech.sms.domain.settings.ThemeMode) -> Unit,
 ) {
     val items = listOf(
-        com.filestech.sms.data.local.datastore.ThemeMode.SYSTEM to stringResource(R.string.settings_theme_system),
-        com.filestech.sms.data.local.datastore.ThemeMode.LIGHT to stringResource(R.string.settings_theme_light),
-        com.filestech.sms.data.local.datastore.ThemeMode.DARK to stringResource(R.string.settings_theme_dark),
-        com.filestech.sms.data.local.datastore.ThemeMode.DARK_TECH to stringResource(R.string.settings_theme_dark_tech),
+        com.filestech.sms.domain.settings.ThemeMode.SYSTEM to stringResource(R.string.settings_theme_system),
+        com.filestech.sms.domain.settings.ThemeMode.LIGHT to stringResource(R.string.settings_theme_light),
+        com.filestech.sms.domain.settings.ThemeMode.DARK to stringResource(R.string.settings_theme_dark),
+        com.filestech.sms.domain.settings.ThemeMode.DARK_TECH to stringResource(R.string.settings_theme_dark_tech),
     )
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1419,7 +1419,7 @@ private fun ThemeSwatchPicker(
                 )
             }
         }
-        if (current == com.filestech.sms.data.local.datastore.ThemeMode.DARK_TECH) {
+        if (current == com.filestech.sms.domain.settings.ThemeMode.DARK_TECH) {
             Spacer(Modifier.size(10.dp))
             Text(
                 text = stringResource(R.string.settings_theme_dark_tech_desc),
@@ -1432,7 +1432,7 @@ private fun ThemeSwatchPicker(
 
 @Composable
 private fun ThemeSwatch(
-    mode: com.filestech.sms.data.local.datastore.ThemeMode,
+    mode: com.filestech.sms.domain.settings.ThemeMode,
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -1529,28 +1529,28 @@ private data class SwatchPalette(
 )
 
 @Composable
-private fun swatchPalette(mode: com.filestech.sms.data.local.datastore.ThemeMode): SwatchPalette =
+private fun swatchPalette(mode: com.filestech.sms.domain.settings.ThemeMode): SwatchPalette =
     when (mode) {
-        com.filestech.sms.data.local.datastore.ThemeMode.SYSTEM -> SwatchPalette(
+        com.filestech.sms.domain.settings.ThemeMode.SYSTEM -> SwatchPalette(
             // Split-style: half light, half dark — we use the light side and a contrast accent.
             background = Color(0xFFF2F4F8),
             accent = Color(0xFF1F2937),
             incomingBubble = Color(0xFFD8DEE9),
             outgoingBubble = Color(0xFF1F2937),
         )
-        com.filestech.sms.data.local.datastore.ThemeMode.LIGHT -> SwatchPalette(
+        com.filestech.sms.domain.settings.ThemeMode.LIGHT -> SwatchPalette(
             background = Color(0xFFFFFFFF),
             accent = Color(0xFF1565C0),
             incomingBubble = Color(0xFFE7ECF3),
             outgoingBubble = Color(0xFF1565C0),
         )
-        com.filestech.sms.data.local.datastore.ThemeMode.DARK -> SwatchPalette(
+        com.filestech.sms.domain.settings.ThemeMode.DARK -> SwatchPalette(
             background = Color(0xFF15171C),
             accent = Color(0xFF82B1FF),
             incomingBubble = Color(0xFF2A2E36),
             outgoingBubble = Color(0xFF3D6FE0),
         )
-        com.filestech.sms.data.local.datastore.ThemeMode.DARK_TECH -> SwatchPalette(
+        com.filestech.sms.domain.settings.ThemeMode.DARK_TECH -> SwatchPalette(
             background = Color(0xFF050505),
             accent = Color(0xFF00E5FF),
             incomingBubble = Color(0xFF111418),
@@ -2525,8 +2525,8 @@ private fun VaultPinSetupDialog(
  */
 @Composable
 private fun NotificationsSection(
-    notifications: com.filestech.sms.data.local.datastore.NotificationSettings,
-    onUpdate: (transform: (com.filestech.sms.data.local.datastore.AppSettings) -> com.filestech.sms.data.local.datastore.AppSettings) -> Unit,
+    notifications: com.filestech.sms.domain.settings.NotificationSettings,
+    onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -> com.filestech.sms.domain.settings.AppSettings) -> Unit,
     onOpenPreviewPicker: () -> Unit,
     onOpenStylePicker: () -> Unit,
 ) {
@@ -2555,11 +2555,11 @@ private fun NotificationsSection(
         // Sous-titre = libellé localisé de la valeur actuelle pour que
         // l'utilisateur voit du premier coup d'œil son réglage actif.
         val previewLabel = when (notifications.previewMode) {
-            com.filestech.sms.data.local.datastore.PreviewMode.ALWAYS ->
+            com.filestech.sms.domain.settings.PreviewMode.ALWAYS ->
                 stringResource(R.string.settings_notif_preview_always)
-            com.filestech.sms.data.local.datastore.PreviewMode.WHEN_UNLOCKED ->
+            com.filestech.sms.domain.settings.PreviewMode.WHEN_UNLOCKED ->
                 stringResource(R.string.settings_notif_preview_unlocked)
-            com.filestech.sms.data.local.datastore.PreviewMode.NEVER ->
+            com.filestech.sms.domain.settings.PreviewMode.NEVER ->
                 stringResource(R.string.settings_notif_preview_never)
         }
         NavigationRow(
@@ -2569,11 +2569,11 @@ private fun NotificationsSection(
         )
         // v1.8.0 (bug 3 fix MEDIUM 3b) — wire NotificationStyle (dead field).
         val styleLabel = when (notifications.style) {
-            com.filestech.sms.data.local.datastore.NotificationStyle.HEADS_UP ->
+            com.filestech.sms.domain.settings.NotificationStyle.HEADS_UP ->
                 stringResource(R.string.settings_notif_style_heads_up)
-            com.filestech.sms.data.local.datastore.NotificationStyle.BANNER ->
+            com.filestech.sms.domain.settings.NotificationStyle.BANNER ->
                 stringResource(R.string.settings_notif_style_banner)
-            com.filestech.sms.data.local.datastore.NotificationStyle.SILENT ->
+            com.filestech.sms.domain.settings.NotificationStyle.SILENT ->
                 stringResource(R.string.settings_notif_style_silent)
         }
         NavigationRow(
@@ -2612,9 +2612,9 @@ private fun NotificationsSection(
  */
 @Composable
 private fun SecuritySection(
-    security: com.filestech.sms.data.local.datastore.SecuritySettings,
+    security: com.filestech.sms.domain.settings.SecuritySettings,
     isPanicDecoy: Boolean,
-    onUpdate: (transform: (com.filestech.sms.data.local.datastore.AppSettings) -> com.filestech.sms.data.local.datastore.AppSettings) -> Unit,
+    onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -> com.filestech.sms.domain.settings.AppSettings) -> Unit,
     onOpenLockModePicker: () -> Unit,
     onOpenVaultPinSetup: () -> Unit,
     onOpenVaultPinClearConfirm: () -> Unit,
@@ -2628,7 +2628,7 @@ private fun SecuritySection(
         // App lock entry — opens the lock-mode picker (None / PIN). Subtitle reflects the
         // current state so the user sees at a glance whether the lock is armed.
         val currentLockLabel = when (security.lockMode) {
-            com.filestech.sms.data.local.datastore.LockMode.PIN ->
+            com.filestech.sms.domain.settings.LockMode.PIN ->
                 stringResource(R.string.lock_mode_pin)
             else -> stringResource(R.string.lock_mode_off)
         }
@@ -2715,8 +2715,8 @@ private fun SecuritySection(
  */
 @Composable
 private fun EmergencySection(
-    security: com.filestech.sms.data.local.datastore.SecuritySettings,
-    onUpdate: (transform: (com.filestech.sms.data.local.datastore.AppSettings) -> com.filestech.sms.data.local.datastore.AppSettings) -> Unit,
+    security: com.filestech.sms.domain.settings.SecuritySettings,
+    onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -> com.filestech.sms.domain.settings.AppSettings) -> Unit,
     onOpenEmergencySetup: () -> Unit,
     onOpenEmergency: () -> Unit,
     onRequestLocationPermission: () -> Unit,

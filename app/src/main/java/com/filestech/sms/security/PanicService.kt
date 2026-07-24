@@ -86,6 +86,6 @@ class PanicService @Inject constructor(
             File(context.filesDir, "db").deleteRecursively()
             context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         }.onFailure { Timber.w(it, "wipe file dirs") }
-        runCatching { settings.update { com.filestech.sms.data.local.datastore.AppSettings() } }
+        runCatching { settings.update { com.filestech.sms.domain.settings.AppSettings() } }
     }
 }

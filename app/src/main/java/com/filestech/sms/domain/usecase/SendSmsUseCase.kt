@@ -2,7 +2,6 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
@@ -11,6 +10,7 @@ import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SentSmsRecorder
 import com.filestech.sms.domain.sender.SmsSender
+import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
@@ -31,7 +31,7 @@ class SendSmsUseCase @Inject constructor(
     private val sender: SmsSender,
     private val mirror: OutgoingMessageMirror,
     private val blockedRepo: BlockedNumberRepository,
-    private val settings: SettingsRepository,
+    private val settings: AppSettingsSource,
 ) {
     suspend operator fun invoke(
         recipients: List<PhoneAddress>,

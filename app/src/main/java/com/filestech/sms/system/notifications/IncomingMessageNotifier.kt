@@ -3,7 +3,6 @@ package com.filestech.sms.system.notifications
 import android.Manifest
 import android.app.NotificationManager
 import android.app.PendingIntent
-import androidx.core.app.RemoteInput
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -12,15 +11,16 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
+import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
-import com.filestech.sms.data.local.datastore.NotificationStyle
-import com.filestech.sms.data.local.datastore.PreviewMode
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.repository.ContactRepository
+import com.filestech.sms.domain.settings.NotificationStyle
+import com.filestech.sms.domain.settings.PreviewMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext

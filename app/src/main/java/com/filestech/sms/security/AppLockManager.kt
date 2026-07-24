@@ -3,11 +3,11 @@ package com.filestech.sms.security
 import android.os.SystemClock
 import com.filestech.sms.core.crypto.PasswordKdf
 import com.filestech.sms.core.crypto.wipe
-import com.filestech.sms.data.local.datastore.LockMode
 import com.filestech.sms.data.local.datastore.SecurityStore
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.security.PanicStateProvider
+import com.filestech.sms.domain.settings.LockMode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

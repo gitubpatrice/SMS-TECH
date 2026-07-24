@@ -10,6 +10,31 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.ReactionFormat
+import com.filestech.sms.domain.settings.AdvancedSettings
+import com.filestech.sms.domain.settings.AppSettings
+import com.filestech.sms.domain.settings.AppSettingsSource
+import com.filestech.sms.domain.settings.Appearance
+import com.filestech.sms.domain.settings.AutoBackupFrequency
+import com.filestech.sms.domain.settings.AutoLockDelay
+import com.filestech.sms.domain.settings.BackupFormat
+import com.filestech.sms.domain.settings.BackupSettings
+import com.filestech.sms.domain.settings.BlockingSettings
+import com.filestech.sms.domain.settings.ConversationSettings
+import com.filestech.sms.domain.settings.EmergencyCallBehavior
+import com.filestech.sms.domain.settings.FirstDayOfWeek
+import com.filestech.sms.domain.settings.ListDensity
+import com.filestech.sms.domain.settings.LocaleSettings
+import com.filestech.sms.domain.settings.LockMode
+import com.filestech.sms.domain.settings.MmsImageQuality
+import com.filestech.sms.domain.settings.NotificationSettings
+import com.filestech.sms.domain.settings.NotificationStyle
+import com.filestech.sms.domain.settings.PreviewMode
+import com.filestech.sms.domain.settings.SecuritySettings
+import com.filestech.sms.domain.settings.SendingSettings
+import com.filestech.sms.domain.settings.SortMode
+import com.filestech.sms.domain.settings.TextScale
+import com.filestech.sms.domain.settings.ThemeMode
+import com.filestech.sms.domain.settings.VibratePattern
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -27,8 +52,8 @@ private val Context.dataStore by preferencesDataStore(name = "sms_tech_settings"
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     @ApplicationScope private val appScope: CoroutineScope,
-) {
-    val flow: Flow<AppSettings> = context.dataStore.data.map { prefs -> prefs.toAppSettings() }
+) : AppSettingsSource {
+    override val flow: Flow<AppSettings> = context.dataStore.data.map { prefs -> prefs.toAppSettings() }
 
     /**
      * v1.6.1 (audit PERF-01 / PERF-11) — snapshot chaud partagé via [StateFlow]. Tous
@@ -42,11 +67,11 @@ class SettingsRepository @Inject constructor(
      * le comportement attendu (les settings sont consultés en permanence par les
      * receivers, workers, viewmodels). Le seul coût est la première hydration au boot.
      */
-    val state: StateFlow<AppSettings> = flow.stateIn(
+    override val state: StateFlow<AppSettings> = flow.stateIn(
         appScope, SharingStarted.Eagerly, AppSettings(),
     )
 
-    suspend fun update(transform: (AppSettings) -> AppSettings) {
+    override suspend fun update(transform: (AppSettings) -> AppSettings) {
         context.dataStore.edit { prefs ->
             val current = prefs.toAppSettings()
             val next = transform(current)
@@ -165,8 +190,8 @@ class SettingsRepository @Inject constructor(
                 // v1.14.0 — comportement boutons 112/17. Défaut DIALER_ONLY
                 // (zero-risk pocket-dial, behavior v1.12 préservé).
                 emergencyCallBehavior = p[K.emergencyCallBehavior]
-                    ?.let { runCatching { com.filestech.sms.data.local.datastore.EmergencyCallBehavior.valueOf(it) }.getOrNull() }
-                    ?: com.filestech.sms.data.local.datastore.EmergencyCallBehavior.DIALER_ONLY,
+                    ?.let { runCatching { com.filestech.sms.domain.settings.EmergencyCallBehavior.valueOf(it) }.getOrNull() }
+                    ?: com.filestech.sms.domain.settings.EmergencyCallBehavior.DIALER_ONLY,
                 // v1.14.0 — SMS "Je vais bien" sur kill-switch. Default true.
                 sendIAmOkSmsOnReset = p[K.sendIAmOkSmsOnReset] ?: true,
             ),

@@ -2,11 +2,11 @@ package com.filestech.sms.domain.usecase
 
 import android.os.SystemClock
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.security.PanicStateProvider
+import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -28,7 +28,7 @@ import javax.inject.Inject
  * d'urgence devant lui — révélation du réseau de soutien.
  *
  * **Garde-fous** :
- *  - Refuse si [com.filestech.sms.data.local.datastore.AppSettings] :
+ *  - Refuse si [com.filestech.sms.domain.settings.AppSettings] :
  *    `security.emergency.enabled == false` (defense in depth ; l'UI cache
  *    déjà le bouton).
  *  - Refuse si liste de contacts vide (l'UI grise déjà le bouton, mais
@@ -46,7 +46,7 @@ import javax.inject.Inject
  */
 class TriggerEmergencyUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
-    private val settings: SettingsRepository,
+    private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
     private val location: LocationProvider,
     @IoDispatcher private val io: CoroutineDispatcher,

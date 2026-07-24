@@ -1,18 +1,18 @@
 package com.filestech.sms.ui.screens.settings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import android.content.Context
 import com.filestech.sms.data.blocking.BlockedNumbersImporter
-import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.PanicService
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -120,7 +120,7 @@ class SettingsViewModel @Inject constructor(
      */
     fun setPin(pin: CharArray) = viewModelScope.launch { appLock.setPin(pin) }
 
-    /** Disables the lock entirely (back to [com.filestech.sms.data.local.datastore.LockMode.OFF]). */
+    /** Disables the lock entirely (back to [com.filestech.sms.domain.settings.LockMode.OFF]). */
     fun clearLock() = viewModelScope.launch { appLock.clearPin() }
 
     /**

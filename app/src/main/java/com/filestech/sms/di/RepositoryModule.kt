@@ -1,6 +1,7 @@
 package com.filestech.sms.di
 
 import com.filestech.sms.data.backup.BackupService
+import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.location.LocationResolver
 import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl
@@ -32,6 +33,7 @@ import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SenderNameProvider
 import com.filestech.sms.domain.sender.SentSmsRecorder
 import com.filestech.sms.domain.sender.SmsSender
+import com.filestech.sms.domain.settings.AppSettingsSource
 import com.filestech.sms.domain.vault.VaultMover
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.VaultManager
@@ -99,4 +101,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindOutgoingMessageMirror(impl: ConversationMirror): OutgoingMessageMirror
+
+    @Binds @Singleton
+    abstract fun bindAppSettingsSource(impl: SettingsRepository): AppSettingsSource
 }

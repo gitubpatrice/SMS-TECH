@@ -10,7 +10,6 @@ import com.filestech.sms.core.crypto.wipe
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.core.result.runCatchingOutcome
-import com.filestech.sms.data.local.datastore.BackupFormat
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.dao.ConversationDao
@@ -21,6 +20,7 @@ import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.backup.BackupRestorer
 import com.filestech.sms.domain.backup.RestoreResult
 import com.filestech.sms.domain.model.MessageDirection
+import com.filestech.sms.domain.settings.BackupFormat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first

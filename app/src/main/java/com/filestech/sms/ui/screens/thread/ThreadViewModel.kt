@@ -8,7 +8,6 @@ import com.filestech.sms.core.ext.asEvents
 import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.AppSettings
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.sms.SmsSegmentCounter
 import com.filestech.sms.data.voice.VoicePlaybackController
@@ -17,12 +16,13 @@ import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.usecase.ExportConversationPdfUseCase
 import com.filestech.sms.domain.usecase.MarkConversationReadUseCase
 import com.filestech.sms.domain.usecase.RetrySendUseCase
+import com.filestech.sms.domain.usecase.SendMediaMmsUseCase
 import com.filestech.sms.domain.usecase.SendReactionUseCase
 import com.filestech.sms.domain.usecase.SendSmsUseCase
-import com.filestech.sms.domain.usecase.SendMediaMmsUseCase
 import com.filestech.sms.domain.usecase.SendVoiceMmsUseCase
 import com.filestech.sms.system.notifications.ActiveConversationTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -579,7 +579,7 @@ class ThreadViewModel @Inject constructor(
      * v1.3.0 — pose / change / retire la réaction emoji locale d'un message. Le badge sur la
      * bulle se met à jour automatiquement via le Flow d'observation de la conversation.
      *
-     * v1.3.1 — si la préférence [com.filestech.sms.data.local.datastore.SendingSettings
+     * v1.3.1 — si la préférence [com.filestech.sms.domain.settings.SendingSettings
      * .sendReactionsToRecipient] est activée ET que la transition est une **première pose**
      * ([SetReactionResult.First] : null → emoji), on prévient le correspondant en envoyant
      * un SMS contenant uniquement l'emoji. Au tout premier envoi (jamais validé), un

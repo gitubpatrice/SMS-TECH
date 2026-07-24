@@ -5,15 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.filestech.sms.core.ext.foldForSearch
 import com.filestech.sms.core.ext.normalizePhone
-import com.filestech.sms.data.local.datastore.AppSettings
+import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.local.datastore.SortMode
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sync.TelephonySyncManager
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.settings.AppSettings
+import com.filestech.sms.domain.settings.SortMode
 import com.filestech.sms.domain.usecase.BlockNumberUseCase
 import com.filestech.sms.domain.usecase.ToggleConversationStateUseCase
 import com.filestech.sms.security.AppLockManager
@@ -33,7 +34,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import com.filestech.sms.core.result.Outcome
 import javax.inject.Inject
 
 /**

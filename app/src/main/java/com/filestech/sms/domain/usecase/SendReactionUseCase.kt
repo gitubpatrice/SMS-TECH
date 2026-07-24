@@ -30,7 +30,7 @@ import javax.inject.Inject
  * Le caller (typiquement [com.filestech.sms.ui.screens.thread.ThreadViewModel]) reste
  * responsable :
  *
- *   - de vérifier que [com.filestech.sms.data.local.datastore.SendingSettings
+ *   - de vérifier que [com.filestech.sms.domain.settings.SendingSettings
  *     .sendReactionsToRecipient] est activée,
  *   - d'avoir affiché le dialog de confirmation au premier envoi si nécessaire,
  *   - de ne PAS invoquer ce use case pour un retrait

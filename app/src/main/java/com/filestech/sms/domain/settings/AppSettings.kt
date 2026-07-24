@@ -1,4 +1,4 @@
-package com.filestech.sms.data.local.datastore
+package com.filestech.sms.domain.settings
 
 import com.filestech.sms.domain.model.ReactionFormat
 

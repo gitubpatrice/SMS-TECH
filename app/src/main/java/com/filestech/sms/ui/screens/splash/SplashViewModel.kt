@@ -19,7 +19,7 @@ import javax.inject.Inject
  *     pendant 1 frame que skipper un splash dû). Sera réécrite par la première
  *     émission DataStore (en pratique instantanée car le `Flow` est froid mais
  *     hot-démarré par `stateIn`).
- *   - **`true`** tant que [com.filestech.sms.data.local.datastore.AdvancedSettings
+ *   - **`true`** tant que [com.filestech.sms.domain.settings.AdvancedSettings
  *     .splashShown] est `false` côté disque.
  *   - **`false`** ensuite — la Composable doit alors appeler `onFinished()` sans
  *     rendre la moindre frame splash.
