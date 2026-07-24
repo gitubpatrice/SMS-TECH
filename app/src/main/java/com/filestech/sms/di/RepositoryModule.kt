@@ -15,9 +15,11 @@ import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.QuickReplyRepository
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
 import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
+import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SmsSender
 import com.filestech.sms.domain.vault.VaultMover
+import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.VaultManager
 import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
 import dagger.Binds
@@ -59,4 +61,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindVaultMover(impl: VaultManager): VaultMover
+
+    @Binds @Singleton
+    abstract fun bindPanicStateProvider(impl: AppLockManager): PanicStateProvider
 }

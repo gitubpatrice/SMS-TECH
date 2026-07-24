@@ -6,7 +6,7 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.location.LocationResolver
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.domain.security.PanicStateProvider
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -23,7 +23,7 @@ import javax.inject.Inject
  * timer d'inactivité.
  *
  * **Garde panic-decoy (CRITICAL)** : refuse le trigger si l'app est en
- * session [AppLockManager.LockState.PanicDecoy]. Sinon un agresseur ayant
+ * session [com.filestech.sms.security.AppLockManager.LockState.PanicDecoy]. Sinon un agresseur ayant
  * forcé l'ouverture en mode decoy verrait partir les SMS aux contacts
  * d'urgence devant lui — révélation du réseau de soutien.
  *
@@ -47,13 +47,13 @@ import javax.inject.Inject
 class TriggerEmergencyUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
     private val settings: SettingsRepository,
-    private val appLock: AppLockManager,
+    private val panicState: PanicStateProvider,
     private val locationResolver: LocationResolver,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
     suspend operator fun invoke(): Result = withContext(io) {
-        if (appLock.state.value is AppLockManager.LockState.PanicDecoy) {
+        if (panicState.isPanicDecoyActive) {
             Timber.i("TriggerEmergencyUseCase: PanicDecoy active, suppressing trigger")
             return@withContext Result.PanicSuppressed
         }
@@ -163,7 +163,7 @@ class TriggerEmergencyUseCase @Inject constructor(
         data object EmptyBody : Result
 
         /**
-         * Session [AppLockManager.LockState.PanicDecoy] active — trigger
+         * Session [com.filestech.sms.security.AppLockManager.LockState.PanicDecoy] active — trigger
          * supprimé pour ne pas révéler les contacts d'urgence à l'agresseur.
          */
         data object PanicSuppressed : Result

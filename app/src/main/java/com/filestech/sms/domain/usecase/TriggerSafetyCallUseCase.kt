@@ -4,7 +4,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.domain.security.PanicStateProvider
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -20,7 +20,7 @@ import javax.inject.Inject
  * no-op puisque `enabled` est désormais `false`.
  *
  * **Garde panic-decoy (audit fix CRITICAL)** : si l'app est en session
- * [AppLockManager.LockState.PanicDecoy], retourne [Result.PanicSuppressed]
+ * [com.filestech.sms.security.AppLockManager.LockState.PanicDecoy], retourne [Result.PanicSuppressed]
  * sans envoi. Sinon l'agresseur sous contrainte verrait partir les SMS
  * d'urgence devant lui, révélant le réseau de soutien de la victime. Le
  * worker du tick suivant retentera dès que la session decoy est quittée.
@@ -45,12 +45,12 @@ import javax.inject.Inject
 class TriggerSafetyCallUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
     private val settings: SettingsRepository,
-    private val appLock: AppLockManager,
+    private val panicState: PanicStateProvider,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
     suspend operator fun invoke(): Result = withContext(io) {
-        if (appLock.state.value is AppLockManager.LockState.PanicDecoy) {
+        if (panicState.isPanicDecoyActive) {
             Timber.i("TriggerSafetyCallUseCase: PanicDecoy active, suppressing trigger")
             return@withContext Result.PanicSuppressed
         }
@@ -143,7 +143,7 @@ class TriggerSafetyCallUseCase @Inject constructor(
         data object EmptyBody : Result
 
         /**
-         * Session [AppLockManager.LockState.PanicDecoy] active — trigger
+         * Session [com.filestech.sms.security.AppLockManager.LockState.PanicDecoy] active — trigger
          * supprimé pour ne pas révéler les contacts d'urgence à l'agresseur.
          * Le worker tick suivant retentera.
          */

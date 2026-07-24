@@ -3,10 +3,11 @@ package com.filestech.sms.security
 import android.os.SystemClock
 import com.filestech.sms.core.crypto.PasswordKdf
 import com.filestech.sms.core.crypto.wipe
+import com.filestech.sms.data.local.datastore.LockMode
 import com.filestech.sms.data.local.datastore.SecurityStore
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.local.datastore.LockMode
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.security.PanicStateProvider
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +31,7 @@ class AppLockManager @Inject constructor(
     private val settings: SettingsRepository,
     private val kdf: PasswordKdf,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : PanicStateProvider {
 
     /**
      * Initial state is [LockState.Locked] (fail-closed). Any subsequent observer must wait for
@@ -40,6 +41,8 @@ class AppLockManager @Inject constructor(
      */
     private val _state = MutableStateFlow<LockState>(LockState.Locked)
     val state: StateFlow<LockState> = _state.asStateFlow()
+
+    override val isPanicDecoyActive: Boolean get() = _state.value is LockState.PanicDecoy
 
     sealed interface LockState {
         /** Lock is configured OFF in settings — UI is always visible. */
