@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "SMS Tech"
 include(":app")
+include(":core")
 include(":baselineprofile")

@@ -217,7 +217,6 @@
     <ID>LoopWithTooManyJumpStatements:BlockedNumbersImporter.kt$BlockedNumbersImporter$for</ID>
     <ID>LoopWithTooManyJumpStatements:ConversationMirror.kt$ConversationMirror$for</ID>
     <ID>LoopWithTooManyJumpStatements:MmsDownloadedReceiver.kt$MmsDownloadedReceiver$for</ID>
-    <ID>LoopWithTooManyJumpStatements:StringExt.kt$for</ID>
     <ID>LoopWithTooManyJumpStatements:TelephonyReader.kt$TelephonyReader$while</ID>
     <ID>LoopWithTooManyJumpStatements:VoicePlaybackController.kt$VoicePlaybackController$while</ID>
     <ID>MatchingDeclarationName:AppLockManagerTest.kt$AppLockManagerBackoffTest</ID>
@@ -487,7 +486,6 @@
     <ID>SpacingBetweenDeclarationsWithComments:MmsWapPushReceiver.kt$MmsWapPushReceiver.MmsWapPushEntryPoint$// Audit R1 (v1.14.8) — notification user lorsque le MMS dépasse le cap auto-download.</ID>
     <ID>SpacingBetweenDeclarationsWithComments:NotificationChannelInitializer.kt$NotificationChannelInitializer.Companion$/** v1.12.0 — canal pour le raccourci d'urgence (action URGENCE + action 112). */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:NotificationChannelInitializer.kt$NotificationChannelInitializer.Companion$/** v1.9.0 — canal dédié au warning Safety Call (avant trigger). */</ID>
-    <ID>SpacingBetweenDeclarationsWithComments:PasswordKdf.kt$PasswordKdf.Companion$/** OWASP Mobile 2024 recommended floor for PBKDF2-HMAC-SHA512 (Audit F17). */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:Routes.kt$Splash$// v1.23.2 — route `Onboarding` retirée : injoignable depuis v1.2.0 (aucun</ID>
     <ID>SpacingBetweenDeclarationsWithComments:SecurityStore.kt$SecurityStore.K$// v1.13.0 — PIN distinct coffre (second-factor).</ID>
     <ID>SpacingBetweenDeclarationsWithComments:SecurityStore.kt$SecurityStore.K$// v1.14.8 R7 — anti-wallclock-manipulation : baseline mono + durée d'origine.</ID>
@@ -520,7 +518,6 @@
     <ID>SwallowedException:LegacyZeroKeyRekey.kt$LegacyZeroKeyRekey$t: Throwable</ID>
     <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun generateAndWrap(): ByteArray</ID>
     <ID>ThrowsCount:DatabaseKeyManager.kt$DatabaseKeyManager$private fun unwrap(): ByteArray</ID>
-    <ID>TooGenericExceptionThrown:WireAddressTest.kt$WireAddressTest$throw RuntimeException("platform boom")</ID>
     <ID>TooManyFunctions:ConversationDao.kt$ConversationDao</ID>
     <ID>TooManyFunctions:ConversationRepository.kt$ConversationRepository</ID>
     <ID>TooManyFunctions:MessageDao.kt$MessageDao</ID>
@@ -595,7 +592,6 @@
     <ID>Wrapping:SettingsScreen.kt$/* no-op */</ID>
     <ID>Wrapping:SettingsScreen.kt$;</ID>
     <ID>Wrapping:SimLabeler.kt${ subId: Int? -&gt; if (subId == null) null else labels[subId] }</ID>
-    <ID>Wrapping:StringExt.kt$;</ID>
     <ID>Wrapping:ThreadScreen.kt$;</ID>
     <ID>Wrapping:ThreadScreen.kt$Text(stringResource(R.string.thread_schedule_date_title), modifier = Modifier.padding(start = 24.dp, top = 16.dp))</ID>
     <ID>Wrapping:ThreadViewModel.kt$ThreadViewModel$(</ID>

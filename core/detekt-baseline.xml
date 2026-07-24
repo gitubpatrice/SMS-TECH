@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>LoopWithTooManyJumpStatements:StringExt.kt$for</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:PasswordKdf.kt$PasswordKdf.Companion$/** OWASP Mobile 2024 recommended floor for PBKDF2-HMAC-SHA512 (Audit F17). */</ID>
+    <ID>TooGenericExceptionThrown:WireAddressTest.kt$WireAddressTest$throw RuntimeException("platform boom")</ID>
+    <ID>Wrapping:StringExt.kt$;</ID>
+  </CurrentIssues>
+</SmellBaseline>

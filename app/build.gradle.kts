@@ -133,7 +133,12 @@ android {
     lint {
         warningsAsErrors = false
         abortOnError = true
-        checkDependencies = true
+        // Étage 2.3 multi-module — lint PAR module : chaque module (`:app`, `:core`, …) analyse
+        // et baseline son propre code. `checkDependencies=false` évite que la lint d'`:app`
+        // re-scanne les sources des modules-lib (sinon leurs findings baselinés côté module
+        // resurgissent ici). La couverture projet est préservée : `check`/`build` lance la lint
+        // de tous les modules.
+        checkDependencies = false
         baseline = file("lint-baseline.xml")
     }
 
@@ -163,6 +168,8 @@ kotlin {
 }
 
 dependencies {
+    // Module :core (crypto / result / ext / logging) — extrait en module Gradle (Étage 2.3)
+    implementation(project(":core"))
     // Core
     implementation(libs.androidx.core.ktx)
     // v1.24.0 — installe le baseline profile généré au premier lancement (démarrage plus rapide).
