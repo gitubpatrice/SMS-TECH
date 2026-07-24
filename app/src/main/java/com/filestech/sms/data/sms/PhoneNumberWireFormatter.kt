@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 /**
  * Single choke point that turns a recipient's stored address into the **E.164 wire form** just
- * before it is handed to the telephony stack ([SmsSender], [com.filestech.sms.data.mms.MmsSender]).
+ * before it is handed to the telephony stack ([SmsSenderImpl], [com.filestech.sms.data.mms.MmsSender]).
  *
  * Why it exists: an SMS/MMS sent from a **foreign SIM** with a destination in national form (a
  * Luxembourg SIM texting a French `06…` number) is not routable — the network needs the

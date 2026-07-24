@@ -4,9 +4,9 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
-import com.filestech.sms.data.sms.SmsSender
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.SendErrorCode
+import com.filestech.sms.domain.sender.SmsSender
 import timber.log.Timber
 import javax.inject.Inject
 

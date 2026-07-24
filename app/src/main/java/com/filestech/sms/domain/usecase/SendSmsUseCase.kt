@@ -5,12 +5,12 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
-import com.filestech.sms.data.sms.SmsSender
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
+import com.filestech.sms.domain.sender.SmsSender
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 

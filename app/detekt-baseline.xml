@@ -23,8 +23,8 @@
     <ID>AnnotationOnSeparateLine:SettingsScreen.kt$@Suppress("UNUSED_EXPRESSION") onPurgeNow</ID>
     <ID>AnnotationOnSeparateLine:SmsDeliverReceiver.kt$SmsDeliverReceiver$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:SmsDeliveredReceiver.kt$SmsDeliveredReceiver$@Inject @ApplicationScope lateinit</ID>
-    <ID>AnnotationOnSeparateLine:SmsSender.kt$SmsSender$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
-    <ID>AnnotationOnSeparateLine:SmsSender.kt$SmsSender$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
+    <ID>AnnotationOnSeparateLine:SmsSenderImpl.kt$SmsSenderImpl$@Suppress("DEPRECATION") SmsManager.getDefault()</ID>
+    <ID>AnnotationOnSeparateLine:SmsSenderImpl.kt$SmsSenderImpl$@Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId( if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) { SubscriptionManager.getDefaultSmsSubscriptionId() } else subId, )</ID>
     <ID>AnnotationOnSeparateLine:SmsSentReceiver.kt$SmsSentReceiver$@Inject @ApplicationScope lateinit</ID>
     <ID>AnnotationOnSeparateLine:ThreadScreen.kt$@Suppress("UNREACHABLE_CODE") Unit</ID>
     <ID>AnnotationOnSeparateLine:VoiceRecorder.kt$VoiceRecorder$@Suppress("DEPRECATION") MediaRecorder()</ID>
@@ -172,7 +172,7 @@
     <ID>ArgumentListWrapping:VoiceRecorder.kt$VoiceRecorder$(context)</ID>
     <ID>ChainWrapping:SecurityStore.kt$SecurityStore.LockoutSnapshot$&amp;&amp;</ID>
     <ID>CommentWrapping:SmsSegmentCounter.kt$SmsSegmentCounter$/* use7bitOnly */</ID>
-    <ID>CommentWrapping:SmsSender.kt$SmsSender$/* scAddress = */</ID>
+    <ID>CommentWrapping:SmsSenderImpl.kt$SmsSenderImpl$/* scAddress = */</ID>
     <ID>ComplexCondition:MainActivity.kt$MainActivity$scheme == "sms" || scheme == "smsto" || scheme == "mms" || scheme == "mmsto"</ID>
     <ID>CyclomaticComplexMethod:AudioMessageBubble.kt$@Composable fun AudioMessageBubble( message: Message, audio: Attachment, /** * Audit P-P1-2: the playback state is passed as a **lambda** rather than the raw * `PlaybackState` value, so the playback controller's 5 Hz progress ticks (see * [VoicePlaybackController.TICK_MS]) only recompose the bubble that is actually * active. Without this indirection, every tick invalidated every audio bubble in * the thread — a 500-message thread with one playing clip was burning ~2.5 k * recompositions/s. * * The lambda is wrapped in `derivedStateOf` below and the value field that drives * the slider (`positionMs`) is only re-read while the slider is mounted in the * active bubble's composition. */ playbackProvider: () -&gt; VoicePlaybackController.PlaybackState, onTogglePlay: () -&gt; Unit, onSeekTo: (Int) -&gt; Unit, onDelete: () -&gt; Unit = {}, onReply: (() -&gt; Unit)? = null, onReact: (() -&gt; Unit)? = null, /** * v1.3.11 (F5) — forward the voice clip + sender label to another conversation. No * `onCopy` here: a voice MMS has no text payload to copy. */ onForward: (() -&gt; Unit)? = null, onRemoveReaction: () -&gt; Unit = {}, repliedToPreview: ReplyQuotePreview? = null, showTimestamp: Boolean = false, /** v1.3.3 #7 — étiquette d'expéditeur ; voir [MessageBubble] pour la sémantique. */ senderLabel: String? = null, )</ID>
     <ID>CyclomaticComplexMethod:SettingsRepository.kt$SettingsRepository$private fun Preferences.toAppSettings(): AppSettings</ID>
@@ -324,7 +324,7 @@
     <ID>MultiLineIfElse:SettingsScreen.kt$onOpenVaultPinSetup()</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$stringResource(R.string.error_not_default_app)</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$stringResource(R.string.settings_is_default)</ID>
-    <ID>MultiLineIfElse:SmsSender.kt$SmsSender$subId</ID>
+    <ID>MultiLineIfElse:SmsSenderImpl.kt$SmsSenderImpl$subId</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$BrandDanger</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$Color.White</ID>
     <ID>MultiLineIfElse:SmsTechSnackbar.kt$MaterialTheme.colorScheme.inverseOnSurface</ID>

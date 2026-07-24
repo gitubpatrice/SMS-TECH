@@ -5,7 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.filestech.sms.data.repository.ConversationMirror
-import com.filestech.sms.data.sms.SmsSender
+import com.filestech.sms.data.sms.SmsSenderImpl
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.MessageStatus
 import dagger.hilt.android.AndroidEntryPoint
@@ -24,8 +24,8 @@ class SmsSentReceiver : BroadcastReceiver() {
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != SmsSender.ACTION_SMS_SENT) return
-        val localId = intent.getLongExtra(SmsSender.EXTRA_LOCAL_ID, -1L)
+        if (intent.action != SmsSenderImpl.ACTION_SMS_SENT) return
+        val localId = intent.getLongExtra(SmsSenderImpl.EXTRA_LOCAL_ID, -1L)
         if (localId < 0) return
         val rc = resultCode
         val pending = goAsync()

@@ -8,6 +8,7 @@ import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.domain.sender.SmsSender
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,17 +19,17 @@ import javax.inject.Singleton
  * Pending intent extras encode the local Room message id so receivers can update the DB.
  */
 @Singleton
-class SmsSender @Inject constructor(
+class SmsSenderImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val wireFormatter: PhoneNumberWireFormatter,
-) {
+) : SmsSender {
 
-    fun send(
+    override fun send(
         localMessageId: Long,
         destination: String,
         text: String,
-        subId: Int? = null,
-        requestDeliveryReport: Boolean = false,
+        subId: Int?,
+        requestDeliveryReport: Boolean,
     ): Outcome<Unit> {
         return try {
             val manager = subscriptionAwareManager(subId)
