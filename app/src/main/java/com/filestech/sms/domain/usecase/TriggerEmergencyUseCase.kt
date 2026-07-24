@@ -3,8 +3,8 @@ package com.filestech.sms.domain.usecase
 import android.os.SystemClock
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.data.location.LocationResolver
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.security.PanicStateProvider
 import kotlinx.coroutines.CoroutineDispatcher
@@ -37,7 +37,7 @@ import javax.inject.Inject
  *    autres reçoivent le SMS — un seul mauvais numéro ne bloque pas tout.
  *
  * **Géoloc** : si `security.emergency.includeLocation == true`, on tente
- * un fix via [LocationResolver] (timeout 8s, fallback `lastKnownLocation`
+ * un fix via [com.filestech.sms.data.location.LocationResolver] (timeout 8s, fallback `lastKnownLocation`
  * < 5 min). Si null → SMS sans coord avec mention explicite "(position
  * non disponible)". L'UI affiche un snackbar warning.
  *
@@ -48,7 +48,7 @@ class TriggerEmergencyUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
     private val settings: SettingsRepository,
     private val panicState: PanicStateProvider,
-    private val locationResolver: LocationResolver,
+    private val location: LocationProvider,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -71,7 +71,7 @@ class TriggerEmergencyUseCase @Inject constructor(
         }
 
         val locationUrl: String? = if (emergency.includeLocation) {
-            runCatching { locationResolver.getCurrentLocation() }
+            runCatching { location.resolveLocation() }
                 .onFailure { Timber.w(it, "TriggerEmergencyUseCase: location lookup threw") }
                 .getOrNull()
                 ?.let { loc ->

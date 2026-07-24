@@ -1,5 +1,6 @@
 package com.filestech.sms.di
 
+import com.filestech.sms.data.location.LocationResolver
 import com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl
 import com.filestech.sms.data.repository.BlockedNumberRepositoryImpl
 import com.filestech.sms.data.repository.ContactRepositoryImpl
@@ -8,6 +9,7 @@ import com.filestech.sms.data.repository.QuickReplyRepositoryImpl
 import com.filestech.sms.data.repository.ScheduledMessageRepositoryImpl
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sms.SmsSenderImpl
+import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ContactRepository
@@ -64,4 +66,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindPanicStateProvider(impl: AppLockManager): PanicStateProvider
+
+    @Binds @Singleton
+    abstract fun bindLocationProvider(impl: LocationResolver): LocationProvider
 }

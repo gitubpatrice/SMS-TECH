@@ -10,6 +10,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import com.filestech.sms.domain.location.GeoLocation
+import com.filestech.sms.domain.location.LocationProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -47,7 +49,14 @@ import kotlin.coroutines.resume
 @Singleton
 class LocationResolver @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : LocationProvider {
+
+    /**
+     * Projette le [Location] Android résolu en [GeoLocation] domaine — le seul contrat exposé aux
+     * use-cases. Le timeout de résolution reste un détail d'implémentation.
+     */
+    override suspend fun resolveLocation(): GeoLocation? =
+        getCurrentLocation()?.let { GeoLocation(latitude = it.latitude, longitude = it.longitude) }
 
     /**
      * Tente de récupérer la position actuelle. Retourne null si :
