@@ -1,11 +1,11 @@
 package com.filestech.sms.domain.repository
 
-import com.filestech.sms.data.local.db.entity.QuickReplyEntity
+import com.filestech.sms.domain.model.QuickReply
 import kotlinx.coroutines.flow.Flow
 
 interface QuickReplyRepository {
-    fun observe(): Flow<List<QuickReplyEntity>>
+    fun observe(): Flow<List<QuickReply>>
     suspend fun add(text: String)
-    suspend fun update(entity: QuickReplyEntity)
+    suspend fun update(quickReply: QuickReply)
     suspend fun delete(id: Long)
 }

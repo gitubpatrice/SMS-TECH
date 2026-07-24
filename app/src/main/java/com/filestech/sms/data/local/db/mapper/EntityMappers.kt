@@ -4,6 +4,7 @@ import com.filestech.sms.data.local.db.entity.AttachmentEntity
 import com.filestech.sms.data.local.db.entity.BlockedNumberEntity
 import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
+import com.filestech.sms.data.local.db.entity.QuickReplyEntity
 import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
 import com.filestech.sms.domain.model.Attachment
 import com.filestech.sms.domain.model.BlockedNumber
@@ -13,6 +14,7 @@ import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.MessageType
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.model.QuickReply
 import com.filestech.sms.domain.model.ScheduledMessage
 import com.filestech.sms.domain.model.ScheduledState
 
@@ -107,6 +109,18 @@ internal fun mapDirection(direction: MessageDirection): Message.Direction = when
     MessageDirection.INCOMING -> Message.Direction.INCOMING
     MessageDirection.OUTGOING -> Message.Direction.OUTGOING
 }
+
+fun QuickReplyEntity.toDomain(): QuickReply = QuickReply(
+    id = id,
+    text = text,
+    position = position,
+)
+
+fun QuickReply.toEntity(): QuickReplyEntity = QuickReplyEntity(
+    id = id,
+    text = text,
+    position = position,
+)
 
 fun ScheduledMessageEntity.toDomain(): ScheduledMessage = ScheduledMessage(
     id = id,
