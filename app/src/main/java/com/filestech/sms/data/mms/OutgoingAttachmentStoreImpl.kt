@@ -1,6 +1,7 @@
 package com.filestech.sms.data.mms
 
 import android.content.Context
+import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.io.File
@@ -33,16 +34,16 @@ import javax.inject.Singleton
  * pre-existing behaviour for that one file — never worse.
  */
 @Singleton
-class OutgoingAttachmentStore @Inject constructor(
+class OutgoingAttachmentStoreImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : OutgoingAttachmentStore {
 
     /**
      * Moves [staged] into `filesDir/mms_attachments/` and returns the durable [File]. Idempotent
      * for files already inside the durable root (returned unchanged). Returns [staged] untouched on
      * any failure so the caller can still dispatch the MMS.
      */
-    fun promoteToDurable(staged: File): File {
+    override fun promoteToDurable(staged: File): File {
         val dir = File(context.filesDir, ATTACHMENTS_DIR)
         // Already durable (e.g. re-entrancy) — nothing to do.
         val canonicalDir = runCatching { dir.canonicalPath }.getOrNull()

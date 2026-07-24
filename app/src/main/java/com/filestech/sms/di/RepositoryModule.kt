@@ -1,5 +1,6 @@
 package com.filestech.sms.di
 
+import com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl
 import com.filestech.sms.data.repository.BlockedNumberRepositoryImpl
 import com.filestech.sms.data.repository.ContactRepositoryImpl
 import com.filestech.sms.data.repository.ConversationRepositoryImpl
@@ -7,6 +8,7 @@ import com.filestech.sms.data.repository.QuickReplyRepositoryImpl
 import com.filestech.sms.data.repository.ScheduledMessageRepositoryImpl
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sms.SmsSenderImpl
+import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.repository.ConversationRepository
@@ -44,4 +46,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindDefaultSmsAppChecker(impl: DefaultSmsAppManager): DefaultSmsAppChecker
+
+    @Binds @Singleton
+    abstract fun bindOutgoingAttachmentStore(impl: OutgoingAttachmentStoreImpl): OutgoingAttachmentStore
 }
