@@ -17,6 +17,8 @@ import com.filestech.sms.domain.repository.ScheduledMessageRepository
 import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SmsSender
+import com.filestech.sms.domain.vault.VaultMover
+import com.filestech.sms.security.VaultManager
 import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
 import dagger.Binds
 import dagger.Module
@@ -54,4 +56,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindScheduledMessageScheduler(impl: ScheduledMessageSchedulerImpl): ScheduledMessageScheduler
+
+    @Binds @Singleton
+    abstract fun bindVaultMover(impl: VaultManager): VaultMover
 }

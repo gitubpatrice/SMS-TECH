@@ -3,12 +3,12 @@ package com.filestech.sms.domain.usecase
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.repository.ConversationRepository
-import com.filestech.sms.security.VaultManager
+import com.filestech.sms.domain.vault.VaultMover
 import javax.inject.Inject
 
 class ToggleConversationStateUseCase @Inject constructor(
     private val repo: ConversationRepository,
-    private val vault: VaultManager,
+    private val vault: VaultMover,
 ) {
     suspend fun setPinned(id: Long, pinned: Boolean) = repo.setPinned(id, pinned)
     suspend fun setArchived(id: Long, archived: Boolean) = repo.setArchived(id, archived)
@@ -22,7 +22,8 @@ class ToggleConversationStateUseCase @Inject constructor(
         repo.setAppearance(id, bubbleColorArgb, avatarUri)
 
     /**
-     * Audit P0-1 (v1.2.0): vault toggling **must** go through [VaultManager], which gates the
+     * Audit P0-1 (v1.2.0): vault toggling **must** go through [VaultMover] (impl
+     * [com.filestech.sms.security.VaultManager]), which gates the
      * operation against the panic-decoy session. Earlier versions called `repo.moveToVault`
      * directly here, which short-circuited the guard — a coerced decoy session could hide
      * (or unhide) any conversation, defeating the whole point of the vault.
@@ -37,14 +38,14 @@ class ToggleConversationStateUseCase @Inject constructor(
 
     /**
      * v1.11.0 — wrapper pour appels depuis l'extérieur de VaultScreen. Voir
-     * [VaultManager.requestMoveToVault] pour la politique de sécurité (refus
+     * [com.filestech.sms.security.VaultManager.requestMoveToVault] pour la politique de sécurité (refus
      * PanicDecoy + Locked, auto-unlock sinon).
      */
     suspend fun requestMoveToVault(id: Long, intoVault: Boolean): Outcome<Unit> =
         vault.requestMoveToVault(id, intoVault)
 
     /**
-     * v1.14.8 R8 — Bulk move atomique. Wrap [VaultManager.requestBulkMoveToVault] qui
+     * v1.14.8 R8 — Bulk move atomique. Wrap [com.filestech.sms.security.VaultManager.requestBulkMoveToVault] qui
      * délègue à [ConversationRepository.bulkMoveToVault] (transaction Room).
      */
     suspend fun requestBulkMoveToVault(ids: List<Long>, intoVault: Boolean): Outcome<Int> =

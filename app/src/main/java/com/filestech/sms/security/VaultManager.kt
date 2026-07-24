@@ -5,6 +5,7 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.vault.VaultMover
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -49,7 +50,7 @@ class VaultManager @Inject constructor(
     private val conversationRepo: ConversationRepository,
     private val appLock: AppLockManager,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : VaultMover {
 
     // v1.11.0 audit SEC-V2 — AtomicBoolean au lieu de `@Volatile Boolean`.
     // Sémantique correcte pour un flag partagé entre coroutines IO et UI :
@@ -79,13 +80,13 @@ class VaultManager @Inject constructor(
      * only the decoy view). Even if no malicious flow exists today, the asymmetry was a latent
      * footgun.
      */
-    suspend fun moveToVault(conversationId: Long): Outcome<Unit> = withContext(io) {
+    override suspend fun moveToVault(conversationId: Long): Outcome<Unit> = withContext(io) {
         if (!sessionUnlocked.get()) return@withContext Outcome.Failure(AppError.Locked())
         conversationRepo.moveToVault(conversationId, true)
         Outcome.Success(Unit)
     }
 
-    suspend fun moveOutOfVault(conversationId: Long): Outcome<Unit> = withContext(io) {
+    override suspend fun moveOutOfVault(conversationId: Long): Outcome<Unit> = withContext(io) {
         if (!sessionUnlocked.get()) return@withContext Outcome.Failure(AppError.Locked())
         conversationRepo.moveToVault(conversationId, false)
         Outcome.Success(Unit)
@@ -109,7 +110,7 @@ class VaultManager @Inject constructor(
      *    L'auto-unlock est cohérent avec l'intention explicite de l'user qui
      *    a cliqué sur "Déplacer vers le coffre" depuis un menu authenticated.
      */
-    suspend fun requestMoveToVault(
+    override suspend fun requestMoveToVault(
         conversationId: Long,
         intoVault: Boolean,
     ): Outcome<Unit> = withContext(io) {
@@ -143,7 +144,7 @@ class VaultManager @Inject constructor(
      * délègue à [ConversationRepository.bulkMoveToVault] qui wrap dans `withTransaction`.
      * Retourne `Outcome.Success(count)` avec le nombre réel de rows mises à jour.
      */
-    suspend fun requestBulkMoveToVault(
+    override suspend fun requestBulkMoveToVault(
         ids: List<Long>,
         intoVault: Boolean,
     ): Outcome<Int> = withContext(io) {
