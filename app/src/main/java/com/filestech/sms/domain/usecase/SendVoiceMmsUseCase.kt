@@ -6,10 +6,10 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.mms.OutgoingAttachmentStore
 import com.filestech.sms.data.repository.ConversationMirror
-import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.BlockedNumberRepository
+import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import kotlinx.coroutines.flow.first
 import java.io.File
 import javax.inject.Inject
@@ -24,7 +24,7 @@ import javax.inject.Inject
  *     SENT/FAILED outcome arrives asynchronously via [MmsSentReceiver].
  */
 class SendVoiceMmsUseCase @Inject constructor(
-    private val defaultAppManager: DefaultSmsAppManager,
+    private val defaultAppManager: DefaultSmsAppChecker,
     private val blockedRepo: BlockedNumberRepository,
     private val mirror: ConversationMirror,
     private val sender: MmsSender,

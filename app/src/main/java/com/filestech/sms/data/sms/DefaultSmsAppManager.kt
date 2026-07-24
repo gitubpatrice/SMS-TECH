@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Telephony
+import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,18 +15,22 @@ import javax.inject.Singleton
  *
  * Android Q (29) + → use [RoleManager.ROLE_SMS].
  * KitKat-Pie (19-28) → use [Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT].
+ *
+ * Implements the narrow [DefaultSmsAppChecker] domain port (only [isDefault]); the extra
+ * [buildChangeDefaultIntent] stays off the port because it returns an Android [Intent] and is
+ * consumed only by the UI.
  */
 @Singleton
 class DefaultSmsAppManager @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : DefaultSmsAppChecker {
 
     /**
      * On Android 10+ Samsung One UI sometimes leaves `Settings.Secure.sms_default_application`
      * null even when the RoleManager has correctly granted ROLE_SMS to us. So prefer the
      * RoleManager check on Q+ and fall back to the Telephony API on legacy devices.
      */
-    fun isDefault(): Boolean {
+    override fun isDefault(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val rm = context.getSystemService(Context.ROLE_SERVICE) as RoleManager?
             if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_SMS)) {

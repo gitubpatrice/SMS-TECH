@@ -4,12 +4,12 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.repository.ConversationMirror
-import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
+import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SmsSender
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -26,7 +26,7 @@ import javax.inject.Inject
  * For multi-recipient broadcasts each recipient becomes its own row (one private SMS each).
  */
 class SendSmsUseCase @Inject constructor(
-    private val defaultAppManager: DefaultSmsAppManager,
+    private val defaultAppManager: DefaultSmsAppChecker,
     private val telephonyReader: TelephonyReader,
     private val sender: SmsSender,
     private val mirror: ConversationMirror,
