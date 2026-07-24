@@ -1,0 +1,8 @@
+v1.25.0 — Instant startup
+
+• The app now starts instantly: the conversation list no
+  longer appears after a ~2 s blank screen. The encrypted
+  database opens in a few milliseconds instead of about
+  half a second — at-rest encryption is unchanged.
+• Large internal architecture cleanup (no visible change).
+• 100% local, no data leaves your device.

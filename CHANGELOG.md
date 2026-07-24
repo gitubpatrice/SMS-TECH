@@ -3,6 +3,22 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.25.0] — 2026-07-24
+
+### Performance
+- **Démarrage instantané.** La liste des conversations n'apparaît plus après un écran blanc de
+  ~2 s : la base est désormais ouverte en **clé brute** (`x'<hex>'`), ce qui évite les 256 000
+  itérations PBKDF2 que SQLCipher appliquait inutilement à une clé aléatoire de 32 octets.
+  L'ouverture passe de ~490 ms à quelques millisecondes. Conversion unique, crash-safe, exécutée
+  après la réparation de clé v1.24.0 ; aucune perte de message, chiffrement au repos inchangé.
+
+### Changed
+- **Refonte architecturale interne (sans changement fonctionnel).** Inversion de dépendance
+  complète — `domain/` ne dépend plus d'aucune couche `data`/`system`/`security`, chaque
+  collaborateur passe par un port — puis découpage en modules Gradle `:core` / `:domain` /
+  `:data` / `:app`. Gain de maintenabilité et de temps de build ; comportement identique, vérifié
+  par la suite de tests (205 unitaires + 40 instrumentés) et un audit sécurité/data dédié.
+
 ## [1.24.0] — 2026-07-23
 
 ### Security

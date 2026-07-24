@@ -1,0 +1,8 @@
+v1.25.0 — Démarrage instantané
+
+• L'app démarre maintenant instantanément : la liste des
+  conversations n'apparaît plus après un écran blanc de
+  ~2 s. La base chiffrée s'ouvre en quelques millisecondes
+  au lieu d'une demi-seconde — chiffrement au repos inchangé.
+• Gros nettoyage d'architecture interne (rien de visible).
+• 100% local, aucune donnée ne quitte l'appareil.

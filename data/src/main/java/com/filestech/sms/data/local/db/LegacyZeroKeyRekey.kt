@@ -80,6 +80,7 @@ object LegacyZeroKeyRekey {
      */
     private const val PREFS = "db_repair"
     private const val KEY_DONE_PREFIX = "zero_key_repair_v1240_done_"
+    private const val RAW_KEY_DONE_PREFIX = "raw_key_v1250_done_"
 
     /**
      * The marker is keyed **per database file**.
@@ -90,6 +91,9 @@ object LegacyZeroKeyRekey {
      * unable to ever open its own database.
      */
     private fun doneKey(dbFile: File) = KEY_DONE_PREFIX + dbFile.name
+
+    /** Per-file marker: the database is raw-keyed (fast open). Distinct from the zero-key marker. */
+    private fun rawDoneKey(dbFile: File) = RAW_KEY_DONE_PREFIX + dbFile.name
 
     private const val TMP_SUFFIX = ".rekeytmp"
     private const val OLD_SUFFIX = ".rekeyold"
@@ -167,10 +171,16 @@ object LegacyZeroKeyRekey {
             )
         } else {
             Timber.w("LegacyZeroKeyRekey: legacy zero-key database detected — rebuilding")
-            runCatching { exportToNewKey(dbFile, legacyKey, passphrase) }
-                .onFailure { t ->
-                    failures[dbFile.absolutePath] = t as? Failure ?: Failure("rebuild failed", t)
-                }
+            runCatching {
+                exportToNewKey(
+                    dbFile = dbFile,
+                    sourceKey = legacyKey,
+                    applyNewKey = { it.changePassword(passphrase) },
+                    validationKey = passphrase,
+                )
+            }.onFailure { t ->
+                failures[dbFile.absolutePath] = t as? Failure ?: Failure("rebuild failed", t)
+            }
         }
         // Single exit for every failure path: the outcome is memoized in `failed`, so a later
         // request cannot re-run the rebuild — possibly from the main thread.
@@ -181,10 +191,92 @@ object LegacyZeroKeyRekey {
     }
 
     /**
-     * Exports [dbFile] into a sibling encrypted with [passphrase], validates it end to end, then
-     * swaps it in. The original is only removed once the replacement is proven good.
+     * Converts a passphrase-encrypted database to **raw-key** encryption (v1.25.0 speed-up).
+     *
+     * SQLCipher stretches a passphrase with 256 000 PBKDF2 iterations on every open — ~2 s on a
+     * phone, which is why the conversation list appeared blank for a couple of seconds after the
+     * splash. That stretching is pointless here: the key is already 32 random bytes. Opening with a
+     * raw key (`x'…'`, no PBKDF2) drops the open from ~2 s to a few ms (measured 493 ms → 2 ms on
+     * the emulator).
+     *
+     * Runs **after** [rekeyIfNeeded], so by now the database opens with [passphrase] (or is a fresh
+     * install). Same crash-safe copy → rekey → validate → swap as the zero-key repair; never
+     * deletes user data.
+     *
+     * @param passphrase the byte[] real key the database is currently encrypted with.
+     * @throws Failure when an existing database opens with neither the raw key nor the passphrase.
      */
-    private fun exportToNewKey(dbFile: File, legacyKey: ByteArray, passphrase: ByteArray) {
+    fun ensureRawKeyed(
+        context: Context,
+        passphrase: ByteArray,
+        dbFile: File = context.getDatabasePath(AppDatabase.DATABASE_NAME),
+    ): Result {
+        failures[dbFile.absolutePath]?.let { throw it }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(rawDoneKey(dbFile), false)) return Result.ALREADY_CORRECT
+
+        val rawKey = rawKeySpecBytes(passphrase)
+
+        // Fresh install: no file yet. Room will create it directly raw-keyed (the app opens with
+        // the raw spec), so there is nothing to convert — just record completion.
+        if (!dbFile.exists() || dbFile.length() < MIN_SQLITE_SIZE) {
+            prefs.edit().putBoolean(rawDoneKey(dbFile), true).apply()
+            return Result.FRESH_INSTALL
+        }
+
+        if (canOpen(dbFile, rawKey)) {
+            prefs.edit().putBoolean(rawDoneKey(dbFile), true).apply()
+            return Result.ALREADY_CORRECT
+        }
+
+        if (!canOpen(dbFile, passphrase)) {
+            failures[dbFile.absolutePath] = Failure(
+                "database ${dbFile.name} opens with neither the raw key nor the passphrase",
+            )
+        } else {
+            Timber.w("LegacyZeroKeyRekey: converting ${dbFile.name} to raw-key encryption (faster open)")
+            runCatching {
+                exportToNewKey(
+                    dbFile = dbFile,
+                    sourceKey = passphrase,
+                    applyNewKey = { it.rawExecSQL("PRAGMA rekey = \"${rawKeyPragmaSpec(passphrase)}\";") },
+                    validationKey = rawKey,
+                )
+            }.onFailure { t ->
+                failures[dbFile.absolutePath] = t as? Failure ?: Failure("raw-key conversion failed", t)
+            }
+        }
+        // Single exit for every failure path (memoized, so a retry cannot re-run the conversion).
+        failures[dbFile.absolutePath]?.let { throw it }
+        prefs.edit().putBoolean(rawDoneKey(dbFile), true).apply()
+        Timber.i("LegacyZeroKeyRekey: ${dbFile.name} now raw-keyed — open is now near-instant")
+        return Result.REKEYED
+    }
+
+    /** The `x'<64 hex>'` raw-key spec for [key], as the ASCII bytes SQLCipher's byte[] path parses. */
+    fun rawKeySpecBytes(key: ByteArray): ByteArray =
+        rawKeyPragmaSpec(key).toByteArray(Charsets.US_ASCII)
+
+    private fun rawKeyPragmaSpec(key: ByteArray): String =
+        "x'" + key.joinToString("") { "%02x".format(it) } + "'"
+
+    /**
+     * Rebuilds [dbFile] under a new key: copy → apply the new key on the copy → validate end to
+     * end → swap. The original is only removed once the replacement is proven good, so a kill at
+     * any step is safe.
+     *
+     * Generic over the key change so both callers share this crash-safe machinery:
+     *  - zero-key → passphrase repair: `sourceKey = zero`, `applyNewKey = changePassword(passphrase)`,
+     *    `validationKey = passphrase`;
+     *  - passphrase → raw-key speed-up: `sourceKey = passphrase`, `applyNewKey = PRAGMA rekey x'…'`,
+     *    `validationKey = the ASCII of x'…'`.
+     */
+    private fun exportToNewKey(
+        dbFile: File,
+        sourceKey: ByteArray,
+        applyNewKey: (SQLiteDatabase) -> Unit,
+        validationKey: ByteArray,
+    ) {
         val tmp = File(dbFile.absolutePath + TMP_SUFFIX)
         // The original already occupies its own space; only the copy is additional. Requiring
         // twice the size refused the repair on devices that had ample room, leaving the app
@@ -203,7 +295,7 @@ object LegacyZeroKeyRekey {
             // Fold any WAL content back into the main file and switch to a single-file journal, so
             // the copy below is a complete, self-contained snapshot with no sidecar to keep in
             // sync. Room restores its own journal mode when it reopens the database.
-            SQLiteDatabase.openDatabase(dbFile.absolutePath, legacyKey, null, 0, null).use { db ->
+            SQLiteDatabase.openDatabase(dbFile.absolutePath, sourceKey, null, 0, null).use { db ->
                 // `wal_checkpoint` renvoie (busy, log, checkpointed). Un `busy = 1` signifie que le
                 // WAL n'a pas été replié : la copie qui suit serait incomplète. La comparaison des
                 // comptages de `validateExport` finirait par le détecter, mais le diagnostic
@@ -219,19 +311,15 @@ object LegacyZeroKeyRekey {
                 dbFile.inputStream().use { it.copyTo(out) }
                 out.fd.sync()
             }
-            // `changePassword` takes the same `byte[]` the app opens the database with, so the KDF
-            // treatment is identical on both sides. A SQL `ATTACH ... KEY "x'…'"` would NOT be
-            // equivalent: that syntax means a RAW key, bypassing PBKDF2, and the resulting file
-            // would be unreadable through `openDatabase(path, passphrase)`.
-            SQLiteDatabase.openDatabase(tmp.absolutePath, legacyKey, null, 0, null).use { db ->
-                db.changePassword(passphrase)
+            SQLiteDatabase.openDatabase(tmp.absolutePath, sourceKey, null, 0, null).use { db ->
+                applyNewKey(db)
             }
         } catch (t: Throwable) {
             discardTemp(dbFile)
             throw Failure("rebuild of ${dbFile.name} failed; original left untouched", t)
         }
 
-        validateExport(tmp, passphrase, sourceCounts, dbFile)
+        validateExport(tmp, validationKey, sourceCounts, dbFile)
         swapIn(dbFile, tmp)
     }
 

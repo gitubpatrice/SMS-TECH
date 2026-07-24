@@ -72,7 +72,15 @@ class DatabaseFactory @Inject constructor(
         // surface as an exception, never as a splash screen pinned forever.
         LegacyZeroKeyRekey.rekeyIfNeeded(context, raw)
 
-        val factory = SupportOpenHelperFactory(raw)
+        // v1.25.0 — convert the database to RAW-KEY encryption so opening it skips SQLCipher's
+        // 256 000 PBKDF2 iterations (pointless for a random 32-byte key). This is what made the
+        // conversation list blank for ~2 s after the splash; raw-key open is a few ms. One-shot,
+        // crash-safe, runs after the zero-key repair. Room then opens with the raw-key spec below.
+        LegacyZeroKeyRekey.ensureRawKeyed(context, raw)
+
+        // The app opens with the ASCII of `x'<hex>'` — SQLCipher's byte[] path parses it as a raw
+        // key (no PBKDF2). See [LegacyZeroKeyRekey.rawKeySpecBytes].
+        val factory = SupportOpenHelperFactory(LegacyZeroKeyRekey.rawKeySpecBytes(raw))
         val db = Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
             .openHelperFactory(factory)
             // Forward migrations live in `Migrations.kt`. They are additive: existing rows are
