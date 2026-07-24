@@ -3,7 +3,7 @@ package com.filestech.sms.domain.usecase
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
-import com.filestech.sms.system.scheduler.ScheduledMessageScheduler
+import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
 import javax.inject.Inject
 
 class ScheduleMessageUseCase @Inject constructor(

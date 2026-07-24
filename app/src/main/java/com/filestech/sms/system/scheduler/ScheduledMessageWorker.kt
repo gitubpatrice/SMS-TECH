@@ -22,7 +22,7 @@ class ScheduledMessageWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val id = inputData.getLong(ScheduledMessageScheduler.KEY_SCHEDULED_ID, -1L)
+        val id = inputData.getLong(ScheduledMessageSchedulerImpl.KEY_SCHEDULED_ID, -1L)
         if (id < 0) return Result.failure()
         val entity = dao.findById(id) ?: return Result.failure()
         if (entity.state != ScheduledState.PENDING) return Result.success()

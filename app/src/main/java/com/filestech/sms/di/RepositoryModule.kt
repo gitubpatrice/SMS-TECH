@@ -14,8 +14,10 @@ import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.QuickReplyRepository
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
+import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SmsSender
+import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -49,4 +51,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindOutgoingAttachmentStore(impl: OutgoingAttachmentStoreImpl): OutgoingAttachmentStore
+
+    @Binds @Singleton
+    abstract fun bindScheduledMessageScheduler(impl: ScheduledMessageSchedulerImpl): ScheduledMessageScheduler
 }

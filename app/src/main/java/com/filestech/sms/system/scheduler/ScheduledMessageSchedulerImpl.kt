@@ -8,6 +8,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
+import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
@@ -17,13 +18,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ScheduledMessageScheduler @Inject constructor(
+class ScheduledMessageSchedulerImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repo: ScheduledMessageRepository,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : ScheduledMessageScheduler {
 
-    fun scheduleAt(scheduledMessageId: Long, epochMillis: Long) {
+    override fun scheduleAt(scheduledMessageId: Long, epochMillis: Long) {
         val delay = (epochMillis - System.currentTimeMillis()).coerceAtLeast(0)
         // Audit P-P1-8: exponential backoff on transient send failures (no service, RIL busy,
         // SmsManager transient throw). The OS default for `WorkManager.Result.retry()` is a
@@ -45,7 +46,7 @@ class ScheduledMessageScheduler @Inject constructor(
         )
     }
 
-    fun cancel(scheduledMessageId: Long) {
+    override fun cancel(scheduledMessageId: Long) {
         WorkManager.getInstance(context).cancelUniqueWork(workName(scheduledMessageId))
     }
 
