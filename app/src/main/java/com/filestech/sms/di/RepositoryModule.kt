@@ -1,5 +1,6 @@
 package com.filestech.sms.di
 
+import com.filestech.sms.data.backup.BackupService
 import com.filestech.sms.data.location.LocationResolver
 import com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl
 import com.filestech.sms.data.pdf.ConversationPdfExporter
@@ -11,6 +12,7 @@ import com.filestech.sms.data.repository.ScheduledMessageRepositoryImpl
 import com.filestech.sms.data.sender.SenderNameProviderImpl
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sms.SmsSenderImpl
+import com.filestech.sms.domain.backup.BackupRestorer
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.pdf.PdfExporter
@@ -79,4 +81,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindPdfExporter(impl: ConversationPdfExporter): PdfExporter
+
+    @Binds @Singleton
+    abstract fun bindBackupRestorer(impl: BackupService): BackupRestorer
 }

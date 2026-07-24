@@ -18,6 +18,8 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.backup.BackupRestorer
+import com.filestech.sms.domain.backup.RestoreResult
 import com.filestech.sms.domain.model.MessageDirection
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -55,7 +57,10 @@ class BackupService @Inject constructor(
     private val kdf: PasswordKdf,
     private val aead: AeadCipher,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : BackupRestorer {
+
+    override suspend fun restore(uriString: String, password: CharArray): Outcome<RestoreResult> =
+        readSmsbk(Uri.parse(uriString), password)
 
     @Serializable
     data class BackupHeader(val createdAt: Long, val app: String, val version: Int)
@@ -243,16 +248,6 @@ class BackupService @Inject constructor(
      * d'afficher un récap précis ("X conversations dont Y nouvelles, Z messages importés sur
      * N total dans la sauvegarde, M ignorés car déjà présents").
      */
-    data class RestoreResult(
-        val conversationsReused: Int,
-        val conversationsCreated: Int,
-        val messagesImported: Int,
-        val messagesSkipped: Int,
-    ) {
-        val totalConversationsInBackup: Int get() = conversationsReused + conversationsCreated
-        val totalMessagesInBackup: Int get() = messagesImported + messagesSkipped
-    }
-
     /**
      * Lit, déchiffre et importe un fichier `.smsbk` v1.
      *

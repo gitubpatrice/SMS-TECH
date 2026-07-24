@@ -50,6 +50,7 @@ import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.backup.BackupService
+import com.filestech.sms.domain.backup.RestoreResult
 import com.filestech.sms.domain.usecase.RestoreBackupUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,7 +71,7 @@ class BackupViewModel @Inject constructor(
         data object ExportFailed : Event
         // v1.15.2 — Événements restore. Le succès porte le récap chiffré pour l'affichage,
         // l'échec porte un kind typé qui mappe vers une string d'erreur localisée côté UI.
-        data class RestoreDone(val result: BackupService.RestoreResult) : Event
+        data class RestoreDone(val result: RestoreResult) : Event
         data class RestoreFailed(val kind: RestoreFailureKind) : Event
     }
 
@@ -119,7 +120,7 @@ class BackupViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
-                val outcome = restoreBackup(uri, passphrase)
+                val outcome = restoreBackup(uri.toString(), passphrase)
                 when (outcome) {
                     is Outcome.Success -> _events.tryEmit(Event.RestoreDone(outcome.value))
                     is Outcome.Failure -> {
