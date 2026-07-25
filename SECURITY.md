@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.23.4** (2026-07-21)
+Current release : **v1.25.2** (2026-07-25)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -74,6 +74,23 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 ---
 
 ## Audit history
+
+### v1.25.0 — Ouverture SQLCipher en clé brute (performance, sans changement de sécurité)
+
+Depuis la 1.25.0, la base est ouverte avec la **clé brute** (`SupportOpenHelperFactory` reçoit
+`x'<64 hex>'`) au lieu de laisser SQLCipher dériver la clé par **PBKDF2** (256 000 itérations).
+
+**Pourquoi c'est neutre côté sécurité.** PBKDF2 sert à *étirer* un secret à faible entropie (un mot
+de passe humain) pour le rendre coûteux à brute-forcer. Or la passphrase de SMS Tech est déjà
+**32 octets aléatoires (256 bits) scellés par le Keystore** (depuis le correctif clé-nulle v1.24.0) :
+sur une clé déjà à pleine entropie, les itérations PBKDF2 n'ajoutent **aucune** résistance — elles ne
+font que ralentir l'ouverture (~490 ms → quelques ms). Le chiffrement au repos, l'algorithme
+(AES-256) et le threat model sont **inchangés** ; seule l'étape de dérivation, inutile ici, est sautée.
+
+**Conversion.** Une bascule unique, crash-safe (`LegacyZeroKeyRekey.ensureRawKeyed`, même pattern
+copie → validation `cipher_integrity_check` + comptage de lignes → swap que la réparation v1.24.0),
+est exécutée au premier lancement de la 1.25.0, après la réparation clé-nulle. Aucune perte de
+message : l'original n'est jamais détruit avant que le remplaçant ne soit prouvé sain.
 
 ### v1.24.0 — SEC-CRIT : la base était chiffrée avec une clé nulle
 

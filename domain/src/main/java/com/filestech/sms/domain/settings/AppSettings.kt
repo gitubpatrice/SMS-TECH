@@ -182,7 +182,7 @@ data class SecuritySettings(
      * clés indépendantes (cf. K.safetyCall*) plutôt qu'un blob JSON sérialisé,
      * pour rester lisible/debugable et permettre des migrations partielles
      * sans schéma. La liste [SafetyCallContact] est stockée en format
-     * pipe-separated via [SafetyCallContactCodec] (seule structure complexe).
+     * pipe-separated via `SafetyCallContactCodec` (dans `:data`) (seule structure complexe).
      */
     val safetyCall: com.filestech.sms.domain.safetycall.SafetyCallConfig =
         com.filestech.sms.domain.safetycall.SafetyCallConfig(),

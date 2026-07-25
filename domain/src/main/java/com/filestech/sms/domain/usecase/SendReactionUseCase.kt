@@ -225,7 +225,9 @@ private val FORBIDDEN_BODY_CHARS = Regex(
 /**
  * v1.3.2 — construit le corps SMS au format Apple/Google Tapback. Fonction top-level
  * pour être testable sans instancier [SendReactionUseCase] (dont les dépendances
- * nécessiteraient des mocks). `internal` pour rester invisible hors du module.
+ * nécessiteraient des mocks). Publique (top-level) : testée directement, y compris depuis les
+ * tests de régression cross-module (`AuditV180Test`/`AuditV190Test`, qui importent des classes
+ * `:app`/`:data` et ne peuvent donc pas vivre dans `:domain`).
  *
  * Garanties :
  *

@@ -34,6 +34,12 @@ android {
     }
 
     testOptions {
+        // isReturnDefaultValues : les stubs android.jar (ex. SystemClock.elapsedRealtime, appelé
+        // par SafetyCallConfig.isExpired) renvoient une valeur par défaut au lieu de lever
+        // "not mocked" — aligné sur :app, requis par AuditV190Test relocalisé dans ce module.
+        unitTests {
+            isReturnDefaultValues = true
+        }
         unitTests.all { it.useJUnitPlatform() }
     }
 
