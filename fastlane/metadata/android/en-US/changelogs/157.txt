@@ -1,0 +1,5 @@
+v1.25.2 — Vault blank-screen fix
+
+• Fixed: tapping Back quickly on the vault password prompt could
+  leave the app stuck on a blank white screen until a force-close.
+  Back now returns cleanly to the conversation list.

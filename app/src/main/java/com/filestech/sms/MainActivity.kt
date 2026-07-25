@@ -234,6 +234,24 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        // v1.25.2 — Fallback Back au niveau Activity (enregistré AVANT setContent → priorité la plus
+        // basse : les BackHandler Compose et le callback interne du NavController passent d'abord). Il
+        // ne se déclenche donc QUE lorsque rien d'autre ne consomme le Retour, c.-à-d. sur la
+        // destination de départ (la liste des conversations, cf. startDestination = Conversations dans
+        // AppRoot). Là, au lieu de laisser l'Activity se `finish()` — ce qui retire la tâche et tue le
+        // process EN PLEINE TRANSITION, laissant une surface blanche gelée jusqu'à fermeture manuelle
+        // (bug remonté : Coffre → mot de passe → Retour rapides) — on envoie la tâche en arrière-plan
+        // comme le geste Accueil. Le process reste vivant, le Retour ne vide jamais le NavHost ni ne
+        // tue l'app à mi-transition. Toujours actif ⇒ insensible à la course de recomposition Compose.
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    moveTaskToBack(true)
+                }
+            },
+        )
+
         setContent {
             // While the async settings read is in flight, `initialSettings.value` is null and
             // the splash screen masks the Compose tree. We render the defaults under the splash

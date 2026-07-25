@@ -3,6 +3,17 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.25.2] — 2026-07-25
+
+### Fixed
+- **Coffre-fort : plus d'écran blanc bloquant en annulant la saisie du mot de passe.** En tapant
+  « Retour » rapidement sur la demande de mot de passe du coffre, l'app pouvait rester coincée sur
+  un écran blanc jusqu'à devoir la fermer de force. Cause : l'annulation du coffre se déclenchait
+  deux fois pendant l'animation de sortie (double dépilement de la navigation, qui vidait l'écran).
+  L'annulation est désormais idempotente ; en complément, la destination de départ (liste des
+  conversations) ne peut plus être dépilée et un « Retour » sur la liste met l'app en arrière-plan
+  proprement au lieu de la terminer à mi-transition (ce qui laissait une surface blanche gelée).
+
 ## [1.25.1] — 2026-07-24
 
 ### Changed

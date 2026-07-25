@@ -232,10 +232,19 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // stack, juste mise en pause par le push d'écran au-dessus). Le wrapping
     // est centralisé pour ne pas oublier un call site (top-bar back, system
     // back, PIN cancel, biometric refused).
-    val lockedOnBack: () -> Unit = remember(onBack) {
+    // v1.25.2 — garde d'idempotence : sortir du Coffre ne doit se produire qu'UNE fois. Sans ça,
+    // pendant l'animation de pop (VaultScreen glisse en sortie ~160 ms), un second Retour rapide
+    // atteignait encore le BackHandler de VaultScreen (toujours composé le temps de la transition)
+    // et rappelait `lockedOnBack` → double `popBackStack` → dépilement de Conversations → NavHost
+    // vide = page blanche bloquée. L'AtomicBoolean (remember sans clé, stable sur toute la vie du
+    // composable) rend tout appel suivant no-op. Une nouvelle entrée dans le Coffre = nouveau garde.
+    val backGuard = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val lockedOnBack: () -> Unit = remember(onBack, backGuard) {
         {
-            viewModel.lockVaultSession()
-            onBack()
+            if (backGuard.compareAndSet(false, true)) {
+                viewModel.lockVaultSession()
+                onBack()
+            }
         }
     }
 

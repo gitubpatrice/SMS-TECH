@@ -98,6 +98,16 @@ fun LockScreen(
     var fallbackToPin by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
+    // Un écran de verrou ne doit JAMAIS être « dépassé » par le bouton Retour : sans ce handler,
+    // Retour déléguait au NavHost, qui dépilait l'écran Lock et révélait la liste verrouillée
+    // derrière (fuite). On consomme donc simplement le Retour — l'utilisateur ne franchit pas le
+    // verrou par Retour ; il déverrouille (PIN/biométrie) ou quitte via l'accueil. (Ne PAS appeler
+    // moveTaskToBack ici : couplé à un Retour rapide c'est superflu, la racine non-dépilable est
+    // désormais garantie par startDestination = Conversations dans AppRoot.)
+    androidx.activity.compose.BackHandler(enabled = true) {
+        // Consomme le Retour : pas de sortie du verrou par ce geste.
+    }
+
     LaunchedEffect(state) {
         // R2 fix: also dismiss when the lock is disabled — happens on fresh install where
         // resolveInitialState() flips Locked→Disabled after we've already composed.

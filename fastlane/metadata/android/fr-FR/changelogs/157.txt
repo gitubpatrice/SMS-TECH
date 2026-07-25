@@ -1,0 +1,6 @@
+v1.25.2 — Correction écran blanc du Coffre
+
+• Correction : en tapant Retour rapidement sur la demande de
+  mot de passe du Coffre, l'app pouvait rester bloquée sur un
+  écran blanc jusqu'à devoir la fermer de force. C'est corrigé —
+  Retour revient proprement à la liste des conversations.
