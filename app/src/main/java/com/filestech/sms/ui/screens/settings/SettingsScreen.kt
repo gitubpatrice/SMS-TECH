@@ -2686,12 +2686,27 @@ private fun SecuritySection(
         title = stringResource(R.string.settings_section_security),
         icon = Icons.Outlined.Shield,
     ) {
-        // App lock entry — opens the lock-mode picker (None / PIN). Subtitle reflects the
-        // current state so the user sees at a glance whether the lock is armed.
+        // App lock entry — opens the lock-mode picker (None / PIN / Biometric). Subtitle
+        // reflects the current state so the user sees at a glance whether the lock is armed.
+        //
+        // v1.25.3 — le `when` ne traitait que `PIN` et renvoyait tout le reste sur « Aucun » via
+        // un `else` : avec la biométrie armée, Réglages annonçait **« Aucun »** alors que le
+        // verrou fonctionnait. Le commentaire d'origine (« None / PIN ») date d'avant l'ajout du
+        // mode biométrique et n'avait jamais suivi. `when` désormais exhaustif et **sans `else`**,
+        // pour que le compilateur impose de traiter toute nouvelle valeur de [LockMode] au lieu
+        // de la faire silencieusement passer pour un verrou absent.
         val currentLockLabel = when (security.lockMode) {
+            com.filestech.sms.domain.settings.LockMode.OFF ->
+                stringResource(R.string.lock_mode_off)
             com.filestech.sms.domain.settings.LockMode.PIN ->
                 stringResource(R.string.lock_mode_pin)
-            else -> stringResource(R.string.lock_mode_off)
+            com.filestech.sms.domain.settings.LockMode.BIOMETRIC ->
+                stringResource(R.string.lock_mode_biometric)
+            // `PATTERN` est une valeur historique de l'enum : aucun chemin d'UI ne l'arme
+            // (vérifié — aucune référence dans le code). Si un jour on l'implémente, il faudra
+            // sa propre ressource ici ; l'absence d'`else` forcera la question.
+            com.filestech.sms.domain.settings.LockMode.PATTERN ->
+                stringResource(R.string.lock_mode_off)
         }
         NavigationRow(
             title = stringResource(R.string.settings_app_lock),
