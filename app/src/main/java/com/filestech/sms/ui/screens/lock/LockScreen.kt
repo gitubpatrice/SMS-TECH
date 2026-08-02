@@ -83,8 +83,38 @@ class LockViewModel @Inject constructor(
         .map { it.security.lockMode }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), LockMode.OFF)
 
+    /**
+     * v1.26.0 — expose l'échec d'une tentative pour que l'écran le dise.
+     *
+     * Jusqu'ici un code erroné ne produisait **aucun retour** : le champ se vidait et l'écran
+     * restait identique. Impossible de distinguer « je me suis trompé » de « l'application n'a
+     * pas réagi ».
+     *
+     * ⚠️ Seul `Locked` compte comme échec. Les autres états ne doivent **jamais** allumer ce
+     * message :
+     * - `PanicDecoy` est un **succès** — afficher une erreur trahirait l'existence du code
+     *   panique à quiconque regarde par-dessus l'épaule, ce qui ruinerait le mode leurre ;
+     * - `LockedOut` a déjà son compte à rebours dédié, en dessous ;
+     * - `Unlocked` / `Disabled` sont des ouvertures.
+     */
+    private val _wrongCode = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val wrongCode: StateFlow<Boolean> = _wrongCode
+
     fun attempt(pin: CharArray) {
-        viewModelScope.launch { appLock.attemptUnlock(pin) }
+        viewModelScope.launch {
+            _wrongCode.value = appLock.attemptUnlock(pin) is AppLockManager.LockState.Locked
+        }
+    }
+
+    /** Efface le message dès que l'utilisateur ressaisit quelque chose. */
+    fun clearWrongCode() { _wrongCode.value = false }
+
+    /**
+     * v1.26.0 — appelé quand le compte à rebours du blocage atteint zéro. Voir
+     * [AppLockManager.refreshLockoutIfExpired] : c'est lui qui décide, pas le minuteur.
+     */
+    fun onLockoutCountdownFinished() {
+        viewModelScope.launch { appLock.refreshLockoutIfExpired() }
     }
 
     fun beginBiometricChallenge(): ByteArray = appLock.beginBiometricChallenge()
@@ -107,18 +137,28 @@ fun LockScreen(
 ) {
     val state by viewModel.appLock.state.collectAsStateWithLifecycle()
     val lockMode by viewModel.lockMode.collectAsStateWithLifecycle()
+    val wrongCode by viewModel.wrongCode.collectAsStateWithLifecycle()
     var pin by remember { mutableStateOf("") }
     var fallbackToPin by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Un écran de verrou ne doit JAMAIS être « dépassé » par le bouton Retour : sans ce handler,
     // Retour déléguait au NavHost, qui dépilait l'écran Lock et révélait la liste verrouillée
-    // derrière (fuite). On consomme donc simplement le Retour — l'utilisateur ne franchit pas le
-    // verrou par Retour ; il déverrouille (PIN/biométrie) ou quitte via l'accueil. (Ne PAS appeler
-    // moveTaskToBack ici : couplé à un Retour rapide c'est superflu, la racine non-dépilable est
-    // désormais garantie par startDestination = Conversations dans AppRoot.)
+    // derrière (fuite). Le Retour est donc capté ici, et ne franchit jamais le verrou.
+    //
+    // v1.26.0 — il ne se contente plus de l'absorber : il **met l'application en arrière-plan**,
+    // exactement comme le bouton Accueil. Un Retour qui ne produit rigoureusement rien laisse
+    // croire à un écran figé — constaté à l'usage, et c'est d'autant plus déroutant que l'écran
+    // apparaît justement quand on ne s'y attend pas.
+    //
+    // Le commentaire d'origine écartait `moveTaskToBack` en le jugeant « superflu » (la racine
+    // non-dépilable étant garantie par `startDestination = Conversations`). C'était vrai du point
+    // de vue de la page blanche ; ça ne réglait pas la question de l'ergonomie.
+    //
+    // Aucune concession de sécurité : la tâche part en arrière-plan, `_state` reste `Locked`, et
+    // l'écran de verrouillage est là au retour. C'est ce que fait toute application verrouillée.
     androidx.activity.compose.BackHandler(enabled = true) {
-        // Consomme le Retour : pas de sortie du verrou par ce geste.
+        context.findFragmentActivity()?.moveTaskToBack(true)
     }
 
     LaunchedEffect(state) {
@@ -280,12 +320,31 @@ fun LockScreen(
             Spacer(Modifier.size(16.dp))
             OutlinedTextField(
                 value = pin,
-                onValueChange = { if (it.length <= 12 && it.all { c -> c.isDigit() }) pin = it },
+                onValueChange = {
+                    if (it.length <= 12 && it.all { c -> c.isDigit() }) {
+                        pin = it
+                        // Le message disparait des la premiere frappe : le garder affiche pendant
+                        // une nouvelle saisie donnerait l'impression que le nouvel essai a echoue
+                        // avant meme d'avoir ete soumis.
+                        if (wrongCode) viewModel.clearWrongCode()
+                    }
+                },
                 label = { Text(stringResource(R.string.lock_pin_hint)) },
+                isError = wrongCode,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 singleLine = true,
             )
+            // v1.26.0 — masque pendant `LockedOut` : le compte a rebours plus bas dit deja ce
+            // qu'il faut, et empiler les deux messages rouges brouillerait l'information utile.
+            if (wrongCode && state !is AppLockManager.LockState.LockedOut) {
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    text = stringResource(R.string.lock_wrong_code),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Spacer(Modifier.size(16.dp))
             val isLockedOut = state is AppLockManager.LockState.LockedOut
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -322,6 +381,13 @@ fun LockScreen(
                         if (nowMs >= until) break
                         delay(1000L)
                     }
+                    // v1.26.0 — le compte a rebours atteint zero : il faut encore faire retomber
+                    // l'ETAT. Sans cet appel, `_state` restait `LockedOut` jusqu'au prochain
+                    // `attemptUnlock`, lui-meme impossible puisque le bouton reste desactive tant
+                    // que `LockedOut` dure : le champ acceptait la saisie mais rien ne pouvait la
+                    // valider. Le manager re-verifie l'instantane persistant avant de ceder, donc
+                    // avancer l'horloge du telephone ne raccourcit pas la temporisation.
+                    viewModel.onLockoutCountdownFinished()
                 }
                 val remaining by remember(until) {
                     derivedStateOf { ((until - nowMs) / 1000L).coerceAtLeast(0L).toInt() }

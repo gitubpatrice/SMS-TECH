@@ -845,4 +845,14 @@
     <string name="safety_call_setup_unsaved_title">Modifications non enregistrées</string>
     <string name="safety_call_setup_unsaved_body">Ajouter un contact ne suffit pas : il faut enregistrer pour le conserver. Quitter maintenant le perdrait.</string>
     <string name="emergency_location_grant">Autoriser la localisation</string>
+    <string name="settings_panic_code_desc">Second code qui ouvre l\'application en mode leurre : coffre et mode urgence invisibles.</string>
+    <string name="settings_panic_code_set">Configuré. Toucher pour le retirer.</string>
+    <string name="settings_panic_code_clear_title">Retirer le code panique ?</string>
+    <string name="settings_panic_code_clear_body">Le mode leurre ne sera plus accessible. Votre PIN principal et vos données ne changent pas.</string>
+    <string name="settings_panic_code_clear_action">Retirer</string>
+    <string name="settings_panic_code_saved">Code panique enregistré</string>
+    <string name="settings_panic_code_removed">Code panique retiré</string>
+    <string name="settings_panic_code_same_as_pin">Ce code est identique à votre PIN principal. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre.</string>
+    <string name="settings_panic_code_no_pin">Configurez d\'abord un verrouillage de l\'application.</string>
+    <string name="lock_wrong_code">Code incorrect</string>
 </resources>

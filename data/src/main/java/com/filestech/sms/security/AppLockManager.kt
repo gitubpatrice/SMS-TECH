@@ -122,7 +122,68 @@ class AppLockManager @Inject constructor(
         securityStore.clearPin()
         settings.update { it.copy(security = it.security.copy(lockMode = LockMode.OFF)) }
         _state.value = LockState.Disabled
+        // v1.26.0 — sans PIN principal, un code panique n'a plus de sens : il deviendrait le seul
+        // secret connu et ouvrirait l'app en leurre définitif, sans aucun moyen d'en sortir.
+        securityStore.clearPanic()
     }
+
+    /** Résultat de [setPanicCode] — voir ce dernier pour le détail des refus. */
+    sealed interface PanicCodeOutcome {
+        data object Ok : PanicCodeOutcome
+
+        /** Aucun PIN principal n'est configuré : il n'y aurait rien vers quoi revenir. */
+        data object NoPrimaryPin : PanicCodeOutcome
+
+        /** Le code proposé est le PIN principal. Voir ci-dessous : il faut le refuser. */
+        data object SameAsPin : PanicCodeOutcome
+    }
+
+    /**
+     * v1.26.0 — définit le code panique. Le [newCode] est effacé sur tous les chemins de sortie.
+     *
+     * Cette fonction manquait, et **son absence rendait tout le mode leurre inatteignable** :
+     * `setPanicCode` existait dans le magasin, `panicSnapshot()` était lu à chaque déverrouillage,
+     * `LockState.PanicDecoy` et ses gardes étaient complets — mais rien n'écrivait jamais le code,
+     * donc l'instantané valait toujours `null` et la comparaison échouait toujours. La chaîne
+     * « PIN de secours (mode panique) » existait aussi, sans écran pour l'afficher ; lint la
+     * signalait comme inutilisée et l'avertissement avait été absorbé par la baseline.
+     *
+     * Deux refus, pour des raisons opposées :
+     *
+     * - **[PanicCodeOutcome.SameAsPin]** — [attemptUnlock] évalue le code panique **avant** le PIN
+     *   (audit P1-3, v1.2.0). Un code identique ferait donc systématiquement gagner le leurre :
+     *   l'utilisateur n'aurait plus **aucun** moyen d'ouvrir son application normalement, et le
+     *   coffre lui deviendrait inaccessible à lui aussi. C'est un enfermement définitif, pas une
+     *   gêne — d'où le refus.
+     * - **[PanicCodeOutcome.NoPrimaryPin]** — symétrique : sans PIN principal, le code panique
+     *   serait le seul secret connu, et l'application s'ouvrirait en leurre pour toujours.
+     *
+     * Le dérivé est le même que celui du PIN (PBKDF2-HMAC-SHA512, sel neuf, itérations calibrées
+     * sur l'appareil) : un code panique plus faible à casser trahirait la contrainte qu'il protège.
+     */
+    suspend fun setPanicCode(newCode: CharArray): PanicCodeOutcome = withContext(io) {
+        try {
+            val pinSnap = securityStore.pinSnapshot()
+                ?: return@withContext PanicCodeOutcome.NoPrimaryPin
+            if (matches(newCode, pinSnap.salt, pinSnap.hash, pinSnap.iterations)) {
+                return@withContext PanicCodeOutcome.SameAsPin
+            }
+            val salt = kdf.newSalt()
+            val iters = kdf.calibrate()
+            securityStore.setPanicCode(salt, kdf.derive(newCode, salt, iters), iters)
+            PanicCodeOutcome.Ok
+        } finally {
+            // Un seul effacement, dans le `finally` : il couvre les deux retours anticipés
+            // au-dessus comme le chemin nominal.
+            newCode.wipe()
+        }
+    }
+
+    /** v1.26.0 — retire le code panique. Le PIN principal et le reste sont intacts. */
+    suspend fun clearPanicCode() = withContext(io) { securityStore.clearPanic() }
+
+    /** v1.26.0 — vrai si un code panique est enregistré. Sert à l'affichage des Réglages. */
+    suspend fun isPanicCodeSet(): Boolean = withContext(io) { securityStore.panicSnapshot() != null }
 
     /**
      * Promotes the lock mode to [LockMode.BIOMETRIC] **on top of an existing PIN**. The PIN is
@@ -207,6 +268,31 @@ class AppLockManager @Inject constructor(
                 LockState.Locked
             }
         }
+    }
+
+    /**
+     * v1.26.0 — repasse de [LockState.LockedOut] à [LockState.Locked] quand le blocage a
+     * réellement expiré. Rend vrai si l'état a changé.
+     *
+     * **Sans cette fonction, l'utilisateur restait bloqué pour toujours.** L'écran désactive le
+     * bouton pendant `LockedOut` (audit I1, v1.14.8) et affiche un compte à rebours (audit R5),
+     * mais rien ne faisait retomber l'état une fois le délai écoulé : `_state` ne changeait qu'au
+     * prochain `attemptUnlock`… lui-même inatteignable puisque le bouton était désactivé. Le
+     * compte à rebours atteignait zéro et la saisie restait morte.
+     *
+     * ⚠️ On ne se fie **pas** au minuteur de l'interface : il suffirait d'avancer l'horloge du
+     * téléphone pour effacer la temporisation exponentielle. C'est l'instantané persistant qui
+     * tranche — il croise horloge murale et horloge monotone (audit R7, v1.14.8), cette dernière
+     * étant insensible à la manipulation. Si le blocage court toujours, on ne touche à rien.
+     */
+    suspend fun refreshLockoutIfExpired(): Boolean = withContext(io) {
+        if (_state.value !is LockState.LockedOut) return@withContext false
+        val snap = securityStore.lockoutSnapshot()
+        if (snap.isLockoutActive(System.currentTimeMillis(), SystemClock.elapsedRealtime())) {
+            return@withContext false
+        }
+        _state.value = LockState.Locked
+        true
     }
 
     /**

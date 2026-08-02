@@ -116,6 +116,13 @@ fun SettingsScreen(
     var autoDeletePickerOpen by remember { mutableStateOf(false) }
     var autoDeletePurgeConfirmOpen by remember { mutableStateOf(false) }
     var pinSetupOpen by remember { mutableStateOf(false) }
+    // v1.26.0 — code panique.
+    var panicCodeSetupOpen by remember { mutableStateOf(false) }
+    var panicCodeClearConfirmOpen by remember { mutableStateOf(false) }
+    val panicCodeSet by viewModel.panicCodeSet.collectAsStateWithLifecycle()
+    // L'etat du code panique ne transite pas par le flux des reglages (le secret vit hache dans
+    // le magasin securise) : on le relit a l'entree de l'ecran.
+    LaunchedEffect(Unit) { viewModel.refreshPanicCodeSet() }
     // v1.8.0 (bug 3 fix) — pickers PreviewMode + NotificationStyle.
     var previewModePickerOpen by remember { mutableStateOf(false) }
     var notifStylePickerOpen by remember { mutableStateOf(false) }
@@ -142,6 +149,13 @@ fun SettingsScreen(
 
     val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    // v1.26.0 — libelles du code panique resolus dans la composition, pas via
+    // `Context.getString` depuis le collecteur d'evenements : lint le refuse a juste titre
+    // (LocalContextGetResourceValueCall), un changement de langue ne serait pas repercute.
+    val panicSavedMsg = stringResource(R.string.settings_panic_code_saved)
+    val panicRemovedMsg = stringResource(R.string.settings_panic_code_removed)
+    val panicSameAsPinMsg = stringResource(R.string.settings_panic_code_same_as_pin)
+    val panicNoPinMsg = stringResource(R.string.settings_panic_code_no_pin)
     // v1.9.0 — scope partagé pour les actions instantanées qui doivent émettre
     // un snack depuis un onClick callback (ex. bouton "Je vais bien" Safety call).
     val rootScope = rememberCoroutineScope()
@@ -166,6 +180,26 @@ fun SettingsScreen(
                 }
                 SettingsViewModel.Event.ResyncRequested -> {
                     snackbarHost.showSnackbar(ctx.getString(R.string.settings_resync_started))
+                }
+                SettingsViewModel.Event.PanicCodeSet -> {
+                    snackbarHost.showSnackbar(panicSavedMsg)
+                }
+                SettingsViewModel.Event.PanicCodeCleared -> {
+                    snackbarHost.showSnackbar(panicRemovedMsg)
+                }
+                // v1.26.0 — les deux refus enfermeraient l'utilisateur en mode leurre sans issue,
+                // d'ou une erreur explicite plutot qu'un echec muet. Voir
+                // [com.filestech.sms.security.AppLockManager.setPanicCode].
+                is SettingsViewModel.Event.PanicCodeRejected -> {
+                    val msg = when (e.outcome) {
+                        com.filestech.sms.security.AppLockManager.PanicCodeOutcome.SameAsPin ->
+                            panicSameAsPinMsg
+                        com.filestech.sms.security.AppLockManager.PanicCodeOutcome.NoPrimaryPin ->
+                            panicNoPinMsg
+                        com.filestech.sms.security.AppLockManager.PanicCodeOutcome.Ok ->
+                            panicSavedMsg
+                    }
+                    snackbarHost.showError(msg)
                 }
             }
         }
@@ -367,6 +401,9 @@ fun SettingsScreen(
                 isPanicDecoy = isPanicDecoy,
                 onUpdate = viewModel::update,
                 onOpenLockModePicker = { lockModePickerOpen = true },
+                panicCodeSet = panicCodeSet,
+                onOpenPanicCodeSetup = { panicCodeSetupOpen = true },
+                onOpenPanicCodeClearConfirm = { panicCodeClearConfirmOpen = true },
                 onOpenVaultPinSetup = { vaultPinSetupOpen = true },
                 onOpenVaultPinClearConfirm = { vaultPinClearConfirmOpen = true },
                 onOpenPurgeBlockedConfirm = { showPurgeBlockedConfirm = true },
@@ -595,6 +632,11 @@ fun SettingsScreen(
 
     if (lockModePickerOpen) {
         val biometricCtx = androidx.compose.ui.platform.LocalContext.current
+        // v1.26.0 — libelle resolu ICI, dans la composition, et non via `Context.getString`
+        // au fond d'une coroutine : lint le refuse (LocalContextGetResourceValueCall), et il
+        // a raison — un changement de langue ne serait pas repercute sur un texte lu hors
+        // composition.
+        val biometricUnavailableMsg = stringResource(R.string.lock_biometric_unavailable)
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         LockModePickerDialog(
             currentMode = state.security.lockMode,
@@ -634,11 +676,13 @@ fun SettingsScreen(
                                 // jamais.
                                 val ok = com.filestech.sms.ui.security.StrongBiometrics
                                     .isAvailable(biometricCtx) && viewModel.enableBiometricOverPin()
-                                if (!ok) android.widget.Toast.makeText(
-                                    biometricCtx,
-                                    biometricCtx.getString(R.string.lock_biometric_unavailable),
-                                    android.widget.Toast.LENGTH_LONG,
-                                ).show()
+                                if (!ok) {
+                                    android.widget.Toast.makeText(
+                                        biometricCtx,
+                                        biometricUnavailableMsg,
+                                        android.widget.Toast.LENGTH_LONG,
+                                    ).show()
+                                }
                             }
                         }
                     }
@@ -690,6 +734,38 @@ fun SettingsScreen(
                 pinSetupOpen = false
             },
             onDismiss = { pinSetupOpen = false },
+        )
+    }
+
+    // v1.26.0 — meme dialogue que le PIN principal, titre different. Le refus d'un code
+    // identique au PIN est traite dans [AppLockManager.setPanicCode] et remonte par un evenement.
+    if (panicCodeSetupOpen) {
+        PinSetupDialog(
+            titleRes = R.string.settings_panic_code,
+            onConfirm = { code ->
+                viewModel.setPanicCode(code)
+                panicCodeSetupOpen = false
+            },
+            onDismiss = { panicCodeSetupOpen = false },
+        )
+    }
+
+    if (panicCodeClearConfirmOpen) {
+        AlertDialog(
+            onDismissRequest = { panicCodeClearConfirmOpen = false },
+            title = { Text(stringResource(R.string.settings_panic_code_clear_title)) },
+            text = { Text(stringResource(R.string.settings_panic_code_clear_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.clearPanicCode()
+                    panicCodeClearConfirmOpen = false
+                }) { Text(stringResource(R.string.settings_panic_code_clear_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { panicCodeClearConfirmOpen = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
         )
     }
 
@@ -1270,6 +1346,10 @@ private fun LockModeOption(label: String, selected: Boolean, onClick: () -> Unit
 private fun PinSetupDialog(
     onConfirm: (CharArray) -> Unit,
     onDismiss: () -> Unit,
+    // v1.26.0 — le titre devient paramétrable : le même dialogue sert au PIN principal et au
+    // code panique. Deux dialogues jumeaux auraient divergé à la première correction — c'est
+    // l'asymétrie qui a produit la moitié des défauts de cette semaine.
+    @androidx.annotation.StringRes titleRes: Int = R.string.pin_setup_title,
 ) {
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
@@ -1282,7 +1362,7 @@ private fun PinSetupDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.pin_setup_title)) },
+        title = { Text(stringResource(titleRes)) },
         text = {
             Column {
                 androidx.compose.material3.OutlinedTextField(
@@ -2677,6 +2757,12 @@ private fun SecuritySection(
     isPanicDecoy: Boolean,
     onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -> com.filestech.sms.domain.settings.AppSettings) -> Unit,
     onOpenLockModePicker: () -> Unit,
+    // v1.26.0 — code panique. Voir [AppLockManager.setPanicCode] : la mecanique du mode leurre
+    // etait complete, mais aucun ecran ne permettait de definir le code, donc il etait
+    // inatteignable.
+    panicCodeSet: Boolean,
+    onOpenPanicCodeSetup: () -> Unit,
+    onOpenPanicCodeClearConfirm: () -> Unit,
     onOpenVaultPinSetup: () -> Unit,
     onOpenVaultPinClearConfirm: () -> Unit,
     onOpenPurgeBlockedConfirm: () -> Unit,
@@ -2713,6 +2799,30 @@ private fun SecuritySection(
             description = currentLockLabel,
             onClick = onOpenLockModePicker,
         )
+        // v1.26.0 — deux conditions, pour deux raisons sans rapport entre elles.
+        //
+        // 1. Un PIN principal doit exister : sans lui, le code panique serait le seul secret
+        //    connu et l'application s'ouvrirait en leurre pour toujours.
+        //    `AppLockManager.setPanicCode` refuse deja ce cas ; on evite en plus de proposer une
+        //    action vouee au refus.
+        //
+        // 2. ⚠️ **JAMAIS en mode leurre.** La ligne annonce « Configure » quand un code existe :
+        //    l'agresseur qui ouvre les Reglages apprendrait ainsi qu'un second code lui est
+        //    cache, et que l'ecran qu'il regarde est un decor. Ce serait trahir la fonction au
+        //    seul endroit ou elle compte. Meme garde que le toggle du coffre juste en dessous
+        //    (audit UX-2, v1.13.0), pour la meme raison — l'existence d'un reglage est deja une
+        //    information.
+        if (security.lockMode != com.filestech.sms.domain.settings.LockMode.OFF && !isPanicDecoy) {
+            NavigationRow(
+                title = stringResource(R.string.settings_panic_code),
+                description = if (panicCodeSet) {
+                    stringResource(R.string.settings_panic_code_set)
+                } else {
+                    stringResource(R.string.settings_panic_code_desc)
+                },
+                onClick = if (panicCodeSet) onOpenPanicCodeClearConfirm else onOpenPanicCodeSetup,
+            )
+        }
         ToggleRow(
             title = stringResource(R.string.settings_flag_secure),
             description = stringResource(R.string.settings_flag_secure_desc),

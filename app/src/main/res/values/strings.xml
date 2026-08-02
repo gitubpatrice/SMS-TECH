@@ -862,4 +862,14 @@
     <string name="safety_call_setup_unsaved_title">Unsaved changes</string>
     <string name="safety_call_setup_unsaved_body">Adding a contact is not enough: it must be saved to be kept. Leaving now would lose it.</string>
     <string name="emergency_location_grant">Allow location</string>
+    <string name="settings_panic_code_desc">A second code that opens the app in decoy mode: vault and emergency mode hidden.</string>
+    <string name="settings_panic_code_set">Configured. Tap to remove it.</string>
+    <string name="settings_panic_code_clear_title">Remove the panic code?</string>
+    <string name="settings_panic_code_clear_body">Decoy mode will no longer be reachable. Your main PIN and your data are unchanged.</string>
+    <string name="settings_panic_code_clear_action">Remove</string>
+    <string name="settings_panic_code_saved">Panic code saved</string>
+    <string name="settings_panic_code_removed">Panic code removed</string>
+    <string name="settings_panic_code_same_as_pin">This code is the same as your main PIN. Choose another one, otherwise the app would always open in decoy mode.</string>
+    <string name="settings_panic_code_no_pin">Set up an app lock first.</string>
+    <string name="lock_wrong_code">Incorrect code</string>
 </resources>

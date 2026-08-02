@@ -48,6 +48,18 @@ class SettingsViewModel @Inject constructor(
         data class HistoryPurged(val count: Int) : Event
         /** v1.3.0 — re-sync from content://sms a été enquêtée. Le snack confirme à l'utilisateur. */
         data object ResyncRequested : Event
+
+        /** v1.26.0 — code panique enregistré. */
+        data object PanicCodeSet : Event
+
+        /** v1.26.0 — code panique retiré. */
+        data object PanicCodeCleared : Event
+
+        /**
+         * v1.26.0 — refus : le code proposé est le PIN principal, ou aucun PIN n'est configuré.
+         * Les deux enfermeraient l'utilisateur en mode leurre sans issue.
+         */
+        data class PanicCodeRejected(val outcome: AppLockManager.PanicCodeOutcome) : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -121,7 +133,43 @@ class SettingsViewModel @Inject constructor(
     fun setPin(pin: CharArray) = viewModelScope.launch { appLock.setPin(pin) }
 
     /** Disables the lock entirely (back to [com.filestech.sms.domain.settings.LockMode.OFF]). */
-    fun clearLock() = viewModelScope.launch { appLock.clearPin() }
+    fun clearLock() = viewModelScope.launch {
+        // v1.26.0 — `clearPin` retire aussi le code panique : sans PIN principal, celui-ci
+        // deviendrait le seul secret connu et ouvrirait l'application en leurre définitif. On
+        // reflète donc l'état ici, sans relire le magasin (on sait ce qui vient de s'y passer).
+        appLock.clearPin()
+        _panicCodeSet.value = false
+    }
+
+    /**
+     * v1.26.0 — vrai si un code panique est enregistré.
+     *
+     * Le secret ne vit pas dans `AppSettings` (il est haché dans le magasin sécurisé, comme le
+     * PIN), donc son état ne transite pas par le flux des réglages : on le relit à la demande.
+     */
+    private val _panicCodeSet = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val panicCodeSet: StateFlow<Boolean> = _panicCodeSet
+
+    fun refreshPanicCodeSet() = viewModelScope.launch {
+        _panicCodeSet.value = appLock.isPanicCodeSet()
+    }
+
+    /** v1.26.0 — voir [AppLockManager.setPanicCode] pour les deux refus et leur raison. */
+    fun setPanicCode(code: CharArray) = viewModelScope.launch {
+        when (val outcome = appLock.setPanicCode(code)) {
+            AppLockManager.PanicCodeOutcome.Ok -> {
+                _panicCodeSet.value = true
+                _events.send(Event.PanicCodeSet)
+            }
+            else -> _events.send(Event.PanicCodeRejected(outcome))
+        }
+    }
+
+    fun clearPanicCode() = viewModelScope.launch {
+        appLock.clearPanicCode()
+        _panicCodeSet.value = false
+        _events.send(Event.PanicCodeCleared)
+    }
 
     /**
      * Forces the blocked-conversation purge synchronously and reports the count via [events].
