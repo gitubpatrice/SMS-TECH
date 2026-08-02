@@ -75,6 +75,8 @@ fun EmergencySetupScreen(
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val contactsCount by viewModel.safetyCallContactsCount.collectAsStateWithLifecycle()
+    // v1.25.5 — la liste elle-même, pour l'afficher au lieu d'un simple compte.
+    val emergencyContacts by viewModel.safetyCallContacts.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val ctx = LocalContext.current
     // v1.10.0 audit S1+U2 — prompt permission ACCESS_FINE_LOCATION quand
@@ -253,6 +255,26 @@ fun EmergencySetupScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // v1.25.5 — la liste, et plus seulement le compte.
+                //
+                // « 2 contacts » oblige à ouvrir un autre écran pour savoir QUI sera prévenu, et
+                // ce détour passe par la configuration du Safety call — une manipulation
+                // déroutante là où l'information devrait être immédiate. Sur un écran d'urgence,
+                // savoir qui recevra l'alerte est la question principale.
+                //
+                // Lecture seule : la modification reste au bouton ci-dessous, pour que ce carnet
+                // n'ait qu'un seul endroit où s'éditer.
+                emergencyContacts.forEach { contact ->
+                    Spacer(Modifier.height(6.dp))
+                    contact.sanitizedDisplayName()?.let { name ->
+                        Text(text = name, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(
+                        text = contact.phoneNumber,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onOpenSafetyCallSetup) {
                     Text(stringResource(R.string.emergency_setup_contacts_cta))

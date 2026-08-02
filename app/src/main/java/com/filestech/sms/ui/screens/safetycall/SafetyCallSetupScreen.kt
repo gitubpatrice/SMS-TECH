@@ -1,5 +1,6 @@
 package com.filestech.sms.ui.screens.safetycall
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,8 +32,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import com.filestech.sms.ui.components.SmsTechSnackbarHost
-import com.filestech.sms.ui.components.showError
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,11 +52,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import com.filestech.sms.R
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
-import com.filestech.sms.ui.theme.BrandBlue
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.showError
+import com.filestech.sms.ui.theme.BrandBlue
 
 /**
  * v1.9.0 — Écran de configuration du Safety call.
@@ -87,11 +91,35 @@ fun SafetyCallSetupScreen(
     var customDurationDialogOpen by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
+    /*
+     * v1.25.5 — quitter sans enregistrer ne doit plus jeter la saisie en silence.
+     *
+     * Le parcours qui a fait remonter le défaut : Mode urgence → « gérer les contacts » → Safety
+     * call → « Ajouter un contact » → le dialogue, dont le bouton s'appelait « Enregistrer ».
+     * Le contact apparaissait dans la liste, donc tout indiquait que c'était acquis. Or seul le
+     * bouton du bas écrit sur le disque : le Retour jetait le brouillon, sans un mot.
+     *
+     * Le libellé du dialogue est corrigé (« Ajouter »), mais renommer ne suffit pas — on prévient
+     * aussi avant de perdre quoi que ce soit.
+     *
+     * `BackHandler` armé seulement une fois la destination `RESUMED` : composé pendant la
+     * transition d'arrivée, il capterait la fin du geste parti de l'écran précédent et ouvrirait
+     * ce dialogue par-dessus lui. Voir le correctif du Coffre en v1.25.4.
+     */
+    val navEntryOwner = LocalLifecycleOwner.current
+    val navEntryState by navEntryOwner.lifecycle.currentStateAsState()
+    val navEntryResumed = navEntryState.isAtLeast(Lifecycle.State.RESUMED)
+    var confirmExitOpen by remember { mutableStateOf(false) }
+    val requestExit: () -> Unit = {
+        if (viewModel.hasUnsavedChanges) confirmExitOpen = true else onBack()
+    }
+    BackHandler(enabled = navEntryResumed) { requestExit() }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
                 is SafetyCallSetupViewModel.Event.Saved -> {
-                    snackbarHost.showSnackbar(ctx.getString(R.string.action_save))
+                    snackbarHost.showSnackbar(ctx.getString(R.string.safety_call_setup_saved))
                     onBack()
                 }
                 is SafetyCallSetupViewModel.Event.ValidationError -> {
@@ -117,7 +145,7 @@ fun SafetyCallSetupScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.safety_call_setup_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = requestExit) {
                         Icon(
                             Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = stringResource(R.string.action_back),
@@ -169,12 +197,37 @@ fun SafetyCallSetupScreen(
         }
     }
 
+    if (confirmExitOpen) {
+        AlertDialog(
+            onDismissRequest = { confirmExitOpen = false },
+            title = { Text(stringResource(R.string.safety_call_setup_unsaved_title)) },
+            text = { Text(stringResource(R.string.safety_call_setup_unsaved_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmExitOpen = false
+                    // `save` émet `Saved`, dont l'observateur appelle déjà `onBack()`. En cas
+                    // d'échec de validation, on reste sur l'écran avec le motif affiché — c'est
+                    // voulu : sortir alors reviendrait à perdre la saisie malgré l'avertissement.
+                    viewModel.save()
+                }) { Text(stringResource(R.string.safety_call_setup_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    confirmExitOpen = false
+                    onBack()
+                }) { Text(stringResource(R.string.action_discard)) }
+            },
+        )
+    }
+
     if (addContactDialogOpen) {
         AddContactDialog(
             onDismiss = { addContactDialogOpen = false },
             onConfirm = { name, phone ->
-                viewModel.addContact(name, phone)
-                addContactDialogOpen = false
+                // v1.25.5 — on ne referme QUE si l'ajout a abouti. Le dialogue se fermait
+                // auparavant dans tous les cas : un numéro refusé disparaissait avec lui, et le
+                // motif du refus s'affichait dans un bandeau, derrière un dialogue déjà parti.
+                if (viewModel.addContact(name, phone)) addContactDialogOpen = false
             },
         )
     }
@@ -469,7 +522,7 @@ private fun AddContactDialog(
                     contentColor = Color.White,
                 ),
             ) {
-                Text(stringResource(R.string.action_save))
+                Text(stringResource(R.string.action_add))
             }
         },
         dismissButton = {

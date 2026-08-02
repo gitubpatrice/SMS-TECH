@@ -274,6 +274,31 @@ fun EmergencyScreen(
                 config = state,
                 includeLocationGranted = state.includeLocation && locationGranted,
             )
+
+            // v1.25.5 — avertissement EXPLICITE quand la position est armée sans la permission.
+            //
+            // L'aperçu ci-dessus reflétait déjà l'état réel (audit U1, v1.10.0) : il s'affichait
+            // sans lien de carte. Mais repérer une absence dans un exemple demande de savoir ce
+            // qu'on devrait y voir — signal trop faible pour un écran d'urgence. Constaté à
+            // l'usage : le réglage était armé, la permission jamais accordée, et rien sur cet
+            // écran ne le disait. Le message serait parti sans position, en croyant l'envoyer.
+            //
+            // L'avertissement de l'écran de configuration ne suffit pas : on peut armer l'option
+            // une fois et ne plus jamais rouvrir cette page. Celui-ci est là où l'on déclenche,
+            // et il propose d'accorder la permission sur place plutôt que de renvoyer aux
+            // réglages Android.
+            if (state.includeLocation && !locationGranted) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.emergency_setup_location_permission_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { locationPermission.launchPermissionRequest() }) {
+                    Text(stringResource(R.string.emergency_location_grant))
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             // Le bouton hold 3s (centré).

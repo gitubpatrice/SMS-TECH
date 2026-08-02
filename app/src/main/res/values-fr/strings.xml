@@ -839,4 +839,10 @@
     <string name="db_recovery_title">SMS Tech ne parvient pas à ouvrir sa base de données</string>
     <string name="db_recovery_body">Vos messages sont toujours sur cet appareil — Android en conserve sa propre copie, et SMS Tech n’a rien supprimé. Seule la base chiffrée propre à SMS Tech est illisible pour le moment.</string>
     <string name="db_recovery_hint">Cela arrive généralement après un changement de code de verrouillage ou une restauration de l’appareil, qui invalide la clé protégeant la base. Redémarrer le téléphone vaut la peine d’être tenté en premier. Si cet écran persiste, réinstaller SMS Tech reconstruira sa base à partir des messages qu’Android détient déjà.</string>
+    <string name="action_add">Ajouter</string>
+    <string name="action_discard">Abandonner</string>
+    <string name="safety_call_setup_saved">Contacts et réglages enregistrés</string>
+    <string name="safety_call_setup_unsaved_title">Modifications non enregistrées</string>
+    <string name="safety_call_setup_unsaved_body">Ajouter un contact ne suffit pas : il faut enregistrer pour le conserver. Quitter maintenant le perdrait.</string>
+    <string name="emergency_location_grant">Autoriser la localisation</string>
 </resources>

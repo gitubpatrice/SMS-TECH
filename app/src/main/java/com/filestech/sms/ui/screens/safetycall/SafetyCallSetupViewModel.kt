@@ -66,6 +66,26 @@ class SafetyCallSetupViewModel @Inject constructor(
      */
     private var snapshotInitial: SafetyCallConfig = SafetyCallConfig()
 
+    /**
+     * v1.25.5 — vrai dès la première modification de l'utilisateur.
+     *
+     * L'hydratation depuis le DataStore est asynchrone : entre l'ouverture de l'écran et la
+     * réponse du disque, un ajout de contact rapide était **écrasé** par `_draft.value = initial`.
+     * Même motif que le Coffre en v1.25.4 — une initialisation tardive qui annule une décision
+     * déjà prise. On ne réhydrate donc plus par-dessus une saisie.
+     */
+    private var userEdited = false
+
+    /**
+     * v1.25.5 — vrai quand le brouillon diverge de ce qui est enregistré.
+     *
+     * Quitter l'écran jetait le brouillon **en silence** : le dialogue d'ajout de contact,
+     * dont le bouton s'intitulait « Enregistrer », donnait toute raison de croire que le contact
+     * était acquis. Il ne l'était pas — seul le bouton du bas écrit sur le disque. L'écran s'en
+     * sert désormais pour prévenir avant de sortir.
+     */
+    val hasUnsavedChanges: Boolean get() = _draft.value != snapshotInitial
+
     private val _events = Channel<Event>(Channel.BUFFERED)
     val events get() = _events.receiveAsFlow()
 
@@ -77,15 +97,18 @@ class SafetyCallSetupViewModel @Inject constructor(
         viewModelScope.launch {
             val initial = settings.flow.first().security.safetyCall
             snapshotInitial = initial
-            _draft.value = initial
+            // v1.25.5 — ne jamais écraser une saisie plus rapide que le disque.
+            if (!userEdited) _draft.value = initial
         }
     }
 
     fun setEnabled(enabled: Boolean) {
+        userEdited = true
         _draft.value = _draft.value.copy(enabled = enabled)
     }
 
     fun setTimeoutMs(timeoutMs: Long) {
+        userEdited = true
         val capped = timeoutMs.coerceIn(
             SafetyCallConfig.TIMEOUT_MIN_MS,
             SafetyCallConfig.TIMEOUT_MAX_MS,
@@ -94,31 +117,43 @@ class SafetyCallSetupViewModel @Inject constructor(
     }
 
     fun setTemplate(template: SafetyCallTemplate) {
+        userEdited = true
         _draft.value = _draft.value.copy(template = template)
     }
 
     fun setCustomMessage(message: String) {
+        userEdited = true
         val capped = message.take(SafetyCallConfig.MAX_CUSTOM_MESSAGE_LENGTH)
         _draft.value = _draft.value.copy(customMessage = capped)
     }
 
-    fun addContact(name: String?, phoneNumber: String) {
+    /**
+     * Ajoute un contact au brouillon. **Rend `false` si rien n'a été ajouté.**
+     *
+     * v1.25.5 — le retour est le correctif : l'écran fermait le dialogue quel que soit le
+     * résultat, si bien qu'un numéro refusé disparaissait sans que l'utilisateur puisse le
+     * corriger — l'erreur passait dans un bandeau, derrière un dialogue déjà refermé.
+     */
+    fun addContact(name: String?, phoneNumber: String): Boolean {
         val current = _draft.value
         if (current.contacts.size >= SafetyCallConfig.MAX_CONTACTS) {
             _events.trySend(Event.ValidationError(ValidationReason.MaxContactsReached))
-            return
+            return false
         }
         val candidate = SafetyCallContact(displayName = name, phoneNumber = phoneNumber.trim())
         if (!candidate.isValid()) {
             _events.trySend(Event.ValidationError(ValidationReason.InvalidPhone))
-            return
+            return false
         }
+        userEdited = true
         _draft.value = current.copy(contacts = current.contacts + candidate)
+        return true
     }
 
     fun removeContact(index: Int) {
         val current = _draft.value
         if (index !in current.contacts.indices) return
+        userEdited = true
         _draft.value = current.copy(
             contacts = current.contacts.toMutableList().also { it.removeAt(index) },
         )
@@ -163,6 +198,9 @@ class SafetyCallSetupViewModel @Inject constructor(
             settings.update { s ->
                 s.copy(security = s.security.copy(safetyCall = toPersist))
             }
+            // v1.25.5 — le brouillon vient d'être écrit : il n'y a plus rien à perdre, donc plus
+            // de garde de sortie à déclencher.
+            snapshotInitial = toPersist
             // Reschedule le worker — idempotent (KEEP policy). Même si enabled
             // est false, on schedule (no-op ticks) pour qu'un futur enable
             // n'ait pas besoin de cold-start pour démarrer.
