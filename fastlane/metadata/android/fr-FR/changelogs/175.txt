@@ -1,0 +1,7 @@
+Mode panique enfin utilisable.
+
+Le second code qui ouvre l'application en mode leurre — coffre et mode urgence invisibles — était annoncé mais n'avait aucun écran de configuration. Il se règle désormais dans Réglages, Sécurité.
+
+Écran de verrouillage : un code erroné le dit maintenant en rouge, et le blocage après trop de tentatives se lève vraiment à la fin du décompte.
+
+Les envois programmés transportent enfin leurs pièces jointes : photo et texte partent ensemble à l'heure prévue.

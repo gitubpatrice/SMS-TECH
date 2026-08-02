@@ -1,0 +1,7 @@
+Panic mode finally usable.
+
+The second code that opens the app in decoy mode — vault and emergency mode hidden — was advertised but had no setup screen at all. It is now configured in Settings, Security.
+
+Lock screen: a wrong code now says so in red, and the lockout after too many attempts really lifts when the countdown ends.
+
+Scheduled messages finally carry their attachments: photo and text go out together at the chosen time.
