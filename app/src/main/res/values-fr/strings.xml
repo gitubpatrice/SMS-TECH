@@ -259,7 +259,7 @@
     <string name="settings_vault_pin_clear_confirm_body">Le coffre s\'ouvrira sans PIN ni mot de passe dédié, dès que l\'app elle-même est déverrouillée. Les conversations du coffre restent masquées de la liste principale.</string>
     <!-- v1.25.3 (audit M23) — désactiver le verrou se faisait sur un simple tap. -->
     <string name="settings_lock_clear_confirm_title">Désactiver le verrouillage ?</string>
-    <string name="settings_lock_clear_confirm_body">Ton PIN sera supprimé et SMS Tech s\'ouvrira sans rien demander. Le déverrouillage biométrique est désactivé aussi. Cette action est irréversible.</string>
+    <string name="settings_lock_clear_confirm_body">Votre PIN sera supprimé et SMS Tech s\'ouvrira sans rien demander. Le déverrouillage biométrique est désactivé aussi. Cette action est irréversible.</string>
     <string name="settings_lock_clear_confirm_action">Désactiver</string>
     <string name="action_disable">Désactiver</string>
     <string name="vault_actions_title">Actions du coffre</string>
@@ -334,7 +334,7 @@
     <string name="migration_rerun">Relancer</string>
     <string name="migration_imported">Importés : %1$d</string>
     <!-- v1.25.3 (audit M10) — un échec d'import laissait tourner la barre de progression sans fin. -->
-    <string name="migration_failed">L\'import s\'est arrêté sur une erreur. Les messages déjà importés ont été conservés — tu peux le relancer.</string>
+    <string name="migration_failed">L\'import s\'est arrêté sur une erreur. Les messages déjà importés ont été conservés — vous pouvez le relancer.</string>
 
     <!-- About -->
     <string name="about_easter_egg">✨ Merci à toutes celles et ceux qui prennent soin de leur vie privée. ✨</string>
@@ -605,6 +605,26 @@
 
     <string name="about_title">À propos</string>
     <string name="about_tagline_short">SMS &amp; MMS moderne et privé pour Android.</string>
+    <!-- v1.25.3 (audit C7) — titres de section codés en dur en français dans AboutScreen.kt. -->
+    <string name="about_section_privacy">Confidentialité</string>
+    <string name="about_section_features">Fonctionnalités</string>
+    <string name="about_section_author">Auteur</string>
+    <string name="about_section_help">Aide rapide</string>
+    <string name="about_section_links">Liens</string>
+    <string name="about_check_updates">Voir les mises à jour</string>
+    <string name="about_privacy_headline">100 % privé — zéro surveillance</string>
+    <string name="about_author_role">Développeur</string>
+    <!-- v1.25.3 (audit H20) — justificatifs de permissions codés en dur en anglais. Les noms de
+         permissions restent non traduits : ce sont les identifiants Android, verbatim. -->
+    <string name="about_perm_sms">Indispensable à toute application SMS.</string>
+    <string name="about_perm_mms">Recevoir les MMS entrants.</string>
+    <string name="about_perm_contacts">Afficher les noms de contacts plutôt que les numéros bruts.</string>
+    <string name="about_perm_phone_state">Prise en charge du double SIM (envoi depuis la bonne carte).</string>
+    <string name="about_perm_notifications">Afficher les notifications de nouveaux messages.</string>
+    <string name="about_perm_biometric">Déverrouillage biométrique facultatif.</string>
+    <string name="about_perm_internet">Transport des MMS via le MMSC de votre opérateur. Aucune télémétrie.</string>
+    <string name="about_perm_record_audio">Enregistrer les messages vocaux joints aux MMS sortants.</string>
+    <string name="about_perm_foreground_service">Migration et sauvegarde de longue durée.</string>
     <string name="about_permissions_title">Permissions utilisées</string>
     <string name="about_security_title">Sécurité &amp; limites</string>
     <string name="about_security_body">SMS et MMS circulent en clair sur le réseau opérateur — c\'est une limite du protocole, pas un choix. SMS Tech ne protège que ce qui est stocké sur l\'appareil. Pour du chiffrement de bout en bout, utilisez Signal ou Matrix.</string>
@@ -650,7 +670,7 @@
     <string name="snack_thread_numbers_blocked">Numéro(s) bloqué(s)</string>
     <!-- v1.25.3 (audit M21) — l'icône corbeille débloquait instantanément, sur un seul tap. -->
     <string name="blocked_unblock_confirm_title">Débloquer ce numéro ?</string>
-    <string name="blocked_unblock_confirm_body">%1$s pourra de nouveau t\'envoyer des messages. Tu peux le rebloquer à tout moment.</string>
+    <string name="blocked_unblock_confirm_body">%1$s pourra de nouveau vous envoyer des messages. Vous pouvez le rebloquer à tout moment.</string>
     <!-- v1.25.3 (audit H15/H16) — le blocage annonçait un succès même quand il avait échoué. -->
     <string name="snack_block_failed">Le blocage a échoué — le numéro n\'a pas été bloqué. La conversation a été conservée.</string>
 
@@ -677,7 +697,7 @@
     <string name="scheduled_empty">Aucun message programmé</string>
     <!-- v1.15.1 — Mode d'emploi inline affiché à côté de l'empty state, pour que l'user
          découvre le point d'entrée même sans avoir lu AboutScreen. -->
-    <string name="scheduled_empty_explainer">Pour programmer un SMS : ouvre une conversation, tape ton message, puis ⋮ → "Programmer…" → choisis une date et une heure. Le SMS sera envoyé automatiquement à l\'heure prévue, même si l\'app est fermée.</string>
+    <string name="scheduled_empty_explainer">Pour programmer un SMS : ouvrez une conversation, tapez votre message, puis ⋮ → "Programmer…" → choisissez une date et une heure. Le SMS sera envoyé automatiquement à l\'heure prévue, même si l\'app est fermée.</string>
     <string name="scheduled_to">À : %1$s</string>
     <string name="scheduled_when">Programmé pour : %1$s</string>
     <string name="scheduled_cancel_confirm_title">Annuler ce message programmé ?</string>
@@ -686,7 +706,7 @@
     <!-- v1.25.3 (audit H6) — les envois échoués disparaissaient purement et simplement. -->
     <string name="scheduled_section_pending">En attente d\'envoi</string>
     <string name="scheduled_section_failed">Échecs</string>
-    <string name="scheduled_failed_explainer">L\'envoi a échoué après plusieurs tentatives. Relance-le, ou retire-le de cette liste.</string>
+    <string name="scheduled_failed_explainer">L\'envoi a échoué après plusieurs tentatives. Relancez-le, ou retirez-le de cette liste.</string>
     <string name="scheduled_failed_when">Était prévu : %1$s</string>
     <string name="scheduled_delete_confirm_title">Retirer ce message ?</string>
     <string name="scheduled_delete_confirm_body">Il sera retiré de cette liste et ne sera pas envoyé. Cette action est irréversible.</string>
@@ -751,7 +771,7 @@
     <string name="about_help_voice_step3">Cap 60 s — au-delà l\'enregistrement s\'arrête automatiquement</string>
     <string name="about_help_vault_title">Mettre une conversation au coffre</string>
     <string name="about_help_vault_step1">Long press sur la conversation dans la liste → \"Coffre\"</string>
-    <string name="about_help_vault_step2">Déverrouillage : PIN, passphrase ou biométrie selon ton réglage</string>
+    <string name="about_help_vault_step2">Déverrouillage : PIN, passphrase ou biométrie selon votre réglage</string>
     <string name="about_help_vault_step3">Réglages → Sécurité pour configurer le coffre</string>
     <string name="about_help_block_title">Bloquer un numéro</string>
     <string name="about_help_block_step1">Dans une conversation : menu ⋮ → Bloquer (= bloque + supprime la conv)</string>
@@ -770,7 +790,7 @@
     <string name="about_help_update_title">Vérifier une mise à jour</string>
     <string name="about_help_update_step1">Bouton \"Voir les mises à jour\" en haut de cette page</string>
     <string name="about_help_update_step2">Ouvre la page Releases GitHub de SMS Tech</string>
-    <string name="about_help_update_step3">L\'app ne tente jamais d\'auto-update sans ton accord</string>
+    <string name="about_help_update_step3">L\'app ne tente jamais d\'auto-update sans votre accord</string>
 
     <!-- v1.14.8 R1/R2 — notification d\'échec MMS entrant (taille trop grande ou erreur MMSC). -->
     <string name="mms_failure_notification_title">MMS non reçu</string>

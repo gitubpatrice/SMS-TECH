@@ -125,22 +125,22 @@ fun AboutScreen(onBack: () -> Unit) {
             )
 
             Spacer(Modifier.size(28.dp))
-            SectionTitle("Confidentialité")
+            SectionTitle(stringResource(R.string.about_section_privacy))
             Spacer(Modifier.size(8.dp))
             PrivacyCard()
 
             Spacer(Modifier.size(24.dp))
-            SectionTitle("Fonctionnalités")
+            SectionTitle(stringResource(R.string.about_section_features))
             Spacer(Modifier.size(8.dp))
             features().forEach { f -> FeatureRow(icon = f.icon, label = f.label, desc = f.desc) }
 
             Spacer(Modifier.size(24.dp))
-            SectionTitle("Auteur")
+            SectionTitle(stringResource(R.string.about_section_author))
             Spacer(Modifier.size(8.dp))
             AuthorCard()
 
             Spacer(Modifier.size(24.dp))
-            SectionTitle("Aide rapide")
+            SectionTitle(stringResource(R.string.about_section_help))
             Spacer(Modifier.size(8.dp))
             helpRecipes().forEach { h -> HelpCard(title = h.title, steps = h.steps) }
 
@@ -152,20 +152,10 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_permissions_title))
             Spacer(Modifier.size(8.dp))
-            PermissionLine("SEND_SMS / RECEIVE_SMS / READ_SMS / WRITE_SMS", "Required for any SMS app.")
-            PermissionLine("RECEIVE_MMS / RECEIVE_WAP_PUSH", "Receive incoming MMS.")
-            PermissionLine("READ_CONTACTS", "Show contact names instead of bare numbers.")
-            PermissionLine("READ_PHONE_STATE / READ_PHONE_NUMBERS", "Multi-SIM support (sending from the correct SIM).")
-            PermissionLine("POST_NOTIFICATIONS", "Show new-message notifications.")
-            PermissionLine("USE_BIOMETRIC", "Optional biometric unlock.")
-            // v1.3.5 G3 + audit F1 — SCHEDULE_EXACT_ALARM retiré du manifest (envoi
-            // planifié via WorkManager.enqueueUniqueWork, pas AlarmManager.setExact*).
-            PermissionLine("INTERNET", "MMS transport via your carrier MMSC. No analytics.")
-            PermissionLine("RECORD_AUDIO", "Record audio messages attached to outgoing MMS.")
-            PermissionLine("FOREGROUND_SERVICE", "Long-running migration / backup.")
+            permissions().forEach { p -> PermissionLine(name = p.name, why = p.why) }
 
             Spacer(Modifier.size(24.dp))
-            SectionTitle("Liens")
+            SectionTitle(stringResource(R.string.about_section_links))
             Spacer(Modifier.size(8.dp))
             LinkItem(
                 icon = Icons.Outlined.Code,
@@ -283,7 +273,7 @@ private fun HeaderBlock(
         FilledTonalButton(onClick = onCheckUpdate) {
             Icon(Icons.Outlined.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Voir les mises à jour")
+            Text(stringResource(R.string.about_check_updates))
         }
     }
 }
@@ -309,7 +299,7 @@ private fun PrivacyCard() {
                 )
                 Spacer(Modifier.size(6.dp))
                 Text(
-                    text = "100 % privé — zéro surveillance",
+                    text = stringResource(R.string.about_privacy_headline),
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
                     color = cs.onSurface,
@@ -416,7 +406,7 @@ private fun AuthorCard() {
                 }
             },
             headlineContent = { Text(AUTHOR_NAME) },
-            supportingContent = { Text("Développeur") },
+            supportingContent = { Text(stringResource(R.string.about_author_role)) },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
     }
@@ -605,6 +595,31 @@ private fun features(): List<Feature> = listOf(
     Feature(Icons.Outlined.DarkMode, stringResource(R.string.about_feat_themes_label), stringResource(R.string.about_feat_themes_desc)),
     Feature(Icons.Outlined.GraphicEq, stringResource(R.string.about_feat_ui_label), stringResource(R.string.about_feat_ui_desc)),
     Feature(Icons.Outlined.QuestionAnswer, stringResource(R.string.about_feat_noads_label), stringResource(R.string.about_feat_noads_desc)),
+)
+
+private data class Permission(val name: String, val why: String)
+
+/**
+ * v1.25.3 (audit H20) — les justificatifs de permissions étaient des littéraux **anglais** dans
+ * le corps de l'écran : un utilisateur francophone lisait « Required for any SMS app. » au milieu
+ * d'une page en français. Même patron de factory `@Composable` que [features] et [helpRecipes].
+ *
+ * Les noms de permissions restent des littéraux : ce sont les identifiants Android exacts, et les
+ * traduire les rendrait invérifiables face à l'écran système des autorisations.
+ */
+@androidx.compose.runtime.Composable
+private fun permissions(): List<Permission> = listOf(
+    Permission("SEND_SMS / RECEIVE_SMS / READ_SMS / WRITE_SMS", stringResource(R.string.about_perm_sms)),
+    Permission("RECEIVE_MMS / RECEIVE_WAP_PUSH", stringResource(R.string.about_perm_mms)),
+    Permission("READ_CONTACTS", stringResource(R.string.about_perm_contacts)),
+    Permission("READ_PHONE_STATE / READ_PHONE_NUMBERS", stringResource(R.string.about_perm_phone_state)),
+    Permission("POST_NOTIFICATIONS", stringResource(R.string.about_perm_notifications)),
+    Permission("USE_BIOMETRIC", stringResource(R.string.about_perm_biometric)),
+    // v1.3.5 G3 + audit F1 — SCHEDULE_EXACT_ALARM retiré du manifest (envoi planifié via
+    // WorkManager.enqueueUniqueWork, pas AlarmManager.setExact*).
+    Permission("INTERNET", stringResource(R.string.about_perm_internet)),
+    Permission("RECORD_AUDIO", stringResource(R.string.about_perm_record_audio)),
+    Permission("FOREGROUND_SERVICE", stringResource(R.string.about_perm_foreground_service)),
 )
 
 private data class HelpRecipe(val title: String, val steps: List<String>)
