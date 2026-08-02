@@ -263,6 +263,13 @@
     <string name="settings_vault_pin_same_as_app">Choose a PIN that is different from your app PIN.</string>
     <string name="settings_vault_pin_saved">Vault PIN saved.</string>
     <string name="settings_vault_pin_cleared">Vault PIN removed.</string>
+    <!-- v1.25.3 (audit M24) — the confirm dialog reused the feature description as its body. -->
+    <string name="settings_vault_pin_clear_confirm_title">Remove the vault PIN?</string>
+    <string name="settings_vault_pin_clear_confirm_body">The vault will open without its own PIN or password, as soon as the app itself is unlocked. Vault conversations stay hidden from the main list.</string>
+    <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
+    <string name="settings_lock_clear_confirm_title">Turn off app lock?</string>
+    <string name="settings_lock_clear_confirm_body">Your PIN will be deleted and SMS Tech will open without asking for anything. Biometric unlock is turned off too. This cannot be undone.</string>
+    <string name="settings_lock_clear_confirm_action">Turn off</string>
     <string name="action_disable">Disable</string>
     <string name="vault_actions_title">Vault actions</string>
     <string name="vault_biometric_title">Unlock the vault</string>
@@ -335,6 +342,8 @@
     <string name="migration_run">Start import</string>
     <string name="migration_rerun">Re-run</string>
     <string name="migration_imported">Imported: %1$d</string>
+    <!-- v1.25.3 (audit M10) — an import failure used to leave a progress bar spinning forever. -->
+    <string name="migration_failed">The import stopped on an error. Messages already imported were kept — you can run it again.</string>
 
     <!-- About -->
     <string name="about_easter_egg">✨ Thanks to those who care about their privacy. ✨</string>
@@ -656,6 +665,11 @@
     <string name="snack_thread_attach_cap_reached">MMS limit reached (280 KB). Remove an attachment or shorten the text.</string>
     <string name="snack_thread_voice_sent">Voice message sent</string>
     <string name="snack_thread_numbers_blocked">Number(s) blocked</string>
+    <!-- v1.25.3 (audit M21) — the trash icon used to unblock instantly on a single tap. -->
+    <string name="blocked_unblock_confirm_title">Unblock this number?</string>
+    <string name="blocked_unblock_confirm_body">%1$s will be able to text you again. You can block it again at any time.</string>
+    <!-- v1.25.3 (audit H15/H16) — blocking used to report success even when it had failed. -->
+    <string name="snack_block_failed">Blocking failed — the number was not blocked. The conversation was kept.</string>
 
     <!-- v1.15.2 — Common a11y + UX strings for passphrase fields. -->
     <string name="action_show_password">Show passphrase</string>
@@ -686,6 +700,14 @@
     <string name="scheduled_cancel_confirm_title">Cancel this scheduled message?</string>
     <string name="scheduled_cancel_confirm_body">It will not be sent. This action cannot be undone.</string>
     <string name="scheduled_cancel_confirm_action">Cancel sending</string>
+    <!-- v1.25.3 (audit H6) — failed sends were dropped from the list entirely. -->
+    <string name="scheduled_section_pending">Waiting to be sent</string>
+    <string name="scheduled_section_failed">Failed</string>
+    <string name="scheduled_failed_explainer">Sending failed after several attempts. Retry it, or remove it from this list.</string>
+    <string name="scheduled_failed_when">Was due: %1$s</string>
+    <string name="scheduled_delete_confirm_title">Remove this message?</string>
+    <string name="scheduled_delete_confirm_body">It will be removed from this list and will not be sent. This action cannot be undone.</string>
+    <string name="scheduled_retried">Sending again…</string>
     <string name="settings_scheduled_messages">Scheduled messages</string>
     <string name="settings_scheduled_messages_desc">View and manage scheduled SMS</string>
     <string name="thread_schedule_action">Schedule…</string>

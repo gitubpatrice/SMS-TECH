@@ -14,6 +14,19 @@ interface ScheduledMessageDao {
     @Query("SELECT * FROM scheduled_messages WHERE state = 0 ORDER BY scheduled_at ASC")
     fun observePending(): Flow<List<ScheduledMessageEntity>>
 
+    /**
+     * v1.25.3 (audit H6) — les envois abandonnés après épuisement des tentatives
+     * ([com.filestech.sms.system.scheduler.ScheduledSendAttempt]). Sans cette requête ils
+     * sortaient de [observePending] et disparaissaient de l'écran : l'utilisateur ne voyait ni
+     * l'échec, ni le message. Les plus récents d'abord — c'est l'échec du jour qu'on vient voir.
+     *
+     * `state = 2` littéral pour la même raison que le `state = 0` ci-dessus : Room lie les
+     * paramètres, pas les constantes, et l'enum est convertie par
+     * [com.filestech.sms.data.local.db.MessageEnumConverters].
+     */
+    @Query("SELECT * FROM scheduled_messages WHERE state = 2 ORDER BY scheduled_at DESC")
+    fun observeFailed(): Flow<List<ScheduledMessageEntity>>
+
     @Query("SELECT * FROM scheduled_messages WHERE id = :id")
     suspend fun findById(id: Long): ScheduledMessageEntity?
 
@@ -35,6 +48,15 @@ interface ScheduledMessageDao {
 
     @Query("UPDATE scheduled_messages SET work_id = :workId WHERE id = :id")
     suspend fun setWorkId(id: Long, workId: String?)
+
+    /**
+     * v1.25.3 (audit H6) — réarme un envoi abandonné : retour en `PENDING` (`state = 0`) ET
+     * nouvelle échéance. Les deux writes dans le même UPDATE, sinon un envoi peut redevenir
+     * éligible avec une échéance encore dans le passé, que [observePending] trierait en tête
+     * avec une date périmée à l'écran.
+     */
+    @Query("UPDATE scheduled_messages SET state = 0, scheduled_at = :scheduledAt WHERE id = :id")
+    suspend fun rearmPending(id: Long, scheduledAt: Long)
 
     @Query("DELETE FROM scheduled_messages WHERE id = :id")
     suspend fun delete(id: Long)

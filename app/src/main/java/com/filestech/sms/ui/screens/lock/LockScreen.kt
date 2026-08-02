@@ -49,6 +49,7 @@ import com.filestech.sms.R
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.settings.LockMode
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.ui.security.StrongBiometrics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -129,10 +130,14 @@ fun LockScreen(
         if (fallbackToPin) return@LaunchedEffect
         val activity = context.findFragmentActivity() ?: return@LaunchedEffect
 
-        val biometricManager = BiometricManager.from(context)
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK
-        if (biometricManager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+        // v1.25.3 (audit H2) — Classe 3 exigée, via l'unique politique [StrongBiometrics].
+        val status = StrongBiometrics.status(context)
+        if (status != BiometricManager.BIOMETRIC_SUCCESS) {
             // No usable biometric on the device — auto-fall back to PIN so we never trap the user.
+            // Et si l'indispo est définitive (pas de capteur Classe 3, plus aucune empreinte), on
+            // désarme le réglage : sinon Réglages continuerait d'afficher « Biométrie » pour un
+            // déverrouillage qui ne se déclencherait plus jamais.
+            if (StrongBiometrics.isPermanentlyUnavailable(status)) viewModel.disableBiometricSilently()
             fallbackToPin = true
             return@LaunchedEffect
         }
@@ -154,12 +159,19 @@ fun LockScreen(
                         BiometricPrompt.ERROR_USER_CANCELED,
                         BiometricPrompt.ERROR_CANCELED -> fallbackToPin = true
                         BiometricPrompt.ERROR_HW_NOT_PRESENT,
-                        BiometricPrompt.ERROR_HW_UNAVAILABLE,
                         BiometricPrompt.ERROR_NO_BIOMETRICS -> {
                             // The user removed all enrolled biometrics — disable to keep Settings honest.
                             viewModel.disableBiometricSilently()
                             fallbackToPin = true
                         }
+                        // v1.25.3 (audit H2) — `ERROR_HW_UNAVAILABLE` est **transitoire** (« try
+                        // again later » : capteur occupé par une autre app, throttling thermique).
+                        // Il était traité comme une disparition définitive du capteur et désarmait
+                        // le réglage : un simple raté faisait perdre silencieusement le
+                        // déverrouillage biométrique. Même distinction que
+                        // [StrongBiometrics.isPermanentlyUnavailable] applique en amont — les deux
+                        // extrémités doivent dire la même chose.
+                        BiometricPrompt.ERROR_HW_UNAVAILABLE,
                         BiometricPrompt.ERROR_LOCKOUT,
                         BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> fallbackToPin = true
                         else -> fallbackToPin = true
@@ -171,7 +183,7 @@ fun LockScreen(
             .setTitle(context.getString(R.string.lock_biometric_title))
             .setSubtitle(context.getString(R.string.lock_biometric_subtitle))
             .setNegativeButtonText(context.getString(R.string.lock_use_pin))
-            .setAllowedAuthenticators(authenticators)
+            .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
             .setConfirmationRequired(false)
             .build()
         prompt.authenticate(info)

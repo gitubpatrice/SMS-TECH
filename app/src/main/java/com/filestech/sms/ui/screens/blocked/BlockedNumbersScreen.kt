@@ -65,6 +65,9 @@ fun BlockedNumbersScreen(onBack: () -> Unit, viewModel: BlockedNumbersViewModel 
     var showDialog by remember { mutableStateOf(false) }
     var newNumber by remember { mutableStateOf("") }
 
+    /** v1.25.3 (audit M21) — numéro en attente de confirmation de déblocage. */
+    var confirmUnblockFor by remember { mutableStateOf<String?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -95,7 +98,10 @@ fun BlockedNumbersScreen(onBack: () -> Unit, viewModel: BlockedNumbersViewModel 
                         headlineContent = { Text(item.rawNumber) },
                         supportingContent = item.label?.let { { Text(it) } },
                         trailingContent = {
-                            IconButton(onClick = { viewModel.remove(item.rawNumber) }) {
+                            // v1.25.3 (audit M21) — passe par une confirmation : un tap
+                            // accidentel remettait en circulation un numéro indésirable, sans
+                            // annulation possible ni trace de ce qui venait de se produire.
+                            IconButton(onClick = { confirmUnblockFor = item.rawNumber }) {
                                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.action_unblock))
                             }
                         },
@@ -104,6 +110,25 @@ fun BlockedNumbersScreen(onBack: () -> Unit, viewModel: BlockedNumbersViewModel 
                 }
             }
         }
+    }
+
+    confirmUnblockFor?.let { number ->
+        AlertDialog(
+            onDismissRequest = { confirmUnblockFor = null },
+            title = { Text(stringResource(R.string.blocked_unblock_confirm_title)) },
+            text = { Text(stringResource(R.string.blocked_unblock_confirm_body, number)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmUnblockFor = null
+                    viewModel.remove(number)
+                }) { Text(stringResource(R.string.action_unblock)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmUnblockFor = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 
     if (showDialog) {

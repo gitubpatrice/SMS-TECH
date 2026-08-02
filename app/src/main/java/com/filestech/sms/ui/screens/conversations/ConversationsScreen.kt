@@ -162,6 +162,12 @@ fun ConversationsScreen(
     val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // v1.25.3 (audit H16) — résolue ici plutôt que via `ctx.getString` dans le collecteur :
+    // `LocalContextGetResourceValueCall` rate les changements de configuration (langue, thème)
+    // parce que le `Context` capturé n'est pas relu à la recomposition.
+    val blockFailedMessage = stringResource(R.string.snack_block_failed)
+
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -174,6 +180,8 @@ fun ConversationsScreen(
                 }
                 is ConversationsViewModel.Event.MoveToVaultFailed ->
                     snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))
+                is ConversationsViewModel.Event.BlockFailed ->
+                    snackbarHost.showError(blockFailedMessage)
                 is ConversationsViewModel.Event.IAmOkDoneWithSms -> {
                     // v1.14.0 audit SEC-2 — différencier succès partiel vs
                     // échec total. Si sent=0 mais failed>0, le reset a eu

@@ -110,6 +110,9 @@ fun SettingsScreen(
     val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
     var showNuke by remember { mutableStateOf(false) }
     var lockModePickerOpen by remember { mutableStateOf(false) }
+
+    /** v1.25.3 (audit M23) — confirmation avant de supprimer le verrou de l'app. */
+    var lockClearConfirmOpen by remember { mutableStateOf(false) }
     var autoDeletePickerOpen by remember { mutableStateOf(false) }
     var autoDeletePurgeConfirmOpen by remember { mutableStateOf(false) }
     var pinSetupOpen by remember { mutableStateOf(false) }
@@ -598,7 +601,14 @@ fun SettingsScreen(
             onPick = { mode ->
                 lockModePickerOpen = false
                 when (mode) {
-                    com.filestech.sms.domain.settings.LockMode.OFF -> viewModel.clearLock()
+                    // v1.25.3 (audit M23) — un simple tap sur « Aucun » supprimait le PIN et
+                    // désarmait le verrouillage, sans retour possible. Le geste est aussi
+                    // destructif que le retrait du PIN du coffre : même confirmation. No-op
+                    // silencieux si le verrou est déjà désactivé — rien à confirmer.
+                    com.filestech.sms.domain.settings.LockMode.OFF ->
+                        if (state.security.lockMode != com.filestech.sms.domain.settings.LockMode.OFF) {
+                            lockClearConfirmOpen = true
+                        }
                     com.filestech.sms.domain.settings.LockMode.PIN -> {
                         // PIN-only: opens the 2-field setup. If already on BIOMETRIC, this also
                         // strips the biometric flag back down.
@@ -617,7 +627,13 @@ fun SettingsScreen(
                             // safer than auto-switching behind a successful PIN setup.
                         } else {
                             scope.launch {
-                                val ok = viewModel.enableBiometricOverPin()
+                                // v1.25.3 (audit H2) — vérifier la Classe 3 AVANT d'armer. Sans
+                                // ce garde, on laissait activer un déverrouillage biométrique que
+                                // LockScreen refuserait ensuite de déclencher : le réglage
+                                // affichait « Biométrie » pour quelque chose qui ne se produisait
+                                // jamais.
+                                val ok = com.filestech.sms.ui.security.StrongBiometrics
+                                    .isAvailable(biometricCtx) && viewModel.enableBiometricOverPin()
                                 if (!ok) android.widget.Toast.makeText(
                                     biometricCtx,
                                     biometricCtx.getString(R.string.lock_biometric_unavailable),
@@ -858,17 +874,52 @@ fun SettingsScreen(
         )
     }
 
+    // v1.25.3 (audit M23) — Dialog confirmation désactivation du verrou de l'app. Même patron
+    // que le retrait du PIN du coffre juste en dessous : confirm BrandDanger, Annuler autofocus.
+    if (lockClearConfirmOpen) {
+        val cancelFocus = remember { FocusRequester() }
+        // `runCatching` comme dans `DestructiveConfirmDialog` : `requestFocus()` jette si le nœud
+        // n'est pas encore attaché, et perdre l'autofocus vaut mieux que planter les Réglages.
+        LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
+        AlertDialog(
+            onDismissRequest = { lockClearConfirmOpen = false },
+            title = { Text(stringResource(R.string.settings_lock_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_lock_clear_confirm_body)) },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.clearLock()
+                        lockClearConfirmOpen = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
+                ) { Text(stringResource(R.string.settings_lock_clear_confirm_action)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { lockClearConfirmOpen = false },
+                    modifier = Modifier.focusRequester(cancelFocus).focusable(),
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
     // v1.13.0 — Dialog confirmation retrait PIN/pass coffre (l'user désactive
     // le toggle). Action non destructive (rien n'est effacé sauf le hash),
     // mais on confirme pour éviter un toggle accidentel qui réduirait la
     // sécurité. Pattern : confirm Button BrandDanger, Cancel autofocus.
     if (vaultPinClearConfirmOpen) {
         val cancelFocus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+        // Même garde que les deux autres confirmations destructives de l'écran.
+        LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
         AlertDialog(
             onDismissRequest = { vaultPinClearConfirmOpen = false },
-            title = { Text(stringResource(R.string.settings_vault_pin_title)) },
-            text = { Text(stringResource(R.string.settings_vault_pin_desc)) },
+            // v1.25.3 (audit M24) — le corps reprenait `settings_vault_pin_desc`, qui décrit à
+            // quoi sert la fonctionnalité, pas ce que la confirmation va supprimer.
+            title = { Text(stringResource(R.string.settings_vault_pin_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_vault_pin_clear_confirm_body)) },
             confirmButton = {
                 androidx.compose.material3.FilledTonalButton(
                     onClick = {
@@ -2075,6 +2126,11 @@ private fun PurgeNowConfirmDialog(
 ) {
     val cs = MaterialTheme.colorScheme
     var count by remember { mutableStateOf<Int?>(null) }
+    // v1.25.3 (audit L9) — le `FocusRequester` était bien attaché au bouton Annuler mais
+    // `requestFocus()` n'était jamais appelé : un Entrée ou un D-pad tombait sur le bouton
+    // destructif. Même patron que les deux autres confirmations destructives de cet écran.
+    val cancelFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
     LaunchedEffect(days) {
         count = runCatching { countLoader() }.getOrDefault(0)
     }
@@ -2106,7 +2162,7 @@ private fun PurgeNowConfirmDialog(
         dismissButton = {
             androidx.compose.material3.TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.focusRequester(remember { FocusRequester() }),
+                modifier = Modifier.focusRequester(cancelFocus).focusable(),
             ) {
                 Text(stringResource(R.string.action_cancel))
             }

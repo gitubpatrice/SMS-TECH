@@ -999,9 +999,13 @@ fun ThreadScreen(
         )
     }
     if (askBlock) {
+        // v1.25.3 (audit M18) — le corps du dialogue reprenait le titre de la conversation (un
+        // nom ou un numéro) en guise d'explication : l'utilisateur confirmait un geste
+        // irréversible sans jamais lire ce qu'il allait déclencher. Les ressources explicatives
+        // existaient déjà et n'étaient utilisées nulle part.
         DestructiveConfirmDialog(
-            title = stringResource(R.string.action_block),
-            message = title,
+            title = stringResource(R.string.conversation_block_confirm_title),
+            message = stringResource(R.string.conversation_block_confirm_body),
             confirmLabel = stringResource(R.string.action_block),
             onConfirm = {
                 askBlock = false
@@ -1016,8 +1020,8 @@ fun ThreadScreen(
     }
     if (askDelete) {
         DestructiveConfirmDialog(
-            title = stringResource(R.string.action_delete),
-            message = title,
+            title = stringResource(R.string.conversations_delete_confirm_title),
+            message = stringResource(R.string.conversations_delete_confirm_body),
             confirmLabel = stringResource(R.string.action_delete),
             onConfirm = {
                 askDelete = false

@@ -284,7 +284,6 @@
     <ID>NoUnusedImports:PinEntryDialog.kt$com.filestech.sms.ui.components.PinEntryDialog.kt</ID>
     <ID>NoUnusedImports:ReplyQuoteCard.kt$com.filestech.sms.ui.components.ReplyQuoteCard.kt</ID>
     <ID>NoUnusedImports:SafetyCallWorker.kt$com.filestech.sms.system.scheduler.SafetyCallWorker.kt</ID>
-    <ID>NoUnusedImports:ScheduledMessagesScreen.kt$com.filestech.sms.ui.screens.scheduled.ScheduledMessagesScreen.kt</ID>
     <ID>NoUnusedImports:TelephonySyncWorker.kt$com.filestech.sms.system.scheduler.TelephonySyncWorker.kt</ID>
     <ID>NoUnusedImports:ThreadScreen.kt$com.filestech.sms.ui.screens.thread.ThreadScreen.kt</ID>
     <ID>ParameterListWrapping:SettingsScreen.kt$(com.filestech.sms.domain.settings.AppSettings)</ID>
@@ -370,7 +369,6 @@
     <ID>UnusedImports:ReplyQuoteCard.kt$import androidx.compose.foundation.layout.Spacer</ID>
     <ID>UnusedImports:ReplyQuoteCard.kt$import androidx.compose.foundation.layout.width</ID>
     <ID>UnusedImports:SafetyCallWorker.kt$import kotlinx.coroutines.flow.first</ID>
-    <ID>UnusedImports:ScheduledMessagesScreen.kt$import androidx.compose.foundation.layout.Box</ID>
     <ID>UnusedImports:TelephonySyncWorker.kt$import kotlinx.coroutines.flow.first</ID>
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.foundation.layout.heightIn</ID>
     <ID>UnusedImports:ThreadScreen.kt$import androidx.compose.material.icons.outlined.Stop</ID>
@@ -403,6 +401,6 @@
     <ID>Wrapping:ThreadScreen.kt$;</ID>
     <ID>Wrapping:ThreadScreen.kt$Text(stringResource(R.string.thread_schedule_date_title), modifier = Modifier.padding(start = 24.dp, top = 16.dp))</ID>
     <ID>Wrapping:ThreadViewModel.kt$ThreadViewModel$(</ID>
-    <ID>Wrapping:VaultScreen.kt${ onError -&gt; val authenticators = androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK val activity = ctx.findVaultActivity() if (activity == null) { onError() } else { val executor = androidx.core.content.ContextCompat.getMainExecutor(activity) val prompt = androidx.biometric.BiometricPrompt( activity, executor, object : androidx.biometric.BiometricPrompt.AuthenticationCallback() { override fun onAuthenticationSucceeded( result: androidx.biometric.BiometricPrompt.AuthenticationResult, ) { vaultPinPassed = true viewModel.markUnlocked() unlocked = true } override fun onAuthenticationError( errorCode: Int, errString: CharSequence, ) { onError() } }, ) val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder() .setTitle(ctx.getString(R.string.vault_biometric_title)) .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle)) .setNegativeButtonText(ctx.getString(R.string.action_cancel)) .setAllowedAuthenticators(authenticators) .setConfirmationRequired(false) .build() prompt.authenticate(info) } }</ID>
+    <ID>Wrapping:VaultScreen.kt${ onError -&gt; val activity = ctx.findVaultActivity() if (activity == null) { onError() } else { val executor = androidx.core.content.ContextCompat.getMainExecutor(activity) val prompt = androidx.biometric.BiometricPrompt( activity, executor, object : androidx.biometric.BiometricPrompt.AuthenticationCallback() { override fun onAuthenticationSucceeded( result: androidx.biometric.BiometricPrompt.AuthenticationResult, ) { vaultPinPassed = true viewModel.markUnlocked() unlocked = true } override fun onAuthenticationError( errorCode: Int, errString: CharSequence, ) { onError() } }, ) val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder() .setTitle(ctx.getString(R.string.vault_biometric_title)) .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle)) .setNegativeButtonText(ctx.getString(R.string.action_cancel)) .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS) .setConfirmationRequired(false) .build() prompt.authenticate(info) } }</ID>
   </CurrentIssues>
 </SmellBaseline>

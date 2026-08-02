@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -311,12 +312,25 @@ class ConversationsViewModel @Inject constructor(
      *
      * Each address is sent individually to [BlockNumberUseCase] so a group-MMS with one already-
      * blocked party still adds the others without partial-failure noise. Idempotent.
+     *
+     * v1.25.3 (audit H16) — la conversation était supprimée même quand **aucun** blocage n'avait
+     * abouti : le `runCatching` n'attrapait que les exceptions, et [BlockNumberUseCase] signale
+     * ses échecs par un `Outcome.Failure`, pas en jetant. L'utilisateur perdait donc son
+     * historique en croyant avoir bloqué un numéro qui ne l'était pas. On ne supprime plus
+     * qu'après au moins un blocage réellement réussi, et l'échec total est remonté à l'écran.
      */
     fun block(conversation: Conversation) = viewModelScope.launch {
-        for (addr in conversation.addresses) {
+        val blocked = conversation.addresses.count { addr ->
             runCatching { blockNumber.invoke(addr.raw, conversation.displayName) }
+                .onFailure { Timber.w(it, "block: block threw for one address") }
+                .getOrNull() is Outcome.Success
         }
-        runCatching { toggle.delete(conversation.id) }
+        if (blocked > 0) {
+            runCatching { toggle.delete(conversation.id) }
+                .onFailure { Timber.w(it, "block: conversation delete failed") }
+        } else {
+            _events.trySend(Event.BlockFailed)
+        }
     }
 
     /**
@@ -417,6 +431,9 @@ class ConversationsViewModel @Inject constructor(
     sealed interface Event {
         data class MovedToVault(val count: Int) : Event
         data class MoveToVaultFailed(val count: Int) : Event
+
+        /** v1.25.3 (audit H16) — aucun numéro n'a pu être bloqué ; la conversation est conservée. */
+        data object BlockFailed : Event
         /** v1.14.0 — Reset cooldown + SMS "Je vais bien" envoyé. */
         data class IAmOkDoneWithSms(val sent: Int, val failed: Int) : Event
         /** v1.14.0 — Reset cooldown effectué, pas de SMS (opt-in OFF). */

@@ -30,6 +30,7 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -44,7 +45,13 @@ class MigrationViewModel @Inject constructor(
 ) : ViewModel() {
     // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
     @androidx.compose.runtime.Stable
-    data class UiState(val isRunning: Boolean = false, val imported: Int = 0, val done: Boolean = false)
+    data class UiState(
+        val isRunning: Boolean = false,
+        val imported: Int = 0,
+        val done: Boolean = false,
+        /** v1.25.3 (audit M10) — l'import s'est interrompu sur une erreur. */
+        val failed: Boolean = false,
+    )
 
     private val _state = MutableStateFlow(UiState())
     val state = _state.asStateFlow()
@@ -62,25 +69,44 @@ class MigrationViewModel @Inject constructor(
      *
      * Also persists `lastSyncedSmsId` at the end so the periodic `TelephonySyncWorker` does not
      * re-scan the historical set on its next tick.
+     *
+     * v1.25.3 (audit M10) — `readSmsBatched` n'était protégé par rien. Une `SecurityException`
+     * (permission révoquée en cours de route) ou un curseur système en erreur laissait
+     * `isRunning` à `true` pour toujours : barre de progression infinie, bouton grisé,
+     * aucun message — l'utilisateur ne pouvait que quitter l'écran sans savoir ce qui s'était
+     * passé. L'état terminal est désormais garanti par un `finally`, et l'échec est affiché.
      */
     fun run() {
         if (_state.value.isRunning) return
         _state.value = UiState(isRunning = true)
         viewModelScope.launch {
             var count = 0
-            reader.readSmsBatched(pageSize = 500) { batch ->
-                mirror.bulkImportFromTelephony(batch)
-                count += batch.size
-                _state.value = _state.value.copy(imported = count)
-            }
-            runCatching {
-                val fp = reader.snapshotSmsFingerprint()
-                if (fp.maxId > 0L) {
-                    settings.update { it.copy(advanced = it.advanced.copy(lastSyncedSmsId = fp.maxId)) }
-                    Timber.i("Migration: cursor advanced to id=%d", fp.maxId)
+            try {
+                reader.readSmsBatched(pageSize = 500) { batch ->
+                    mirror.bulkImportFromTelephony(batch)
+                    count += batch.size
+                    _state.value = _state.value.copy(imported = count)
                 }
-            }.onFailure { Timber.w(it, "Migration: failed to persist sync cursor") }
-            _state.value = _state.value.copy(isRunning = false, done = true)
+                runCatching {
+                    val fp = reader.snapshotSmsFingerprint()
+                    if (fp.maxId > 0L) {
+                        settings.update { it.copy(advanced = it.advanced.copy(lastSyncedSmsId = fp.maxId)) }
+                        Timber.i("Migration: cursor advanced to id=%d", fp.maxId)
+                    }
+                }.onFailure { Timber.w(it, "Migration: failed to persist sync cursor") }
+                _state.value = _state.value.copy(done = true)
+            } catch (cancellation: CancellationException) {
+                // L'écran a été quitté : on laisse l'annulation se propager, sinon la coroutine
+                // continuerait après `onCleared`.
+                throw cancellation
+            } catch (t: Throwable) {
+                Timber.e(t, "Migration: import aborted after %d messages", count)
+                _state.value = _state.value.copy(failed = true)
+            } finally {
+                // Les lignes déjà importées le restent (une transaction par page, IGNORE sur
+                // l'index unique) : relancer reprend proprement là où on s'est arrêté.
+                _state.value = _state.value.copy(isRunning = false)
+            }
         }
     }
 }
@@ -122,13 +148,26 @@ fun MigrationScreen(onBack: () -> Unit, viewModel: MigrationViewModel = hiltView
                     else stringResource(R.string.migration_run),
                 )
             }
-            if (state.isRunning || state.done) {
+            if (state.isRunning || state.done || state.failed) {
                 Spacer(Modifier.size(16.dp))
-                LinearProgressIndicator(modifier = Modifier.padding(vertical = 8.dp))
+                // v1.25.3 (audit M10) — la barre indéterminée ne tourne plus que pendant
+                // l'import : elle restait affichée une fois terminé, ce qui donnait à un import
+                // fini l'apparence d'un import bloqué.
+                if (state.isRunning) {
+                    LinearProgressIndicator(modifier = Modifier.padding(vertical = 8.dp))
+                }
                 Text(
                     text = stringResource(R.string.migration_imported, state.imported),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                if (state.failed) {
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        text = stringResource(R.string.migration_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
     }

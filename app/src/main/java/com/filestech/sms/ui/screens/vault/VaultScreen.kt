@@ -53,6 +53,7 @@ import com.filestech.sms.security.VaultManager
 import com.filestech.sms.ui.components.ConversationRow
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
+import com.filestech.sms.ui.security.StrongBiometrics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -291,12 +292,9 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // v1.13.0 — détecte la présence d'un capteur biométrique pour proposer le
     // bouton "Utiliser la biométrie" dans le PinEntryDialog. Lecture pure côté
     // BiometricManager, pas d'effet de bord.
-    val biometricAvailable = remember(ctx) {
-        val bmgr = androidx.biometric.BiometricManager.from(ctx)
-        bmgr.canAuthenticate(
-            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK,
-        ) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
-    }
+    // v1.25.3 (audit H2) — Classe 3 exigée, via l'unique politique [StrongBiometrics] : le coffre
+    // acceptait jusqu'ici la Classe 2 (reconnaissance faciale 2D), soit une photo du visage.
+    val biometricAvailable = remember(ctx) { StrongBiometrics.isAvailable(ctx) }
 
     // v1.13.0 — helper biométrique factorisé. Appelé soit par le LaunchedEffect
     // (lockMode=BIOMETRIC) soit par le bouton "Utiliser la biométrie" du
@@ -305,7 +303,6 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // dialog → garder le dialog ouvert pour retentative PIN/pass).
     val triggerBiometric: (onError: () -> Unit) -> Unit = remember {
         { onError ->
-            val authenticators = androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
             val activity = ctx.findVaultActivity()
             if (activity == null) {
                 onError()
@@ -335,7 +332,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                     .setTitle(ctx.getString(R.string.vault_biometric_title))
                     .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))
                     .setNegativeButtonText(ctx.getString(R.string.action_cancel))
-                    .setAllowedAuthenticators(authenticators)
+                    .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
                     .setConfirmationRequired(false)
                     .build()
                 prompt.authenticate(info)
@@ -359,11 +356,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         if (unlocked == true) return@LaunchedEffect
         when (currentLockMode) {
             LockMode.BIOMETRIC -> {
-                val bmgr = androidx.biometric.BiometricManager.from(ctx)
-                val authenticators = androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
-                val canBio = bmgr.canAuthenticate(authenticators) ==
-                    androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
-                if (!canBio) {
+                if (!StrongBiometrics.isAvailable(ctx)) {
                     // Biométrie indisponible (perdue, hardware off) → on accepte
                     // car l'user a déjà passé le verrouillage principal de l'app.
                     viewModel.markUnlocked()

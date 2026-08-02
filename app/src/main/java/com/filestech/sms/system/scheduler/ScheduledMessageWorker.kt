@@ -4,39 +4,50 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
-import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.domain.model.ScheduledState
-import com.filestech.sms.domain.usecase.SendSmsUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import timber.log.Timber
 
+/**
+ * Adaptateur WorkManager : lit l'id d'entrée, délègue la décision à [ScheduledSendAttempt] et
+ * traduit son verdict en `Result`. Toute la logique de reprise vit dans le délégué, testable
+ * sans harnais WorkManager.
+ */
 @HiltWorker
 class ScheduledMessageWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
-    private val dao: ScheduledMessageDao,
-    private val sendSms: SendSmsUseCase,
+    private val sendAttempt: ScheduledSendAttempt,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
         val id = inputData.getLong(ScheduledMessageSchedulerImpl.KEY_SCHEDULED_ID, -1L)
         if (id < 0) return Result.failure()
-        val entity = dao.findById(id) ?: return Result.failure()
-        if (entity.state != ScheduledState.PENDING) return Result.success()
-        val recipients = PhoneAddress.list(entity.addressesCsv)
-        return when (sendSms.invoke(recipients, entity.body, entity.subId)) {
-            is Outcome.Success -> {
-                dao.setState(id, ScheduledState.SENT)
-                Result.success()
-            }
-            is Outcome.Failure -> {
-                Timber.w("ScheduledMessageWorker: send failed for id=%d", id)
-                dao.setState(id, ScheduledState.FAILED)
+        return when (sendAttempt(id, runAttemptCount)) {
+            ScheduledSendAttempt.Verdict.SENT,
+            ScheduledSendAttempt.Verdict.ALREADY_SETTLED,
+            -> Result.success()
+
+            ScheduledSendAttempt.Verdict.RETRY -> {
+                Timber.w(
+                    "ScheduledMessageWorker: send failed for id=%d, attempt %d/%d — retrying",
+                    id,
+                    runAttemptCount + 1,
+                    ScheduledSendAttempt.MAX_ATTEMPTS,
+                )
                 Result.retry()
             }
+
+            ScheduledSendAttempt.Verdict.GAVE_UP -> {
+                Timber.w(
+                    "ScheduledMessageWorker: giving up on id=%d after %d attempts",
+                    id,
+                    ScheduledSendAttempt.MAX_ATTEMPTS,
+                )
+                Result.failure()
+            }
+
+            ScheduledSendAttempt.Verdict.UNKNOWN_ID -> Result.failure()
         }
     }
 }

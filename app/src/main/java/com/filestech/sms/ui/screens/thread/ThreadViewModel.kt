@@ -1257,14 +1257,30 @@ class ThreadViewModel @Inject constructor(
      * showing past history of the now-blocked number, which is not what the user expects when
      * they explicitly tap "Block" from inside a conversation. The list-level Block action
      * stays unchanged (block-only) so users keeping history have a path.
+     *
+     * v1.25.3 (audit H15) — l'`Outcome` de [BlockNumberUseCase] était purement ignoré et la
+     * boucle n'isolait pas ses erreurs. Deux conséquences : une `SecurityException` du
+     * `BlockedNumberContract` système sur le premier destinataire faisait sauter le blocage des
+     * suivants **et** la suppression de la conversation ; et dans tous les cas l'utilisateur
+     * voyait « Numéro(s) bloqué(s) » alors que rien n'avait été bloqué. On isole chaque adresse,
+     * et on ne supprime la conversation — geste irréversible — que si au moins un blocage a
+     * réellement abouti.
      */
     fun blockSenders(onDone: () -> Unit = {}) {
         val addresses = _state.value.conversation?.addresses ?: return
         viewModelScope.launch {
-            for (addr in addresses) blockNumber.invoke(addr.raw)
-            toggleConvState.delete(conversationId)
-            _events.tryEmit(Event.ShowSnackbar(snackNumbersBlocked()))
-            onDone()
+            val blocked = addresses.count { addr ->
+                runCatching { blockNumber.invoke(addr.raw) }
+                    .onFailure { timber.log.Timber.w(it, "blockSenders: block threw for one address") }
+                    .getOrNull() is Outcome.Success
+            }
+            if (blocked > 0) {
+                toggleConvState.delete(conversationId)
+                _events.tryEmit(Event.ShowSnackbar(snackNumbersBlocked()))
+                onDone()
+            } else {
+                _events.tryEmit(Event.ShowSnackbar(snackBlockFailed()))
+            }
         }
     }
 
@@ -1414,6 +1430,8 @@ class ThreadViewModel @Inject constructor(
     private fun snackAttachCapReached(): String = context.getString(com.filestech.sms.R.string.snack_thread_attach_cap_reached)
     private fun snackVoiceSent(): String = context.getString(com.filestech.sms.R.string.snack_thread_voice_sent)
     private fun snackNumbersBlocked(): String = context.getString(com.filestech.sms.R.string.snack_thread_numbers_blocked)
+
+    private fun snackBlockFailed(): String = context.getString(com.filestech.sms.R.string.snack_block_failed)
 
     private companion object {
         /**

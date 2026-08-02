@@ -28,6 +28,9 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
     override fun observePending(): Flow<List<ScheduledMessage>> =
         dao.observePending().map { list -> list.map { it.toDomain() } }.flowOn(io)
 
+    override fun observeFailed(): Flow<List<ScheduledMessage>> =
+        dao.observeFailed().map { list -> list.map { it.toDomain() } }.flowOn(io)
+
     override suspend fun schedule(
         conversationId: Long?,
         addresses: List<PhoneAddress>,
@@ -62,4 +65,8 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
     }
     override suspend fun markSent(id: Long) = withContext(io) { dao.setState(id, ScheduledState.SENT) }
     override suspend fun markFailed(id: Long) = withContext(io) { dao.setState(id, ScheduledState.FAILED) }
+    override suspend fun rearmPending(id: Long, scheduledAt: Long) = withContext(io) {
+        dao.rearmPending(id, scheduledAt)
+    }
+    override suspend fun delete(id: Long) = withContext(io) { dao.delete(id) }
 }

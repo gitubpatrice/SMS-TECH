@@ -254,6 +254,13 @@
     <string name="settings_vault_pin_same_as_app">Choisissez un PIN différent de votre PIN d\'app.</string>
     <string name="settings_vault_pin_saved">PIN du coffre enregistré.</string>
     <string name="settings_vault_pin_cleared">PIN du coffre retiré.</string>
+    <!-- v1.25.3 (audit M24) — le dialogue de confirmation reprenait la description du réglage. -->
+    <string name="settings_vault_pin_clear_confirm_title">Retirer le PIN du coffre ?</string>
+    <string name="settings_vault_pin_clear_confirm_body">Le coffre s\'ouvrira sans PIN ni mot de passe dédié, dès que l\'app elle-même est déverrouillée. Les conversations du coffre restent masquées de la liste principale.</string>
+    <!-- v1.25.3 (audit M23) — désactiver le verrou se faisait sur un simple tap. -->
+    <string name="settings_lock_clear_confirm_title">Désactiver le verrouillage ?</string>
+    <string name="settings_lock_clear_confirm_body">Ton PIN sera supprimé et SMS Tech s\'ouvrira sans rien demander. Le déverrouillage biométrique est désactivé aussi. Cette action est irréversible.</string>
+    <string name="settings_lock_clear_confirm_action">Désactiver</string>
     <string name="action_disable">Désactiver</string>
     <string name="vault_actions_title">Actions du coffre</string>
     <string name="vault_biometric_title">Déverrouiller le coffre</string>
@@ -326,6 +333,8 @@
     <string name="migration_run">Lancer l\'import</string>
     <string name="migration_rerun">Relancer</string>
     <string name="migration_imported">Importés : %1$d</string>
+    <!-- v1.25.3 (audit M10) — un échec d'import laissait tourner la barre de progression sans fin. -->
+    <string name="migration_failed">L\'import s\'est arrêté sur une erreur. Les messages déjà importés ont été conservés — tu peux le relancer.</string>
 
     <!-- About -->
     <string name="about_easter_egg">✨ Merci à toutes celles et ceux qui prennent soin de leur vie privée. ✨</string>
@@ -639,6 +648,11 @@
     <string name="snack_thread_attach_cap_reached">Limite MMS atteinte (280 Ko). Retirez une pièce jointe ou réduisez le texte.</string>
     <string name="snack_thread_voice_sent">Message vocal envoyé</string>
     <string name="snack_thread_numbers_blocked">Numéro(s) bloqué(s)</string>
+    <!-- v1.25.3 (audit M21) — l'icône corbeille débloquait instantanément, sur un seul tap. -->
+    <string name="blocked_unblock_confirm_title">Débloquer ce numéro ?</string>
+    <string name="blocked_unblock_confirm_body">%1$s pourra de nouveau t\'envoyer des messages. Tu peux le rebloquer à tout moment.</string>
+    <!-- v1.25.3 (audit H15/H16) — le blocage annonçait un succès même quand il avait échoué. -->
+    <string name="snack_block_failed">Le blocage a échoué — le numéro n\'a pas été bloqué. La conversation a été conservée.</string>
 
     <!-- v1.15.2 — Strings communes a11y + UX champs passphrase. -->
     <string name="action_show_password">Afficher la passphrase</string>
@@ -669,6 +683,14 @@
     <string name="scheduled_cancel_confirm_title">Annuler ce message programmé ?</string>
     <string name="scheduled_cancel_confirm_body">Il ne sera pas envoyé. Cette action est irréversible.</string>
     <string name="scheduled_cancel_confirm_action">Annuler l\'envoi</string>
+    <!-- v1.25.3 (audit H6) — les envois échoués disparaissaient purement et simplement. -->
+    <string name="scheduled_section_pending">En attente d\'envoi</string>
+    <string name="scheduled_section_failed">Échecs</string>
+    <string name="scheduled_failed_explainer">L\'envoi a échoué après plusieurs tentatives. Relance-le, ou retire-le de cette liste.</string>
+    <string name="scheduled_failed_when">Était prévu : %1$s</string>
+    <string name="scheduled_delete_confirm_title">Retirer ce message ?</string>
+    <string name="scheduled_delete_confirm_body">Il sera retiré de cette liste et ne sera pas envoyé. Cette action est irréversible.</string>
+    <string name="scheduled_retried">Nouvel envoi en cours…</string>
     <string name="settings_scheduled_messages">Messages programmés</string>
     <string name="settings_scheduled_messages_desc">Voir et gérer les SMS programmés</string>
     <string name="thread_schedule_action">Programmer…</string>
