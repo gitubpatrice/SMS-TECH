@@ -39,9 +39,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.withResumed
 import com.filestech.sms.R
@@ -250,6 +252,28 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     val selectionMode by viewModel.selectionMode.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
 
+    /*
+     * v1.25.4 — le Coffre ne réagit qu'une fois sa destination réellement au premier plan.
+     *
+     * Sous un `NavHost`, l'écran qu'on dépile et celui qu'on découvre sont composés **en même
+     * temps** le temps de la transition. Le Coffre y enregistrait donc ses `BackHandler` alors que
+     * le geste de retour parti depuis la conversation n'était pas encore terminé — et comme
+     * `OnBackPressedDispatcher` donne la priorité au callback enregistré en dernier, c'est le
+     * Coffre qui en recevait la fin. Un seul retour produisait deux dépilements : la conversation,
+     * puis le Coffre. D'où le dialogue de second facteur qui « essaie d'apparaître et disparaît
+     * aussitôt », et le retour direct à la liste.
+     *
+     * Le garde de la v1.25.2 rendait `lockedOnBack` idempotent, ce qui empêchait le Coffre d'être
+     * dépilé DEUX fois — pas d'être dépilé pour un retour qui ne lui était pas destiné.
+     *
+     * `LocalLifecycleOwner` est ici la `NavBackStackEntry` du Coffre : elle n'atteint `RESUMED`
+     * qu'une fois la transition finie. Tant qu'on n'y est pas, ni les `BackHandler` ni le dialogue
+     * de PIN ne sont armés, donc rien ne peut capter un geste destiné à l'écran précédent.
+     */
+    val navEntryOwner = LocalLifecycleOwner.current
+    val navEntryState by navEntryOwner.lifecycle.currentStateAsState()
+    val navEntryResumed = navEntryState.isAtLeast(Lifecycle.State.RESUMED)
+
     // v1.14.0 — wrap onBack pour verrouiller le coffre à CHAQUE sortie
     // explicite. PAS sur push ThreadScreen (composable ne quitte pas la nav
     // stack, juste mise en pause par le push d'écran au-dessus). Le wrapping
@@ -272,11 +296,12 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     }
 
     // v1.13.0 — système back en mode sélection ⇒ sortir du mode sélection.
-    androidx.activity.compose.BackHandler(enabled = selectionMode) {
+    // v1.25.4 — armé seulement une fois la destination au premier plan (cf. [navEntryResumed]).
+    androidx.activity.compose.BackHandler(enabled = selectionMode && navEntryResumed) {
         viewModel.clearSelection()
     }
     // v1.14.0 — système back HORS mode sélection ⇒ lock + onBack.
-    androidx.activity.compose.BackHandler(enabled = !selectionMode) {
+    androidx.activity.compose.BackHandler(enabled = !selectionMode && navEntryResumed) {
         lockedOnBack()
     }
 
@@ -327,13 +352,12 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // matérielle se produit (différencié : LaunchedEffect → onBack ; bouton
     // dialog → garder le dialog ouvert pour retentative PIN/pass).
     val gateScope = androidx.compose.runtime.rememberCoroutineScope()
-    val gateLifecycle = LocalLifecycleOwner.current
     // v1.25.4 — mêmes deux gardes que [com.filestech.sms.ui.screens.lock.LockScreen], absents ici
     // alors que la v1.25.3 y a introduit la même fenêtre asynchrone (`prepareBiometricGate` est
     // suspend et touche le matériel sécurisé avant que le prompt ne parte). Le coffre garde des
     // conversations : il n'a aucune raison d'être moins protégé que l'écran de verrouillage.
     val promptInFlight = remember { mutableStateOf(false) }
-    val triggerBiometric: (onError: () -> Unit) -> Unit = remember(gateScope, gateLifecycle) {
+    val triggerBiometric: (onError: () -> Unit) -> Unit = remember(gateScope, navEntryOwner) {
         fun(onError: () -> Unit) {
             val activity = ctx.findVaultActivity()
             if (activity == null) {
@@ -408,7 +432,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                         // retour) et n'appelle **aucun** callback. Le coffre restait alors sans
                         // prompt et sans repli, `onError` n'étant jamais atteint — il fallait sortir
                         // au bouton retour. On attend le premier plan au lieu de renoncer.
-                        gateLifecycle.lifecycle.withResumed {
+                        navEntryOwner.lifecycle.withResumed {
                             prompt.authenticate(
                                 info,
                                 androidx.biometric.BiometricPrompt.CryptoObject(gateCipher),
@@ -644,7 +668,10 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // au-dessus (double second-factor = friction inutile : l'user a déjà
     // démontré qu'il connaît le secret distinct du coffre).
     // Annulation → onBack() (sortie de l'écran).
-    if (pinGateOpen) {
+    // v1.25.4 — pas avant que la destination ne soit au premier plan : présenté pendant la
+    // transition, ce dialogue captait lui aussi la fin du geste de retour venu de la conversation
+    // et se refermait dans la foulée en appelant `onCancel` — donc `lockedOnBack`.
+    if (pinGateOpen && navEntryResumed) {
         com.filestech.sms.ui.components.PinEntryDialog(
             title = stringResource(R.string.vault_pin_dialog_title),
             description = stringResource(R.string.vault_pin_dialog_subtitle),
