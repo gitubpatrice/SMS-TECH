@@ -1,0 +1,5 @@
+Mode urgence.
+
+Les contacts d'urgence saisis pouvaient être perdus en quittant l'écran : le bouton du dialogue s'appelait « Enregistrer » alors qu'il n'ajoutait qu'au brouillon. Il s'appelle désormais « Ajouter », et quitter sans enregistrer demande confirmation.
+
+L'écran d'urgence signale maintenant que la position ne sera pas transmise si la permission manque, et propose de l'accorder sur place. Il affiche aussi qui sera prévenu, au lieu d'un simple nombre.

@@ -1,0 +1,5 @@
+Emergency mode.
+
+Emergency contacts could be lost when leaving the screen: the dialog button read "Save" while it only added to a draft. It now reads "Add", and leaving with unsaved changes asks for confirmation.
+
+The emergency screen now warns when location will not be sent because the permission is missing, and offers to grant it there. It also shows who will be alerted, instead of just a count.
