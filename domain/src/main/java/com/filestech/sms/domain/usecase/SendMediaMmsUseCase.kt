@@ -127,8 +127,15 @@ class SendMediaMmsUseCase @Inject constructor(
         val durationMs: Long? = null,
     )
 
-    private companion object {
-        // Conservative cap aligned with French MMSC ceilings (Free is the tightest at ~300 KB).
+    companion object {
+        /**
+         * Conservative cap aligned with French MMSC ceilings (Free is the tightest at ~300 KB).
+         *
+         * v1.26.0 — n'est plus prive : [ScheduleMessageUseCase] applique la MEME limite au moment
+         * de programmer, pour que l'utilisateur l'apprenne pendant qu'il peut encore retirer une
+         * image, et non des heures plus tard. Une constante partagee plutot que deux valeurs
+         * jumelles vouees a diverger.
+         */
         const val MAX_PAYLOAD_BYTES = 300L * 1024L
     }
 }

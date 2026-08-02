@@ -516,17 +516,31 @@ class ThreadViewModel @Inject constructor(
                 return@launch
             }
             val effectiveSubId = cachedSettings.value.sending.defaultSubId
+            // v1.26.0 — les pieces jointes en attente partent AVEC l'envoi programme.
+            //
+            // Elles etaient purement ignorees : on pouvait joindre une photo, programmer, et
+            // seul le texte partait a l'heure dite — la photo restant dans le composeur, ce qui
+            // laissait croire qu'elle suivrait. `ScheduleMessageUseCase` les rend durables avant
+            // d'enregistrer, sans quoi le fichier aurait disparu bien avant l'echeance.
+            val pending = _state.value.pendingAttachments
+            val payloads = pending.map { p ->
+                SendMediaMmsUseCase.AttachmentPayload(file = p.file, mimeType = p.mimeType)
+            }
             val r = scheduleMessage(
                 conversationId = conversationId,
                 addresses = recipients,
                 body = body,
                 whenEpochMillis = epochMillis,
                 subId = effectiveSubId,
+                attachments = payloads,
             )
             when (r) {
                 is com.filestech.sms.core.result.Outcome.Success -> {
-                    // Vide le draft (le SMS partira automatiquement à l'heure prévue).
-                    _state.update { it.copy(draft = "") }
+                    // Vide le draft ET les pieces jointes retenues : elles appartiennent
+                    // desormais a l'envoi programme. Les laisser dans le composeur ferait croire
+                    // qu'elles sont encore a envoyer, et un envoi immediat les expedierait une
+                    // seconde fois.
+                    _state.update { it.copy(draft = "", pendingAttachments = it.pendingAttachments - pending.toSet()) }
                     repo.setDraft(conversationId, null)
                     _events.tryEmit(Event.ShowSnackbar(
                         context.getString(com.filestech.sms.R.string.thread_schedule_success),

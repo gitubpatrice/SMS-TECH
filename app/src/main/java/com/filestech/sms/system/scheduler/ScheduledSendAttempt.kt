@@ -2,6 +2,7 @@ package com.filestech.sms.system.scheduler
 
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
+import com.filestech.sms.data.local.db.mapper.toDomain
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.ScheduledState
 import com.filestech.sms.domain.usecase.SendSmsUseCase
@@ -22,6 +23,8 @@ import javax.inject.Inject
 class ScheduledSendAttempt @Inject constructor(
     private val dao: ScheduledMessageDao,
     private val sendSms: SendSmsUseCase,
+    // v1.26.0 — un envoi programme peut porter des pieces jointes ; il faut alors la voie MMS.
+    private val sendMediaMms: com.filestech.sms.domain.usecase.SendMediaMmsUseCase,
 ) {
 
     /**
@@ -54,7 +57,27 @@ class ScheduledSendAttempt @Inject constructor(
         val entity = dao.findById(id) ?: return Verdict.UNKNOWN_ID
         if (entity.state != ScheduledState.PENDING) return Verdict.ALREADY_SETTLED
         val recipients = PhoneAddress.list(entity.addressesCsv)
-        return when (sendSms.invoke(recipients, entity.body, entity.subId)) {
+        // v1.26.0 — aiguillage SMS / MMS.
+        //
+        // Le worker n'appelait que `sendSms`, si bien qu'un envoi programme avec une piece jointe
+        // partait ampute de celle-ci : le texte arrivait, l'image jamais. La colonne
+        // `attachments_json` etait remplie de rien, personne ne la lisant.
+        //
+        // Les fichiers ont ete rendus DURABLES au moment de programmer
+        // (`ScheduleMessageUseCase`), donc ils sont encore la des heures plus tard. Si l'un d'eux
+        // a malgre tout disparu, `SendMediaMmsUseCase` rend un echec de validation, ce qui
+        // enclenche le meme cycle de reprise que n'importe quel autre echec : la ligne reste
+        // `PENDING` et l'utilisateur la retrouve dans « Echecs » plutot que de croire l'envoi
+        // parti.
+        // Decodage via le mapper de l'entite : une seule voie de lecture, partagee avec la liste
+        // des envois programmes. Le codec lui-meme reste interne au module `data`.
+        val attachments = entity.toDomain().attachments
+        val outcome = if (attachments.isEmpty()) {
+            sendSms.invoke(recipients, entity.body, entity.subId)
+        } else {
+            sendMediaMms.invoke(recipients, attachments, entity.body, entity.subId)
+        }
+        return when (outcome) {
             is Outcome.Success -> {
                 dao.setState(id, ScheduledState.SENT)
                 Verdict.SENT

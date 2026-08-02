@@ -507,9 +507,14 @@ fun ThreadScreen(
                         onBlock = { menuOpen = false; askBlock = true },
                         onDelete = { menuOpen = false; askDelete = true },
                         // v1.15.1 — Programmer le draft pour plus tard. Grisé tant qu'il
-                        // n'y a rien à programmer (draft vide) — évite le tunnel
-                        // date/heure → snackbar "Tape un message avant" frustrant.
-                        canSchedule = state.draft.isNotBlank(),
+                        // n'y a rien à programmer — évite le tunnel date/heure → snackbar
+                        // "Tape un message avant" frustrant.
+                        // v1.26.0 — une pièce jointe suffit désormais, même sans texte : un MMS
+                        // ne portant qu'une image est un envoi normal, et la programmation les
+                        // transporte maintenant. Auparavant ce test ne regardait que le texte, si
+                        // bien qu'on pouvait programmer un message avec photo et voir partir le
+                        // texte seul.
+                        canSchedule = state.draft.isNotBlank() || state.pendingAttachments.isNotEmpty(),
                         onScheduleSend = {
                             menuOpen = false
                             scheduleStep = "date"

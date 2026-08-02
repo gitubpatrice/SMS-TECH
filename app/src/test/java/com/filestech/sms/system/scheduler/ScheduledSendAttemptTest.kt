@@ -26,7 +26,15 @@ class ScheduledSendAttemptTest {
 
     private val dao = mockk<ScheduledMessageDao>(relaxed = true)
     private val sendSms = mockk<SendSmsUseCase>()
-    private val attempt = ScheduledSendAttempt(dao, sendSms)
+
+    /**
+     * v1.26.0 — le worker aiguille desormais vers le MMS quand l'envoi porte des pieces jointes.
+     * Ces tests-ci portent sur des envois SANS piece jointe, donc ce collaborateur ne doit jamais
+     * etre sollicite : `relaxed = false` par defaut ferait echouer tout appel inattendu, ce qui
+     * verrouille l'aiguillage au passage.
+     */
+    private val sendMediaMms = mockk<com.filestech.sms.domain.usecase.SendMediaMmsUseCase>()
+    private val attempt = ScheduledSendAttempt(dao, sendSms, sendMediaMms)
 
     private fun entity(state: ScheduledState = ScheduledState.PENDING) = ScheduledMessageEntity(
         id = ID,

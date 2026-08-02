@@ -137,5 +137,7 @@ fun ScheduledMessageEntity.toDomain(): ScheduledMessage = ScheduledMessage(
         ScheduledState.FAILED -> ScheduledMessage.State.FAILED
         ScheduledState.CANCELLED -> ScheduledMessage.State.CANCELLED
     },
+    // v1.26.0 — la colonne existait depuis toujours sans jamais etre lue ni ecrite.
+    attachments = com.filestech.sms.data.local.db.ScheduledAttachmentCodec.decode(attachmentsJson),
     createdAt = createdAt,
 )
