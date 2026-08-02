@@ -75,8 +75,12 @@
     <string name="pin_setup_digits_only">Chiffres uniquement</string>
     <string name="lock_mode_dialog_title">Choisir le mode de verrouillage</string>
     <string name="conversation_actions_title">Actions sur la conversation</string>
-    <string name="conversation_block_confirm_title">Bloquer cette conversation ?</string>
-    <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. Vous pourrez les débloquer plus tard dans les Réglages.</string>
+    <!-- v1.25.3 — ce dialogue ne promettait qu'un blocage, alors que l'action supprime AUSSI la
+         conversation et tous ses messages, de Room et de la base SMS du système. Un utilisateur
+         a confirmé en croyant à un blocage réversible et a perdu son historique. -->
+    <string name="conversation_block_confirm_title">Bloquer et supprimer cette conversation ?</string>
+    <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués, et la conversation ainsi que tous ses messages seront définitivement supprimés — de cet appareil et de la base SMS du système. Les débloquer plus tard ne les restaurera PAS. Pour bloquer un numéro sans perdre la conversation, passez plutôt par Réglages › Numéros bloqués.</string>
+    <string name="conversation_block_confirm_action">Bloquer et supprimer</string>
     <string name="settings_purge_blocked">Purger les conversations bloquées</string>
     <string name="settings_purge_blocked_desc">Supprime définitivement toutes les conversations dont les participants sont sur la liste de blocage système.</string>
     <string name="settings_purge_blocked_result">%1$d conversation(s) supprimée(s)</string>

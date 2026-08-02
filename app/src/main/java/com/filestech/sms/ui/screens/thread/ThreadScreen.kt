@@ -1006,7 +1006,9 @@ fun ThreadScreen(
         DestructiveConfirmDialog(
             title = stringResource(R.string.conversation_block_confirm_title),
             message = stringResource(R.string.conversation_block_confirm_body),
-            confirmLabel = stringResource(R.string.action_block),
+            // v1.25.3 — « Bloquer et supprimer » : le libellé doit énoncer l'acte destructeur.
+            // « Bloquer » seul laissait croire à un geste réversible.
+            confirmLabel = stringResource(R.string.conversation_block_confirm_action),
             onConfirm = {
                 askBlock = false
                 // v1.2.5: block-from-detail now also removes the conversation so the user is

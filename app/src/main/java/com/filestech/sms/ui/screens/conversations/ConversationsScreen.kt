@@ -902,13 +902,20 @@ private fun SwipeableConversationRow(
             onDismissRequest = { pendingBlock = false },
             title = { Text(stringResource(R.string.conversation_block_confirm_title)) },
             text = { Text(stringResource(R.string.conversation_block_confirm_body)) },
+            // v1.25.3 — libellé explicite + rouge destructif, comme les autres confirmations
+            // irréversibles de l'app. Ce dialogue était le seul geste destructeur rendu en
+            // bouton neutre, alors qu'il efface la conversation ET ses messages des deux bases.
             confirmButton = {
                 androidx.compose.material3.FilledTonalButton(
                     onClick = {
                         pendingBlock = false
                         onBlock()
                     },
-                ) { Text(stringResource(R.string.action_block)) }
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
+                ) { Text(stringResource(R.string.conversation_block_confirm_action)) }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(

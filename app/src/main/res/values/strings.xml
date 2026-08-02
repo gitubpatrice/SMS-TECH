@@ -78,8 +78,12 @@
     <string name="pin_setup_digits_only">Digits only</string>
     <string name="lock_mode_dialog_title">Choose lock mode</string>
     <string name="conversation_actions_title">Conversation actions</string>
-    <string name="conversation_block_confirm_title">Block this conversation?</string>
-    <string name="conversation_block_confirm_body">Every number in this conversation will be blocked. You can unblock them later in Settings.</string>
+    <!-- v1.25.3 — this dialog used to promise blocking only, while the action ALSO deletes the
+         conversation and every message, from Room and from the system SMS database. A user
+         confirmed it expecting a reversible block and lost their history. -->
+    <string name="conversation_block_confirm_title">Block and delete this conversation?</string>
+    <string name="conversation_block_confirm_body">Every number in this conversation will be blocked, and the conversation and all its messages will be permanently deleted — from this device and from the system SMS database. Unblocking later will NOT bring them back. To block a number without losing the conversation, use Settings › Blocked numbers instead.</string>
+    <string name="conversation_block_confirm_action">Block and delete</string>
     <string name="settings_purge_blocked">Purge blocked conversations</string>
     <string name="settings_purge_blocked_desc">Permanently delete every conversation whose participants are all on the system blocklist.</string>
     <string name="settings_purge_blocked_result">Purged %1$d conversation(s)</string>
