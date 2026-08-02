@@ -87,27 +87,39 @@ class VaultViewModel @Inject constructor(
         repo.observeVault().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
     /**
-     * v1.11.0 — Trou #3 Vault polish : lockMode courant, utilisé par
-     * [VaultScreen] pour décider d'afficher un BiometricPrompt à l'entrée
-     * (si l'user a `lockMode = BIOMETRIC`, on re-prompte au coffre comme
-     * second-factor distinct du déverrouillage initial de l'app).
+     * v1.25.4 — conditions d'entrée du Coffre, **ou `null` tant qu'elles ne sont pas lues**.
+     *
+     * Elles étaient exposées en deux `StateFlow` distincts, chacun avec une valeur de repli
+     * (`LockMode.OFF`, `false`) servie tant que le DataStore n'avait pas répondu. L'effet d'entrée
+     * partait sur ces valeurs de repli, tombait dans la branche « aucun verrou configuré » et
+     * appelait `markUnlocked()` : **le Coffre s'ouvrait tout seul, avant tout second facteur**, et
+     * son contenu s'affichait derrière le dialogue de PIN qui arrivait ensuite.
+     *
+     * Un repli qui signifie « pas de verrou » est un choix qui échoue du mauvais côté. Ici
+     * l'absence de réponse se dit `null`, et l'appelant n'a alors rien à décider : il attend.
+     *
+     * Regroupées en un seul état parce qu'elles se lisent ensemble : deux flux séparés se
+     * résolvent à deux instants différents, et c'est exactement l'intervalle entre les deux qui
+     * ouvrait la faille.
      */
-    val lockMode: StateFlow<LockMode> = settings.flow
-        .map { it.security.lockMode }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), LockMode.OFF)
+    data class EntryGate(val lockMode: LockMode, val pinRequired: Boolean)
 
-    /**
-     * v1.13.0 — état effectif du second-factor PIN coffre. `true` si le flag
-     * Settings est ON ET un hash est posé en SecurityStore. Si le flag est ON
-     * mais le hash absent (état incohérent post-restore ou bug), on traite
-     * comme OFF — l'user pourra reconfigurer depuis Réglages.
-     */
-    val vaultPinRequired: StateFlow<Boolean> = settings.flow
+    val entryGate: StateFlow<EntryGate?> = settings.flow
         .map { s ->
-            if (!s.security.vaultPinEnabled) false
-            else kotlinx.coroutines.withContext(io) { vaultPin.isVaultPinConfigured() }
+            EntryGate(
+                lockMode = s.security.lockMode,
+                // v1.13.0 audit SEC-2 — `isVaultPinConfigured` fait un DataStore.first() (I/O),
+                // routé via `withContext(io)` pour ne pas bloquer le Main pendant le cold-start.
+                // Flag ON mais hash absent (restauration incohérente) ⇒ traité comme OFF :
+                // l'utilisateur pourra reconfigurer depuis les Réglages.
+                pinRequired = if (!s.security.vaultPinEnabled) {
+                    false
+                } else {
+                    kotlinx.coroutines.withContext(io) { vaultPin.isVaultPinConfigured() }
+                },
+            )
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
 
     /** v1.13.0 — verify suspend pour le `PinEntryDialog`. */
     suspend fun verifyVaultPin(candidate: CharArray): Boolean = vaultPin.verifyVaultPin(candidate)
@@ -230,8 +242,9 @@ class VaultViewModel @Inject constructor(
 @Composable
 fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: VaultViewModel = hiltViewModel()) {
     val rows by viewModel.state.collectAsStateWithLifecycle()
-    val lockMode by viewModel.lockMode.collectAsStateWithLifecycle()
-    val vaultPinRequired by viewModel.vaultPinRequired.collectAsStateWithLifecycle()
+    // v1.25.4 — `null` tant que les réglages n'ont pas répondu. Voir [VaultViewModel.EntryGate].
+    val entryGate by viewModel.entryGate.collectAsStateWithLifecycle()
+    val gateResolved = entryGate != null
     // v1.13.0 — sélection multiple bulk move-out.
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
     val selectionMode by viewModel.selectionMode.collectAsStateWithLifecycle()
@@ -296,7 +309,10 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     var vaultPinPassed by remember {
         mutableStateOf(viewModel.isVaultSessionUnlocked())
     }
-    val pinGateOpen = vaultPinRequired && !vaultPinPassed
+    // v1.25.4 — tant que [gateResolved] est faux on ne sait pas si un PIN est exigé : on ne
+    // prétend donc pas que la porte est ouverte, et [revealContent] plus bas garde le contenu
+    // masqué pendant ce temps.
+    val pinGateOpen = entryGate?.pinRequired == true && !vaultPinPassed
 
     // v1.13.0 — détecte la présence d'un capteur biométrique pour proposer le
     // bouton "Utiliser la biométrie" dans le PinEntryDialog. Lecture pure côté
@@ -416,13 +432,24 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // deux prompts simultanés). Le snapshot lockMode est lu UNE seule fois à
     // l'entrée de l'écran ; si l'user change son lockMode après être entré, ça
     // n'a pas d'effet sur cette session — comportement attendu.
-    // v1.13.0 — clé composite (Unit, pinGateOpen) : à la 1ère composition le
+    // v1.13.0 — clé composite (…, pinGateOpen) : à la 1ère composition le
     // pinGateOpen=true skip le bloc auth (return@LaunchedEffect immédiat).
     // Quand le user valide le PIN (vaultPinPassed=true), pinGateOpen passe à
     // false ET la key du LaunchedEffect change → relance qui passe le gate.
-    LaunchedEffect(Unit, pinGateOpen) {
+    //
+    // v1.25.4 — la clé `Unit` devient [gateResolved]. Avec `Unit`, l'effet partait dès la
+    // première composition, quand les réglages n'étaient pas encore lus : `lockMode` valait
+    // encore son repli `OFF`, la branche `else` concluait « aucun verrou » et appelait
+    // `markUnlocked()`. Le Coffre s'ouvrait donc **avant** le second facteur, et son contenu
+    // restait affiché derrière le dialogue de PIN qui apparaissait juste après.
+    //
+    // Passer de faux à vrai relance l'effet une fois, avec les vraies valeurs. Une modification
+    // ultérieure des réglages ne le relance pas : [gateResolved] reste vrai, ce qui préserve
+    // l'instantané voulu ci-dessus.
+    LaunchedEffect(gateResolved, pinGateOpen) {
+        val gate = entryGate ?: return@LaunchedEffect
         if (pinGateOpen) return@LaunchedEffect
-        val currentLockMode = lockMode
+        val currentLockMode = gate.lockMode
         if (unlocked == true) return@LaunchedEffect
         when (currentLockMode) {
             LockMode.BIOMETRIC -> {
@@ -520,9 +547,27 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (unlocked) {
-                null -> {
-                    // Auth en cours : neutre, pas de contenu vault dévoilé.
+            // v1.25.4 — le dévoilement exige les TROIS conditions, et plus le seul `unlocked`.
+            //
+            // `pinGateOpen` ne commandait jusqu'ici que l'affichage du dialogue de PIN, pas le
+            // contenu : un `unlocked` passé à vrai par ailleurs laissait donc la liste du Coffre
+            // lisible **derrière** ce dialogue. Et tant que les réglages ne sont pas lus, on ne
+            // sait pas encore si un PIN sera exigé — afficher pendant cet intervalle reviendrait
+            // à parier que non.
+            //
+            // Deuxième barrière, volontairement redondante avec la garde de l'effet d'entrée :
+            // celle-ci décide de ne pas ouvrir, celle-là de ne rien montrer. Il faut que les deux
+            // cèdent pour que le contenu fuie.
+            val revealContent = gateResolved && !pinGateOpen && unlocked == true
+            when {
+                !revealContent -> {
+                    // Auth en cours, refusée, ou réglages pas encore lus : neutre, aucun contenu
+                    // du Coffre dévoilé. Même placeholder dans les trois cas — l'écran ne doit pas
+                    // laisser deviner laquelle des trois situations il traverse.
+                    //
+                    // v1.11.0 audit U2 — sur refus, `onBack()` est déjà appelé depuis le callback
+                    // `onAuthenticationError` ; ce placeholder évite le flash blanc entre la
+                    // recomposition et le `popBackStack` effectif (1-2 frames sur appareil lent).
                     Text(
                         text = stringResource(R.string.vault_biometric_pending),
                         style = MaterialTheme.typography.bodyMedium,
@@ -530,21 +575,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                         modifier = Modifier.padding(24.dp),
                     )
                 }
-                false -> {
-                    // v1.11.0 audit U2 — auth refusée : `onBack()` est déjà
-                    // appelé dans le callback `onAuthenticationError`. On
-                    // affiche le même placeholder que pendant l'auth pour
-                    // éviter un flash blanc entre la recomposition
-                    // `unlocked=false` et le popBackStack effectif (1-2
-                    // frames sur slow device).
-                    Text(
-                        text = stringResource(R.string.vault_biometric_pending),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(24.dp),
-                    )
-                }
-                true -> {
+                else -> {
                     if (rows.isEmpty()) {
                         Text(
                             text = stringResource(R.string.vault_empty),
