@@ -67,8 +67,22 @@ class KeystoreManager @Inject constructor() {
             .setRandomizedEncryptionRequired(!allowUserIv)
             .setUserAuthenticationRequired(userAuthRequired)
             .apply {
-                if (userAuthRequired && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                    setInvalidatedByBiometricEnrollment(true)
+                if (!userAuthRequired) return@apply
+                // v1.25.3 — disponible depuis l'API 24, donc sur tout le périmètre (minSdk 26) et
+                // non plus à partir de l'API 30 seulement. En dessous, on s'en remettait au défaut
+                // implicite de la plateforme pour une propriété de SÉCURITÉ : c'est elle qui
+                // invalide la clé quand l'utilisateur ré-inscrit une empreinte, et donc elle qui
+                // fait basculer proprement sur le PIN au lieu d'ouvrir avec une biométrie changée.
+                setInvalidatedByBiometricEnrollment(true)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    // v1.25.3 — sur API 30+, exprimer explicitement la politique d'authentification
+                    // plutôt que de s'en remettre au défaut hérité de
+                    // `setUserAuthenticationValidityDurationSeconds` : timeout 0 = authentification
+                    // exigée à CHAQUE usage de la clé, et `AUTH_BIOMETRIC_STRONG` seul, sans repli
+                    // sur le code de verrouillage de l'appareil. C'est ce qui rend le déverrouillage
+                    // biométrique cryptographiquement réel : sans présentation biométrique, la clé
+                    // ne s'ouvre pas, quel que soit l'état de l'application.
+                    setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
                 }
             }
             .build()
@@ -84,5 +98,15 @@ class KeystoreManager @Inject constructor() {
         const val ALIAS_VAULT_KEK = "smstech_vault_kek"
         const val ALIAS_SETTINGS_AEAD = "smstech_settings_aead"
         const val ALIAS_PANIC_DECOY = "smstech_panic_decoy"
+
+        /**
+         * v1.25.3 — clé adossée à la biométrie, seule à porter `userAuthRequired = true`.
+         *
+         * Elle ne chiffre aucune donnée : elle sert de **preuve**. Le déverrouillage biométrique
+         * était jusqu'ici un portail d'interface — `BiometricPrompt` réussissait, le ViewModel
+         * notait « déverrouillé », et rien dans le système de clés ne l'attestait. Un `doFinal`
+         * réussi sur cette clé prouve que l'OS a bien reçu une empreinte Classe 3.
+         */
+        const val ALIAS_BIOMETRIC_GATE = "smstech_biometric_gate"
     }
 }

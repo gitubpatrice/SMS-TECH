@@ -75,6 +75,7 @@ class VaultViewModel @Inject constructor(
     private val toggle: ToggleConversationStateUseCase,
     settings: SettingsRepository,
     private val vaultPin: com.filestech.sms.security.VaultPinManager,
+    private val biometricGate: com.filestech.sms.ui.security.BiometricGate,
     // v1.13.0 audit SEC-2 — vaultPinRequired flow appelle `isVaultPinConfigured`
     // qui fait un DataStore.first() (I/O). Routé via `withContext(io)` pour ne
     // pas bloquer le Main thread pendant le cold-start.
@@ -164,6 +165,12 @@ class VaultViewModel @Inject constructor(
      * passed the AppLock (PIN / biometric / disabled lock), so it is a fair second-factor.
      */
     fun markUnlocked() = vault.markUnlocked()
+
+    /** v1.25.3 — voir [com.filestech.sms.ui.security.BiometricGate]. Le coffre exige la même
+     *  preuve cryptographique que l'écran de verrouillage : il garde des conversations. */
+    suspend fun prepareBiometricGate() = biometricGate.prepare()
+
+    fun confirmBiometricGate(cipher: javax.crypto.Cipher?): Boolean = biometricGate.confirm(cipher)
 
     fun toggleSelection(id: Long) {
         _selectedIds.update { current -> if (current.contains(id)) current - id else current + id }
@@ -301,41 +308,65 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // PinEntryDialog. onError = ce qu'on fait si l'user annule ou si une erreur
     // matérielle se produit (différencié : LaunchedEffect → onBack ; bouton
     // dialog → garder le dialog ouvert pour retentative PIN/pass).
-    val triggerBiometric: (onError: () -> Unit) -> Unit = remember {
+    val gateScope = androidx.compose.runtime.rememberCoroutineScope()
+    val triggerBiometric: (onError: () -> Unit) -> Unit = remember(gateScope) {
         { onError ->
             val activity = ctx.findVaultActivity()
             if (activity == null) {
                 onError()
             } else {
-                val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
-                val prompt = androidx.biometric.BiometricPrompt(
-                    activity,
-                    executor,
-                    object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-                        override fun onAuthenticationSucceeded(
-                            result: androidx.biometric.BiometricPrompt.AuthenticationResult,
-                        ) {
-                            vaultPinPassed = true
-                            viewModel.markUnlocked()
-                            unlocked = true
-                        }
-
-                        override fun onAuthenticationError(
-                            errorCode: Int,
-                            errString: CharSequence,
-                        ) {
+                gateScope.launch {
+                    // v1.25.3 — clé Keystore adossée à la biométrie, préparée hors thread principal.
+                    // `Invalidated` est traité comme une indisponibilité : c'est [LockScreen] qui
+                    // désarme le réglage au prochain déverrouillage de l'app, le coffre n'ayant pas
+                    // autorité sur le mode de verrouillage global.
+                    val prepared = viewModel.prepareBiometricGate()
+                    val gateCipher = when (prepared) {
+                        is com.filestech.sms.ui.security.BiometricGate.Prepared.Ready -> prepared.cipher
+                        else -> {
                             onError()
+                            return@launch
                         }
-                    },
-                )
-                val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(ctx.getString(R.string.vault_biometric_title))
-                    .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))
-                    .setNegativeButtonText(ctx.getString(R.string.action_cancel))
-                    .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
-                    .setConfirmationRequired(false)
-                    .build()
-                prompt.authenticate(info)
+                    }
+                    val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
+                    val prompt = androidx.biometric.BiometricPrompt(
+                        activity,
+                        executor,
+                        object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationSucceeded(
+                                result: androidx.biometric.BiometricPrompt.AuthenticationResult,
+                            ) {
+                                // Sans `doFinal` accepté par le Keystore, le succès annoncé
+                                // n'est adossé à aucune clé : on refuse l'ouverture du coffre.
+                                if (viewModel.confirmBiometricGate(result.cryptoObject?.cipher)) {
+                                    vaultPinPassed = true
+                                    viewModel.markUnlocked()
+                                    unlocked = true
+                                } else {
+                                    onError()
+                                }
+                            }
+
+                            override fun onAuthenticationError(
+                                errorCode: Int,
+                                errString: CharSequence,
+                            ) {
+                                onError()
+                            }
+                        },
+                    )
+                    val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                        .setTitle(ctx.getString(R.string.vault_biometric_title))
+                        .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))
+                        .setNegativeButtonText(ctx.getString(R.string.action_cancel))
+                        .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
+                        .setConfirmationRequired(false)
+                        .build()
+                    prompt.authenticate(
+                        info,
+                        androidx.biometric.BiometricPrompt.CryptoObject(gateCipher),
+                    )
+                }
             }
         }
     }

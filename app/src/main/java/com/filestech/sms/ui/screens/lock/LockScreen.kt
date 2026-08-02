@@ -43,8 +43,10 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.withResumed
 import com.filestech.sms.R
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.settings.LockMode
@@ -64,7 +66,17 @@ import javax.inject.Inject
 class LockViewModel @Inject constructor(
     val appLock: AppLockManager,
     settings: SettingsRepository,
+    private val biometricGate: com.filestech.sms.ui.security.BiometricGate,
 ) : ViewModel() {
+
+    /**
+     * v1.25.3 — prépare la clé Keystore adossée à la biométrie. Suspend : la génération touche le
+     * matériel sécurisé et n'a rien à faire sur le thread principal.
+     */
+    suspend fun prepareBiometricGate() = biometricGate.prepare()
+
+    /** Consomme le `Cipher` rendu par le prompt — c'est lui qui fait preuve, pas le callback. */
+    fun confirmBiometricGate(cipher: javax.crypto.Cipher?): Boolean = biometricGate.confirm(cipher)
 
     /** Current lock mode — drives whether the biometric prompt fires at screen entry. */
     val lockMode: StateFlow<LockMode> = settings.flow
@@ -124,10 +136,19 @@ fun LockScreen(
     //  - the user has BIOMETRIC mode armed,
     //  - the session is still Locked (not LockedOut — biometric must NOT bypass the cool-down),
     //  - the user has not yet tapped "Use PIN" in the prompt.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // v1.25.3 — garde anti-empilement. Préparer la clé Keystore puis attendre `withResumed`
+    // introduit une fenêtre asynchrone entre le déclenchement de cet effet et l'affichage du
+    // prompt. Comme il se relance sur chaque changement de `state`, deux prompts pouvaient s'y
+    // chevaucher — et [VaultScreen] documente que certains OEM Samsung/Xiaomi les empilent au
+    // lieu d'ignorer le second. Le drapeau survit aux relances (`remember` sans clé) et n'est
+    // rendu qu'en cas d'échec, quand un nouvel essai est légitime.
+    var promptInFlight by remember { mutableStateOf(false) }
     LaunchedEffect(state, lockMode, fallbackToPin) {
         if (lockMode != LockMode.BIOMETRIC) return@LaunchedEffect
         if (state !is AppLockManager.LockState.Locked) return@LaunchedEffect
         if (fallbackToPin) return@LaunchedEffect
+        if (promptInFlight) return@LaunchedEffect
         val activity = context.findFragmentActivity() ?: return@LaunchedEffect
 
         // v1.25.3 (audit H2) — Classe 3 exigée, via l'unique politique [StrongBiometrics].
@@ -142,6 +163,26 @@ fun LockScreen(
             return@LaunchedEffect
         }
 
+        // v1.25.3 — clé Keystore adossée à la biométrie. Préparée AVANT le prompt, hors du
+        // thread principal (la génération touche le matériel sécurisé).
+        val prepared = viewModel.prepareBiometricGate()
+        val gateCipher = when (prepared) {
+            is com.filestech.sms.ui.security.BiometricGate.Prepared.Ready -> prepared.cipher
+            com.filestech.sms.ui.security.BiometricGate.Prepared.Invalidated -> {
+                // Empreintes ré-inscrites : la clé ne s'ouvrira plus jamais. Désarmer est
+                // impératif — la laisser armée enfermerait l'utilisateur dehors.
+                viewModel.disableBiometricSilently()
+                fallbackToPin = true
+                return@LaunchedEffect
+            }
+            com.filestech.sms.ui.security.BiometricGate.Prepared.Unavailable -> {
+                // Keystore capricieux : on retombe sur le PIN sans désarmer le réglage, la panne
+                // pouvant être passagère.
+                fallbackToPin = true
+                return@LaunchedEffect
+            }
+        }
+
         val challenge = viewModel.beginBiometricChallenge()
         val executor = ContextCompat.getMainExecutor(activity)
         val prompt = BiometricPrompt(
@@ -149,10 +190,18 @@ fun LockScreen(
             executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    viewModel.markBiometricUnlocked(challenge)
+                    // La preuve est ici : sans `doFinal` accepté par le Keystore, le succès
+                    // annoncé n'est adossé à aucune clé et on refuse le déverrouillage.
+                    promptInFlight = false
+                    if (viewModel.confirmBiometricGate(result.cryptoObject?.cipher)) {
+                        viewModel.markBiometricUnlocked(challenge)
+                    } else {
+                        fallbackToPin = true
+                    }
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    promptInFlight = false
                     Timber.i("BiometricPrompt error %d: %s", errorCode, errString)
                     when (errorCode) {
                         BiometricPrompt.ERROR_NEGATIVE_BUTTON,
@@ -186,7 +235,16 @@ fun LockScreen(
             .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
             .setConfirmationRequired(false)
             .build()
-        prompt.authenticate(info)
+        // v1.25.3 — `withResumed` : `authenticate()` after `onSaveInstanceState` crashes the
+        // host FragmentActivity. Ce LaunchedEffect vit dans la composition, qui survit à un
+        // passage en arrière-plan ; sans cette attente, un prompt préparé pendant que l'écran
+        // part en arrière-plan partait au mauvais moment. Attendre le premier plan plutôt que
+        // renoncer : un garde `if (!isResumed) return` annulerait le prompt au lancement, quand
+        // l'activité n'est pas encore RESUMED.
+        promptInFlight = true
+        lifecycleOwner.lifecycle.withResumed {
+            prompt.authenticate(info, BiometricPrompt.CryptoObject(gateCipher))
+        }
     }
 
     Scaffold { padding ->
