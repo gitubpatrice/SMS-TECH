@@ -318,11 +318,12 @@ class ConversationsViewModel @Inject constructor(
     }
 
     /**
-     * Blocks **every recipient** of a conversation, then deletes the conversation locally and
-     * from the system content provider. The user-intent is "I never want to hear from this
-     * person again" — keeping the history around half-deletes the gesture (the filter in
-     * `observeAll` hides the row but the SMS still sit in Room + system provider). One-shot
-     * cleanup removes both surfaces.
+     * Blocks **every recipient** of a conversation.
+     *
+     * v1.25.4 — la description d'origine (« puis supprime la conversation, ici comme dans le
+     * fournisseur système ») ne vaut plus : la suppression a été retirée en v1.25.3 après qu'elle
+     * a réellement détruit des conversations. La conversation reste, marquée `Conversation.blocked`
+     * et regroupée en fin de liste ; l'effacement est un geste distinct, explicite et confirmé.
      *
      * Each address is sent individually to [BlockNumberUseCase] so a group-MMS with one already-
      * blocked party still adds the others without partial-failure noise. Idempotent.

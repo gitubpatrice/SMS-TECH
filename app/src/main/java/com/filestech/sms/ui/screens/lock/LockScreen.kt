@@ -235,15 +235,31 @@ fun LockScreen(
             .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
             .setConfirmationRequired(false)
             .build()
-        // v1.25.3 — `withResumed` : `authenticate()` after `onSaveInstanceState` crashes the
-        // host FragmentActivity. Ce LaunchedEffect vit dans la composition, qui survit à un
-        // passage en arrière-plan ; sans cette attente, un prompt préparé pendant que l'écran
-        // part en arrière-plan partait au mauvais moment. Attendre le premier plan plutôt que
-        // renoncer : un garde `if (!isResumed) return` annulerait le prompt au lancement, quand
-        // l'activité n'est pas encore RESUMED.
+        // v1.25.3 — `withResumed` : passé `onSaveInstanceState`, `authenticate()` renonce.
+        // androidx.biometric 1.1.0 teste `FragmentManager.isStateSaved()`, journalise « Unable to
+        // start authentication. Called after onSaveInstanceState(). » et retourne — sans lever, et
+        // surtout **sans appeler aucun callback** : le prompt ne s'affiche jamais et rien ne
+        // signale l'abandon. Ce LaunchedEffect vit dans la composition, qui survit à un passage en
+        // arrière-plan ; sans cette attente, un prompt préparé pendant que l'écran part en
+        // arrière-plan se perdait ainsi. Attendre le premier plan plutôt que renoncer : un garde
+        // `if (!isResumed) return` annulerait le prompt au lancement, quand l'activité n'est pas
+        // encore RESUMED.
+        //
+        // v1.25.4 — `try/finally` : `promptInFlight` était levé AVANT une suspension, et seuls les
+        // callbacks le rabaissaient. Une annulation du LaunchedEffect pendant l'attente
+        // n'en déclenche aucun, et le drapeau — un `remember` sans clé — survit à la relance de
+        // l'effet : le garde d'entrée bloquait alors définitivement toute nouvelle tentative, ne
+        // laissant plus que le repli PIN. On ne relâche que si `authenticate()` n'a pas été
+        // atteint ; sinon les callbacks restent seuls maîtres du drapeau.
         promptInFlight = true
-        lifecycleOwner.lifecycle.withResumed {
-            prompt.authenticate(info, BiometricPrompt.CryptoObject(gateCipher))
+        var handedOff = false
+        try {
+            lifecycleOwner.lifecycle.withResumed {
+                prompt.authenticate(info, BiometricPrompt.CryptoObject(gateCipher))
+                handedOff = true
+            }
+        } finally {
+            if (!handedOff) promptInFlight = false
         }
     }
 

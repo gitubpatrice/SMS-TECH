@@ -31,4 +31,14 @@ interface BlockedNumberDao {
     /** Snapshot of every blocked normalized number — used to filter SMS imports + UI lists. */
     @Query("SELECT normalized_number FROM blocked_numbers")
     suspend fun allNormalized(): List<String>
+
+    /**
+     * v1.25.4 — instantané complet, `raw_number` compris.
+     *
+     * Requis par `BlockedNumbersImporter.rekeyLegacyEntries()` : recalculer la clé d'une entrée
+     * héritée suppose de repartir de la forme **brute** saisie à l'origine, la clé enregistrée
+     * ayant déjà perdu ce qui permet de la recalculer (les lettres, notamment).
+     */
+    @Query("SELECT * FROM blocked_numbers")
+    suspend fun all(): List<BlockedNumberEntity>
 }

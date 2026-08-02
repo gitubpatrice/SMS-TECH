@@ -1,7 +1,7 @@
 package com.filestech.sms.data.repository
 
 import android.os.Build
-import com.filestech.sms.core.ext.normalizePhone
+import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.blocking.BlockedNumberSystem
@@ -30,24 +30,22 @@ class BlockedNumberRepositoryImpl @Inject constructor(
         dao.observe().map { list -> list.map { it.toDomain() } }.flowOn(io)
 
     /**
-     * v1.25.3 — clé de stockage repliée sur le libellé brut quand la normalisation ne rend rien.
+     * v1.25.4 — [com.filestech.sms.core.ext.blockKey] remplace `normalizePhone()` sur **tous** les
+     * accès à la table, et c'est la même fonction que celle du marquage dans la liste.
      *
-     * `normalizePhone()` ne garde que les chiffres, `+` et `*#` : un expéditeur alphanumérique
-     * (« SFR », « Free ») se réduisait donc à la chaîne **vide**. Toutes ces entrées partageaient
-     * alors la même clé, et bloquer un seul de ces expéditeurs les bloquait **tous** — sans que
-     * rien ne l'indique. Même repli que [com.filestech.sms.domain.model.PhoneAddress.of].
+     * La v1.25.3 en avait deux : une égalité stricte ici, un rapprochement permissif à l'affichage.
+     * Un numéro saisi en `+33…` dans les Réglages s'affichait donc « Bloqué » sur une conversation
+     * enregistrée en `0…`, pendant que ce `isBlocked` répondait `false` et laissait les messages
+     * arriver. La clé partagée supprime l'écart au lieu de le rattraper.
      */
-    private fun blockKey(rawNumber: String): String =
-        rawNumber.normalizePhone().ifEmpty { rawNumber.trim() }
-
     override suspend fun isBlocked(rawNumber: String): Boolean = withContext(io) {
-        val key = blockKey(rawNumber)
+        val key = rawNumber.blockKey()
         key.isNotEmpty() && dao.isBlocked(key)
     }
 
     override suspend fun block(rawNumber: String, label: String?): Outcome<Unit> = withContext(io) {
         if (rawNumber.isBlank()) return@withContext Outcome.Failure(AppError.Validation("number is blank"))
-        val normalized = blockKey(rawNumber)
+        val normalized = rawNumber.blockKey()
         val systemUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) system.block(rawNumber) else null
         dao.upsert(
             BlockedNumberEntity(
@@ -63,13 +61,13 @@ class BlockedNumberRepositoryImpl @Inject constructor(
 
     override suspend fun unblock(rawNumber: String): Outcome<Unit> = withContext(io) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) system.unblock(rawNumber)
-        dao.deleteByNormalized(blockKey(rawNumber))
+        dao.deleteByNormalized(rawNumber.blockKey())
         Outcome.Success(Unit)
     }
 
     override suspend fun mirrorFromSystem(rawNumber: String): Outcome<Unit> = withContext(io) {
         if (rawNumber.isBlank()) return@withContext Outcome.Failure(AppError.Validation("number is blank"))
-        val normalized = blockKey(rawNumber)
+        val normalized = rawNumber.blockKey()
         // No-op when already mirrored — keeps `created_at` stable and avoids a write storm at
         // boot when nothing has changed since last launch.
         if (dao.isBlocked(normalized)) return@withContext Outcome.Success(Unit)

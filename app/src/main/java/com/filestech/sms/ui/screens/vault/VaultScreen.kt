@@ -40,8 +40,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.withResumed
 import com.filestech.sms.R
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.datastore.SettingsRepository
@@ -309,63 +311,100 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // matérielle se produit (différencié : LaunchedEffect → onBack ; bouton
     // dialog → garder le dialog ouvert pour retentative PIN/pass).
     val gateScope = androidx.compose.runtime.rememberCoroutineScope()
-    val triggerBiometric: (onError: () -> Unit) -> Unit = remember(gateScope) {
-        { onError ->
+    val gateLifecycle = LocalLifecycleOwner.current
+    // v1.25.4 — mêmes deux gardes que [com.filestech.sms.ui.screens.lock.LockScreen], absents ici
+    // alors que la v1.25.3 y a introduit la même fenêtre asynchrone (`prepareBiometricGate` est
+    // suspend et touche le matériel sécurisé avant que le prompt ne parte). Le coffre garde des
+    // conversations : il n'a aucune raison d'être moins protégé que l'écran de verrouillage.
+    val promptInFlight = remember { mutableStateOf(false) }
+    val triggerBiometric: (onError: () -> Unit) -> Unit = remember(gateScope, gateLifecycle) {
+        fun(onError: () -> Unit) {
             val activity = ctx.findVaultActivity()
             if (activity == null) {
                 onError()
-            } else {
+            } else if (!promptInFlight.value) {
+                // Un prompt déjà en vol fait tomber l'appel dans l'absence de branche `else` :
+                // on l'ignore en silence, sans `onError`. Celui-ci ramène en arrière ou rouvre le
+                // dialogue PIN, ce qui saborderait le prompt effectivement affiché.
+                //
+                // Le drapeau se lève **ici**, avant le `launch` : `prepareBiometricGate()` est
+                // suspend, donc le lever à l'intérieur laisserait deux appels rapprochés franchir
+                // le garde pendant la préparation. Contrairement au `LaunchedEffect` de
+                // [com.filestech.sms.ui.screens.lock.LockScreen], que le changement de clé annule
+                // avant de le relancer, ce lambda est appelable depuis deux endroits (l'effet
+                // d'entrée et le bouton du dialogue PIN) et rien ne sérialise ses invocations.
+                promptInFlight.value = true
                 gateScope.launch {
-                    // v1.25.3 — clé Keystore adossée à la biométrie, préparée hors thread principal.
-                    // `Invalidated` est traité comme une indisponibilité : c'est [LockScreen] qui
-                    // désarme le réglage au prochain déverrouillage de l'app, le coffre n'ayant pas
-                    // autorité sur le mode de verrouillage global.
-                    val prepared = viewModel.prepareBiometricGate()
-                    val gateCipher = when (prepared) {
-                        is com.filestech.sms.ui.security.BiometricGate.Prepared.Ready -> prepared.cipher
-                        else -> {
-                            onError()
-                            return@launch
+                    // `handedOff` distingue « le prompt est parti, les callbacks ont la main » de
+                    // « on a renoncé avant » — seul ce second cas doit rabaisser le drapeau.
+                    var handedOff = false
+                    try {
+                        // v1.25.3 — clé Keystore adossée à la biométrie, préparée hors thread
+                        // principal. `Invalidated` est traité comme une indisponibilité : c'est
+                        // [LockScreen] qui désarme le réglage au prochain déverrouillage de l'app,
+                        // le coffre n'ayant pas autorité sur le mode de verrouillage global.
+                        val prepared = viewModel.prepareBiometricGate()
+                        val gateCipher = when (prepared) {
+                            is com.filestech.sms.ui.security.BiometricGate.Prepared.Ready -> prepared.cipher
+                            else -> {
+                                onError()
+                                return@launch
+                            }
                         }
-                    }
-                    val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
-                    val prompt = androidx.biometric.BiometricPrompt(
-                        activity,
-                        executor,
-                        object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-                            override fun onAuthenticationSucceeded(
-                                result: androidx.biometric.BiometricPrompt.AuthenticationResult,
-                            ) {
-                                // Sans `doFinal` accepté par le Keystore, le succès annoncé
-                                // n'est adossé à aucune clé : on refuse l'ouverture du coffre.
-                                if (viewModel.confirmBiometricGate(result.cryptoObject?.cipher)) {
-                                    vaultPinPassed = true
-                                    viewModel.markUnlocked()
-                                    unlocked = true
-                                } else {
+                        val executor = androidx.core.content.ContextCompat.getMainExecutor(activity)
+                        val prompt = androidx.biometric.BiometricPrompt(
+                            activity,
+                            executor,
+                            object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                                override fun onAuthenticationSucceeded(
+                                    result: androidx.biometric.BiometricPrompt.AuthenticationResult,
+                                ) {
+                                    promptInFlight.value = false
+                                    // Sans `doFinal` accepté par le Keystore, le succès annoncé
+                                    // n'est adossé à aucune clé : on refuse l'ouverture du coffre.
+                                    if (viewModel.confirmBiometricGate(result.cryptoObject?.cipher)) {
+                                        vaultPinPassed = true
+                                        viewModel.markUnlocked()
+                                        unlocked = true
+                                    } else {
+                                        onError()
+                                    }
+                                }
+
+                                override fun onAuthenticationError(
+                                    errorCode: Int,
+                                    errString: CharSequence,
+                                ) {
+                                    promptInFlight.value = false
                                     onError()
                                 }
-                            }
-
-                            override fun onAuthenticationError(
-                                errorCode: Int,
-                                errString: CharSequence,
-                            ) {
-                                onError()
-                            }
-                        },
-                    )
-                    val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                        .setTitle(ctx.getString(R.string.vault_biometric_title))
-                        .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))
-                        .setNegativeButtonText(ctx.getString(R.string.action_cancel))
-                        .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
-                        .setConfirmationRequired(false)
-                        .build()
-                    prompt.authenticate(
-                        info,
-                        androidx.biometric.BiometricPrompt.CryptoObject(gateCipher),
-                    )
+                            },
+                        )
+                        val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                            .setTitle(ctx.getString(R.string.vault_biometric_title))
+                            .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))
+                            .setNegativeButtonText(ctx.getString(R.string.action_cancel))
+                            .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
+                            .setConfirmationRequired(false)
+                            .build()
+                        // v1.25.4 — `withResumed` : passé `onSaveInstanceState`, androidx.biometric
+                        // 1.1.0 renonce silencieusement (test `isStateSaved()`, journalisation puis
+                        // retour) et n'appelle **aucun** callback. Le coffre restait alors sans
+                        // prompt et sans repli, `onError` n'étant jamais atteint — il fallait sortir
+                        // au bouton retour. On attend le premier plan au lieu de renoncer.
+                        gateLifecycle.lifecycle.withResumed {
+                            prompt.authenticate(
+                                info,
+                                androidx.biometric.BiometricPrompt.CryptoObject(gateCipher),
+                            )
+                            handedOff = true
+                        }
+                    } finally {
+                        // Renoncement avant l'envoi (clé indisponible, annulation pendant
+                        // l'attente) : aucun callback ne viendra rabaisser le drapeau, et le
+                        // laisser levé condamnerait toute tentative ultérieure.
+                        if (!handedOff) promptInFlight.value = false
+                    }
                 }
             }
         }

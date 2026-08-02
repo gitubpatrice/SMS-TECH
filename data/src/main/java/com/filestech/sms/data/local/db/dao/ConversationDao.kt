@@ -23,9 +23,12 @@ interface ConversationDao {
 
     /**
      * One-shot **unfiltered** snapshot of every non-vault conversation (both archived and not).
-     * Used by [com.filestech.sms.data.blocking.BlockedNumbersImporter.purgeMatchingConversations]
-     * which **must** see the rows the live `observeAll` filter is hiding (otherwise the purge
-     * runs on already-filtered data and never finds anything to delete — chicken-and-egg).
+     * Used by [com.filestech.sms.data.blocking.BlockedNumbersImporter.purgeMatchingConversations].
+     *
+     * v1.25.4 — le motif d'origine (« `observeAll` masque les conversations bloquées, la purge doit
+     * pouvoir les voir ») a disparu avec le masquage : depuis la v1.25.3 elles restent listées et
+     * portent simplement `Conversation.blocked`. L'instantané reste néanmoins la bonne source pour
+     * la purge : il ne dépend d'aucun flux d'affichage et lui donne l'état brut de la base.
      */
     @Query(
         """

@@ -3,7 +3,7 @@ package com.filestech.sms.data.repository
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
-import com.filestech.sms.core.ext.blockMatchKey
+import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.core.result.AppError
@@ -72,10 +72,22 @@ class ConversationRepositoryImpl @Inject constructor(
      * distinguer « masqué » de « effacé », et aucun retour lui confirmant que le blocage avait
      * pris. Elles restent désormais visibles, regroupées et signalées par l'écran de liste.
      *
-     * Le rapprochement passe par [com.filestech.sms.core.ext.blockMatchKey] : suffixe de 8 chiffres
-     * pour les numéros — pour qu'une forme internationale (`+33612345678`) rejoigne la forme
-     * nationale stockée dans `content://sms` (`0612345678`) — et libellé en minuscules pour les
-     * expéditeurs alphanumériques, qui n'ont aucun chiffre et se confondaient tous.
+     * v1.25.4 — le marquage reproduit **exactement** le test que fait `BlockedNumberRepository.
+     * isBlocked` : appartenance de `raw.blockKey()` à l'ensemble des clés enregistrées. C'est la
+     * même comparaison, sur la même clé, donc le badge « Bloqué » ne peut plus affirmer ce que le
+     * filtre de réception ne tient pas. La v1.25.3 comparait ici des suffixes de 8 chiffres pendant
+     * que le filtre exigeait une égalité stricte, d'où des conversations annoncées bloquées qui
+     * continuaient de recevoir.
+     *
+     * Deux précautions qui ne se voient pas :
+     * - on part de [com.filestech.sms.domain.model.PhoneAddress.raw], **jamais** de `normalized` :
+     *   ce dernier a déjà perdu les lettres (« SFR 123 » y devient « 123 »), et
+     *   [com.filestech.sms.core.ext.blockKey] a précisément besoin de les voir pour ne pas confondre
+     *   l'opérateur avec le code court homonyme ;
+     * - les clés enregistrées sont prises telles quelles, sans re-normalisation. Une entrée héritée
+     *   d'une version antérieure ne correspondra donc à rien tant que
+     *   `BlockedNumbersImporter.rekeyLegacyEntries()` ne l'a pas convertie — une conversation non
+     *   marquée, jamais un badge mensonger. L'erreur penche du bon côté.
      *
      * Un groupe mêlant un participant bloqué et un autorisé n'est **pas** marqué : le filtre de
      * réception dans `SmsDeliverReceiver` écarte déjà les messages du seul participant bloqué.
@@ -86,13 +98,13 @@ class ConversationRepositoryImpl @Inject constructor(
             blockedRepo.observe(),
         ) { rows, blocked ->
             val blockedKeys = blocked
-                .map { it.normalizedNumber.blockMatchKey() }
+                .map { it.normalizedNumber }
                 .filter { it.isNotEmpty() }
                 .toHashSet()
             rows.map { row ->
                 val conv = row.toDomain()
                 val allBlocked = conv.addresses.isNotEmpty() &&
-                    conv.addresses.all { addr -> addr.normalized.blockMatchKey() in blockedKeys }
+                    conv.addresses.all { addr -> addr.raw.blockKey() in blockedKeys }
                 if (allBlocked) conv.copy(blocked = true) else conv
             }
         }.flowOn(io)

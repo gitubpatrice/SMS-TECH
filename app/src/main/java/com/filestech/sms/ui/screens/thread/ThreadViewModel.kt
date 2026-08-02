@@ -1275,10 +1275,11 @@ class ThreadViewModel @Inject constructor(
                     .getOrNull() is Outcome.Success
             }
             // v1.25.3 — bloquer ne SUPPRIME plus la conversation. Le `delete()` datait de la
-            // v1.2.5, quand un blocage laissait le fil visible dans la liste ; depuis,
-            // `ConversationRepositoryImpl.observeAll` masque toute conversation dont chaque
-            // adresse est bloquée. La suppression était donc devenue redondante — et
-            // irréversible, alors que le masquage se défait d'un simple déblocage.
+            // v1.2.5, quand un blocage laissait le fil visible dans la liste ; il avait ensuite
+            // doublonné avec un masquage, puis survécu à son retrait. Il était donc redondant —
+            // et irréversible, alors que le marquage se défait d'un simple déblocage.
+            // v1.25.4 — `ConversationRepositoryImpl.observeAll` ne masque plus rien : il pose
+            // `Conversation.blocked` et la liste regroupe ces fils sous « Bloqués ».
             when {
                 blocked == addresses.size -> {
                     _events.tryEmit(Event.ShowSnackbar(snackNumbersBlocked()))

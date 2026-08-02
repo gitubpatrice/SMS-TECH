@@ -69,21 +69,48 @@ fun String.phoneSuffix8(): String {
 }
 
 /**
- * Clé de rapprochement d'un expéditeur avec la liste noire, **pour l'affichage**.
+ * Nombre de chiffres significatifs retenus pour rapprocher deux écritures d'un même numéro.
  *
- * v1.25.3 — [phoneSuffix8] seul ne suffit pas : un expéditeur alphanumérique (« SFR », « Free »,
- * « ORANGE ») n'a aucun chiffre, sa clé est donc vide et se confond avec celle de tous les autres.
- * On bascule sur le libellé lui-même dès que la chaîne contient une lettre — y compris pour les
- * formes mixtes (« SFR2 »), qui sinon se réduiraient au seul chiffre « 2 » et entreraient en
- * collision avec n'importe quel numéro finissant par 2.
- *
- * Réservé à la mise en évidence dans la liste. Le filtrage réel des envois et des réceptions
- * reste sur une égalité stricte : le rapprochement par suffixe de 8 chiffres confondrait
- * `0612345678` et `0712345678`, et bloquerait de vrais correspondants.
+ * **9 et non 8.** Le numéro national significatif français fait 9 chiffres (`612345678` pour
+ * « 06 12 34 56 78 ») : s'arrêter à 8 amputait le premier, celui-là même qui sépare un mobile
+ * `06…` d'un `07…`. `0612345678` et `0712345678` partageaient donc leur clé — c'est ce qui avait
+ * fait écarter le rapprochement permissif du filtrage réel, et donc laissé l'affichage et
+ * l'application diverger. À 9 chiffres les deux formes se distinguent, tout en continuant
+ * d'absorber le passage international ↔ national (`+33612345678` → `612345678`).
  */
-fun String.blockMatchKey(): String {
+private const val BLOCK_KEY_SIGNIFICANT_DIGITS = 9
+
+/**
+ * Clé canonique d'un expéditeur dans la liste noire — **la seule**, côté stockage comme côté
+ * affichage.
+ *
+ * v1.25.4 — l'unicité est le correctif. La v1.25.3 avait deux règles : `normalizePhone()` pour
+ * écrire et lire en base (égalité stricte), un suffixe de 8 chiffres pour teinter la liste. Une
+ * conversation pouvait donc s'afficher « Bloqué » alors que le filtre de réception, lui, ne
+ * reconnaissait pas le numéro et laissait passer les messages. Une même fonction des deux côtés
+ * rend cette divergence structurellement impossible.
+ *
+ * Deux régimes, selon la nature de l'expéditeur :
+ * - **alphanumérique** (« SFR », « SFR 123 », « Free ») → le libellé en minuscules. `normalizePhone`
+ *   n'y gardait que les chiffres : « SFR » se réduisait à la chaîne vide et « SFR 123 » au code
+ *   court « 123 », si bien que bloquer l'un bloquait l'autre.
+ * - **numérique** → les [BLOCK_KEY_SIGNIFICANT_DIGITS] derniers chiffres, ou le nombre exact de
+ *   chiffres s'il y en a moins (codes courts : « 123 » reste « 123 »).
+ *
+ * La bascule se fait sur la **présence d'une lettre**, avant tout retrait de caractères : c'est ce
+ * qui distingue « SFR 123 » du code court « 123 ». Appliquer cette fonction à une chaîne déjà
+ * normalisée la priverait de cette information — elle attend la forme brute.
+ */
+fun String.blockKey(): String {
     val trimmed = trim()
-    return if (trimmed.any { it.isLetter() }) trimmed.lowercase() else trimmed.phoneSuffix8()
+    if (trimmed.any { it.isLetter() }) return trimmed.lowercase()
+    val digits = trimmed.filter { it.isDigit() }
+    if (digits.isEmpty()) return trimmed
+    return if (digits.length <= BLOCK_KEY_SIGNIFICANT_DIGITS) {
+        digits
+    } else {
+        digits.takeLast(BLOCK_KEY_SIGNIFICANT_DIGITS)
+    }
 }
 
 /**
