@@ -1,0 +1,7 @@
+Vault security.
+
+The vault could open before its second factor: while settings were still loading, it treated itself as unprotected. Its contents then stayed visible behind the passcode dialog. Fixed, with a second barrier on display.
+
+A single back gesture from a vault conversation no longer leaves two screens at once.
+
+Blocking: blocking a named sender ("SFR 123") no longer blocks the short code of the same name. A number entered as +33 now really filters a conversation stored as 06.
