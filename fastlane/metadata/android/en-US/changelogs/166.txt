@@ -1,0 +1,11 @@
+v1.25.3 — Blocking no longer deletes, scheduled sends fixed
+
+• IMPORTANT: blocking a conversation no longer deletes it. It
+  stays at the bottom of the list, marked in orange, and comes
+  back if you unblock. An automatic purge used to delete it,
+  with no warning.
+• Scheduled sends: a failure is retried again, and shows up in
+  a "Failed" section where you can send it again.
+• Biometric unlock is now backed by the Keystore: Class 3 only,
+  vault included.
+• "About" screen fully translated.
