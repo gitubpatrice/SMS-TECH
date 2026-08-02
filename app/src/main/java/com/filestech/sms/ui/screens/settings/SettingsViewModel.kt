@@ -125,9 +125,11 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Forces the blocked-conversation purge synchronously and reports the count via [events].
-     * Uses the same logic that runs at boot — but here the user explicitly opted in, so we
-     * don't second-guess them with a confirmation dialog (the operation only deletes rows the
-     * system blocklist already considers undesired).
+     * v1.25.3 — c'est désormais le **seul** déclencheur de cette purge. Elle s'enchaînait
+     * auparavant à `BlockedNumbersImporter.importFromSystem()`, donc au démarrage de l'app et à
+     * chaque synchronisation : bloquer un numéro effaçait la conversation en tâche de fond,
+     * définitivement et sans avertissement. Ici l'utilisateur la demande, et l'écran le prévient
+     * (`settings_purge_blocked_confirm_body` annonce l'irréversibilité et le fournisseur système).
      */
     fun purgeBlockedConversations() = viewModelScope.launch {
         val count = runCatching { blockedImporter.purgeMatchingConversations() }.getOrDefault(0)

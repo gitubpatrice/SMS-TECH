@@ -2,6 +2,7 @@ package com.filestech.sms.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,9 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.filestech.sms.domain.model.Conversation
+import com.filestech.sms.ui.theme.BrandBlocked
+import com.filestech.sms.ui.theme.BrandDanger
 import com.filestech.sms.ui.util.relativeRowLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
 
@@ -63,15 +68,36 @@ fun ConversationRow(
      */
     subtitleNumber: String? = null,
     onLongClick: (() -> Unit)? = null,
+    /**
+     * v1.25.3 — corbeille de fin de ligne, affichée **uniquement** sur une conversation bloquée.
+     * Les conversations bloquées restent désormais dans la liste au lieu d'être supprimées : c'est
+     * là, et seulement là, qu'un accès direct à la suppression a du sens. Ailleurs, l'appui long
+     * et le balayage l'offrent déjà, et un troisième chemin alourdirait chaque ligne pour rien.
+     */
+    onDelete: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val title = conversation.displayName ?: conversation.addresses.joinToString { it.raw }
     val unread = conversation.unreadCount > 0
 
+    // v1.25.3 — mise en évidence des conversations bloquées : fond rouge très pâle + bordure.
+    // Les modificateurs ne sont composés que dans ce cas, pour ne rien coûter aux lignes
+    // normales, qui sont l'écrasante majorité d'une liste.
+    val blockedDecoration = if (conversation.blocked) {
+        Modifier
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(BrandBlocked.copy(alpha = 0.08f))
+            .border(1.dp, BrandBlocked.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+    } else {
+        Modifier
+    }
+
     val formatters = rememberChatFormatters()
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(blockedDecoration)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -155,6 +181,31 @@ fun ConversationRow(
                 }
                 Spacer(Modifier.size(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // v1.25.3 — « Bloqué » sur la ligne d'aperçu et non sur celle du titre : cette
+                    // dernière se termine par l'horodatage relatif (« jeu. », « 14:32 »), et le
+                    // titre prenant toute la largeur restante, le libellé s'y retrouvait collé à
+                    // la date, les deux se lisant comme un seul bloc.
+                    //
+                    // Il double le fond et la bordure : la couleur seule ne doit jamais porter une
+                    // information (daltonisme, contraste réduit), et TalkBack n'annonce pas un
+                    // fond coloré.
+                    if (conversation.blocked) {
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(
+                                id = com.filestech.sms.R.string.conversation_blocked_label,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            color = BrandBlocked,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = " · ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
                     val draftText = conversation.draft
                     Text(
                         text = if (!draftText.isNullOrBlank()) {
@@ -173,6 +224,17 @@ fun ConversationRow(
                         Spacer(Modifier.width(8.dp))
                         UnreadChip(count = conversation.unreadCount)
                     }
+                }
+            }
+            if (conversation.blocked && onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = androidx.compose.ui.res.stringResource(
+                            id = com.filestech.sms.R.string.action_delete,
+                        ),
+                        tint = BrandDanger,
+                    )
                 }
             }
         }

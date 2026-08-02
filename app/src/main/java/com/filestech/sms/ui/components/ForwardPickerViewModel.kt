@@ -49,8 +49,13 @@ class ForwardPickerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             conversationRepo.observeAll(includeArchived = false).collect { list ->
+                // v1.25.3 — `observeAll` ne filtre plus les conversations bloquées : elles
+                // restent visibles dans la liste principale, signalées en rouge. Ici en
+                // revanche elles n'ont rien à faire — on ne propose pas de transférer un
+                // message vers un correspondant qu'on vient de bloquer.
+                val selectable = list.filterNot { it.blocked }
                 _state.update { current ->
-                    val next = current.copy(conversations = list)
+                    val next = current.copy(conversations = selectable)
                     next.copy(filtered = computeFiltered(next))
                 }
             }

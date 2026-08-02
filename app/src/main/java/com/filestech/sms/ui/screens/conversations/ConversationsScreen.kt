@@ -157,6 +157,15 @@ fun ConversationsScreen(
     var overflowOpen by remember { mutableStateOf(false) }
     // v1.8.0 — dialog de confirmation pour "Tout marquer comme lu".
     var showMarkAllReadConfirm by remember { mutableStateOf(false) }
+
+    // v1.25.3 — état des deux actions propres aux conversations bloquées, qui restent
+    // désormais dans la liste : suppression définitive et feuille Débloquer/Supprimer.
+    var pendingDeleteBlocked by remember {
+        mutableStateOf<com.filestech.sms.domain.model.Conversation?>(null)
+    }
+    var blockedActionsFor by remember {
+        mutableStateOf<com.filestech.sms.domain.model.Conversation?>(null)
+    }
     // v1.11.0 — Snackbar feedback pour les déplacements Vault. Utilise
     // SmsTechSnackbarHost (bleu marque succès / rouge erreur).
     val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
@@ -167,6 +176,10 @@ fun ConversationsScreen(
     // `LocalContextGetResourceValueCall` rate les changements de configuration (langue, thème)
     // parce que le `Context` capturé n'est pas relu à la recomposition.
     val blockFailedMessage = stringResource(R.string.snack_block_failed)
+
+    // Le message partiel porte des arguments connus seulement à l'exécution : on hisse le
+    // *format* ici (même raison que ci-dessus) et on l'applique dans le collecteur.
+    val blockPartialFormat = stringResource(R.string.snack_block_partial)
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -182,6 +195,15 @@ fun ConversationsScreen(
                     snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))
                 is ConversationsViewModel.Event.BlockFailed ->
                     snackbarHost.showError(blockFailedMessage)
+                is ConversationsViewModel.Event.BlockPartial ->
+                    snackbarHost.showError(
+                        String.format(
+                            java.util.Locale.getDefault(),
+                            blockPartialFormat,
+                            event.blocked,
+                            event.total,
+                        ),
+                    )
                 is ConversationsViewModel.Event.IAmOkDoneWithSms -> {
                     // v1.14.0 audit SEC-2 — différencier succès partiel vs
                     // échec total. Si sent=0 mais failed>0, le reset a eu
@@ -476,8 +498,16 @@ fun ConversationsScreen(
                     // liste de 200 conv qui se met à jour à chaque SMS entrant, on évite ~200
                     // allocations Color/frame → moindre pression GC sur low-end.
                     val dividerColor = cs.outlineVariant.copy(alpha = 0.4f)
+
+                    // v1.25.3 — les conversations dont tous les numéros sont bloqués ne sont plus
+                    // ni supprimées ni masquées : elles descendent en fin de liste sous un
+                    // en-tête dédié. Le tri d'origine est conservé à l'intérieur de chaque groupe
+                    // (`partition` est stable), donc rien ne bouge pour qui n'a rien bloqué.
+                    val (activeConversations, blockedConversations) =
+                        state.conversations.partition { !it.blocked }
+
                     items(
-                        state.conversations,
+                        activeConversations,
                         key = { it.id },
                         // Audit PERF-M2 (v1.14.8) — `contentType` stable indique au recycleur
                         // que toutes les rows partagent le même layout. Sans ce hint, Compose
@@ -528,10 +558,64 @@ fun ConversationsScreen(
                         )
                         HorizontalDivider(color = dividerColor)
                     }
+
+                    if (blockedConversations.isNotEmpty()) {
+                        item(key = "header-blocked", contentType = "header") {
+                            Text(
+                                text = stringResource(R.string.conversations_section_blocked),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = com.filestech.sms.ui.theme.BrandBlocked,
+                                modifier = Modifier.padding(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 20.dp,
+                                    bottom = 6.dp,
+                                ),
+                            )
+                        }
+                        items(
+                            blockedConversations,
+                            key = { it.id },
+                            contentType = { "blocked-row" },
+                        ) { conv ->
+                            // Ligne simple, sans balayage : le geste de balayage sert à répondre
+                            // et à supprimer sur une conversation active. Sur une bloquée, les
+                            // deux actions utiles sont explicites — corbeille rouge ici,
+                            // « Débloquer » dans la feuille d'appui long.
+                            ConversationRow(
+                                conversation = conv,
+                                showAvatars = state.settings.conversations.showAvatars,
+                                previewLines = state.settings.conversations.previewLines
+                                    .coerceIn(1, 2),
+                                // v1.25.3 — les lignes bloquées ne participent PAS au mode
+                                // sélection : elles utilisent `ConversationRow` nu, sans l'état
+                                // visuel de sélection de `SwipeableConversationRow`. Les y
+                                // inclure permettrait de sélectionner sans le voir, et une
+                                // action groupée porterait sur des fils invisiblement cochés.
+                                // Elles ont leurs deux actions propres, explicites.
+                                onClick = { onOpenThread(conv.id) },
+                                onLongClick = { blockedActionsFor = conv },
+                                onDelete = { pendingDeleteBlocked = conv },
+                            )
+                            HorizontalDivider(color = dividerColor)
+                        }
+                    }
                 }
             }
         }
     }
+
+    // v1.25.3 — dialogues propres aux conversations bloquées, extraits pour garder
+    // [ConversationsScreen] sous le seuil de complexité cyclomatique de detekt.
+    BlockedConversationDialogs(
+        pendingDelete = pendingDeleteBlocked,
+        actionsFor = blockedActionsFor,
+        onDismissDelete = { pendingDeleteBlocked = null },
+        onDismissActions = { blockedActionsFor = null },
+        onConfirmDelete = { id -> pendingDeleteBlocked = null; viewModel.delete(id) },
+        onUnblock = { conv -> blockedActionsFor = null; viewModel.unblock(conv) },
+        onRequestDelete = { conv -> blockedActionsFor = null; pendingDeleteBlocked = conv },
+    )
 
     // v1.8.0 — Dialog de confirmation pour "Tout marquer comme lu".
     // Action non destructive, dialog simple (pas d'autofocus complexe — c'est
@@ -902,20 +986,19 @@ private fun SwipeableConversationRow(
             onDismissRequest = { pendingBlock = false },
             title = { Text(stringResource(R.string.conversation_block_confirm_title)) },
             text = { Text(stringResource(R.string.conversation_block_confirm_body)) },
-            // v1.25.3 — libellé explicite + rouge destructif, comme les autres confirmations
-            // irréversibles de l'app. Ce dialogue était le seul geste destructeur rendu en
-            // bouton neutre, alors qu'il efface la conversation ET ses messages des deux bases.
             confirmButton = {
                 androidx.compose.material3.FilledTonalButton(
                     onClick = {
                         pendingBlock = false
                         onBlock()
                     },
+                    // v1.25.3 — orange « blocage » + texte blanc. Volontairement PAS le rouge
+                    // destructif : ce geste se défait, contrairement à la suppression.
                     colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        containerColor = com.filestech.sms.ui.theme.BrandBlocked,
                         contentColor = androidx.compose.ui.graphics.Color.White,
                     ),
-                ) { Text(stringResource(R.string.conversation_block_confirm_action)) }
+                ) { Text(stringResource(R.string.action_block)) }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(
@@ -988,9 +1071,23 @@ private fun ConversationActionsSheet(
                     modifier = Modifier.clickable(onClick = onSelectMultipleRequested),
                 )
             }
+            // v1.25.3 — « Bloquer » en rouge, comme « Supprimer » juste en dessous et comme le
+            // dialogue de confirmation du fil. Le blocage ne détruit plus rien, mais il reste un
+            // geste marquant : il coupe la réception et sort la conversation du flux courant.
             androidx.compose.material3.ListItem(
-                leadingContent = { Icon(Icons.Outlined.Block, contentDescription = null) },
-                headlineContent = { Text(stringResource(R.string.action_block)) },
+                leadingContent = {
+                    Icon(
+                        Icons.Outlined.Block,
+                        contentDescription = null,
+                        tint = com.filestech.sms.ui.theme.BrandBlocked,
+                    )
+                },
+                headlineContent = {
+                    Text(
+                        text = stringResource(R.string.action_block),
+                        color = com.filestech.sms.ui.theme.BrandBlocked,
+                    )
+                },
                 modifier = Modifier.clickable(onClick = onBlockRequested),
             )
             androidx.compose.material3.ListItem(
@@ -1148,4 +1245,66 @@ private fun SortMenuItem(label: String, selected: Boolean, onClick: () -> Unit) 
             contentDescription = label
         },
     )
+}
+
+/**
+ * v1.25.3 — les deux dialogues qui n'existent que pour une conversation bloquée : suppression
+ * définitive (corbeille rouge de la ligne) et choix Débloquer / Supprimer (appui long).
+ *
+ * Extraits de [ConversationsScreen] : leur ajout y faisait franchir le seuil de complexité
+ * cyclomatique, et ils forment de toute façon une unité cohérente.
+ */
+@Composable
+private fun BlockedConversationDialogs(
+    pendingDelete: com.filestech.sms.domain.model.Conversation?,
+    actionsFor: com.filestech.sms.domain.model.Conversation?,
+    onDismissDelete: () -> Unit,
+    onDismissActions: () -> Unit,
+    onConfirmDelete: (Long) -> Unit,
+    onUnblock: (com.filestech.sms.domain.model.Conversation) -> Unit,
+    onRequestDelete: (com.filestech.sms.domain.model.Conversation) -> Unit,
+) {
+    // Confirmation obligatoire : c'est le seul geste de cet écran qui efface réellement des
+    // messages, de Room ET du fournisseur système.
+    pendingDelete?.let { conv ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onDismissDelete,
+            title = { Text(stringResource(R.string.conversations_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.conversations_delete_confirm_body)) },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = { onConfirmDelete(conv.id) },
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
+                ) { Text(stringResource(R.string.action_delete)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = onDismissDelete) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    // « Bloquer » n'aurait aucun sens ici, la conversation l'est déjà : on propose le geste
+    // réparateur (débloquer) et le geste assumé (supprimer).
+    actionsFor?.let { conv ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onDismissActions,
+            title = { Text(stringResource(R.string.conversation_actions_title)) },
+            text = { Text(stringResource(R.string.conversation_blocked_label)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { onUnblock(conv) }) {
+                    Text(stringResource(R.string.action_unblock))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { onRequestDelete(conv) }) {
+                    Text(stringResource(R.string.action_delete))
+                }
+            },
+        )
+    }
 }

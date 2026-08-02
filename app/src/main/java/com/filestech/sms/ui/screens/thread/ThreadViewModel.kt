@@ -1274,12 +1274,22 @@ class ThreadViewModel @Inject constructor(
                     .onFailure { timber.log.Timber.w(it, "blockSenders: block threw for one address") }
                     .getOrNull() is Outcome.Success
             }
-            if (blocked > 0) {
-                toggleConvState.delete(conversationId)
-                _events.tryEmit(Event.ShowSnackbar(snackNumbersBlocked()))
-                onDone()
-            } else {
-                _events.tryEmit(Event.ShowSnackbar(snackBlockFailed()))
+            // v1.25.3 — bloquer ne SUPPRIME plus la conversation. Le `delete()` datait de la
+            // v1.2.5, quand un blocage laissait le fil visible dans la liste ; depuis,
+            // `ConversationRepositoryImpl.observeAll` masque toute conversation dont chaque
+            // adresse est bloquée. La suppression était donc devenue redondante — et
+            // irréversible, alors que le masquage se défait d'un simple déblocage.
+            when {
+                blocked == addresses.size -> {
+                    _events.tryEmit(Event.ShowSnackbar(snackNumbersBlocked()))
+                    onDone()
+                }
+                // Blocage partiel : le fil reste visible (le filtre exige que TOUTES les adresses
+                // soient bloquées), ce qui est cohérent — un participant peut encore écrire.
+                blocked > 0 -> _events.tryEmit(
+                    Event.ShowSnackbar(snackBlockPartial(blocked, addresses.size)),
+                )
+                else -> _events.tryEmit(Event.ShowSnackbar(snackBlockFailed()))
             }
         }
     }
@@ -1432,6 +1442,9 @@ class ThreadViewModel @Inject constructor(
     private fun snackNumbersBlocked(): String = context.getString(com.filestech.sms.R.string.snack_thread_numbers_blocked)
 
     private fun snackBlockFailed(): String = context.getString(com.filestech.sms.R.string.snack_block_failed)
+
+    private fun snackBlockPartial(blocked: Int, total: Int): String =
+        context.getString(com.filestech.sms.R.string.snack_block_partial, blocked, total)
 
     private companion object {
         /**

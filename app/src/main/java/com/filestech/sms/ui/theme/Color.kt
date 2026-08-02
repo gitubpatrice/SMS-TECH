@@ -26,6 +26,20 @@ internal val ReplyStripeOutgoing = Color(0xFF0D2B54)
 internal val BrandDanger = Color(0xFFC62828)
 
 /**
+ * v1.25.3 — orange du **blocage**, délibérément distinct de [BrandDanger].
+ *
+ * Le rouge est réservé à ce qui détruit et ne se rattrape pas : suppression d'une conversation,
+ * purge, retrait du verrou. Bloquer, lui, se défait d'un tap — même famille d'avertissement, mais
+ * pas la même gravité. Deux teintes, deux messages : l'utilisateur ne doit pas hésiter entre le
+ * geste réversible et celui qui ne l'est pas.
+ *
+ * `0xFFE65100` et non un orange plus clair : le blanc posé dessus atteint 4,87:1, au-dessus du
+ * seuil AA de 4,5:1 exigé pour du texte de taille normale (libellé de bouton). Les oranges plus
+ * vifs tombent sous ce seuil et rendent le libellé blanc illisible.
+ */
+internal val BrandBlocked = Color(0xFFE65100)
+
+/**
  * Incoming chat-bubble background — a slate-blue ("gris bleu") that reads warmer than the
  * default `surfaceContainerHigh` and visually pairs with the outgoing brand-blue bubble. Two
  * tones so the bubble stays legible in both light and dark themes.

@@ -69,6 +69,24 @@ fun String.phoneSuffix8(): String {
 }
 
 /**
+ * Clé de rapprochement d'un expéditeur avec la liste noire, **pour l'affichage**.
+ *
+ * v1.25.3 — [phoneSuffix8] seul ne suffit pas : un expéditeur alphanumérique (« SFR », « Free »,
+ * « ORANGE ») n'a aucun chiffre, sa clé est donc vide et se confond avec celle de tous les autres.
+ * On bascule sur le libellé lui-même dès que la chaîne contient une lettre — y compris pour les
+ * formes mixtes (« SFR2 »), qui sinon se réduiraient au seul chiffre « 2 » et entreraient en
+ * collision avec n'importe quel numéro finissant par 2.
+ *
+ * Réservé à la mise en évidence dans la liste. Le filtrage réel des envois et des réceptions
+ * reste sur une égalité stricte : le rapprochement par suffixe de 8 chiffres confondrait
+ * `0612345678` et `0712345678`, et bloquerait de vrais correspondants.
+ */
+fun String.blockMatchKey(): String {
+    val trimmed = trim()
+    return if (trimmed.any { it.isLetter() }) trimmed.lowercase() else trimmed.phoneSuffix8()
+}
+
+/**
  * Avatar initials: first letter of first two words, uppercased. Falls back to '?'.
  */
 fun String.avatarInitials(maxChars: Int = 2): String {

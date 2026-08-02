@@ -3,6 +3,7 @@ package com.filestech.sms.data.repository
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.filestech.sms.core.ext.blockMatchKey
 import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.core.result.AppError
@@ -63,30 +64,37 @@ class ConversationRepositoryImpl @Inject constructor(
 ) : ConversationRepository {
 
     /**
-     * Main list stream. Filters out conversations whose **every** address is blocked.
+     * Main list stream. Marks — et ne masque plus — les conversations dont **toutes** les adresses
+     * sont bloquées, via [Conversation.blocked].
      *
-     * Matching uses the [com.filestech.sms.core.ext.phoneSuffix8] suffix (last 8 digits) rather
-     * than full-string equality so a number blocked in international form (`+33612345678` via
-     * Téléphone / Samsung Messages) still matches the national form stored in `content://sms`
-     * (`0612345678`). Groups with one blocked + one allowed participant stay visible — the
-     * receiver-side filter in `SmsDeliverReceiver` already drops the blocked party's messages.
+     * v1.25.3 — auparavant ces conversations étaient filtrées hors de la liste. Combiné à la
+     * suppression que déclenchait l'action « Bloquer », l'utilisateur n'avait aucun moyen de
+     * distinguer « masqué » de « effacé », et aucun retour lui confirmant que le blocage avait
+     * pris. Elles restent désormais visibles, regroupées et signalées par l'écran de liste.
+     *
+     * Le rapprochement passe par [com.filestech.sms.core.ext.blockMatchKey] : suffixe de 8 chiffres
+     * pour les numéros — pour qu'une forme internationale (`+33612345678`) rejoigne la forme
+     * nationale stockée dans `content://sms` (`0612345678`) — et libellé en minuscules pour les
+     * expéditeurs alphanumériques, qui n'ont aucun chiffre et se confondaient tous.
+     *
+     * Un groupe mêlant un participant bloqué et un autorisé n'est **pas** marqué : le filtre de
+     * réception dans `SmsDeliverReceiver` écarte déjà les messages du seul participant bloqué.
      */
     override fun observeAll(includeArchived: Boolean): Flow<List<Conversation>> =
         combine(
             conversationDao.observe(includeArchived),
             blockedRepo.observe(),
         ) { rows, blocked ->
-            val blockedSuffixes = blocked
-                .map { it.normalizedNumber.phoneSuffix8() }
+            val blockedKeys = blocked
+                .map { it.normalizedNumber.blockMatchKey() }
                 .filter { it.isNotEmpty() }
                 .toHashSet()
-            rows.asSequence()
-                .map { it.toDomain() }
-                .filter { conv ->
-                    if (conv.addresses.isEmpty()) return@filter true
-                    conv.addresses.any { addr -> addr.normalized.phoneSuffix8() !in blockedSuffixes }
-                }
-                .toList()
+            rows.map { row ->
+                val conv = row.toDomain()
+                val allBlocked = conv.addresses.isNotEmpty() &&
+                    conv.addresses.all { addr -> addr.normalized.blockMatchKey() in blockedKeys }
+                if (allBlocked) conv.copy(blocked = true) else conv
+            }
         }.flowOn(io)
 
     /**

@@ -40,12 +40,21 @@ class BlockedNumbersImporter @Inject constructor(
 ) {
 
     /**
-     * Imports every system-blocked number not yet mirrored, then **purges** any conversation
-     * whose every participant is now in the blocklist. The purge propagates to the system SMS
-     * content provider (via [ConversationRepository.delete]), so a blocked correspondent's
-     * thread vanishes from SMS Tech **and** from `content://sms`.
+     * Recopie dans Room les numéros bloqués au niveau système qui ne le sont pas encore.
      *
-     * Idempotent: re-running at every cold start is cheap. No-op when nothing has changed.
+     * v1.25.3 — **ne purge plus les conversations correspondantes.** Cette fonction est appelée
+     * au démarrage de l'app ([com.filestech.sms.MainApplication]) et à chaque synchronisation
+     * ([com.filestech.sms.data.sync.TelephonySyncManager]) : la purge qu'elle enchaînait
+     * supprimait donc **automatiquement, en tâche de fond**, tout fil dont les participants
+     * étaient bloqués — de Room *et* de `content://sms`, donc sans retour possible. Bloquer un
+     * numéro revenait à effacer l'historique quelques secondes plus tard, sans que rien ne
+     * l'annonce et sans qu'aucun déblocage puisse le rendre.
+     *
+     * [purgeMatchingConversations] reste disponible, mais **uniquement** sur action explicite de
+     * l'utilisateur depuis les Réglages. Bloquer masque et signale ; effacer se demande.
+     *
+     * Idempotent : rejouer à chaque démarrage à froid est peu coûteux, et sans effet quand rien
+     * n'a changé.
      */
     suspend fun importFromSystem() = withContext(io) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return@withContext
@@ -59,7 +68,6 @@ class BlockedNumbersImporter @Inject constructor(
             }
             Timber.i("BlockedNumbersImporter: mirrored %d system entries", imported)
         }
-        purgeMatchingConversations()
     }
 
     /**
@@ -79,10 +87,11 @@ class BlockedNumbersImporter @Inject constructor(
             .toHashSet()
         Timber.i("Purge: %d distinct blocked suffixes", blockedSuffixes.size)
         if (blockedSuffixes.isEmpty()) return@withContext 0
-        // Read directly from the DAO — not `ConversationRepository.observeAll()` — because
-        // observeAll() already filters out blocked conversations to clean up the UI, and the
-        // purge needs to SEE those rows to delete them. Using the filtered list would be a
-        // chicken-and-egg trap (purge sees nothing, nothing gets deleted, rows stay forever).
+        // Read directly from the DAO — not `ConversationRepository.observeAll()`. Le motif
+        // d'origine (« observeAll filtre déjà les conversations bloquées ») n'est plus vrai
+        // depuis la v1.25.3 : elles restent listées, marquées via `Conversation.blocked`. La
+        // lecture directe reste néanmoins la bonne : elle donne l'instantané brut, sans
+        // dépendre d'un flux d'affichage ni du marquage, dont la purge n'a que faire.
         val allEntities = runCatching { conversationDao.snapshotAllNonVault() }.getOrDefault(emptyList())
         Timber.i("Purge: %d conversations to evaluate (unfiltered snapshot)", allEntities.size)
         var purged = 0

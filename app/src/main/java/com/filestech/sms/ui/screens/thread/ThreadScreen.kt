@@ -836,7 +836,10 @@ fun ThreadScreen(
                     val epochMs = localCal.timeInMillis
                     scheduleStep = null
                     viewModel.scheduleSend(epochMs)
-                }) { Text(stringResource(R.string.action_continue)) }
+                    // v1.25.3 (audit L10) — « Programmer » et non « Continuer » : c'est l'étape
+                    // finale du sélecteur, elle valide l'envoi différé. `action_schedule`
+                    // existait déjà en FR et EN, simplement jamais référencée.
+                }) { Text(stringResource(R.string.action_schedule)) }
             },
             dismissButton = {
                 TextButton(onClick = { scheduleStep = null }) {
@@ -1006,9 +1009,8 @@ fun ThreadScreen(
         DestructiveConfirmDialog(
             title = stringResource(R.string.conversation_block_confirm_title),
             message = stringResource(R.string.conversation_block_confirm_body),
-            // v1.25.3 — « Bloquer et supprimer » : le libellé doit énoncer l'acte destructeur.
-            // « Bloquer » seul laissait croire à un geste réversible.
-            confirmLabel = stringResource(R.string.conversation_block_confirm_action),
+            confirmLabel = stringResource(R.string.action_block),
+            confirmColor = com.filestech.sms.ui.theme.BrandBlocked,
             onConfirm = {
                 askBlock = false
                 // v1.2.5: block-from-detail now also removes the conversation so the user is
@@ -1178,13 +1180,15 @@ private fun ThreadActionsMenu(
                 Icon(
                     Icons.Outlined.Block,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    // v1.25.3 — orange « blocage », distinct du rouge de « Supprimer » juste en
+                    // dessous : bloquer se défait, supprimer non.
+                    tint = com.filestech.sms.ui.theme.BrandBlocked,
                 )
             },
             text = {
                 Text(
                     stringResource(R.string.action_block),
-                    color = MaterialTheme.colorScheme.error,
+                    color = com.filestech.sms.ui.theme.BrandBlocked,
                 )
             },
             onClick = onBlock,
@@ -1278,6 +1282,12 @@ private fun DestructiveConfirmDialog(
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    /**
+     * v1.25.3 — teinte du bouton de confirmation. Rouge par défaut (suppression, geste sans
+     * retour) ; l'appelant passe [com.filestech.sms.ui.theme.BrandBlocked] pour un blocage, qui
+     * se défait d'un tap et ne mérite donc pas le même signal.
+     */
+    confirmColor: Color = BrandDanger,
 ) {
     // v1.2.5: revert to the solid BrandDanger fill — the Material 3 `errorContainer` token
     // resolves to a pastel pink in the light scheme, which the user explicitly didn't want
@@ -1295,7 +1305,7 @@ private fun DestructiveConfirmDialog(
             FilledTonalButton(
                 onClick = onConfirm,
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = BrandDanger,
+                    containerColor = confirmColor,
                     contentColor = Color.White,
                 ),
             ) { Text(confirmLabel) }

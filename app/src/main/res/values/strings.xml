@@ -78,12 +78,13 @@
     <string name="pin_setup_digits_only">Digits only</string>
     <string name="lock_mode_dialog_title">Choose lock mode</string>
     <string name="conversation_actions_title">Conversation actions</string>
-    <!-- v1.25.3 — this dialog used to promise blocking only, while the action ALSO deletes the
-         conversation and every message, from Room and from the system SMS database. A user
-         confirmed it expecting a reversible block and lost their history. -->
-    <string name="conversation_block_confirm_title">Block and delete this conversation?</string>
-    <string name="conversation_block_confirm_body">Every number in this conversation will be blocked, and the conversation and all its messages will be permanently deleted — from this device and from the system SMS database. Unblocking later will NOT bring them back. To block a number without losing the conversation, use Settings › Blocked numbers instead.</string>
-    <string name="conversation_block_confirm_action">Block and delete</string>
+    <!-- v1.25.3 — blocking no longer deletes anything. The dialog used to promise blocking only
+         while the action ALSO wiped the conversation from Room and from the system SMS database;
+         the deletion has been removed rather than merely documented. -->
+    <string name="conversation_block_confirm_title">Block this conversation?</string>
+    <string name="conversation_block_confirm_body">Every number in this conversation will be blocked. The conversation stays in your list, marked as blocked, and nothing is deleted. You can unblock it at any time.</string>
+    <string name="conversations_section_blocked">Blocked</string>
+    <string name="conversation_blocked_label">Blocked</string>
     <string name="settings_purge_blocked">Purge blocked conversations</string>
     <string name="settings_purge_blocked_desc">Permanently delete every conversation whose participants are all on the system blocklist.</string>
     <string name="settings_purge_blocked_result">Purged %1$d conversation(s)</string>
@@ -694,6 +695,9 @@
     <string name="blocked_unblock_confirm_body">%1$s will be able to text you again. You can block it again at any time.</string>
     <!-- v1.25.3 (audit H15/H16) — blocking used to report success even when it had failed. -->
     <string name="snack_block_failed">Blocking failed — the number was not blocked. The conversation was kept.</string>
+    <!-- v1.25.3 (audit SEC3) — a partial block used to be reported as a full success, and the
+         conversation was deleted even though one participant could still reach the user. -->
+    <string name="snack_block_partial">Only %1$d of %2$d numbers could be blocked. The conversation was kept so you do not lose it.</string>
 
     <!-- v1.15.2 — Common a11y + UX strings for passphrase fields. -->
     <string name="action_show_password">Show passphrase</string>

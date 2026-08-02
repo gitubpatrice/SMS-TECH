@@ -75,12 +75,13 @@
     <string name="pin_setup_digits_only">Chiffres uniquement</string>
     <string name="lock_mode_dialog_title">Choisir le mode de verrouillage</string>
     <string name="conversation_actions_title">Actions sur la conversation</string>
-    <!-- v1.25.3 — ce dialogue ne promettait qu'un blocage, alors que l'action supprime AUSSI la
-         conversation et tous ses messages, de Room et de la base SMS du système. Un utilisateur
-         a confirmé en croyant à un blocage réversible et a perdu son historique. -->
-    <string name="conversation_block_confirm_title">Bloquer et supprimer cette conversation ?</string>
-    <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués, et la conversation ainsi que tous ses messages seront définitivement supprimés — de cet appareil et de la base SMS du système. Les débloquer plus tard ne les restaurera PAS. Pour bloquer un numéro sans perdre la conversation, passez plutôt par Réglages › Numéros bloqués.</string>
-    <string name="conversation_block_confirm_action">Bloquer et supprimer</string>
+    <!-- v1.25.3 — bloquer ne supprime plus rien. Le dialogue ne promettait qu'un blocage alors
+         que l'action effaçait AUSSI la conversation de Room et de la base SMS du système ; la
+         suppression a été retirée plutôt que simplement documentée. -->
+    <string name="conversation_block_confirm_title">Bloquer cette conversation ?</string>
+    <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. La conversation reste dans votre liste, signalée comme bloquée, et rien n\'est supprimé. Vous pourrez la débloquer à tout moment.</string>
+    <string name="conversations_section_blocked">Bloqués</string>
+    <string name="conversation_blocked_label">Bloqué</string>
     <string name="settings_purge_blocked">Purger les conversations bloquées</string>
     <string name="settings_purge_blocked_desc">Supprime définitivement toutes les conversations dont les participants sont sur la liste de blocage système.</string>
     <string name="settings_purge_blocked_result">%1$d conversation(s) supprimée(s)</string>
@@ -677,6 +678,9 @@
     <string name="blocked_unblock_confirm_body">%1$s pourra de nouveau vous envoyer des messages. Vous pouvez le rebloquer à tout moment.</string>
     <!-- v1.25.3 (audit H15/H16) — le blocage annonçait un succès même quand il avait échoué. -->
     <string name="snack_block_failed">Le blocage a échoué — le numéro n\'a pas été bloqué. La conversation a été conservée.</string>
+    <!-- v1.25.3 (audit SEC3) — un blocage partiel était annoncé comme un succès complet, et la
+         conversation supprimée alors qu'un participant pouvait encore joindre l'utilisateur. -->
+    <string name="snack_block_partial">Seuls %1$d numéro(s) sur %2$d ont pu être bloqués. La conversation a été conservée pour ne pas la perdre.</string>
 
     <!-- v1.15.2 — Strings communes a11y + UX champs passphrase. -->
     <string name="action_show_password">Afficher la passphrase</string>

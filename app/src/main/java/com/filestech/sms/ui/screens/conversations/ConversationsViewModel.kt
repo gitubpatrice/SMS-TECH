@@ -60,6 +60,7 @@ class ConversationsViewModel @Inject constructor(
     private val syncManager: TelephonySyncManager,
     private val appLock: AppLockManager,
     private val blockNumber: BlockNumberUseCase,
+    private val unblockNumber: com.filestech.sms.domain.usecase.UnblockNumberUseCase,
     private val iAmOk: com.filestech.sms.domain.usecase.IAmOkUseCase,
     // v1.6.1 (audit QUAL-03) — privé : la screen passe désormais par
     // [buildChangeDefaultIntent] au lieu de manipuler le manager directement.
@@ -304,6 +305,19 @@ class ConversationsViewModel @Inject constructor(
     fun delete(id: Long) = viewModelScope.launch { toggle.delete(id) }
 
     /**
+     * v1.25.3 — débloque toutes les adresses d'une conversation. Le geste réparateur du blocage :
+     * la conversation quitte la section « Bloqués » et retrouve sa place, sans qu'aucune donnée
+     * n'ait été touchée entre-temps. Chaque adresse est isolée pour qu'un échec sur l'une
+     * n'empêche pas les autres.
+     */
+    fun unblock(conversation: Conversation) = viewModelScope.launch {
+        for (addr in conversation.addresses) {
+            runCatching { unblockNumber.invoke(addr.raw) }
+                .onFailure { Timber.w(it, "unblock: unblock threw for one address") }
+        }
+    }
+
+    /**
      * Blocks **every recipient** of a conversation, then deletes the conversation locally and
      * from the system content provider. The user-intent is "I never want to hear from this
      * person again" — keeping the history around half-deletes the gesture (the filter in
@@ -325,11 +339,17 @@ class ConversationsViewModel @Inject constructor(
                 .onFailure { Timber.w(it, "block: block threw for one address") }
                 .getOrNull() is Outcome.Success
         }
-        if (blocked > 0) {
-            runCatching { toggle.delete(conversation.id) }
-                .onFailure { Timber.w(it, "block: conversation delete failed") }
-        } else {
-            _events.trySend(Event.BlockFailed)
+        // v1.25.3 — bloquer ne SUPPRIME plus la conversation. Le `delete()` datait de la v1.2.5,
+        // quand un blocage laissait le fil visible ; il effaçait les messages de Room ET du
+        // fournisseur système, sans que la confirmation le dise. La conversation reste désormais
+        // en place, signalée comme bloquée dans la liste ([Conversation.blocked]), et l'utilisateur
+        // la retrouve intacte au déblocage.
+        when {
+            blocked == conversation.addresses.size -> Unit
+            blocked > 0 -> _events.trySend(
+                Event.BlockPartial(blocked = blocked, total = conversation.addresses.size),
+            )
+            else -> _events.trySend(Event.BlockFailed)
         }
     }
 
@@ -434,6 +454,9 @@ class ConversationsViewModel @Inject constructor(
 
         /** v1.25.3 (audit H16) — aucun numéro n'a pu être bloqué ; la conversation est conservée. */
         data object BlockFailed : Event
+
+        /** v1.25.3 (audit SEC3) — blocage partiel ; la conversation est conservée volontairement. */
+        data class BlockPartial(val blocked: Int, val total: Int) : Event
         /** v1.14.0 — Reset cooldown + SMS "Je vais bien" envoyé. */
         data class IAmOkDoneWithSms(val sent: Int, val failed: Int) : Event
         /** v1.14.0 — Reset cooldown effectué, pas de SMS (opt-in OFF). */
