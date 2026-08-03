@@ -484,6 +484,7 @@
     <string name="safety_call_setup_template_preview">Preview</string>
     <string name="safety_call_setup_save">Save</string>
     <string name="safety_call_setup_save_validation_no_contacts">Add at least one contact before enabling.</string>
+    <string name="safety_call_setup_shared_with_emergency">These contacts are also used by Emergency mode, which is still armed. Emptying the list would leave it with no one to alert. Turn Emergency mode off first, or keep at least one contact.</string>
     <string name="safety_call_setup_save_validation_custom_empty">Custom message cannot be empty.</string>
     <string name="safety_call_warning_title">SMS Tech — confirm you\'re OK</string>
     <string name="safety_call_warning_body_hours">Safety call will trigger in about %1$d hours. Tap to reset the timer.</string>
@@ -543,6 +544,18 @@
     <string name="attachment_remove_label">Remove attachment</string>
 
     <string name="action_react">React</string>
+    <string name="settings_auto_lock_delay">Auto-lock delay</string>
+    <string name="settings_auto_lock_delay_dialog_title">Lock the app after…</string>
+    <string name="auto_lock_immediate">Immediately</string>
+    <string name="auto_lock_15s">15 seconds</string>
+    <string name="auto_lock_1m">1 minute</string>
+    <string name="auto_lock_5m">5 minutes</string>
+    <string name="auto_lock_next_launch">Next launch only</string>
+    <string name="settings_signature_none">Not set</string>
+    <string name="settings_signature_dialog_body">Appended to every SMS you send, after a separator line. Keep it short: a long signature can split the message into several SMS, each billed separately.</string>
+    <string name="settings_signature_placeholder">e.g. Pat</string>
+    <string name="action_star">Star</string>
+    <string name="action_unstar">Remove from starred</string>
     <string name="reaction_picker_other">Other emoji</string>
     <string name="reaction_picker_other_title">Custom emoji</string>
     <string name="reaction_picker_other_body">Type or paste an emoji</string>
@@ -608,7 +621,6 @@
 
     <string name="settings_section_backup">Backup</string>
     <string name="settings_backup_now">Back up now</string>
-    <string name="settings_auto_backup">Automatic backup</string>
     <string name="settings_restore">Restore from file</string>
 
     <string name="settings_section_advanced">Advanced</string>
@@ -871,5 +883,6 @@
     <string name="settings_panic_code_removed">Panic code removed</string>
     <string name="settings_panic_code_same_as_pin">This code is the same as your main PIN. Choose another one, otherwise the app would always open in decoy mode.</string>
     <string name="settings_panic_code_no_pin">Set up an app lock first.</string>
+    <string name="settings_pin_same_as_panic_code">This PIN is the same as your panic code. Choose another one, otherwise the app would always open in decoy mode and you could no longer reach your own session.</string>
     <string name="lock_wrong_code">Incorrect code</string>
 </resources>

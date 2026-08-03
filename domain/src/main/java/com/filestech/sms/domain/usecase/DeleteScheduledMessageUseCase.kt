@@ -24,14 +24,20 @@ class DeleteScheduledMessageUseCase @Inject constructor(
      * d'atteinte des purges de cache : sans ce menage, une programmation avec photo annulee
      * laisserait son image sur le telephone pour toujours.
      *
-     * **La suppression n'a lieu QU'ICI**, pas a l'annulation ni apres envoi, et c'est
-     * deliberement asymetrique :
-     * - une annulation garde la ligne en `CANCELLED` comme trace, donc ses fichiers doivent
-     *   survivre avec elle ;
-     * - apres un envoi reussi, ce sont les `AttachmentEntity` du message envoye qui pointent vers
-     *   ces memes fichiers — les effacer viderait les bulles du fil.
+     * ⚠️ v1.26.1 (audit B2) — CE PARAGRAPHE ETAIT FAUX et contredisait
+     * [CancelScheduledMessageUseCase], qui supprime bel et bien les fichiers a l'annulation tout
+     * en conservant la ligne `CANCELLED`. Il affirmait « la suppression n'a lieu QU'ICI » et
+     * « les fichiers vivent tant que la ligne existe » : ni l'un ni l'autre n'etait vrai.
      *
-     * La regle tient en une phrase : **les fichiers vivent tant que la ligne existe.**
+     * La regle REELLE, ecrite des deux cotes :
+     * - **annulation** → les fichiers partent tout de suite. Aucune liste n'affiche l'etat
+     *   `CANCELLED` (`observePending` = PENDING/SENDING, `observeFailed` = FAILED), donc la ligne
+     *   est inatteignable : ses fichiers resteraient sur le telephone pour toujours, invisibles
+     *   et indelogeables. Sauf si le worker a deja revendique l'envoi — dans ce cas on n'y touche
+     *   pas, il est en train de les lire.
+     * - **apres un envoi reussi** → on ne touche a rien : ce sont les `AttachmentEntity` du
+     *   message envoye qui pointent vers ces memes fichiers, les effacer viderait les bulles.
+     * - **suppression explicite** (ici) → la ligne ET ses fichiers partent ensemble.
      */
     suspend operator fun invoke(id: Long): Outcome<Unit> {
         scheduler.cancel(id)

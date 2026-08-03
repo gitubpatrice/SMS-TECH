@@ -174,6 +174,18 @@ class SafetyCallSetupViewModel @Inject constructor(
                 _events.trySend(Event.ValidationError(ValidationReason.NoContacts))
                 return@launch
             }
+            // v1.26.1 (audit M5) — le carnet de contacts est PARTAGÉ avec le Mode urgence, qui
+            // lit `security.safetyCall.contacts`. La validation ci-dessus ne s'applique que si
+            // le Safety call lui-même est activé : un utilisateur qui le désarmait et retirait
+            // ses contacts au passage vidait donc le carnet, et le Mode urgence — resté armé —
+            // perdait TOUS ses destinataires. Il ne l'apprenait qu'au déclenchement, c'est-à-dire
+            // au moment précis où il en avait besoin.
+            if (current.contacts.isEmpty() &&
+                settings.state.value.security.emergency.enabled
+            ) {
+                _events.trySend(Event.ValidationError(ValidationReason.SharedWithEmergency))
+                return@launch
+            }
             if (current.enabled &&
                 current.template == SafetyCallTemplate.CUSTOM &&
                 current.customMessage.isBlank()
@@ -219,5 +231,11 @@ class SafetyCallSetupViewModel @Inject constructor(
         InvalidPhone,
         MaxContactsReached,
         EmptyCustomMessage,
+
+        /**
+         * v1.26.1 (audit M5) — le carnet est partagé avec le Mode urgence, qui est encore armé :
+         * le vider le priverait de tous ses destinataires, en silence.
+         */
+        SharedWithEmergency,
     }
 }

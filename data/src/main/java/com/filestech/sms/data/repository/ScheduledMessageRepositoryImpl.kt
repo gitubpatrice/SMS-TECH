@@ -67,9 +67,12 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
         Outcome.Success(id)
     }
 
-    override suspend fun cancel(id: Long): Outcome<Unit> = withContext(io) {
-        dao.setState(id, ScheduledState.CANCELLED)
-        Outcome.Success(Unit)
+    override suspend fun cancel(id: Long): Outcome<Boolean> = withContext(io) {
+        // v1.26.1 (audit B2) — transition CONDITIONNELLE : on n'annule que si l'envoi est
+        // encore `PENDING`. Un `setState` inconditionnel ecrasait l'etat d'un envoi deja
+        // revendique par le worker, et l'appelant supprimait ensuite ses fichiers pendant que
+        // le PDU etait en cours de construction.
+        Outcome.Success(dao.cancelIfPending(id) == 1)
     }
     override suspend fun markSent(id: Long) = withContext(io) { dao.setState(id, ScheduledState.SENT) }
     override suspend fun markFailed(id: Long) = withContext(io) { dao.setState(id, ScheduledState.FAILED) }

@@ -36,6 +36,10 @@ class IncomingMessageNotifier @Inject constructor(
     private val contacts: ContactRepository,
     private val activeConversationTracker: ActiveConversationTracker,
     private val conversationDao: ConversationDao,
+    // v1.26.1 (audit H2) — authentifie l'intent d'ouverture de conversation, cf.
+    // [NotificationIntentToken]. `MainActivity` est expose : sans ce secret, une app tierce
+    // pouvait forger `ACTION_OPEN_CONVERSATION` et forcer l'affichage d'un fil arbitraire.
+    private val intentToken: NotificationIntentToken,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ConversationNotificationCanceller {
 
@@ -55,9 +59,39 @@ class IncomingMessageNotifier @Inject constructor(
         // Lecture synchrone Room (~1-3 ms) acceptable sur SMS entrant — bien
         // moins coûteuse qu'un round-trip DataStore (10-15 ms) qu'on évite
         // déjà via `settings.state.value` ci-dessous.
-        val inVault = runCatching { conversationDao.findById(conversationId)?.inVault == true }
-            .onFailure { Timber.w(it, "IncomingMessageNotifier: inVault lookup failed, defaulting to false") }
-            .getOrDefault(false)
+        // v1.26.1 (audit H16) — le repli dit désormais « traiter comme SI c'était dans le coffre ».
+        //
+        // Il disait l'inverse (`false` = « pas dans le coffre ») : toute erreur de lecture Room /
+        // SQLCipher — base tenue par une transaction concurrente, I/O disque, base non ouvrable
+        // après une réparation — faisait afficher nom de l'expéditeur ET aperçu du corps sur
+        // l'écran de verrouillage pour une conversation protégée. La promesse du coffre (« ni
+        // nom, ni preview, ni icône ») tombait exactement quand la base allait mal.
+        //
+        // Le coût du repli sûr est une notification manquée ; le message reste lisible dans
+        // l'application. Le coût du repli permissif était l'aperçu d'une conversation du coffre
+        // sur un écran verrouillé. Ce n'est pas symétrique.
+        // v1.26.1 (audit F1) — une seule lecture sert désormais aux DEUX gardes : coffre et
+        // sourdine. `muted` n'était lu par aucun notifier, si bien que mettre une conversation
+        // en sourdine n'aurait rien silencié même une fois le geste câblé.
+        //
+        // Les trois cas sont distingués volontairement, pour ne pas changer la sémantique
+        // existante en passant :
+        //  - ÉCHEC de lecture  → on ne notifie pas (repli sûr, cf. audit H16 ci-dessus) ;
+        //  - conversation ABSENTE → on notifie, comportement d'origine (`?.inVault == true`
+        //    rendait `false` dans ce cas) ;
+        //  - `inVault` ou `muted` → on ne notifie pas.
+        val convResult = runCatching { conversationDao.findById(conversationId) }
+        if (convResult.isFailure) {
+            Timber.w(
+                convResult.exceptionOrNull(),
+                "IncomingMessageNotifier: conversation lookup failed, suppressing notification",
+            )
+            return@withContext
+        }
+        val conv = convResult.getOrNull()
+        val inVault = conv?.inVault == true
+        val muted = conv?.muted == true
+        if (muted) return@withContext
         // v1.11.0 audit S3 — pas de log explicite "conv #N suppressed in vault"
         // pour éviter qu'un ReleaseTree mal configuré (Crashlytics bêta, OEM
         // logcat persistant) corrèle le conversationId avec le fait qu'il
@@ -127,6 +161,7 @@ class IncomingMessageNotifier @Inject constructor(
                 // de manière asynchrone (qui aurait nécessité une requête Room
                 // côté MainActivity, source potentielle de race avec l'import).
                 .putExtra(EXTRA_CONVERSATION_ID, conversationId)
+                .putExtra(NotificationIntentToken.EXTRA_NAV_TOKEN, intentToken.current())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

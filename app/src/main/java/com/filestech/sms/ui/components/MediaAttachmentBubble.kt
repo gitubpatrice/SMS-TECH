@@ -80,6 +80,8 @@ fun MediaAttachmentBubble(
     onCopy: (() -> Unit)? = null,
     /** v1.3.11 (F5) — forward the attachment (+ caption if any) to another conversation. */
     onForward: (() -> Unit)? = null,
+    /** v1.26.1 (audit F2) — bascule « favori » ; l'état est lu sur [message]. */
+    onToggleStar: (() -> Unit)? = null,
     /**
      * v1.3.11 (F4) — invoked when the user taps a phone number rendered inside the
      * caption block. Forwarded to [MessageTextWithLinks]; the host (`ThreadScreen`)
@@ -131,7 +133,15 @@ fun MediaAttachmentBubble(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isOut) {
-            BubbleMenuTrigger(onCopy = onCopy, onForward = onForward, onReply = onReply, onReact = onReact, onDelete = onDelete)
+            BubbleMenuTrigger(
+                onCopy = onCopy,
+                onForward = onForward,
+                onReply = onReply,
+                onReact = onReact,
+                starred = message.starred,
+                onToggleStar = onToggleStar,
+                onDelete = onDelete,
+            )
         }
         Column(
             horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
@@ -215,7 +225,15 @@ fun MediaAttachmentBubble(
             }
         }
         if (!isOut) {
-            BubbleMenuTrigger(onCopy = onCopy, onForward = onForward, onReply = onReply, onReact = onReact, onDelete = onDelete)
+            BubbleMenuTrigger(
+                onCopy = onCopy,
+                onForward = onForward,
+                onReply = onReply,
+                onReact = onReact,
+                starred = message.starred,
+                onToggleStar = onToggleStar,
+                onDelete = onDelete,
+            )
         }
     }
 }

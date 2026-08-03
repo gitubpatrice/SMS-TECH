@@ -10,9 +10,10 @@ import org.junit.jupiter.api.Test
  *    `selectionMode` derived dans [ConversationsViewModel.UiState] : la
  *    transition vide ↔ non-vide doit refléter strictement le booléen exposé
  *    à l'UI (TopAppBar contextuelle).
- *  - Sujet B : PIN/pass distinct coffre. Le hash/verify est testé en
- *    instrumented (DataStore + Android Keystore), trop d'I/O pour un unit
- *    test pur JVM. On garde ici la garde haut-niveau "selection backend".
+ *  - Sujet B : PIN/pass distinct coffre.
+ *    ⚠️ v1.26.1 (audit F12) — la mention « testé en instrumented » était FAUSSE :
+ *    aucun des fichiers `androidTest` ne touche `vaultPin`. Le hash/verify du PIN du
+ *    coffre reste À COUVRIR. On garde ici la garde haut-niveau "selection backend".
  *  - Sujet C : partage + envoi depuis conv vault. La voie d'envoi
  *    (`SendSmsUseCase` → `ConversationMirror.ensureConversation`) ne touche
  *    plus à `in_vault` depuis v1.11.0 ; pas de test JVM faisable sans DB,

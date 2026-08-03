@@ -1,0 +1,493 @@
+================================================================================
+SMS TECH — JOURNAL DES CORRECTIFS APPLIQUÉS
+================================================================================
+Date            : 2026-08-03
+Base de départ  : v1.26.0 — commit 6e0fd31 — versionCode 175
+Audit source    : audit-haut-niveau-sms-tech-2026-08-03.txt (même dossier)
+
+PORTÉE : 64 fichiers modifiés, +2121 / −427, plus 3 fichiers nouveaux.
+         RIEN N'EST COMMITÉ NI TAGUÉ — tout est dans l'arbre de travail.
+
+FICHIERS NOUVEAUX
+  data/src/main/java/com/filestech/sms/security/VaultSessionState.kt
+  app/src/main/java/com/filestech/sms/system/notifications/NotificationIntentToken.kt
+  data/src/test/java/com/filestech/sms/data/local/datastore/LockoutSnapshotTest.kt
+
+VÉRIFICATION À CHAQUE PALIER (jamais en bloc à la fin)
+  compilation des 4 modules ✅ · tests unitaires des 4 modules ✅ · détekt ✅
+  lint ✅ · parité FR↔EN 732/732, aucun écart dans les deux sens ✅
+  assembleRelease signé, certificat b09a9511…687d inchangé ✅
+
+⚠️ AUCUNE BASELINE N'A ÉTÉ ÉLARGIE POUR MASQUER UN DÉFAUT.
+   Les écarts détekt provoqués par les insertions ont été corrigés À LA SOURCE
+   (tri d'imports, doublon d'import, accolades, enveloppement d'arguments).
+   Les baselines ont été régénérées une fois, et le diff PROUVE que tous les
+   compteurs de règles baissent ou restent égaux — aucun n'augmente. Le seul
+   qui augmentait (complexité cyclomatique) venait de mon propre code : il a été
+   corrigé, pas absorbé.
+
+================================================================================
+1. LES QUATRE CRITIQUES — le mode leurre
+================================================================================
+
+C1 — Le mode leurre se désarmait depuis l'écran qu'il protège.
+     La ligne « Verrouillage de l'app » n'était pas gardée, alors que ses deux
+     voisines l'étaient. Quatre appuis — Réglages → Verrouillage → Aucun →
+     Confirmer, SANS ressaisie de PIN — appelaient `clearPin()`, qui pose
+     `LockState.Disabled`. Or TOUTES les gardes du leurre testent `is PanicDecoy` :
+     elles tombaient d'un coup, et `clearPin()` effaçait au passage le code panique.
+     → Ligne gardée `!isPanicDecoy` (affichage) ET `clearPin()` refuse en
+       `PanicDecoy` (accès). `SettingsViewModel.clearLock()` RELIT l'état au lieu
+       de le supposer.
+     Fichiers : SettingsScreen.kt · AppLockManager.kt · SettingsViewModel.kt
+
+C2 — La sauvegarde exportait le Coffre, et elle était atteignable en leurre.
+     `listAllIncludingArchived()` lit les conversations du coffre — son propre
+     KDoc le dit — et il n'y avait ZÉRO garde panique dans toute la chaîne de
+     sauvegarde. L'agresseur choisissait sa propre phrase secrète et sa
+     destination, et repartait avec l'intégralité du coffre.
+     → Section masquée en leurre, et surtout garde côté ACCÈS dans
+       `BackupService.writeSmsbk`. ⚠️ Le mot de passe est effacé sur le chemin de
+       refus : le `finally` habituel est dans un bloc qu'on ne rejoint pas.
+     Fichiers : SettingsScreen.kt · BackupService.kt
+
+C3 — Le refus « code panique = PIN » n'avait pas de symétrique côté PIN.
+     `setPanicCode` refusait un code identique au PIN, avec une justification
+     explicite en 5 lignes (enfermement définitif). `setPin` ne vérifiait RIEN :
+     changer son PIN pour la valeur de son code panique enfermait l'utilisateur
+     en leurre, sans issue.
+     → `SetPinOutcome.SameAsPanicCode`, vérifié AVANT `kdf.calibrate()`,
+       effacement du secret couvert par le `finally`. Événement UI + 2 strings.
+     Fichiers : AppLockManager.kt · SettingsViewModel.kt · SettingsScreen.kt · strings
+
+C4 — L'écran À propos racontait le mode leurre, en mode leurre.
+     Il listait « Code panique — Second code qui ouvre l'app en mode leurre —
+     coffre invisible et inaccessible », plus le coffre et le mode urgence. Alors
+     qu'AppRoot écrit noir sur blanc que l'agresseur « ne doit même pas SAVOIR »
+     que ces fonctions existent.
+     → `Feature(sensitive = true)` sur les trois entrées, filtrées en leurre.
+       Choix assumé : on filtre les ENTRÉES, on ne masque pas l'écran — une app
+       SMS ordinaire a un « À propos », le faire disparaître serait en soi une
+       anomalie. `isPanicDecoy` est SANS valeur par défaut : un défaut `false`
+       aurait été un repli permissif.
+     Fichiers : AboutScreen.kt · AppRoot.kt
+
+================================================================================
+2. LE COFFRE — le second facteur gardait l'écran, pas la donnée
+================================================================================
+
+H1 — `isVaultUnlockedInSession` n'avait qu'UN SEUL lecteur dans tout le dépôt.
+     La couche données ne le consultait jamais : trois chemins ouvraient un fil du
+     Coffre en session normale sans jamais demander le PIN coffre.
+     → Nouveau `VaultSessionState` : porteur d'état SANS dépendance.
+       Les 3 flux masquent sur `inVault && (PanicDecoy || !vaultOpen)`.
+
+     ⚠️ DEUX PIÈGES ÉVITÉS, tous deux par recensement des appelants AVANT de coder :
+     (a) `VaultManager` dépend de `ConversationRepository` : l'injecter dans le
+         repository aurait fermé un CYCLE Hilt. D'où le porteur tiers — qui règle
+         aussi le fait que l'`AtomicBoolean` d'origine n'était pas observable, donc
+         qu'un flux Compose ne se serait jamais ré-évalué à l'ouverture du Coffre.
+     (b) ⚠️ LA RECOMMANDATION DE L'AUDIT ÉTAIT DANGEREUSE. Filtrer `in_vault = 0`
+         dans `findByAddressesCsv` aurait fait SORTIR DU COFFRE chaque message
+         entrant — `ConversationMirror` s'en sert pour router la réception. Et la
+         variante « créer une conversation jumelle » aurait pu ÉCRASER EN CASCADE
+         une conversation locale : `thread_id` porte un index UNIQUE et les
+         créations utilisent `threadId = 0L` avec `OnConflictStrategy.REPLACE`.
+         `findOrCreate` n'a donc PAS été touché.
+     Fichiers : VaultSessionState.kt (nouveau) · VaultManager.kt · ConversationRepositoryImpl.kt
+
+H2 — Un Intent forgeable ouvrait n'importe quelle conversation.
+     `MainActivity` est `exported="true"` (rôle SMS) : un Intent EXPLICITE ignore
+     les `intent-filter`. Action et extras publics, identifiants Room séquentiels.
+     → Secret PERSISTANT dans le magasin sécurisé, généré atomiquement DANS le
+       `edit{}` DataStore, partagé par toutes les notifications, vérifié AU MOMENT
+       DE LA CONSOMMATION dans AppRoot.
+     ⚠️ Deux modèles écartés et pourquoi : un jeton MONO-USAGE (celui du Safety
+       call) aurait cassé tous les taps sauf le premier, plusieurs notifications
+       coexistant ; un secret EN MÉMOIRE aurait cassé tous les taps après un
+       redémarrage du process — le chemin le plus courant de l'app.
+     Fichiers : NotificationIntentToken.kt (nouveau) · SecurityStore.kt ·
+                IncomingMessageNotifier.kt · PendingNavHolder.kt · MainActivity.kt ·
+                AppRoot.kt · AppRootViewModel.kt
+
+================================================================================
+3. ASYMÉTRIES ET PERTES DE DONNÉES
+================================================================================
+
+H3  Ligne « Verrouiller le coffre en quittant » — seule des trois à ne pas porter
+    la garde, alors qu'elle nomme le coffre dans son titre ET sa description.
+
+H4  Liste noire : 9 chiffres à la réception, 8 à la synchronisation.
+    ⚠️ PERTE DE DONNÉES RÉELLE : bloquer `0612345678` faisait jeter EN SILENCE, à
+    l'import, les messages de `0712345678` — un numéro jamais bloqué — et le
+    curseur avançait quand même, donc la perte était définitive. Effet inverse
+    aussi : une clé alphanumérique donnait une chaîne vide, donc un expéditeur
+    alphanumérique bloqué passait.
+    → `blockKey()` des deux côtés, aux 4 emplacements.
+
+H5  La liste noire ne filtrait que les SMS entrants, pas les MMS.
+    Recensement : `isBlocked(` n'existait que dans `SmsDeliverReceiver` et les
+    trois use-cases d'ENVOI. Un correspondant bloqué voyait ses SMS disparaître
+    mais ses MMS arrivaient, étaient stockés ET notifiés.
+    → Garde dans `MmsWapPushReceiver` (avant le téléchargement, ce qui évite aussi
+      la consommation de données et la notification « trop volumineux ») et garde
+      miroir dans `MmsDownloadedReceiver`.
+
+H13 Import : deux numéros DIFFÉRENTS fusionnés dans un même fil.
+    Les rapprochements se faisaient sur 8 chiffres. Répondre dans le fil fusionné
+    envoyait AU MAUVAIS DESTINATAIRE.
+    → `blockKey()` sur les 3 sites, dont un TROISIÈME que l'audit n'avait pas
+      nommé (rattachement des réactions) : le laisser à 8 aurait recréé
+      l'asymétrie condamnée.
+    ⚠️ Piège : `blockKey()` bascule en mode alphanumérique dès qu'il voit une
+      lettre — il a fallu nettoyer le suffixe `/TYPE=PLMN` d'abord, sans quoi le
+      correctif cassait le cas même que ce repli sert.
+
+H9  Purge non transactionnelle : l'aperçu EN CLAIR du message effacé restait, et
+    DÉFINITIVEMENT (la passe de réparation est gardée par un drapeau déjà posé
+    partout). Le correctif de `deleteMessage` (v1.24.0) n'avait pas été porté ici.
+
+H12 Restauration : les messages du coffre atterrissaient dans la conversation EN
+    CLAIR quand une conversation de même adresse existait hors coffre.
+    → Réutilisation conditionnée au même statut `in_vault`.
+
+M6  Doublons au ré-import : l'index UNIQUE sur `telephony_uri` ne dédoublonnait
+    rien pour les lignes sans URI (tous les MMS sortants), SQLite traitant deux
+    NULL comme distincts — alors que la chaîne affichée promet le contraire.
+    → Clé de repli (conversation, date, sens, corps).
+
+M7  Les pièces jointes ne sont PAS dans la sauvegarde, mais `attachments_count`
+    était restauré tel quel : les bulles annonçaient N pièces jointes
+    introuvables. → Compteur remis à zéro. Choix : rendre la donnée honnête
+    plutôt qu'inventer un nouveau format qui aurait cassé les sauvegardes
+    existantes.
+
+M11 Compteur de non-lus doublé ET notification perdue. L'insert en `IGNORE` rend
+    `-1` sur conflit ; le retour était ignoré. Le chemin en MASSE avait été
+    corrigé pour ce motif exact en v1.8.0, l'unitaire non.
+
+================================================================================
+4. FIABILITÉ DES ENVOIS
+================================================================================
+
+H6  Un envoi programmé pouvait partir DEUX FOIS. Pas de revendication atomique
+    avant l'appel réseau : une mort du processus entre l'envoi réussi et
+    l'écriture de `SENT` faisait tout rejouer.
+    → Nouvel état `SENDING(4)` + `claimForSending` (UPDATE conditionnel).
+    ⚠️ ERREUR RATTRAPÉE EN COURS : j'avais d'abord écrit `state = 1`, or 1 c'est
+      `SENT` — cela aurait marqué le message envoyé AVANT de l'envoyer, pire que
+      le défaut. Et l'état `SENDING` est délibérément INCLUS dans `observePending`
+      pour ne pas recréer le piège des lignes `CANCELLED`, qu'aucune liste
+      n'affiche et qui étaient devenues inatteignables.
+    Les tests existants ont échoué à raison (ils verrouillaient l'ancien contrat) :
+    mis à jour, plus UN TEST AJOUTÉ qui verrouille la garantie anti-double-envoi.
+
+H7  Double tap = deux SMS réellement envoyés et facturés. Le chemin VOCAL avait
+    son garde et son bouton remplacé par un indicateur ; les chemins texte et
+    média n'avaient rien. → `isSending` + `enabled = !isSending`.
+
+H8  Un envoi pouvait être annulé à mi-chemin par un simple retour arrière — geste
+    que l'écran encourage. Résultat : une ligne « envoyée » visible dans les
+    autres apps SMS, une ligne `PENDING` chez nous, et AUCUN SMS parti.
+    → `withContext(NonCancellable)` sur les écritures d'envoi.
+
+M8  Statut d'un SMS multipart = celui de la DERNIÈRE partie reçue. Un échec de
+    partie était écrasé par l'accusé positif d'une autre : message tronqué chez le
+    destinataire, cru envoyé, et relance même pas proposée.
+    → Promotion MONOTONE (`PENDING < SENT < DELIVERED < FAILED`), qui donne les
+      trois garanties d'un coup.
+    ⚠️ J'AI FAILLI CASSER LA RELANCE : `updateOutgoingStatus` servait AUSSI à
+      remettre en `PENDING`, une rétrogradation que la règle bloquait. Le
+      recensement des appelants l'a montré avant que ça parte. Les deux intentions
+      sont désormais séparées : `updateOutgoingStatus` promeut,
+      `resetOutgoingForRetry` rétrograde délibérément.
+
+================================================================================
+5. SÉCURITÉ PERSONNELLE — urgence et Safety call
+================================================================================
+
+H10 Le déclenchement d'urgence tournait sur `viewModelScope` : quitter l'écran
+    pendant les 8 secondes de résolution GPS annulait l'envoi de VRAIS SMS, en
+    silence. `EmergencyShortcutReceiver` utilisait déjà `ApplicationScope` pour le
+    même travail — asymétrie entre deux chemins identiques.
+
+H11 Le SMS d'urgence transmettait une position PÉRIMÉE comme si elle était
+    actuelle. Le seuil de fraîcheur ne s'appliquait qu'au chemin rapide, jamais
+    aux deux replis. Variante silencieuse du défaut v1.25.5 : la position n'est
+    plus « annoncée mais non transmise », elle est TRANSMISE MAIS FAUSSE.
+    → Repli borné à 30 min ; au-delà « position non disponible ».
+
+M5  Vider le carnet Safety call désarmait l'Urgence EN SILENCE (carnet partagé).
+    L'utilisateur ne l'apprenait qu'au déclenchement. → Refus explicite + message.
+
+M3  Un envoi programmé partait devant l'agresseur en session leurre.
+    → DIFFÉRÉ, pas annulé : le leurre est transitoire, perdre le message serait pire.
+
+M4  La route Safety call manquait au garde de navigation du leurre, alors que les
+    Réglages masquent sa section avec exactement la même garde que l'Urgence.
+
+B5  `ACTION_TRIGGER_EMERGENCY` : chemin « SMS d'urgence réels » ARMÉ SANS
+    CONSOMMATEUR depuis la v1.14.2, sans anti-rebond ni retour utilisateur, dont
+    l'innocuité ne tenait qu'à `exported=false`.
+    → Retiré du receveur ET du manifeste, avec imports et injection orphelins.
+
+================================================================================
+6. REPLIS ET GARDES
+================================================================================
+
+H14 Le repli des réglages désarmait le Safety call en silence. Sans `retry`/`catch`,
+    une corruption DataStore tuait la coroutine de partage et figeait
+    DÉFINITIVEMENT tous les réglages sur leurs défauts : le deadman ne se
+    déclenchait plus jamais alors que l'utilisateur le croyait armé.
+    → Le repli devient « pas de nouvelle valeur », pas « valeurs par défaut ».
+
+H15 Le verrouillage automatique pouvait ne JAMAIS s'exécuter — et le garde posé
+    pour l'éviter était situé APRÈS le point de rupture.
+    ⚠️ `try/catch` explicite et NON `runCatching` : `runCatching` attrape aussi
+      `CancellationException`, or `onStart` annule ce job au retour au premier
+      plan. Voir la section « défauts trouvés dans mes propres correctifs ».
+
+H16 Le garde anti-notification du Coffre échouait du mauvais côté
+    (`getOrDefault(false)`). → `true` : en cas de doute, ne rien notifier.
+
+H17 `attemptUnlock` était le seul consommateur de secret à ne pas effacer son
+    `CharArray` — celui du PIN principal, saisi à chaque déverrouillage.
+    → Enveloppe `try/finally { candidate.wipe() }`, en enveloppe plutôt qu'en
+      réécriture du corps (55 lignes, 5 retours anticipés).
+
+H18 L'icône du Coffre s'affichait en session leurre pendant la fenêtre de repli du
+    flux agrégé, qui resservait sa valeur en cache (`isPanicDecoy = false`).
+    → État dérivé DIRECTEMENT du verrou, source chaude avec repli `Locked`.
+      L'ancien champ est marqué `@Deprecated` avec la raison.
+
+M1  Le compte à rebours du blocage était one-shot et ne se réarmait jamais.
+    `refreshLockoutIfExpired` peut légitimement refuser ; l'état restait alors
+    `LockedOut`, la boucle était finie, et RIEN ne la relançait. Bouton mort
+    jusqu'à ce que l'utilisateur tue le processus.
+    → La boucle sort sur le VERDICT, pas sur l'heure.
+
+M9  Les URI de partage entrantes n'étaient ni filtrées ni validées : une app
+    tierce pouvait pointer `EXTRA_STREAM` sur NOS fichiers privés (pièce jointe
+    MMS, PDF d'export d'une conversation) et faire réexpédier un fichier interne.
+    → `content://` uniquement, jamais notre propre autorité.
+    ⚠️ Le KDoc affirmait que le pipeline aval « inspecte le header image » :
+      VÉRIFIÉ, C'EST FAUX. Corrigé — un commentaire faussement rassurant détourne
+      le prochain auditeur d'un contrôle qui n'existe pas.
+
+M10 La purge de verrouillage effaçait le PDU d'un MMS EN VOL — fichier lu PLUS
+    TARD par le service MMS du système. Le MMS ne partait jamais et basculait en
+    échec un quart d'heure après, sans cause visible. Aggravant : `forceLock()`
+    est un no-op sans verrou armé, mais la purge s'exécutait quand même.
+    → Purge PAR ÂGE (1 h).
+
+M-bis Une conversion raw-key interrompue n'était JAMAIS rattrapée : la base
+    absente, sa seule copie orpheline, et la branche « installation neuve » posait
+    son marqueur — Room créait une base VIDE. Perte totale et silencieuse.
+    → `recoverInterruptedSwap` appelée en tête de `ensureRawKeyed`. Une ligne.
+
+B1  `VaultManager` énumérait les états au lieu d'interroger le prédicat qui fait
+    autorité, et oubliait `LockedOut`.
+    ⚠️ Vérifié AVANT de toucher que `isOpenForUi` accepte `Disabled` — sinon
+      j'aurais cassé le déplacement vers le coffre pour tout utilisateur SANS
+      verrou, le cas le plus courant.
+
+B3  `markRead` non transactionnel. Sur `markAllRead`, l'écriture SYSTÈME est
+    restée hors transaction, délibérément : ContentProvider tiers, son échec ne
+    doit pas annuler le marquage local.
+
+B4  `refreshAllConversationPreviewsAfterPurge` n'excluait pas les sentinelles de
+    réaction, contrairement à ses deux requêtes sœurs : aperçu vide et ordre de
+    tri faussé après une purge.
+
+B6  Le destinataire `sms:`/`smsto:` n'était pas validé, alors que le KDoc
+    affirmait le contraire. Toute chaîne créait une conversation au libellé
+    contrôlé par l'appelant — amorce d'hameçonnage.
+    → Aligné sur les bornes de `HeadlessSmsSendService`.
+
+B7  Les PDF d'export EN CLAIR survivaient indéfiniment en mode « prochain
+    lancement ». → Purge découplée du délai de verrouillage.
+
+B8  `errorCode = -1` en dur au lieu de `SendErrorCode.SYNCHRONOUS`.
+
+B2  CONTRADICTION DE CONTRAT levée : un KDoc affirmait « les fichiers vivent tant
+    que la ligne existe » et « la suppression n'a lieu QU'ICI », l'autre les
+    supprimait à l'annulation. → Annulation CONDITIONNELLE (`cancelIfPending`,
+    symétrique de `claimForSending`) ; les fichiers ne partent que si elle a
+    réellement pris. Si le worker a revendiqué l'envoi, on n'y touche pas.
+
+================================================================================
+7. FAMILLE 4 — cinq fonctionnalités câblées, une retirée
+================================================================================
+
+F1  Épingler / archiver / sourdine — trois gestes ajoutés au menu d'appui long
+    (les six libellés existaient déjà, traduits, sans référent). Le tri « Épinglés
+    d'abord », la page Archivés et les deux badges cessent d'être décoratifs.
+    ⚠️ `muted` est en plus RESPECTÉ par le notifier : il n'était lu par aucun
+      notificateur, donc la sourdine n'aurait rien silencié.
+
+F2  Favoris — action ajoutée sur les trois types de bulle. La promesse « les
+    messages favoris ne sont jamais supprimés », affichée trois fois, est enfin
+    tenue : la purge s'appuyait déjà sur le drapeau, seul le geste manquait.
+
+F3  Signature automatique — était ajoutée à CHAQUE SMS sortant et impossible à
+    définir. Réglage + dialogue, plafond 80 caractères avec compteur (au-delà, le
+    SMS bascule en multi-part donc en facturation ×N).
+
+F4  Délai de verrouillage automatique — lu par la production, figé sur son défaut
+    faute de sélecteur. Les cinq valeurs sont désormais atteignables.
+
+F6  Réconciliation des suppressions — triptyque complet, jamais câblé, alors que
+    trois KDoc l'affirmaient implémentée. Un SMS supprimé ailleurs restait
+    visible ici indéfiniment.
+    ⚠️ TROIS GARDE-FOUS BLOQUANTS, parce que le câblage naïf DÉTRUIT LA BASE :
+      (1) SMS uniquement — la liste miroir contient aussi les URI de MMS, or la
+          lecture système ne couvre que `content://sms` : sans filtre, tous les
+          MMS étaient vus « supprimés » ;
+      (2) jamais sur une lecture vide — `readAllSmsIds()` rend un tableau vide
+          aussi bien si le fournisseur est vide que si la requête ÉCHOUE ;
+      (3) découpage sous la limite SQLite de 999 paramètres.
+
+F5  Sauvegarde automatique — RETIRÉE ENTIÈREMENT, sur décision explicite.
+    Morte à trois niveaux : worker jamais mis en file, aucune UI, et refus du
+    format `.smsbk` par défaut faute de phrase secrète. La rendre réelle imposait
+    de persister un secret de chiffrement ; le repli XML non chiffré aurait été
+    une régression de confidentialité.
+    Supprimés : `BackupWorker`, `runScheduledBackup`, `writeXmlCompat`, les champs
+    `autoBackup`/`destinationUri`/`keepLast`/`format`, les enums
+    `AutoBackupFrequency` et `BackupFormat`, la string orpheline, `xmlEscape`.
+    ⚠️ Les 4 clés DataStore sont CONSERVÉES pour EFFACER les valeurs déjà
+      persistées — `backup.uri` désignait un dossier de l'utilisateur sans plus
+      rien pour le justifier.
+    Défaut corrigé au passage : le fichier de destination était créé AVANT le
+    refus du format, donc chaque exécution déposait un fichier VIDE.
+    ✅ La sauvegarde MANUELLE est intacte, restauration comprise.
+
+F10 README — quatre affirmations fausses corrigées : la dictée `SpeechRecognizer`
+    (0 occurrence dans le dépôt ; c'est un MMS audio via `MediaRecorder`), le
+    changement de langue à chaud (0 occurrence ; l'app suit la langue système), la
+    sauvegarde XML (supprimée avec F5) et les réglages par conversation (jamais
+    implémentés). Ajout : les pièces jointes ne sont pas dans la sauvegarde.
+
+F11 `moveToVault` non gardée laissée publique à côté de sa jumelle gardée —
+    piège : le premier futur appelant aurait contourné en silence la politique
+    anti-leurre. → `private` (0 appelant, recensé).
+
+F12 Tests — 7 tests écrits sur `isLockoutActive`, la fonction dont dépend la
+    sortie du blocage et qui n'avait AUCUNE couverture : c'est le défaut de la
+    v1.26.0, resté vert de bout en bout. Deux d'entre eux verrouillent les
+    scénarios de manipulation d'horloge, dont celui qui a fait annuler mon propre
+    correctif M2.
+    ⚠️ Exécution VÉRIFIÉE dans le rapport XML (7 tests, 0 échec, 0 ignoré) — un
+      build vert ne le prouve pas, et c'est exactement le piège trouvé par l'audit.
+    Deux mentions « testé en instrumented » FAUSSES corrigées : aucun test ne
+    touche `EmergencyCallHelper` ni le PIN du coffre. Zones marquées « À COUVRIR ».
+
+================================================================================
+8. DÉFAUTS TROUVÉS DANS MES PROPRES CORRECTIFS, PUIS CORRIGÉS
+================================================================================
+La règle du projet — relancer une revue SUR les correctifs — a payé à chaque fois.
+
+(1) `runCatching` avalait `CancellationException` [correctif H15]
+    `onStart` annule précisément ce job au retour au premier plan. Mon repli
+    aurait donc lu ce retour comme un échec de lecture et appliqué le « chemin le
+    plus strict » : l'application se serait VERROUILLÉE et aurait PURGÉ ses caches
+    — brouillon vocal non envoyé compris — au moment même où l'utilisateur la
+    rouvre. → `try/catch` explicite qui relance l'annulation.
+
+(2) RÉGRESSION LIVRÉE SUR LE TÉLÉPHONE [correctif H1]
+    `lockVaultOnLeave` vaut `true` par défaut et le Coffre se referme
+    IMMÉDIATEMENT à chaque passage en arrière-plan. Mon masquage vidait donc le
+    fil du Coffre ouvert, et « Envoyer » devenait MUET (tous les chemins d'envoi
+    retournent en silence sur `conversation == null`). Avant H1, ce `null` n'était
+    atteignable qu'en leurre.
+    → `observeVaultHidden` distingue « masqué par le Coffre » de « inexistant », et
+      l'écran ressort du fil. ⚠️ Sortie différée par `withResumed` : la fermeture
+      survient pendant `onStop`, donc dépiler à cet instant viserait l'écran voisin.
+
+(3) Ma garde MMS du WAP-Push était un NO-OP SILENCIEUX [correctif H5]
+    `parsed.from?.string` porte `/TYPE=PLMN`, donc `blockKey()` le traitait comme
+    un expéditeur alphanumérique et ne matchait jamais. Elle ne bloquait RIEN.
+    → `stripMmsAddressSuffix` remonté dans `core/ext`, partagé.
+
+(4) `senderHint` non nettoyé — justement la branche qui sert quand le
+    `RetrieveConf` n'a pas de `From:`, donc le cas qui justifie la garde miroir.
+
+(5) Garde posée APRÈS `persistAttachment` : la pièce jointe d'un expéditeur bloqué
+    restait sur le disque POUR TOUJOURS (`purgeTransientCaches` exclut ce dossier).
+    Mon propre commentaire affirmait le contraire.
+
+(6) ⚠️ MON CORRECTIF M2 INVERSAIT LA FAILLE — ANNULÉ.
+    J'avais fait de l'horloge monotone l'autorité, la murale devenant un repli
+    borné à 24 h. Après un redémarrage — seul cas où la monotone devient
+    inexploitable — il suffisait de RECULER l'horloge pour que la borne saute et
+    libère le blocage, sans viser aucune valeur précise. L'attaquant gagnait une
+    tentative par cycle, dégradant la temporisation exponentielle en coût constant.
+    Et le défaut visé était, de mon propre aveu, AUTO-RÉSOLUTIF (NTP ou réglage
+    manuel). J'avais échangé une gêne réparable contre un contournement du garde
+    anti-force-brute. → Comportement strict restauré et documenté.
+
+(7) Seuil de rapprochement 9 → 8 chiffres.
+    `blockKey()` PLAFONNE déjà à 9, donc exiger `>= 9` revenait à exiger
+    exactement 9 — et cassait le rapprochement pour tout numéro national à
+    8 chiffres significatifs. La discrimination `06`/`07` vient de `blockKey()`
+    lui-même, pas du seuil.
+
+(8) Rétention des PDU 24 h → 1 h. J'avais repris le seuil du nettoyage périodique,
+    qui répond à un besoin différent ; ici on arbitre une FENÊTRE D'EXPOSITION.
+
+(9) ⚠️ J'AVAIS REPRODUIT L'ERREUR QUE CET AUDIT TRAQUE [correctif H2]
+    J'ai protégé `OPEN_CONVERSATION` et laissé `OPEN_EMERGENCY` GRANDE OUVERTE —
+    même activité exposée, même type d'Intent explicite, même constante publique.
+    → Jeton étendu aux deux branches, constante d'extra centralisée.
+    Corrigé aussi `SECURITY.md`, qui justifiait l'absence de protection par « pas
+    exposé en intent-filter » : c'est précisément le raisonnement faux que mon
+    propre correctif venait de démontrer.
+
+(10) Fail-closed manquant sur la lecture du jeton : mon nouveau chemin faisait de
+     l'E/S là où il n'y en avait pas, donc un magasin corrompu aurait fait
+     CRASHER `AppRoot` au moindre tap sur notification.
+
+(11) Deux commentaires rendus CONTRADICTOIRES dans le même changeset (seuil de
+     purge des PDU). Corrigé.
+
+(12) Erreur d'état rattrapée avant livraison [correctif H6] : j'avais écrit
+     `state = 1` pour la revendication, or 1 c'est `SENT` — le message aurait été
+     marqué envoyé AVANT de l'être.
+
+================================================================================
+9. CE QUI N'A PAS ÉTÉ FAIT, ET POURQUOI
+================================================================================
+
+- `requestMoveToVault` ouvre encore la session du Coffre sans second facteur
+  (déplacer une conversation vers le coffre suffit). Sémantique inchangée depuis
+  l'origine, mais elle LIMITE la portée de H1. À trancher.
+- La sauvegarde reste gardée contre le leurre mais pas contre le coffre verrouillé.
+- Les orphelins F7 (13 réglages sans consommateur), F8 (5 colonnes Room), F9
+  (QuickReply) et F13 (code mort bénin) n'ont pas été supprimés : ce sont des
+  suppressions de schéma et de champs persistés, qui méritent leur propre lot et
+  leur propre validation.
+- La whitelist `EmergencyCallHelper` et le PIN du coffre restent SANS TEST, ce qui
+  est désormais écrit dans les fichiers concernés au lieu d'être masqué par une
+  affirmation fausse.
+
+================================================================================
+10. ÉTAT ET PROCHAINES ÉTAPES
+================================================================================
+
+RIEN N'EST COMMITÉ NI TAGUÉ. Tout est dans l'arbre de travail.
+
+Le téléphone (S24 FE) tourne encore une build ANTÉRIEURE à ces lots — la dernière
+installation date d'avant les lots A→E. Une réinstallation est nécessaire pour
+tester ce qui précède.
+
+Rollback complet possible à tout moment :
+    git checkout -- .
+    rm data/src/main/java/com/filestech/sms/security/VaultSessionState.kt
+    rm app/src/main/java/com/filestech/sms/system/notifications/NotificationIntentToken.kt
+    rm data/src/test/java/com/filestech/sms/data/local/datastore/LockoutSnapshotTest.kt
+    adb install -r <APK de la release v1.26.0>   # même signature, sans perte
+
+Prochaine étape convenue : tests sur appareil, puis rédaction du MODÈLE DE MENACE
+écrit — la mesure qui s'attaque à la cause plutôt qu'aux symptômes, puisque
+l'asymétrie entre gardes est ce qui a produit la majorité des défauts de cet audit.
+================================================================================

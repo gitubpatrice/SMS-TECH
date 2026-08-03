@@ -44,7 +44,9 @@ import javax.inject.Singleton
  *
  * **Sécurité** :
  *  - `setContentIntent` cible `MainActivity::class.java` explicitement,
- *    action `ACTION_OPEN_EMERGENCY` (constante), `FLAG_IMMUTABLE`.
+ *    action `ACTION_OPEN_EMERGENCY` (constante), `FLAG_IMMUTABLE`, et porte depuis
+ *    la v1.26.1 le secret [NotificationIntentToken] : `MainActivity` etant expose,
+ *    un Intent EXPLICITE d'une app tierce contournerait sinon tout intent-filter.
  *  - Quick actions 112 / 17 = broadcast vers `EmergencyShortcutReceiver`
  *    (`exported=false`). Aucune app tierce ne peut déclencher.
  *  - Numéros 112 et 17 hardcodés dans `EmergencyCallHelper.ALLOWED_NUMBERS`
@@ -60,6 +62,12 @@ import javax.inject.Singleton
 @Singleton
 class EmergencyShortcutNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
+    // v1.26.1 (audit SEC-A1) — authentifie l'intent d'ouverture du Mode urgence, exactement
+    // comme pour l'ouverture de conversation. Sans ce secret, une app tierce pouvait forger
+    // `ACTION_OPEN_EMERGENCY` sur `MainActivity`, qui est expose (role SMS) : un Intent
+    // EXPLICITE ignore les `<intent-filter>`, lesquels ne gouvernent que la resolution des
+    // intents implicites.
+    private val intentToken: NotificationIntentToken,
 ) {
 
     /**
@@ -70,7 +78,7 @@ class EmergencyShortcutNotifier @Inject constructor(
      *   la police nationale FR (opt-in spécifique France). Max 3 actions
      *   par notif Android — URGENCE + 112 + 17 saturé.
      */
-    fun postShortcut(policeEnabled: Boolean = false) {
+    suspend fun postShortcut(policeEnabled: Boolean = false) {
         if (!hasPostPermission()) {
             Timber.w("EmergencyShortcutNotifier: POST_NOTIFICATIONS not granted, skipping")
             return
@@ -117,6 +125,7 @@ class EmergencyShortcutNotifier @Inject constructor(
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
                 android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP or
                 android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(NotificationIntentToken.EXTRA_NAV_TOKEN, intentToken.current())
         }
         val openEmergencyPI = PendingIntent.getActivity(
             context,

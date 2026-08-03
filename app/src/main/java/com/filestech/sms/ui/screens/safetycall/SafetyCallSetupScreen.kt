@@ -132,6 +132,9 @@ fun SafetyCallSetupScreen(
                             R.string.safety_call_setup_contact_max_reached
                         SafetyCallSetupViewModel.ValidationReason.EmptyCustomMessage ->
                             R.string.safety_call_setup_save_validation_custom_empty
+                        // v1.26.1 (audit M5) — carnet partagé avec le Mode urgence.
+                        SafetyCallSetupViewModel.ValidationReason.SharedWithEmergency ->
+                            R.string.safety_call_setup_shared_with_emergency
                     }
                     // v1.9.0 — validation = erreur rouge, pas confirmation bleue.
                     snackbarHost.showError(ctx.getString(msgRes))

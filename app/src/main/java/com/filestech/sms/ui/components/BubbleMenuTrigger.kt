@@ -8,6 +8,8 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -60,6 +62,12 @@ fun BubbleMenuTrigger(
      * passes `null` for bubbles where forwarding is not yet supported.
      */
     onForward: (() -> Unit)? = null,
+    /**
+     * v1.26.1 (audit F2) — bascule « favori ». `starred` porte l'état courant pour choisir le
+     * libellé. `null` désactive l'entrée (mode leurre).
+     */
+    starred: Boolean = false,
+    onToggleStar: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -160,6 +168,33 @@ fun BubbleMenuTrigger(
                     onClick = {
                         expanded = false
                         onReact()
+                    },
+                )
+            }
+            // v1.26.1 (audit F2) — « Favori ». `MessageDao.setStarred` existait avec ZÉRO
+            // appelant, alors que trois chaînes promettaient à l'utilisateur que « les messages
+            // favoris ne sont jamais supprimés » et que la purge automatique s'appuie réellement
+            // sur le drapeau (`DELETE … AND starred = 0`). La promesse ne protégeait donc rien :
+            // aucun message ne POUVAIT être mis en favori. Placé juste avant la suppression,
+            // parce que c'est précisément ce dont il protège.
+            if (onToggleStar != null) {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (starred) Icons.Outlined.Star else Icons.Outlined.StarBorder,
+                            contentDescription = null,
+                        )
+                    },
+                    text = {
+                        Text(
+                            stringResource(
+                                if (starred) R.string.action_unstar else R.string.action_star,
+                            ),
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onToggleStar()
                     },
                 )
             }

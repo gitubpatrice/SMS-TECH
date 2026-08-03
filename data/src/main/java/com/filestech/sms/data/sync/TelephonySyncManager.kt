@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
-import com.filestech.sms.core.ext.phoneSuffix8
+import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.MessageDao
@@ -213,23 +213,36 @@ class TelephonySyncManager @Inject constructor(
             // Union the Room mirror with a fresh read of the system blocklist. The Room snapshot
             // covers app-initiated blocks; the live system read covers entries the user already
             // had in Téléphone / Samsung Messages before the importer had a chance to mirror them.
-            // Suffix-8 matching absorbs international vs national format mismatches.
+            // v1.26.1 (audit H4) — `blockKey()` des DEUX côtés, plus `phoneSuffix8()`. Jumeau
+            // exact de [TelephonySyncWorker] : voir là-bas le détail des deux effets (perte
+            // silencieuse et définitive de messages d'un numéro NON bloqué qui partage ses
+            // 8 derniers chiffres avec un numéro bloqué ; et blocage inopérant sur les
+            // expéditeurs alphanumériques, dont la clé se réduisait à la chaîne vide).
             val roomBlocked = runCatching { blockedRepo.blockedNormalizedSnapshot() }.getOrDefault(emptySet())
             val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
             } else emptyList()
-            val blockedSuffixes = (roomBlocked.asSequence() + systemBlocked.asSequence())
-                .map { it.phoneSuffix8() }
+            val blockedKeys = (roomBlocked.asSequence() + systemBlocked.asSequence())
+                .map { it.blockKey() }
                 .filter { it.isNotEmpty() }
                 .toHashSet()
-            Timber.i("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)
+            Timber.i(
+                "runSync(%s) blocked sources: room=%d system=%d → keys=%d",
+                reason,
+                roomBlocked.size,
+                systemBlocked.size,
+                blockedKeys.size,
+            )
 
             var imported = 0
             var skipped = 0
             val newCursor = try {
                 telephonyReader.readSmsSince(sinceId = current, pageSize = 500) { page ->
-                    val filtered = if (blockedSuffixes.isEmpty()) page
-                    else page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }
+                    val filtered = if (blockedKeys.isEmpty()) {
+                        page
+                    } else {
+                        page.filter { it.entity.address.blockKey() !in blockedKeys }
+                    }
                     skipped += page.size - filtered.size
                     if (filtered.isNotEmpty()) {
                         // v1.8.0 (post-audit fix badges fresh install S24) — au
@@ -264,11 +277,69 @@ class TelephonySyncManager @Inject constructor(
             } else {
                 Timber.i("runSync(%s) done; no new rows (skipped(blocked)=%d)", reason, skipped)
             }
+            reconcileDeletions()
             _state.value = State.Idle
         }
+    }
+
+    /**
+     * v1.26.1 (audit F6) — passe de réconciliation des suppressions.
+     *
+     * Le triptyque `listMirroredTelephonyUris` / `readAllSmsIds` / `deleteByTelephonyUris`
+     * existait, complet, avec **zéro appelant** — alors que les trois KDoc affirmaient la
+     * fonctionnalité implémentée. Conséquence : un SMS effacé depuis une autre application ou
+     * depuis les réglages système restait visible indéfiniment ici, l'utilisateur croyant l'avoir
+     * supprimé.
+     *
+     * ⚠️ C'est la passe la plus dangereuse de l'application : elle EFFACE des messages. Trois
+     * garde-fous, chacun bloquant, parce que ce chemin naïf détruit toute la base :
+     *
+     *  1. **SMS uniquement.** `listMirroredTelephonyUris()` rend aussi les URI de MMS
+     *     (`ConversationMirror` écrit `content://mms/<id>`), or `readAllSmsIds()` ne lit que
+     *     `content://sms`. Sans ce filtre, TOUS les MMS miroités seraient vus comme supprimés.
+     *  2. **Jamais sur une lecture vide.** `readAllSmsIds()` rend un tableau vide aussi bien
+     *     quand le fournisseur est vide que quand la requête ÉCHOUE (permission retirée en
+     *     cours de route, provider indisponible) — les deux sont indiscernables. On refuse donc
+     *     d'effacer quoi que ce soit tant qu'on a des lignes miroir et que le système n'en rend
+     *     aucune.
+     *  3. **Découpage sous la limite SQLite** de 999 paramètres hôtes.
+     *
+     * Le coffre est déjà exclu par la requête elle-même (`c.in_vault = 0`) : ses messages
+     * n'existent que dans notre base et n'ont rien à réconcilier.
+     */
+    private suspend fun reconcileDeletions() {
+        if (!hasReadSmsPermission()) return
+        runCatching {
+            val mirrored = messageDao.listMirroredTelephonyUris()
+                .filter { it.startsWith(SMS_URI_PREFIX) }
+            if (mirrored.isEmpty()) return@runCatching
+            val systemIds = telephonyReader.readAllSmsIds()
+            if (systemIds.isEmpty()) {
+                // Garde-fou 2 : indiscernable d'un échec de lecture. On ne détruit rien.
+                Timber.w("reconcileDeletions: provider returned 0 SMS while %d mirrored — skipped", mirrored.size)
+                return@runCatching
+            }
+            val alive = HashSet<String>(systemIds.size)
+            systemIds.forEach { alive += "$SMS_URI_PREFIX$it" }
+            val gone = mirrored.filterNot { it in alive }
+            if (gone.isEmpty()) return@runCatching
+            var removed = 0
+            gone.chunked(SQLITE_HOST_PARAM_LIMIT).forEach { batch ->
+                removed += messageDao.deleteByTelephonyUris(batch)
+            }
+            Timber.i("reconcileDeletions: %d local row(s) dropped (deleted system-side)", removed)
+        }.onFailure { Timber.w(it, "reconcileDeletions failed") }
     }
 
     private fun hasReadSmsPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
             PackageManager.PERMISSION_GRANTED
+
+    private companion object {
+        /** v1.26.1 (audit F6) — seules les lignes SMS sont réconciliables, cf. [reconcileDeletions]. */
+        const val SMS_URI_PREFIX = "content://sms/"
+
+        /** SQLite plafonne `IN (…)` à 999 paramètres hôtes ; on reste dessous. */
+        const val SQLITE_HOST_PARAM_LIMIT = 900
+    }
 }

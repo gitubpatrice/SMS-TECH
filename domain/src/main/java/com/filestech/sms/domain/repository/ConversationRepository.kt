@@ -13,6 +13,15 @@ interface ConversationRepository {
     fun observeOne(id: Long): Flow<Conversation?>
 
     /**
+     * v1.26.1 — `true` quand la conversation existe mais que son contenu est masqué parce que
+     * le Coffre s'est refermé pour cette session. Permet à l'écran de fil de distinguer « masqué
+     * par le Coffre » de « conversation inexistante » et de ressortir au lieu d'afficher un fil
+     * vide dont l'envoi échoue en silence. Toujours `false` en session leurre — voir
+     * l'implémentation.
+     */
+    fun observeVaultHidden(id: Long): Flow<Boolean>
+
+    /**
      * The **entire** thread. Kept unbounded for consumers that need the full history, such as the
      * PDF export. The thread UI uses [observeMessagesWindow] instead.
      */
@@ -61,6 +70,15 @@ interface ConversationRepository {
     suspend fun markAllRead()
     suspend fun delete(id: Long)
     suspend fun deleteMessage(messageId: Long)
+
+    /**
+     * v1.26.1 (audit F2) — marque ou démarque un message comme favori.
+     *
+     * `MessageDao.setStarred` existait sans aucun appelant, alors que la purge automatique
+     * épargne déjà les favoris (`DELETE … AND starred = 0`) et que l'interface le promet à
+     * l'utilisateur. Sans ce chemin d'écriture, la promesse ne protégeait rien.
+     */
+    suspend fun setMessageStarred(messageId: Long, starred: Boolean)
     suspend fun search(query: String): List<Message>
 
     /**

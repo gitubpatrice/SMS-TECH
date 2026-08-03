@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -121,6 +122,11 @@ class ConversationsViewModel @Inject constructor(
          * [com.filestech.sms.data.repository.ConversationRepositoryImpl.observeVault], it makes
          * the panic decoy a real privacy backstop (audit S-P0-1).
          */
+        @Deprecated(
+            "v1.26.1 (audit H18) — ne plus lire ce champ pour masquer une entrée sensible : il " +
+                "vaut `false` pendant toute la fenêtre de repli du flux agrégé. Utiliser " +
+                "`ConversationsViewModel.isPanicDecoy`, dérivé directement de l'état du verrou.",
+        )
         val isPanicDecoy: Boolean = false,
         /**
          * v1.14.0 — `true` si l'user a déclenché le mode urgence il y a moins de
@@ -302,7 +308,47 @@ class ConversationsViewModel @Inject constructor(
         settings.update { it.copy(conversations = it.conversations.copy(sortMode = mode)) }
     }
 
+    /**
+     * v1.26.1 (audit H18) — état leurre dérivé DIRECTEMENT du verrou, hors du flux agrégé.
+     *
+     * Porté par `UiState`, il valait `false` pendant toute la fenêtre de repli : le `combine`
+     * amont agrège Room, DataStore et l'état de synchronisation en `flowOn(io)`, donc sa première
+     * émission coûte une requête chiffrée et un appel Binder. Et avec `WhileSubscribed(5 s)`, la
+     * valeur EN CACHE — calculée avant le verrouillage, donc avec `isPanicDecoy = false` — était
+     * resservie au dépilement de l'écran de verrouillage. Résultat : en session leurre, l'icône
+     * du Coffre s'affichait le temps que le flux redémarre, alors que tout le mode leurre
+     * s'emploie à nier son EXISTENCE.
+     *
+     * Ici la source est `appLock.state`, déjà chaude et autoritaire, avec un repli `Locked` —
+     * donc jamais « session normale » par défaut.
+     */
+    val isPanicDecoy: StateFlow<Boolean> = appLock.state
+        .map { it is AppLockManager.LockState.PanicDecoy }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     fun delete(id: Long) = viewModelScope.launch { toggle.delete(id) }
+
+    /**
+     * v1.26.1 (audit F1) — épingler / archiver / mettre en sourdine.
+     *
+     * `setPinned`, `setArchived` et `setMuted` existaient sur les quatre couches — DAO,
+     * repository, interface, use case — avec **zéro appelant**. L'interface, elle, montrait déjà
+     * les conséquences : le tri « Épinglés d'abord » du menu 3-points était donc rigoureusement
+     * identique au tri par date, la sous-page « Archivés » était structurellement toujours vide,
+     * et les deux badges de [ConversationRow] ne pouvaient jamais s'allumer. Les six libellés
+     * étaient déjà traduits FR et EN, référencés par personne. Il ne manquait que le geste.
+     */
+    fun togglePinned(conversation: Conversation) = viewModelScope.launch {
+        toggle.setPinned(conversation.id, !conversation.pinned)
+    }
+
+    fun toggleArchived(conversation: Conversation) = viewModelScope.launch {
+        toggle.setArchived(conversation.id, !conversation.archived)
+    }
+
+    fun toggleMuted(conversation: Conversation) = viewModelScope.launch {
+        toggle.setMuted(conversation.id, !conversation.muted)
+    }
 
     /**
      * v1.25.3 — débloque toutes les adresses d'une conversation. Le geste réparateur du blocage :

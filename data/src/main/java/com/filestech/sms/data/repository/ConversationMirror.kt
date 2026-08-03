@@ -3,7 +3,8 @@ package com.filestech.sms.data.repository
 import android.telephony.PhoneNumberUtils
 import androidx.room.withTransaction
 import com.filestech.sms.core.ext.WireAddress
-import com.filestech.sms.core.ext.phoneSuffix8
+import com.filestech.sms.core.ext.blockKey
+import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
@@ -108,9 +109,26 @@ class ConversationMirror @Inject constructor(
                 scheduledAt = null,
                 attachmentsCount = 0,
             )
-            val msgId = messageDao.insert(msg)
-            touchConversation(convId, date, body, deltaUnread = +1)
-            msgId
+            // v1.26.1 (audit M11) — on distingue une INSERTION RÉELLE d'un conflit ignoré.
+            //
+            // L'insert est en `IGNORE` sur l'index `UNIQUE(telephony_uri)` et rend `-1` quand la
+            // ligne existe déjà — typiquement quand une synchronisation a miroité le même SMS
+            // depuis `content://sms` entre l'écriture système du receveur et cet appel. Le retour
+            // était ignoré, avec deux effets : le compteur de non-lus était incrémenté une
+            // SECONDE fois pour un seul message, et le receveur, ne retrouvant pas `-1` en base,
+            // abandonnait la notification — le SMS arrivait sans être signalé.
+            //
+            // Le chemin en MASSE avait été corrigé pour ce motif exact en v1.8.0 ; le chemin
+            // unitaire ne l'avait pas été.
+            val insertedId = messageDao.insert(msg)
+            if (insertedId > 0L) {
+                touchConversation(convId, date, body, deltaUnread = +1)
+                insertedId
+            } else {
+                // Conflit : on rend l'id de la ligne DÉJÀ présente pour que l'appelant puisse
+                // quand même notifier, et on ne touche pas au compteur.
+                telephonyUri?.let { messageDao.findByTelephonyUri(it)?.id } ?: -1L
+            }
         }
     }
 
@@ -237,10 +255,16 @@ class ConversationMirror @Inject constructor(
         // Avoid creating an empty conversation just to lookup against it — only
         // proceed if a conversation for this address already exists.
         val csv = addr.raw
+        // v1.26.1 (audit H13, par cohérence) — même clé que les deux replis d'import : à 8
+        // chiffres, une réaction reçue de `0612345678` pouvait se poser sur la conversation de
+        // `0712345678`. Laisser ce site sur l'ancienne clé aurait recréé l'asymétrie même que
+        // l'audit condamne.
+        val incomingKey = addr.raw.stripMmsAddressSuffix().blockKey()
         val existing = conversationDao.findByAddressesCsv(csv)
             ?: conversationDao.snapshotOneToOneConversations().firstOrNull { conv ->
-                PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw?.phoneSuffix8() ==
-                    addr.raw.phoneSuffix8()
+                val convKey = PhoneAddress.list(conv.addressesCsv).firstOrNull()
+                    ?.raw?.stripMmsAddressSuffix()?.blockKey()
+                convKey != null && convKey == incomingKey
             }
             ?: return@withContext null
         val target = when (kind) {
@@ -369,7 +393,15 @@ class ConversationMirror @Inject constructor(
 
     // v1.16.0 — Paramètre `status` typé MessageStatus (était Int) — propagation depuis le DAO.
     override suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int?) = withContext(io) {
-        messageDao.updateStatus(localId, status, errorCode)
+        // v1.26.1 (audit M8) — promotion monotone : le statut d'un envoi ne peut que progresser.
+        // Voir [MessageDao.promoteStatusMonotonic] : c'est ce qui empêche l'accusé positif d'une
+        // partie d'écraser l'échec d'une autre sur un SMS multi-parties.
+        messageDao.promoteStatusMonotonic(localId, status, status.rawValue, errorCode)
+    }
+
+    /** v1.26.1 (audit M8) — voir [OutgoingMessageMirror.resetOutgoingForRetry]. */
+    override suspend fun resetOutgoingForRetry(localId: Long) = withContext(io) {
+        messageDao.updateStatus(localId, MessageStatus.PENDING, errorCode = null)
     }
 
     /**
@@ -788,12 +820,28 @@ class ConversationMirror @Inject constructor(
         // the gateway-decorated form (e.g. "+33617332729/TYPE=PLMN"), the exact-CSV match
         // misses but the last 8 digits do agree. Same rationale as [ensureConversation].
         if (addresses.size == 1) {
-            val incomingSuffix = addresses.first().raw.phoneSuffix8()
-            if (incomingSuffix.length == 8) {
+            // v1.26.1 (audit H13) — rapprochement sur `blockKey()` (9 chiffres
+            // significatifs) et non plus `phoneSuffix8()`.
+            //
+            // Huit chiffres amputaient le chiffre qui distingue un `06…` d'un `07…` :
+            // `0612345678` et `0712345678` — DEUX PERSONNES DIFFÉRENTES — partageaient
+            // leur clé. À l'import, les messages de l'une étaient rattachés à la
+            // conversation de l'autre, sous son nom ; répondre dans ce fil envoyait au
+            // mauvais destinataire. Le fichier `StringExt` documente déjà cette raison
+            // pour la liste noire, et la passe de déduplication se disait elle-même
+            // « PLUS stricte que le suffix-8 de la réception ».
+            //
+            // ⚠️ `stripMmsAddressSuffix` d'abord : l'en-tête `From:` d'un PDU porte
+            // `/TYPE=PLMN`, or `blockKey()` bascule en mode alphanumérique dès qu'il voit
+            // une lettre — sans ce nettoyage il rendrait la chaîne entière et casserait
+            // précisément le cas que ce repli existe pour couvrir.
+            val incomingKey = addresses.first().raw.stripMmsAddressSuffix().blockKey()
+            if (incomingKey.length >= CONV_MATCH_MIN_DIGITS && incomingKey.all { it.isDigit() }) {
                 val oneToOne = conversationDao.snapshotOneToOneConversations()
                 val match = oneToOne.firstOrNull { conv ->
                     val convAddress = PhoneAddress.list(conv.addressesCsv).firstOrNull()
-                    convAddress != null && convAddress.raw.phoneSuffix8() == incomingSuffix
+                    convAddress != null &&
+                        convAddress.raw.stripMmsAddressSuffix().blockKey() == incomingKey
                 }
                 if (match != null) {
                     if (systemThreadId > 0L && match.threadId != systemThreadId) {
@@ -852,12 +900,28 @@ class ConversationMirror @Inject constructor(
         //    deux participants partiels ne doivent PAS être confondus avec un autre
         //    groupe via suffix.
         if (addresses.size == 1) {
-            val incomingSuffix = addresses.first().raw.phoneSuffix8()
-            if (incomingSuffix.length == 8) {
+            // v1.26.1 (audit H13) — rapprochement sur `blockKey()` (9 chiffres
+            // significatifs) et non plus `phoneSuffix8()`.
+            //
+            // Huit chiffres amputaient le chiffre qui distingue un `06…` d'un `07…` :
+            // `0612345678` et `0712345678` — DEUX PERSONNES DIFFÉRENTES — partageaient
+            // leur clé. À l'import, les messages de l'une étaient rattachés à la
+            // conversation de l'autre, sous son nom ; répondre dans ce fil envoyait au
+            // mauvais destinataire. Le fichier `StringExt` documente déjà cette raison
+            // pour la liste noire, et la passe de déduplication se disait elle-même
+            // « PLUS stricte que le suffix-8 de la réception ».
+            //
+            // ⚠️ `stripMmsAddressSuffix` d'abord : l'en-tête `From:` d'un PDU porte
+            // `/TYPE=PLMN`, or `blockKey()` bascule en mode alphanumérique dès qu'il voit
+            // une lettre — sans ce nettoyage il rendrait la chaîne entière et casserait
+            // précisément le cas que ce repli existe pour couvrir.
+            val incomingKey = addresses.first().raw.stripMmsAddressSuffix().blockKey()
+            if (incomingKey.length >= CONV_MATCH_MIN_DIGITS && incomingKey.all { it.isDigit() }) {
                 val oneToOne = conversationDao.snapshotOneToOneConversations()
                 val match = oneToOne.firstOrNull { conv ->
                     val convAddress = PhoneAddress.list(conv.addressesCsv).firstOrNull()
-                    convAddress != null && convAddress.raw.phoneSuffix8() == incomingSuffix
+                    convAddress != null &&
+                        convAddress.raw.stripMmsAddressSuffix().blockKey() == incomingKey
                 }
                 if (match != null) {
                     if (match.displayName == null && resolved != null) {
@@ -1009,6 +1073,24 @@ class ConversationMirror @Inject constructor(
 
     private companion object {
         const val MAX_PREVIEW = 240
+
+        /**
+         * v1.26.1 (audit H13) — nombre minimal de chiffres exigé pour rapprocher deux écritures
+         * d'un même correspondant.
+         *
+         * ⚠️ HUIT, et non neuf. Une première version exigeait 9, par symétrie avec
+         * `BLOCK_KEY_SIGNIFICANT_DIGITS`. La revue a montré que c'était une RÉGRESSION : comme
+         * `blockKey()` PLAFONNE déjà à 9 chiffres, exiger `length >= 9` revenait à exiger
+         * exactement 9 — donc à ne plus jamais rapprocher un numéro national à 8 chiffres
+         * significatifs (Singapour, Hong Kong…), qui matchait pourtant très bien avant.
+         *
+         * Le seuil ne sert qu'à écarter les codes courts, qu'on ne doit jamais rapprocher par
+         * suffixe. C'est `blockKey()` — et non ce seuil — qui apporte la discrimination : deux
+         * numéros français produisent deux clés de 9 chiffres DIFFÉRENTES, donc le défaut
+         * `0612345678` / `0712345678` reste corrigé, la comparaison étant une égalité stricte
+         * entre chaînes de même longueur.
+         */
+        const val CONV_MATCH_MIN_DIGITS = 8
 
         /**
          * v1.3.7 (F5 audit) — borne LRU du cache `displayNameCache`. 1000 entrées couvre largement

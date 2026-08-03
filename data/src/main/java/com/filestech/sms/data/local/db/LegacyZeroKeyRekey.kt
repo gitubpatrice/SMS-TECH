@@ -212,6 +212,17 @@ object LegacyZeroKeyRekey {
         dbFile: File = context.getDatabasePath(AppDatabase.DATABASE_NAME),
     ): Result {
         failures[dbFile.absolutePath]?.let { throw it }
+        // v1.26.1 (audit M-bis) — RATTRAPER un échange interrompu, AVANT toute autre décision.
+        //
+        // `recoverInterruptedSwap` n'était appelée que depuis `rekeyIfNeeded`, qui sort dès la
+        // première ligne quand le marqueur zéro-clé est posé — c'est-à-dire sur tout appareil
+        // ayant déjà démarré une fois. Un processus tué entre les deux `renameTo` de `swapIn`
+        // laissait donc `smstech.db` ABSENT et `.rekeyold` seul porteur des données ; au
+        // démarrage suivant, la branche « installation neuve » posait son marqueur et Room
+        // créait une base VIDE. Perte totale et silencieuse, alors que le fichier était encore
+        // là. La fenêtre est étroite — deux opérations de métadonnées — mais la conséquence est
+        // maximale, et le rattrapage ne coûte qu'un test d'existence de fichier.
+        recoverInterruptedSwap(dbFile)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(rawDoneKey(dbFile), false)) return Result.ALREADY_CORRECT
 

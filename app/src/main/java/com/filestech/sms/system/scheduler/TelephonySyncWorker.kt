@@ -1,7 +1,9 @@
 package com.filestech.sms.system.scheduler
 
 import android.content.Context
+import android.os.Build
 import androidx.hilt.work.HiltWorker
+import androidx.room.withTransaction
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -11,8 +13,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import android.os.Build
-import com.filestech.sms.core.ext.phoneSuffix8
+import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.MessageDao
@@ -56,6 +57,8 @@ class TelephonySyncWorker @AssistedInject constructor(
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
     private val mmsSystemWriteback: MmsSystemWriteback,
+    // v1.26.1 (audit H9) — nécessaire pour rendre la purge automatique atomique, cf. plus bas.
+    private val database: com.filestech.sms.data.local.db.AppDatabase,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -125,12 +128,20 @@ class TelephonySyncWorker @AssistedInject constructor(
                         // partagée avec [ConversationRepositoryImpl] ; les constantes
                         // SAFETY_NET_DAYS et MS_PER_DAY viennent de [PurgePolicy].
                         val cutoff = purgeCutoffMs(days, now)
-                        val purged = messageDao.purgeOlderThan(cutoff)
-                        if (purged > 0) {
-                            // v1.3.3 G1 audit fix — refresh preview/last_message_at après
-                            // purge auto pour éviter qu'une conv vidée garde l'ancien
-                            // preview en clair sur la liste (leak privacy).
-                            messageDao.refreshAllConversationPreviewsAfterPurge()
+                        // v1.26.1 (audit H9) — atomique, comme le jumeau
+                        // [ConversationRepositoryImpl.purgeHistoryNow]. Une mort du processus
+                        // entre le DELETE et le refresh laissait sinon l'aperçu EN CLAIR du
+                        // message purgé sur la liste, définitivement (la passe de réparation
+                        // est gardée par un drapeau déjà posé partout depuis la v1.24.0).
+                        val purged = database.withTransaction {
+                            val n = messageDao.purgeOlderThan(cutoff)
+                            if (n > 0) {
+                                // v1.3.3 G1 audit fix — refresh preview/last_message_at après
+                                // purge auto pour éviter qu'une conv vidée garde l'ancien
+                                // preview en clair sur la liste (leak privacy).
+                                messageDao.refreshAllConversationPreviewsAfterPurge()
+                            }
+                            n
                         }
                         settings.update {
                             it.copy(security = it.security.copy(lastAutoPurgeAt = now))
@@ -177,20 +188,34 @@ class TelephonySyncWorker @AssistedInject constructor(
         //  2. Live system snapshot — fresh read of `BlockedNumberContract`, so a Téléphone /
         //     Samsung Messages entry blocks SMS at first import even before the importer has
         //     had a chance to mirror it.
-        // Suffix-8 matching absorbs international vs. national format mismatches.
+        // v1.26.1 (audit H4) — `blockKey()` des DEUX côtés, plus `phoneSuffix8()`.
+        //
+        // La v1.25.4 a unifié la clé de liste noire sur `blockKey()` (9 chiffres significatifs,
+        // ou le libellé en minuscules pour un expéditeur alphanumérique) précisément parce que
+        // 8 chiffres amputaient le chiffre qui sépare un `06…` d'un `07…`. Ce chemin d'import
+        // était resté à 8, et re-tronquait des clés DÉJÀ en `blockKey`. Deux effets, tous deux
+        // faux : (1) bloquer `0612345678` faisait jeter EN SILENCE, à l'import, les messages du
+        // `0712345678` — un numéro jamais bloqué — et le curseur avançait quand même, donc la
+        // perte était définitive ; (2) une clé alphanumérique (« sfr ») donnait une chaîne vide,
+        // éliminée par le `filter`, si bien qu'un expéditeur alphanumérique bloqué passait.
+        // `blockKey()` est idempotente sur sa propre sortie, on peut donc l'appliquer
+        // uniformément au snapshot Room (déjà en clés) comme à la lecture système (brute).
         val roomBlocked = runCatching { blockedRepo.blockedNormalizedSnapshot() }
             .getOrDefault(emptySet())
         val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
         } else emptyList()
-        val blockedSuffixes = (roomBlocked.asSequence() + systemBlocked.asSequence())
-            .map { it.phoneSuffix8() }
+        val blockedKeys = (roomBlocked.asSequence() + systemBlocked.asSequence())
+            .map { it.blockKey() }
             .filter { it.isNotEmpty() }
             .toHashSet()
         var imported = 0
         val maxSeen = reader.readSmsSince(sinceId = sinceId, pageSize = 500) { page ->
-            val filtered = if (blockedSuffixes.isEmpty()) page
-            else page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }
+            val filtered = if (blockedKeys.isEmpty()) {
+                page
+            } else {
+                page.filter { it.entity.address.blockKey() !in blockedKeys }
+            }
             if (filtered.isNotEmpty()) {
                 mirror.bulkImportFromTelephony(filtered.map { it.entity })
             }

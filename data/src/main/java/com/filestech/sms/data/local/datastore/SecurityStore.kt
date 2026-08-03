@@ -18,6 +18,7 @@ private val Context.secStore by preferencesDataStore(name = "sms_tech_security")
 /**
  * Stores opaque blobs (hashed PIN, salts, panic codes…). Never stores cleartext credentials.
  */
+
 @Singleton
 class SecurityStore @Inject constructor(@ApplicationContext private val context: Context) {
 
@@ -96,15 +97,38 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
 
     data class LockoutSnapshot(val untilWall: Long, val setAtElapsed: Long, val durationMs: Long) {
         /**
-         * Audit R7 — Lockout actif si l'une des deux horloges (wall OU mono) dit "pas encore
-         * expiré". Mono est autoritaire contre la manipulation fwd de l'horloge système.
-         * Si mono baseline > nowElapsed → reboot détecté → mono check invalidé → fallback wall.
+         * Audit R7 — Lockout actif si l'une des deux horloges (murale OU monotone) dit « pas
+         * encore expiré ». La monotone (`elapsedRealtime`, qu'un utilisateur ne peut pas
+         * avancer) protège contre l'avance d'horloge ; la murale couvre le cas du redémarrage,
+         * qui réinitialise la monotone. Il faut que les DEUX soient expirées pour libérer —
+         * voir dans le corps pourquoi ce `||` n'a délibérément pas été assoupli.
          */
         fun isLockoutActive(nowMs: Long, nowElapsed: Long): Boolean {
             val wallLocked = untilWall > 0L && untilWall > nowMs
-            val monoLocked = setAtElapsed > 0L && durationMs > 0L
-                && nowElapsed >= setAtElapsed
-                && (nowElapsed - setAtElapsed) < durationMs
+            val monoLocked = setAtElapsed > 0L && durationMs > 0L &&
+                nowElapsed >= setAtElapsed &&
+                (nowElapsed - setAtElapsed) < durationMs
+            // v1.26.1 (audit M2) — LE `||` EST CONSERVÉ, ET C'EST DÉLIBÉRÉ.
+            //
+            // Une première version de ce correctif faisait de la monotone l'autorité, la murale
+            // n'étant qu'un repli borné à 24 h. La revue a montré que cela INVERSAIT la faille au
+            // lieu de la fermer : après un redémarrage (seul cas où la monotone devient
+            // inexploitable), il suffisait de RECULER l'horloge système pour que
+            // `untilWall <= nowMs + 24 h` devienne faux et que le blocage saute — sans viser
+            // aucune valeur précise. L'attaquant gagnait une tentative par cycle
+            // redémarrage + changement de date, ce qui dégrade la temporisation exponentielle en
+            // coût constant. L'ancien `||`, lui, gardait le blocage actif dans ce cas.
+            //
+            // Le défaut que la première version visait — un téléphone à plat qui redémarre sans
+            // réseau sur une horloge antérieure, et reste bloqué longtemps — est réel mais
+            // AUTO-RÉSOLUTIF : il disparaît dès que l'horloge se recale, par NTP au retour du
+            // réseau ou par réglage manuel, tous deux à la portée de l'utilisateur. Une gêne
+            // réparable ne justifie pas d'ouvrir un contournement du garde anti-force-brute.
+            //
+            // Les deux cas ne sont pas distinguables depuis l'horloge seule : toute règle qui
+            // libère le téléphone à RTC morte libère aussi l'attaquant. On tranche donc pour la
+            // stricte, conformément à la doctrine « ne jamais retirer une garde sans preuve
+            // qu'elle est morte ».
             return wallLocked || monoLocked
         }
     }
@@ -163,7 +187,39 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
     suspend fun setLastUnlock(ts: Long) = context.secStore.edit { it[K.lastUnlock] = ts }
     val lastUnlock: Flow<Long> = context.secStore.data.map { it[K.lastUnlock] ?: 0L }
 
+    /**
+     * v1.26.1 (audit H2) — secret PERSISTANT qui authentifie les intents internes que
+     * `MainActivity` route (ouverture d'une conversation depuis une notification).
+     *
+     * **Persistant, et non roté par notification.** Le modèle mono-usage de
+     * `SafetyCallIntentToken` ne convient pas ici : plusieurs notifications coexistent, et
+     * consommer le jeton de l'une invaliderait toutes les autres. **Persistant, et non en
+     * mémoire** : les notifications survivent à la mort du processus, et un secret régénéré au
+     * démarrage aurait fait échouer le tap sur une notification postée avant — une régression
+     * sur le chemin le plus courant de l'application.
+     *
+     * La génération est faite DANS le `edit`, donc sérialisée par DataStore : deux appels
+     * concurrents au tout premier lancement ne peuvent pas produire deux secrets différents.
+     */
+    suspend fun notificationTokenOrCreate(): Long {
+        var result = 0L
+        context.secStore.edit { p ->
+            val current = p[K.notifIntentToken] ?: 0L
+            result = if (current != 0L) {
+                current
+            } else {
+                var fresh: Long
+                val rnd = java.security.SecureRandom()
+                do { fresh = rnd.nextLong() } while (fresh == 0L) // 0 = sentinelle « absent »
+                p[K.notifIntentToken] = fresh
+                fresh
+            }
+        }
+        return result
+    }
+
     private object K {
+        val notifIntentToken = longPreferencesKey("notif.intentToken")
         val pinSalt = byteArrayPreferencesKey("pin.salt")
         val pinHash = byteArrayPreferencesKey("pin.hash")
         val pinIters = intPreferencesKey("pin.iters")

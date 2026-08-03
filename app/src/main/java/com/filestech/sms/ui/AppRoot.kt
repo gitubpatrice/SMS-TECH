@@ -96,6 +96,14 @@ fun AppRoot() {
         when {
             route.contains("Vault") ->
                 nav.popBackStack(route = Vault, inclusive = true)
+            // v1.26.1 (audit M4) — Safety call manquait, alors que les Réglages masquent sa
+            // section avec EXACTEMENT la même garde que celle du Mode urgence (même motif :
+            // ne pas révéler à un agresseur l'existence des fonctions de sécurité
+            // personnelle). Seule l'urgence avait ce second filet ; l'argument qui le
+            // justifie — état de navigation restauré, raccourci, lien — vaut à l'identique
+            // pour l'écran Safety call, qui affiche les contacts de confiance et le délai.
+            route.contains("SafetyCallSetup") ->
+                nav.popBackStack(route = SafetyCallSetup, inclusive = true)
             route.contains("EmergencySetup") ->
                 nav.popBackStack(route = EmergencySetup, inclusive = true)
             route.contains("Emergency") ->
@@ -177,6 +185,11 @@ fun AppRoot() {
                 pendingNav.clear()
                 return@LaunchedEffect
             }
+            // v1.26.1 (audit SEC-A1) — meme authentification que la branche conversation.
+            if (!rootViewModel.isNotificationIntentAuthentic(current.navToken)) {
+                pendingNav.clear()
+                return@LaunchedEffect
+            }
             pendingNav.consume() ?: return@LaunchedEffect
             nav.navigate(Emergency)
             return@LaunchedEffect
@@ -235,6 +248,21 @@ fun AppRoot() {
                 pendingNav.clear()
                 return@LaunchedEffect
             }
+        }
+        // v1.26.1 (audit H2) — AUTHENTIFICATION de l'intent avant toute navigation.
+        //
+        // `MainActivity` est `exported="true"` (rôle SMS), donc n'importe quelle application peut
+        // l'atteindre par un Intent EXPLICITE portant `ACTION_OPEN_CONVERSATION` — action et
+        // extras sont des constantes publiques, et les identifiants Room sont séquentiels, donc
+        // triviaux à énumérer. Sans ce contrôle, un tiers forçait l'affichage d'une conversation
+        // arbitraire, y compris via un pending qui survit 30 s au verrouillage.
+        //
+        // La vérification est ici et non dans `MainActivity` parce que la lecture du secret est
+        // suspendue : l'attendre dans `onCreate` bloquerait le démarrage à froid, c'est-à-dire
+        // exactement le cas d'un tap sur notification quand le processus est mort.
+        if (!rootViewModel.isNotificationIntentAuthentic(current.navToken)) {
+            pendingNav.clear()
+            return@LaunchedEffect
         }
         // Consomme via `.consume()` qui re-vérifie expiration + clear atomique.
         val consumed = pendingNav.consume() ?: return@LaunchedEffect
@@ -325,7 +353,13 @@ fun AppRoot() {
         }
         composable<Backup> { BackupScreen(onBack = { nav.popBackStack() }) }
         composable<Migration> { MigrationScreen(onBack = { nav.popBackStack() }) }
-        composable<About> { AboutScreen(onBack = { nav.popBackStack() }) }
+        // v1.26.1 (audit C4) — `isPanicDecoy` est passé sans valeur par défaut, volontairement :
+        // un défaut `false` serait un repli permissif (l'écran nommerait le coffre et le mode
+        // panique tant que l'état n'est pas transmis). Le compilateur exige donc que tout futur
+        // point d'entrée tranche explicitement.
+        composable<About> {
+            AboutScreen(onBack = { nav.popBackStack() }, isPanicDecoy = isPanicDecoy)
+        }
         composable<Lock> {
             LockScreen(
                 onUnlocked = { nav.popBackStack(route = Lock, inclusive = true) },

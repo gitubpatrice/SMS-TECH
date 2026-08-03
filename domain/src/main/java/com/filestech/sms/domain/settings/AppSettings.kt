@@ -290,16 +290,27 @@ data class BlockingSettings(
     // global. La clé DataStore reste lue pour migration (sera supprimée v1.3.6+).
 )
 
+/**
+ * v1.26.1 (audit F5) — la sauvegarde AUTOMATIQUE a été retirée, sur décision explicite.
+ *
+ * Elle était morte à trois niveaux indépendants : `BackupWorker` n'était jamais mis en file,
+ * aucun écran ne réglait la fréquence ni le dossier de destination, et `runScheduledBackup`
+ * refusait de toute façon le format `.smsbk` — le format par défaut — faute de phrase secrète
+ * disponible pour un travail de fond. La rendre réelle aurait exigé de persister un secret de
+ * chiffrement sur l'appareil ; l'alternative, sauvegarder en XML non chiffré, aurait été une
+ * régression de confidentialité. La fonctionnalité part donc entièrement, plutôt que de rester
+ * une promesse latente.
+ *
+ * Sont supprimés avec elle : `autoBackup` + l'enum `AutoBackupFrequency`, `destinationUri`,
+ * `keepLast`, `format` + l'enum `BackupFormat` (dont l'unique consommateur était le chemin
+ * planifié), `runScheduledBackup`, `writeXmlCompat` et `BackupWorker`.
+ *
+ * **La sauvegarde MANUELLE, elle, est intacte** : `writeSmsbk` / `readSmsbk` depuis l'écran
+ * Sauvegarde, restauration comprise.
+ */
 data class BackupSettings(
-    val autoBackup: AutoBackupFrequency = AutoBackupFrequency.OFF,
-    val destinationUri: String? = null,
     val encrypt: Boolean = true,
-    val keepLast: Int = 5,
-    val format: BackupFormat = BackupFormat.SMSBK,
 )
-
-enum class AutoBackupFrequency { OFF, DAILY, WEEKLY }
-enum class BackupFormat { SMSBK, XML_COMPAT }
 
 data class AdvancedSettings(
     val isDefaultSmsApp: Boolean = false,

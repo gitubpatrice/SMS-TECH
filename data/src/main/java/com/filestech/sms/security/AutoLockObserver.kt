@@ -54,7 +54,39 @@ class AutoLockObserver @Inject constructor(
     override fun onStop(owner: LifecycleOwner) {
         pendingLock?.cancel()
         pendingLock = scope.launch {
-            val s = settings.flow.first()
+            // v1.26.1 (audit H15) — cette lecture n'était pas protégée, et c'était LE point de
+            // rupture réel de tout le verrouillage automatique : si DataStore levait (corruption
+            // — aucun `corruptionHandler` n'est posé sur ce magasin), la coroutine mourait ici et
+            // NI `forceLock()` NI `purgeTransientCaches()` ne s'exécutaient jamais. L'application
+            // ne se reverrouillait donc plus en passant en arrière-plan, et les PDF d'export en
+            // clair restaient sur le disque.
+            //
+            // L'ironie est que le `runCatching` ci-dessous avait justement été ajouté pour ne pas
+            // « sauter les deux » — mais il protège une ligne située APRÈS la rupture.
+            //
+            // En cas d'échec on applique le chemin LE PLUS STRICT plutôt que d'abandonner :
+            // verrouiller et purger tout de suite. Ne rien faire serait le repli permissif.
+            // ⚠️ `try/catch` explicite et NON `runCatching` : `runCatching` attrape aussi
+            // `CancellationException`, or `onStart` annule précisément ce job quand l'utilisateur
+            // revient au premier plan. Avec `runCatching`, ce retour aurait été lu comme un échec
+            // de lecture, donc traité par le « chemin le plus strict » — l'application se serait
+            // verrouillée et aurait purgé ses caches (brouillon vocal non envoyé compris) au
+            // moment même où l'utilisateur la rouvre. On relance donc l'annulation telle quelle.
+            val s = try {
+                settings.flow.first()
+            } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                Timber.w(t, "AutoLockObserver: settings read failed, applying strictest path")
+                null
+            }
+            if (s == null) {
+                runCatching { vaultLazy.get().lock() }
+                    .onFailure { Timber.w(it, "AutoLockObserver: vault relock skipped") }
+                appLock.forceLock()
+                purgeTransientCaches()
+                return@launch
+            }
             // Audit F33: vault relocks immediately when the user opts in.
             // best-effort : le verrouillage du coffre est un flag Room, donc inopérant si la base
             // est inouvrable — alors que `forceLock()` et la purge des exports EN CLAIR qui suivent
@@ -77,7 +109,18 @@ class AutoLockObserver @Inject constructor(
                 AutoLockDelay.FIVE_MINUTES -> 5 * 60_000L
                 AutoLockDelay.NEXT_LAUNCH -> if (isPanicDecoy) 0L else Long.MAX_VALUE
             }
-            if (ms == Long.MAX_VALUE) return@launch
+            if (ms == Long.MAX_VALUE) {
+                // v1.26.1 (audit B7) — la PURGE n'est plus couplée au délai de verrouillage.
+                //
+                // Le `return@launch` sautait `forceLock()` ET `purgeTransientCaches()`. En
+                // « prochain lancement seulement », un PDF d'export EN CLAIR — disponible sur
+                // TOUTES les conversations, coffre compris — restait donc indéfiniment sur le
+                // disque, hors du chiffrement SQLCipher. Or les artefacts en clair n'ont aucune
+                // raison d'attendre le verrouillage : l'utilisateur a quitté l'application, il
+                // peut toujours ré-exporter.
+                purgeTransientCaches()
+                return@launch
+            }
             if (ms > 0) delay(ms)
             appLock.forceLock()
             // Audit F13 + S-P2-3: when the lock kicks in, purge generated PDFs, export staging
@@ -109,11 +152,59 @@ class AutoLockObserver @Inject constructor(
         val targets = listOf(
             File(context.filesDir, "exports"),
             File(context.cacheDir, "voice_mms"),
-            File(context.cacheDir, "mms_outgoing"),
         )
         for (dir in targets) {
             runCatching { if (dir.exists()) dir.deleteRecursively() }
                 .onFailure { Timber.w(it, "AutoLockObserver: purge of %s failed", dir.absolutePath) }
         }
+        purgeStaleOutgoingPdus()
+    }
+
+    /**
+     * v1.26.1 (audit M10) — `cache/mms_outgoing` est purgé PAR ÂGE, pas en bloc.
+     *
+     * Ces fichiers ne sont pas de simples résidus : `MmsSender` y écrit le PDU, en dérive une URI
+     * FileProvider et la confie au service MMS du SYSTÈME, qui le lit **plus tard** et de façon
+     * différée — Doze, absence de couverture, réessais opérateur. Les supprimer en bloc à chaque
+     * verrouillage détruisait donc le PDU d'un envoi encore en vol : le MMS ne partait jamais, et
+     * le chien de garde le basculait en échec un quart d'heure plus tard, sans cause visible.
+     *
+     * Aggravant : `forceLock()` est un no-op quand aucun verrou n'est armé — la configuration par
+     * défaut — alors que la purge, elle, s'exécutait quand même. On détruisait un envoi pour
+     * protéger un verrou qui n'existait pas.
+     *
+     * Le seuil DIFFÈRE volontairement de celui de `TelephonySyncWorker` (24 h) : celui-là fait
+     * du ménage best-effort, celui-ci arbitre une fenêtre d'exposition. Voir
+     * [OUTGOING_PDU_MAX_AGE_MS]. Les PDU restent des octets en clair, mais ils ne
+     * contiennent que ce que l'utilisateur vient lui-même d'envoyer, et ils disparaissent au plus
+     * tard au bout de ce délai.
+     */
+    private fun purgeStaleOutgoingPdus() {
+        val dir = File(context.cacheDir, "mms_outgoing")
+        if (!dir.exists()) return
+        val cutoff = System.currentTimeMillis() - OUTGOING_PDU_MAX_AGE_MS
+        runCatching {
+            dir.listFiles()?.forEach { f ->
+                if (f.lastModified() < cutoff) f.deleteRecursively()
+            }
+        }.onFailure { Timber.w(it, "AutoLockObserver: purge of %s failed", dir.absolutePath) }
+    }
+
+    private companion object {
+        /**
+         * v1.26.1 (audit M10) — âge au-delà duquel un PDU sortant est considéré abandonné.
+         *
+         * UNE HEURE, et non 24 h. Une première version reprenait le seuil de 24 h du nettoyage
+         * périodique ; la revue a fait remarquer qu'il répond à un besoin différent — du ménage
+         * best-effort — alors qu'ici on arbitre une FENÊTRE D'EXPOSITION : ces fichiers
+         * contiennent le corps du message, les destinataires et les octets bruts des pièces
+         * jointes, en clair, et ils survivaient auparavant à peine quelques secondes puisque la
+         * purge était en bloc à chaque verrouillage.
+         *
+         * Une heure couvre très largement un envoi réellement en vol : le chien de garde bascule
+         * déjà un envoi resté `PENDING` en échec au bout de 15 minutes. Le plafond de 24 h reste
+         * appliqué par ailleurs, ce n'est donc pas un relâchement du pire cas.
+         */
+        const val OUTGOING_PDU_MAX_AGE_MS = 60L * 60L * 1_000L
     }
 }

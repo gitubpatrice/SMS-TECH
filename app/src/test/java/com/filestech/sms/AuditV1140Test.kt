@@ -11,10 +11,16 @@ import org.junit.jupiter.api.Test
  *  - Sujet 1 : auto-lock coffre. Sémantique simple (lock() au onBack), pas
  *    testable en pur JVM sans Compose lifecycle. Couvert par audit code.
  *  - Sujet 2 : EmergencyCallBehavior enum + EmergencyCallHelper number
- *    whitelist (112 / 17 hardcoded). Whitelist testée en instrumented
- *    (besoin Context Android pour les Intent calls), pas en JVM pur.
- *  - Sujet 3 : showIAmOkChip derivation dans UiState — basé sur
- *    `lastTriggeredAt` + fenêtre 30 min + non-PanicDecoy.
+ *    whitelist (112 / 17 hardcoded).
+ *    ⚠️ v1.26.1 (audit F12) — la mention « testée en instrumented » était FAUSSE :
+ *    aucun test du dépôt ne référence `EmergencyCallHelper`. Une couverture annoncée
+ *    mais inexistante est pire que pas de couverture — elle dissuade le relecteur de
+ *    chercher le test manquant. La whitelist reste À COUVRIR.
+ *  - Sujet 3 : showIAmOkChip.
+ *    ⚠️ v1.26.1 (audit F12) — ce qui est testé ici n'est que la mémorisation du
+ *    paramètre par la `data class`, pas la DÉRIVATION (`lastTriggeredAt` + fenêtre
+ *    30 min + non-PanicDecoy), qui porte pourtant le masquage anti-agresseur. La
+ *    dérivation reste À COUVRIR.
  *  - Sujet 4 : EmergencyCallBehavior par défaut = DIALER_ONLY (no perm).
  */
 class AuditV1140Test {

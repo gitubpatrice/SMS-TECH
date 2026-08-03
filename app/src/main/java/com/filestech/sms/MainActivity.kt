@@ -1,6 +1,7 @@
 package com.filestech.sms
 
 import android.Manifest
+import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -372,10 +373,14 @@ class MainActivity : FragmentActivity() {
      *
      * Sécurité :
      *   - Lecture d'URIs uniquement (jamais d'exec, jamais d'écriture en aveugle).
-     *   - Le `type` (MIME) est purement indicatif : la dispatch finale revalide
-     *     l'extension / le contenu via le pipeline existant SendMediaMmsUseCase
-     *     (qui caps déjà à 280 KB et inspecte le header image — audit F5 PDF Tech
-     *     style).
+     *   - v1.26.1 (audit M9) — les URI entrantes sont FILTRÉES avant d'être retenues :
+     *     `content://` uniquement, et jamais notre propre autorité. Voir [isSafeSharedUri].
+     *   - ⚠️ Le `type` (MIME) est purement indicatif, et le reste. Ce KDoc affirmait que la
+     *     dispatch finale « revalide l'extension / le contenu » et « inspecte le header image » :
+     *     VÉRIFIÉ, C'EST FAUX — `SendMediaMmsUseCase` n'applique qu'un plafond de taille et fait
+     *     confiance au type MIME fourni. La correction est notée ici parce qu'un commentaire
+     *     faussement rassurant est pire que pas de commentaire : il détourne le prochain
+     *     auditeur d'un contrôle qui n'existe pas.
      */
     private fun handleSharedIntent(intent: Intent?) {
         if (intent == null) return
@@ -450,7 +455,18 @@ class MainActivity : FragmentActivity() {
                 // après hydratation du NavController + guards (lock actif → pas
                 // de pop, panic-decoy → pas de pop).
                 incomingShare.clear()
-                pendingNav.set(PendingNavHolder.Pending(openEmergency = true))
+                pendingNav.set(
+                    PendingNavHolder.Pending(
+                        openEmergency = true,
+                        // v1.26.1 (audit SEC-A1) — meme authentification que la branche
+                        // d'ouverture de conversation : la brancher d'un cote seulement
+                        // aurait laisse la jumelle grande ouverte.
+                        navToken = intent.getLongExtra(
+                            com.filestech.sms.system.notifications.NotificationIntentToken.EXTRA_NAV_TOKEN,
+                            0L,
+                        ),
+                    ),
+                )
             }
             IncomingMessageNotifier.ACTION_OPEN_CONVERSATION -> {
                 // v1.8.0 (bug 4 fix) — l'utilisateur a tapé une notif de message
@@ -469,7 +485,17 @@ class MainActivity : FragmentActivity() {
                 val conversationId =
                     intent.getLongExtra(IncomingMessageNotifier.EXTRA_CONVERSATION_ID, -1L)
                 if (conversationId > 0L) {
-                    pendingNav.set(PendingNavHolder.Pending(conversationId = conversationId))
+                    pendingNav.set(
+                        PendingNavHolder.Pending(
+                            conversationId = conversationId,
+                            // v1.26.1 (audit H2) — le secret voyage jusqu'a AppRoot, qui seul
+                            // peut le verifier (lecture suspendue).
+                            navToken = intent.getLongExtra(
+                                com.filestech.sms.system.notifications.NotificationIntentToken.EXTRA_NAV_TOKEN,
+                                0L,
+                            ),
+                        ),
+                    )
                 } else {
                     Timber.w(
                         "MainActivity: OPEN_CONVERSATION intent missing valid conversationId (got %d)",
@@ -493,9 +519,24 @@ class MainActivity : FragmentActivity() {
                     // pour cette v1.14.8, on prend le 1er ; le multi-recipient nécessite
                     // de passer par ComposeScreen pour confirmer le groupe (v1.15 backlog).
                     val raw = data?.schemeSpecificPart?.let { Uri.decode(it) }.orEmpty()
+                    // v1.26.1 (audit B6) — le destinataire est désormais VALIDÉ.
+                    //
+                    // Toute chaîne non vide était acceptée et ÉCRIVAIT une ligne en base : une
+                    // application tierce pouvait, en boucle, créer autant de conversations
+                    // qu'elle voulait dans la liste, avec un libellé entièrement sous son
+                    // contrôle (un nom de banque, par exemple) et un corps pré-rempli — une
+                    // amorce d'hameçonnage crédible. Le KDoc de `PendingNavHolder` affirmait
+                    // pourtant « valide phone number côté caller (MainActivity) » : cette
+                    // validation n'existait pas.
+                    //
+                    // On s'aligne sur les bornes déjà appliquées par `HeadlessSmsSendService`,
+                    // l'autre entrée IPC qui fait la même chose : longueur plafonnée, et au
+                    // moins un chiffre — ce qui laisse passer les formats internationaux et les
+                    // codes courts, mais écarte le texte arbitraire.
                     val firstRecipient = raw.split(",", ";")
                         .map { it.trim() }
                         .firstOrNull { it.isNotEmpty() }
+                        ?.takeIf { it.length <= SENDTO_ADDRESS_MAX_CHARS && it.any(Char::isDigit) }
                     val body = intent.getStringExtra("sms_body")?.takeIf { it.isNotBlank() }
                         ?: intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
                     incomingShare.clear()
@@ -536,7 +577,37 @@ class MainActivity : FragmentActivity() {
             getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         } else {
             getParcelableExtra(Intent.EXTRA_STREAM)
+        }?.takeIf { it.isSafeSharedUri() }
+
+    /**
+     * v1.26.1 (audit M9) — filtre les URI de partage entrantes.
+     *
+     * `EXTRA_STREAM` vient d'une application tierce et était accepté TEL QUEL : ni vérification
+     * du schéma, ni vérification de l'autorité. En aval, `copyAttachmentToCache` fait
+     * `contentResolver.openInputStream(uri)` — et comme l'appelant et le fournisseur partagent
+     * notre UID, une URI `content://com.filestech.sms.fileprovider/...` ou un `file:///data/...`
+     * désignant NOS PROPRES fichiers privés (pièce jointe MMS, PDF d'export d'une conversation)
+     * était résolue sans le moindre contrôle de permission. L'utilisateur pouvait alors, sans le
+     * savoir, réexpédier à un tiers un fichier interne — un député confus classique.
+     *
+     * Le KDoc de `handleSharedIntent` affirmait que le pipeline aval « inspecte le header
+     * image » : vérifié, c'est FAUX — `SendMediaMmsUseCase` ne fait qu'un plafond de taille et
+     * fait confiance au type MIME fourni. Le commentaire a été corrigé.
+     *
+     * Règle : uniquement `content://`, et jamais notre propre autorité.
+     */
+    private fun Uri.isSafeSharedUri(): Boolean {
+        if (scheme != ContentResolver.SCHEME_CONTENT) {
+            Timber.w("handleSharedIntent: rejected non-content URI scheme=%s", scheme)
+            return false
         }
+        val auth = authority.orEmpty()
+        if (auth == packageName || auth.startsWith("$packageName.")) {
+            Timber.w("handleSharedIntent: rejected self-owned authority %s", auth)
+            return false
+        }
+        return true
+    }
 
     /** v1.3.3 — récupère la liste d'URIs pour ACTION_SEND_MULTIPLE. */
     @Suppress("DEPRECATION")
@@ -546,4 +617,15 @@ class MainActivity : FragmentActivity() {
         } else {
             getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
         }
+            // v1.26.1 (audit M9) — même filtre que le partage simple, cf. [isSafeSharedUri].
+            .filter { it.isSafeSharedUri() }
+
+    private companion object {
+        /**
+         * v1.26.1 (audit B6) — longueur maximale d'un destinataire reçu via `sms:`/`smsto:`.
+         * Alignée sur `HeadlessSmsSendService.MAX_NUMBER_LEN`, l'autre entrée IPC qui accepte un
+         * numéro d'une source non fiable : deux portes d'entrée équivalentes, une seule règle.
+         */
+        const val SENDTO_ADDRESS_MAX_CHARS = 32
+    }
 }

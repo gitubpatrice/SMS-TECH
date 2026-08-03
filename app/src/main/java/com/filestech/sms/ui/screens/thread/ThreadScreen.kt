@@ -106,7 +106,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.withResumed
 import com.filestech.sms.R
 import com.filestech.sms.core.ext.splitGraphemeClusters
 import com.filestech.sms.data.voice.VoicePlaybackController
@@ -169,6 +171,25 @@ fun ThreadScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
+
+    // v1.26.1 (audit H1, suite de revue) — le Coffre s'est refermé alors qu'on est dans un de
+    // ses fils : on ressort, au lieu de laisser un fil VIDE dont le bouton « Envoyer » ne fait
+    // plus rien en silence (tous les chemins d'envoi retournent sur `conversation == null`).
+    // Le cas est fréquent : `lockVaultOnLeave` vaut `true` par défaut et le Coffre se referme
+    // dès que l'application passe en arrière-plan — bascule d'app, écran éteint, sélecteur de
+    // photos, appel entrant.
+    //
+    // ⚠️ On attend que la destination soit RESUMED. La fermeture du Coffre survient justement
+    // pendant `onStop`, donc l'effet se déclenche alors que l'écran n'est PAS au premier plan :
+    // dépiler à ce moment-là viserait l'écran voisin, exactement le dépilement parasite corrigé
+    // en v1.25.4. `withResumed` diffère la sortie au retour de l'utilisateur.
+    val vaultHidden by viewModel.vaultHidden.collectAsStateWithLifecycle()
+    val threadNavOwner = LocalLifecycleOwner.current
+    LaunchedEffect(vaultHidden) {
+        if (vaultHidden) {
+            threadNavOwner.lifecycle.withResumed { onBack() }
+        }
+    }
     val snackbarHost = remember { SnackbarHostState() }
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -569,6 +590,7 @@ fun ThreadScreen(
                     draft = state.draft,
                     segments = state.segments,
                     isSendingVoice = state.isSendingVoice,
+                    isSending = state.isSending,
                     hasPendingAttachments = state.pendingAttachments.isNotEmpty(),
                     onDraftChanged = viewModel::updateDraft,
                     onSendText = {
@@ -661,6 +683,8 @@ fun ThreadScreen(
                 onForward = { msg -> forwardingMessage = msg },
                 onTranslate = { msg -> translateMessageExternal(msg) },
                 onCopy = { msg -> copyMessageBody(msg) },
+                // v1.26.1 (audit F2) — bascule sur l'état courant du message.
+                onToggleStar = { msg -> viewModel.toggleMessageStarred(msg.id, !msg.starred) },
                 onPhoneClick = onPhoneClick,
             )
         }
@@ -1336,6 +1360,8 @@ private fun ComposerBar(
     draft: String,
     segments: com.filestech.sms.data.sms.SmsSegmentCounter.Stats,
     isSendingVoice: Boolean,
+    /** v1.26.1 (audit H7) — envoi texte/media en cours : desactive le bouton Envoyer. */
+    isSending: Boolean,
     /** v1.3.4 M1 audit fix — flag pour basculer mic → send button quand des PJ sont stagées. */
     hasPendingAttachments: Boolean,
     onDraftChanged: (String) -> Unit,
@@ -1376,6 +1402,7 @@ private fun ComposerBar(
                 segments = segments,
                 permissionGranted = permissionGranted,
                 hasPendingAttachments = hasPendingAttachments,
+                isSending = isSending,
                 onDraftChanged = onDraftChanged,
                 onSendText = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1426,6 +1453,8 @@ private fun ComposingRow(
     /** v1.3.4 M1 — quand `true`, force l'affichage du bouton Send au lieu du mic même
      *  si `draft.isBlank()` (l'user a juste empilé des PJ et veut les envoyer sans texte). */
     hasPendingAttachments: Boolean,
+    /** v1.26.1 (audit H7) — envoi en cours : le bouton Envoyer est désactivé le temps du vol. */
+    isSending: Boolean,
     onDraftChanged: (String) -> Unit,
     onSendText: () -> Unit,
     onRequestPermission: () -> Unit,
@@ -1511,7 +1540,8 @@ private fun ComposingRow(
                 },
             )
         } else {
-            FilledIconButton(onClick = onSendText) {
+            // v1.26.1 (audit H7) — désactivé pendant l'envoi, comme le bouton vocal l'est déjà.
+            FilledIconButton(onClick = onSendText, enabled = !isSending) {
                 Icon(
                     Icons.AutoMirrored.Outlined.Send,
                     contentDescription = stringResource(R.string.action_send),
@@ -1928,6 +1958,8 @@ private class ThreadMessageItemActions(
     val onForward: (Message) -> Unit,
     val onTranslate: (Message) -> Unit,
     val onCopy: (Message) -> Unit,
+    /** v1.26.1 (audit F2) — bascule « favori » ; le drapeau protège déjà de la purge auto. */
+    val onToggleStar: (Message) -> Unit,
     val onPhoneClick: (String) -> Unit,
 )
 
@@ -2016,6 +2048,8 @@ private fun ThreadMessageItem(
                 // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus.
                 onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
                 onForward = { actions.onForward(msg) },
+                // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
+                onToggleStar = { actions.onToggleStar(msg) },
                 onRemoveReaction = { actions.onRemoveReaction(msg) },
                 repliedToPreview = repliedToPreview,
                 showTimestamp = showTimestamp,
@@ -2033,6 +2067,8 @@ private fun ThreadMessageItem(
                 // v1.3.11 (F3) — copy exposed only when the bubble carries a user-typed caption.
                 onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
                 onForward = { actions.onForward(msg) },
+                // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
+                onToggleStar = { actions.onToggleStar(msg) },
                 onPhoneClick = actions.onPhoneClick,
                 onRemoveReaction = { actions.onRemoveReaction(msg) },
                 repliedToPreview = repliedToPreview,
@@ -2053,6 +2089,8 @@ private fun ThreadMessageItem(
                 onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
                 onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
                 onForward = { actions.onForward(msg) },
+                // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
+                onToggleStar = { actions.onToggleStar(msg) },
                 onPhoneClick = actions.onPhoneClick,
                 onRemoveReaction = { actions.onRemoveReaction(msg) },
                 repliedToPreview = repliedToPreview,

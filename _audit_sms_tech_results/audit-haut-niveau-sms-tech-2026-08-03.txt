@@ -1,0 +1,1884 @@
+================================================================================
+AUDIT DE HAUT NIVEAU — SMS TECH — APPLICATION ENTIÈRE
+================================================================================
+Date            : 2026-08-03
+Cible           : j:\applications\sms_tech
+Version auditée : v1.26.0 — commit 6e0fd31 — versionCode 175 — arbre de travail propre
+Périmètre       : 269 fichiers Kotlin, ~45 400 lignes, modules :app :core :domain :data
+Méthode         : audit PAR MOTIFS (pas de lecture linéaire, pas de balayage de delta)
+                  7 agents spécialisés en parallèle + vérification adversariale
+                  de chaque finding dans le code par l'orchestrateur
+Moyens          : lecture pure. AUCUN fichier modifié. AUCUN test appareil
+                  (Galaxy S9 non branché — confirmé par Patrice)
+
+--------------------------------------------------------------------------------
+POURQUOI CET AUDIT N'EST PAS UN AUDIT GÉNÉRIQUE
+--------------------------------------------------------------------------------
+Cadrage posé le 2026-08-02 : ne PAS refaire un audit générique. La semaine avait
+tranché — un audit externe avait produit 7 findings faux (dont 3 recopiés d'un
+projet Flutter) et recommandé de révoquer le keystore de production, ce qui aurait
+cassé la chaîne de mise à jour. Pendant ce temps, la majorité des défauts réels
+sortaient de l'usage de Patrice, pas d'une lecture de code.
+
+L'audit a donc ciblé les QUATRE FAMILLES qui ont produit tous les vrais défauts :
+
+  1. Un garde qui existe mais vise le mauvais problème
+  2. Un repli qui échoue du mauvais côté
+  3. Un correctif appliqué à un endroit et pas à son jumeau
+  4. Une ressource orpheline qui signale une fonctionnalité non câblée,
+     un test vert sur un chemin que la production n'emprunte pas
+
+Plus les quatre zones jamais éprouvées sur appareil (panique, urgence,
+restauration, migration), et deux axes de haut niveau ajoutés en cours de route
+(surface exposée/IPC, concurrence/intégrité des données).
+
+RÉSULTAT : le cadrage était juste. Les quatre familles ont produit l'intégralité
+des findings critiques. La famille 3 (asymétrie) reste, de très loin, la plus
+rentable — elle explique à elle seule 3 des 4 findings critiques.
+
+--------------------------------------------------------------------------------
+RÉSUMÉ EXÉCUTIF
+--------------------------------------------------------------------------------
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  CE DOCUMENT DÉCRIT L'ÉTAT AU MOMENT DE L'AUDIT.                         │
+│                                                                            │
+│ TOUS LES FINDINGS ONT DEPUIS ÉTÉ CORRIGÉS, le même jour.                   │
+│ Le détail de CE QUI A ÉTÉ FAIT, comment, et les douze défauts trouvés dans │
+│ les correctifs eux-mêmes, sont dans le fichier voisin :                    │
+│                                                                            │
+│     correctifs-appliques-2026-08-03.txt                                    │
+│                                                                            │
+│ 64 fichiers modifiés, +2121 / −427, 3 fichiers nouveaux.                   │
+│ Compile · tests · détekt · lint · parité FR↔EN 732/732 : tous verts.       │
+│ RIEN N'EST COMMITÉ NI TAGUÉ.                                               │
+│                                                                            │
+│ Le verdict « BLOQUANT » ci-dessous est donc HISTORIQUE : il décrit la      │
+│ v1.26.0 telle qu'elle a été auditée, pas l'état actuel de l'arbre de       │
+│ travail. Les sections « Findings » restent au présent parce qu'elles       │
+│ documentent le RAISONNEMENT — c'est lui qui a de la valeur pour la suite,  │
+│ pas seulement la liste des lignes changées.                                │
+└────────────────────────────────────────────────────────────────────────────┘
+
+Verdict : ❌ BLOQUANT. Quatre défauts critiques, dont trois portent sur le mode
+panique — la fonctionnalité rendue atteignable il y a un jour et jamais éprouvée.
+
+Le mode leurre est aujourd'hui une illusion mince : il masque des écrans, mais
+il ne résiste ni à quatre appuis dans les Réglages (qui le DÉSARMENT), ni à
+l'écran À propos (qui le DÉCRIT), ni à la sauvegarde (qui EXPORTE le coffre).
+
+Et un motif traverse tout le reste : le second facteur du Coffre garde l'ÉCRAN,
+jamais la DONNÉE. `isVaultUnlockedInSession` n'a qu'UN SEUL lecteur dans tout le
+dépôt. Trois chemins distincts ouvrent un fil du Coffre sans jamais demander le
+PIN coffre.
+
+TROIS ACTIONS PRIORITAIRES
+  1. C1 — masquer la ligne « Verrouillage de l'app » en mode leurre et refuser
+     `clearPin()` en `PanicDecoy`. Sans ça, tout le mode panique est décoratif.
+  2. C2 — garder la sauvegarde côté ACCÈS (BackupService), pas seulement côté
+     affichage, et exclure `in_vault` du payload en session leurre.
+  3. H1 — étendre le prédicat des flux de données : masquer aussi quand
+     `inVault && !isVaultUnlockedInSession`, pas seulement en `PanicDecoy`.
+
+--------------------------------------------------------------------------------
+SCORE
+--------------------------------------------------------------------------------
+Familles de défauts couvertes ......... 4 / 4      ❌ toutes ont produit du réel
+Zones jamais éprouvées couvertes ...... 4 / 4      ❌ toutes ont produit du réel
+Axes complémentaires .................. 2 / 2      ⚠️ IPC et concurrence touchés
+
+Findings retenus après vérification ... 53
+  🔴 Critique .......................... 4
+  🟠 Haute ............................. 24
+  🟡 Moyenne ........................... 17
+  🟢 Basse ............................. 8
+
+Findings ÉCARTÉS après vérification ... 10  (voir section « FAUSSES PISTES »)
+
+⚠️ LE CHIFFRE QUI RÉSUME LA FAMILLE 4 : SIX fonctionnalités sont implémentées
+   jusqu'au DAO ou consommées en production, et n'ont AUCUN point d'entrée
+   utilisateur. C'est le défaut du mode panique, six fois. Voir PARTIE IV-BIS.
+
+================================================================================
+PARTIE I — FINDINGS CRITIQUES (bloquent la prochaine release)
+================================================================================
+
+--------------------------------------------------------------------------------
+C1 — 🔴 CRITIQUE — CONFIRMÉ — Le mode leurre se désarme depuis l'écran qu'il protège
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt:2797-2801
+Corollaires  : SettingsScreen.kt:641-653 · SettingsViewModel.kt:136-142
+               AppLockManager.kt:121-128
+Famille      : 3 (asymétrie — ligne voisine) + 1 (garde mal visé)
+
+CE QUI EST EN PLACE
+La ligne « Code panique » juste en dessous porte une garde `!isPanicDecoy` avec un
+commentaire de 8 lignes qui énonce la règle (SettingsScreen.kt:2809-2814) :
+« ⚠️ JAMAIS en mode leurre. […] l'existence d'un réglage est déjà une information. »
+
+LE DÉFAUT
+La ligne IMMÉDIATEMENT AU-DESSUS ne porte aucune garde :
+
+    NavigationRow(
+        title = stringResource(R.string.settings_app_lock),
+        description = currentLockLabel,
+        onClick = onOpenLockModePicker,
+    )
+
+LE SCÉNARIO (chaîne complète lue et vérifiée)
+  Session leurre → Réglages → « Verrouillage de l'app » → « Aucun »
+  → SettingsScreen.kt:650-653 ouvre une simple confirmation
+    (AUCUNE ressaisie du PIN n'est demandée)
+  → SettingsViewModel.clearLock():136 → AppLockManager.clearPin():121-128
+  → `_state.value = LockState.Disabled`
+
+LA CONSÉQUENCE
+TOUTES les gardes du leurre testent `lockState is PanicDecoy` — vérifié dans
+ConversationRepositoryImpl.kt:127/140/187/238, AppRoot.kt:70/93-104,
+SettingsScreen.kt:2815/2857, MainApplication.kt:310. Passer en `Disabled` les
+désarme d'un seul coup : le Coffre redevient listé et navigable, les sections
+Urgence et Safety call réapparaissent. Et `clearPin()` efface aussi le code
+panique (ligne 127) : la protection est détruite, pas seulement contournée.
+
+L'agresseur qui a obtenu le code sous contrainte neutralise le leurre en quatre
+appuis, depuis l'écran que le leurre est censé protéger.
+
+ACTION
+  (a) `if (!isPanicDecoy)` sur la ligne 2797 — cohérence avec ses deux voisines ;
+  (b) SURTOUT, refuser `clearPin()` côté manager quand `_state is PanicDecoy`.
+      Le (a) seul répéterait l'erreur d'énumération : c'est la garde côté ACCÈS
+      qui compte.
+EFFORT : Rapide (< 1 h)
+
+--------------------------------------------------------------------------------
+C2 — 🔴 CRITIQUE — CONFIRMÉ — La sauvegarde exporte le Coffre, et elle est
+     atteignable en mode leurre
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt:506-513
+               data/src/main/java/com/filestech/sms/data/backup/BackupService.kt:191-213
+               data/src/main/java/com/filestech/sms/data/local/db/dao/ConversationDao.kt:83-85
+               app/src/main/java/com/filestech/sms/ui/AppRoot.kt:93-104
+Famille      : 1 (garde mal visé) + 3 (asymétrie)
+Trouvé indépendamment par 3 agents sur 7.
+
+CE QUI EST EN PLACE
+Toutes les autres voies de lecture du Coffre sont gardées, sans exception :
+  ConversationRepositoryImpl.kt:127  observeVault      → emptyList en PanicDecoy
+  ConversationRepositoryImpl.kt:140  observeOne        → null
+  ConversationRepositoryImpl.kt:187  observeMessages   → emptyList
+  MessageDao.kt:392                  recherche FTS     → AND c.in_vault = 0
+  ConversationDao.kt:17,36,166        listes et badges  → WHERE in_vault = 0
+  IncomingMessageNotifier.kt:65       notifications     → if (inVault) return
+
+LE DÉFAUT
+La section Sauvegarde n'a AUCUNE garde :
+
+    SectionCard(title = stringResource(R.string.settings_section_backup), …) {
+        NavigationRow(stringResource(R.string.settings_backup_now), onClick = onOpenBackup)
+
+Et le garde de navigation d'AppRoot ne dépile que `Vault`, `Emergency`,
+`EmergencySetup` — pas `Backup`.
+
+En aval, `buildPayload()` appelle `listSync()` → `conversationDao.listAllIncludingArchived()`,
+dont le KDoc dit lui-même :
+
+    /** Snapshot read for the backup pipeline (includes archived + in_vault rows). */
+    @Query("SELECT * FROM conversations ORDER BY id ASC")
+
+Vérification faite : grep `panic|inVault|in_vault` sur data/backup/, domain/backup/,
+ui/screens/backup/ et BackupWorker.kt → ZÉRO occurrence. Aucun filtre nulle part.
+
+LE SCÉNARIO
+Session leurre → Réglages → Sauvegarde → « Sauvegarder maintenant » → l'agresseur
+choisit SA PROPRE phrase secrète (minimum 8 caractères) et SA destination.
+Le `.smsbk` produit contient l'intégralité des conversations du Coffre et tous
+leurs messages. Il le déchiffre ailleurs, avec la clé qu'il vient de poser.
+
+Le leurre est contourné par le chemin même qui ne trahit rien.
+
+À NOTER — le défaut existe aussi HORS mode leurre : en session normale, la
+sauvegarde exporte le Coffre sans jamais demander le second facteur. C'est la
+même racine que H1.
+
+ACTION
+  (a) `if (!isPanicDecoy)` sur la section (ligne 506) + `route.contains("Backup")`
+      dans le garde d'AppRoot.kt:96-103 ;
+  (b) SURTOUT, garde côté ACCÈS dans BackupService : refuser l'export en
+      `PanicDecoy`, et exclure `in_vault` du payload tant que le Coffre n'est pas
+      déverrouillé en session.
+EFFORT : Moyen (< 1 jour)
+
+--------------------------------------------------------------------------------
+C3 — 🔴 CRITIQUE — CONFIRMÉ — Le refus « code panique = PIN » n'a pas de symétrique
+     côté PIN : enfermement définitif
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/security/AppLockManager.kt:108-119
+Le côté correct : AppLockManager.kt:164-180
+Famille      : 3 (asymétrie) + 1 (garde mal visé — il ne couvre qu'un sens)
+Trouvé indépendamment par l'orchestrateur et par un agent.
+
+CE QUI EST EN PLACE
+`setPanicCode()` refuse un code identique au PIN, avec une justification explicite
+en 5 lignes (AppLockManager.kt:153-157) :
+
+    « attemptUnlock évalue le code panique AVANT le PIN. Un code identique ferait
+      systématiquement gagner le leurre : l'utilisateur n'aurait plus AUCUN moyen
+      d'ouvrir son application normalement, et le coffre lui deviendrait
+      inaccessible à lui aussi. C'est un enfermement définitif, pas une gêne. »
+
+LE DÉFAUT
+`setPin()` ne fait AUCUNE vérification symétrique. Il ne lit jamais
+`panicSnapshot()`, ne refuse rien, et n'efface pas le code panique :
+
+    suspend fun setPin(newPin: CharArray): Unit = withContext(io) {
+        val salt = kdf.newSalt()
+        val iters = kdf.calibrate()
+        try {
+            val hash = kdf.derive(newPin, salt, iters)
+            securityStore.setPinHash(salt, hash, iters)
+        } finally { newPin.wipe() }
+        settings.update { … lockMode = LockMode.PIN … }
+        _state.value = LockState.Locked
+    }
+
+LE SCÉNARIO
+Code panique = 1234, PIN = 9999. L'utilisateur change son PIN (le picker rouvre le
+dialogue de saisie même quand le mode est déjà PIN — SettingsScreen.kt:654-662) et
+choisit 1234, la valeur qu'il a mémorisée.
+Chaîne : SettingsScreen.kt:733 → SettingsViewModel.kt:133 → AppLockManager.setPin.
+
+À partir de là, `attemptUnlock` (AppLockManager.kt:236-244) évalue le panique en
+premier : le seul secret que l'utilisateur connaît ouvre systématiquement le
+LEURRE. Plus aucun accès à sa vraie session ni à son coffre.
+
+C'est très exactement l'enfermement définitif que le refus `SameAsPin` documente
+comme inacceptable — atteint par la porte d'à côté.
+
+ACTION
+Dans `setPin`, lire `securityStore.panicSnapshot()` et refuser si le candidat
+correspond (nouveau `SetPinOutcome`, sur le modèle de `PanicCodeOutcome`) ; ou
+effacer le code panique et le dire explicitement à l'utilisateur.
+EFFORT : Rapide (< 1 h)
+
+--------------------------------------------------------------------------------
+C4 — 🔴 CRITIQUE — CONFIRMÉ — L'écran À propos raconte le mode leurre, en mode leurre
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/about/AboutScreen.kt:585-587
+               app/src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt:596
+               app/src/main/java/com/filestech/sms/ui/AppRoot.kt:93-104 (route About absente)
+Famille      : 3 (asymétrie)
+Trouvé indépendamment par 2 agents et par l'orchestrateur.
+
+LE DÉFAUT
+`features()` liste inconditionnellement, sans aucune garde `isPanicDecoy` :
+
+    Feature(Icons.Outlined.Security, …about_feat_vault_label…,     …vault_desc…),
+    Feature(Icons.Outlined.Shield,   …about_feat_panic_label…,     …panic_desc…),
+    Feature(Icons.Outlined.Warning,  …about_feat_emergency_label…, …emergency_desc…),
+
+Et le texte français (res/values-fr/strings.xml:747-748) dit mot pour mot :
+
+    « Code panique — Second code qui ouvre l'app en mode leurre — coffre invisible
+      et inaccessible. »
+
+La ligne d'accès (SettingsScreen.kt:596) n'est pas gardée, et la route `About`
+n'est pas dans le garde de navigation d'AppRoot (qui ne couvre que Vault,
+Emergency, EmergencySetup).
+
+POURQUOI C'EST FAUTIF — le code se contredit lui-même
+AppRoot.kt:89-91 énonce la règle noir sur blanc :
+
+    « un agresseur en session decoy ne doit même pas SAVOIR que l'app dispose
+      d'un Mode urgence (l'illusion "app SMS ordinaire" doit tenir) »
+
+Toute l'architecture du leurre sert à nier l'EXISTENCE de ces fonctions : icône
+cadenas masquée, item de menu à `null`, chip « Je vais bien » masqué, sections
+Réglages masquées, gardes de navigation, notification de raccourci annulée,
+`observeVault` → `emptyList`. Un seul écran non gardé les énumère en clair.
+
+LE SCÉNARIO
+L'agresseur obtient le code sous contrainte, ouvre l'app, va dans Réglages →
+À propos, et lit qu'un second code existe pour cacher un coffre. Il exige le vrai
+code. Le leurre ne protège plus rien : il DÉSIGNE ce qu'il cache.
+
+C'est strictement pire que la ligne de Réglages corrigée en v1.26.0 (qui affichait
+seulement « Configuré ») : ici le mécanisme est expliqué en toutes lettres.
+
+ACTION
+Garder la ligne d'accès, ajouter `route.contains("About")` au garde d'AppRoot, et
+retirer les trois `Feature` sensibles quand `isPanicDecoy`.
+EFFORT : Rapide (< 1 h)
+
+================================================================================
+PARTIE II — FINDINGS HAUTS
+================================================================================
+
+--------------------------------------------------------------------------------
+H1 — 🟠 HAUTE — CONFIRMÉ — Le second facteur du Coffre garde l'ÉCRAN, pas la DONNÉE
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/data/repository/ConversationRepositoryImpl.kt:137-145, 186-192, 235-243
+               data/src/main/java/com/filestech/sms/data/local/db/dao/ConversationDao.kt:60-61, 74-75
+               data/src/main/java/com/filestech/sms/security/VaultManager.kt:64
+Famille      : 1 (garde mal visé)
+Trouvé indépendamment par 3 agents sur 7, par trois chemins différents.
+
+LE FAIT CENTRAL, VÉRIFIÉ
+`isVaultUnlockedInSession` a EXACTEMENT UN lecteur dans tout le dépôt :
+VaultScreen.kt:141. La couche données ne le consulte JAMAIS. Ses trois flux ne
+masquent que sur une seule condition :
+
+    lockState is AppLockManager.LockState.PanicDecoy && entity.inVault -> null
+
+Autrement dit : le PIN coffre + la biométrie Classe 3 protègent l'écran Coffre,
+et rien d'autre. Le modèle de menace que VaultPinManager.kt:19-23 revendique
+lui-même — « j'ai vu ton PIN d'app par-dessus ton épaule » — n'est pas couvert.
+
+TROIS CHEMINS D'ACCÈS VÉRIFIÉS, aucun ne demande le PIN coffre
+
+  (1) « Nouveau message » vers le contact concerné
+      ConversationDao.kt:60 `findByAddressesCsv` n'a pas de `WHERE in_vault = 0`.
+      ComposeViewModel.kt:104-111 → `findOrCreate` (ConversationRepositoryImpl.kt:289)
+      rend l'id de la conversation EXISTANTE du Coffre →
+      `Event.ConversationCreated(id)` → `nav.navigate(Thread(id))`.
+      Tout l'historique protégé s'affiche.
+
+  (2) Lien `smsto:` depuis l'application Téléphone
+      MainActivity.kt:488-515 → AppRootViewModel.resolveSendToAddress → `findOrCreate`.
+      Même résultat, sans même passer par SMS Tech.
+
+  (3) Intent forgeable par n'importe quelle application tierce  → voir H2
+
+Et l'écran Fil n'a AUCUNE garde coffre : vérifié, `inVault` n'y sert qu'à choisir
+l'icône « entrer / sortir du coffre » (ThreadScreen.kt:492, 1168).
+
+Le projet a pourtant déjà identifié cette menace ailleurs :
+ConversationRepositoryImpl.kt:537-547 pose une garde `inVault` sur
+`findMessageById` en citant explicitement « un caller futur (deep link, intent…)
+pourrait lire le body d'un message vault ». La garde équivalente manque sur la
+route `Thread`.
+
+ACTION
+  (a) Étendre le prédicat des trois flux : masquer si `PanicDecoy && inVault`
+      OU si `inVault && !vault.isVaultUnlockedInSession` ;
+  (b) filtrer `in_vault = 0` dans `findByAddressesCsv` et
+      `snapshotOneToOneConversations` (créer une conversation jumelle hors coffre
+      est le comportement le moins surprenant ; révéler l'existante l'est le plus).
+EFFORT : Moyen (< 1 jour)
+
+--------------------------------------------------------------------------------
+H2 — 🟠 HAUTE — CONFIRMÉ — Un Intent forgeable ouvre n'importe quelle conversation
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/MainActivity.kt:455-479
+               app/src/main/AndroidManifest.xml:142-148
+Famille      : 1 (garde mal visé) + 3 (asymétrie avec SafetyCallIntentToken)
+
+`MainActivity` est légitimement `exported="true"` (rôle SMS) et sans permission.
+Une app tierce peut donc l'atteindre par Intent EXPLICITE avec n'importe quelle
+action, indépendamment des `<intent-filter>`.
+
+`ACTION_OPEN_CONVERSATION` ("com.filestech.sms.OPEN_CONVERSATION") et
+`EXTRA_CONVERSATION_ID` ("conversationId") sont des constantes publiques
+(IncomingMessageNotifier.kt:354, 357). Le handler ne vérifie AUCUNE origine :
+ni jeton, ni PendingIntent de rappel, ni permission de signature.
+
+C'est une asymétrie nette : l'équipe a construit la bonne défense
+(`SafetyCallIntentToken` — nonce SecureRandom, `consume()` mono-usage,
+MainActivity.kt:419-426) mais ne l'a appliquée qu'à UNE des quatre actions
+internes routées par MainActivity.
+
+SCÉNARIO — app tierce sans aucune permission :
+    startActivity(new Intent()
+        .setComponent(new ComponentName("com.filestech.sms","com.filestech.sms.MainActivity"))
+        .setAction("com.filestech.sms.OPEN_CONVERSATION")
+        .putExtra("conversationId", 7L));
+Les ids sont des Long Room séquentiels : énumération triviale. Combiné à H1, si la
+conversation est dans le Coffre, son contenu s'affiche sans le second facteur.
+Si l'app est verrouillée, le pending reste armé 30 s (PendingNavHolder.kt:117) et
+se déclenche au déverrouillage suivant.
+
+LIMITE HONNÊTE : l'app tierce ne peut pas LIRE l'écran (FLAG_SECURE par défaut).
+Le gain est l'affichage forcé du contenu protégé — pertinent en contexte de
+contrainte ou d'épaule, qui est le modèle de menace du Coffre.
+
+ACTION : garde `inVault` sur la route Thread (corrige aussi H1) + jeton mono-usage
+sur `ACTION_OPEN_CONVERSATION`, sur le modèle de `SafetyCallIntentToken`.
+EFFORT : Moyen
+
+--------------------------------------------------------------------------------
+H3 — 🟠 HAUTE — CONFIRMÉ — « Verrouiller le coffre en quittant » : voisin non gardé
+     de deux lignes gardées
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/settings/SettingsScreen.kt:2832-2837
+Les côtés corrects : SettingsScreen.kt:2815 (code panique) et :2857 (PIN coffre)
+Famille      : 3 (asymétrie — ligne voisine). C'est le défaut de référence, à l'identique.
+
+Le ToggleRow est INTERCALÉ entre les deux lignes gardées, et ne porte pas la garde.
+Son titre et sa description nomment tous deux le coffre :
+    « Verrouiller le coffre en quittant »
+    « Verrouille automatiquement le coffre-fort chiffré dès que l'app passe en
+      arrière-plan. »
+Le commentaire de la ligne 2812 énonce pourtant la règle : « Même garde que le
+toggle du coffre juste en dessous ».
+
+ACTION : englober les lignes 2832-2837 dans le `if (!isPanicDecoy)`.
+EFFORT : Rapide (< 15 min)
+
+--------------------------------------------------------------------------------
+H4 — 🟠 HAUTE — CONFIRMÉ — Liste noire : 9 chiffres à la réception, 8 à la
+     synchronisation → perte de messages ET blocage inopérant
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/data/sync/TelephonySyncManager.kt:221-232
+               app/src/main/java/com/filestech/sms/system/scheduler/TelephonySyncWorker.kt:186-193
+Le côté correct : core/src/main/java/com/filestech/sms/core/ext/StringExt.kt:81,104-114
+Famille      : 3 (asymétrie)
+
+La v1.25.4 a unifié la clé de liste noire sur `blockKey()` = 9 chiffres, en
+documentant précisément pourquoi 8 ne suffit pas (StringExt.kt:73-79) : « s'arrêter
+à 8 amputait le premier chiffre, celui-là même qui sépare un mobile 06… d'un 07… ».
+`blockKey()` est utilisé par BlockedNumberRepositoryImpl, ConversationRepositoryImpl
+(badge « Bloqué ») et SmsDeliverReceiver.
+
+Les deux chemins de synchronisation sont restés à 8 :
+
+    val blockedSuffixes = (roomBlocked.asSequence() + systemBlocked.asSequence())
+        .map { it.phoneSuffix8() }.filter { it.isNotEmpty() }.toHashSet()
+    …
+    else page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }
+
+Or `roomBlocked` contient DÉJÀ des `blockKey()` (colonne `normalized_number` depuis
+la v1.25.4). Les re-tronquer à 8 réintroduit exactement la confusion supprimée.
+
+DEUX EFFETS, opposés et tous deux faux :
+
+  (1) PERTE DE DONNÉES RÉELLE — `0612345678` bloqué produit la clé `612345678`,
+      ramenée à `12345678`. Les SMS d'un contact NON BLOQUÉ `0712345678` donnent
+      le même suffixe et sont écartés de l'import. Le curseur avance quand même
+      (TelephonySyncManager.kt:259-262) : ces messages ne seront JAMAIS importés.
+      Silencieux et définitif. Sur un premier lancement, c'est tout l'historique
+      de ce correspondant qui disparaît.
+
+  (2) BLOCAGE INOPÉRANT — une clé alphanumérique (« sfr ») donne
+      `phoneSuffix8() == ""`, éliminée par le `.filter { it.isNotEmpty() }`.
+      Les SMS d'un expéditeur alphanumérique bloqué sont importés malgré le
+      blocage — la divergence même que la v1.25.4 disait rendre
+      « structurellement impossible ».
+
+ACTION : comparer `entity.address.blockKey()` aux clés telles quelles, aux
+4 emplacements, sans repasser par `phoneSuffix8()`. Mettre à jour les deux
+commentaires « Suffix-8 matching ».
+EFFORT : Rapide (< 1 h) — mais à tester : c'est un chemin d'import.
+
+--------------------------------------------------------------------------------
+H5 — 🟠 HAUTE — CONFIRMÉ — La liste noire filtre les SMS entrants, pas les MMS
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/system/receiver/MmsWapPushReceiver.kt (tout onReceive)
+               app/src/main/java/com/filestech/sms/system/receiver/MmsDownloadedReceiver.kt
+Le côté correct : app/src/main/java/com/filestech/sms/system/receiver/SmsDeliverReceiver.kt:106
+Famille      : 3 (asymétrie)
+
+Recensement exhaustif de `isBlocked(` dans tout le dépôt (hors tests) :
+  SmsDeliverReceiver.kt:106      ← réception SMS      ✅
+  SendSmsUseCase.kt:84           ← envoi              ✅
+  SendMediaMmsUseCase.kt:72      ← envoi              ✅
+  SendVoiceMmsUseCase.kt:61      ← envoi              ✅
+  → aucune occurrence dans la chaîne MMS ENTRANTE.
+
+Le côté envoi est parfaitement symétrique sur les trois transports. Le côté
+réception ne couvre qu'un des deux. `MmsWapPushReceiver.kt:106-107` extrait pourtant
+`parsed.from?.string` : l'expéditeur est disponible AVANT le téléchargement.
+
+SCÉNARIO : un harceleur est bloqué, ses SMS disparaissent. Il envoie une photo en
+MMS : elle est téléchargée (consommation data), écrite en base, ET NOTIFIÉE
+(MmsDownloadedReceiver.kt:198 appelle `notifyIncoming`). L'utilisatrice constate
+que le blocage « ne marche pas ».
+
+ACTION : garde `isBlocked(sender)` dans MmsWapPushReceiver avant `downloader.download(…)`,
+et garde miroir dans MmsDownloadedReceiver sur l'expéditeur du RetrieveConf (le
+WAP-Push peut ne pas porter `from`).
+EFFORT : Rapide
+
+--------------------------------------------------------------------------------
+H6 — 🟠 HAUTE — CONFIRMÉ — Un envoi programmé peut partir DEUX FOIS
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/system/scheduler/ScheduledSendAttempt.kt:56-92
+               data/src/main/java/com/filestech/sms/data/local/db/dao/ScheduledMessageDao.kt:46-47
+Famille      : concurrence
+
+Il n'existe aucune revendication atomique `PENDING → SENDING` avant l'appel réseau.
+Le seul garde est `if (entity.state != ScheduledState.PENDING) return ALREADY_SETTLED`,
+évalué AVANT l'envoi. `setState` est un UPDATE inconditionnel.
+
+ENTRELACEMENT
+  Worker réveillé → `findById` rend PENDING → `sendSms.invoke()` : le SMS EST PARTI,
+  la ligne est écrite dans content://sms ET dans messages → `Outcome.Success` revient
+  → LE PROCESSUS EST TUÉ (OOM, force-stop, tueur OEM Samsung/Xiaomi) AVANT
+  `dao.setState(id, SENT)` ligne 82.
+  WorkManager remet le travail non terminé en ENQUEUED et ré-exécute `doWork` →
+  `entity.state` vaut TOUJOURS PENDING → renvoi complet.
+
+CONSÉQUENCE : le destinataire reçoit deux fois le message, deux SMS facturés, deux
+bulles. En MMS, deux pièces jointes. Aucune erreur affichée.
+
+ACTION : UPDATE conditionnel rendant le nombre de lignes touchées —
+    @Query("UPDATE scheduled_messages SET state = 1 WHERE id = :id AND state = 0")
+    suspend fun claim(id: Long): Int
+n'envoyer que si le count vaut 1 ; remettre PENDING avant de rendre RETRY.
+EFFORT : Moyen
+
+--------------------------------------------------------------------------------
+H7 — 🟠 HAUTE — CONFIRMÉ — Double tap sur « Envoyer » = deux SMS (et le chemin
+     vocal, lui, est protégé)
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/thread/ThreadViewModel.kt:447-467
+               app/src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt:1514
+Le côté correct : ThreadViewModel.kt:1187 (`if (_state.value.isSendingVoice) return`)
+                  ThreadScreen.kt:1750 (bouton remplacé par un CircularProgressIndicator)
+Famille      : 3 (asymétrie) + concurrence
+
+`send()` n'a aucun garde en vol, et `FilledIconButton(onClick = onSendText)` n'a
+aucun paramètre `enabled` — vérifié.
+
+ENTRELACEMENT : tap 1 → `viewModelScope.launch { doSend(body) }` avec
+`body = draft.trim()` → suspend dans `sendSms.invoke` (lecture Room `isBlocked`,
+insert ContentProvider, transaction Room : 20 à 100 ms de points de suspension).
+Tap 2 dans cette fenêtre → seconde coroutine ; `draft` vaut ENCORE la même valeur,
+il n'est vidé qu'après le retour. Deuxième SMS parti et facturé.
+
+Même défaut sur `dispatchPendingAttachments()` (lignes 883-928) : deux MMS
+multipart, et sur `retry(messageId)` (ligne 1029) → `RetrySendUseCase` n'a aucune
+précondition de statut. À noter : le chemin MMS possède un mutex par message
+(MmsSender.kt:166-178, `perMessageLocks`) — le chemin SMS n'en a aucun.
+
+ACTION : `isSending: Boolean` dans UiState, posé avant `launch`, relâché dans un
+`finally`, + `enabled = !isSending` sur le bouton. C'est exactement le motif déjà
+en place pour la voix, à copier.
+EFFORT : Rapide
+
+--------------------------------------------------------------------------------
+H8 — 🟠 HAUTE — CONFIRMÉ — Un envoi peut être annulé à mi-chemin si l'utilisateur
+     quitte l'écran
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/thread/ThreadViewModel.kt:559-575
+               domain/src/main/java/com/filestech/sms/domain/usecase/SendSmsUseCase.kt:83-108
+Famille      : concurrence
+
+`doSend` tourne dans `viewModelScope`, annulé par `onCleared()`. La séquence est,
+par destinataire : (1) insert dans content://sms — suspend ; (2) `upsertOutgoingSms`
+— `withContext(io)` + transaction Room, suspend ; (3) `sender.send(...)` — non
+suspend. Aucun `NonCancellable`, aucun `@ApplicationScope`.
+
+`withContext` est un point d'annulation à l'entrée ET à la sortie.
+
+ENTRELACEMENT : l'utilisateur tape « Envoyer » puis fait immédiatement retour — un
+geste que l'UI encourage (ThreadScreen.kt:577-580 masque le clavier juste après).
+`onCleared()` annule le scope. La coroutine reprend avec CancellationException au
+retour de l'étape 2 → l'étape 3 n'est JAMAIS exécutée.
+
+RÉSULTAT : une ligne « envoyée » dans content://sms, visible dans les autres apps
+SMS ; une ligne PENDING dans Room ; et AUCUN SMS parti. Le chien de garde
+(TelephonySyncWorker.kt:85-89) la bascule en FAILED 15 minutes plus tard, sans
+cause visible.
+
+Même risque sur `scheduleSend` (:505), `blockSenders` (:1285 — blocage partiel) et
+`deleteMessage` (:1034).
+
+ACTION : porter les écritures d'envoi sur `@ApplicationScope` (le scope existe
+déjà, avec son CoroutineExceptionHandler — di/CoroutineModule.kt:34-41), ou
+envelopper l'appel au use case dans `withContext(NonCancellable)`.
+EFFORT : Moyen
+
+--------------------------------------------------------------------------------
+H9 — 🟠 HAUTE — CONFIRMÉ — La purge n'est pas transactionnelle : l'aperçu en clair
+     du message effacé reste, définitivement
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/data/repository/ConversationRepositoryImpl.kt:497-507
+               app/src/main/java/com/filestech/sms/system/scheduler/TelephonySyncWorker.kt:126-134
+Le côté correct : ConversationRepositoryImpl.kt:458 (`deleteMessage`, v1.24.0)
+Famille      : 3 (asymétrie)
+
+Deux écritures qui devraient n'en faire qu'une, sans `database.withTransaction` :
+
+    val purged = messageDao.purgeOlderThan(cutoff)
+    if (purged > 0) { messageDao.refreshAllConversationPreviewsAfterPurge() }
+
+alors que `deleteMessage`, corrigé en v1.24.0 pour EXACTEMENT ce motif, est bien
+enveloppé — son commentaire dit même « confirmé sur une vraie sauvegarde 2026-07-23 ».
+Le correctif n'a pas été porté sur la purge.
+
+Pas besoin de concurrence : il suffit que le processus meure entre le DELETE et
+l'UPDATE. Les messages sont effacés, mais `conversations.last_message_preview`
+conserve LE CORPS EN CLAIR du message purgé.
+
+AGGRAVANT : rien ne répare cet état. La seule passe de réparation,
+`repairStaleConversationPreviews` (StartupMigrations.kt:68-76), est gardée par le
+drapeau `staleConversationPreviewsRepairedV1240`, déjà à `true` sur toute install
+post-1.24.0. L'aperçu périmé est PERMANENT.
+
+C'est la famille de défauts qui a déjà coûté deux conversations sur ce projet.
+
+ACTION : `database.withTransaction { … }` aux deux emplacements.
+EFFORT : Rapide
+
+--------------------------------------------------------------------------------
+H10 — 🟠 HAUTE — CONFIRMÉ — Le déclenchement d'urgence est annulable, et rien ne
+      le dit à l'utilisateur
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/emergency/EmergencyViewModel.kt:161-171
+Le côté correct : app/src/main/java/com/filestech/sms/system/receiver/EmergencyShortcutReceiver.kt:66 (@ApplicationScope)
+Famille      : 3 (asymétrie) + concurrence
+ZONE JAMAIS ÉPROUVÉE. ⚠️ Ce chemin envoie de VRAIS SMS.
+
+    fun trigger() {
+        if (!_isTriggerInFlight.compareAndSet(false, true)) return
+        viewModelScope.launch { … }
+    }
+
+`TriggerEmergencyUseCase:73` résout la position AVANT la boucle d'envoi, ce qui peut
+prendre 8 SECONDES (LocationResolver.kt:226, DEFAULT_TIMEOUT_MS). Pendant ces 8 s,
+rien ne bouge à l'écran : `EmergencyHoldButton` ne reçoit que `onTrigger` et
+`enabled`, aucun état « en cours », et le statut sous le bouton reste « prêt ».
+
+Un utilisateur en situation d'urgence qui appuie sur Retour, bascule d'application
+ou dont l'écran se ferme annule `viewModelScope` : AUCUN SMS ne part, et rien ne le
+dit. Si l'annulation survient au milieu de la boucle, une partie seulement des
+contacts est prévenue, sans trace.
+
+ACTION : porter l'envoi sur `@ApplicationScope` (ou un CoroutineWorker) — comme le
+fait déjà le receiver — et afficher un état « envoi en cours » pendant la résolution
+de position.
+EFFORT : Moyen
+
+--------------------------------------------------------------------------------
+H11 — 🟠 HAUTE — CONFIRMÉ — Le SMS d'urgence transmet une position périmée comme
+      si elle était actuelle
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/data/location/LocationResolver.kt:106-117
+Famille      : 2 (repli qui échoue du mauvais côté)
+ZONE JAMAIS ÉPROUVÉE.
+
+Au timeout, repli sur `bestLastKnown(lm)` SANS AUCUNE BORNE D'ÂGE. Le seuil de
+fraîcheur de 5 minutes (`FRESH_THRESHOLD_MS`, ligne 232) ne s'applique qu'au chemin
+rapide en amont (lignes 80-88), jamais au repli des lignes 96 et 107.
+
+SCÉNARIO : GPS coupé depuis la veille, ou intérieur sans fix. `awaitFirstFix` expire,
+`bestLastKnown` rend une position vieille de plusieurs heures ou jours.
+
+Le SMS dit alors « ⚠️ URGENCE… Ma position : https://maps.google.com/?q=… » sans
+horodatage ni précision, et `hadLocation = true` déclenche le snackbar de SUCCÈS
+(EmergencyScreen.kt:559-563).
+
+C'est la variante silencieuse du défaut de la v1.25.5 : la position n'est plus
+« annoncée mais non transmise », elle est TRANSMISE MAIS FAUSSE. Des secours
+envoyés à la mauvaise adresse.
+
+ACTION : borner l'âge du repli (30 min p. ex.) et, au-delà, soit tomber en
+« position non disponible », soit annexer l'âge du fix au message.
+EFFORT : Rapide
+
+--------------------------------------------------------------------------------
+H12 — 🟠 HAUTE — CONFIRMÉ — La restauration sort le contenu du Coffre du Coffre
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/data/backup/BackupService.kt:426
+Famille      : 1 (garde mal visé)
+ZONE JAMAIS ÉPROUVÉE.
+
+    val existing = conversationDao.findByAddressesCsv(backupConv.addressesCsv)
+    if (existing != null) { convIdMap[backupConv.id] = existing.id; reused++ }
+
+`findByAddressesCsv` (ConversationDao.kt:60) ne filtre pas `in_vault` — même racine
+que H1.
+
+SCÉNARIO : la sauvegarde contient la conversation « Marie » DANS le coffre ; la base
+cible contient déjà une « Marie » HORS coffre (créée par la synchro système, ou
+après une réinstallation suivie d'un import). Les messages du coffre sont insérés
+(lignes 449-465) dans la conversation EN CLAIR.
+
+CONSÉQUENCE : le contenu protégé apparaît dans la liste ordinaire — y compris en
+mode leurre.
+
+ACTION : restreindre la réutilisation aux conversations de même statut `in_vault`,
+ou reporter le `inVault` de la sauvegarde sur la conversation réutilisée.
+EFFORT : Rapide
+
+--------------------------------------------------------------------------------
+H13 — 🟠 HAUTE — CONFIRMÉ — Import : deux numéros différents fusionnés dans un
+      même fil
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/data/repository/ConversationMirror.kt:790-800, 854-869
+Famille      : 3 (asymétrie)
+ZONE JAMAIS ÉPROUVÉE.
+
+Les deux chemins de rattachement (`ensureConversationByThread`, utilisé par
+`bulkImportFromTelephony:717`, et `ensureConversation`) rapprochent sur
+`phoneSuffix8()` — 8 chiffres. Le code se contredit lui-même : StringExt.kt:74-79
+explique que 8 chiffres confondent `0612345678` et `0712345678` (c'est la raison du
+passage à 9 pour la liste noire), et le KDoc de `dedupeSameNumberConversations`
+qualifie sa clé E.164 de « PLUS stricte que le suffix-8 de la réception ».
+
+SCÉNARIO : import initial. La conversation de `0612345678` est créée (thread système
+T1) ; les rows de `0712345678` (thread T2) ne trouvent ni T2 ni le CSV, mais MATCHENT
+LE SUFFIXE 8 → elles sont rattachées à la conversation du 06, dont le `threadId` est
+réécrit vers T2 (lignes 775-779).
+
+CONSÉQUENCE : les messages de deux personnes différentes se retrouvent dans le même
+fil, sous le nom d'une seule. Répondre dans ce fil envoie au numéro enregistré dans
+`addressesCsv` — donc AU MAUVAIS DESTINATAIRE. La passe de dédup ne rattrape rien :
+elle est plus stricte, pas moins.
+
+ACTION : aligner ces deux fallbacks sur `blockKey()` / E.164, comme la dédup et la
+liste noire. Même correctif de fond que H4.
+EFFORT : Moyen — chemin d'import, à tester.
+
+--------------------------------------------------------------------------------
+H14 — 🟠 HAUTE — CONFIRMÉ — Le repli des réglages désarme le Safety call en silence
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/data/local/datastore/SettingsRepository.kt:49, 70-72
+Famille      : 2 (repli qui échoue du mauvais côté)
+
+    private val Context.dataStore by preferencesDataStore(name = "sms_tech_settings")
+    // ↑ AUCUN corruptionHandler — vérifié
+    override val state: StateFlow<AppSettings> =
+        flow.stateIn(appScope, SharingStarted.Eagerly, AppSettings())
+
+`AppSettings()` = tous les réglages de sécurité à leur valeur par défaut. Deux façons
+pour ce repli de rester en place POUR TOUJOURS : (a) `dataStore.data` lève (corruption
+— sans `corruptionHandler`, DataStore ne s'auto-répare pas) ; la coroutine de partage
+meurt, l'`appScope` se contente de journaliser (CoroutineModule.kt:33-40), et le
+StateFlow conserve `AppSettings()` définitivement, sans rien signaler ; (b) fenêtre
+d'hydratation au démarrage à froid.
+
+CONSÉQUENCES chez les consommateurs de `state.value` — aucun n'attend l'hydratation :
+  SafetyCallWorker.kt:70      → `safetyCall.enabled = false` → « disabled, skipping
+                                 tick » : LE DEADMAN NE SE DÉCLENCHE PLUS JAMAIS,
+                                 en silence, alors que l'utilisateur le croit armé.
+  IncomingMessageNotifier.kt:75 → `notifications.enabled = true`, `previewMode = ALWAYS` :
+                                 les aperçus s'affichent alors que l'utilisateur avait
+                                 choisi NEVER.
+
+À NOTER — `AppLockManager.resolveInitialState()` (:76-82) est IMMUNISÉ : il utilise
+`settings.flow.first()`, donc une levée laisse `_state` sur `Locked`, fail-closed.
+C'est bien l'instantané chaud `state` qui est le maillon permissif.
+
+ACTION : exposer `StateFlow<AppSettings?>` (null = pas encore lu, les appelants
+attendent), ou a minima `.retry()` + `.catch {}` qui ré-émet le dernier instantané
+VALIDE au lieu des défauts, et remonter l'échec.
+EFFORT : Moyen
+
+--------------------------------------------------------------------------------
+H15 — 🟠 HAUTE — CONFIRMÉ — Le verrouillage automatique peut ne jamais s'exécuter,
+      et le garde placé pour l'éviter est situé APRÈS le point de rupture
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/security/AutoLockObserver.kt:57
+Famille      : 2 (repli) + 1 (garde mal visé)
+
+    pendingLock = scope.launch {
+        val s = settings.flow.first()        // ← AUCUNE protection
+        if (s.security.lockVaultOnLeave) {
+            runCatching { vaultLazy.get().lock() }   // ← le garde est ICI
+                .onFailure { … }
+        }
+        …
+        appLock.forceLock()
+        purgeTransientCaches()
+    }
+
+Si la lecture DataStore lève (même corruption qu'en H14), la coroutine meurt sur
+place : ni `forceLock()`, ni `purgeTransientCaches()`.
+
+L'ironie est documentée dans le fichier lui-même : le `runCatching` des lignes 63-66
+a été ajouté précisément pour ne pas « sauter les deux » — mais il protège une ligne
+située APRÈS le vrai point de rupture. Garde mal visé, cas d'école.
+
+CONSÉQUENCE : l'application ne se reverrouille plus jamais en passant en
+arrière-plan, et `files/exports/` (PDF de conversations EN CLAIR), `cache/voice_mms/`,
+`cache/mms_outgoing/` restent sur le disque.
+
+ACTION : `val s = runCatching { settings.flow.first() }.getOrNull()` puis, si null,
+appliquer le chemin LE PLUS STRICT (forceLock immédiat + purge) au lieu d'abandonner.
+EFFORT : Rapide
+
+--------------------------------------------------------------------------------
+H16 — 🟠 HAUTE — CONFIRMÉ — La notification du Coffre échoue du mauvais côté
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/system/notifications/IncomingMessageNotifier.kt:58-60
+Famille      : 2 (repli qui échoue du mauvais côté)
+
+    val inVault = runCatching { conversationDao.findById(conversationId)?.inVault == true }
+        .onFailure { Timber.w(it, "…inVault lookup failed, defaulting to false") }
+        .getOrDefault(false)
+    if (inVault) return@withContext
+
+C'est L'UNIQUE garde qui empêche une notification pour une conversation du Coffre
+(`notifyIncoming` est le seul point d'entrée, appelé depuis SmsDeliverReceiver.kt:173,203
+et MmsDownloadedReceiver.kt:198). Le repli dit « pas dans le coffre ».
+
+Toute erreur Room/SQLCipher sur ce `findById` — base verrouillée par une transaction
+concurrente, I/O disque, base non ouvrable après une réparation — affiche alors nom
+de l'expéditeur et aperçu du corps sur l'écran de verrouillage. La promesse du Coffre
+(« ni nom, ni preview, ni icône ») tombe exactement quand la base va mal.
+
+Le projet a déjà tranché ce point ailleurs : VaultScreen.kt:92-106 dit `null` et fait
+attendre l'appelant.
+
+ACTION : `.getOrDefault(true)`. En cas de doute, ne rien notifier — le message reste
+lisible dans l'app.
+EFFORT : Rapide (1 ligne)
+
+--------------------------------------------------------------------------------
+H17 — 🟠 HAUTE — CONFIRMÉ — `attemptUnlock` est le seul consommateur de secret qui
+      n'efface pas son CharArray
+--------------------------------------------------------------------------------
+Localisation : data/src/main/java/com/filestech/sms/security/AppLockManager.kt:220-271
+Les côtés corrects : AppLockManager.kt:114-116 (`setPin`), :175-179 (`setPanicCode`),
+                     VaultPinManager.kt:112-114, PinEntryDialog.kt:149-154
+Famille      : 3 (asymétrie)
+
+Quatre jumeaux portent tous un `finally { … wipe() }`. `attemptUnlock` a cinq retours
+anticipés possibles et n'efface le candidat sur AUCUN. `matches()` (:363-370) n'efface
+que le dérivé. L'appelant ne compense pas : LockScreen.kt:352 fait
+`viewModel.attempt(pin.toCharArray())` et personne ne reprend le tableau.
+
+PinEntryDialog.kt:141-146 documente pourtant précisément la menace (« sans ça, le
+String reste en heap JVM pendant toute la dérivation, exposé à un heap dump »), et
+VaultPinManager l'applique. Le PIN principal — celui qui ouvre tout, coffre compris —
+est le seul non couvert, alors que c'est le secret saisi le plus souvent.
+
+ACTION : envelopper le corps d'`attemptUnlock` dans `try { … } finally { candidate.wipe() }`
+(`wipe()` est déjà importé ligne 5). Vérifier qu'`AppLockManagerTest` ne réutilise pas
+un candidat après appel.
+EFFORT : Rapide
+
+--------------------------------------------------------------------------------
+H18 — 🟠 HAUTE — CONFIRMÉ — L'icône du Coffre est visible pendant la fenêtre de repli
+      en session leurre
+--------------------------------------------------------------------------------
+Localisation : app/src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsViewModel.kt:124, 225
+               app/src/main/java/com/filestech/sms/ui/screens/conversations/ConversationsScreen.kt:307
+Famille      : 2 (repli qui échoue du mauvais côté)
+
+`UiState()` a `isPanicDecoy = false` par défaut, et le flux est en
+`stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())`.
+Le consommateur ne porte AUCUNE garde `isLoading` :
+
+    if (!state.isPanicDecoy) {
+        IconButton(onClick = onOpenVault) { Icon(Icons.Outlined.Lock, …) }
+    }
+
+Ce n'est pas une course d'une frame : le `combine` amont agrège Room, DataStore et
+`syncManager.state` en `flowOn(io)` — la première émission coûte une vraie requête
+chiffrée plus un IPC Binder (`isDefault()`). Et avec `WhileSubscribed(5_000L)`,
+pendant que LockScreen est au-dessus la collecte s'arrête ; au dépilement, la valeur
+EN CACHE — calculée avant, avec `isPanicDecoy = false` — est resservie immédiatement.
+
+Le garde de navigation d'AppRoot ne couvre pas ce cas : il dépile la route Vault
+APRÈS le tap, il n'empêche pas la révélation de l'EXISTENCE du coffre — qui est
+précisément ce que le mode leurre doit nier (le commentaire de ConversationsScreen.kt:302-306
+dit « we hide the icon entirely (rather than disable it) so the feature looks like it
+doesn't exist to a coerced observer »).
+
+Même motif, plus court, sur SettingsViewModel.kt:77-79 (`stateIn(…, false)` →
+sections Safety call et Mode urgence composées au moins une fois).
+
+ACTION : ne pas porter `isPanicDecoy` dans le UiState agrégé — l'exposer séparément
+depuis `appLock.state` (source déjà chaude et autoritaire), ou rendre le champ
+tri-état et masquer tant qu'il vaut `null`.
+EFFORT : Moyen
+
+================================================================================
+PARTIE III — FINDINGS MOYENS
+================================================================================
+
+M1  🟡 CONFIRMÉ — Le compte à rebours du blocage est one-shot et ne se réarme jamais
+    app/.../ui/screens/lock/LockScreen.kt:378-391
+    `LaunchedEffect(until)` sort sur `nowMs >= until` puis appelle
+    `refreshLockoutIfExpired()`, qui peut légitimement rendre `false` (l'instantané
+    persistant tranche). L'état reste LockedOut, la boucle est terminée, `until` ne
+    change pas → la clé du LaunchedEffect ne change pas → RIEN NE LA RELANCE. Bouton
+    mort jusqu'à ce que l'utilisateur tue le processus. Symptôme identique à celui
+    corrigé en v1.26.0 — l'utilisateur ne fera pas la différence.
+    ACTION : sortir de la boucle sur le retour `true` de `refreshLockoutIfExpired()`,
+    sinon re-temporiser 1 s et redemander. Le minuteur ne doit être qu'un déclencheur
+    de sondage — ce que le commentaire affirme déjà, mais que la boucle ne tient pas.
+
+M2  🟡 CONFIRMÉ — Le blocage anti-manipulation d'horloge peut enfermer l'utilisateur
+    data/.../local/datastore/SecurityStore.kt:103-109
+    `return wallLocked || monoLocked` : le OU rend l'horloge murale capable
+    d'ALLONGER le blocage sans borne. Le clamp de `setLockout` (:73-79) est évalué à
+    l'ÉCRITURE et ne sert donc à rien si l'horloge bouge ensuite. Téléphone à plat
+    plusieurs jours, redémarrage sans réseau, horloge repartie au repère de build :
+    `wallLocked` reste vrai, et `attemptUnlock` retourne LockedOut dès sa première
+    ligne — ni le PIN, ni le CODE PANIQUE, ni la biométrie ne passent.
+    ⚠️ REVU À LA BAISSE par l'orchestrateur (un agent l'avait classé HAUTE) : la
+    situation se résorbe dès que l'horloge se recale (NTP au retour du réseau, ou
+    réglage manuel). Ce n'est pas un enfermement permanent.
+    ACTION : faire de la monotone l'autorité quand elle est valide, et ne retomber
+    sur la murale que si un reboot est détecté. Borner aussi à la LECTURE.
+
+M3  🟡 CONFIRMÉ — Envoi programmé non gardé en mode leurre
+    app/.../scheduler/ScheduledMessageWorker.kt, ScheduledSendAttempt.kt
+    Aucune référence à `AppLockManager` ni `PanicStateProvider` (recherche
+    exhaustive). Un message programmé part et APPARAÎT DANS LA LISTE devant
+    l'agresseur, sans que personne ne l'ait composé — rupture de l'illusion, et fuite
+    du contenu programmé. Les use-cases d'urgence, eux, ont tous leur garde.
+
+M4  🟡 CONFIRMÉ — Garde de navigation leurre : Urgence oui, Safety call non
+    app/.../ui/AppRoot.kt:96-103 — la route `SafetyCallSetup` n'y figure pas, alors
+    que les deux fonctions reçoivent le MÊME traitement dans les Réglages
+    (SettingsScreen.kt:420 et :468, même `!isPanicDecoy`). Seule l'urgence reçoit le
+    second filet.
+    ACTION : ajouter la branche AVANT `Emergency` (l'ordre compte : `contains` est
+    préfixiel, cf. le couple EmergencySetup/Emergency).
+
+M5  🟡 CONFIRMÉ — Carnet de contacts partagé : vider le Safety call désarme l'Urgence
+    app/.../ui/screens/safetycall/SafetyCallSetupViewModel.kt:169-210
+    `save()` ne valide `contacts.isEmpty()` QUE si `current.enabled`. Or le Mode
+    urgence lit le même `security.safetyCall.contacts` (TriggerEmergencyUseCase:67).
+    L'utilisateur désarme son Safety call, retire ses contacts, enregistre : le Mode
+    urgence reste `enabled = true` et perd tous ses destinataires. Le déclenchement
+    rend `NoContacts` — il l'apprendra au moment où il en a besoin.
+    Défaut connexe : le brouillon est hydraté une seule fois (:97-102) et `save()`
+    réécrit tout le bloc `safetyCall` — une modification faite ailleurs entre
+    l'ouverture de l'écran et le Save est écrasée en silence.
+
+M6  🟡 CONFIRMÉ — Doublons au ré-import d'une sauvegarde
+    data/.../local/db/entity/MessageEntity.kt:25,47 + BackupService.kt:459
+    La dédup repose sur `UNIQUE(telephony_uri)` + `OnConflictStrategy.IGNORE`, mais
+    la colonne est NULLABLE et SQLite traite les NULL comme distincts. Ont un
+    `telephony_uri` nul : TOUS les MMS sortants et les SMS dont l'écriture système a
+    échoué. Restaurer deux fois la même sauvegarde les duplique sans limite — alors
+    que la chaîne affichée dit l'inverse (strings.xml:708 : « existing messages are
+    kept (no duplicates) »).
+
+M7  🟡 CONFIRMÉ — Les pièces jointes ne sont PAS dans la sauvegarde
+    data/.../backup/BackupService.kt:69-73
+    `BackupPayload` ne porte que `conversations` + `messages`. La table `attachments`
+    n'est ni exportée ni restaurée, alors que `attachments_count` est restauré tel
+    quel. Après restauration : bulles vides, photos/vocaux/fichiers perdus, sans le
+    moindre avertissement.
+
+M8  🟡 CONFIRMÉ — Statut d'un SMS multipart = celui de la DERNIÈRE partie reçue
+    data/.../sms/SmsSenderImpl.kt:44-54, 102-103 + app/.../receiver/SmsSentReceiver.kt:35-40
+    Un PendingIntent par partie porte `EXTRA_PART_INDEX` et `EXTRA_PART_COUNT` — qui
+    ne sont lus NULLE PART. SMS de 3 segments : échec de la partie 0 → FAILED, puis
+    OK des parties 1 et 2 → repassé en SENT. Le destinataire reçoit un message
+    tronqué, l'expéditeur le croit envoyé, et la bulle n'étant pas FAILED, la relance
+    n'est même pas armée.
+
+M9  🟡 CONFIRMÉ — URI externe lue sans validation d'autorité ni de scheme
+    app/.../MainActivity.kt:383-395 → ThreadViewModel.kt:1022, 1412-1422
+    `EXTRA_STREAM` d'un `ACTION_SEND` tiers est accepté tel quel : ni vérification que
+    le scheme est `content://`, ni que l'autorité n'est pas celle de SMS Tech
+    elle-même. ⚠️ Le KDoc MainActivity.kt:374-378 affirme que le pipeline aval
+    « inspecte le header image » — VÉRIFIÉ, C'EST FAUX : SendMediaMmsUseCase n'applique
+    qu'un cap de taille (:54) et fait confiance au mimeType fourni (:96-98). Ce
+    commentaire est un piège pour le prochain auditeur.
+
+M10 🟡 PROBABLE — Le verrouillage automatique efface le PDU d'un MMS en vol
+    data/.../security/AutoLockObserver.kt:105-118 vs data/.../mms/MmsSender.kt:262-268
+    Le PDU est écrit dans `cacheDir/mms_outgoing/` et lu PLUS TARD par le MmsService
+    de l'OS ; `purgeTransientCaches()` le supprime sans égard pour les envois en
+    cours, et sans le seuil d'âge de 24 h qu'applique pourtant TelephonySyncWorker.kt:207-216.
+    Aggravé si le délai est IMMEDIATE. Et `forceLock()` est un no-op quand
+    `lockMode == OFF` (le défaut) alors que la purge s'exécute quand même.
+    MAILLON NON VÉRIFIÉ : le moment exact où la plateforme lit l'URI du PDU.
+    ACTION : écrire les PDU sortants dans `filesDir/mms_outgoing/`, ou exclure de la
+    purge les fichiers de moins de N minutes ; et ne purger que si un verrou est armé.
+
+M11 🟡 PROBABLE — SMS entrant sans notification et compteur de non-lus doublé
+    data/.../repository/ConversationMirror.kt:111-113 + app/.../receiver/SmsDeliverReceiver.kt:189-213
+    `upsertIncomingSms` ignore le retour de l'insert (`-1L` en cas de conflit) et fait
+    `touchConversation(deltaUnread = +1)` inconditionnellement. Le chemin EN MASSE a
+    été corrigé pour exactement ce motif en v1.8.0 (ConversationMirror.kt:736-743) ;
+    le chemin unitaire ne l'a pas été — encore une asymétrie. Si une synchronisation
+    tourne pile à cet instant : compteur faussé ET aucune notification postée.
+    MAILLON NON VÉRIFIÉ : la simultanéité réelle (fenêtre de quelques ms).
+
+================================================================================
+PARTIE IV — FINDINGS BAS
+================================================================================
+
+B1  🟢 CONFIRMÉ — `VaultManager` énumère les états au lieu d'interroger le prédicat
+    qui fait autorité — data/.../security/VaultManager.kt:117-131
+    Le commentaire `else -> Unit // Unlocked or Disabled` est faux : `LockedOut` tombe
+    aussi dans cette branche, alors qu'`isOpenForUi` le classe du côté fermé. Aucun
+    chemin atteignable trouvé (les écrans appelants sont dépilés dès `showLock`), mais
+    c'est exactement la forme qui a produit les autres findings : une énumération qui
+    vieillit mal.
+
+B2  🟢 CONFIRMÉ — L'annulation d'un envoi programmé efface des fichiers qu'un worker
+    peut lire — domain/.../usecase/CancelScheduledMessageUseCase.kt:23-36
+    Contradiction de contrat à signaler : `DeleteScheduledMessageUseCase.kt:29-34`
+    affirme « les fichiers vivent tant que la ligne existe » et que la suppression
+    « n'a lieu QU'ICI » — or `CancelScheduledMessageUseCase.kt:35` supprime bien les
+    fichiers en conservant la ligne CANCELLED. Les deux commentaires ne peuvent pas
+    être vrais en même temps.
+
+B3  🟢 CONFIRMÉ — `markRead` / `markAllRead` non transactionnels
+    data/.../repository/ConversationRepositoryImpl.kt:404-406, 431-438
+    Se répare au démarrage suivant (`recomputeAllUnreadCounts`), d'où la sévérité.
+
+B4  🟢 CONFIRMÉ — `refreshAllConversationPreviewsAfterPurge` n'exclut pas les
+    sentinelles de réaction — data/.../dao/MessageDao.kt:432-447
+    Les deux requêtes sœurs portent le prédicat `NOT (body = '' AND … )`, celle-ci
+    non → aperçu vide et ordre de tri faussé après une purge.
+
+B5  🟢 CONFIRMÉ — `ACTION_TRIGGER_EMERGENCY` toujours câblé, sans émetteur
+    AndroidManifest.xml:282 + EmergencyShortcutReceiver.kt:56, 111-117
+    Chemin « SMS d'urgence réels » armé, sans appelant depuis la v1.14.2. Inoffensif
+    aujourd'hui (`exported=false`), mais il n'a NI anti-rebond, NI cooldown, NI retour
+    utilisateur. Le recâbler tel quel rouvrirait le double-envoi de vrais SMS.
+
+B6  🟢 CONFIRMÉ — `smsto:` accepte n'importe quelle chaîne comme destinataire
+    MainActivity.kt:488-515 + AppRootViewModel.kt:69-79
+    Toute chaîne non vide devient un destinataire et ÉCRIT UNE LIGNE EN BASE. Le KDoc
+    de PendingNavHolder.kt:66-67 affirme « valide phone number côté caller
+    (MainActivity) » — cette validation n'existe pas. Incohérent avec
+    HeadlessSmsSendService.kt:76-82, qui plafonne à 32 caractères et 50 destinataires.
+
+B7  🟢 CONFIRMÉ — Les PDF d'export (Coffre inclus) survivent si l'auto-verrouillage
+    est NEXT_LAUNCH — AutoLockObserver.kt:78-88
+    Le `return@launch` de la ligne 80 saute `forceLock()` ET `purgeTransientCaches()`.
+    L'export PDF est disponible sur TOUTES les conversations, Coffre compris
+    (ThreadScreen.kt:505, 1154 — aucune condition `inVault`).
+
+B8  🟢 CONFIRMÉ — `errorCode = -1` en dur au lieu de `SendErrorCode.SYNCHRONOUS`
+    SendMediaMmsUseCase.kt:113 et SendVoiceMmsUseCase.kt:79 vs SendSmsUseCase.kt:104-108
+    Pas de bug aujourd'hui (même valeur), mais `SendErrorCode.WATCHDOG_TIMEOUT = -2`
+    existe et `RetrySendUseCase.kt:31-36` en dépend : le jour où l'échelle bouge, les
+    deux MMS mentiront.
+
+================================================================================
+PARTIE IV-BIS — FAMILLE 4 : LE DÉFAUT DU MODE PANIQUE, SIX FOIS
+================================================================================
+Le motif de référence : `setPanicCode()` existait avec zéro appelant. Toute la
+mécanique était complète et correcte ; il manquait le seul écran permettant de
+s'en servir. Lint le signalait, la baseline l'avait absorbé.
+
+Ce motif n'est pas un accident isolé. Il est présent SIX fois, dont quatre où
+l'utilisateur voit déjà l'interface de la fonctionnalité absente.
+
+⚠️ PIÈGE DE MÉTHODE À RETENIR : les baselines contiennent elles-mêmes les
+littéraux `R.string.xxx` dans leurs attributs `message`. Tout comptage d'orphelins
+qui n'exclut pas `lint-baseline.xml` et `detekt-baseline.xml` conclut faussement
+« utilisée ». Sur 54 strings réellement orphelines, 53 sont absorbées par les
+65 `UnusedResources` des baselines.
+(Parité FR↔EN par ailleurs parfaite : 719/719, aucun écart.)
+
+--------------------------------------------------------------------------------
+F1 — 🟠 HAUTE — CONFIRMÉ — Épinglage, archivage et sourdine : l'interface existe,
+     rien ne peut les déclencher
+--------------------------------------------------------------------------------
+Localisation : domain/.../usecase/ToggleConversationStateUseCase.kt:13-15
+               data/.../local/db/dao/ConversationDao.kt:94, 97, 100
+               data/.../repository/ConversationRepositoryImpl.kt:370-372
+               domain/.../repository/ConversationRepository.kt:32-34
+
+PREUVE : `setPinned`, `setArchived`, `setMuted` ont EXACTEMENT 4 occurrences
+chacun dans tout le dépôt — les 4 couches de déclaration, et rien d'autre.
+ZÉRO appelant de production. Le use case EST pourtant injecté
+(ConversationsViewModel.kt:58, ThreadViewModel.kt:61, VaultScreen.kt:79), mais
+aucune VM n'appelle ces trois méthodes.
+
+CE QUE L'UTILISATEUR VOIT DÉJÀ — et qui ne peut jamais rien faire :
+  ConversationsScreen.kt:406-410  le tri « Épinglés d'abord » dans le menu
+                                  3-points ⇒ identique à « Plus récents » À JAMAIS
+  ConversationsScreen.kt:315      le bouton vers la liste Archivés
+                                  ⇒ structurellement TOUJOURS VIDE
+  ConversationRow.kt:128, 147     les badges « épinglé » et « silencieux »
+                                  ⇒ ne peuvent jamais s'allumer
+  6 strings action_pin/unpin/archive/unarchive/mute/unmute, traduites FR+EN,
+  référencées par aucun `R.string.*`
+
+AGGRAVANT : `muted` n'est lu par AUCUN notifier (vérifié : 0 occurrence dans
+app/.../system/notifications/). Même câblée, la mise en sourdine ne couperait
+aucune notification.
+
+À NOTER — le symptôme a été VU et mal diagnostiqué : le commentaire
+ConversationsViewModel.kt:288-289 constate que « DATE et PINNED_FIRST produisaient
+le même tri » et corrige le COMPARATEUR, sans voir que la cause est l'absence
+totale d'écriture.
+
+ACTION : ajouter les trois actions au menu d'appui long (les strings existent
+déjà, traduites) ET faire lire `conversation.muted` par IncomingMessageNotifier.
+Le câblage est peu risqué : tout existe en aval.
+
+--------------------------------------------------------------------------------
+F2 — 🟠 HAUTE — CONFIRMÉ — « Les messages favoris ne sont jamais supprimés » —
+     aucun message ne peut être mis en favori
+--------------------------------------------------------------------------------
+Localisation : data/.../local/db/dao/MessageDao.kt:155-156
+
+PREUVE : `setStarred` a UNE SEULE occurrence dans tout le dépôt — sa déclaration.
+Zéro appelant, ni production ni test. Aucun repository ni use case n'expose
+`starred` en écriture, et les 8 sites de construction de `MessageEntity` écrivent
+tous `starred = false` en dur.
+
+LA PROMESSE, elle, est faite trois fois à l'utilisateur (strings.xml:400, 401, 415) :
+  « Starred messages are never deleted. »
+  « Starred messages are kept. This cannot be undone. »
+
+Et la purge s'appuie réellement dessus (MessageDao.kt:416) :
+  DELETE FROM messages WHERE date < :olderThan AND starred = 0
+
+⇒ Le filet anti-purge annoncé ne protège RIEN, puisque le drapeau est
+structurellement toujours à `false`. L'utilisateur lit une réassurance sur
+laquelle il ne peut pas agir, au moment précis où il configure une suppression
+automatique.
+
+ACTION : deux options, à trancher.
+  (a) le plus sûr à court terme — retirer la promesse des 3 strings ;
+  (b) le plus juste — ajouter l'action « Favori » au menu d'appui long du fil.
+Ne pas laisser en l'état : c'est une promesse de non-destruction non tenue.
+
+--------------------------------------------------------------------------------
+F3 — 🟠 HAUTE — CONFIRMÉ — La signature automatique est consommée à chaque SMS,
+     et impossible à définir
+--------------------------------------------------------------------------------
+Localisation : domain/.../settings/AppSettings.kt:44
+Consommateur : domain/.../usecase/SendSmsUseCase.kt:76-77
+
+C'est le motif `setPanicCode` À L'IDENTIQUE : le mécanisme est complet, correct,
+et RÉELLEMENT BRANCHÉ en production —
+
+    val signature = s.conversations.signature?.takeIf { it.isNotBlank() }
+    val finalBody = if (appendSignature && signature != null) "$body\n--\n$signature" else body
+
+— il ajoute la signature à CHAQUE SMS sortant. Le champ est câblé 3/3 côté
+DataStore (SettingsRepository.kt:102, 238, 345).
+
+PREUVE DU MAILLON MANQUANT : zéro occurrence de `signature` dans tout
+app/src/main/java/com/filestech/sms/ui/ (hors homonymes sans rapport : signature
+de fonction, signature visuelle). Aucune ligne de réglage. La string
+`settings_signature` (« Signature automatique ») est orpheline.
+
+⇒ Le champ reste `null` à jamais. La fonctionnalité est inerte.
+
+ACTION : ajouter la ligne de réglage (la string existe), ou retirer le champ et
+la branche de `SendSmsUseCase`.
+
+--------------------------------------------------------------------------------
+F4 — 🟠 HAUTE — CONFIRMÉ — Le délai de verrouillage automatique est figé, aucune
+     UI ne permet de le changer
+--------------------------------------------------------------------------------
+Localisation : domain/.../settings/AppSettings.kt:174
+Consommateur : data/.../security/AutoLockObserver.kt:73
+
+`autoLockDelay` EST lu par la production — c'est lui qui décide du délai avant
+`forceLock()`. Mais il n'a AUCUNE UI : zéro occurrence de `autoLockDelay` ou
+`AutoLockDelay` dans tout app/src/main/java/com/filestech/sms/ui/.
+
+⇒ Le délai est figé à `ONE_MINUTE` (défaut) pour tous les utilisateurs, et les
+cinq valeurs de l'enum (IMMEDIATE, FIFTEEN_SECONDS, ONE_MINUTE, FIVE_MINUTES,
+NEXT_LAUNCH) sont inatteignables. C'est un réglage de SÉCURITÉ que l'utilisateur
+ne peut pas durcir — alors que `lockMode`, son voisin immédiat, a bien son
+sélecteur.
+
+À NOTER : cela réduit d'autant la portée de B7 et de M10, qui supposaient tous
+deux que l'utilisateur puisse choisir NEXT_LAUNCH ou IMMEDIATE. Il ne le peut pas.
+
+ACTION : ajouter le sélecteur dans Réglages → Sécurité, à côté de `lockMode`.
+
+--------------------------------------------------------------------------------
+F5 — 🟠 HAUTE — CONFIRMÉ — La sauvegarde automatique est morte à trois niveaux
+     indépendants
+--------------------------------------------------------------------------------
+Localisation : app/.../system/scheduler/BackupWorker.kt:13, 30
+               data/.../backup/BackupService.kt:85, 97-100
+               domain/.../settings/AppSettings.kt:294, 295, 297
+
+Trois ruptures indépendantes, chacune suffisante :
+  (1) `BackupWorker` n'est JAMAIS mis en file. Recensement exhaustif des sites
+      d'enqueue : SafetyCallWorker.kt:122, ScheduledMessageSchedulerImpl.kt:48,
+      TelephonySyncWorker.kt:258/272 — et rien pour BackupWorker. Sa constante
+      `UNIQUE_NAME = "scheduled_backup"`, qui n'existe que pour être passée à
+      `enqueueUniquePeriodicWork`, a 0 référence.
+  (2) Aucune UI ne règle `autoBackup`, `destinationUri` ni `keepLast`. La string
+      `settings_auto_backup` est orpheline.
+  (3) Même si le worker tournait, `runScheduledBackup` retourne `Outcome.Failure`
+      pour le format `SMSBK` — qui est le format PAR DÉFAUT.
+
+À NOTER — rien n'est promis à l'utilisateur (ni README, ni fastlane, ni écran
+À propos), d'où HAUTE et non critique. La sauvegarde MANUELLE, elle, fonctionne
+(restauration comprise).
+
+ACTION : trancher explicitement — câbler (UI fréquence + dossier + phrase secrète
+persistée) ou supprimer `BackupWorker`, `runScheduledBackup`, `BackupSettings` et
+la string. Ne pas laisser en l'état.
+
+--------------------------------------------------------------------------------
+F6 — 🟠 HAUTE — CONFIRMÉ — La réconciliation des suppressions est un triptyque
+     complet et jamais câblé
+--------------------------------------------------------------------------------
+Localisation : data/.../local/db/dao/MessageDao.kt:366 `listMirroredTelephonyUris()`
+               data/.../local/db/dao/MessageDao.kt:374 `deleteByTelephonyUris()`
+               data/.../sms/TelephonyReader.kt:124 `readAllSmsIds()`
+
+Les trois ont UNE SEULE occurrence chacun : leur déclaration. Zéro appelant.
+
+Or les KDoc affirment la fonctionnalité implémentée :
+  MessageDao.kt:355     « Used by [TelephonySyncManager] to detect rows that have
+                          been deleted from the system content provider… so we can
+                          drop them locally »
+  TelephonyReader.kt:115 « Used by [TelephonySyncManager] for the
+                          deletion-reconciliation pass »
+
+`TelephonySyncManager` ne fait en réalité qu'un delta ascendant par curseur
+`lastSyncedSmsId`.
+
+⇒ Un SMS supprimé depuis une autre application SMS, ou depuis les réglages
+système, RESTE VISIBLE INDÉFINIMENT dans SMS Tech. L'utilisateur croit l'avoir
+effacé. C'est une divergence de données doublée d'une fuite de confidentialité.
+
+ACTION : appeler le triptyque dans `runSync()`, gardé pour ne pas payer le scan
+complet à chaque tick — ou retirer les trois méthodes ET les deux KDoc qui
+mentent.
+
+--------------------------------------------------------------------------------
+F7 — 🟡 MOYENNE — CONFIRMÉ — Treize réglages persistés sans aucun consommateur
+--------------------------------------------------------------------------------
+La règle projet « un champ AppSettings se câble aux 3 endroits DataStore » est
+RESPECTÉE : les 68 champs sont tous en 3/3. C'est le QUATRIÈME maillon — le
+consommateur — qui manque, et c'est ce qui les rend invisibles.
+
+Signature du défaut : exactement 3 occurrences dans tout le dépôt = déclaration
++ lecture + écriture DataStore, et rien d'autre.
+
+Les plus lourds :
+  AppSettings.kt:306  mmsRoamingAutoDownload — une protection contre les frais
+                      d'itinérance qui n'est JAMAIS appliquée
+  AppSettings.kt:51   convertToMmsAfterSegments — seuil de bascule SMS→MMS inerte
+  AppSettings.kt:52   mmsImageQuality — la compression ignore le réglage
+  AppSettings.kt:22   textScale — accessibilité : l'échelle n'est jamais appliquée
+                      (alors que son voisin `density`, lui, est bien consommé)
+  AppSettings.kt:158, 163, 164  defaultSoundUri / vibratePattern / ledColorArgb —
+                      NotificationChannelInitializer code tout en dur et ne les
+                      lit jamais. Résidus de la table `conversation_overrides`
+                      supprimée en v1.3.7 : le nettoyage les a laissés derrière.
+  AppSettings.kt:33   languageTag — aucun `setApplicationLocales`
+  AppSettings.kt:297  keepLast · :43 groupArchived · :34 firstDayOfWeek
+
+⚠️ PIÈGE DE MAINTENANCE — AppSettings.kt:177 `panicCodeEnabled` est un FANTÔME.
+Le vrai mode panique vit dans `SecurityStore`/`AppLockManager` et est correctement
+câblé depuis la v1.26.0. Un futur développeur qui garderait l'UI panique derrière
+ce booléen toujours `false` REPRODUIRAIT EXACTEMENT le défaut de référence.
+À supprimer pour lever l'ambiguïté.
+
+--------------------------------------------------------------------------------
+F8 — 🟡 MOYENNE — CONFIRMÉ — Cinq colonnes Room orphelines, dont le motif
+     `attachments_json` exact
+--------------------------------------------------------------------------------
+  ConversationEntity.kt:38  notification_channel_id — 0 occurrence hors sa
+      déclaration (et les schémas JSON). Dernier survivant du canal par
+      conversation, dont la table a été droppée en v1.3.7. Voyage en plus dans
+      chaque sauvegarde, `ConversationEntity` étant `@Serializable`.
+      Avec `muted` jamais lu et les 3 champs de F7, TOUTE la couche
+      « notifications par conversation » est non implémentée — alors que
+      README.md:21 annonce « per-conversation overrides ».
+  ScheduledMessageEntity.kt:25  work_id — écrit par une seule méthode DAO
+      (`setWorkId`) elle-même sans appelant. Le rattachement d'un envoi programmé
+      à son WorkRequest n'est jamais écrit ⇒ annulation ciblée impossible, on
+      contourne par un tag global. Motif `attachments_json` exact.
+  MessageEntity.kt:70  scheduled_at — 8 sites d'écriture qui passent tous
+      littéralement `null`, 0 consommateur, aucune @Query.
+  BlockedNumberEntity.kt:19  system_uri — écrite 3 fois, JAMAIS lue. L'URI rendue
+      par `BlockedNumberContract.block()` est mémorisée puis jamais réutilisée :
+      le déblocage repasse par le numéro. À lire dans `unblock()` pour garantir
+      la levée côté système.
+  MessageEntity.kt:60  date_sent — collectée avec de vraies valeurs, mappée,
+      jamais affichée.
+
+--------------------------------------------------------------------------------
+F9 — 🟡 MOYENNE — CONFIRMÉ — `QuickReply` : pile complète, deux bindings Hilt,
+     aucun consommateur
+--------------------------------------------------------------------------------
+Table Room `quick_replies`, entité, DAO à 4 méthodes, mapper, interface +
+implémentation, modèle de domaine, et DEUX bindings Hilt (DatabaseModule.kt:32,
+RepositoryModule.kt:65). Hors ces déclarations et le DI : aucun ViewModel, aucun
+écran, aucun use case. Le graphe Hilt câble une dépendance que personne n'injecte.
+
+--------------------------------------------------------------------------------
+F10 — 🟡 MOYENNE — CONFIRMÉ — Deux promesses du README sans aucune implémentation
+--------------------------------------------------------------------------------
+  README.md:22  « Voice SMS — on-device dictation via SpeechRecognizer »
+                → `SpeechRecognizer` / `RecognizerIntent` : 0 occurrence dans tout
+                le dépôt. L'app enregistre un MMS audio via `MediaRecorder` —
+                fonctionnel, mais ce n'est pas de la dictée. String orpheline
+                corroborante : `action_voice_input`.
+  README.md:27  « Bilingual UI … switchable at runtime »
+                → `setApplicationLocales` / `LocaleListCompat` / `AppCompatDelegate`
+                / `locales_config` : 0 occurrence. Corroboré par trois orphelins
+                convergents : `settings_section_locale`, `settings_language`, et
+                le champ mort `languageTag`.
+ATTÉNUATION : fastlane/metadata ne reprend ni l'une ni l'autre. L'écart est limité
+au README développeur — mais c'est lui que lisent les contributeurs et F-Droid.
+
+--------------------------------------------------------------------------------
+F11 — 🟡 MOYENNE — CONFIRMÉ — `moveToVault` non gardée, laissée publique à côté de
+     sa variante gardée
+--------------------------------------------------------------------------------
+Localisation : domain/.../usecase/ToggleConversationStateUseCase.kt:36
+Les trois ViewModels passent tous par `requestMoveToVault` (ThreadViewModel.kt:1049).
+`moveToVault` a 0 appelant. Ce n'est pas une fonctionnalité manquante, c'est un
+PIÈGE : le premier futur appelant contournerait silencieusement la politique
+anti-PanicDecoy documentée aux lignes 27-33 du même fichier — le trou que le
+CHANGELOG:553 décrit comme « P0-1 Vault bypass closed ».
+ACTION : la passer `private`, ou la supprimer.
+
+--------------------------------------------------------------------------------
+F12 — 🟠 HAUTE — CONFIRMÉ — Les tests du verrouillage ne testent pas le verrou
+--------------------------------------------------------------------------------
+  data/src/test/.../AppLockManagerTest.kt:8, 17 — les DEUX seuls tests du
+  gestionnaire portent sur `backoffMillis`, un `coerceIn` dans un tableau de 6
+  constantes : il ne peut pas régresser sans qu'on édite le tableau.
+  Le vrai verrou — LA SORTIE DU BLOCAGE — n'est testé nulle part :
+  `refreshLockoutIfExpired()` et `isLockoutActive()` ont 0 occurrence dans tout
+  `src/test` et `src/androidTest`. C'est précisément le défaut v1.26.0 « le
+  blocage ne se levait jamais », resté vert.
+
+  app/src/test/.../AuditV1140Test.kt:29-38 — `showIAmOkChip` est un simple
+  paramètre de constructeur : le test le passe à `true` puis assert `isTrue()`.
+  TAUTOLOGIE — il vérifie qu'une data class mémorise son argument. La dérivation
+  réelle (ConversationsViewModel.kt:198-201), qui porte le masquage anti-agresseur
+  en PanicDecoy, n'a aucune couverture — alors que l'en-tête du fichier l'annonce
+  comme « Sujet 3 : showIAmOkChip derivation ».
+
+  COUVERTURE ANNONCÉE QUI N'EXISTE PAS — AuditV1140Test.kt:14 déclare la whitelist
+  d'`EmergencyCallHelper.ALLOWED_NUMBERS` « testée en instrumented » : aucun test
+  du dépôt ne référence `EmergencyCallHelper`. AuditV1130Test.kt:13 déclare le PIN
+  du coffre « testé en instrumented » : aucun des 9 fichiers androidTest ne touche
+  `vaultPin`. Ces mentions font qu'un relecteur NE CHERCHE PAS le test manquant.
+
+  core/src/test/.../WireAddressTest.kt:23-33 — le `fakeFormatter` calcule lui-même
+  le résultat attendu et la SUT ne fait que relayer : l'assertion vérifie le fake.
+  La production injecte `PhoneNumberUtils.formatNumberToE164`, non éprouvé.
+  (Les cas d'erreur, eux, sont réels et bien couverts.)
+
+VÉRIFIÉ SANS REPROCHE : AeadCipherTest, BackupAadBindingTest,
+PasswordKdfUnicodeTest, BlocklistRekeyTest, ScheduledAttachmentCodecTest,
+MigrationTest, EagerInjectionGuardTest (qui porte même une anti-vacuité
+`inspected >= 30`). Aucun `AuditV*Test.kt` ne réimplémente de logique de
+production — le motif a été cherché, il n'est pas là. Aucun
+`stateIn(WhileSubscribed)` lu par `.value` dans les tests.
+
+--------------------------------------------------------------------------------
+F13 — 🟢 BASSE — Code mort bénin (à ne pas confondre avec ce qui précède)
+--------------------------------------------------------------------------------
+`EmergencyCallButton` (seul composable public orphelin de l'app, résidu assumé de
+v1.14.1) · route `Splash` (Routes.kt:17, le splash est un overlay) ·
+`TelephonyReader.readMmsParts` (supplantée par la version batchée) ·
+`vault_explanation_body` (qui contient pourtant la mise en garde honnête « SMS is
+unencrypted on the carrier network… use Signal or Matrix », jamais montrée) ·
+`about_version` (AboutScreen code la version en dur) · `SecurityStore.setLockoutUntil`
+(remplacée par `setLockout` ; ⚠️ elle n'écrit qu'un champ sur trois et CORROMPRAIT
+le snapshot anti-manipulation d'horloge si un jour rappelée — CHANGELOG.md:558 et
+SECURITY.md:22 la documentent toujours comme active) · `VaultManager.ensureKey()`
+(0 appelant, son KDoc « Called at first vault use » est factuellement faux) ·
+`ScheduledMessageDao.allPending`, `MessageDao.setRead/deleteAllForConversation/
+findByTelephonyUri/countSince`, `AttachmentDao.deleteForMessage`,
+`BlockedNumberDao.findByNormalized`, `KeystoreManager.containsAlias`.
+
+================================================================================
+PARTIE V — FAUSSES PISTES ÉCARTÉES APRÈS VÉRIFICATION
+================================================================================
+Cette section existe parce que la fausse alerte coûte plus cher que le silence.
+Neuf pistes ont été ouvertes puis fermées après lecture du code.
+
+1. `emergency_call_behavior_*` (6 strings orphelines) — CODE MORT DOCUMENTÉ. Le
+   setting a été retiré volontairement en v1.14.1 ; quatre commentaires le disent
+   (EmergencyScreen.kt:116, EmergencyViewModel.kt:77, SettingsScreen.kt:1023, 2963).
+   Ce n'est PAS une fonctionnalité non câblée. Hygiène seulement.
+
+2. `settings_emergency_enabled` / `settings_safety_call_enabled` — strings SUPPLANTÉES.
+   Le statut « Armé » est bien affiché, via `settings_emergency_armed_chip` et
+   `settings_safety_call_armed_chip` (SettingsScreen.kt:2363, 2500). Pas un finding.
+
+3. Receivers SMS/MMS exportés — CORRECTS. `SmsDeliverReceiver` est protégé par
+   `BROADCAST_SMS`, `MmsWapPushReceiver` par `BROADCAST_WAP_PUSH`, `HeadlessSmsSendService`
+   par `SEND_RESPOND_VIA_MESSAGE`. Aucune injection de faux SMS possible.
+
+4. `PendingIntent` — TOUS `FLAG_IMMUTABLE`. Le seul `FLAG_MUTABLE`
+   (IncomingMessageNotifier.kt:242) est la réponse inline : RemoteInput l'exige, et
+   l'Intent est verrouillé par `component` + `package`.
+
+5. `println` en production — AUCUN. Et R8 strippe Timber ET `android.util.Log` en
+   release (`-assumenosideeffects`, `isMinifyEnabled = true`).
+
+6. `allowBackup` — `false`, avec `data_extraction_rules.xml` et `backup_rules.xml`
+   cohérents sur `cloud-backup` ET `device-transfer`.
+
+7. Déclenchement d'urgence par une app tierce — IMPOSSIBLE. `EmergencyShortcutReceiver`
+   est `exported=false`, `SafetyCallIntentToken` est correctement implémenté (nonce
+   SecureRandom, `consume()` mono-usage).
+
+8. Restauration abaissant la sécurité — NON. Le payload ne contient ni PIN, ni code
+   panique, ni `AppSettings`. Une vieille sauvegarde ne peut pas désarmer le verrou.
+
+9. `LegacyZeroKeyRekey` (réparation zéro-clé) — CORRECT. Copie → re-chiffrement de la
+   COPIE → `cipher_integrity_check` + comptage ligne à ligne → échange. L'original
+   n'est jamais détruit avant validation. (Une réserve subsiste sur la conversion
+   raw-key : voir M-bis ci-dessous.)
+
+10. `ComposeScreen.initialAddress` « jamais lu, le composeur s'ouvre vide » —
+   FINDING REJETÉ, remonté en HAUTE par un agent. Le paramètre du composable
+   (ComposeScreen.kt:53) est bien mort, MAIS la fonctionnalité marche : le
+   destinataire est consommé par le ViewModel via le SavedStateHandle —
+   ComposeViewModel.kt:57-59 :
+       savedStateHandle.get<String>("initialAddress")?.let { addr ->
+           _state.update { it.copy(recipients = listOf(PhoneAddress.of(addr))) } }
+   Un lien `sms:`/`smsto:` PRÉ-REMPLIT donc bien le destinataire. Il ne reste
+   qu'un paramètre inutilisé (detekt `UnusedParameter`), sévérité BASSE.
+   ⚠️ Leçon : « le symbole n'est pas lu à l'endroit attendu » ne veut pas dire
+   « la fonctionnalité est morte ». C'est exactement l'erreur que la famille 4
+   invite à commettre en sens inverse.
+
+M-bis 🟡 PROBABLE — Conversion raw-key interrompue jamais rattrapée
+    data/.../local/db/LegacyZeroKeyRekey.kt:143, 152, 222-225, 379-387
+    `recoverInterruptedSwap()` n'est appelée que depuis `rekeyIfNeeded`, qui
+    court-circuite dès que le marqueur zéro-clé est posé — donc sur tout appareil ayant
+    déjà démarré une fois. Un kill entre les deux `renameTo` de `swapIn` laisserait
+    `smstech.db` absent et `.rekeyold` seul porteur des données ; au démarrage suivant
+    `ensureRawKeyed` prendrait la branche « fresh install », poserait son marqueur, et
+    Room créerait une base VIDE. Fenêtre très étroite (deux opérations de métadonnées),
+    conséquence maximale (perte totale silencieuse).
+    ACTION : une ligne — appeler `recoverInterruptedSwap(dbFile)` en tête
+    d'`ensureRawKeyed`, avant le test d'existence.
+
+================================================================================
+PARTIE VI — CE QUI EST SAIN (vérifié explicitement, ne pas y revenir)
+================================================================================
+Un rapport qui ne liste que des problèmes ne dit pas ce qui a été regardé.
+
+MODE PANIQUE
+  ✅ Les deux refus de `setPanicCode` (NoPrimaryPin, SameAsPin) tiennent sur l'UNIQUE
+     chemin d'écriture, avec `wipe()` dans un `finally` couvrant les deux retours.
+  ✅ `clearPin()` efface bien le code panique (AppLockManager.kt:127).
+  ✅ Le leurre ne survit PAS au redémarrage du processus (`resolveInitialState` repart
+     de `Locked`) ; le retour d'arrière-plan force `Locked` immédiatement même en
+     NEXT_LAUNCH (AutoLockObserver.kt:72-82).
+  ✅ Sortie légitime du leurre : arrière-plan → forceLock → vrai PIN. Chemin atteignable.
+  ✅ Pas de fuite par notification, par badge (`AND in_vault = 0`), par la notification
+     de raccourci urgence (annulée en leurre), ni par la biométrie
+     (`markBiometricUnlocked` refuse tout état ≠ Locked).
+  ✅ Les gardes PanicDecoy des use-cases (TriggerEmergency:56, TriggerSafetyCall:53,
+     IAmOk:50, SafetyCallWorker:62) sont posés sur l'ACTION, pas sur l'affichage.
+
+COFFRE
+  ✅ Le correctif v1.25.4 de VaultScreen est complet : `entryGate` initial `null`,
+     effet d'entrée conditionné par `gateResolved`, seconde barrière indépendante
+     `revealContent = gateResolved && !pinGateOpen && unlocked == true`. Le placeholder
+     est identique dans les trois cas de non-révélation — il ne trahit pas lequel.
+  ✅ Aucune voie de synchronisation ne remet `in_vault` à 0. Aucun chemin ne fait
+     remonter un message hors du coffre.
+
+MODE URGENCE
+  ✅ Le codec de contacts NE PERD PLUS d'entrées : `encode` strippe `|` et les C0/C1
+     des deux champs, `decode` coupe au PREMIER `|`. Un nom porteur d'un séparateur est
+     impossible par construction. Le seul rejet silencieux restant est aligné sur la
+     validation d'ajout.
+  ✅ Le message n'annonce plus ce qu'il ne contient pas : « (position non disponible) »
+     + snackbar d'ERREUR. (Réserve : voir H11.)
+  ✅ Pas de double envoi : AtomicBoolean en vol + cooldown 60 s croisant horloge murale
+     et monotone.
+
+SAUVEGARDE / RESTAURATION
+  ✅ Fichier corrompu / tronqué / mauvaise version : `parseHeader` valide longueur,
+     magic, version exacte, bornes d'itérations ; lecture en flux avec cap 50 Mo ; caps
+     10⁴ conversations / 10⁶ messages ; JSON strict. AUCUNE boucle de crash possible.
+  ✅ Cryptographie correcte : PBKDF2-HMAC-SHA512, plancher 210 000 itérations, sel 16 o,
+     AES-256-GCM tag 128 bits, AAD = magic‖version‖sel‖iter (altérer l'en-tête fait
+     échouer le déchiffrement), secrets effacés sur tous les chemins.
+  ✅ Pas d'écrasement : conversation réutilisée sans update, messages en IGNORE, le tout
+     dans une transaction unique.
+
+MIGRATION / IMPORT
+  ✅ L'import est STRICTEMENT ADDITIF. Aucun `update` sur une row locale : pièces
+     jointes, réactions et statut coffre ne peuvent pas être écrasés par un ré-import.
+  ✅ Les six migrations Room (1→7) sont exclusivement `ALTER TABLE ADD COLUMN` et
+     `CREATE INDEX IF NOT EXISTS`. `fallbackToDestructiveMigration` est ABSENT, et
+     `fallbackToDestructiveMigrationOnDowngrade(false)` est explicite : un downgrade
+     plante, il n'efface pas.
+  ✅ La purge automatique responsable de l'incident passé a bien été RETIRÉE :
+     `importFromSystem()` ne fait plus que le miroir ; `purgeMatchingConversations()`
+     n'est câblée qu'à l'action explicite (SettingsViewModel:182).
+  ✅ `StartupMigrations` reparente les messages AVANT de supprimer la conversation
+     source — l'ordre inverse les aurait effacés par la cascade FK.
+  ✅ `DatabaseRecoveryScreen` n'offre AUCUNE action destructive ; `DatabaseKeyManager.unwrap()`
+     ne supprime jamais le fichier de clé sur échec.
+
+CONCURRENCE
+  ✅ Les six voies d'écriture de `ConversationMirror` sont enveloppées dans
+     `database.withTransaction`. Pas de message orphelin, pas de pièce jointe sans message.
+  ✅ `TelephonySyncManager` : `syncMutex` single-flight + index UNIQUE + IGNORE. Deux
+     synchronisations concurrentes ne peuvent pas doubler l'import.
+  ✅ `MmsSender.perMessageLocks` : séquence correctement sérialisée par message, avec
+     rollback. C'est le modèle à copier pour le chemin SMS.
+  ✅ `MmsDownloadedReceiver` : déduplication par transactionId, bornée en temps (5 min)
+     et en nombre (256, LRU) sous `synchronized`.
+  ✅ Pagination : ordre total `date DESC, id DESC`, une fenêtre élargie est un
+     sur-ensemble strict de la précédente. Aucun message sauté ni dupliqué.
+  ✅ Aucun `GlobalScope` en production ; `@ApplicationScope` porte bien un
+     `CoroutineExceptionHandler`.
+
+DIVERS
+  ✅ FLAG_SECURE : une seule source, défaut sûr, aucun comptage de références donc
+     aucun déséquilibre possible.
+  ✅ `purgeMatchingConversations` : le correctif v1.25.3 tient.
+  ✅ `onDelete = CASCADE` : `ConversationMirror` reparente bien avant suppression.
+  ✅ Purge automatique mensuelle : ancrage au premier passage, filet 5 jours, favoris
+     épargnés. Aucune donnée ne disparaît sans que l'utilisateur ait réglé une rétention.
+
+================================================================================
+PARTIE VII — PLAN D'ACTION ORDONNÉ
+================================================================================
+
+ÉTAGE 1 — AVANT TOUTE RELEASE (bloquant)
+  C1  Ligne « Verrouillage de l'app » gardée + `clearPin()` refusé en PanicDecoy
+  C3  Refus symétrique dans `setPin` (une lecture de `panicSnapshot()`)
+  C4  Écran À propos gardé en leurre (3 Feature + ligne d'accès + route)
+  C2  Sauvegarde : garde côté ACCÈS dans BackupService + section gardée
+  H3  Ligne « Verrouiller le coffre en quittant » gardée
+  → Les cinq sont des correctifs courts. C1, C3, C4 et H3 tiennent en une heure.
+
+ÉTAGE 2 — AVANT LA RELEASE SUIVANTE
+  H1  Prédicat des flux étendu à `inVault && !isVaultUnlockedInSession` + filtres DAO
+  H2  Garde `inVault` sur la route Thread (corrige aussi H1) + jeton sur OPEN_CONVERSATION
+  H4  `blockKey()` aux 4 emplacements de synchronisation      ⚠️ perte de données
+  H13 Même correctif sur les deux fallbacks de ConversationMirror ⚠️ perte de données
+  H5  Liste noire appliquée aux MMS entrants
+  H9  Purge transactionnelle
+  H16 `.getOrDefault(true)` sur la garde de notification du Coffre
+  H15 `runCatching` autour du `first()` d'AutoLockObserver
+  H17 `finally { candidate.wipe() }` dans `attemptUnlock`
+
+ÉTAGE 3 — SÉCURITÉ PERSONNELLE (à traiter ensemble, même zone)
+  H10 Trigger d'urgence sur @ApplicationScope + état « envoi en cours »
+  H11 Borne d'âge sur le repli de position
+  M5  Refuser de vider le carnet tant que l'Urgence est armée
+  M3  Garde leurre sur les envois programmés
+  M4  SafetyCallSetup dans le garde de navigation
+
+ÉTAGE 4 — ENVOIS ET DONNÉES
+  H6  Revendication atomique `claim()` sur les envois programmés
+  H7  `isSending` + `enabled` (motif déjà présent pour la voix)
+  H8  Écritures d'envoi sur @ApplicationScope
+  H14 `StateFlow<AppSettings?>` ou `.catch` ré-émettant le dernier instantané valide
+  H18 `isPanicDecoy` sorti du UiState agrégé
+  M8  Agrégation des accusés multipart
+  M6, M7  Sauvegarde : dédup de repli + pièces jointes dans le payload
+
+ÉTAGE 5 — FAMILLE 4 : DÉCIDER, PAS LAISSER EN L'ÉTAT
+  Ces six-là demandent une DÉCISION (câbler ou retirer la promesse), pas un
+  correctif mécanique. Les laisser en l'état, c'est reconduire le défaut du mode
+  panique — une fonctionnalité que l'utilisateur croit avoir.
+  F2  « Les messages favoris ne sont jamais supprimés » ⇒ retirer la promesse
+      (3 strings) OU ajouter l'action Favori. Le plus urgent des six : c'est une
+      promesse de NON-DESTRUCTION non tenue.
+  F1  Épinglage / archivage / sourdine ⇒ câbler les 3 actions (strings et UI déjà
+      là) + faire lire `muted` par le notifier
+  F4  Sélecteur de délai de verrouillage automatique ⇒ à ajouter (réglage de
+      sécurité aujourd'hui figé)
+  F3  Signature automatique ⇒ ajouter la ligne de réglage, ou retirer le champ
+  F6  Réconciliation des suppressions ⇒ câbler, ou retirer les 3 méthodes ET les
+      2 KDoc qui mentent
+  F5  Sauvegarde automatique ⇒ câbler entièrement, ou supprimer entièrement
+  F11 `moveToVault` non gardée ⇒ `private` (piège de sécurité, correctif trivial)
+  F12 Tests : couvrir `refreshLockoutIfExpired` / `isLockoutActive`, et retirer
+      les mentions « testé en instrumented » qui n'existent pas
+
+ÉTAGE 6 — BACKLOG
+  M1, M2, M9, M10, M11, M-bis, F7 à F10, F13, B1 à B8
+
+================================================================================
+PARTIE VIII — CE QUE CET AUDIT DIT DE LA BASE DE CODE
+================================================================================
+
+1. LA QUALITÉ D'INTENTION EST TRÈS HAUTE. Chaque garde porte un commentaire qui
+   explique la menace, l'audit d'origine et la version. C'est ce qui a rendu cet
+   audit possible : dans presque tous les cas, le code DIT lui-même quelle règle il
+   applique — et c'est en comparant cette règle à son voisin qu'on trouve l'oubli.
+
+2. L'ASYMÉTRIE RESTE LA FAIBLESSE STRUCTURELLE, et le cadrage du 02/08 avait raison
+   de la désigner comme le motif le plus rentable. Trois des quatre critiques et neuf
+   des dix-huit hauts en relèvent. Le schéma se répète : un défaut est vu quelque
+   part, corrigé LÀ, et son jumeau — souvent la ligne VOISINE — reste en l'état.
+
+3. LE MOTIF DOMINANT DU MOMENT : la garde est posée sur l'AFFICHAGE, pas sur l'ACCÈS.
+   C1 (Réglages), C2 (sauvegarde), H1 (coffre), H2 (Intent), H12 (restauration) sont
+   tous la même erreur. Un garde d'affichage est une énumération d'écrans ; elle
+   vieillit à chaque écran ajouté. Un garde d'accès est un prédicat ; il ne vieillit pas.
+
+4. LE MODE PANIQUE N'A JAMAIS ÉTÉ ÉPROUVÉ, et cela se voit. Il a été rendu atteignable
+   il y a un jour. Trois des quatre critiques sont dans cette zone. C'est cohérent
+   avec le constat du portefeuille : ce sont les tests d'usage qui trouvent les vrais
+   défauts, et cette fonctionnalité n'en a pas encore eu.
+
+5. RECOMMANDATION DE MÉTHODE — les baselines lint/détekt absorbent 65 `UnusedResources`
+   et 554 entrées détekt. C'est le mécanisme même qui a caché le mode panique
+   inatteignable pendant des mois. Une revue périodique des orphelines, en se
+   demandant à chaque fois « code mort, ou fonctionnalité non câblée ? », coûte peu et
+   aurait trouvé ce défaut avant l'utilisateur.
+
+================================================================================
+PARTIE IX — CORRECTIFS APPLIQUÉS LE 2026-08-03 (10 findings)
+================================================================================
+Appliqués APRÈS le rapport, sur demande. 13 fichiers, +323/-61.
+Vérification : compilation ✅ · 4 modules de tests unitaires ✅ · détekt ✅ ·
+lint ✅ (0 erreur hors baseline, aucun avertissement nouveau sur les fichiers
+touchés). AUCUNE baseline élargie — les 4 écarts détekt provoqués par mes
+insertions ont été corrigés À LA SOURCE (imports réordonnés, accolades,
+enveloppement d'arguments).
+
+ÉTAGE 1 — LES QUATRE CRITIQUES + H3
+  C1  SettingsScreen.kt — ligne « Verrouillage de l'app » gardée `!isPanicDecoy`
+      AppLockManager.clearPin() — refus si `_state is PanicDecoy` (garde d'ACCÈS)
+      SettingsViewModel.clearLock() — relit `isPanicCodeSet()` au lieu de le supposer
+  C2  SettingsScreen.kt — section Sauvegarde gardée
+      BackupService.writeSmsbk() — refus en `PanicDecoy` (garde d'ACCÈS), avec
+      effacement du mot de passe sur le chemin de refus (le `finally` habituel
+      est dans le bloc qu'on ne rejoint pas — piège évité)
+  C3  AppLockManager.setPin() — refus symétrique `SetPinOutcome.SameAsPanicCode`,
+      vérifié AVANT `kdf.calibrate()`, effacement couvert par le `finally`
+      + Event.PinRejectedSameAsPanicCode + 2 strings FR/EN (apostrophes échappées)
+  C4  AboutScreen.kt — `Feature(sensitive = true)` sur coffre / panique / urgence,
+      `features(isPanicDecoy).filterNot { … }`. `isPanicDecoy` SANS valeur par
+      défaut : un défaut `false` aurait été un repli permissif.
+      Choix assumé : on filtre les entrées, on ne masque PAS l'écran — une app SMS
+      ordinaire a un « À propos », le faire disparaître serait en soi une anomalie.
+  H3  SettingsScreen.kt — ligne « Verrouiller le coffre en quittant » gardée
+
+ÉTAGE 2 — CINQ HAUTS SANS AMBIGUÏTÉ
+  H4  TelephonySyncManager + TelephonySyncWorker — `blockKey()` des deux côtés au
+      lieu de `phoneSuffix8()`. Idempotence de `blockKey()` sur sa propre sortie
+      vérifiée avant application (numérique, alphanumérique, code court).
+  H9  ConversationRepositoryImpl.purgeHistoryNow + TelephonySyncWorker (purge auto)
+      — les deux rendues atomiques via `database.withTransaction`, comme
+      `deleteMessage` l'était depuis la v1.24.0. `AppDatabase` injectée dans le worker.
+  H15 AutoLockObserver — lecture des réglages protégée, repli sur le chemin LE PLUS
+      STRICT (verrouiller + purger) au lieu de mourir en silence.
+  H16 IncomingMessageNotifier — `.getOrDefault(true)` : en cas d'échec de lecture,
+      on suppose « dans le coffre » et on ne notifie pas.
+  H17 AppLockManager.attemptUnlock — enveloppe `try/finally { candidate.wipe() }`.
+      Implémentée en enveloppe plutôt qu'en réécriture du corps (55 lignes,
+      5 retours anticipés) : diff minimal, aucun risque sur la logique existante.
+
+⚠️ DÉFAUT TROUVÉ DANS MES PROPRES CORRECTIFS, PUIS CORRIGÉ
+La revue systématique sur les correctifs — règle du projet — a payé une fois de
+plus. Mon correctif H15 utilisait `runCatching { settings.flow.first() }`. Or
+`runCatching` attrape aussi `CancellationException`, et `onStop`/`onStart`
+annulent PRÉCISÉMENT ce job quand l'utilisateur revient au premier plan. Le retour
+à l'écran aurait donc été lu comme un échec de lecture, donc traité par le
+« chemin le plus strict » : l'application se serait verrouillée et aurait purgé
+ses caches — brouillon vocal non envoyé compris — au moment même où l'utilisateur
+la rouvre. Remplacé par un `try/catch` explicite qui RELANCE l'annulation.
+C'est la 7ᵉ fois d'affilée que cette règle trouve un vrai défaut.
+
+ÉTAGE 3 — H1 ET H5, APPLIQUÉS ENSUITE (S24 FE branché)
+  H1  Le second facteur du Coffre garde désormais la DONNÉE, plus seulement l'écran.
+      Nouveau `VaultSessionState` (data/security/) : porteur d'état SANS dépendance.
+      `VaultManager` délègue — son API publique est inchangée, donc VaultScreen et
+      AutoLockObserver ne bougent pas. Les trois flux (`observeOne`,
+      `observeMessages`, `observeMessagesWindow`) masquent désormais sur
+      `inVault && (PanicDecoy || !vaultOpen)`.
+  H5  Liste noire appliquée aux MMS entrants, aux DEUX endroits : `MmsWapPushReceiver`
+      (avant le téléchargement — évite aussi la consommation de données et la
+      notification « trop volumineux ») et `MmsDownloadedReceiver` (garde miroir,
+      car le WAP-Push ne porte pas toujours l'expéditeur).
+
+  ⚠️ DEUX PIÈGES ÉVITÉS PENDANT CETTE ÉTAPE, tous deux par recensement préalable :
+
+  (a) **Le cycle de dépendances.** `VaultManager` dépend de `ConversationRepository`.
+      Injecter `VaultManager` dans `ConversationRepositoryImpl`, comme le suggérait
+      la lecture naïve du finding, aurait fermé le cycle et cassé le graphe Hilt.
+      D'où l'extraction de l'état dans un porteur tiers — qui règle du même coup un
+      second problème : l'`AtomicBoolean` d'origine n'était pas OBSERVABLE, donc un
+      flux Compose ne se serait jamais ré-évalué au moment où l'utilisateur ouvre
+      son Coffre, et le fil serait resté vide.
+
+  (b) **La recommandation de l'audit était DANGEREUSE sur ce schéma.** L'audit
+      proposait de filtrer `in_vault = 0` dans `findByAddressesCsv` /
+      `snapshotOneToOneConversations`. Recensement des appelants : ces requêtes
+      servent AUSSI à `ConversationMirror` pour router les messages ENTRANTS. Les
+      filtrer aurait fait sortir du coffre chaque nouveau message reçu.
+      Variante suivante envisagée — laisser `findOrCreate` créer une conversation
+      jumelle hors coffre : `thread_id` porte un index UNIQUE et les créations
+      utilisent `threadId = 0L` avec `OnConflictStrategy.REPLACE` ⇒ multiplier ces
+      insertions aurait pu ÉCRASER EN CASCADE une conversation locale déjà à 0.
+      **`findOrCreate` n'a donc pas été touché.** Le masquage en couche données
+      suffit à fermer la fuite, et il réutilise un chemin que l'UI gère déjà
+      (tous les accès à `conversation` sont en appel sûr, tous les chemins d'envoi
+      gardent `conversation == null`) — vérifié avant application.
+
+  CONSÉQUENCE À CONNAÎTRE : ouvrir un fil du Coffre sans être passé par l'écran
+  Coffre (ex. « Nouveau message » vers ce contact) affiche désormais un fil VIDE
+  tant que le second facteur n'a pas été franchi dans la session. C'est le
+  comportement voulu, mais c'est un changement visible.
+
+ÉTAGE 3-BIS — LA REVUE INDÉPENDANTE A TROUVÉ 1 RÉGRESSION + 3 DÉFAUTS DANS MES
+              PROPRES CORRECTIFS. Tous corrigés.
+
+Une revue adversariale a été relancée SUR les correctifs de l'étage 3, une fois
+ceux-ci déjà installés sur le téléphone principal. Elle a rapporté quatre défauts
+réels, tous vérifiés dans le code avant correction. C'est la 8ᵉ fois d'affilée que
+cette règle du projet paie.
+
+  🔴 RÉGRESSION INTRODUITE PAR H1 — le fil du Coffre se vidait au moindre
+     passage en arrière-plan, et « Envoyer » devenait muet.
+     `lockVaultOnLeave` vaut `true` PAR DÉFAUT (AppSettings.kt:176) et
+     `AutoLockObserver` referme le Coffre IMMÉDIATEMENT à chaque `onStop`, AVANT
+     tout délai (AutoLockObserver.kt:95-98, vérifié). Donc : bascule d'application,
+     écran éteint, sélecteur de photos, appel entrant → le Coffre se referme → mon
+     masquage vidait le fil ouvert. Et tous les chemins d'envoi retournent en
+     silence sur `conversation == null` (ThreadViewModel.kt:560, 821, 889, 1185,
+     1211, 1284) : le bouton ne faisait plus rien, sans le moindre message.
+     Avant H1, `conversation == null` n'était atteignable qu'en session leurre —
+     état où l'écran est déjà gardé en amont. C'était donc un état NOUVEAU, et
+     fréquent.
+     CORRECTIF : nouveau `ConversationRepository.observeVaultHidden(id)` qui
+     distingue « masqué par le Coffre » de « conversation inexistante », et
+     `ThreadScreen` ressort du fil au lieu d'afficher un écran mort.
+     ⚠️ La sortie est différée par `withResumed` : la fermeture du Coffre survient
+     pendant `onStop`, donc dépiler à cet instant viserait l'écran voisin —
+     exactement le dépilement parasite corrigé en v1.25.4.
+     ⚠️ `observeVaultHidden` rend `false` en session leurre : le fil doit y rester
+     indiscernable d'une conversation inexistante, surtout pas déclencher une
+     navigation qui trahirait qu'il y a quelque chose à cacher.
+
+  🟠 MA GARDE MMS DU WAP-PUSH ÉTAIT UN NO-OP SILENCIEUX.
+     `parsed.from?.string` porte le suffixe passerelle `/TYPE=PLMN`. `blockKey()`
+     bascule sur « expéditeur alphanumérique » dès qu'il voit une lettre, et rendait
+     donc `"+33612345678/type=plmn"` au lieu de `"612345678"` — aucune
+     correspondance possible avec la clé stockée. La garde ne bloquait RIEN.
+     CORRECTIF : `stripMmsAddressSuffix` remonté dans `core/ext/StringExt.kt`
+     (les deux récepteurs en ont besoin — une copie privée par récepteur aurait
+     garanti qu'un des deux l'oublie) et appliqué avant `isBlocked`.
+
+  🟠 LE REPLI `senderHint` ÉCHAPPAIT À LA GARDE MIROIR.
+     Seule la branche `parsed.from` était nettoyée. Or `senderHint` est justement
+     la branche qui sert quand le `RetrieveConf` n'a pas de `From:` — le cas même
+     qui justifie l'existence de la garde miroir. Elle échouait donc précisément
+     là où on l'attendait. CORRECTIF : nettoyage appliqué aux deux branches.
+
+  🟡 LA PIÈCE JOINTE D'UN MMS BLOQUÉ RESTAIT SUR LE DISQUE, EN CLAIR, POUR TOUJOURS.
+     Ma garde était posée APRÈS `persistAttachment` : le média était déjà écrit dans
+     `filesDir/mms_attachments/`, et après l'abandon plus rien ne le référençait —
+     ni ligne Room, ni purge (`purgeTransientCaches` exclut explicitement ce
+     dossier). Mon propre commentaire affirmait « le nettoyage reste assuré par le
+     finally » : vrai du PDU, FAUX du média.
+     CORRECTIF : garde remontée avant tout décodage et toute écriture.
+
+  Points signalés par la revue et NON corrigés, car antérieurs et assumés :
+   - `requestMoveToVault` appelle `markUnlocked()` sans second facteur (déplacer une
+     conversation vers le Coffre ouvre donc la session). Sémantique inchangée depuis
+     l'AtomicBoolean d'origine — mais elle limite la portée de H1, à trancher.
+   - `observeVault` reste gardé à l'écran et non à la donnée. Cohérent : c'est le
+     seul écran qui EST le second facteur.
+
+NON APPLIQUÉ — ET POURQUOI
+  Famille 4 (F1 à F6)  → TRAITÉE ENSUITE, voir l'étage 4 ci-dessous.
+
+ÉTAGE 4 — FAMILLE 4 : CINQ CÂBLÉES, UNE RETIRÉE (décision de Patrice)
+  F1  Épingler / archiver / sourdine — les trois gestes ajoutés au menu d'appui
+      long (les six libellés existaient déjà, traduits). Le tri « Épinglés
+      d'abord », la page Archivés et les deux badges cessent d'être décoratifs.
+      ⚠️ `muted` est en plus RESPECTÉ par `IncomingMessageNotifier` : il n'était
+      lu par aucun notifier, donc la sourdine n'aurait rien silencié.
+  F2  Favoris — action ajoutée sur les trois types de bulle. La promesse « les
+      messages favoris ne sont jamais supprimés » est enfin tenue : la purge
+      s'appuyait déjà sur le drapeau, seul le geste manquait.
+  F3  Signature automatique — réglage + dialogue, plafond 80 caractères avec
+      compteur (au-delà le SMS bascule en multi-part, donc en facturation ×N).
+  F4  Délai de verrouillage automatique — sélecteur des cinq valeurs, masqué en
+      mode leurre comme sa ligne voisine.
+  F6  Réconciliation des suppressions — câblée dans `runSync`, avec TROIS
+      garde-fous bloquants, parce que le câblage naïf détruit la base :
+        (1) SMS uniquement — `listMirroredTelephonyUris()` rend aussi les URI de
+            MMS (`content://mms/<id>`), or `readAllSmsIds()` ne lit que
+            `content://sms` : sans filtre, tous les MMS étaient vus « supprimés » ;
+        (2) jamais sur une lecture vide — `readAllSmsIds()` rend un tableau vide
+            aussi bien si le fournisseur est vide que si la requête ÉCHOUE, les
+            deux étant indiscernables ;
+        (3) découpage sous la limite SQLite de 999 paramètres hôtes.
+  F5  Sauvegarde automatique — RETIRÉE ENTIÈREMENT, sur décision explicite.
+      Elle ne pouvait pas être « juste câblée » : le format par défaut `.smsbk`
+      est chiffré et exige une phrase secrète qu'un travail de fond ne peut pas
+      demander. La rendre réelle imposait de persister un secret de chiffrement
+      sur l'appareil ; se rabattre sur le XML non chiffré aurait été une
+      régression de confidentialité. Supprimés : `BackupWorker`,
+      `runScheduledBackup`, `writeXmlCompat`, les champs `autoBackup` /
+      `destinationUri` / `keepLast` / `format`, les enums `AutoBackupFrequency` et
+      `BackupFormat`, et la string orpheline. Les quatre clés DataStore sont
+      CONSERVÉES pour effacer les valeurs déjà persistées — `backup.uri` en
+      particulier désignait un dossier de l'utilisateur sans plus rien pour le
+      justifier. **La sauvegarde MANUELLE est intacte**, restauration comprise.
+      Défaut corrigé au passage : le fichier de destination était créé AVANT le
+      refus du format, donc chaque exécution déposait un fichier vide.
+
+ÉTAGE 5 — LE RESTE : TOUS LES HAUTS, MOYENS ET BAS ONT ÉTÉ TRAITÉS ENSUITE
+  Le « backlog » annoncé ici n'existe plus. Les lots suivants ont couvert
+  l'intégralité des findings restants — H2, H6, H7, H8, H10, H11, H12, H13, H14,
+  H18, M1 à M11, M-bis, B1 à B8, F10, F11, F12. Détail complet, décisions et
+  pièges rencontrés : voir `correctifs-appliques-2026-08-03.txt`.
+
+  ⚠️ CE QUI RESTE VOLONTAIREMENT OUVERT, et qui n'est PAS un oubli :
+   - `requestMoveToVault` ouvre encore la session du Coffre sans second facteur.
+     Sémantique inchangée depuis l'origine, mais elle LIMITE la portée de H1 :
+     déplacer une conversation vers le coffre suffit à l'ouvrir. À trancher.
+   - La sauvegarde est gardée contre le leurre, pas contre le coffre verrouillé.
+   - Les orphelins F7 (13 réglages sans consommateur), F8 (5 colonnes Room), F9
+     (QuickReply) et F13 (code mort bénin) : ce sont des suppressions de schéma et
+     de champs persistés, qui méritent leur propre lot et leur propre validation.
+   - La whitelist `EmergencyCallHelper` et le PIN du coffre restent SANS TEST —
+     c'est désormais ÉCRIT dans les fichiers concernés, au lieu d'être masqué par
+     une affirmation « testé en instrumented » qui était fausse.
+
+================================================================================
+DEUX REVUES DE SÉCURITÉ ONT ÉTÉ PASSÉES SUR LES CORRECTIFS EUX-MÊMES
+================================================================================
+Déclenchées par le garde-fou du projet (niveau 2 strict) dès qu'un fichier
+d'authentification ou de données était touché. Elles ont trouvé, entre autres :
+
+ - que mon correctif M2 INVERSAIT la faille au lieu de la fermer — un recul
+   d'horloge après redémarrage libérait le blocage. Correctif ANNULÉ, comportement
+   strict restauré ;
+ - que j'avais protégé `OPEN_CONVERSATION` en laissant `OPEN_EMERGENCY` ouverte —
+   c'est-à-dire que j'avais reproduit exactement l'asymétrie que cet audit traque ;
+ - qu'un seuil que j'avais durci excluait les numéros nationaux à 8 chiffres.
+
+Au total, DOUZE défauts ont été trouvés dans mes propres correctifs et corrigés
+avant livraison — dont une régression qui avait déjà été installée sur le
+téléphone. La règle du projet « relancer une revue SUR les correctifs de revue »
+a payé à chaque passe, sans exception.
+
+================================================================================
+GARDE-FOUS APPLIQUÉS
+================================================================================
+- Chaque finding cite un `fichier:ligne` réel, avec le code exact.
+- Statut CONFIRMÉ / PROBABLE porté par chaque finding ; PROBABLE nomme le maillon
+  non vérifié.
+- Tous les findings critiques et hauts ont été RE-VÉRIFIÉS DANS LE CODE par
+  l'orchestrateur, indépendamment de l'agent qui les a remontés.
+- Neuf pistes ont été ouvertes puis ÉCARTÉES après vérification (Partie V).
+- Une sévérité a été REVUE À LA BAISSE par l'orchestrateur (M2), contre l'avis de
+  l'agent qui l'avait remontée.
+- Aucune recommandation ne SUPPRIME une garde existante.
+- AUCUN fichier du projet n'a été modifié pendant la PHASE D'AUDIT elle-même.
+  Les correctifs sont venus après, et sont journalisés séparément.
+- Aucun test appareil PENDANT L'AUDIT : le Galaxy S9 n'était pas branché. Tous les
+  findings sont statiques ; ceux marqués PROBABLE demandent une confirmation sur
+  appareil.
+
+⚠️ UNE LEÇON DE MÉTHODE, VALABLE POUR LE PROCHAIN AUDIT
+
+Deux recommandations de ce rapport se sont révélées DANGEREUSES à l'application,
+et n'ont été arrêtées que par le recensement des appelants avant de coder :
+
+ 1. « Filtrer `in_vault = 0` dans `findByAddressesCsv` » (H1) aurait fait SORTIR
+    DU COFFRE chaque message entrant — cette requête sert aussi au routage de la
+    réception. Et la variante « créer une conversation jumelle » aurait pu écraser
+    une conversation en cascade, `thread_id` portant un index UNIQUE avec REPLACE.
+ 2. « Faire de l'horloge monotone l'autorité » (M2) ouvrait un contournement du
+    blocage par recul d'horloge.
+
+Un finding correctement identifié n'implique pas que le correctif suggéré soit
+correct. La règle du projet — recenser TOUS les appelants AVANT de corriger —
+s'applique aux recommandations d'un audit exactement comme au reste.
+================================================================================

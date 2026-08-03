@@ -22,21 +22,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -48,8 +50,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import com.filestech.sms.ui.components.SmsTechSnackbarHost
-import com.filestech.sms.ui.components.showError
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -65,7 +65,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +76,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.ui.components.ContactIntents
 import com.filestech.sms.ui.components.ConversationRow
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.showError
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,6 +95,10 @@ fun ConversationsScreen(
     viewModel: ConversationsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // v1.26.1 (audit H18) — l'etat leurre vient du VERROU, pas du flux agrege : ce dernier
+    // resservait sa valeur en cache (`isPanicDecoy = false`) le temps de redemarrer, ce qui
+    // faisait apparaitre l'icone du Coffre en session leurre.
+    val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
 
     val defaultAppLauncher = rememberLauncherForActivityResult(
@@ -230,7 +235,7 @@ fun ConversationsScreen(
     Scaffold(
         snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
         topBar = topBar@{
-            if (state.selectionMode && !state.isPanicDecoy) {
+            if (state.selectionMode && !isPanicDecoy) {
                 // v1.13.0 — TopAppBar contextuelle en mode sélection : count + action
                 // "Déplacer N vers le coffre" + croix annule. Masquée en PanicDecoy
                 // (re-entry via le `combine` purge la sélection ; on dé-render aussi
@@ -304,7 +309,7 @@ fun ConversationsScreen(
                         // looks like it doesn't exist to a coerced observer — matches the decoy
                         // illusion. Defense in depth: the AppRoot navigation guard and the
                         // repository-level filter back-stop this UI gate.
-                        if (!state.isPanicDecoy) {
+                        if (!isPanicDecoy) {
                             IconButton(onClick = onOpenVault) {
                                 Icon(
                                     Icons.Outlined.Lock,
@@ -540,8 +545,22 @@ fun ConversationsScreen(
                             // donc pas en session decoy (cohérent avec masquage
                             // de l'icône cadenas top-bar). Désactivé aussi en mode
                             // sélection (l'action passe par la TopAppBar bulk).
-                            onMoveToVault = if (state.isPanicDecoy || state.selectionMode) null else {
+                            onMoveToVault = if (isPanicDecoy || state.selectionMode) null else {
                                 { viewModel.moveConversationToVault(conv.id) }
+                            },
+                            // v1.26.1 (audit F1) — mêmes conditions que le coffre : masqués en
+                            // mode leurre et en mode sélection. Les trois gestes sont portés par
+                            // UN SEUL objet nullable plutôt que par trois `if` séparés : une
+                            // seule décision au lieu de trois identiques, et la complexité
+                            // cyclomatique de cet écran reste sous le seuil du projet.
+                            rowActions = if (isPanicDecoy || state.selectionMode) {
+                                null
+                            } else {
+                                ConversationRowActions(
+                                    onTogglePin = { viewModel.togglePinned(conv) },
+                                    onToggleArchive = { viewModel.toggleArchived(conv) },
+                                    onToggleMute = { viewModel.toggleMuted(conv) },
+                                )
                             },
                             // v1.13.1 — restaure ActionsSheet legacy en long-press
                             // (quick actions Block/Delete/Move to vault). Ajoute en
@@ -550,7 +569,7 @@ fun ConversationsScreen(
                             // (en mode sélection le long-press toggle, comportement
                             // Gmail). PanicDecoy : pas de selection toggle non plus,
                             // l'ActionsSheet legacy sans item Vault est rendu.
-                            onSelectMultiple = if (state.isPanicDecoy) null else {
+                            onSelectMultiple = if (isPanicDecoy) null else {
                                 { viewModel.toggleSelection(conv.id) }
                             },
                             selected = isSelected,
@@ -793,6 +812,11 @@ private fun SwipeableConversationRow(
      * le pattern "appui long → menu" attendu en v1.12, sans perdre le multi.
      */
     onSelectMultiple: (() -> Unit)? = null,
+    /**
+     * v1.26.1 (audit F1) — épingler / archiver / sourdine. `null` en mode leurre : l'agresseur
+     * ne doit pas pouvoir réorganiser ni faire taire les conversations de la victime.
+     */
+    rowActions: ConversationRowActions? = null,
     /** v1.13.0 — visuel sélectionné (background tinted + check icon). */
     selected: Boolean = false,
     /** v1.13.0 — désactive le swipe et le menu legacy en mode sélection. */
@@ -951,6 +975,28 @@ private fun SwipeableConversationRow(
                     handler()
                 }
             },
+            // v1.26.1 (audit F1) — état courant + gestes. `null` en mode leurre, via le parent.
+            pinned = conversation.pinned,
+            archived = conversation.archived,
+            muted = conversation.muted,
+            onTogglePinRequested = rowActions?.let { a ->
+                {
+                    actionsSheetOpen = false
+                    a.onTogglePin()
+                }
+            },
+            onToggleArchiveRequested = rowActions?.let { a ->
+                {
+                    actionsSheetOpen = false
+                    a.onToggleArchive()
+                }
+            },
+            onToggleMuteRequested = rowActions?.let { a ->
+                {
+                    actionsSheetOpen = false
+                    a.onToggleMute()
+                }
+            },
         )
     }
 
@@ -1019,6 +1065,21 @@ private fun SwipeableConversationRow(
 }
 
 /**
+ * v1.26.1 (audit F1) — les trois gestes d'organisation d'une conversation, portés ensemble.
+ *
+ * Regroupés dans un seul objet nullable plutôt qu'en trois paramètres nullables indépendants :
+ * ils partagent exactement la même condition d'existence (ni mode leurre, ni mode sélection),
+ * donc trois `if` séparés auraient répété la même décision — et fait franchir à l'écran le seuil
+ * de complexité cyclomatique du projet.
+ */
+@androidx.compose.runtime.Stable
+class ConversationRowActions(
+    val onTogglePin: () -> Unit,
+    val onToggleArchive: () -> Unit,
+    val onToggleMute: () -> Unit,
+)
+
+/**
  * Bottom-sheet menu shown on long-press of a conversation row. Surfaces the actions that were
  * previously buried in nested dialogs (Block) alongside the destructive one (Delete). Each
  * choice routes back through the parent's confirm flow so destructive intents still go through
@@ -1032,6 +1093,14 @@ private fun ConversationActionsSheet(
     onDeleteRequested: () -> Unit,
     onMoveToVaultRequested: (() -> Unit)? = null,
     onSelectMultipleRequested: (() -> Unit)? = null,
+    // v1.26.1 (audit F1) — état courant pour choisir le libellé, et gestes correspondants.
+    // Les six chaînes existaient déjà, traduites FR+EN, sans aucun référent.
+    pinned: Boolean = false,
+    archived: Boolean = false,
+    muted: Boolean = false,
+    onTogglePinRequested: (() -> Unit)? = null,
+    onToggleArchiveRequested: (() -> Unit)? = null,
+    onToggleMuteRequested: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1061,6 +1130,55 @@ private fun ConversationActionsSheet(
                     leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
                     headlineContent = { Text(stringResource(R.string.vault_move_in)) },
                     modifier = Modifier.clickable(onClick = onMoveToVaultRequested),
+                )
+            }
+            // v1.26.1 (audit F1) — épingler / archiver / sourdine. Placés avant les gestes
+            // marquants (bloquer, supprimer) : ce sont des actions réversibles et fréquentes.
+            // Les callbacks sont nullables sur le même modèle que le coffre : `null` en mode
+            // leurre, pour ne pas offrir de prise sur l'organisation des conversations.
+            if (onTogglePinRequested != null) {
+                androidx.compose.material3.ListItem(
+                    leadingContent = {
+                        Icon(Icons.Outlined.PushPin, contentDescription = null)
+                    },
+                    headlineContent = {
+                        Text(
+                            stringResource(
+                                if (pinned) R.string.action_unpin else R.string.action_pin,
+                            ),
+                        )
+                    },
+                    modifier = Modifier.clickable(onClick = onTogglePinRequested),
+                )
+            }
+            if (onToggleArchiveRequested != null) {
+                androidx.compose.material3.ListItem(
+                    leadingContent = {
+                        Icon(Icons.Outlined.Inventory2, contentDescription = null)
+                    },
+                    headlineContent = {
+                        Text(
+                            stringResource(
+                                if (archived) R.string.action_unarchive else R.string.action_archive,
+                            ),
+                        )
+                    },
+                    modifier = Modifier.clickable(onClick = onToggleArchiveRequested),
+                )
+            }
+            if (onToggleMuteRequested != null) {
+                androidx.compose.material3.ListItem(
+                    leadingContent = {
+                        Icon(Icons.Outlined.NotificationsOff, contentDescription = null)
+                    },
+                    headlineContent = {
+                        Text(
+                            stringResource(
+                                if (muted) R.string.action_unmute else R.string.action_mute,
+                            ),
+                        )
+                    },
+                    modifier = Modifier.clickable(onClick = onToggleMuteRequested),
                 )
             }
             // v1.13.1 — entrée mode sélection multiple via long-press menu.

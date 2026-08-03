@@ -133,6 +133,11 @@ fun ScheduledMessageEntity.toDomain(): ScheduledMessage = ScheduledMessage(
     // signale toute valeur manquante si on ajoute un état dans [ScheduledState].
     state = when (state) {
         ScheduledState.PENDING -> ScheduledMessage.State.PENDING
+        // v1.26.1 (audit H6) — `SENDING` est un état de VERROU, interne au worker : il dit
+        // « une exécution a revendiqué cet envoi », pas « l'envoi a changé de nature » pour
+        // l'utilisateur. Côté domaine il reste donc PENDING, ce qui garde la ligne dans
+        // « Programmés » avec son libellé habituel, y compris si le processus meurt en vol.
+        ScheduledState.SENDING -> ScheduledMessage.State.PENDING
         ScheduledState.SENT -> ScheduledMessage.State.SENT
         ScheduledState.FAILED -> ScheduledMessage.State.FAILED
         ScheduledState.CANCELLED -> ScheduledMessage.State.CANCELLED

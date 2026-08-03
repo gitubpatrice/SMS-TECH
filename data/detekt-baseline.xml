@@ -25,7 +25,6 @@
     <ID>ArgumentListWrapping:ScheduledMessageDao.kt$ScheduledMessageDao$("UPDATE scheduled_messages SET conversation_id = :toConversationId WHERE conversation_id = :fromConversationId")</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$( appScope, SharingStarted.Eagerly, AppSettings(), )</ID>
     <ID>ArgumentListWrapping:TelephonyReader.kt$TelephonyReader$( "TelephonyReader: MMS %d skipped (empty address after FROM=137/151/129 fallback, direction=%d, threadId=%d)", mmsId, direction, threadId, )</ID>
-    <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)</ID>
     <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) done; imported=%d skipped(blocked)=%d cursor=%d→%d", reason, imported, skipped, current, newCursor)</ID>
     <ID>ArgumentListWrapping:TelephonySyncManager.kt$TelephonySyncManager$("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, imported, isFirstRun, hasAnyMms)</ID>
     <ID>ArgumentListWrapping:VoiceRecorder.kt$VoiceRecorder$("DEPRECATION")</ID>
@@ -44,7 +43,6 @@
     <ID>MatchingDeclarationName:AppLockManagerTest.kt$AppLockManagerBackoffTest</ID>
     <ID>MaxLineLength:MmsSender.kt$MmsSender$Timber.w(persisted.exceptionOrNull(), "dispatchMms: setMmsSystemId(%d, %d) failed — rolling back", localMessageId, mmsSystemId)</ID>
     <ID>MaxLineLength:MmsSystemWriteback.kt$MmsSystemWriteback$Timber.i("MmsSystemWriteback: inserted outbox row id=%d (%d recipient(s), %d attachment(s))", mmsId, recipients.size, attachments.size)</ID>
-    <ID>MaxLineLength:TelephonySyncManager.kt$TelephonySyncManager$Timber.i("runSync(%s) blocked sources: room=%d system=%d → suffixes=%d", reason, roomBlocked.size, systemBlocked.size, blockedSuffixes.size)</ID>
     <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$emptyList&lt;Conversation&gt;()</ID>
     <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$emptyMap()</ID>
     <ID>MultiLineIfElse:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$list.map { it.toDomain() }</ID>
@@ -59,7 +57,6 @@
     <ID>MultiLineIfElse:TelephonyReader.kt$TelephonyReader$MessageDirection.OUTGOING</ID>
     <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$emptyList()</ID>
     <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$page</ID>
-    <ID>MultiLineIfElse:TelephonySyncManager.kt$TelephonySyncManager$page.filter { it.entity.address.phoneSuffix8() !in blockedSuffixes }</ID>
     <ID>NoUnusedImports:SettingsRepository.kt$com.filestech.sms.data.local.datastore.SettingsRepository.kt</ID>
     <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(parts: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsPartImport&gt;)</ID>
     <ID>ParameterListWrapping:ConversationMirror.kt$ConversationMirror$(rows: List&lt;com.filestech.sms.data.sms.TelephonyReader.MmsImportRow&gt;)</ID>

@@ -28,8 +28,10 @@ import com.filestech.sms.system.notifications.ActiveConversationTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -37,8 +39,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import javax.inject.Inject
@@ -78,6 +82,18 @@ class ThreadViewModel @Inject constructor(
     val playbackState: StateFlow<VoicePlaybackController.PlaybackState> get() = playbackController.state
 
     private val conversationId: Long = checkNotNull(savedStateHandle["conversationId"])
+
+    /**
+     * v1.26.1 (audit H1, suite de revue) — `true` quand le Coffre s'est refermé alors que ce fil
+     * lui appartient. L'écran ressort du fil plutôt que d'afficher un écran vide dont l'envoi
+     * échoue en silence. Voir [ConversationRepository.observeVaultHidden].
+     *
+     * Valeur initiale `false` : ici, le repli signifie « ne pas naviguer », ce qui ne dévoile
+     * rien — le masquage du contenu, lui, est assuré par les flux de données eux-mêmes. C'est
+     * le sens sûr pour ce drapeau-ci.
+     */
+    val vaultHidden: StateFlow<Boolean> = repo.observeVaultHidden(conversationId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
 
     /**
      * Size of the loaded window. Raising it widens the query in place and the repository
@@ -174,6 +190,17 @@ class ThreadViewModel @Inject constructor(
         val lastMessageAt: Long? = null,
         val voice: VoiceState = VoiceState.Idle,
         val isSendingVoice: Boolean = false,
+        /**
+         * v1.26.1 (audit H7) — un envoi texte ou média est en cours.
+         *
+         * Le chemin VOCAL avait déjà son garde (`isSendingVoice`) et son bouton remplacé par un
+         * indicateur de progression ; les chemins texte et média n'en avaient AUCUN, et le bouton
+         * Envoyer n'avait pas de `enabled`. Or `sendSms.invoke` suspend plusieurs dizaines de
+         * millisecondes (lecture de la liste noire, insertion dans `content://sms`, transaction
+         * Room) et le brouillon n'est vidé qu'APRÈS le retour : un second appui dans cette
+         * fenêtre partait avec le même corps et envoyait — et facturait — un deuxième SMS.
+         */
+        val isSending: Boolean = false,
         /**
          * Non-null when the user tapped Send while [SendingSettings.confirmBeforeBroadcast] is on.
          * UI displays a confirm dialog with this body; [confirmPendingSend] / [cancelPendingSend]
@@ -452,6 +479,9 @@ class ThreadViewModel @Inject constructor(
         //   (b) texte seul → flow SMS classique (avec confirm dialog si broadcast multi-dest)
         //   (c) rien → no-op
         if (!hasAttachments && body.isEmpty()) return
+        // v1.26.1 (audit H7) — garde en vol, calqué sur celui du chemin vocal. Sans lui, un
+        // double appui rapide produisait deux SMS (ou deux MMS) réellement envoyés et facturés.
+        if (_state.value.isSending) return
         viewModelScope.launch {
             if (hasAttachments) {
                 dispatchPendingAttachments()
@@ -559,18 +589,37 @@ class ThreadViewModel @Inject constructor(
     private suspend fun doSend(body: String) {
         val conv = _state.value.conversation ?: return
         val replyTargetId = _state.value.replyingTo?.id
-        when (val res = sendSms.invoke(conv.addresses, body, replyToMessageId = replyTargetId)) {
-            is Outcome.Success -> {
-                _state.update {
-                    it.copy(
-                        draft = "",
-                        segments = segCounter.count(""),
-                        replyingTo = null,
-                    )
-                }
-                repo.setDraft(conversationId, null)
+        _state.update { it.copy(isSending = true) }
+        try {
+            // v1.26.1 (audit H8) — l'envoi ne doit PLUS pouvoir être annulé à mi-parcours.
+            //
+            // `SendSmsUseCase` enchaîne, par destinataire : insertion dans `content://sms`
+            // (suspend), miroir Room (`withContext(io)` + transaction, suspend), puis l'appel
+            // NON suspend à `SmsManager`. `withContext` est un point d'annulation à l'entrée ET
+            // à la sortie : si l'utilisateur tapait « Envoyer » puis revenait en arrière — geste
+            // que l'écran encourage, il masque le clavier juste après — `onCleared()` annulait
+            // `viewModelScope` et la troisième étape n'était JAMAIS exécutée. Résultat : une
+            // ligne « envoyée » visible dans les autres applications SMS, une ligne `PENDING`
+            // chez nous, et AUCUN SMS parti — que le chien de garde basculait en échec quinze
+            // minutes plus tard, sans cause visible.
+            val res = withContext(NonCancellable) {
+                sendSms.invoke(conv.addresses, body, replyToMessageId = replyTargetId)
             }
-            is Outcome.Failure -> _events.tryEmit(Event.SendError(res.error))
+            when (res) {
+                is Outcome.Success -> {
+                    _state.update {
+                        it.copy(
+                            draft = "",
+                            segments = segCounter.count(""),
+                            replyingTo = null,
+                        )
+                    }
+                    repo.setDraft(conversationId, null)
+                }
+                is Outcome.Failure -> _events.tryEmit(Event.SendError(res.error))
+            }
+        } finally {
+            _state.update { it.copy(isSending = false) }
         }
     }
 
@@ -901,11 +950,22 @@ class ThreadViewModel @Inject constructor(
         val payloads = pending.map { p ->
             SendMediaMmsUseCase.AttachmentPayload(file = p.file, mimeType = p.mimeType)
         }
-        when (val res = sendMediaMms.invoke(
-            recipients = conv.addresses,
-            attachments = payloads,
-            textBody = textBody,
-        )) {
+        // v1.26.1 (audit H7 + H8) — même traitement que [doSend] : garde en vol contre le
+        // double appui, et envoi non annulable pour qu'un retour arrière ne laisse pas un MMS
+        // à moitié parti.
+        _state.update { it.copy(isSending = true) }
+        val res = try {
+            withContext(NonCancellable) {
+                sendMediaMms.invoke(
+                    recipients = conv.addresses,
+                    attachments = payloads,
+                    textBody = textBody,
+                )
+            }
+        } finally {
+            _state.update { it.copy(isSending = false) }
+        }
+        when (res) {
             is Outcome.Success -> {
                 // M2 audit fix — filter, not wipe, pour préserver les PJ ajoutées
                 // pendant le dispatch async.
@@ -1032,6 +1092,14 @@ class ThreadViewModel @Inject constructor(
 
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch { repo.deleteMessage(messageId) }
+    }
+
+    /**
+     * v1.26.1 (audit F2) — bascule « favori ». Le drapeau est déjà respecté par la purge
+     * automatique (`DELETE … AND starred = 0`) : c'est le geste qui manquait.
+     */
+    fun toggleMessageStarred(messageId: Long, starred: Boolean) {
+        viewModelScope.launch { repo.setMessageStarred(messageId, starred) }
     }
 
     /**

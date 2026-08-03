@@ -24,7 +24,14 @@ interface ScheduledMessageRepository {
         attachments: List<com.filestech.sms.domain.usecase.SendMediaMmsUseCase.AttachmentPayload> =
             emptyList(),
     ): Outcome<Long>
-    suspend fun cancel(id: Long): Outcome<Unit>
+
+    /**
+     * v1.26.1 (audit B2) — rend `true` si l'annulation a REELLEMENT pris, `false` si l'envoi
+     * avait deja ete revendique par le worker. Le verdict conditionne la suppression des
+     * pieces jointes : les effacer sous les pieds d'un envoi en cours produirait un MMS
+     * ampute.
+     */
+    suspend fun cancel(id: Long): Outcome<Boolean>
     suspend fun markSent(id: Long)
     suspend fun markFailed(id: Long)
 

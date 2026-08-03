@@ -3,6 +3,7 @@ package com.filestech.sms.system.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.pdu.NotificationInd
@@ -46,6 +47,9 @@ class MmsWapPushReceiver : BroadcastReceiver() {
         // Audit R1 (v1.14.8) — notification user lorsque le MMS dépasse le cap auto-download.
         fun mmsFailureNotifier(): MmsFailureNotifier
 
+        // v1.26.1 (audit H5) — filtrage des MMS entrants par la liste noire, cf. `onReceive`.
+        fun blockedNumberRepository(): com.filestech.sms.domain.repository.BlockedNumberRepository
+
         @ApplicationScope
         fun applicationScope(): CoroutineScope
     }
@@ -75,6 +79,7 @@ class MmsWapPushReceiver : BroadcastReceiver() {
         }
         val downloader = entry.mmsDownloader()
         val failureNotifier = entry.mmsFailureNotifier()
+        val blockedRepo = entry.blockedNumberRepository()
         val scope = entry.applicationScope()
 
         val pending = goAsync()
@@ -91,6 +96,29 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 val contentLocation = parsed.contentLocation?.let { String(it) }
                 if (contentLocation.isNullOrBlank()) {
                     Timber.w("NotificationInd has no contentLocation")
+                    return@launch
+                }
+                // v1.26.1 (audit H5) — la liste noire ne couvrait QUE les SMS entrants.
+                //
+                // Recensement fait : `isBlocked(` n'existait que dans [SmsDeliverReceiver] et
+                // dans les trois use-cases d'ENVOI. Le côté envoi était parfaitement symétrique
+                // sur les trois transports ; le côté réception ne couvrait qu'un des deux. Un
+                // correspondant bloqué voyait donc ses SMS disparaître, mais ses MMS étaient
+                // téléchargés, écrits en base ET notifiés — l'utilisatrice constatait que « le
+                // blocage ne marche pas » sans comprendre pourquoi.
+                //
+                // Le contrôle est placé AVANT `downloader.download(...)` : cela évite aussi la
+                // consommation de données, et la notification « MMS trop volumineux » de la
+                // branche `else`, qui trahirait elle aussi l'arrivée du message.
+                // ⚠️ `stripMmsAddressSuffix` est INDISPENSABLE : l'en-tête `From:` d'un PDU porte
+                // le suffixe passerelle `/TYPE=PLMN`. Sans ce nettoyage, `blockKey()` voit des
+                // lettres, traite l'adresse comme un expéditeur alphanumérique et ne peut jamais
+                // correspondre à la clé numérique stockée — la garde serait un no-op silencieux.
+                val fromAddress = parsed.from?.string?.stripMmsAddressSuffix()
+                if (!fromAddress.isNullOrBlank() &&
+                    runCatching { blockedRepo.isBlocked(fromAddress) }.getOrDefault(false)
+                ) {
+                    Timber.i("Dropping incoming MMS from blocked sender")
                     return@launch
                 }
                 // OMA-MMS-ENC §7.3.21: `X-Mms-Message-Size` is OPTIONAL in m-notification.ind.

@@ -8,6 +8,7 @@ import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
@@ -110,7 +111,11 @@ class SendMediaMmsUseCase @Inject constructor(
                 requestDeliveryReport = deliveryReports,
             )) {
                 is Outcome.Success -> ids += localId
-                is Outcome.Failure -> mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = -1)
+                is Outcome.Failure -> mirror.updateOutgoingStatus(
+                    localId,
+                    MessageStatus.FAILED,
+                    errorCode = SendErrorCode.SYNCHRONOUS,
+                )
             }
         }
 

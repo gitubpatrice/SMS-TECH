@@ -87,7 +87,7 @@ import com.filestech.sms.R
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
     val context = LocalContext.current
     var tapCount by remember { mutableStateOf(0) }
 
@@ -132,7 +132,9 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_section_features))
             Spacer(Modifier.size(8.dp))
-            features().forEach { f -> FeatureRow(icon = f.icon, label = f.label, desc = f.desc) }
+            features(isPanicDecoy).forEach { f ->
+                FeatureRow(icon = f.icon, label = f.label, desc = f.desc)
+            }
 
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_section_author))
@@ -576,15 +578,53 @@ private fun privacyBadges(): List<PrivacyBadge> = listOf(
     PrivacyBadge(Icons.Outlined.PrivacyTip, stringResource(R.string.about_badge_no_sharing), Color(0xFF7B1FA2)),
 )
 
-private data class Feature(val icon: ImageVector, val label: String, val desc: String)
+/**
+ * @param sensitive v1.26.1 (audit C4) — la fonctionnalité ne doit PAS être nommée en session
+ *   leurre. Marquer plutôt que filtrer à la main : une fonctionnalité de sécurité ajoutée
+ *   plus tard hérite du bon comportement en posant un seul drapeau, au lieu d'être oubliée
+ *   dans une liste d'exclusion tenue ailleurs.
+ */
+private data class Feature(
+    val icon: ImageVector,
+    val label: String,
+    val desc: String,
+    val sensitive: Boolean = false,
+)
 
+/**
+ * v1.26.1 (audit C4) — en session leurre, on retire les fonctionnalités marquées `sensitive`.
+ *
+ * Cet écran était le dernier à décrire en clair ce que tout le reste du mode leurre s'emploie
+ * à nier. Le texte du code panique dit mot pour mot « Second code qui ouvre l'app en mode
+ * leurre — coffre invisible et inaccessible » : un agresseur qui ouvrait À propos apprenait
+ * donc à la fois qu'un coffre existe et qu'un second code le lui cache. Le leurre désignait
+ * ce qu'il cachait.
+ *
+ * On filtre les entrées plutôt que de masquer l'écran entier : une application SMS ordinaire
+ * a un écran « À propos », et le faire disparaître serait en soi une anomalie visible.
+ */
 @androidx.compose.runtime.Composable
-private fun features(): List<Feature> = listOf(
+private fun features(isPanicDecoy: Boolean): List<Feature> = listOf(
     Feature(Icons.Outlined.ChatBubbleOutline, stringResource(R.string.about_feat_sms_label), stringResource(R.string.about_feat_sms_desc)),
     Feature(Icons.Outlined.Mic, stringResource(R.string.about_feat_voice_label), stringResource(R.string.about_feat_voice_desc)),
-    Feature(Icons.Outlined.Security, stringResource(R.string.about_feat_vault_label), stringResource(R.string.about_feat_vault_desc)),
-    Feature(Icons.Outlined.Shield, stringResource(R.string.about_feat_panic_label), stringResource(R.string.about_feat_panic_desc)),
-    Feature(Icons.Outlined.Warning, stringResource(R.string.about_feat_emergency_label), stringResource(R.string.about_feat_emergency_desc)),
+    Feature(
+        Icons.Outlined.Security,
+        stringResource(R.string.about_feat_vault_label),
+        stringResource(R.string.about_feat_vault_desc),
+        sensitive = true,
+    ),
+    Feature(
+        Icons.Outlined.Shield,
+        stringResource(R.string.about_feat_panic_label),
+        stringResource(R.string.about_feat_panic_desc),
+        sensitive = true,
+    ),
+    Feature(
+        Icons.Outlined.Warning,
+        stringResource(R.string.about_feat_emergency_label),
+        stringResource(R.string.about_feat_emergency_desc),
+        sensitive = true,
+    ),
     Feature(Icons.Outlined.Fingerprint, stringResource(R.string.about_feat_biometric_label), stringResource(R.string.about_feat_biometric_desc)),
     Feature(Icons.AutoMirrored.Outlined.Reply, stringResource(R.string.about_feat_reply_label), stringResource(R.string.about_feat_reply_desc)),
     Feature(Icons.Outlined.Translate, stringResource(R.string.about_feat_translate_label), stringResource(R.string.about_feat_translate_desc)),
@@ -595,7 +635,7 @@ private fun features(): List<Feature> = listOf(
     Feature(Icons.Outlined.DarkMode, stringResource(R.string.about_feat_themes_label), stringResource(R.string.about_feat_themes_desc)),
     Feature(Icons.Outlined.GraphicEq, stringResource(R.string.about_feat_ui_label), stringResource(R.string.about_feat_ui_desc)),
     Feature(Icons.Outlined.QuestionAnswer, stringResource(R.string.about_feat_noads_label), stringResource(R.string.about_feat_noads_desc)),
-)
+).filterNot { isPanicDecoy && it.sensitive }
 
 private data class Permission(val name: String, val why: String)
 

@@ -18,13 +18,13 @@ No ads, no trackers, no analytics. Apache-2.0 licensed.
   SQLCipher) Room database, not a separately-keyed cryptographic envelope. A second-layer
   vault crypto keyed by an `setUserAuthenticationRequired = true` Keystore alias is planned
   for v1.1.1 — see `SECURITY.md` for the threat model and the explicit limit.
-- Inline reply &amp; mark-as-read actions on notifications, per-conversation overrides.
-- **Voice SMS** — on-device dictation via `SpeechRecognizer` (no network).
+- Inline reply &amp; mark-as-read actions on notifications.
+- **Voice messages** — recorded on-device with `MediaRecorder` and sent as an audio MMS (no network beyond the carrier).
 - **PDF export** of any conversation, generated locally via `PdfDocument` (no external lib).
 - Scheduled sending via `WorkManager` (exact alarms when granted).
-- Backup &amp; restore in `.smsbk` (AES-256-GCM + PBKDF2) and XML SMS-Backup-Restore compat.
+- Manual backup &amp; restore in `.smsbk` (AES-256-GCM + PBKDF2). Attachments are not part of the backup.
 - Migration assistant: read the system SMS provider once SMS Tech is the default app.
-- Bilingual UI: English &amp; French, switchable at runtime.
+- Bilingual UI: English &amp; French, following the system language.
 - F-Droid friendly: no Google libraries, no proprietary blobs.
 
 ## 📦 Build

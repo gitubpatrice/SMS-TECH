@@ -56,6 +56,16 @@ class ScheduledSendAttempt @Inject constructor(
     suspend operator fun invoke(id: Long, runAttemptCount: Int): Verdict {
         val entity = dao.findById(id) ?: return Verdict.UNKNOWN_ID
         if (entity.state != ScheduledState.PENDING) return Verdict.ALREADY_SETTLED
+        // v1.26.1 (audit H6) — revendication ATOMIQUE avant tout appel réseau.
+        //
+        // Le test d'état ci-dessus ne suffisait pas : il était évalué AVANT l'envoi, et l'état
+        // ne passait à `SENT` qu'APRÈS. Une mort du processus dans cet intervalle — tueur OEM
+        // Samsung/Xiaomi, OOM, force-stop — faisait ré-exécuter le travail par WorkManager, qui
+        // retrouvait `PENDING` et **renvoyait le message** : deux SMS reçus, deux facturés.
+        //
+        // `claimForSending` rend le nombre de lignes modifiées : 0 signifie qu'une autre
+        // exécution a déjà pris cet envoi, on abandonne sans rien envoyer.
+        if (dao.claimForSending(id) != 1) return Verdict.ALREADY_SETTLED
         val recipients = PhoneAddress.list(entity.addressesCsv)
         // v1.26.0 — aiguillage SMS / MMS.
         //
@@ -86,7 +96,11 @@ class ScheduledSendAttempt @Inject constructor(
                 dao.setState(id, ScheduledState.FAILED)
                 Verdict.GAVE_UP
             } else {
-                // Aucune écriture d'état ici : laisser `PENDING` EST le correctif.
+                // v1.26.1 (audit H6) — la ligne est désormais en `SENDING` (revendiquée) : il
+                // faut explicitement la RENDRE, sinon la reprise suivante trouverait un état
+                // non-`PENDING` et abandonnerait. Avant la revendication, l'état n'avait pas
+                // bougé et « ne rien écrire » suffisait — ce n'est plus vrai.
+                dao.setState(id, ScheduledState.PENDING)
                 Verdict.RETRY
             }
         }

@@ -59,6 +59,8 @@ fun MessageBubble(
     onCopy: (() -> Unit)? = null,
     /** v1.3.11 (F5) — forward the bubble's text body to another conversation. */
     onForward: (() -> Unit)? = null,
+    /** v1.26.1 (audit F2) — bascule « favori » ; l'état est lu sur [message]. */
+    onToggleStar: (() -> Unit)? = null,
     /**
      * v1.3.11 (F4) — invoked when the user taps a phone number rendered inside the
      * bubble body. Forwarded to [MessageTextWithLinks]; the host (`ThreadScreen`)
@@ -134,6 +136,8 @@ fun MessageBubble(
                 onReply = onReply,
                 onTranslate = onTranslate,
                 onReact = onReact,
+                starred = message.starred,
+                onToggleStar = onToggleStar,
                 onDelete = onDelete,
             )
         }
@@ -230,6 +234,8 @@ fun MessageBubble(
                 onReply = onReply,
                 onTranslate = onTranslate,
                 onReact = onReact,
+                starred = message.starred,
+                onToggleStar = onToggleStar,
                 onDelete = onDelete,
             )
         }

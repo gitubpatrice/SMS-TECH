@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.telephony.SubscriptionManager
 import com.filestech.sms.core.ext.stripInvisibleChars
+import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.data.repository.ConversationMirror
@@ -53,6 +54,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // Audit R2 (v1.14.8) — Notification user lorsque le download MMS échoue (rc != OK).
         fun mmsFailureNotifier(): MmsFailureNotifier
 
+        // v1.26.1 (audit H5) — garde miroir de celle de [MmsWapPushReceiver] : le WAP-Push peut
+        // ne pas porter l'expéditeur, auquel cas c'est ici, sur le `RetrieveConf`, qu'on le
+        // connaît pour la première fois.
+        fun blockedNumberRepository(): com.filestech.sms.domain.repository.BlockedNumberRepository
+
         @ApplicationScope
         fun applicationScope(): CoroutineScope
     }
@@ -92,6 +98,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val messageDao = entry.messageDao()
                 val notifier = entry.notifier()
                 val failureNotifier = entry.mmsFailureNotifier()
+                val blockedRepo = entry.blockedNumberRepository()
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
                     // pas qu'un MMS lui était destiné. Maintenant on poste une notification
@@ -164,8 +171,28 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // expéditeur malicieux pouvait inverser visuellement le preview notif
                 // (parité avec le path SMS qui appelle déjà stripInvisibleChars dans
                 // SmsDeliverReceiver).
-                val sender = (parsed.from?.string?.let(::stripMmsAddressSuffix) ?: senderHint ?: "")
+                // v1.26.1 (audit H5) — le `senderHint` de repli est nettoyé LUI AUSSI. Il vient
+                // brut de [MmsWapPushReceiver] via [MmsDownloader.EXTRA_SENDER] et porte donc le
+                // suffixe `/TYPE=PLMN`. Or c'est précisément la branche qui sert quand le
+                // `RetrieveConf` n'a pas de `From:` — le cas même qui justifie cette garde
+                // miroir. Sans ce nettoyage elle échouait exactement là où on l'attend.
+                val sender = (parsed.from?.string ?: senderHint ?: "")
+                    .stripMmsAddressSuffix()
                     .stripInvisibleChars()
+                // v1.26.1 (audit H5) — garde miroir de [MmsWapPushReceiver], posée ici parce que
+                // le WAP-Push ne porte pas toujours l'expéditeur.
+                //
+                // ⚠️ Placée AVANT `persistAttachment` : plus bas, le média était déjà écrit dans
+                // `filesDir/mms_attachments/` quand on abandonnait, et plus rien ne le
+                // référençait — ni ligne Room, ni purge (`purgeTransientCaches` exclut ce
+                // dossier). La photo d'un expéditeur bloqué restait donc sur l'appareil, en
+                // clair, pour toujours. Ici on abandonne avant tout décodage et toute écriture.
+                if (sender.isNotBlank() &&
+                    runCatching { blockedRepo.isBlocked(sender) }.getOrDefault(false)
+                ) {
+                    Timber.i("Dropping downloaded MMS from blocked sender")
+                    return@launch
+                }
                 val date = (if (parsed.date > 0) parsed.date * 1000L else System.currentTimeMillis())
                 val subject = parsed.subject?.string?.stripInvisibleChars()?.takeIf { it.isNotBlank() }
 
@@ -339,14 +366,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         else -> "bin"
     }
 
-    /**
-     * Strips the "/TYPE=PLMN" or similar suffix MMS gateways append to phone numbers in the
-     * From: header (cf. [com.filestech.sms.data.mms.MmsBuilder.formatAddressForMms]).
-     */
-    private fun stripMmsAddressSuffix(raw: String): String {
-        val idx = raw.indexOf('/')
-        return if (idx > 0) raw.substring(0, idx) else raw
-    }
+    // v1.26.1 (audit H5) — `stripMmsAddressSuffix` a déménagé dans `core/ext/StringExt.kt` :
+    // la garde de liste noire des MMS entrants en a besoin des deux côtés du pipeline, et une
+    // copie privée par récepteur aurait garanti qu'un des deux finisse par l'oublier.
 
     /**
      * Fallback label for the conversation list + notification when neither a `text/plain`

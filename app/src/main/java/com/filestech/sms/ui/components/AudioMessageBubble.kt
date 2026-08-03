@@ -81,6 +81,8 @@ fun AudioMessageBubble(
      * `onCopy` here: a voice MMS has no text payload to copy.
      */
     onForward: (() -> Unit)? = null,
+    /** v1.26.1 (audit F2) — bascule « favori » ; l'état est lu sur [message]. */
+    onToggleStar: (() -> Unit)? = null,
     onRemoveReaction: () -> Unit = {},
     repliedToPreview: ReplyQuotePreview? = null,
     showTimestamp: Boolean = false,
@@ -144,7 +146,16 @@ fun AudioMessageBubble(
         horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onForward = onForward, onDelete = onDelete)
+        if (isOut) {
+            BubbleMenuTrigger(
+                onReply = onReply,
+                onReact = onReact,
+                onForward = onForward,
+                starred = message.starred,
+                onToggleStar = onToggleStar,
+                onDelete = onDelete,
+            )
+        }
         androidx.compose.foundation.layout.Column(
             horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
         ) {
@@ -299,7 +310,16 @@ fun AudioMessageBubble(
                 }
             }
         }
-        if (!isOut) BubbleMenuTrigger(onReply = onReply, onReact = onReact, onForward = onForward, onDelete = onDelete)
+        if (!isOut) {
+            BubbleMenuTrigger(
+                onReply = onReply,
+                onReact = onReact,
+                onForward = onForward,
+                starred = message.starred,
+                onToggleStar = onToggleStar,
+                onDelete = onDelete,
+            )
+        }
     }
 
     if (showTimestamp || message.status == Message.Status.FAILED) {

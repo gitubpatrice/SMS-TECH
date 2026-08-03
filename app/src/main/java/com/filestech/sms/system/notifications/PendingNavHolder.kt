@@ -62,10 +62,22 @@ class PendingNavHolder @Inject constructor() {
          * [com.filestech.sms.ui.navigation.Thread]. Le body optionnel est staged dans
          * [com.filestech.sms.system.share.IncomingShareHolder] pour pré-remplir le composer.
          *
-         * Sécurité : valide phone number côté caller (MainActivity) — pas de chemin de
-         * confiance entre une app tierce et un thread arbitraire. Non-PII en log.
+         * Sécurité : v1.26.1 (audit B6) — la validation annoncée ici EXISTE désormais
+         * réellement côté `MainActivity` (longueur plafonnée + au moins un chiffre, alignées sur
+         * `HeadlessSmsSendService`). Elle était affirmée mais absente : n'importe quelle chaîne
+         * non vide créait une conversation au libellé contrôlé par l'appelant. Non-PII en log.
          */
         val sendToAddress: String? = null,
+        /**
+         * v1.26.1 (audit H2) — secret porte par l'intent d'ouverture de conversation.
+         * Verifie par `AppRoot` AVANT de naviguer, cf. [NotificationIntentToken] : la lecture
+         * du secret est suspendue, donc elle ne peut pas avoir lieu dans `MainActivity`.
+         * `0` = absent, ce qui vaut refus.
+         *
+         * ⚠️ `Pending` est une `data class` : son `toString()` genere inclut ce champ. NE JAMAIS
+         * journaliser l'instance entiere — logger les champs utiles un par un.
+         */
+        val navToken: Long = 0L,
         val postedAt: Long = System.currentTimeMillis(),
     ) {
         fun isExpired(now: Long = System.currentTimeMillis()): Boolean =

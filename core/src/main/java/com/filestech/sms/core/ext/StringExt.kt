@@ -101,6 +101,21 @@ private const val BLOCK_KEY_SIGNIFICANT_DIGITS = 9
  * qui distingue « SFR 123 » du code court « 123 ». Appliquer cette fonction à une chaîne déjà
  * normalisée la priverait de cette information — elle attend la forme brute.
  */
+/**
+ * v1.26.1 (audit H5) — retire le suffixe `/TYPE=PLMN` (ou similaire) que les passerelles MMS
+ * ajoutent aux numéros dans l'en-tête `From:` d'un PDU.
+ *
+ * Centralisé ici parce que la garde de liste noire des MMS entrants en a besoin des DEUX côtés
+ * du pipeline ([MmsWapPushReceiver] avant le téléchargement, [MmsDownloadedReceiver] après), et
+ * qu'oublier ce nettoyage rend la garde SILENCIEUSEMENT INOPÉRANTE : `"+33612345678/TYPE=PLMN"`
+ * contient des lettres, donc [blockKey] le traite comme un expéditeur alphanumérique et rend
+ * `"+33612345678/type=plmn"` au lieu de `"612345678"` — aucune correspondance possible.
+ */
+fun String.stripMmsAddressSuffix(): String {
+    val idx = indexOf('/')
+    return if (idx > 0) substring(0, idx) else this
+}
+
 fun String.blockKey(): String {
     val trimmed = trim()
     if (trimmed.any { it.isLetter() }) return trimmed.lowercase()

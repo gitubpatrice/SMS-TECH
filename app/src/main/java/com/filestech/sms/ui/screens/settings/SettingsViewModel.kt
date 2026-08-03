@@ -60,6 +60,13 @@ class SettingsViewModel @Inject constructor(
          * Les deux enfermeraient l'utilisateur en mode leurre sans issue.
          */
         data class PanicCodeRejected(val outcome: AppLockManager.PanicCodeOutcome) : Event
+
+        /**
+         * v1.26.1 (audit C3) — refus symétrique du précédent : le PIN proposé est le code
+         * panique déjà enregistré. L'accepter enfermerait l'utilisateur en mode leurre sans
+         * issue, le code panique étant évalué avant le PIN.
+         */
+        data object PinRejectedSameAsPanicCode : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -130,7 +137,16 @@ class SettingsViewModel @Inject constructor(
      * inside the manager so the secret never lingers on the JVM heap. Caller (UI) must hand
      * over a fresh `CharArray` — we never accept `String` to avoid the implicit intern table.
      */
-    fun setPin(pin: CharArray) = viewModelScope.launch { appLock.setPin(pin) }
+    fun setPin(pin: CharArray) = viewModelScope.launch {
+        // v1.26.1 (audit C3) — le refus « PIN identique au code panique » doit être VISIBLE :
+        // un échec muet laisserait l'utilisateur croire son nouveau PIN posé alors qu'il ne
+        // l'est pas. Voir [AppLockManager.setPin] pour la raison du refus.
+        when (appLock.setPin(pin)) {
+            AppLockManager.SetPinOutcome.Ok -> Unit
+            AppLockManager.SetPinOutcome.SameAsPanicCode ->
+                _events.send(Event.PinRejectedSameAsPanicCode)
+        }
+    }
 
     /** Disables the lock entirely (back to [com.filestech.sms.domain.settings.LockMode.OFF]). */
     fun clearLock() = viewModelScope.launch {
@@ -138,7 +154,10 @@ class SettingsViewModel @Inject constructor(
         // deviendrait le seul secret connu et ouvrirait l'application en leurre définitif. On
         // reflète donc l'état ici, sans relire le magasin (on sait ce qui vient de s'y passer).
         appLock.clearPin()
-        _panicCodeSet.value = false
+        // v1.26.1 (audit C1) — on RELIT l'état au lieu de le supposer : `clearPin()` refuse
+        // désormais en session leurre, donc « on sait ce qui vient de s'y passer » n'est plus
+        // vrai sur tous les chemins. Relire coûte une lecture DataStore et ne peut pas dériver.
+        _panicCodeSet.value = appLock.isPanicCodeSet()
     }
 
     /**

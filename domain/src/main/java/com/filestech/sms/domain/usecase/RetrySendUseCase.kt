@@ -34,7 +34,9 @@ class RetrySendUseCase @Inject constructor(
                 messageId,
             )
         }
-        mirror.updateOutgoingStatus(messageId, MessageStatus.PENDING, errorCode = null)
+        // v1.26.1 (audit M8) — rétrogradation DÉLIBÉRÉE : `updateOutgoingStatus` est désormais
+        // monotone et refuserait ce retour en arrière depuis `FAILED`.
+        mirror.resetOutgoingForRetry(messageId)
         return when (val r = sender.send(messageId, msg.address, msg.body, msg.subId)) {
             is Outcome.Success -> Outcome.Success(Unit)
             is Outcome.Failure -> {

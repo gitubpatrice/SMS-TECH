@@ -8,7 +8,6 @@ import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.vault.VaultMover
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,6 +48,9 @@ class VaultManager @Inject constructor(
     private val keystore: KeystoreManager,
     private val conversationRepo: ConversationRepository,
     private val appLock: AppLockManager,
+    // v1.26.1 (audit H1) — état de session extrait ici pour être observable ET consultable
+    // par la couche données sans cycle de dépendances. Voir [VaultSessionState].
+    private val session: VaultSessionState,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : VaultMover {
 
@@ -59,15 +61,20 @@ class VaultManager @Inject constructor(
     // sur un primitive Volatile). Le flag continue à servir de simple
     // mémoire d'état (pas de logique transactionnelle CAS) — mais le
     // contrat est désormais formel.
-    private val sessionUnlocked = AtomicBoolean(false)
+    //
+    // v1.26.1 (audit H1) — l'état a déménagé dans [VaultSessionState], qui conserve cette
+    // sémantique (`MutableStateFlow.value` est atomique et visible entre threads) et ajoute
+    // les deux propriétés qui manquaient : il est OBSERVABLE, et il est atteignable par la
+    // couche données sans fermer le cycle `VaultManager → ConversationRepository`.
+    // L'API publique ci-dessous est inchangée : aucun appelant n'est touché.
 
-    val isVaultUnlockedInSession: Boolean get() = sessionUnlocked.get()
+    val isVaultUnlockedInSession: Boolean get() = session.isUnlocked
 
     /** Marks the vault as opened for this app session. Caller must already be authenticated. */
-    fun markUnlocked() { sessionUnlocked.set(true) }
+    fun markUnlocked() { session.markUnlocked() }
 
     /** Forces the vault to be locked again (e.g. on background or panic). */
-    fun lock() { sessionUnlocked.set(false) }
+    fun lock() { session.lock() }
 
     /**
      * Moves a conversation **into** the vault.
@@ -81,13 +88,13 @@ class VaultManager @Inject constructor(
      * footgun.
      */
     override suspend fun moveToVault(conversationId: Long): Outcome<Unit> = withContext(io) {
-        if (!sessionUnlocked.get()) return@withContext Outcome.Failure(AppError.Locked())
+        if (!session.isUnlocked) return@withContext Outcome.Failure(AppError.Locked())
         conversationRepo.moveToVault(conversationId, true)
         Outcome.Success(Unit)
     }
 
     override suspend fun moveOutOfVault(conversationId: Long): Outcome<Unit> = withContext(io) {
-        if (!sessionUnlocked.get()) return@withContext Outcome.Failure(AppError.Locked())
+        if (!session.isUnlocked) return@withContext Outcome.Failure(AppError.Locked())
         conversationRepo.moveToVault(conversationId, false)
         Outcome.Success(Unit)
     }
@@ -114,11 +121,19 @@ class VaultManager @Inject constructor(
         conversationId: Long,
         intoVault: Boolean,
     ): Outcome<Unit> = withContext(io) {
+        // v1.26.1 (audit B1) — on interroge le PRÉDICAT qui fait autorité, au lieu d'énumérer
+        // les états fermés.
+        //
+        // L'énumération oubliait `LockedOut` : le commentaire disait « Unlocked or Disabled »,
+        // mais un blocage après trop de tentatives tombait aussi dans le `else` — et déplaçait
+        // donc une conversation vers le coffre EN POSANT `sessionUnlocked = true`. Aucun chemin
+        // atteignable n'a été trouvé (les écrans appelants sont dépilés dès que le verrou
+        // s'affiche), mais c'est exactement la forme qui a produit la moitié des défauts de cet
+        // audit : une liste d'états qui vieillit mal. `isOpenForUi` est la source de vérité
+        // utilisée par les receveurs et le service headless — on s'y aligne.
         val lockState = appLock.state.value
-        when (lockState) {
-            is AppLockManager.LockState.PanicDecoy -> return@withContext Outcome.Failure(AppError.Locked())
-            is AppLockManager.LockState.Locked -> return@withContext Outcome.Failure(AppError.Locked())
-            else -> Unit // Unlocked or Disabled — proceed
+        if (!appLock.isOpenForUi(lockState) || lockState is AppLockManager.LockState.PanicDecoy) {
+            return@withContext Outcome.Failure(AppError.Locked())
         }
         // v1.11.0 audit S2 — re-check juste avant la mutation pour bloquer
         // une race où PanicDecoy aurait été activé entre la 1ère évaluation
@@ -129,7 +144,7 @@ class VaultManager @Inject constructor(
         if (postCheck is AppLockManager.LockState.PanicDecoy) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
-        sessionUnlocked.set(true)
+        session.markUnlocked()
         conversationRepo.moveToVault(conversationId, intoVault)
         Outcome.Success(Unit)
     }
@@ -161,7 +176,7 @@ class VaultManager @Inject constructor(
         if (post is AppLockManager.LockState.PanicDecoy) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
-        sessionUnlocked.set(true)
+        session.markUnlocked()
         val updated = conversationRepo.bulkMoveToVault(ids, intoVault)
         Outcome.Success(updated)
     }

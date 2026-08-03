@@ -105,20 +105,63 @@ class AppLockManager @Inject constructor(
      * `toByteArray(UTF-8).toCharArray()` — that was the F3 entropy bug. PBKDF2-HMAC-SHA512 handles
      * the UTF-8 encoding of CharArray internally and preserves the full Unicode range.
      */
-    suspend fun setPin(newPin: CharArray): Unit = withContext(io) {
-        val salt = kdf.newSalt()
-        val iters = kdf.calibrate()
+    /** Résultat de [setPin] — voir ce dernier pour le détail du refus. */
+    sealed interface SetPinOutcome {
+        data object Ok : SetPinOutcome
+
+        /**
+         * Le PIN proposé est le code panique déjà enregistré. Voir [setPin] : l'accepter
+         * enfermerait définitivement l'utilisateur en mode leurre.
+         */
+        data object SameAsPanicCode : SetPinOutcome
+    }
+
+    suspend fun setPin(newPin: CharArray): SetPinOutcome = withContext(io) {
         try {
+            // v1.26.1 (audit C3) — refus SYMÉTRIQUE de celui de [setPanicCode].
+            //
+            // `setPanicCode` refuse depuis la v1.26.0 un code identique au PIN, et documente
+            // pourquoi : [attemptUnlock] évalue le code panique AVANT le PIN, donc un code
+            // identique fait systématiquement gagner le leurre et l'utilisateur n'a plus AUCUN
+            // moyen d'ouvrir son application normalement — enfermement définitif, coffre compris.
+            //
+            // Le refus manquait dans l'autre sens : rien n'empêchait de CHANGER SON PIN pour la
+            // valeur de son code panique, ce qui produit exactement le même enfermement par la
+            // porte d'à côté. Le picker rouvre le dialogue de saisie même quand le mode est déjà
+            // PIN, et un utilisateur qui « recycle » un code mémorisé tombe droit dedans.
+            //
+            // Vérification faite AVANT `kdf.calibrate()` : inutile de payer la calibration pour
+            // un candidat qu'on va refuser.
+            val panicSnap = securityStore.panicSnapshot()
+            if (panicSnap != null &&
+                matches(newPin, panicSnap.salt, panicSnap.hash, panicSnap.iterations)
+            ) {
+                return@withContext SetPinOutcome.SameAsPanicCode
+            }
+            val salt = kdf.newSalt()
+            val iters = kdf.calibrate()
             val hash = kdf.derive(newPin, salt, iters)
             securityStore.setPinHash(salt, hash, iters)
         } finally {
+            // Un seul effacement, dans le `finally` : il couvre le retour anticipé du refus
+            // comme le chemin nominal.
             newPin.wipe()
         }
         settings.update { it.copy(security = it.security.copy(lockMode = LockMode.PIN)) }
         _state.value = LockState.Locked
+        SetPinOutcome.Ok
     }
 
     suspend fun clearPin() = withContext(io) {
+        // v1.26.1 (audit C1) — refus en session leurre, garde côté ACCÈS.
+        //
+        // La ligne « Verrouillage de l'app » est désormais masquée en `PanicDecoy`, mais masquer
+        // un écran est une énumération : elle vieillit à chaque point d'entrée ajouté. Le vrai
+        // garde est ici. Sans lui, l'agresseur retirait le verrou depuis la session leurre, ce
+        // qui posait `LockState.Disabled` — et comme TOUTES les gardes du leurre testent
+        // `is PanicDecoy`, elles tombaient toutes d'un coup. Le désarmement doit venir de
+        // l'utilisateur légitime, dans sa vraie session.
+        if (_state.value is LockState.PanicDecoy) return@withContext
         securityStore.clearPin()
         settings.update { it.copy(security = it.security.copy(lockMode = LockMode.OFF)) }
         _state.value = LockState.Disabled
@@ -217,7 +260,25 @@ class AppLockManager @Inject constructor(
         }
     }
 
-    suspend fun attemptUnlock(candidate: CharArray): LockState = withContext(io) {
+    /**
+     * v1.26.1 (audit H17) — enveloppe qui EFFACE le candidat sur tous les chemins de sortie.
+     *
+     * `setPin`, `setPanicCode`, `VaultPinManager.verifyVaultPin` et `PinEntryDialog` effacent
+     * tous leur `CharArray` dans un `finally` ; `attemptUnlock` était le seul consommateur de
+     * secret à ne pas le faire, alors qu'il reçoit le PIN principal — celui qui ouvre tout,
+     * coffre compris — et qu'il est appelé à chaque déverrouillage. `matches()` n'efface que
+     * le dérivé, et l'appelant (`LockScreen`) construit un `CharArray` que personne ne reprend :
+     * le PIN en clair survivait donc dans le tas jusqu'à la prochaine GC, lisible par un heap
+     * dump. L'enveloppe couvre les cinq retours anticipés du corps sans y toucher.
+     */
+    suspend fun attemptUnlock(candidate: CharArray): LockState =
+        try {
+            attemptUnlockInternal(candidate)
+        } finally {
+            candidate.wipe()
+        }
+
+    private suspend fun attemptUnlockInternal(candidate: CharArray): LockState = withContext(io) {
         val now = System.currentTimeMillis()
         val nowElapsed = SystemClock.elapsedRealtime()
         // Audit R7 (v1.14.8) — Snapshot mono+wall vs simple wall check. Si mono dit "encore

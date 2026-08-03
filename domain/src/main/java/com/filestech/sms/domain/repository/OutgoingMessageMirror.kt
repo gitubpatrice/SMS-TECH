@@ -28,7 +28,22 @@ interface OutgoingMessageMirror {
     ): Long
 
     /** Met à jour le statut d'un message sortant (transition PENDING→SENT/DELIVERED/FAILED). */
+    /**
+     * Fait PROGRESSER le statut d'un envoi. La promotion est monotone : voir
+     * `MessageDao.promoteStatusMonotonic`. Destiné aux accusés d'envoi / de réception et aux
+     * échecs — c'est-à-dire à tout ce qui est subi, pas décidé.
+     */
     suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int? = null)
+
+    /**
+     * v1.26.1 (audit M8) — REMET un envoi en attente, sur action explicite de l'utilisateur
+     * (relance d'un message en échec).
+     *
+     * Distinct de [updateOutgoingStatus] parce que l'intention est l'inverse : c'est une
+     * RÉTROGRADATION délibérée, que la règle monotone bloquerait. Séparer les deux évite qu'un
+     * futur appelant obtienne l'une en croyant demander l'autre.
+     */
+    suspend fun resetOutgoingForRetry(localId: Long)
 
     /** Miroite un MMS vocal sortant. Renvoie l'id Room local. */
     suspend fun upsertOutgoingMms(

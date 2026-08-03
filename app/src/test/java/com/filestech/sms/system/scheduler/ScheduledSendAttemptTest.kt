@@ -57,6 +57,15 @@ class ScheduledSendAttemptTest {
 
     private fun failure() = Outcome.Failure(AppError.Telephony("no SIM"))
 
+    /**
+     * v1.26.1 (audit H6) — la revendication atomique `PENDING -> SENDING` precede desormais tout
+     * envoi. Par defaut on la fait reussir : les tests ci-dessous portent sur ce qui suit.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    fun claimSucceedsByDefault() {
+        coEvery { dao.claimForSending(ID) } returns 1
+    }
+
     @Test
     fun `envoi reussi marque SENT`() = runTest {
         stubSend(Outcome.Success(listOf(42L)))
@@ -77,7 +86,10 @@ class ScheduledSendAttemptTest {
             assertThat(attempt(ID, runAttemptCount = run))
                 .isEqualTo(ScheduledSendAttempt.Verdict.RETRY)
         }
-        coVerify(exactly = 0) { dao.setState(ID, any()) }
+        coVerify(exactly = ScheduledSendAttempt.MAX_ATTEMPTS - 1) {
+            dao.setState(ID, ScheduledState.PENDING)
+        }
+        coVerify(exactly = 0) { dao.setState(ID, ScheduledState.FAILED) }
     }
 
     @Test

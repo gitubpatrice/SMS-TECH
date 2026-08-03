@@ -279,7 +279,6 @@
             android:name=".system.receiver.EmergencyShortcutReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.filestech.sms.SHORTCUT_TRIGGER_EMERGENCY" />
                 <action android:name="com.filestech.sms.SHORTCUT_DIAL_112" />
                 <action android:name="com.filestech.sms.SHORTCUT_DIAL_POLICE" />
             </intent-filter>

@@ -93,7 +93,7 @@ class LocationResolver @Inject constructor(
             .getOrDefault(false)
         if (!gpsEnabled && !networkEnabled) {
             Timber.d("LocationResolver: no enabled provider, returning stale lastKnown if any")
-            return bestLastKnown(lm)
+            return bestLastKnownBounded(lm)
         }
 
         val newFix = withTimeoutOrNull(timeoutMs) {
@@ -103,8 +103,8 @@ class LocationResolver @Inject constructor(
             Timber.d("LocationResolver: got fresh fix (provider=%s)", newFix.provider)
             return newFix
         }
-        // Timeout — best-effort fallback sur le lastKnown même rance.
-        val stale = bestLastKnown(lm)
+        // Timeout — repli sur le lastKnown, mais BORNÉ EN ÂGE (cf. [bestLastKnownBounded]).
+        val stale = bestLastKnownBounded(lm)
         if (stale != null) {
             Timber.d(
                 "LocationResolver: timeout, falling back to stale lastKnown (provider=%s, ageMs=%d)",
@@ -126,6 +126,32 @@ class LocationResolver @Inject constructor(
     private fun bestFreshLastKnown(lm: LocationManager): Location? {
         val now = System.currentTimeMillis()
         return bestLastKnown(lm)?.takeIf { now - it.time <= FRESH_THRESHOLD_MS }
+    }
+
+    /**
+     * v1.26.1 (audit H11) — repli BORNÉ EN ÂGE.
+     *
+     * Les deux chemins de repli — « aucun fournisseur activé » et « délai dépassé » — rendaient
+     * `bestLastKnown` **sans aucune borne**, alors que le seuil de fraîcheur de 5 minutes ne
+     * s'appliquait qu'au chemin rapide. GPS coupé depuis la veille ou intérieur sans fix : le
+     * SMS d'urgence partait avec « Ma position : https://maps.google.com/?q=… » pointant sur une
+     * position vieille de plusieurs heures, sans horodatage ni mention de son âge, et l'interface
+     * affichait un message de SUCCÈS.
+     *
+     * C'est la variante silencieuse du défaut de la v1.25.5 : la position n'est plus « annoncée
+     * mais non transmise », elle est **transmise mais fausse** — des secours envoyés à la
+     * mauvaise adresse. Au-delà de la borne on rend `null`, ce qui fait basculer le message sur
+     * « (position non disponible) » et l'interface sur une erreur : dire qu'on ne sait pas vaut
+     * mieux que d'affirmer un lieu périmé.
+     */
+    private fun bestLastKnownBounded(lm: LocationManager): Location? {
+        val fix = bestLastKnown(lm) ?: return null
+        val ageMs = System.currentTimeMillis() - fix.time
+        if (ageMs > STALE_FALLBACK_MAX_AGE_MS) {
+            Timber.d("LocationResolver: lastKnown too old (ageMs=%d) — reporting unavailable", ageMs)
+            return null
+        }
+        return fix
     }
 
     private fun bestLastKnown(lm: LocationManager): Location? {
@@ -230,5 +256,16 @@ class LocationResolver @Inject constructor(
          * un nouveau fix avant de retomber sur le lastKnown stale.
          */
         const val FRESH_THRESHOLD_MS: Long = 5 * 60 * 1000L
+
+        /**
+         * v1.26.1 (audit H11) — âge maximal d'un `lastKnownLocation` encore acceptable en REPLI,
+         * quand aucun fix frais n'a pu être obtenu.
+         *
+         * Trente minutes : assez large pour couvrir un trajet en intérieur ou un GPS lent — cas
+         * où une position approchée reste très utile aux secours — mais assez court pour qu'elle
+         * reste représentative. Au-delà, on préfère dire « position non disponible » plutôt que
+         * d'envoyer un lieu où la personne n'est plus.
+         */
+        const val STALE_FALLBACK_MAX_AGE_MS: Long = 30 * 60 * 1000L
     }
 }

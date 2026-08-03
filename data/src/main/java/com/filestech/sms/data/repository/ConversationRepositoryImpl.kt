@@ -47,6 +47,13 @@ class ConversationRepositoryImpl @Inject constructor(
     private val messageDao: MessageDao,
     private val attachmentDao: AttachmentDao,
     private val appLock: AppLockManager,
+    // v1.26.1 (audit H1) — le second facteur du Coffre gardait l'ÉCRAN, pas la DONNÉE :
+    // `isVaultUnlockedInSession` n'avait qu'UN SEUL lecteur dans tout le dépôt, l'écran Coffre.
+    // La couche données ne le consultait jamais, si bien qu'un fil du Coffre atteint autrement
+    // (« Nouveau message » vers le contact, lien `smsto:`, Intent forgé) s'affichait en entier
+    // sans que le PIN coffre soit demandé. On dépend de [VaultSessionState] et non de
+    // [VaultManager] : ce dernier dépend de ce repository, l'injecter fermerait le cycle Hilt.
+    private val vaultSession: com.filestech.sms.security.VaultSessionState,
     private val blockedRepo: BlockedNumberRepository,
     private val notifier: ConversationNotificationCanceller,
     // v1.12.0 — résolution du displayName à la création d'une conv via
@@ -134,13 +141,50 @@ class ConversationRepositoryImpl @Inject constructor(
      * thread (saved nav state, share-target shortcut, future widget) must not bypass the gate.
      */
     override fun observeOne(id: Long): Flow<Conversation?> =
-        combine(appLock.state, conversationDao.observeById(id)) { lockState, entity ->
+        combine(
+            appLock.state,
+            conversationDao.observeById(id),
+            vaultSession.unlocked,
+        ) { lockState, entity, vaultOpen ->
             when {
                 entity == null -> null
-                lockState is AppLockManager.LockState.PanicDecoy && entity.inVault -> null
+                // v1.26.1 (audit H1) — condition étendue : le contenu du Coffre reste masqué
+                // tant que son second facteur n'a pas été franchi DANS CETTE SESSION, pas
+                // seulement en session leurre. `vaultSession.unlocked` est un StateFlow pour
+                // que le fil se révèle bien au moment où l'utilisateur ouvre son Coffre.
+                entity.inVault && (lockState is AppLockManager.LockState.PanicDecoy || !vaultOpen) -> null
                 else -> entity.toDomain()
             }
         }.flowOn(io)
+
+    /**
+     * v1.26.1 (audit H1, suite de revue) — « ce fil est masqué parce que le Coffre s'est
+     * refermé », par opposition à « cette conversation n'existe pas ».
+     *
+     * Sans cette distinction, le masquage introduit ci-dessus produisait une RÉGRESSION vécue :
+     * `lockVaultOnLeave` vaut `true` par défaut et [AutoLockObserver] referme le Coffre
+     * IMMÉDIATEMENT à chaque passage en arrière-plan — bascule d'application, écran éteint,
+     * sélecteur de photos, appel entrant. L'utilisateur revenait donc sur un fil du Coffre
+     * entièrement VIDE, dont le bouton « Envoyer » ne faisait plus rien : tous les chemins
+     * d'envoi retournent en silence sur `conversation == null`. Rien ne le lui disait.
+     *
+     * L'écran s'en sert pour ressortir du fil au lieu de laisser un écran mort.
+     *
+     * ⚠️ Rend `false` en session leurre : là, le fil doit rester indiscernable d'une
+     * conversation inexistante — surtout pas déclencher une navigation qui trahirait qu'il y a
+     * quelque chose à cacher.
+     */
+    override fun observeVaultHidden(id: Long): Flow<Boolean> =
+        combine(
+            conversationDao.observeById(id),
+            appLock.state,
+            vaultSession.unlocked,
+        ) { entity, lockState, vaultOpen ->
+            entity != null &&
+                entity.inVault &&
+                lockState !is AppLockManager.LockState.PanicDecoy &&
+                !vaultOpen
+        }.distinctUntilChanged().flowOn(io)
 
     /**
      * Messages stream for a given conversation. **Empty list when the host conversation is in
@@ -183,8 +227,14 @@ class ConversationRepositoryImpl @Inject constructor(
             }
             inVault to messages
         }.flowOn(io)
-        return combine(baseFlow, appLock.state) { (inVault, messages), lockState ->
-            if (lockState is AppLockManager.LockState.PanicDecoy && inVault) {
+        // v1.26.1 (audit H1) — voir [observeOne] : le masquage ne dépend plus seulement du
+        // mode leurre, mais aussi du second facteur du Coffre pour la session en cours.
+        return combine(
+            baseFlow,
+            appLock.state,
+            vaultSession.unlocked,
+        ) { (inVault, messages), lockState, vaultOpen ->
+            if (inVault && (lockState is AppLockManager.LockState.PanicDecoy || !vaultOpen)) {
                 emptyList()
             } else {
                 messages
@@ -234,8 +284,10 @@ class ConversationRepositoryImpl @Inject constructor(
             mapped,
             messageDao.observeStatsForConversation(conversationId).distinctUntilChanged(),
             appLock.state,
-        ) { (inVault, messages), stats, lockState ->
-            if (lockState is AppLockManager.LockState.PanicDecoy && inVault) {
+            vaultSession.unlocked,
+        ) { (inVault, messages), stats, lockState, vaultOpen ->
+            // v1.26.1 (audit H1) — même condition que [observeOne] et [observeMessages].
+            if (inVault && (lockState is AppLockManager.LockState.PanicDecoy || !vaultOpen)) {
                 MessageWindow()
             } else {
                 MessageWindow(
@@ -402,8 +454,15 @@ class ConversationRepositoryImpl @Inject constructor(
             conversationDao.setAppearance(id, bubbleColorArgb, safeAvatarUri)
         }
     override suspend fun markRead(id: Long) = withContext(io) {
-        messageDao.markConversationRead(id)
-        conversationDao.clearUnread(id)
+        // v1.26.1 (audit B3) — les deux écritures Room sont ATOMIQUES. Une mort du processus
+        // entre elles laissait `unread_count > 0` alors que tous les messages étaient marqués
+        // lus : badge fantôme. C'était rattrapé au démarrage suivant par
+        // `recomputeAllUnreadCounts`, d'où la sévérité basse — mais le rattrapage n'est pas une
+        // raison de laisser deux écritures liées se désynchroniser.
+        database.withTransaction {
+            messageDao.markConversationRead(id)
+            conversationDao.clearUnread(id)
+        }
         // v1.8.0 (post-audit fix badges après désinstallation) — propage
         // `READ=1` côté `content://sms` + `content://mms` pour les messages
         // incoming de cette conversation. Récupère le `threadId` système
@@ -429,11 +488,18 @@ class ConversationRepositoryImpl @Inject constructor(
     // pour que le badge ne ré-apparaisse pas après désinstall/reinstall. Avant : la VM
     // orchestrait elle-même en injectant 2 DAOs + le TelephonyReader (layer violation).
     override suspend fun markAllRead() = withContext(io) {
+        // v1.26.1 (audit B3) — les deux écritures ROOM sont atomiques ; l'écriture SYSTÈME reste
+        // en dehors, et c'est délibéré : elle passe par un ContentProvider tiers, donc ni
+        // transactionnable avec Room ni fiable (indisponible en mode panique, ROM custom). La
+        // faire échouer ne doit pas annuler le marquage local, qui est ce que l'utilisateur voit.
         runCatching {
-            messageDao.markAllIncomingAsRead()
-            conversationDao.recomputeAllUnreadCounts()
-            telephonyReader.markAllIncomingReadInSystem()
-        }
+            database.withTransaction {
+                messageDao.markAllIncomingAsRead()
+                conversationDao.recomputeAllUnreadCounts()
+            }
+        }.onFailure { Timber.w(it, "markAllRead: local mark failed") }
+        runCatching { telephonyReader.markAllIncomingReadInSystem() }
+            .onFailure { Timber.w(it, "markAllRead: system propagation failed") }
         Unit
     }
 
@@ -447,6 +513,12 @@ class ConversationRepositoryImpl @Inject constructor(
         }
         conversationDao.delete(id)
     }
+
+    /** v1.26.1 (audit F2) — voir [ConversationRepository.setMessageStarred]. */
+    override suspend fun setMessageStarred(messageId: Long, starred: Boolean) = withContext(io) {
+        messageDao.setStarred(messageId, starred)
+    }
+
     override suspend fun deleteMessage(messageId: Long) = withContext(io) {
         // Same rationale as [delete]: remove the row from the system content provider so the
         // next launch (or a future re-import) doesn't bring it back.
@@ -497,11 +569,21 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun purgeHistoryNow(olderThanDays: Int): Int = withContext(io) {
         if (olderThanDays <= 0) return@withContext 0
         val cutoff = purgeCutoffMs(olderThanDays)
-        val purged = messageDao.purgeOlderThan(cutoff)
-        if (purged > 0) {
-            // v1.3.3 G1 audit fix — refresh preview/last_message_at après purge pour
-            // éviter qu'une conv vidée garde l'ancien preview en clair (leak privacy).
-            messageDao.refreshAllConversationPreviewsAfterPurge()
+        // v1.26.1 (audit H9) — les deux écritures sont ATOMIQUES, comme `deleteMessage` l'est
+        // depuis la v1.24.0. Sans transaction, il suffisait que le processus meure entre le
+        // DELETE et le refresh pour que `conversations.last_message_preview` conserve LE CORPS
+        // EN CLAIR du message purgé — la fuite même que le correctif G1 de la v1.3.3 visait.
+        // Aggravant : rien ne réparait cet état, `repairStaleConversationPreviews` étant gardée
+        // par un drapeau déjà posé sur toute installation post-1.24.0. L'aperçu périmé était
+        // donc PERMANENT. Le correctif de `deleteMessage` n'avait pas été porté ici.
+        val purged = database.withTransaction {
+            val n = messageDao.purgeOlderThan(cutoff)
+            if (n > 0) {
+                // v1.3.3 G1 audit fix — refresh preview/last_message_at après purge pour
+                // éviter qu'une conv vidée garde l'ancien preview en clair (leak privacy).
+                messageDao.refreshAllConversationPreviewsAfterPurge()
+            }
+            n
         }
         purged
     }

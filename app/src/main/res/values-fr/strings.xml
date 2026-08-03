@@ -472,6 +472,7 @@
     <string name="safety_call_setup_template_preview">Aperçu</string>
     <string name="safety_call_setup_save">Enregistrer</string>
     <string name="safety_call_setup_save_validation_no_contacts">Ajoutez au moins un contact avant d\'activer.</string>
+    <string name="safety_call_setup_shared_with_emergency">Ces contacts servent aussi au Mode urgence, qui est encore armé. Vider la liste le laisserait sans personne à alerter. Désactivez d\'abord le Mode urgence, ou gardez au moins un contact.</string>
     <string name="safety_call_setup_save_validation_custom_empty">Le message personnalisé ne peut pas être vide.</string>
     <string name="safety_call_warning_title">SMS Tech — confirmez que vous allez bien</string>
     <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Appuyez pour réinitialiser le minuteur.</string>
@@ -531,6 +532,18 @@
     <string name="attachment_remove_label">Retirer la pièce jointe</string>
 
     <string name="action_react">Réagir</string>
+    <string name="settings_auto_lock_delay">Délai de verrouillage automatique</string>
+    <string name="settings_auto_lock_delay_dialog_title">Verrouiller l\'application après…</string>
+    <string name="auto_lock_immediate">Immédiatement</string>
+    <string name="auto_lock_15s">15 secondes</string>
+    <string name="auto_lock_1m">1 minute</string>
+    <string name="auto_lock_5m">5 minutes</string>
+    <string name="auto_lock_next_launch">Au prochain lancement seulement</string>
+    <string name="settings_signature_none">Non définie</string>
+    <string name="settings_signature_dialog_body">Ajoutée à chaque SMS que vous envoyez, après une ligne de séparation. Gardez-la courte : une signature longue peut découper le message en plusieurs SMS, facturés séparément.</string>
+    <string name="settings_signature_placeholder">ex. Pat</string>
+    <string name="action_star">Mettre en favori</string>
+    <string name="action_unstar">Retirer des favoris</string>
     <string name="reaction_picker_other">Autre emoji</string>
     <string name="reaction_picker_other_title">Emoji personnalisé</string>
     <string name="reaction_picker_other_body">Tapez ou collez un emoji</string>
@@ -596,7 +609,6 @@
 
     <string name="settings_section_backup">Sauvegarde</string>
     <string name="settings_backup_now">Sauvegarder maintenant</string>
-    <string name="settings_auto_backup">Sauvegarde automatique</string>
     <string name="settings_restore">Restaurer depuis un fichier</string>
 
     <string name="settings_section_advanced">Avancé</string>
@@ -854,5 +866,6 @@
     <string name="settings_panic_code_removed">Code panique retiré</string>
     <string name="settings_panic_code_same_as_pin">Ce code est identique à votre PIN principal. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre.</string>
     <string name="settings_panic_code_no_pin">Configurez d\'abord un verrouillage de l\'application.</string>
+    <string name="settings_pin_same_as_panic_code">Ce PIN est identique à votre code panique. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre et vous ne pourriez plus atteindre votre propre session.</string>
     <string name="lock_wrong_code">Code incorrect</string>
 </resources>

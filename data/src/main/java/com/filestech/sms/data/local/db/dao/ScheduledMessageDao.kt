@@ -11,7 +11,14 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ScheduledMessageDao {
 
-    @Query("SELECT * FROM scheduled_messages WHERE state = 0 ORDER BY scheduled_at ASC")
+    /**
+     * v1.26.1 (audit H6) — inclut l'état `SENDING` (4) en plus de `PENDING` (0).
+     *
+     * Une ligne revendiquée puis interrompue en vol (processus tué pendant l'envoi) doit rester
+     * VISIBLE dans « Programmés » : la sortir de cette liste reproduirait exactement le défaut
+     * des lignes `CANCELLED`, qu'aucune liste n'affiche et qui étaient donc inatteignables.
+     */
+    @Query("SELECT * FROM scheduled_messages WHERE state IN (0, 4) ORDER BY scheduled_at ASC")
     fun observePending(): Flow<List<ScheduledMessageEntity>>
 
     /**
@@ -45,6 +52,35 @@ interface ScheduledMessageDao {
     // convertit en Int pour le binding SQL. Cohérence avec MessageDao.updateStatus.
     @Query("UPDATE scheduled_messages SET state = :state WHERE id = :id")
     suspend fun setState(id: Long, state: ScheduledState)
+
+    /**
+     * v1.26.1 (audit H6) — revendication ATOMIQUE `PENDING → SENDING`.
+     *
+     * Rend le nombre de lignes réellement modifiées : `1` = cette exécution a pris l'envoi,
+     * `0` = quelqu'un d'autre l'a déjà pris (ou l'état n'est plus `PENDING`). Sans elle, la
+     * séquence était « lire l'état, envoyer, écrire SENT » : si le processus mourait entre
+     * l'envoi réussi et l'écriture — tueur OEM, OOM, force-stop — WorkManager ré-exécutait le
+     * travail, retrouvait l'état `PENDING` et **renvoyait le message**. Deux SMS reçus, deux
+     * facturés, deux bulles.
+     *
+     * Les états sont sérialisés en Int par [ScheduledState] : 0 = PENDING, 4 = SENDING.
+     */
+    @Query("UPDATE scheduled_messages SET state = 4 WHERE id = :id AND state = 0")
+    suspend fun claimForSending(id: Long): Int
+
+    /**
+     * v1.26.1 (audit B2) — annulation CONDITIONNELLE, symétrique de [claimForSending].
+     *
+     * Rend `1` si l'annulation a réellement pris, `0` si l'envoi avait déjà été revendiqué par
+     * une exécution du worker (état `SENDING`) ou s'il était déjà réglé. C'est ce verdict qui
+     * autorise — ou non — la suppression des pièces jointes : les effacer pendant que le worker
+     * lit encore les fichiers produisait un PDU construit sur un fichier absent ou tronqué, donc
+     * un MMS parti amputé ou une partie de zéro octet écrite dans `content://mms`.
+     *
+     * `0` = PENDING, `3` = CANCELLED.
+     */
+    @Query("UPDATE scheduled_messages SET state = 3 WHERE id = :id AND state = 0")
+    suspend fun cancelIfPending(id: Long): Int
 
     @Query("UPDATE scheduled_messages SET work_id = :workId WHERE id = :id")
     suspend fun setWorkId(id: Long, workId: String?)

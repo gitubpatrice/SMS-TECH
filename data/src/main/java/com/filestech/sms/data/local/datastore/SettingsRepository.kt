@@ -14,9 +14,7 @@ import com.filestech.sms.domain.settings.AdvancedSettings
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
 import com.filestech.sms.domain.settings.Appearance
-import com.filestech.sms.domain.settings.AutoBackupFrequency
 import com.filestech.sms.domain.settings.AutoLockDelay
-import com.filestech.sms.domain.settings.BackupFormat
 import com.filestech.sms.domain.settings.BackupSettings
 import com.filestech.sms.domain.settings.BlockingSettings
 import com.filestech.sms.domain.settings.ConversationSettings
@@ -40,20 +38,51 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.flow.stateIn
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private val Context.dataStore by preferencesDataStore(name = "sms_tech_settings")
+
+/**
+ * v1.26.1 (audit H14) — nombre de reprises sur une lecture DataStore en échec avant d'abandonner
+ * l'émission. Trois : assez pour absorber une erreur d'E/S transitoire, assez peu pour ne pas
+ * boucler indéfiniment sur un fichier réellement corrompu.
+ */
+private const val SETTINGS_READ_RETRIES = 3L
 
 @Singleton
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     @ApplicationScope private val appScope: CoroutineScope,
 ) : AppSettingsSource {
-    override val flow: Flow<AppSettings> = context.dataStore.data.map { prefs -> prefs.toAppSettings() }
+    /**
+     * v1.26.1 (audit H14) — le flux SURVIT à une lecture qui échoue.
+     *
+     * `preferencesDataStore` n'a pas de `corruptionHandler` : une corruption fait lever
+     * `dataStore.data` à CHAQUE lecture. Sans ce `retry`/`catch`, la coroutine de partage de
+     * [state] mourait, le `StateFlow` restait figé sur `AppSettings()` — tous les réglages à leur
+     * valeur par défaut — DÉFINITIVEMENT et en silence. Conséquences observées à la lecture :
+     * `SafetyCallWorker` voyait `enabled = false` et le deadman ne se déclenchait plus jamais,
+     * alors que l'utilisateur le croyait armé ; et les aperçus de notification réapparaissaient
+     * chez quelqu'un qui les avait désactivés.
+     *
+     * On réessaie trois fois (une corruption transitoire d'E/S se résorbe), puis on cesse
+     * d'émettre plutôt que de servir des défauts : le repli est ainsi « pas de nouvelle valeur »
+     * et non « valeurs par défaut », ce qui laisse le dernier instantané VALIDE en place.
+     */
+    override val flow: Flow<AppSettings> = context.dataStore.data
+        .retry(SETTINGS_READ_RETRIES) { t ->
+            Timber.w(t, "SettingsRepository: DataStore read failed — retrying")
+            true
+        }
+        .catch { t -> Timber.e(t, "SettingsRepository: DataStore unreadable — keeping last snapshot") }
+        .map { prefs -> prefs.toAppSettings() }
 
     /**
      * v1.6.1 (audit PERF-01 / PERF-11) — snapshot chaud partagé via [StateFlow]. Tous
@@ -199,11 +228,7 @@ class SettingsRepository @Inject constructor(
                 blockUnknown = p[K.blockUnknown] ?: false,
             ),
             backup = BackupSettings(
-                autoBackup = enumOr(p, K.autoBackup, AutoBackupFrequency.OFF, AutoBackupFrequency::valueOf),
-                destinationUri = p[K.backupUri],
                 encrypt = p[K.backupEncrypt] ?: true,
-                keepLast = p[K.backupKeep] ?: 5,
-                format = enumOr(p, K.backupFormat, BackupFormat.SMSBK, BackupFormat::valueOf),
             ),
             advanced = AdvancedSettings(
                 isDefaultSmsApp = p[K.isDefault] ?: false,
@@ -308,11 +333,16 @@ class SettingsRepository @Inject constructor(
         // Le `remove` est idempotent ; appelé à chaque write c'est négligeable.
         remove(K.blockShort)
 
-        this[K.autoBackup] = s.backup.autoBackup.name
-        s.backup.destinationUri?.let { this[K.backupUri] = it } ?: remove(K.backupUri)
+        // v1.26.1 (audit F5) — `autoBackup`, `backupUri`, `backupKeep` et `backupFormat` ont été
+        // retirés avec la sauvegarde automatique. On les EFFACE explicitement du magasin : les
+        // valeurs persistées chez les utilisateurs existants deviendraient sinon des orphelines
+        // silencieuses, et `backup.uri` en particulier conserverait une permission d'URI vers un
+        // dossier de l'utilisateur sans que plus rien ne la justifie.
+        remove(K.autoBackup)
+        remove(K.backupUri)
+        remove(K.backupKeep)
+        remove(K.backupFormat)
         this[K.backupEncrypt] = s.backup.encrypt
-        this[K.backupKeep] = s.backup.keepLast
-        this[K.backupFormat] = s.backup.format.name
 
         this[K.isDefault] = s.advanced.isDefaultSmsApp
         this[K.mmsRoaming] = s.advanced.mmsRoamingAutoDownload
@@ -415,11 +445,17 @@ class SettingsRepository @Inject constructor(
         val lastAutoPurgeAt = longPreferencesKey("security.lastAutoPurgeAt")
         val blockUnknown = booleanPreferencesKey("block.unknown")
         val blockShort = booleanPreferencesKey("block.short")
+
+        // v1.26.1 (audit F5) — ces quatre clés ne sont plus JAMAIS lues : la sauvegarde
+        // automatique a été retirée. Elles sont conservées uniquement pour pouvoir EFFACER les
+        // valeurs déjà persistées chez les utilisateurs existants (cf. `write`). Sans elles, les
+        // anciennes valeurs resteraient indéfiniment dans le magasin — et `backup.uri`
+        // continuerait de désigner un dossier de l'utilisateur sans aucune raison.
         val autoBackup = stringPreferencesKey("backup.auto")
         val backupUri = stringPreferencesKey("backup.uri")
-        val backupEncrypt = booleanPreferencesKey("backup.encrypt")
         val backupKeep = intPreferencesKey("backup.keep")
         val backupFormat = stringPreferencesKey("backup.format")
+        val backupEncrypt = booleanPreferencesKey("backup.encrypt")
         val isDefault = booleanPreferencesKey("advanced.isDefault")
         val mmsRoaming = booleanPreferencesKey("advanced.mmsRoaming")
         // Bumped from a boolean ("didInitialSmsImport") to a long cursor: the latter encodes the

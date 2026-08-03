@@ -33,7 +33,19 @@ class ToggleConversationStateUseCase @Inject constructor(
      * overflow ThreadScreen), utiliser [requestMoveToVault] qui check AppLockState
      * et auto-arme sessionUnlocked.
      */
-    suspend fun moveToVault(id: Long, inVault: Boolean): Outcome<Unit> =
+    /**
+     * v1.26.1 (audit F11) — RETIRÉE de l'API publique du use case.
+     *
+     * Recensement fait : zéro appelant. Les trois ViewModels passent tous par
+     * [requestMoveToVault], qui refuse en session leurre. Cette variante-ci, elle, ne vérifie
+     * rien : la laisser exposée à côté de sa jumelle gardée était un piège — le premier futur
+     * appelant aurait contourné en silence la politique anti-leurre, c'est-à-dire rouvert le
+     * trou que le CHANGELOG décrit comme « P0-1 Vault bypass closed ».
+     *
+     * Conservée en `private` plutôt que supprimée : c'est elle qui porte l'aiguillage
+     * entrée/sortie, réutilisé par [requestMoveToVault].
+     */
+    private suspend fun moveToVault(id: Long, inVault: Boolean): Outcome<Unit> =
         if (inVault) vault.moveToVault(id) else vault.moveOutOfVault(id)
 
     /**

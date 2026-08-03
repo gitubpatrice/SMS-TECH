@@ -158,8 +158,66 @@ interface MessageDao {
     // v1.16.0 — Paramètre `status` typé MessageStatus (était Int). Le TypeConverter
     // [com.filestech.sms.data.local.db.MessageEnumConverters] convertit en Int pour
     // le binding SQL. Type safety au call-site, schéma DB inchangé.
+    /**
+     * v1.26.1 (audit M6) — détecte un doublon lors d'une RESTAURATION, pour les lignes qui n'ont
+     * pas de `telephony_uri`.
+     *
+     * La déduplication de la restauration repose sur l'index `UNIQUE(telephony_uri)` combiné à
+     * `OnConflictStrategy.IGNORE`. Or la colonne est NULLABLE, et SQLite considère deux NULL
+     * comme distincts : l'index ne dédoublonne donc RIEN pour les lignes sans URI — tous les MMS
+     * sortants, et les SMS dont l'écriture dans la base système avait échoué. Restaurer deux fois
+     * la même sauvegarde les dupliquait sans limite, alors que la chaîne affichée à l'utilisateur
+     * affirme « les messages existants sont conservés (pas de doublons) ».
+     *
+     * Clé de repli : même conversation, même horodatage, même sens, même corps.
+     */
+    @Query(
+        """
+        SELECT id FROM messages
+        WHERE conversation_id = :conversationId AND date = :date
+          AND direction = :direction AND body = :body
+        LIMIT 1
+        """,
+    )
+    suspend fun findRestoreDuplicate(
+        conversationId: Long,
+        date: Long,
+        direction: com.filestech.sms.domain.model.MessageDirection,
+        body: String,
+    ): Long?
+
     @Query("UPDATE messages SET status = :status, error_code = :errorCode WHERE id = :id")
     suspend fun updateStatus(id: Long, status: com.filestech.sms.domain.model.MessageStatus, errorCode: Int? = null)
+
+    /**
+     * v1.26.1 (audit M8) — promotion de statut qui NE PEUT PAS écraser un échec.
+     *
+     * Un SMS long part en plusieurs parties, et `SmsSenderImpl` construit un `PendingIntent` par
+     * partie. Chaque accusé écrivait le statut sans agrégation : sur un message de trois
+     * segments, un échec de la partie 0 posait `FAILED`, puis les accusés positifs des parties 1
+     * et 2 le repassaient à `SENT`. Le destinataire recevait un message TRONQUÉ, l'expéditeur le
+     * croyait envoyé — et comme la bulle n'était pas en échec, la relance n'était même pas
+     * proposée.
+     *
+     * Les accusés n'arrivent pas dans l'ordre : plutôt que de parier sur l'index de la dernière
+     * partie, la promotion est MONOTONE — un statut ne peut que progresser. L'échelle du chemin
+     * sortant est `PENDING(0) < SENT(1) < DELIVERED(2) < FAILED(3)`, si bien que la règle donne
+     * gratuitement les trois garanties voulues :
+     *  - un échec de partie ne peut plus être écrasé par l'accusé positif d'une autre partie ;
+     *  - un accusé de réception ne peut plus être rétrogradé en « envoyé » par un accusé
+     *    d'envoi arrivé après lui ;
+     *  - un échec tardif marque toujours le message, même déjà passé « envoyé ».
+     *
+     * [statusRaw] double [status] parce que SQLite compare la colonne à un entier ; les deux
+     * doivent décrire le MÊME statut.
+     */
+    @Query("UPDATE messages SET status = :status, error_code = :errorCode WHERE id = :id AND status < :statusRaw")
+    suspend fun promoteStatusMonotonic(
+        id: Long,
+        status: com.filestech.sms.domain.model.MessageStatus,
+        statusRaw: Int,
+        errorCode: Int? = null,
+    )
 
     /**
      * v1.15.2 — Remapping post-restore du `reply_to_message_id`. Utilisé par
@@ -429,18 +487,32 @@ interface MessageDao {
      * O(N) sur le nombre de conversations (typiquement <500), exécuté UNIQUEMENT après une
      * purge effective. Pas d'impact perf en steady state.
      */
+    /**
+     * v1.26.1 (audit B4) — le prédicat d'exclusion des SENTINELLES DE RÉACTION a été ajouté, et
+     * le départage `id DESC` avec.
+     *
+     * Ses deux requêtes sœurs — `refreshConversationPreview` et `repairStaleConversationPreviews`
+     * — portent toutes deux `NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS
+     * NULL)` ; celle-ci ne l'avait pas. Après une purge, une conversation dont la ligne restante
+     * la plus récente était une sentinelle Tapback — invisible dans le fil — recevait donc un
+     * aperçu VIDE et un `last_message_at` calé sur cette ligne fantôme, ce qui faussait aussi
+     * l'ordre de tri de la liste.
+     */
     @Query(
         """
         UPDATE conversations
         SET
           last_message_at = COALESCE(
-              (SELECT MAX(date) FROM messages WHERE conversation_id = conversations.id),
+              (SELECT MAX(date) FROM messages
+               WHERE conversation_id = conversations.id
+                 AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)),
               0
           ),
           last_message_preview = (
               SELECT body FROM messages
               WHERE conversation_id = conversations.id
-              ORDER BY date DESC LIMIT 1
+                AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+              ORDER BY date DESC, id DESC LIMIT 1
           )
         """,
     )

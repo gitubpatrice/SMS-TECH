@@ -18,11 +18,28 @@ class ScheduledMessageWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
     private val sendAttempt: ScheduledSendAttempt,
+    /** v1.26.1 (audit M3) — pour différer un envoi pendant une session leurre, cf. [doWork]. */
+    private val appLock: com.filestech.sms.security.AppLockManager,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
         val id = inputData.getLong(ScheduledMessageSchedulerImpl.KEY_SCHEDULED_ID, -1L)
         if (id < 0) return Result.failure()
+        // v1.26.1 (audit M3) — en session leurre, on DIFFÈRE l'envoi.
+        //
+        // Les use-cases d'urgence portent tous une garde `PanicDecoy` ; les envois programmés
+        // n'en avaient aucune. Un message partait donc et APPARAISSAIT dans la liste sous les
+        // yeux de l'agresseur, sans que personne ne l'ait composé — rupture de l'illusion, et
+        // fuite de son contenu (« je pars », « j'appelle la police »).
+        //
+        // On diffère au lieu d'annuler : le mode leurre est TRANSITOIRE (l'observateur de
+        // verrouillage le réinitialise dès que l'application passe en arrière-plan), alors
+        // qu'annuler perdrait définitivement un message que l'utilisateur avait programmé.
+        appLock.ensureResolved()
+        if (appLock.state.value is com.filestech.sms.security.AppLockManager.LockState.PanicDecoy) {
+            Timber.i("ScheduledMessageWorker: deferring id=%d — panic-decoy session", id)
+            return Result.retry()
+        }
         return when (sendAttempt(id, runAttemptCount)) {
             ScheduledSendAttempt.Verdict.SENT,
             ScheduledSendAttempt.Verdict.ALREADY_SETTLED,

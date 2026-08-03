@@ -39,6 +39,15 @@ import javax.inject.Inject
 class EmergencyViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val triggerEmergency: TriggerEmergencyUseCase,
+    /**
+     * v1.26.1 (audit H10) — le déclenchement d'urgence tourne sur la portée de l'APPLICATION,
+     * pas sur celle du ViewModel. Voir [trigger] : `viewModelScope` était annulé dès que
+     * l'utilisateur quittait l'écran, ce qui pouvait faire échouer l'envoi de vrais SMS
+     * d'urgence, en silence. `EmergencyShortcutReceiver` utilisait déjà cette portée pour le
+     * même travail — c'était une asymétrie entre deux chemins censés faire la même chose.
+     */
+    @com.filestech.sms.di.ApplicationScope
+    private val appScope: kotlinx.coroutines.CoroutineScope,
 ) : ViewModel() {
 
     /** Config persistée — lue en continu pour refléter les changements live. */
@@ -160,7 +169,15 @@ class EmergencyViewModel @Inject constructor(
      */
     fun trigger() {
         if (!_isTriggerInFlight.compareAndSet(false, true)) return
-        viewModelScope.launch {
+        // v1.26.1 (audit H10) — `appScope` et non `viewModelScope`.
+        //
+        // `TriggerEmergencyUseCase` résout la position AVANT la boucle d'envoi, ce qui peut
+        // prendre jusqu'à 8 secondes. Pendant ce temps, un appui sur Retour, une bascule
+        // d'application ou l'écran qui s'éteint annulait `viewModelScope` : AUCUN SMS ne partait,
+        // et rien ne le disait. Une annulation en cours de boucle ne prévenait qu'une partie des
+        // contacts, sans trace. C'est inacceptable pour un envoi d'urgence : une fois le geste
+        // fait — appui maintenu 3 secondes — l'envoi doit aller au bout.
+        appScope.launch {
             try {
                 val result = triggerEmergency()
                 _events.trySend(Event.Triggered(result))

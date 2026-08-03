@@ -113,9 +113,15 @@ class LockViewModel @Inject constructor(
      * v1.26.0 — appelé quand le compte à rebours du blocage atteint zéro. Voir
      * [AppLockManager.refreshLockoutIfExpired] : c'est lui qui décide, pas le minuteur.
      */
-    fun onLockoutCountdownFinished() {
-        viewModelScope.launch { appLock.refreshLockoutIfExpired() }
-    }
+    /**
+     * v1.26.1 (audit M1) — SUSPEND et rend le verdict, au lieu de lancer une coroutine détachée.
+     *
+     * L'écran a besoin de savoir si le blocage est réellement levé : `refreshLockoutIfExpired`
+     * peut légitimement refuser (l'instantané persistant croise horloge murale et monotone). Un
+     * appel « tire et oublie » ne permettait pas de re-sonder, et l'écran restait figé sur un
+     * compte à rebours à zéro avec un bouton mort.
+     */
+    suspend fun onLockoutCountdownFinished(): Boolean = appLock.refreshLockoutIfExpired()
 
     fun beginBiometricChallenge(): ByteArray = appLock.beginBiometricChallenge()
     fun markBiometricUnlocked(token: ByteArray) = appLock.markBiometricUnlocked(token)
@@ -376,18 +382,26 @@ fun LockScreen(
                 val until = (state as AppLockManager.LockState.LockedOut).until
                 var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
                 LaunchedEffect(until) {
+                    // v1.26.1 (audit M1) — le minuteur est un DÉCLENCHEUR DE SONDAGE, pas le
+                    // décideur. La boucle ne sort donc que lorsque le manager confirme que le
+                    // blocage est réellement levé.
+                    //
+                    // Elle sortait sur `nowMs >= until` puis appelait une seule fois
+                    // `onLockoutCountdownFinished()`. Or ce dernier peut légitimement rendre
+                    // `false` — c'est l'instantané persistant qui tranche, en croisant horloge
+                    // murale et horloge monotone. Dans ce cas l'état restait `LockedOut`, la
+                    // boucle était finie, et RIEN ne la relançait : `until` ne changeait pas,
+                    // donc la clé de l'effet non plus. Compte à rebours à zéro, bouton mort
+                    // jusqu'à ce que l'utilisateur tue le processus — le symptôme même corrigé
+                    // en v1.26.0, déplacé d'un cran.
                     while (true) {
                         nowMs = System.currentTimeMillis()
-                        if (nowMs >= until) break
+                        if (nowMs >= until) {
+                            if (viewModel.onLockoutCountdownFinished()) return@LaunchedEffect
+                            // Refusé : on re-sonde à la seconde plutôt que d'abandonner.
+                        }
                         delay(1000L)
                     }
-                    // v1.26.0 — le compte a rebours atteint zero : il faut encore faire retomber
-                    // l'ETAT. Sans cet appel, `_state` restait `LockedOut` jusqu'au prochain
-                    // `attemptUnlock`, lui-meme impossible puisque le bouton reste desactive tant
-                    // que `LockedOut` dure : le champ acceptait la saisie mais rien ne pouvait la
-                    // valider. Le manager re-verifie l'instantane persistant avant de ceder, donc
-                    // avancer l'horloge du telephone ne raccourcit pas la temporisation.
-                    viewModel.onLockoutCountdownFinished()
                 }
                 val remaining by remember(until) {
                     derivedStateOf { ((until - nowMs) / 1000L).coerceAtLeast(0L).toInt() }

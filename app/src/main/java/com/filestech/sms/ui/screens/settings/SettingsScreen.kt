@@ -13,24 +13,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,13 +40,13 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,23 +62,26 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
+import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.ui.components.showError
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -110,6 +111,8 @@ fun SettingsScreen(
     val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
     var showNuke by remember { mutableStateOf(false) }
     var lockModePickerOpen by remember { mutableStateOf(false) }
+    // v1.26.1 (audit F4) — sélecteur du délai de verrouillage automatique.
+    var autoLockDelayPickerOpen by remember { mutableStateOf(false) }
 
     /** v1.25.3 (audit M23) — confirmation avant de supprimer le verrou de l'app. */
     var lockClearConfirmOpen by remember { mutableStateOf(false) }
@@ -156,6 +159,10 @@ fun SettingsScreen(
     val panicRemovedMsg = stringResource(R.string.settings_panic_code_removed)
     val panicSameAsPinMsg = stringResource(R.string.settings_panic_code_same_as_pin)
     val panicNoPinMsg = stringResource(R.string.settings_panic_code_no_pin)
+    // v1.26.1 (audit C3) — hissé dans la composition comme ses voisins : un
+    // `ctx.getString` dans le collecteur d'événements déclencherait
+    // `LocalContextGetResourceValueCall`.
+    val pinSameAsPanicMsg = stringResource(R.string.settings_pin_same_as_panic_code)
     // v1.9.0 — scope partagé pour les actions instantanées qui doivent émettre
     // un snack depuis un onClick callback (ex. bouton "Je vais bien" Safety call).
     val rootScope = rememberCoroutineScope()
@@ -200,6 +207,11 @@ fun SettingsScreen(
                             panicSavedMsg
                     }
                     snackbarHost.showError(msg)
+                }
+                // v1.26.1 (audit C3) — refus symetrique du precedent : le PIN propose est le
+                // code panique. Voir [com.filestech.sms.security.AppLockManager.setPin].
+                SettingsViewModel.Event.PinRejectedSameAsPanicCode -> {
+                    snackbarHost.showError(pinSameAsPanicMsg)
                 }
             }
         }
@@ -274,6 +286,14 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_show_avatars),
                     value = state.conversations.showAvatars,
                     onChange = { v -> viewModel.update { it.copy(conversations = it.conversations.copy(showAvatars = v)) } },
+                )
+                // v1.26.1 (audit F3) — la signature était consommée à chaque SMS sortant sans
+                // qu'aucun écran ne permette de la définir. Voir [SignatureRow].
+                SignatureRow(
+                    current = state.conversations.signature,
+                    onChange = { v ->
+                        viewModel.update { it.copy(conversations = it.conversations.copy(signature = v)) }
+                    },
                 )
             }
 
@@ -401,6 +421,7 @@ fun SettingsScreen(
                 isPanicDecoy = isPanicDecoy,
                 onUpdate = viewModel::update,
                 onOpenLockModePicker = { lockModePickerOpen = true },
+                onOpenAutoLockDelayPicker = { autoLockDelayPickerOpen = true },
                 panicCodeSet = panicCodeSet,
                 onOpenPanicCodeSetup = { panicCodeSetupOpen = true },
                 onOpenPanicCodeClearConfirm = { panicCodeClearConfirmOpen = true },
@@ -503,13 +524,20 @@ fun SettingsScreen(
                 )
             }
 
-            SectionCard(
-                title = stringResource(R.string.settings_section_backup),
-                icon = Icons.Outlined.Backup,
-            ) {
-                NavigationRow(stringResource(R.string.settings_backup_now), onClick = onOpenBackup)
-                NavigationRow(stringResource(R.string.settings_restore), onClick = onOpenBackup)
-                NavigationRow(stringResource(R.string.migration_title), onClick = onOpenMigration)
+            // v1.26.1 (audit C2) — masquée en leurre, comme les sections Safety call et Mode
+            // urgence. La sauvegarde exporte les conversations du coffre : c'était la seule
+            // voie de lecture du coffre qui n'était pas gardée. Le vrai verrou est côté accès
+            // (`BackupService.writeSmsbk` refuse en `PanicDecoy`) ; ceci évite en plus de
+            // proposer une action vouée au refus.
+            if (!isPanicDecoy) {
+                SectionCard(
+                    title = stringResource(R.string.settings_section_backup),
+                    icon = Icons.Outlined.Backup,
+                ) {
+                    NavigationRow(stringResource(R.string.settings_backup_now), onClick = onOpenBackup)
+                    NavigationRow(stringResource(R.string.settings_restore), onClick = onOpenBackup)
+                    NavigationRow(stringResource(R.string.migration_title), onClick = onOpenMigration)
+                }
             }
 
             SectionCard(
@@ -630,6 +658,17 @@ fun SettingsScreen(
         )
     }
 
+    // v1.26.1 (audit F4) — sélecteur du délai de verrouillage automatique.
+    if (autoLockDelayPickerOpen) {
+        AutoLockDelayPickerDialog(
+            current = state.security.autoLockDelay,
+            onPick = { delay ->
+                autoLockDelayPickerOpen = false
+                viewModel.update { it.copy(security = it.security.copy(autoLockDelay = delay)) }
+            },
+            onDismiss = { autoLockDelayPickerOpen = false },
+        )
+    }
     if (lockModePickerOpen) {
         val biometricCtx = androidx.compose.ui.platform.LocalContext.current
         // v1.26.0 — libelle resolu ICI, dans la composition, et non via `Context.getString`
@@ -1269,6 +1308,58 @@ private fun NotificationStylePickerDialog(
 }
 
 /**
+ * v1.26.1 (audit F4) — sélecteur du délai de verrouillage automatique.
+ *
+ * `SecuritySettings.autoLockDelay` était LU par la production ([AutoLockObserver] s'en sert pour
+ * décider quand appeler `forceLock()` et purger les caches en clair) mais AUCUN écran ne
+ * permettait de le changer : le délai était donc figé sur son défaut d'une minute pour tout le
+ * monde, et les cinq valeurs de l'enum étaient inatteignables. C'est un réglage de sécurité que
+ * l'utilisateur ne pouvait ni durcir, ni assouplir — alors que `lockMode`, sa ligne voisine,
+ * avait bien son sélecteur.
+ */
+@Composable
+private fun AutoLockDelayPickerDialog(
+    current: AutoLockDelay,
+    onPick: (AutoLockDelay) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_auto_lock_delay_dialog_title)) },
+        text = {
+            Column {
+                autoLockDelayOptions().forEach { (delay, label) ->
+                    LockModeOption(
+                        label = label,
+                        selected = current == delay,
+                        onClick = { onPick(delay) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+/**
+ * Libellés des cinq délais, résolus dans la composition (un `getString` dans le corps du dialogue
+ * déclencherait `LocalContextGetResourceValueCall`). L'ordre est celui du plus strict au plus
+ * permissif, pour que la lecture de haut en bas soit celle d'un curseur de sécurité.
+ */
+@Composable
+private fun autoLockDelayOptions(): List<Pair<AutoLockDelay, String>> = listOf(
+    AutoLockDelay.IMMEDIATE to stringResource(R.string.auto_lock_immediate),
+    AutoLockDelay.FIFTEEN_SECONDS to stringResource(R.string.auto_lock_15s),
+    AutoLockDelay.ONE_MINUTE to stringResource(R.string.auto_lock_1m),
+    AutoLockDelay.FIVE_MINUTES to stringResource(R.string.auto_lock_5m),
+    AutoLockDelay.NEXT_LAUNCH to stringResource(R.string.auto_lock_next_launch),
+)
+
+/**
  * Lock-mode picker — v1.1.x exposes only **None** and **PIN**. Pattern / Biometric ride on the
  * same `LockMode` enum but their UX (system biometric prompt, pattern grid) is reserved for a
  * later iteration.
@@ -1823,6 +1914,74 @@ private fun detectMsisdn(context: android.content.Context): MsisdnDetection {
 
 /** v1.2.7 audit Q7 : regex de validation MSISDN — autorise +, digits, espaces, tirets, parens. */
 private val MSISDN_PATTERN = Regex("^\\+?[0-9 ()\\-]{4,20}$")
+
+/**
+ * v1.26.1 (audit F3) — réglage de la signature automatique.
+ *
+ * C'était le motif du code panique à l'identique : le mécanisme était **complet et branché en
+ * production** — [com.filestech.sms.domain.usecase.SendSmsUseCase] ajoute `"\n--\n$signature"` à
+ * CHAQUE SMS sortant, et le champ est câblé aux trois points DataStore — mais aucun écran ne
+ * permettait de le renseigner. Le champ restait donc `null` à jamais et la fonctionnalité était
+ * inerte, tandis que la chaîne `settings_signature` traînait, orpheline, dans les ressources.
+ *
+ * Champ multi-ligne volontairement borné : une signature longue bascule le SMS en multi-part,
+ * donc en facturation multiple. Le compteur le rappelle.
+ */
+@Composable
+private fun SignatureRow(current: String?, onChange: (String?) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var dialogOpen by remember { mutableStateOf(false) }
+    NavigationRow(
+        title = stringResource(R.string.settings_signature),
+        description = current?.takeIf { it.isNotBlank() }
+            ?: stringResource(R.string.settings_signature_none),
+        onClick = { dialogOpen = true },
+    )
+    if (dialogOpen) {
+        var value by remember { mutableStateOf(current.orEmpty()) }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            title = { Text(stringResource(R.string.settings_signature)) },
+            text = {
+                Column {
+                    Text(
+                        stringResource(R.string.settings_signature_dialog_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.size(12.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = value,
+                        onValueChange = { if (it.length <= SIGNATURE_MAX_CHARS) value = it },
+                        placeholder = { Text(stringResource(R.string.settings_signature_placeholder)) },
+                        supportingText = {
+                            Text("${value.length} / $SIGNATURE_MAX_CHARS")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        dialogOpen = false
+                        // Une signature vide vaut « pas de signature » : on repose `null` pour
+                        // que `SendSmsUseCase` retombe sur sa branche sans suffixe.
+                        onChange(value.trim().takeIf { it.isNotBlank() })
+                    },
+                ) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { dialogOpen = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+}
+
+/** v1.26.1 — plafond de la signature : au-delà, le SMS bascule en multi-part (facturation ×N). */
+private const val SIGNATURE_MAX_CHARS = 80
 
 @Composable
 private fun MyNumberRow(current: String?, onChange: (String?) -> Unit) {
@@ -2757,6 +2916,8 @@ private fun SecuritySection(
     isPanicDecoy: Boolean,
     onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -> com.filestech.sms.domain.settings.AppSettings) -> Unit,
     onOpenLockModePicker: () -> Unit,
+    /** v1.26.1 (audit F4) — ouvre le sélecteur du délai de verrouillage automatique. */
+    onOpenAutoLockDelayPicker: () -> Unit,
     // v1.26.0 — code panique. Voir [AppLockManager.setPanicCode] : la mecanique du mode leurre
     // etait complete, mais aucun ecran ne permettait de definir le code, donc il etait
     // inatteignable.
@@ -2794,11 +2955,31 @@ private fun SecuritySection(
             com.filestech.sms.domain.settings.LockMode.PATTERN ->
                 stringResource(R.string.lock_mode_off)
         }
-        NavigationRow(
-            title = stringResource(R.string.settings_app_lock),
-            description = currentLockLabel,
-            onClick = onOpenLockModePicker,
-        )
+        // v1.26.1 (audit C1) — ⚠️ **JAMAIS en mode leurre**, et c'est la garde la plus
+        // importante de cet écran. Sans elle, l'agresseur ouvrait ce sélecteur, choisissait
+        // « Aucun » et une simple confirmation suffisait à appeler `clearPin()` — lequel pose
+        // `LockState.Disabled`. Or TOUTES les gardes du leurre testent `is PanicDecoy` : passer
+        // en `Disabled` les désarmait d'un seul coup (coffre de nouveau listé et navigable,
+        // sections Urgence et Safety call de retour), et `clearPin()` effaçait au passage le
+        // code panique lui-même. Le mode leurre se neutralisait donc depuis l'écran qu'il est
+        // censé protéger. Même garde que les deux lignes ci-dessous, pour la même raison.
+        // Défense en profondeur : `AppLockManager.clearPin()` refuse aussi en `PanicDecoy`.
+        if (!isPanicDecoy) {
+            NavigationRow(
+                title = stringResource(R.string.settings_app_lock),
+                description = currentLockLabel,
+                onClick = onOpenLockModePicker,
+            )
+            // v1.26.1 (audit F4) — le délai était lu par [AutoLockObserver] mais figé sur son
+            // défaut faute de sélecteur. Masqué en leurre comme la ligne au-dessus : c'est un
+            // réglage de verrouillage, il en révélerait l'existence.
+            NavigationRow(
+                title = stringResource(R.string.settings_auto_lock_delay),
+                description = autoLockDelayOptions()
+                    .firstOrNull { it.first == security.autoLockDelay }?.second.orEmpty(),
+                onClick = onOpenAutoLockDelayPicker,
+            )
+        }
         // v1.26.0 — deux conditions, pour deux raisons sans rapport entre elles.
         //
         // 1. Un PIN principal doit exister : sans lui, le code panique serait le seul secret
@@ -2829,12 +3010,19 @@ private fun SecuritySection(
             value = security.flagSecure,
             onChange = { v -> onUpdate { it.copy(security = it.security.copy(flagSecure = v)) } },
         )
-        ToggleRow(
-            title = stringResource(R.string.settings_lock_vault_on_leave),
-            description = stringResource(R.string.settings_lock_vault_on_leave_desc),
-            value = security.lockVaultOnLeave,
-            onChange = { v -> onUpdate { it.copy(security = it.security.copy(lockVaultOnLeave = v)) } },
-        )
+        // v1.26.1 (audit H3) — masqué en leurre comme ses deux voisines. Cette ligne était la
+        // seule des trois à ne pas porter la garde, alors qu'elle nomme le coffre dans son
+        // titre ET dans sa description (« Verrouille automatiquement le coffre-fort chiffré… ») :
+        // elle révélait donc l'existence du coffre à l'agresseur, exactement ce que le toggle
+        // du PIN coffre juste en dessous évite depuis la v1.13.0.
+        if (!isPanicDecoy) {
+            ToggleRow(
+                title = stringResource(R.string.settings_lock_vault_on_leave),
+                description = stringResource(R.string.settings_lock_vault_on_leave_desc),
+                value = security.lockVaultOnLeave,
+                onChange = { v -> onUpdate { it.copy(security = it.security.copy(lockVaultOnLeave = v)) } },
+            )
+        }
         // v1.11.0 — Sujet 3 anti-smishing.
         ToggleRow(
             title = stringResource(R.string.settings_smishing_detection),

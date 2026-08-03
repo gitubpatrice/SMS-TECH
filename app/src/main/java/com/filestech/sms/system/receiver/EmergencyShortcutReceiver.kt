@@ -6,73 +6,47 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
 import com.filestech.sms.R
-import com.filestech.sms.di.ApplicationScope
-import com.filestech.sms.domain.usecase.TriggerEmergencyUseCase
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import timber.log.Timber
-import javax.inject.Inject
 
 /**
- * v1.12.0 — Receiver du raccourci d'urgence (notification persistante
- * lock-screen). Deux actions exposées :
+ * v1.12.0 — Receiver du raccourci d'urgence (notification persistante lock-screen).
  *
- *  - **[ACTION_TRIGGER_EMERGENCY]** : déclenche immédiatement
- *    [TriggerEmergencyUseCase] (qui garde déjà la défense PanicDecoy).
- *    Pas besoin de déverrouiller le téléphone. L'envoi SMS aux contacts
- *    + résolution GPS se fait en background via `ApplicationScope`. Un
- *    toast Android natif (ou la notif elle-même) suffit comme feedback —
- *    on n'a pas besoin de remonter une UI Compose.
+ * Actions restantes :
  *
  *  - **[ACTION_DIAL_112]** : ouvre le dialer pré-rempli sur 112 (numéro
  *    d'urgence européen). Utilise `Intent.ACTION_DIAL` (pas CALL_PHONE qui
  *    demanderait permission runtime + déclencherait l'appel sans confirmation).
  *    Le numéro 112 est reconnu par l'OS comme numéro d'urgence et le dialer
  *    s'ouvre même écran verrouillé sur la plupart des devices.
+ *  - **[ACTION_DIAL_POLICE]** : idem pour le 17, en opt-in.
+ *
+ * **v1.26.1 (audit B5) — `ACTION_TRIGGER_EMERGENCY` a été RETIRÉE.**
+ *
+ * Elle envoyait de VRAIS SMS d'urgence + la géolocalisation sur un SEUL broadcast, sans
+ * anti-rebond, sans temporisation et sans retour utilisateur. Son unique constructeur d'Intent
+ * n'avait plus aucun appelant depuis le retrait de la quick action en v1.14.2 : c'était un
+ * chemin armé sans consommateur, dont l'innocuité ne tenait qu'à `exported=false`. Une
+ * régression du manifeste — ou un copier-coller d'`intent-filter` — l'aurait rendue
+ * déclenchable par n'importe quelle application. Le déclenchement légitime passe par l'écran
+ * in-app, avec appui maintenu 3 secondes.
  *
  * **Sécurité** :
  *  - `exported = false` dans le Manifest — uniquement le PendingIntent de
  *    SMS Tech peut déclencher ces actions, pas une autre app.
- *  - L'action 112 ne peut PAS être détournée pour appeler un autre numéro
- *    car le numéro est hardcodé ici (pas passé en extra modifiable).
- *  - L'action URGENCE bénéficie de la garde PanicDecoy du UseCase.
- *
- * **Threading** : `goAsync()` + `ApplicationScope.launch` pour le trigger
- * suspend. Latence acceptable (~10-50ms) sur le main thread pour le tap,
- * puis l'envoi SMS continue en background même si la notif est dismiss.
+ *  - Les numéros ne peuvent PAS être détournés : ils sont codés en dur ici,
+ *    jamais passés en extra modifiable, et re-filtrés par la liste blanche
+ *    d'`EmergencyCallHelper`.
  */
 @AndroidEntryPoint
 class EmergencyShortcutReceiver : BroadcastReceiver() {
 
-    // v1.24.0 SEC-CRIT — `Lazy` : ce collaborateur atteint un DAO, donc `AppDatabase`, donc la
-    // réparation zéro-clé. L'injection de champ Hilt précède le corps de `onReceive`, sur le main
-    // thread : en eager, la reconstruction de la base y tournait sous un timeout ANR de 10 s.
-    @Inject lateinit var triggerEmergencyLazy: dagger.Lazy<TriggerEmergencyUseCase>
-    @Inject @ApplicationScope lateinit var scope: CoroutineScope
-
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            ACTION_TRIGGER_EMERGENCY -> handleTrigger(context)
+            // v1.26.1 (audit B5) — `ACTION_TRIGGER_EMERGENCY` retiree, cf. le KDoc de tete.
             ACTION_DIAL_112 -> handleDial(context, EMERGENCY_NUMBER_EU)
             ACTION_DIAL_POLICE -> handleDial(context, EMERGENCY_NUMBER_POLICE_FR)
             else -> Timber.w("EmergencyShortcutReceiver: unknown action %s", intent.action)
-        }
-    }
-
-    private fun handleTrigger(context: Context) {
-        Timber.i("EmergencyShortcutReceiver: ACTION_TRIGGER_EMERGENCY received")
-        val pending = goAsync()
-        scope.launch {
-            try {
-                val triggerEmergency = triggerEmergencyLazy.get()
-                val result = triggerEmergency()
-                Timber.i("EmergencyShortcutReceiver: trigger result = %s", result::class.simpleName)
-            } catch (t: Throwable) {
-                Timber.w(t, "EmergencyShortcutReceiver: trigger failed")
-            } finally {
-                pending.finish()
-            }
         }
     }
 
@@ -92,7 +66,6 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
         /** Police nationale française (depuis France). */
         const val EMERGENCY_NUMBER_POLICE_FR = "17"
 
-        const val ACTION_TRIGGER_EMERGENCY = "com.filestech.sms.SHORTCUT_TRIGGER_EMERGENCY"
         const val ACTION_DIAL_112 = "com.filestech.sms.SHORTCUT_DIAL_112"
         const val ACTION_DIAL_POLICE = "com.filestech.sms.SHORTCUT_DIAL_POLICE"
 
@@ -107,13 +80,6 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
 
         /** ID unique de la notif persistante (jamais collisionne avec celles SMS). */
         const val NOTIF_ID_EMERGENCY_SHORTCUT = 0x53484f52 // 'SHOR'
-
-        fun intentTrigger(context: Context): Intent =
-            Intent(context, EmergencyShortcutReceiver::class.java).apply {
-                action = ACTION_TRIGGER_EMERGENCY
-                component = ComponentName(context, EmergencyShortcutReceiver::class.java)
-                `package` = context.packageName
-            }
 
         fun intentDial112(context: Context): Intent =
             Intent(context, EmergencyShortcutReceiver::class.java).apply {
