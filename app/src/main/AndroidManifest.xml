@@ -66,6 +66,22 @@
          ConnectivityManager.setMobileDataEnabled / requestNetwork* dans l'app.
          INTERNET + ACCESS_NETWORK_STATE suffisent pour le transport MMS. -->
 
+    <!-- v1.27.1 (N3) — requise par `Window.setHideOverlayWindows()`, qui masque les
+         superpositions des autres applications pendant la saisie d'un secret
+         (cf. ProtectSecretInput / THREAT-MODEL.md N3).
+
+         Niveau de protection `normal` : accordée à l'installation, sans invite ni
+         écran de réglage. Elle n'accorde AUCUN accès à des données : elle autorise
+         seulement l'app à demander que les overlays TIERS soient masqués au-dessus
+         de SES propres fenêtres.
+
+         ⚠️ Sans cette déclaration, l'appel lève `SecurityException` et fait TOMBER
+         l'application — constaté sur Galaxy S24 FE / Android 14 le 2026-08-03, sur
+         l'écran de définition du PIN ET sur l'écran de verrouillage. L'appel est
+         désormais aussi protégé côté code : une garde de sécurité ne doit jamais
+         pouvoir crasher l'app qu'elle protège. -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+
     <!-- Foreground service for long migration/backup tasks -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />

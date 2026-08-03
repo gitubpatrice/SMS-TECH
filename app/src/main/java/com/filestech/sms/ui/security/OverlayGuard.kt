@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
+import timber.log.Timber
 import java.util.WeakHashMap
 
 /**
@@ -38,9 +39,7 @@ private fun armOverlayGuard(window: Window?) {
     synchronized(overlayGuardCounts) {
         val count = (overlayGuardCounts[window] ?: 0) + 1
         overlayGuardCounts[window] = count
-        if (count == 1 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.setHideOverlayWindows(true)
-        }
+        if (count == 1) window.setHideOverlayWindowsSafely(true)
     }
 }
 
@@ -51,9 +50,7 @@ private fun disarmOverlayGuard(window: Window?) {
         val count = (overlayGuardCounts[window] ?: 0) - 1
         if (count <= 0) {
             overlayGuardCounts.remove(window)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                window.setHideOverlayWindows(false)
-            }
+            window.setHideOverlayWindowsSafely(false)
         } else {
             overlayGuardCounts[window] = count
         }
@@ -161,6 +158,31 @@ fun ProtectSecretInput(blockObscuredTouches: Boolean = true) {
             }
             disarmOverlayGuard(window)
         }
+    }
+}
+
+/**
+ * Applique `setHideOverlayWindows` sans jamais pouvoir faire tomber l'application.
+ *
+ * ⚠️ **Cet appel exige la permission `HIDE_OVERLAY_WINDOWS` au manifeste.** Sans elle il lève
+ * `SecurityException` — ce qui a fait **crasher l'application** sur Galaxy S24 FE / Android 14 le
+ * 2026-08-03, sur l'écran de définition du PIN **et** sur l'écran de verrouillage. Un utilisateur
+ * dont le verrou est actif se serait retrouvé **enfermé hors de sa messagerie**.
+ *
+ * La permission est désormais déclarée, mais l'appel reste protégé : rien ne garantit qu'un OEM
+ * l'honore, et **une garde de sécurité qui fait tomber l'application qu'elle protège est pire que
+ * son absence**. En cas de refus, on renonce silencieusement au masquage — le filtre de touches et
+ * `FLAG_SECURE` restent en place.
+ *
+ * `try`/`catch` explicite et non `runCatching` : la doctrine du projet proscrit ce dernier dès
+ * qu'un appel peut se trouver dans un contexte annulable, pour ne pas avaler `CancellationException`.
+ */
+private fun Window.setHideOverlayWindowsSafely(hide: Boolean) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    try {
+        setHideOverlayWindows(hide)
+    } catch (e: SecurityException) {
+        Timber.w(e, "setHideOverlayWindows(%b) refusé — masquage des superpositions indisponible", hide)
     }
 }
 

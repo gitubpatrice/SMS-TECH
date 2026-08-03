@@ -21,6 +21,7 @@ permissions "just in case", and degrades gracefully if any of them is refused.
 | `USE_FULL_SCREEN_INTENT`                     | Reserved for future incoming-call-style critical notifications. Off by default. |
 | `VIBRATE`                                    | Optional vibration on new messages.                                             |
 | `RECORD_AUDIO`                               | Record audio clips attached to outgoing MMS (mic only while the user is actively recording).|
+| `HIDE_OVERLAY_WINDOWS` (API 31+)             | Hide other apps' overlays while you type a PIN or passphrase, so a malicious window cannot harvest your keystrokes. Grants **no** access to any data — it only asks that third-party overlays be hidden above **our own** windows. Protection level `normal`: granted at install, no prompt. |
 
 ## What we do **not** request
 
