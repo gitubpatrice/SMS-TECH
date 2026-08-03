@@ -13,6 +13,12 @@ If you find a vulnerability, please disclose it to **contact@files-tech.com** wi
 
 ## Threat model
 
+> 📎 **Complément opérationnel : [`THREAT-MODEL.md`](THREAT-MODEL.md).** La table ci-dessous
+> répond à « contre quoi l'app défend ». `THREAT-MODEL.md` répond à « **où est la garde qui fait
+> autorité, et par quels chemins doit-elle passer** » : invariants, couche d'application, chemins
+> jumeaux à recenser, et **non-garanties assumées** (superposition d'écran, presse-papier).
+> Toute modification touchant une garde de sécurité doit être confrontée à ses invariants.
+
 | Adversary | What we protect against | How |
 |---|---|---|
 | Device-level adb pull / forensic image | Plaintext SMS / MMS body, vault content, draft messages, recordings | Whole Room DB encrypted at rest by SQLCipher; key derived from a passphrase wrapped in the Android Keystore. Transient caches (PDU staging, voice drafts, exports) wiped on auto-lock + on panic. |
