@@ -1443,8 +1443,6 @@ private fun PinSetupDialog(
     // l'asymétrie qui a produit la moitié des défauts de cette semaine.
     @androidx.annotation.StringRes titleRes: Int = R.string.pin_setup_title,
 ) {
-    // v1.27.0 (N3) — saisie de secret (PIN principal ET code panique, cf. ci-dessus).
-    ProtectSecretInput()
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     val digitsOnly = remember(pin, confirm) {
@@ -1458,6 +1456,8 @@ private fun PinSetupDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(titleRes)) },
         text = {
+            // v1.27.1 (N3) — DANS le contenu du dialogue (PIN principal ET code panique).
+            ProtectSecretInput()
             Column {
                 androidx.compose.material3.OutlinedTextField(
                     value = pin,
@@ -2733,8 +2733,6 @@ private fun VaultPinSetupDialog(
     onConfirm: (CharArray) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // v1.27.0 (N3) — saisie de secret : PIN du coffre.
-    ProtectSecretInput()
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
@@ -2748,6 +2746,8 @@ private fun VaultPinSetupDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_vault_pin_set_title)) },
         text = {
+            // v1.27.1 (N3) — DANS le contenu du dialogue : PIN du coffre.
+            ProtectSecretInput()
             androidx.compose.foundation.layout.Column {
                 Text(
                     text = stringResource(R.string.settings_vault_pin_set_subtitle),

@@ -318,8 +318,6 @@ private fun PassphraseDialog(
     onConfirm: (CharArray) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // v1.27.0 (N3) — saisie de secret : anti-superposition armé tant que le dialogue est composé.
-    ProtectSecretInput()
     var pw by remember { mutableStateOf("") }
     var pw2 by remember { mutableStateOf("") }
     // v1.15.2 — Toggle visibilité passphrase (icône œil). Permet de vérifier la saisie pour
@@ -331,6 +329,8 @@ private fun PassphraseDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.backup_passphrase_title)) },
         text = {
+            // v1.27.1 (N3) — DANS le contenu du dialogue : phrase secrète d'export.
+            ProtectSecretInput()
             Column {
                 Text(
                     text = stringResource(R.string.backup_passphrase_explain),
@@ -438,8 +438,6 @@ private fun RestorePassphraseDialog(
     onConfirm: (CharArray) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // v1.27.0 (N3) — saisie de secret : anti-superposition armé tant que le dialogue est composé.
-    ProtectSecretInput()
     var pw by remember { mutableStateOf("") }
     // v1.15.2 — Toggle visibilité passphrase. Critique en restore : si l'user se trompe, le
     // déchiffrement échoue avec une erreur générique → il ne saura pas si c'est une faute de
@@ -449,6 +447,8 @@ private fun RestorePassphraseDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.backup_restore_passphrase_title)) },
         text = {
+            // v1.27.1 (N3) — DANS le contenu du dialogue : phrase secrète de restauration.
+            ProtectSecretInput()
             Column {
                 Text(
                     text = stringResource(R.string.backup_restore_explainer),

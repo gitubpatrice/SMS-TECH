@@ -64,6 +64,31 @@ private fun disarmOverlayGuard(window: Window?) {
  * À appeler depuis **toute** surface qui recueille un secret : verrou de l'application, PIN du
  * coffre, définition du PIN et du code panique, phrases secrètes de sauvegarde.
  *
+ * ### ⚠️ OÙ appeler — la moitié du travail est dans le placement
+ *
+ * Dans un dialogue, **l'appel doit être placé À L'INTÉRIEUR d'un lambda de contenu**
+ * (`text = { … }`), **jamais avant `AlertDialog(…)`** :
+ *
+ * ```kotlin
+ * // FAUX — protège la fenêtre de l'ACTIVITÉ, le dialogue reste découvert
+ * ProtectSecretInput()
+ * AlertDialog(text = { Column { … } })
+ *
+ * // JUSTE
+ * AlertDialog(text = { ProtectSecretInput(); Column { … } })
+ * ```
+ *
+ * Raison : `LocalView.current` ne désigne la vue **du dialogue** que dans la sous-composition
+ * créée par `Dialog`. Un appel situé avant hérite du `LocalView` **ambiant** — celui de
+ * l'activité. `findDialogWindow()` remonte alors une hiérarchie où aucun `DialogWindowProvider`
+ * n'existe, retourne `null`, et le repli arme la fenêtre de l'activité : la garde s'applique à
+ * une fenêtre que personne n'attaque, pendant que celle qui porte le champ reste ouverte.
+ *
+ * ⚠️ **Le défaut a été livré** (`77612b5` → `8cb137e`) : les cinq dialogues étaient déclarés
+ * protégés et ne l'étaient pas, pendant que ce KDoc affirmait le contraire. Corrigé en v1.27.1.
+ * Un écran **plein** (`LockScreen`) n'est pas concerné : sa fenêtre **est** celle de l'activité,
+ * l'appel en tête de fonction y est correct.
+ *
  * ### Le défaut couvert
  *
  * `FLAG_SECURE` est posé sur toute l'application ([com.filestech.sms.MainActivity]) : il protège

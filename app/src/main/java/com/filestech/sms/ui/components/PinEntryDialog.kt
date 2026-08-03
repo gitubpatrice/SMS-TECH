@@ -78,8 +78,6 @@ fun PinEntryDialog(
     onCancel: () -> Unit,
     onUseBiometric: (() -> Unit)? = null,
 ) {
-    // v1.27.0 (N3) — saisie de secret : anti-superposition armé tant que le dialogue est composé.
-    ProtectSecretInput()
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var verifying by remember { mutableStateOf(false) }
@@ -94,6 +92,9 @@ fun PinEntryDialog(
         onDismissRequest = onCancel,
         title = { Text(title) },
         text = {
+            // v1.27.1 (N3) — DANS le contenu du dialogue, jamais avant `AlertDialog(...)` :
+            // c'est ici seulement que `LocalView` désigne la fenêtre DU DIALOGUE. Cf. KDoc.
+            ProtectSecretInput()
             Column {
                 if (description != null) {
                     Text(
