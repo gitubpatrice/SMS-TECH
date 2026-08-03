@@ -1,0 +1,5 @@
+Deux protections ajoutées là où vous saisissez un code.
+
+Pendant la saisie d'un PIN ou d'une phrase secrète, les fenêtres posées par d'autres applications sont masquées : aucune ne peut se superposer pour récolter vos frappes.
+
+Le presse-papier n'affiche plus d'aperçu du texte copié. Copier un message du coffre ne le montre donc plus en clair par-dessus l'écran, et les claviers ne le conservent plus dans leur historique.

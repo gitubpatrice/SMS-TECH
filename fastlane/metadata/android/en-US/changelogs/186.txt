@@ -1,0 +1,5 @@
+Two protections added where you type a code.
+
+While you enter a PIN or a passphrase, windows drawn by other apps are hidden: none can overlay the screen to harvest your keystrokes.
+
+The clipboard no longer shows a preview of copied text. Copying a message from the vault therefore no longer displays it in the clear over your screen, and keyboards no longer keep it in their history.

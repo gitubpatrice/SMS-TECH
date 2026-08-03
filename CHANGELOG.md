@@ -3,6 +3,38 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.1] — 2026-08-03
+
+Deux non-garanties du modèle de menace fermées, sur les surfaces où un secret est saisi ou copié.
+Le nouveau `THREAT-MODEL.md` documente les invariants de sécurité et le point d'autorité de chaque
+garde — il complète `SECURITY.md`, qui catalogue les adversaires.
+
+### Security
+- **Superposition d'écran (tapjacking).** Rien ne protégeait ce qui *entre* dans l'application :
+  `FLAG_SECURE` couvre les captures d'écran, mais une application tierce autorisée à se superposer
+  pouvait poser une fenêtre au-dessus d'un écran de saisie pour récolter les frappes, ou masquer un
+  bouton afin d'en faire actionner un autre. Les **six** surfaces de saisie de secret masquent
+  désormais les superpositions des autres applications (Android 12+) et, sur les dialogues,
+  ignorent les touches reçues à travers une fenêtre obscurcie.
+- **Presse-papier.** Depuis Android 13, le système affiche une vignette d'aperçu du contenu copié.
+  Copier un message du **coffre** l'exposait donc en clair, hors de tout ce que le coffre protège.
+  Toutes les copies sont maintenant marquées sensibles : plus d'aperçu, et les claviers ne
+  conservent plus la valeur dans leur historique.
+
+### Changed
+- L'étoile « Favori » s'affiche en **or** lorsqu'elle est active.
+- Nouvelle permission `HIDE_OVERLAY_WINDOWS` (Android 12+), requise par le masquage ci-dessus.
+  Niveau `normal`, accordée à l'installation : elle n'ouvre **aucun** accès à des données, elle
+  permet seulement de demander que les superpositions tierces soient masquées au-dessus des
+  fenêtres de l'application. Détail dans `PERMISSIONS.md`.
+
+### Known limitation
+- L'**écran de verrouillage** masque les superpositions mais n'ignore pas les touches reçues à
+  travers elles, contrairement aux dialogues. Ce filtre bloque aussi les superpositions
+  *légitimes* (filtre de lumière bleue tiers, outil d'accessibilité) : sur le verrou d'une
+  application détenant le rôle SMS, une fausse détection enfermerait l'utilisateur hors de sa
+  messagerie. Arbitrage assumé, documenté en N3-bis du `THREAT-MODEL.md`.
+
 ## [1.27.0] — 2026-08-03
 
 Correction des 53 constats d'un audit de haut niveau conduit par motifs de défaut. Le motif
