@@ -142,8 +142,11 @@ fun LockScreen(
     onUnlocked: () -> Unit,
     viewModel: LockViewModel = hiltViewModel(),
 ) {
-    // v1.27.0 (N3) — saisie de secret : anti-superposition armé tant que l'écran est composé.
-    ProtectSecretInput()
+    // v1.27.0 (N3) — anti-superposition, MAIS sans filtre de touches : voir le KDoc de
+    // [ProtectSecretInput]. Un écran de verrouillage qui cesse de répondre parce qu'un filtre de
+    // lumière bleue tiers se superpose enfermerait l'utilisateur hors de sa messagerie, sans
+    // message ni recours. Asymétrie DÉLIBÉRÉE avec les dialogues, tranchée le 2026-08-03.
+    ProtectSecretInput(blockObscuredTouches = false)
     val state by viewModel.appLock.state.collectAsStateWithLifecycle()
     val lockMode by viewModel.lockMode.collectAsStateWithLifecycle()
     val wrongCode by viewModel.wrongCode.collectAsStateWithLifecycle()

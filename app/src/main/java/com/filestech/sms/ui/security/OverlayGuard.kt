@@ -109,16 +109,36 @@ private fun disarmOverlayGuard(window: Window?) {
  * composables de saisie dans un même écran plein) : sans lui, la sortie de la première
  * désarmerait la seconde — le piège du refcount `FLAG_SECURE` déjà rencontré sur les applications
  * Flutter du portefeuille. D'où un compte par fenêtre, à clés faibles.
+ *
+ * @param blockObscuredTouches ⚠️ **`false` sur l'écran de verrouillage, délibérément — ne pas
+ * « corriger » cette asymétrie sans lire ce qui suit.**
+ *
+ * `filterTouchesWhenObscured` fait **ignorer** les touches tant que la fenêtre est obscurcie, y
+ * compris par une superposition parfaitement légitime : filtre de lumière bleue tiers, outil
+ * d'accessibilité, bulle de conversation. L'utilisateur ne reçoit aucun message — l'écran cesse
+ * simplement de répondre.
+ *
+ * Sur un **dialogue**, le coût est borné : on peut en sortir et réessayer. Sur l'**écran de
+ * verrouillage** d'une application qui détient le rôle SMS par défaut, ce serait un utilisateur
+ * enfermé hors de sa messagerie, sans explication ni recours. Le coût du faux positif dépasse
+ * alors le gain : le tapjacking suppose une application malveillante déjà installée ET autorisée à
+ * se superposer, là où le blocage frappe des configurations ordinaires.
+ *
+ * Le verrou conserve `setHideOverlayWindows`, qui **masque** sans jamais bloquer une touche.
+ *
+ * ⚠️ Conséquence assumée : **sous Android 12, l'écran de verrouillage n'a aucune protection
+ * anti-superposition** — `setHideOverlayWindows` n'y existe pas et le filtre de touches y est
+ * volontairement désactivé. Arbitrage tranché avec Patrice le 2026-08-03.
  */
 @Composable
-fun ProtectSecretInput() {
+fun ProtectSecretInput(blockObscuredTouches: Boolean = true) {
     val view = LocalView.current
-    DisposableEffect(view) {
+    DisposableEffect(view, blockObscuredTouches) {
         // Filtre de touches posé sur la racine de CETTE surface : une fenêtre de dialogue a sa
         // propre hiérarchie de vues, la poser sur l'activité ne la couvrirait pas.
         val root = view.rootView
         val previousFilter = root?.filterTouchesWhenObscured
-        root?.filterTouchesWhenObscured = true
+        if (blockObscuredTouches) root?.filterTouchesWhenObscured = true
 
         // ⚠️ La fenêtre de CETTE surface, et non celle de l'activité.
         //
@@ -134,7 +154,11 @@ fun ProtectSecretInput() {
         armOverlayGuard(window)
 
         onDispose {
-            if (previousFilter != null) root.filterTouchesWhenObscured = previousFilter
+            // Ne restaurer que si l'on a effectivement posé le filtre : réécrire une valeur qu'on
+            // n'a pas changée écraserait celle qu'une autre surface aurait posée entre-temps.
+            if (blockObscuredTouches && previousFilter != null) {
+                root.filterTouchesWhenObscured = previousFilter
+            }
             disarmOverlayGuard(window)
         }
     }
