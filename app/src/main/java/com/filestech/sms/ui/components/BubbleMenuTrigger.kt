@@ -15,6 +15,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.filestech.sms.R
+import com.filestech.sms.ui.theme.starColor
 
 /**
  * Accessible fallback for the long-press "delete" gesture on chat bubbles. Some users do not
@@ -183,6 +185,14 @@ fun BubbleMenuTrigger(
                         Icon(
                             imageVector = if (starred) Icons.Outlined.Star else Icons.Outlined.StarBorder,
                             contentDescription = null,
+                            // v1.27.0 — l'étoile PLEINE porte l'or ; la creuse garde la couleur
+                            // d'icône du menu. Teinter les deux ferait de l'or une décoration au
+                            // lieu d'un état, et l'utilisateur ne lirait plus la différence.
+                            tint = if (starred) {
+                                starColor(MaterialTheme.colorScheme)
+                            } else {
+                                LocalContentColor.current
+                            },
                         )
                     },
                     text = {

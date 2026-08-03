@@ -64,6 +64,27 @@ internal val SettingsBlockLight = Color(0xFFE4EBF6)
 internal val SettingsBlockDark = Color(0xFF2B3444)
 
 /**
+ * v1.27.0 — or du **favori**, appliqué à la seule étoile PLEINE (état « ce message est favori »).
+ *
+ * L'étoile creuse garde la couleur d'icône du menu : c'est l'état par défaut, il ne doit rien
+ * signaler. Seul l'état actif porte la couleur, sur le même principe que [BrandBlocked] — la
+ * teinte marque un état, elle ne décore pas.
+ *
+ * Deux tons sélectionnés par luminance (cf. [starColor]), parce qu'un or unique ne peut pas tenir
+ * sur les deux fonds : l'or vif est illisible sur le `surfaceContainer` clair d'un menu, et l'or
+ * profond disparaît sur DarkTech / Amoled.
+ *
+ *  - Light : `#A57C00` (or profond) — 3,12:1 sur le `surfaceContainer` clair, au-dessus du seuil
+ *            AA de 3:1 applicable aux éléments non textuels (WCAG 1.4.11).
+ *  - Dark  : `#FFC107` (or vif) — ~10:1 sur le conteneur sombre, marge confortable sous Amoled.
+ *
+ * Le libellé du menu (« Favori » / « Retirer des favoris ») porte l'information de son côté : la
+ * couleur reste un renfort, jamais le seul véhicule de l'état.
+ */
+internal val BrandStarLight = Color(0xFFA57C00)
+internal val BrandStarDark = Color(0xFFFFC107)
+
+/**
  * Slate-blue palette for [Snackbar] / inverse-surface widgets. The default Material 3 inverse
  * pair is grey/near-black, which looks foreign on a brand-blue app. Both light and dark schemes
  * share the same pair: a confirmation toast always reads against this stable identity, no
@@ -207,4 +228,14 @@ internal fun settingsBlockColor(scheme: ColorScheme): Color {
     val s = scheme.surface
     val luma = 0.2126f * s.red + 0.7152f * s.green + 0.0722f * s.blue
     return if (luma < 0.5f) SettingsBlockDark else SettingsBlockLight
+}
+
+/**
+ * Or de l'étoile « favori » active, choisi selon la luminance de la surface du thème (comme
+ * [bubbleIncomingColor]) pour couvrir les thèmes clair, sombre, DarkTech et Amoled.
+ */
+internal fun starColor(scheme: ColorScheme): Color {
+    val s = scheme.surface
+    val luma = 0.2126f * s.red + 0.7152f * s.green + 0.0722f * s.blue
+    return if (luma < 0.5f) BrandStarDark else BrandStarLight
 }
