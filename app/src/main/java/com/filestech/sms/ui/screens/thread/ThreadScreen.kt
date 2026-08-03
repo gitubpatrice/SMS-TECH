@@ -126,6 +126,7 @@ import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.SmsTechSnackbarVisuals
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.components.toPlaybackUri
+import com.filestech.sms.ui.security.copyToClipboardSensitive
 import com.filestech.sms.ui.theme.BrandDanger
 import com.filestech.sms.ui.util.daySeparatorLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
@@ -201,14 +202,15 @@ fun ThreadScreen(
     // collapsing the keyboard (Apple Messages / Google Messages convention).
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    // v1.3.11 (F3) — single Clipboard channel for all bubble copy actions. We use the
-    // Compose-provided manager (backed by the system `ClipboardManager`) so the same path
-    // applies for paste targets across apps.
-    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    // v1.3.11 (F3) — single Clipboard channel for all bubble copy actions.
+    // v1.27.0 (N4) — passe par [copyToClipboardSensitive] et non plus par `LocalClipboardManager` :
+    // ce dernier n'expose pas `ClipDescription.EXTRA_IS_SENSITIVE`, donc Android 13+ affichait en
+    // surimpression une vignette du texte copié — y compris pour un message issu du COFFRE, hors
+    // de tout ce que le coffre protège. Cf. `THREAT-MODEL.md` I7 / N4.
     val copyMessageBody: (Message) -> Unit = { m ->
         val body = m.body.trim()
         if (body.isNotEmpty()) {
-            clipboard.setText(androidx.compose.ui.text.AnnotatedString(body))
+            context.copyToClipboardSensitive(label = "message", text = body)
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             val label = context.getString(R.string.toast_copied)
             scope.launch { snackbarHost.showSnackbar(label) }

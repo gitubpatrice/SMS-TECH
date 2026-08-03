@@ -21,12 +21,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.filestech.sms.R
+import com.filestech.sms.ui.security.copyToClipboardSensitive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -58,7 +57,6 @@ fun PhoneActionsDialog(
     onSnack: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -93,7 +91,9 @@ fun PhoneActionsDialog(
                     icon = Icons.Outlined.ContentCopy,
                     labelRes = R.string.action_copy,
                     onClick = {
-                        clipboard.setText(AnnotatedString(number))
+                        // v1.27.0 (N4) — un numéro de correspondant est une métadonnée sensible :
+                        // même traitement que le corps d'un message, pas de vignette d'aperçu.
+                        context.copyToClipboardSensitive(label = "phone", text = number)
                         scope.launch { onSnack(context.getString(R.string.toast_copied)) }
                         onDismiss()
                     },

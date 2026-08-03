@@ -51,6 +51,7 @@ import com.filestech.sms.R
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.settings.LockMode
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.ui.security.ProtectSecretInput
 import com.filestech.sms.ui.security.StrongBiometrics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -141,6 +142,8 @@ fun LockScreen(
     onUnlocked: () -> Unit,
     viewModel: LockViewModel = hiltViewModel(),
 ) {
+    // v1.27.0 (N3) — saisie de secret : anti-superposition armé tant que l'écran est composé.
+    ProtectSecretInput()
     val state by viewModel.appLock.state.collectAsStateWithLifecycle()
     val lockMode by viewModel.lockMode.collectAsStateWithLifecycle()
     val wrongCode by viewModel.wrongCode.collectAsStateWithLifecycle()

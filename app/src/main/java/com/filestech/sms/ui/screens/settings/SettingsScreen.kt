@@ -83,6 +83,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.ui.components.showError
+import com.filestech.sms.ui.security.ProtectSecretInput
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -1442,6 +1443,8 @@ private fun PinSetupDialog(
     // l'asymétrie qui a produit la moitié des défauts de cette semaine.
     @androidx.annotation.StringRes titleRes: Int = R.string.pin_setup_title,
 ) {
+    // v1.27.0 (N3) — saisie de secret (PIN principal ET code panique, cf. ci-dessus).
+    ProtectSecretInput()
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     val digitsOnly = remember(pin, confirm) {
@@ -2730,6 +2733,8 @@ private fun VaultPinSetupDialog(
     onConfirm: (CharArray) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // v1.27.0 (N3) — saisie de secret : PIN du coffre.
+    ProtectSecretInput()
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }

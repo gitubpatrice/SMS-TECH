@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,8 +23,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import com.filestech.sms.ui.components.SmsTechSnackbarHost
-import com.filestech.sms.ui.components.showError
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -52,10 +50,13 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.backup.BackupService
 import com.filestech.sms.domain.backup.RestoreResult
 import com.filestech.sms.domain.usecase.RestoreBackupUseCase
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.showError
+import com.filestech.sms.ui.security.ProtectSecretInput
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -317,6 +318,8 @@ private fun PassphraseDialog(
     onConfirm: (CharArray) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // v1.27.0 (N3) — saisie de secret : anti-superposition armé tant que le dialogue est composé.
+    ProtectSecretInput()
     var pw by remember { mutableStateOf("") }
     var pw2 by remember { mutableStateOf("") }
     // v1.15.2 — Toggle visibilité passphrase (icône œil). Permet de vérifier la saisie pour
@@ -435,6 +438,8 @@ private fun RestorePassphraseDialog(
     onConfirm: (CharArray) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // v1.27.0 (N3) — saisie de secret : anti-superposition armé tant que le dialogue est composé.
+    ProtectSecretInput()
     var pw by remember { mutableStateOf("") }
     // v1.15.2 — Toggle visibilité passphrase. Critique en restore : si l'user se trompe, le
     // déchiffrement échoue avec une erreur générique → il ne saura pas si c'est une faute de

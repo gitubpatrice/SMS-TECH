@@ -149,7 +149,15 @@ C'est l'invariant le plus violé de l'audit : cinq constats sur les vingt-deux l
 
 Presse-papier, partage, export PDF, notifications, écriture dans `content://sms`.
 
-⚠️ **Cet invariant n'est PAS tenu aujourd'hui** — voir §6.
+*Point d'autorité pour le presse-papier :* `copyToClipboardSensitive` — **jamais**
+`LocalClipboardManager`, qui n'expose pas `EXTRA_IS_SENSITIVE`.
+
+⚠️ Le marquage est **uniforme**, non conditionné à l'appartenance au coffre. Le conditionner
+obligerait à propager « ce message est au coffre » jusqu'à chaque bouton copier : un drapeau de
+plus à ne pas oublier sur chaque nouveau chemin, c'est-à-dire la fabrique d'asymétries décrite en
+§1. Un prédicat uniforme ne s'oublie pas sur une branche.
+
+⚠️ **L'écriture dans `content://sms` reste hors de portée** — voir N2.
 
 ---
 
@@ -175,8 +183,8 @@ détourne le prochain auditeur d'un contrôle qui n'existe pas.
 |---|---|---|
 | N1 | **Le transport SMS / MMS est en clair.** Aucune app ne peut y remédier. | Par conception |
 | N2 | **En tant qu'app SMS par défaut, l'app écrit dans `content://sms`** — lisible par toute app disposant de `READ_SMS`. Le chiffrement Room ne couvre pas cette copie. | Par conception |
-| N3 | **Superposition d'écran (tapjacking) : aucune protection.** Ni `filterTouchesWhenObscured`, ni `setHideOverlayWindows`, alors que `LockScreen` et `VaultScreen` saisissent des codes. `FLAG_SECURE` protège la **sortie** (captures), rien ne protège l'**entrée**. | 🔴 **Ouvert** |
-| N4 | **Presse-papier non marqué sensible.** Aucun `EXTRA_IS_SENSITIVE` dans le dépôt. Copier un message **du coffre** l'affiche en aperçu système sur Android 13+, hors du périmètre protégé. | 🔴 **Ouvert** |
+| N3 | **Superposition d'écran (tapjacking).** `filterTouchesWhenObscured` + `setHideOverlayWindows` (API 31+) armés par [`ProtectSecretInput`](app/src/main/java/com/filestech/sms/ui/security/OverlayGuard.kt) sur les **six** surfaces de saisie de secret recensées. ⚠️ Portée **déclarée par la surface** : toute nouvelle saisie de secret doit appeler `ProtectSecretInput()`. ⚠️ `setHideOverlayWindows` n'existe qu'à partir d'Android 12 ; en deçà, seul le filtre de touches s'applique. | ✅ v1.27.0 |
+| N4 | **Presse-papier.** [`copyToClipboardSensitive`](app/src/main/java/com/filestech/sms/ui/security/SensitiveClipboard.kt) pose `EXTRA_IS_SENSITIVE` sur **toutes** les copies — uniforme et non conditionné au coffre, pour qu'aucune branche ne puisse l'oublier. ⚠️ Sans effet avant Android 13, et un clavier tiers reste libre de l'ignorer. | ✅ v1.27.0 |
 | N5 | Un appareil **rooté** met tous les invariants hors de portée. | Par conception |
 | N6 | La whitelist `EmergencyCallHelper` et le PIN du coffre sont **sans test automatisé**. | ⚠️ Assumé, écrit dans les fichiers concernés |
 
@@ -203,7 +211,6 @@ empiriquement. La procédure qui les trouve :
 
 ## 8. Points ouverts
 
-- **N3 et N4** (superposition, presse-papier) — identifiés le 2026-08-03, non corrigés.
 - **I2 limité** par `requestMoveToVault` — décision de conception à prendre.
 - **Dédoublonnage de la synchronisation** : `TelephonySyncManager` ne dédoublonne que par
   `telephony_uri`, et le sweep re-propose chaque SMS reçu en direct (le receveur n'avance pas le
