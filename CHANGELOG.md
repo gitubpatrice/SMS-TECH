@@ -76,6 +76,59 @@ dominant : **la garde était posée sur l'affichage, pas sur l'accès** — une 
   secret de chiffrement, et le repli non chiffré aurait été une régression de confidentialité. La
   sauvegarde manuelle est intacte, restauration comprise.
 
+## [1.26.0] — 2026-08-02
+
+### Added
+- **Mode panique enfin atteignable.** Le second code, qui ouvre l'application en mode leurre —
+  coffre et mode urgence invisibles — était annoncé aux utilisateurs mais n'avait **aucun écran de
+  configuration** : la fonction ne pouvait donc jamais être atteinte. Elle se règle désormais dans
+  Réglages, Sécurité.
+- **Les envois programmés transportent leurs pièces jointes.** Photo et texte partent ensemble à
+  l'heure prévue.
+
+### Fixed
+- **Le blocage après trop de tentatives ne se levait jamais.** Le décompte allait à son terme sans
+  rien libérer.
+- Écran de verrouillage : un code erroné est maintenant signalé en rouge.
+
+## [1.25.5] — 2026-08-02
+
+### Fixed
+- **Les contacts d'urgence saisis étaient jetés en silence.** Le bouton du dialogue s'appelait
+  « Enregistrer » alors qu'il n'ajoutait qu'au brouillon : quitter l'écran perdait la saisie. Il
+  s'appelle désormais « Ajouter », et quitter sans enregistrer demande confirmation.
+- **La position annoncée n'était jamais transmise** dans le SMS d'urgence.
+
+### Changed
+- L'écran d'urgence signale que la position ne sera pas transmise si la permission manque, et
+  propose de l'accorder sur place. Il affiche aussi **qui** sera prévenu, au lieu d'un simple
+  nombre.
+
+## [1.25.4] — 2026-08-02
+
+### Security
+- **Le coffre s'ouvrait avant son second facteur.** Le temps que les réglages se chargent, il se
+  croyait non protégé et son contenu restait visible derrière le dialogue de code. Corrigé, avec
+  une seconde barrière sur l'affichage.
+
+### Fixed
+- **Un seul retour depuis une conversation du coffre dépilait deux écrans.**
+- **Blocage : clé unifiée.** Bloquer « SFR 123 » ne bloque plus le numéro court homonyme, et un
+  numéro saisi en +33 filtre réellement une conversation enregistrée en 06.
+
+## [1.25.3] — 2026-08-02
+
+### Fixed
+- **Bloquer une conversation ne l'efface plus.** Une purge automatique la supprimait jusqu'ici,
+  sans avertissement — des conversations ont réellement été perdues. Elle reste désormais en bas
+  de la liste, signalée en orange, et revient à sa place au déblocage.
+- **Envois programmés : un échec est réessayé**, et apparaît dans une section « Échecs » pour être
+  relancé.
+
+### Changed
+- **Déverrouillage biométrique adossé au Keystore** (Class 3 uniquement), Coffre inclus.
+- Écran « À propos » entièrement traduit.
+
 ## [1.25.2] — 2026-07-25
 
 ### Fixed

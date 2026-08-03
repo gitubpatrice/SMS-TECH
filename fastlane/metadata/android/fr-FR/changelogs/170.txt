@@ -2,6 +2,6 @@ Sécurité du coffre-fort.
 
 Le coffre pouvait s'ouvrir avant son second facteur : le temps que les réglages se chargent, il se croyait non protégé. Son contenu restait visible derrière le dialogue de code. Corrigé, avec une seconde barrière sur l'affichage.
 
-Un seul retour depuis une conversation du coffre ne quitte plus deux écrans d'un coup.
+Un retour depuis une conversation du coffre ne quitte plus deux écrans.
 
 Blocage : bloquer « SFR 123 » ne bloque plus le numéro court homonyme. Un numéro saisi en +33 filtre vraiment une conversation enregistrée en 06.
