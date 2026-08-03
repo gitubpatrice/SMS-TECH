@@ -4,19 +4,61 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
+import android.view.View
+import android.view.ViewParent
+import android.view.Window
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
-import java.util.concurrent.atomic.AtomicInteger
+import androidx.compose.ui.window.DialogWindowProvider
+import java.util.WeakHashMap
 
 /**
- * Nombre de surfaces de saisie de secret actuellement composées.
+ * Nombre de surfaces de saisie de secret composées **par fenêtre**.
  *
- * ⚠️ Incrémenté **inconditionnellement**, alors que l'effet qu'il pilote est réservé à l'API 31+.
- * Le garder aligné sur la version rendrait le compteur faux le jour où une seconde mesure, sans
- * la même borne, viendrait s'y accrocher.
+ * ⚠️ Le compte est **par fenêtre et non global**, parce que `setHideOverlayWindows` est une
+ * propriété de la fenêtre — et qu'un `AlertDialog` Compose crée **sa propre fenêtre**. Un compteur
+ * global ferait voir « déjà armé » à la seconde surface, dont la fenêtre ne serait alors **jamais**
+ * armée : la protection paraîtrait active en étant absente là où elle compte le plus.
+ *
+ * ⚠️ Clés faibles : une fenêtre détruite ne doit pas retenir d'entrée. Les accès sont
+ * `synchronized` — les effets Compose s'exécutent sur le thread principal, mais le coût est nul et
+ * l'invariant cesse de dépendre de cette hypothèse.
  */
-private val activeSecretInputs = AtomicInteger(0)
+private val overlayGuardCounts = WeakHashMap<Window, Int>()
+
+/**
+ * Arme le masquage des superpositions sur [window], en comptant les surfaces qui la partagent.
+ *
+ * ⚠️ Une `window` nulle ne compte pas : une surface incapable d'armer ne doit pas occuper un cran
+ * du compteur, sinon la surface suivante — elle, valide — verrait « déjà armé » et n'armerait rien.
+ */
+private fun armOverlayGuard(window: Window?) {
+    if (window == null) return
+    synchronized(overlayGuardCounts) {
+        val count = (overlayGuardCounts[window] ?: 0) + 1
+        overlayGuardCounts[window] = count
+        if (count == 1 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.setHideOverlayWindows(true)
+        }
+    }
+}
+
+/** Symétrique d'[armOverlayGuard] : ne désarme qu'à la dernière surface de CETTE fenêtre. */
+private fun disarmOverlayGuard(window: Window?) {
+    if (window == null) return
+    synchronized(overlayGuardCounts) {
+        val count = (overlayGuardCounts[window] ?: 0) - 1
+        if (count <= 0) {
+            overlayGuardCounts.remove(window)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                window.setHideOverlayWindows(false)
+            }
+        } else {
+            overlayGuardCounts[window] = count
+        }
+    }
+}
 
 /**
  * v1.27.0 (N3) — arme la protection contre la **superposition d'écran** tant que le composable
@@ -54,13 +96,19 @@ private val activeSecretInputs = AtomicInteger(0)
  * La portée est donc **déclarée par la surface**, pas énumérée au centre. Une liste d'écrans
  * vieillit ; une capacité déclarée par l'appelant, non (cf. `THREAT-MODEL.md` §1).
  *
- * ### Le compteur, et pourquoi il est indispensable
+ * ### Le compteur, et pourquoi il est PAR FENÊTRE
  *
- * ⚠️ Les surfaces se **superposent** : le dialogue de saisie du PIN du coffre s'ouvre au-dessus
- * d'un écran ayant déjà armé la protection. Sans compteur, la fermeture du dialogue appellerait
- * `setHideOverlayWindows(false)` et **désarmerait la protection de l'écran encore affiché** —
- * exactement le piège du refcount `FLAG_SECURE` déjà rencontré sur les applications Flutter du
- * portefeuille. L'effet n'est donc appliqué qu'aux transitions 0 → 1 et 1 → 0.
+ * `setHideOverlayWindows` s'applique à **une fenêtre**. Chaque surface arme donc la sienne : celle
+ * du dialogue quand c'en est un, celle de l'activité sinon.
+ *
+ * ⚠️ Un compteur **global** serait faux, et silencieusement : la seconde surface y verrait « déjà
+ * armé » et **sa** fenêtre — celle d'un dialogue, donc celle qui recueille réellement le secret —
+ * ne serait jamais armée. La protection paraîtrait active en étant absente là où elle compte.
+ *
+ * Le compte reste nécessaire lorsque plusieurs surfaces **partagent** une fenêtre (deux
+ * composables de saisie dans un même écran plein) : sans lui, la sortie de la première
+ * désarmerait la seconde — le piège du refcount `FLAG_SECURE` déjà rencontré sur les applications
+ * Flutter du portefeuille. D'où un compte par fenêtre, à clés faibles.
  */
 @Composable
 fun ProtectSecretInput() {
@@ -72,20 +120,22 @@ fun ProtectSecretInput() {
         val previousFilter = root?.filterTouchesWhenObscured
         root?.filterTouchesWhenObscured = true
 
-        // Le masquage des superpositions est une propriété de la fenêtre de l'ACTIVITÉ.
-        // `view.context` est un `ContextWrapper` dans un dialogue, d'où le déroulage.
-        val window = view.context.findActivity()?.window
-        val isFirst = activeSecretInputs.incrementAndGet() == 1
-        if (isFirst && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window?.setHideOverlayWindows(true)
-        }
+        // ⚠️ La fenêtre de CETTE surface, et non celle de l'activité.
+        //
+        // `setHideOverlayWindows` s'applique à UNE fenêtre. Or cinq des six surfaces de saisie de
+        // secret sont des `AlertDialog`, et un dialogue Compose possède sa PROPRE fenêtre : armer
+        // celle de l'activité les laisserait toutes découvertes, alors que ce sont précisément
+        // elles qui recueillent les PIN et les phrases secrètes.
+        //
+        // Compose expose la fenêtre d'un dialogue via `DialogWindowProvider`, porté par la vue
+        // parente. Hors dialogue (écran plein comme `LockScreen`), on retombe sur la fenêtre de
+        // l'activité, obtenue en déroulant le `ContextWrapper`.
+        val window = view.findDialogWindow() ?: view.context.findActivity()?.window
+        armOverlayGuard(window)
 
         onDispose {
             if (previousFilter != null) root.filterTouchesWhenObscured = previousFilter
-            val isLast = activeSecretInputs.decrementAndGet() == 0
-            if (isLast && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                window?.setHideOverlayWindows(false)
-            }
+            disarmOverlayGuard(window)
         }
     }
 }
@@ -95,4 +145,22 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/**
+ * Fenêtre du dialogue Compose hébergeant cette vue, `null` hors dialogue.
+ *
+ * ⚠️ On **remonte** la hiérarchie au lieu de tester le parent direct. `DialogWindowProvider` est
+ * aujourd'hui porté par le parent immédiat, mais s'en remettre à cette profondeur ferait retomber
+ * le repli sur la fenêtre de l'activité — **en silence** — le jour où Compose insérerait une vue
+ * intermédiaire. Un repli silencieux sur une garde de sécurité est précisément ce que
+ * `THREAT-MODEL.md` I5 proscrit.
+ */
+private fun View.findDialogWindow(): Window? {
+    var parent: ViewParent? = this.parent
+    while (parent != null) {
+        if (parent is DialogWindowProvider) return parent.window
+        parent = (parent as? View)?.parent
+    }
+    return null
 }

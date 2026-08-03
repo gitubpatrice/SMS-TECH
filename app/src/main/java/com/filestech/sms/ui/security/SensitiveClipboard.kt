@@ -45,6 +45,12 @@ import android.os.PersistableBundle
  * l'ignore n'est pas couvert. Cela ne remplace pas la règle d'usage : ne pas copier ce qu'on ne
  * veut pas voir quitter l'application.
  *
+ * ⚠️ **Best-effort assumé** : si le service de presse-papier est indisponible, la fonction rend la
+ * main sans rien copier et **sans le signaler**. Les appelants affichent leur confirmation
+ * « Copié » sans condition. Le cas ne se produit pas depuis un contexte d'activité ; le contrat est
+ * écrit ici plutôt que supposé, pour qu'un futur appelant depuis un contexte plus exotique sache
+ * qu'il doit vérifier lui-même.
+ *
  * @param label étiquette technique du `ClipData`, non affichée à l'utilisateur.
  * @param text contenu à copier.
  */
