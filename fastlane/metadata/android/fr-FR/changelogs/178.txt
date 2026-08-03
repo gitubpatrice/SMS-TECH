@@ -1,0 +1,7 @@
+Mode leurre : le verrouillage de l'application ne peut plus y être retiré, la sauvegarde n'y est plus accessible et l'écran À propos n'y mentionne plus le coffre.
+
+Coffre : le second code protège désormais les messages eux-mêmes, plus seulement l'écran.
+
+Envois : plus de double SMS sur un double appui, et quitter l'écran n'interrompt plus un envoi en cours.
+
+Nouveau : épingler, archiver ou mettre en sourdine une conversation, et marquer un message en favori.

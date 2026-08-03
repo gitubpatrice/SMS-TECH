@@ -3,6 +3,79 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.0] — 2026-08-03
+
+Correction des 53 constats d'un audit de haut niveau conduit par motifs de défaut. Le motif
+dominant : **la garde était posée sur l'affichage, pas sur l'accès** — une ligne masquée dans un
+écran, mais la fonction qu'elle déclenche restant atteignable par un autre chemin.
+
+### Security
+- **Le mode leurre se désarmait depuis l'écran qu'il protège.** La ligne « Verrouillage de
+  l'app » n'était pas masquée, alors que ses deux voisines l'étaient : quatre appuis, sans
+  ressaisie de PIN, effaçaient le verrou — donc le code panique avec lui, et toutes les gardes du
+  leurre d'un coup. La ligne est masquée et, surtout, l'effacement du verrou est refusé en session
+  leurre.
+- **La sauvegarde exportait le coffre, et elle était atteignable en leurre.** Aucune garde
+  n'existait dans la chaîne de sauvegarde. La section est masquée et l'écriture elle-même est
+  refusée en leurre.
+- **Changer son PIN pour la valeur de son code panique enfermait l'utilisateur en leurre, sans
+  issue.** Le refus symétrique existait dans l'autre sens seulement.
+- **L'écran À propos décrivait le mode leurre, en mode leurre** — coffre, code panique et mode
+  urgence compris. Les entrées sensibles y sont filtrées ; l'écran, lui, reste présent.
+- **Le second facteur du coffre gardait l'écran, pas la donnée.** Trois chemins ouvraient un fil
+  du coffre sans jamais demander le PIN coffre. Le masquage est descendu dans la couche données.
+- **Un Intent forgeable ouvrait n'importe quelle conversation.** L'activité est exportée (rôle
+  SMS) et un Intent explicite ignore les `intent-filter`. Les intentions de notification portent
+  désormais un jeton vérifié à la consommation.
+
+### Added
+- Épingler, archiver et mettre en sourdine une conversation. Le tri « Épinglés d'abord », la page
+  Archivés et les deux badges cessent d'être décoratifs — et la sourdine silencie réellement les
+  notifications, ce qu'aucun notificateur ne faisait.
+- Marquer un message en favori. La promesse « les messages favoris ne sont jamais supprimés »,
+  affichée à trois endroits, devient tenable : la purge s'appuyait déjà sur le drapeau, seul le
+  geste manquait.
+- Signature automatique, réglable (plafond 80 caractères, au-delà le SMS bascule en multi-part).
+  Elle était ajoutée à chaque SMS sortant sans pouvoir être définie.
+- Sélecteur du délai de verrouillage automatique : la valeur était lue par la production mais
+  figée sur son défaut, faute d'écran.
+- Réconciliation des suppressions : un SMS supprimé depuis une autre application ne reste plus
+  visible ici indéfiniment.
+
+### Fixed
+- **Double appui sur « Envoyer » = deux SMS réellement envoyés et facturés** sur les chemins texte
+  et média ; seul le chemin vocal était protégé.
+- **Un envoi pouvait être annulé à mi-chemin par un simple retour arrière** — geste que l'écran
+  encourage : la ligne apparaissait « envoyée » dans les autres applications, en attente ici, et
+  aucun SMS ne partait.
+- **Un envoi programmé pouvait partir deux fois** faute de revendication atomique avant l'appel
+  réseau.
+- **Le statut d'un SMS multi-parties était celui de la dernière partie reçue** : un échec partiel
+  était écrasé par l'accusé positif d'une autre partie, et le message arrivait tronqué mais cru
+  envoyé.
+- **La liste noire ne filtrait pas les MMS** : un correspondant bloqué voyait ses SMS disparaître,
+  mais ses MMS arrivaient, étaient stockés et notifiés.
+- **Liste noire : 9 chiffres à la réception, 8 à la synchronisation.** Bloquer un numéro faisait
+  jeter en silence, à l'import, les messages d'un numéro jamais bloqué — et définitivement.
+- **Import : deux numéros différents pouvaient être fusionnés dans un même fil**, et répondre
+  envoyait alors au mauvais destinataire.
+- **Le SMS d'urgence transmettait une position périmée comme si elle était actuelle.** Le seuil de
+  fraîcheur ne s'appliquait qu'au chemin rapide, jamais aux deux replis.
+- **Le déclenchement d'urgence était annulable en quittant l'écran**, ce qui interrompait en
+  silence l'envoi de vrais SMS.
+- **Vider le carnet Safety call désarmait le mode urgence en silence** (carnet partagé).
+- **Le blocage après trop de tentatives pouvait ne jamais se lever** : le compte à rebours ne se
+  réarmait pas, laissant un bouton mort jusqu'à la fin du processus.
+- La purge n'était pas transactionnelle : l'aperçu en clair d'un message effacé subsistait, et
+  définitivement.
+- La restauration sortait du coffre les messages qui s'y trouvaient.
+
+### Removed
+- **Sauvegarde automatique**, morte à trois niveaux (worker jamais mis en file, aucune interface,
+  refus du format par défaut faute de phrase secrète). La rendre réelle imposait de persister un
+  secret de chiffrement, et le repli non chiffré aurait été une régression de confidentialité. La
+  sauvegarde manuelle est intacte, restauration comprise.
+
 ## [1.25.2] — 2026-07-25
 
 ### Fixed

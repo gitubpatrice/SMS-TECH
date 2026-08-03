@@ -1,0 +1,7 @@
+Decoy mode: app lock can no longer be removed from within it, backup is no longer reachable there, and the About screen no longer mentions the vault.
+
+Vault: the second code now protects the messages themselves, not just the screen.
+
+Sending: no more duplicate SMS on a double tap, and leaving the screen no longer interrupts a send in progress.
+
+New: pin, archive or mute a conversation, and star a message.
