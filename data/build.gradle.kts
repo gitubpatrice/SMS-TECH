@@ -90,4 +90,9 @@ dependencies {
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.junit.jupiter.params)
     testImplementation(libs.truth)
+    // v1.27.2 — nécessaires pour tester les gardes de [VaultManager] en JVM : ses collaborateurs
+    // sont des classes concrètes adossées à DataStore, donc non instanciables hors appareil, et
+    // ses points d'entrée sont `suspend`. Mêmes versions que `:app`, prises au catalogue.
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

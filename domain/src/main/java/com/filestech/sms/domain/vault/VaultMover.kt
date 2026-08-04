@@ -21,7 +21,12 @@ interface VaultMover {
 
     /**
      * Déplacement « depuis l'extérieur » du coffre : vérifie l'état de verrouillage (refus
-     * `PanicDecoy` / `Locked`) puis auto-déverrouille la session avant de déplacer.
+     * `PanicDecoy`, et tout état non ouvert pour l'UI — `Locked` comme `LockedOut`).
+     *
+     * v1.27.2 — n'auto-déverrouille **plus** la session du coffre : cet auto-déverrouillage
+     * datait d'avant l'existence du code du coffre et contournait donc son second facteur.
+     * **Y entrer** reste permis session fermée (cacher est sûr) ; **en sortir** révèle du contenu
+     * protégé et exige désormais une session ouverte, comme [moveOutOfVault].
      */
     suspend fun requestMoveToVault(conversationId: Long, intoVault: Boolean): Outcome<Unit>
 
