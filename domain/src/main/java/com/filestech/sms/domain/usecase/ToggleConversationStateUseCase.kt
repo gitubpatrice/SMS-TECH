@@ -50,8 +50,9 @@ class ToggleConversationStateUseCase @Inject constructor(
 
     /**
      * v1.11.0 — wrapper pour appels depuis l'extérieur de VaultScreen. Voir
-     * [com.filestech.sms.security.VaultManager.requestMoveToVault] pour la politique de sécurité (refus
-     * PanicDecoy + Locked, auto-unlock sinon).
+     * [com.filestech.sms.security.VaultManager.requestMoveToVault] pour la politique de sécurité
+     * (refus PanicDecoy + Locked ; v1.27.2 : plus d'auto-unlock de la session coffre, et la
+     * SORTIE du coffre exige une session coffre déjà déverrouillée).
      */
     suspend fun requestMoveToVault(id: Long, intoVault: Boolean): Outcome<Unit> =
         vault.requestMoveToVault(id, intoVault)

@@ -62,14 +62,16 @@ interface ConversationDao {
 
     /**
      * v1.3.3 — snapshot des conv **1-to-1** (zéro `;` dans `addresses_csv`, donc une seule
-     * adresse stockée). Sert au fallback de matching par suffix 8 chiffres dans
+     * adresse stockée). Sert au fallback de matching par clé numérique dans
      * [com.filestech.sms.data.repository.ConversationMirror.ensureConversation] : un SMS
      * reçu en format national (`0612…`) doit retrouver la conversation existante créée
      * lors de l'import système en format international (`+33612…`), et inversement.
      *
      * On évite un `LIKE '%suffix'` SQL imprécis sur le CSV : ici on filtre les 1-to-1 puis
-     * le matching exact se fait en mémoire via `phoneSuffix8()`. Volume négligeable (qq
-     * centaines de conv max sur usage normal).
+     * le matching exact se fait en mémoire via `blockKey()` — 9 chiffres significatifs
+     * (v1.26.1 H13 côté réception, v1.27.2 côté composition `findOrCreate`, qui utilisait
+     * encore `phoneSuffix8()`). Volume négligeable (qq centaines de conv max sur usage
+     * normal).
      */
     @Query("SELECT * FROM conversations WHERE addresses_csv NOT LIKE '%;%'")
     suspend fun snapshotOneToOneConversations(): List<ConversationEntity>
