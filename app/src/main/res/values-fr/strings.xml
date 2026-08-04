@@ -269,6 +269,8 @@
     <string name="action_disable">Désactiver</string>
     <string name="vault_actions_title">Actions du coffre</string>
     <string name="vault_biometric_title">Déverrouiller le coffre</string>
+    <string name="vault_biometric_unavailable_title">Coffre indisponible</string>
+    <string name="vault_biometric_unavailable_body">La biométrie est le seul second facteur configuré pour ce coffre, et elle est actuellement indisponible. Définissez un code du coffre distinct dans les Réglages pour l\'ouvrir sans biométrie.</string>
     <string name="vault_biometric_subtitle">Confirmez votre identité pour ouvrir le dossier privé.</string>
     <string name="vault_biometric_pending">En attente de l\'empreinte…</string>
     <!-- v1.11.0 — Sujet 5 apparence par contact -->

@@ -278,6 +278,8 @@
     <string name="action_disable">Disable</string>
     <string name="vault_actions_title">Vault actions</string>
     <string name="vault_biometric_title">Unlock the vault</string>
+    <string name="vault_biometric_unavailable_title">Vault unavailable</string>
+    <string name="vault_biometric_unavailable_body">Biometrics is the only second factor set for this vault, and it is currently unavailable. Set a separate vault code in Settings to open the vault without biometrics.</string>
     <string name="vault_biometric_subtitle">Confirm your identity to open the private folder.</string>
     <string name="vault_biometric_pending">Waiting for fingerprint…</string>
     <!-- v1.11.0 — Sujet 5 apparence par contact -->

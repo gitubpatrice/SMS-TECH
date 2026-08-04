@@ -319,6 +319,10 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     var unlocked by remember {
         mutableStateOf<Boolean?>(if (viewModel.isVaultSessionUnlocked()) true else null)
     }
+    // v1.27.2 (audit externe Gemini 2026-08-04) — la biométrie est le SEUL second facteur de ce
+    // coffre (aucun code coffre configuré) et elle est indisponible. On ne peut donc pas
+    // authentifier : on l'explique au lieu d'ouvrir. Cf. l'effet d'entrée plus bas.
+    var biometricUnavailable by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
 
     // v1.13.0 — si le PIN/pass distinct coffre est ON, on attend la validation
@@ -478,10 +482,25 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         when (currentLockMode) {
             LockMode.BIOMETRIC -> {
                 if (!StrongBiometrics.isAvailable(ctx)) {
-                    // Biométrie indisponible (perdue, hardware off) → on accepte
-                    // car l'user a déjà passé le verrouillage principal de l'app.
-                    viewModel.markUnlocked()
-                    unlocked = true
+                    // v1.27.2 (audit externe Gemini 2026-08-04) — on N'OUVRE PLUS.
+                    //
+                    // Avant : « l'utilisateur a déjà passé le verrouillage principal, on
+                    // accepte ». Le repli échouait du mauvais côté. Sur ce chemin — mode
+                    // biométrique ET aucun code coffre configuré — la biométrie est le SEUL
+                    // second facteur du Coffre : la rendre indisponible le supprimait
+                    // entièrement. Retirer ses empreintes, ou un capteur en panne, et le Coffre
+                    // s'ouvrait tout seul pour quiconque tient le téléphone déverrouillé.
+                    //
+                    // L'asymétrie était parlante : [com.filestech.sms.ui.screens.lock.LockScreen]
+                    // retombe sur le PIN quand la biométrie manque ; ici on retombait sur RIEN.
+                    //
+                    // Pourquoi refuser plutôt que retomber sur le PIN principal : sur ce chemin
+                    // il l'a DÉJÀ saisi pour ouvrir l'application (LockScreen bascule sur le PIN
+                    // dès que la biométrie manque). Le redemander ne prouverait rien de plus et
+                    // ne serait qu'une mise en scène. Le second facteur du Coffre doit être un
+                    // secret DISTINCT — c'est le code coffre, et il se configure dans les
+                    // Réglages, hors du Coffre : personne n'est enfermé dehors.
+                    biometricUnavailable = true
                     return@LaunchedEffect
                 }
                 triggerBiometric {
@@ -671,6 +690,22 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // v1.25.4 — pas avant que la destination ne soit au premier plan : présenté pendant la
     // transition, ce dialogue captait lui aussi la fin du geste de retour venu de la conversation
     // et se refermait dans la foulée en appelant `onCancel` — donc `lockedOnBack`.
+    // v1.27.2 (audit externe Gemini 2026-08-04) — biométrie indisponible et aucun code coffre :
+    // on explique et on ressort, au lieu d'ouvrir. Un dialogue plutôt qu'un message éphémère,
+    // qui ne s'afficherait pas puisqu'on quitte l'écran dans la foulée.
+    if (biometricUnavailable) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { biometricUnavailable = false; lockedOnBack() },
+            title = { Text(stringResource(R.string.vault_biometric_unavailable_title)) },
+            text = { Text(stringResource(R.string.vault_biometric_unavailable_body)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { biometricUnavailable = false; lockedOnBack() },
+                ) { Text(stringResource(R.string.action_confirm)) }
+            },
+        )
+    }
+
     if (pinGateOpen && navEntryResumed) {
         com.filestech.sms.ui.components.PinEntryDialog(
             title = stringResource(R.string.vault_pin_dialog_title),
