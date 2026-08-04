@@ -129,10 +129,30 @@ class ConversationRepositoryImpl @Inject constructor(
      * out of decoy back to a real unlock (next session), the list re-populates without manual
      * refresh.
      */
+    /**
+     * v1.27.2 (audit externe Gemini 2026-08-04) — le second facteur du Coffre garde AUSSI sa
+     * propre liste.
+     *
+     * Le correctif H1 (v1.26.1) avait branché [vaultSession] sur [observeOne],
+     * [observeMessages] et [observeMessageWindow] — mais pas ici, sur le flux qui rend le
+     * contenu du Coffre lui-même. C'était le dernier chemin de lecture du Coffre gardé
+     * uniquement contre la session leurre, alors que ses trois frères exigent en plus le second
+     * facteur. Aucune fuite atteignable aujourd'hui (l'unique consommateur, `VaultScreen`, masque
+     * son contenu tant que l'authentification n'a pas abouti) — mais c'est exactement la forme
+     * que H1 décrit : la garde sur l'ÉCRAN et non sur la DONNÉE. Le prochain consommateur de ce
+     * flux hériterait de la protection au lieu de devoir y penser.
+     */
     override fun observeVault(): Flow<List<Conversation>> =
-        combine(appLock.state, conversationDao.observeVault()) { lockState, list ->
-            if (lockState is AppLockManager.LockState.PanicDecoy) emptyList<Conversation>()
-            else list.map { it.toDomain() }
+        combine(
+            appLock.state,
+            conversationDao.observeVault(),
+            vaultSession.unlocked,
+        ) { lockState, list, vaultOpen ->
+            if (lockState is AppLockManager.LockState.PanicDecoy || !vaultOpen) {
+                emptyList()
+            } else {
+                list.map { it.toDomain() }
+            }
         }.flowOn(io)
 
     /**
