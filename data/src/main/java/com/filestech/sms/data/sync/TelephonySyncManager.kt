@@ -346,11 +346,26 @@ class TelephonySyncManager @Inject constructor(
             // que H9 a fermé — au tour suivant `gone` serait vide et le refresh jamais rejoué.
             var removed = 0
             database.withTransaction {
+                // v1.27.2 (relecture Codex 2026-08-04) — recalcul CIBLÉ, et non plus global.
+                //
+                // La première version appelait `refreshAllConversationPreviewsAfterPurge()`,
+                // qui réécrit l'aperçu de TOUTES les conversations à partir de
+                // `messages.body`. Or pour un MMS sans légende, `body` est VIDE : le libellé
+                // utile (« 🖼️ photo.jpg », sujet…) vit uniquement dans
+                // `conversations.last_message_preview`, posé à l'insertion par
+                // `ConversationMirror.touchConversation`. Une suppression dans le fil B vidait
+                // donc l'aperçu du fil A, parfaitement étranger à l'opération.
+                //
+                // On relève les conversations concernées AVANT le `DELETE` — après, les lignes
+                // n'existent plus — et on ne recalcule que celles-là.
+                val affected = gone.chunked(SQLITE_HOST_PARAM_LIMIT)
+                    .flatMap { batch -> messageDao.findConversationIdsByTelephonyUris(batch) }
+                    .toSet()
                 gone.chunked(SQLITE_HOST_PARAM_LIMIT).forEach { batch ->
                     removed += messageDao.deleteByTelephonyUris(batch)
                 }
                 if (removed > 0) {
-                    messageDao.refreshAllConversationPreviewsAfterPurge()
+                    affected.forEach { convId -> messageDao.refreshConversationPreview(convId) }
                 }
             }
             Timber.i("reconcileDeletions: %d local row(s) dropped (deleted system-side)", removed)

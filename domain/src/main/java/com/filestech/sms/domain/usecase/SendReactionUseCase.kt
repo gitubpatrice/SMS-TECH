@@ -155,7 +155,10 @@ class SendReactionUseCase @Inject constructor(
      * X1 — vrai numéro téléphonique dialable. Refuse :
      *
      *   - alphanumériques (banque, Free, INFO, AMAZON, livraisons),
-     *   - short codes < 4 chiffres (numéros premium 5 chiffres : 1,50 € le SMS),
+     *   - short codes de moins de [REACTION_MIN_DIGITS] chiffres, ce qui couvre les 3 à 6
+     *     chiffres des codes courts mondiaux et les 5 chiffres des numéros premium français
+     *     (1,50 € le SMS) — v1.27.2 : le seuil était de 4, il ne rejetait donc AUCUN des codes
+     *     que cette ligne prétendait déjà écarter,
      *   - chaînes contenant des lettres ou symboles non téléphoniques.
      *
      * Acceptés : `+33612345678`, `0612345678`, `+1 (415) 555-2671`, `06.12.34.56.78`,

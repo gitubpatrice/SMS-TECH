@@ -96,6 +96,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // sandbox ci-dessous, seul autorisé à être supprimé dans le `finally`. Cf. le commentaire
         // qui accompagne cette suppression.
         var validatedPdu: File? = null
+        // v1.27.2 (relecture Codex 2026-08-04) — le PDU n'est CONSOMMÉ que lorsque son sort est
+        // réglé : message écrit en base, expéditeur bloqué pour de bon, doublon déjà traité, ou
+        // contenu inexploitable. Tant que ce drapeau est faux, le fichier est la SEULE copie du
+        // MMS et de sa pièce jointe — on ne le supprime pas.
+        var pduConsumed = false
         scope.launch {
             try {
                 val mirror = entry.mirror()
@@ -146,6 +151,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // restreinte au fichier validé, il n'aurait plus jamais été nettoyé du cache.
                 if (!pduFile.exists() || pduFile.length() == 0L) {
                     Timber.w("MMS PDU missing or empty: %s", pduPath)
+                    // Rien à préserver : le fichier est absent ou vide.
+                    pduConsumed = true
                     return@launch
                 }
                 val bytes = runCatching { pduFile.readBytes() }.getOrNull()
@@ -156,6 +163,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val parsed = runCatching { PduParser(bytes).parse() }.getOrNull()
                 if (parsed !is RetrieveConf) {
                     Timber.w("MMS PDU is not RetrieveConf (parsed=%s)", parsed?.javaClass?.simpleName)
+                    // Contenu définitivement inexploitable : le conserver ne mènerait à rien.
+                    pduConsumed = true
                     return@launch
                 }
 
@@ -172,6 +181,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                         processedTransactions.entries.removeAll { now - it.value > DEDUP_TTL_MS }
                         if (processedTransactions.containsKey(txId)) {
                             Timber.i("MMS replay suppressed: txId=%s", txId)
+                            // Doublon : l'exemplaire précédent a déjà réglé le sort du message.
+                            pduConsumed = true
                             return@launch
                         }
                         processedTransactions[txId] = now
@@ -206,6 +217,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // avalée et la politique est écrite à UN seul endroit.
                 if (sender.isNotBlank() && blockedRepo.isBlockedFailOpen(sender)) {
                     Timber.i("Dropping downloaded MMS from blocked sender")
+                    // Rejet DÉLIBÉRÉ, sur un `true` franc de la liste noire : le message ne doit
+                    // pas être conservé. Une ERREUR de consultation, elle, rend `false` et
+                    // n'arrive donc jamais ici.
+                    pduConsumed = true
                     return@launch
                 }
                 val date = (if (parsed.date > 0) parsed.date * 1000L else System.currentTimeMillis())
@@ -232,6 +247,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     date = date,
                     subId = subId,
                 )
+                // v1.27.2 (relecture Codex 2026-08-04) — le message est en base : le PDU a
+                // rempli son office et peut être supprimé. Tout ce qui suit (lecture du
+                // conversationId, notification) n'est plus de la persistance.
+                pduConsumed = true
                 // Symmetric with [SmsDeliverReceiver]: re-fetch the row to get the conversationId
                 // so [IncomingMessageNotifier.cancelAllForConversation] can later clear the
                 // notification by tag when the user opens the thread.
@@ -246,6 +265,13 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 } else {
                     Timber.w("MmsDownloadedReceiver: message %d not found after insert", msgId)
                 }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                // v1.27.2 (relecture Codex 2026-08-04) — une annulation n'est PAS un traitement
+                // abouti. Le `catch (Throwable)` ci-dessous l'absorbait, et le `finally`
+                // supprimait alors le PDU d'un message jamais persisté — y compris celle que
+                // [isBlockedFailOpen] relance justement pour ne pas la transformer en « non
+                // bloqué ». On la laisse remonter, PDU intact.
+                throw ce
             } catch (t: Throwable) {
                 Timber.w(t, "MMS download handling failed")
             } finally {
@@ -263,7 +289,22 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // Non atteignable aujourd'hui (`exported=false`, chemin posé par notre propre
                 // processus) — c'est bien de la défense en profondeur qu'on rend cohérente, pas
                 // une faille ouverte que l'on ferme.
-                if (rc == Activity.RESULT_OK) {
+                //
+                // v1.27.2 (relecture Codex 2026-08-04) — et SEULEMENT si son sort est réglé.
+                //
+                // La condition ne portait que sur `rc == RESULT_OK`, c'est-à-dire sur la
+                // réussite du TÉLÉCHARGEMENT, jamais sur celle du traitement. Si
+                // `upsertIncomingMms` échouait — base indisponible, la situation même que le
+                // repli ouvert de la liste noire laisse passer — le `catch` absorbait l'erreur
+                // et le `finally` supprimait quand même le PDU. Le MMS et sa pièce jointe
+                // n'existaient alors NULLE PART : ni en base, ni dans le fournisseur système,
+                // ni sur le disque. Irrécupérables.
+                //
+                // Le fichier est désormais conservé tant que rien n'a réglé son sort. Il reste
+                // dans `cacheDir`, que le système récupère sous pression — préférer quelques
+                // kilo-octets orphelins à la perte d'un message est le bon sens d'échec pour
+                // cette application.
+                if (rc == Activity.RESULT_OK && pduConsumed) {
                     validatedPdu?.let { pdu -> runCatching { pdu.delete() } }
                 }
                 pending.finish()

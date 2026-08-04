@@ -255,8 +255,17 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 // écrit, et le SMS n'existait nulle part. `TelephonyReader` ne dépend que du
                 // Context : il reste utilisable même quand Room/SQLCipher est mort. La ligne
                 // système sera ré-importée en Room par [TelephonySyncManager] à la prochaine
-                // synchro ; pas de doublon possible, la ligne Room n'ayant pas été écrite sur ce
-                // chemin d'échec.
+                // synchro.
+                //
+                // ⚠️ v1.27.2 (relecture Codex 2026-08-04) — la version précédente de ce
+                // commentaire affirmait « pas de doublon possible ». C'était FAUX. Si le
+                // fournisseur système valide l'insertion puis que la liaison Binder échoue avant
+                // le retour, l'appel lève alors que la ligne EXISTE : `persistedToSystem` reste
+                // faux et ce filet insère une seconde fois. Sémantique « au moins une fois »,
+                // pas « exactement une fois ».
+                //
+                // C'est le compromis VOULU : un doublon se voit et s'efface, une perte est
+                // définitive. Mais il devait être écrit tel qu'il est, pas nié.
                 if (!persistedToSystem && !droppedByBlocklist) {
                     val addr = salvageAddress
                     val text = salvageBody

@@ -432,6 +432,18 @@ interface MessageDao {
     suspend fun deleteByTelephonyUris(uris: List<String>): Int
 
     /**
+     * v1.27.2 (relecture Codex 2026-08-04) — conversations touchées par un lot de suppressions,
+     * À LIRE AVANT le `DELETE` (après, les lignes n'existent plus).
+     *
+     * Sert à `TelephonySyncManager.reconcileDeletions` pour ne recalculer QUE les aperçus des
+     * fils réellement concernés. Le recalcul global qui l'a précédée réécrivait l'aperçu de
+     * TOUTES les conversations, y compris celles qu'aucune suppression ne touchait — voir le
+     * commentaire de cette passe pour ce que ça coûtait.
+     */
+    @Query("SELECT DISTINCT conversation_id FROM messages WHERE telephony_uri IN (:uris)")
+    suspend fun findConversationIdsByTelephonyUris(uris: List<String>): List<Long>
+
+    /**
      * FTS search across body + address. Returns matching message ids ordered by relevance.
      *
      * v1.11.0 audit SEC-V1 — JOIN sur `conversations` avec filtre `in_vault = 0`
