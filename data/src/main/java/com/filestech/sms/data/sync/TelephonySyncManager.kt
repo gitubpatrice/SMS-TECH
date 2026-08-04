@@ -311,9 +311,13 @@ class TelephonySyncManager @Inject constructor(
      *
      * v1.27.2 (audit externe 2026-08-04 #6) — 4ᵉ règle : **toute suppression recalcule les
      * aperçus**, dans la même transaction (même contrat que `deleteMessage` v1.24.0 et
-     * `purgeHistoryNow` H9). Le recalcul passe par `refreshAllConversationPreviewsAfterPurge`,
-     * qui re-dérive `last_message_preview`/`last_message_at` de chaque conversation depuis ses
-     * propres messages — idempotent, y compris pour le coffre.
+     * `purgeHistoryNow` H9).
+     *
+     * ⚠️ Le recalcul est **CIBLÉ** sur les seules conversations touchées, relevées avant le
+     * `DELETE`. La première version employait `refreshAllConversationPreviewsAfterPurge`, qui
+     * réécrit TOUTES les conversations depuis `messages.body` : une suppression dans un fil
+     * vidait alors l'aperçu d'un MMS sans légende situé dans un fil **étranger** à l'opération.
+     * Défaut trouvé par la relecture Codex, figé par `ReconcileDeletionsPreviewTest`.
      *
      * Le coffre est déjà exclu par la requête elle-même (`c.in_vault = 0`) : ses messages
      * n'existent que dans notre base et n'ont rien à réconcilier.
