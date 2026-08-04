@@ -179,11 +179,24 @@ class VaultManager @Inject constructor(
         intoVault: Boolean,
     ): Outcome<Int> = withContext(io) {
         if (ids.isEmpty()) return@withContext Outcome.Success(0)
+        // v1.27.2 (audit de cohérence 2026-08-04) — MÊME prédicat que [requestMoveToVault], et
+        // non plus une énumération d'états.
+        //
+        // La v1.26.1 (audit B1) avait remplacé cette énumération par `isOpenForUi` dans la
+        // jumelle non-bulk, précisément parce qu'elle OUBLIAIT `LockedOut` : un blocage après
+        // trop de tentatives n'est ni `Locked` ni `PanicDecoy`, il tombait donc dans le `else`
+        // et laissait l'opération passer. Le correctif n'avait pas été porté ici, alors que le
+        // KDoc de cette fonction affirme « garde les MÊMES guards » — un commentaire qui
+        // promettait ce que son code ne tenait pas.
+        //
+        // Aucun chemin d'interface atteignable identifié aujourd'hui (l'écran de verrouillage
+        // dépile la navigation dès qu'il s'affiche) : c'est de la défense en profondeur, le
+        // même argument qui a justifié de corriger la jumelle. `isOpenForUi` est le prédicat
+        // qui fait autorité — une énumération d'états vieillit mal, celle-ci l'a prouvé deux
+        // fois.
         val pre = appLock.state.value
-        when (pre) {
-            is AppLockManager.LockState.PanicDecoy -> return@withContext Outcome.Failure(AppError.Locked())
-            is AppLockManager.LockState.Locked -> return@withContext Outcome.Failure(AppError.Locked())
-            else -> Unit
+        if (!appLock.isOpenForUi(pre) || pre is AppLockManager.LockState.PanicDecoy) {
+            return@withContext Outcome.Failure(AppError.Locked())
         }
         // Re-check anti-race PanicDecoy après context-switch IO (cohérent avec
         // [requestMoveToVault]).
