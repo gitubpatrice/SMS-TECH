@@ -99,6 +99,8 @@ fun EmergencyScreen(
     val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     val locationGranted = locationPermission.status == PermissionStatus.Granted
 
+    // v1.27.2 — résolu à la composition, comme les autres messages de cet écran.
+    val disableDoneMsg = stringResource(R.string.emergency_disable_done)
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -108,6 +110,17 @@ fun EmergencyScreen(
                     ctxGetter = { ctx },
                 )
                 is EmergencyViewModel.Event.Saved -> Unit // pas pertinent ici
+                // v1.27.2 — la désactivation est écrite : on annonce, puis on quitte l'écran.
+                //
+                // Il restait affiché, avec son gros bouton rouge devenu inerte, sur un mode
+                // qui venait d'être coupé — rien ne disait que l'action avait porté au-delà du
+                // message. `showSnackbar` suspend jusqu'à sa disparition, donc le message est
+                // bien lu AVANT le retour ; c'est le même enchaînement que
+                // [EmergencySetupScreen] après un enregistrement.
+                EmergencyViewModel.Event.Disabled -> {
+                    snackbarHost.showSnackbar(disableDoneMsg)
+                    onBack()
+                }
             }
         }
     }
@@ -368,10 +381,10 @@ fun EmergencyScreen(
                         androidx.compose.material3.FilledTonalButton(
                             onClick = {
                                 disableConfirmOpen = false
+                                // v1.27.2 — le message est désormais posé par le gestionnaire
+                                // d'événement, à la CONFIRMATION de l'écriture, et non ici sur
+                                // la seule intention. Il précède le retour à l'écran précédent.
                                 viewModel.disableEmergencyMode()
-                                scope.launch {
-                                    snackbarHost.showSnackbar(ctx.getString(R.string.emergency_disable_done))
-                                }
                             },
                             colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
                                 containerColor = com.filestech.sms.ui.theme.BrandDanger,

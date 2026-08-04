@@ -213,6 +213,12 @@ class EmergencyViewModel @Inject constructor(
          * (« Mode urgence activé » / « désactivé ») au lieu d'un « Enregistré » muet.
          */
         data class Saved(val enabled: Boolean) : Event
+
+        /**
+         * v1.27.2 — la désactivation est ÉCRITE. L'écran s'en sert pour revenir en arrière :
+         * une fois le mode éteint il n'a plus d'objet, et son gros bouton rouge devient inerte.
+         */
+        data object Disabled : Event
         data class Triggered(val result: TriggerEmergencyUseCase.Result) : Event
     }
 
@@ -238,7 +244,14 @@ class EmergencyViewModel @Inject constructor(
      * PanicDecoy guard non nécessaire ici : l'écran lui-même est gated
      * en PanicDecoy via `AppRoot` (cf. v1.10.0 SEC-1).
      */
-    fun disableEmergencyMode() = viewModelScope.launch {
+    fun disableEmergencyMode() = appScope.launch {
+        // v1.27.2 — `appScope` et non `viewModelScope`, même raison qu'en v1.26.1 (audit H10)
+        // pour [trigger].
+        //
+        // L'écran revient désormais en arrière dès que la désactivation est écrite. Avec
+        // `viewModelScope`, ce retour détruisait le ViewModel et pouvait annuler l'écriture
+        // DataStore en vol : le mode urgence serait resté ACTIF alors que l'utilisateur venait
+        // de le couper et que l'application le lui avait confirmé. Le pire des deux sens.
         settings.update { s ->
             s.copy(
                 security = s.security.copy(
@@ -265,6 +278,9 @@ class EmergencyViewModel @Inject constructor(
                 ),
             )
         }
+        // v1.27.2 — émis APRÈS l'écriture : l'écran ne revient en arrière qu'une fois la
+        // désactivation réellement enregistrée, jamais sur une intention.
+        _events.trySend(Event.Disabled)
     }
 
 }

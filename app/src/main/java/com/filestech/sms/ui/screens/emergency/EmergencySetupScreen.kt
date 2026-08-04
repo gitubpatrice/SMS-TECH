@@ -103,6 +103,9 @@ fun EmergencySetupScreen(
                     onBack()
                 }
                 is EmergencyViewModel.Event.Triggered -> Unit // vient d'EmergencyScreen
+                // v1.27.2 — émis par le bouton « Désactiver » d'[EmergencyScreen], qui gère
+                // lui-même son message et son retour. Rien à faire ici.
+                EmergencyViewModel.Event.Disabled -> Unit
             }
         }
     }
