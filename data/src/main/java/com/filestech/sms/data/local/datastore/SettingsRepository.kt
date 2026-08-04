@@ -408,6 +408,7 @@ class SettingsRepository @Inject constructor(
         // v1.10.0 SEC-11 — snapshot monotonic du dernier reset, anti clock-forward.
         val safetyCallMonotonicLastActivityAt =
             longPreferencesKey("security.safetyCall.monotonicLastActivityAt")
+
         // v1.27.2 — temps monotone capitalisé, pour que le deadman survive aux redémarrages.
         val safetyCallMonotonicAccumulatedMs =
             longPreferencesKey("security.safetyCall.monotonicAccumulatedMs")

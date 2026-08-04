@@ -203,7 +203,7 @@
     <ID>MultiLineIfElse:SettingsScreen.kt$MaterialTheme.colorScheme.primary</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$R.string.settings_emergency_armed_location</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$R.string.settings_emergency_armed_no_location</ID>
-    <ID>MultiLineIfElse:SettingsScreen.kt$SectionCard( title = stringResource(R.string.settings_section_safety_call), icon = Icons.Outlined.Shield, ) { val safetyCall = state.security.safetyCall if (safetyCall.enabled) { // Récap visible quand armé : durée, restant, contacts, // template + 2 actions (Modifier / Je vais bien). SafetyCallArmedRecap( config = safetyCall, remainingMs = safetyCallRemainingMs, onModify = onOpenSafetyCall, onImOk = { viewModel.update { s -&gt; s.copy( security = s.security.copy( safetyCall = s.security.safetyCall.copy( lastActivityAt = System.currentTimeMillis(), // v1.10.0 SEC-11 — couple mono+wall. monotonicLastActivityAt = SystemClock.elapsedRealtime(), ), ), ) } rootScope.launch { snackbarHost.showSnackbar( ctx.getString(R.string.settings_safety_call_im_ok_snack), ) } }, ) } else { NavigationRow( title = stringResource(R.string.settings_safety_call_title), description = stringResource(R.string.settings_safety_call_disabled) + "\n" + stringResource(R.string.settings_safety_call_desc), onClick = onOpenSafetyCall, ) } }</ID>
+    <ID>MultiLineIfElse:SettingsScreen.kt$SectionCard( title = stringResource(R.string.settings_section_safety_call), icon = Icons.Outlined.Shield, ) { val safetyCall = state.security.safetyCall if (safetyCall.enabled) { // Récap visible quand armé : durée, restant, contacts, // template + 2 actions (Modifier / Je vais bien). SafetyCallArmedRecap( config = safetyCall, remainingMs = safetyCallRemainingMs, onModify = onOpenSafetyCall, onImOk = { viewModel.update { s -> s.copy( security = s.security.copy( safetyCall = s.security.safetyCall.copy( lastActivityAt = System.currentTimeMillis(), // v1.10.0 SEC-11 — couple mono+wall. monotonicLastActivityAt = SystemClock.elapsedRealtime(), // v1.27.2 — « Je vais bien » remet aussi le temps // capitalisé à zéro : les trois champs ensemble. monotonicAccumulatedMs = 0L, ), ), ) } rootScope.launch { snackbarHost.showSnackbar( ctx.getString(R.string.settings_safety_call_im_ok_snack), ) } }, ) } else { NavigationRow( title = stringResource(R.string.settings_safety_call_title), description = stringResource(R.string.settings_safety_call_disabled) + "\n" + stringResource(R.string.settings_safety_call_desc), onClick = onOpenSafetyCall, ) } }</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$ctx.getString(R.string.settings_purge_blocked_none)</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$null</ID>
     <ID>MultiLineIfElse:SettingsScreen.kt$onOpenVaultPinClearConfirm()</ID>
@@ -251,7 +251,6 @@
     <ID>NoUnusedImports:ComposeScreen.kt$com.filestech.sms.ui.screens.compose.ComposeScreen.kt</ID>
     <ID>NoUnusedImports:ConversationRow.kt$com.filestech.sms.ui.components.ConversationRow.kt</ID>
     <ID>NoUnusedImports:ConversationsScreen.kt$com.filestech.sms.ui.screens.conversations.ConversationsScreen.kt</ID>
-    <ID>NoUnusedImports:EmergencyCallButton.kt$com.filestech.sms.ui.components.EmergencyCallButton.kt</ID>
     <ID>NoUnusedImports:EmergencyScreen.kt$com.filestech.sms.ui.screens.emergency.EmergencyScreen.kt</ID>
     <ID>NoUnusedImports:EmergencyShortcutReceiver.kt$com.filestech.sms.system.receiver.EmergencyShortcutReceiver.kt</ID>
     <ID>NoUnusedImports:EmojiCustomDialog.kt$com.filestech.sms.ui.components.EmojiCustomDialog.kt</ID>
@@ -332,8 +331,6 @@
     <ID>UnusedImports:ComposeScreen.kt$import androidx.compose.foundation.layout.width</ID>
     <ID>UnusedImports:ConversationRow.kt$import androidx.compose.foundation.layout.fillMaxHeight</ID>
     <ID>UnusedImports:ConversationsScreen.kt$import androidx.compose.material.icons.outlined.LockOpen</ID>
-    <ID>UnusedImports:EmergencyCallButton.kt$import androidx.compose.foundation.background</ID>
-    <ID>UnusedImports:EmergencyCallButton.kt$import androidx.compose.foundation.layout.padding</ID>
     <ID>UnusedImports:EmergencyScreen.kt$import androidx.compose.foundation.layout.Arrangement</ID>
     <ID>UnusedImports:EmergencyShortcutReceiver.kt$import com.filestech.sms.R</ID>
     <ID>UnusedImports:EmojiCustomDialog.kt$import androidx.compose.foundation.layout.padding</ID>

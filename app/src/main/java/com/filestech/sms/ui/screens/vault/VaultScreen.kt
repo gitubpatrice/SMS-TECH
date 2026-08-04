@@ -700,12 +700,18 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // relecture.
     if (biometricUnavailable && navEntryResumed) {
         androidx.compose.material3.AlertDialog(
-            onDismissRequest = { biometricUnavailable = false; lockedOnBack() },
+            onDismissRequest = {
+                biometricUnavailable = false
+                lockedOnBack()
+            },
             title = { Text(stringResource(R.string.vault_biometric_unavailable_title)) },
             text = { Text(stringResource(R.string.vault_biometric_unavailable_body)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(
-                    onClick = { biometricUnavailable = false; lockedOnBack() },
+                    onClick = {
+                        biometricUnavailable = false
+                        lockedOnBack()
+                    },
                 ) { Text(stringResource(R.string.action_confirm)) }
             },
         )

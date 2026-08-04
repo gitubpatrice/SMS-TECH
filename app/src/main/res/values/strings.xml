@@ -145,6 +145,7 @@
     <string name="conversations_delete_confirm_title">Delete this conversation?</string>
     <string name="conversations_delete_confirm_body">All messages in this conversation will be permanently removed from this device. Other conversations are not affected.</string>
     <string name="conversations_draft_prefix">Draft: %1$s</string>
+    <string name="conversations_preview_attachment">Attachment</string>
 
     <!-- Thread -->
     <string name="thread_compose_placeholder">Type a message…</string>

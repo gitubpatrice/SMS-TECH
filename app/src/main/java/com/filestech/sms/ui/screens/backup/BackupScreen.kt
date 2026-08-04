@@ -74,9 +74,11 @@ class BackupViewModel @Inject constructor(
     sealed interface Event {
         data class ExportDone(val uri: android.net.Uri, val pages: Int = 0) : Event
         data object ExportFailed : Event
+
         // v1.27.2 (audit externe 2026-08-04 #4) — l'export exige la session coffre
         // déverrouillée quand le coffre n'est pas vide ; l'UI invite à l'ouvrir d'abord.
         data object ExportVaultLocked : Event
+
         // v1.15.2 — Événements restore. Le succès porte le récap chiffré pour l'affichage,
         // l'échec porte un kind typé qui mappe vers une string d'erreur localisée côté UI.
         data class RestoreDone(val result: RestoreResult) : Event

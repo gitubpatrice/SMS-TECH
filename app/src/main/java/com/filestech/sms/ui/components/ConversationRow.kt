@@ -213,7 +213,35 @@ fun ConversationRow(
                                 id = com.filestech.sms.R.string.conversations_draft_prefix,
                                 draftText,
                             )
-                        } else conversation.lastMessagePreview.orEmpty(),
+                        } else {
+                            // v1.27.2 (relecture Codex 2026-08-04) — repli quand l'aperçu est
+                            // vide alors qu'un dernier message existe.
+                            //
+                            // `conversations.last_message_preview` se reconstruit depuis
+                            // `messages.body`, or le corps d'un MMS SANS LÉGENDE est vide : son
+                            // libellé utile (« 🖼️ … », sujet) n'est posé qu'à l'insertion et
+                            // aucune colonne ne le porte par message. Tout recalcul d'aperçu le
+                            // perd donc — à la suppression d'un message, à la purge d'historique
+                            // comme à la réconciliation de synchro. La ligne devenait alors
+                            // MUETTE, sans rien dire de ce qu'elle contenait.
+                            //
+                            // Corrigé ici plutôt qu'en base : une colonne supplémentaire
+                            // imposerait une migration Room sur une base chiffrée contenant tous
+                            // les messages, pour un défaut d'affichage. Le repli couvre les
+                            // trois chemins d'un coup.
+                            //
+                            // `lastMessageAt > 0` distingue « message sans texte » de
+                            // « conversation sans aucun message » — cette dernière reste muette,
+                            // ce qui est exact.
+                            val preview = conversation.lastMessagePreview.orEmpty()
+                            if (preview.isBlank() && conversation.lastMessageAt > 0L) {
+                                androidx.compose.ui.res.stringResource(
+                                    id = com.filestech.sms.R.string.conversations_preview_attachment,
+                                )
+                            } else {
+                                preview
+                            }
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (unread) cs.onSurface else cs.onSurfaceVariant,
                         maxLines = previewLines,

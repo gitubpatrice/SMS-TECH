@@ -140,6 +140,7 @@
     <string name="conversations_delete_confirm_title">Supprimer cette conversation ?</string>
     <string name="conversations_delete_confirm_body">Tous les messages de cette conversation seront définitivement supprimés de cet appareil. Les autres conversations ne sont pas affectées.</string>
     <string name="conversations_draft_prefix">Brouillon : %1$s</string>
+    <string name="conversations_preview_attachment">Pièce jointe</string>
 
     <string name="thread_compose_placeholder">Écrire un message…</string>
     <string name="thread_segments_indicator">%1$d / %2$d • %3$d seg.</string>

@@ -36,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -78,7 +77,6 @@ fun EmergencySetupScreen(
     // v1.25.5 — la liste elle-même, pour l'afficher au lieu d'un simple compte.
     val emergencyContacts by viewModel.safetyCallContacts.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
-    val ctx = LocalContext.current
     // v1.10.0 audit S1+U2 — prompt permission ACCESS_FINE_LOCATION quand
     // l'user active "Inclure la position". Sans ça, le switch ON sans
     // permission = SMS sans coordonnées en cas d'urgence (faux sentiment

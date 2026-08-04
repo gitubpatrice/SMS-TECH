@@ -240,6 +240,14 @@ class TelephonySyncWorker @AssistedInject constructor(
         val dirs = listOf(
             File(context.cacheDir, "mms_outgoing"),
             File(context.cacheDir, "media_outgoing"),
+            // v1.27.2 (relecture Codex 2026-08-04) — `mms_incoming` balayé lui aussi, par ÂGE.
+            //
+            // [com.filestech.sms.system.receiver.MmsDownloadedReceiver] ne supprime plus le PDU
+            // entrant tant que son sort n'est pas réglé : c'est ce qui ferme la perte d'un MMS
+            // quand la base est indisponible. Sans ce balayage, ces fichiers conservés
+            // s'accumuleraient indéfiniment. Un jour d'ancienneté est très au-delà de toute
+            // reprise plausible — le message est traité en quelques secondes ou jamais.
+            File(context.cacheDir, com.filestech.sms.data.mms.MmsDownloader.MMS_IN_DIR),
         )
         for (dir in dirs) {
             if (!dir.exists()) continue
