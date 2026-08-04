@@ -4,8 +4,8 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.filestech.sms.core.ext.blockKey
-import com.filestech.sms.core.ext.phoneSuffix8
 import com.filestech.sms.core.ext.stripInvisibleChars
+import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.AppDatabase
@@ -351,7 +351,7 @@ class ConversationRepositoryImpl @Inject constructor(
                 existing.id
             } else {
                 // Fix doublon "Nouvelle conversation" — AVANT de créer une nouvelle
-                // conversation, on rejoue le fallback suffix-8 déjà éprouvé côté
+                // conversation, on rejoue le fallback par clé numérique déjà éprouvé côté
                 // [ConversationMirror.ensureConversation]. Sans lui, composer un message
                 // vers un contact dont le numéro est stocké au format national
                 // (`06 12 34 56 78`) alors qu'une conversation existe déjà au format
@@ -361,7 +361,7 @@ class ConversationRepositoryImpl @Inject constructor(
                 // Restreint aux 1-to-1, mêmes garde-fous que le mirror : deux participants
                 // partiels d'un groupe ne doivent jamais être rapprochés par suffixe.
                 val suffixMatch = if (addresses.size == 1) {
-                    matchOneToOneBySuffix8(
+                    matchOneToOneByBlockKey(
                         conversationDao.snapshotOneToOneConversations(),
                         addresses.first(),
                     )
@@ -395,26 +395,39 @@ class ConversationRepositoryImpl @Inject constructor(
 
     companion object {
         /**
-         * Rapprochement d'une conversation 1-to-1 par ses **8 derniers chiffres**. Extrait ici
-         * en fonction pure (aucune dépendance Room) pour être testable en JVM et appelé depuis
-         * [findOrCreate] : quand l'égalité stricte du CSV échoue (`06 12 34 56 78` composé vs
-         * `+33612345678` stocké), ce fallback réunit les deux formes du même numéro et évite un
-         * doublon de conversation. Même stratégie que [ConversationMirror.ensureConversation]
-         * côté réception.
+         * Rapprochement d'une conversation 1-to-1 par la clé numérique canonique [blockKey]
+         * (9 chiffres significatifs). Extrait ici en fonction pure (aucune dépendance Room)
+         * pour être testable en JVM et appelé depuis [findOrCreate] : quand l'égalité stricte
+         * du CSV échoue (`06 12 34 56 78` composé vs `+33612345678` stocké), ce fallback
+         * réunit les deux formes du même numéro et évite un doublon de conversation.
          *
-         * Ne matche que si le suffixe fait exactement 8 chiffres : les numéros courts (services,
-         * 3xxx) sont trop peu discriminants pour être rapprochés sans risque de faux positif.
-         * L'appelant restreint déjà aux 1-to-1 ; on ne rapproche jamais deux groupes par suffixe.
+         * v1.27.2 (audit externe 2026-08-04 #1) — `phoneSuffix8()` amputait le chiffre qui
+         * sépare un `06…` d'un `07…` : `0612345678` et `0712345678` — deux personnes
+         * différentes — partageaient leur clé de 8 chiffres. Composer vers la seconde ouvrait
+         * la conversation de la première, et le message rédigé partait au mauvais
+         * destinataire. Le jumeau réception avait été corrigé en v1.26.1 (audit H13, cf.
+         * [ConversationMirror.ensureConversation]) ; ce côté composition ne l'avait pas été.
+         * Même clé, même seuil, même garde numérique que le mirror désormais.
+         *
+         * Le seuil [CONV_MATCH_MIN_DIGITS] (partagé avec le mirror) écarte les codes courts
+         * (services, 3xxx), trop peu discriminants pour un rapprochement par suffixe. La
+         * garde tout-chiffres écarte les libellés alphanumériques, que `blockKey()` rend en
+         * minuscules AVEC leurs lettres. L'appelant restreint déjà aux 1-to-1 ; on ne
+         * rapproche jamais deux groupes par suffixe.
          */
-        internal fun matchOneToOneBySuffix8(
+        internal fun matchOneToOneByBlockKey(
             oneToOne: List<ConversationEntity>,
             target: PhoneAddress,
         ): ConversationEntity? {
-            val targetSuffix = target.raw.phoneSuffix8()
-            if (targetSuffix.length != 8) return null
+            val targetKey = target.raw.stripMmsAddressSuffix().blockKey()
+            if (targetKey.length < CONV_MATCH_MIN_DIGITS ||
+                !targetKey.all { it.isDigit() }
+            ) {
+                return null
+            }
             return oneToOne.firstOrNull { conv ->
                 PhoneAddress.list(conv.addressesCsv).firstOrNull()
-                    ?.raw?.phoneSuffix8() == targetSuffix
+                    ?.raw?.stripMmsAddressSuffix()?.blockKey() == targetKey
             }
         }
     }

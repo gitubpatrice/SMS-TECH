@@ -1075,24 +1075,6 @@ class ConversationMirror @Inject constructor(
         const val MAX_PREVIEW = 240
 
         /**
-         * v1.26.1 (audit H13) — nombre minimal de chiffres exigé pour rapprocher deux écritures
-         * d'un même correspondant.
-         *
-         * ⚠️ HUIT, et non neuf. Une première version exigeait 9, par symétrie avec
-         * `BLOCK_KEY_SIGNIFICANT_DIGITS`. La revue a montré que c'était une RÉGRESSION : comme
-         * `blockKey()` PLAFONNE déjà à 9 chiffres, exiger `length >= 9` revenait à exiger
-         * exactement 9 — donc à ne plus jamais rapprocher un numéro national à 8 chiffres
-         * significatifs (Singapour, Hong Kong…), qui matchait pourtant très bien avant.
-         *
-         * Le seuil ne sert qu'à écarter les codes courts, qu'on ne doit jamais rapprocher par
-         * suffixe. C'est `blockKey()` — et non ce seuil — qui apporte la discrimination : deux
-         * numéros français produisent deux clés de 9 chiffres DIFFÉRENTES, donc le défaut
-         * `0612345678` / `0712345678` reste corrigé, la comparaison étant une égalité stricte
-         * entre chaînes de même longueur.
-         */
-        const val CONV_MATCH_MIN_DIGITS = 8
-
-        /**
          * v1.3.7 (F5 audit) — borne LRU du cache `displayNameCache`. 1000 entrées couvre largement
          * un compte normal (correspondants distincts + senders alphanumériques opérateurs/banques).
          * Au-delà, l'éviction LRU drop les expéditeurs anciens d'abord — les conversations actives
@@ -1111,3 +1093,26 @@ class ConversationMirror @Inject constructor(
         const val TAPBACK_FALLBACK_LOOKUP_LIMIT = 50
     }
 }
+
+/**
+ * v1.26.1 (audit H13) — nombre minimal de chiffres exigé pour rapprocher deux écritures
+ * d'un même correspondant.
+ *
+ * ⚠️ HUIT, et non neuf. Une première version exigeait 9, par symétrie avec
+ * `BLOCK_KEY_SIGNIFICANT_DIGITS`. La revue a montré que c'était une RÉGRESSION : comme
+ * `blockKey()` PLAFONNE déjà à 9 chiffres, exiger `length >= 9` revenait à exiger
+ * exactement 9 — donc à ne plus jamais rapprocher un numéro national à 8 chiffres
+ * significatifs (Singapour, Hong Kong…), qui matchait pourtant très bien avant.
+ *
+ * Le seuil ne sert qu'à écarter les codes courts, qu'on ne doit jamais rapprocher par
+ * suffixe. C'est `blockKey()` — et non ce seuil — qui apporte la discrimination : deux
+ * numéros français produisent deux clés de 9 chiffres DIFFÉRENTES, donc le défaut
+ * `0612345678` / `0712345678` reste corrigé, la comparaison étant une égalité stricte
+ * entre chaînes de même longueur.
+ *
+ * v1.27.2 (audit externe 2026-08-04 #1) — sorti du companion PRIVÉ de [ConversationMirror]
+ * en top-level `internal` : le même seuil garde désormais le jumeau composition
+ * [ConversationRepositoryImpl.matchOneToOneByBlockKey]. Une valeur dupliquée aurait pu
+ * dériver et rouvrir l'asymétrie réception/composition que ce correctif ferme.
+ */
+internal const val CONV_MATCH_MIN_DIGITS = 8
