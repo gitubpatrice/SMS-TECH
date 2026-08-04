@@ -1106,8 +1106,13 @@ class ThreadViewModel @Inject constructor(
      * v1.12.0 — Déplace la conversation courante DANS le coffre ou L'EN
      * SORT depuis l'overflow ThreadScreen. Délègue à
      * [ToggleConversationStateUseCase.requestMoveToVault] qui check
-     * `AppLockState` (refuse PanicDecoy + Locked, auto-`markUnlocked` sinon).
+     * `AppLockState` (refuse PanicDecoy + Locked).
      * Émet un snackbar `ShowSnackbar` de confirmation succès / échec.
+     *
+     * v1.27.2 (audit externe 2026-08-04 #3) — le déplacement n'arme PLUS la
+     * session coffre, et la SORTIE du coffre exige une session coffre déjà
+     * déverrouillée (AppError.Locked sinon — le `when` ci-dessous affiche déjà
+     * le message « session verrouillée » pour ce cas).
      *
      * En PanicDecoy, l'overflow item est masqué côté UI (cf. `state.isPanicDecoy`)
      * — defense in depth : le UseCase refuse aussi en domain.

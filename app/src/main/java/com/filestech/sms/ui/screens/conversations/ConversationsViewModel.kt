@@ -403,9 +403,11 @@ class ConversationsViewModel @Inject constructor(
     /**
      * v1.11.0 — déplace la conversation dans le coffre depuis la liste
      * principale. Délègue à [ToggleConversationStateUseCase.requestMoveToVault]
-     * qui check `AppLockState` (refuse PanicDecoy + Locked, auto-arme
-     * `sessionUnlocked` sinon). Émet un [Event] de résultat pour que l'UI
-     * affiche le snackbar de confirmation ou d'erreur.
+     * qui check `AppLockState` (refuse PanicDecoy + Locked). Émet un [Event] de
+     * résultat pour que l'UI affiche le snackbar de confirmation ou d'erreur.
+     *
+     * v1.27.2 (audit externe 2026-08-04 #3) — le déplacement n'arme PLUS la
+     * session coffre : l'ouverture du Coffre repasse par son second facteur.
      */
     fun moveConversationToVault(conversationId: Long) = viewModelScope.launch {
         val outcome = toggle.requestMoveToVault(conversationId, intoVault = true)

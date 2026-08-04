@@ -113,9 +113,16 @@ class VaultManager @Inject constructor(
      *    Defense in depth : l'UI doit DÉJÀ masquer le menu en decoy.
      *  - Refuse si [AppLockManager.LockState.Locked] — état impossible côté
      *    UI (l'écran de lock bloque la nav) mais filet de sécurité.
-     *  - Sinon : auto-`markUnlocked()` puis délègue à [moveToVault]/[moveOutOfVault].
-     *    L'auto-unlock est cohérent avec l'intention explicite de l'user qui
-     *    a cliqué sur "Déplacer vers le coffre" depuis un menu authenticated.
+     *  - v1.27.2 (audit externe 2026-08-04 #3) : ne marque PLUS la session coffre
+     *    déverrouillée. L'auto-`markUnlocked()` datait de la v1.11.0, AVANT le PIN coffre
+     *    (v1.13.0) : depuis, il contournait le second facteur — déplacer n'importe quelle
+     *    conversation vers le coffre depuis la liste principale ouvrait ensuite le Coffre
+     *    sans PIN coffre ni biométrie, [com.filestech.sms.ui.screens.vault.VaultScreen]
+     *    initialisant `unlocked` et `vaultPinPassed` depuis cette session.
+     *  - Déplacer VERS le coffre ne requiert aucun droit sur son contenu (cacher est sûr).
+     *    En SORTIR révèle du contenu protégé : même exigence que [moveOutOfVault], session
+     *    coffre déverrouillée obligatoire. La garde d'affichage (fil masqué tant que la
+     *    session est fermée) ne suffit pas — c'est l'ACCÈS qui doit être gardé.
      */
     override suspend fun requestMoveToVault(
         conversationId: Long,
@@ -144,7 +151,11 @@ class VaultManager @Inject constructor(
         if (postCheck is AppLockManager.LockState.PanicDecoy) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
-        session.markUnlocked()
+        // v1.27.2 (audit externe 2026-08-04 #3) — sortir du coffre exige le second facteur ;
+        // y entrer, non. Et plus d'auto-`markUnlocked()` : cf. la politique ci-dessus.
+        if (!intoVault && !session.isUnlocked) {
+            return@withContext Outcome.Failure(AppError.Locked())
+        }
         conversationRepo.moveToVault(conversationId, intoVault)
         Outcome.Success(Unit)
     }
@@ -158,6 +169,10 @@ class VaultManager @Inject constructor(
      * Garde les mêmes guards PanicDecoy/Locked (pré + re-check post context-switch), puis
      * délègue à [ConversationRepository.bulkMoveToVault] qui wrap dans `withTransaction`.
      * Retourne `Outcome.Success(count)` avec le nombre réel de rows mises à jour.
+     *
+     * v1.27.2 (audit externe 2026-08-04 #3) — même politique que [requestMoveToVault] : plus
+     * d'auto-`markUnlocked()` (il contournait le second facteur du Coffre), et la sortie du
+     * coffre exige une session coffre déjà déverrouillée.
      */
     override suspend fun requestBulkMoveToVault(
         ids: List<Long>,
@@ -176,7 +191,11 @@ class VaultManager @Inject constructor(
         if (post is AppLockManager.LockState.PanicDecoy) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
-        session.markUnlocked()
+        // v1.27.2 (audit externe 2026-08-04 #3) — cf. [requestMoveToVault] : sortir du coffre
+        // exige le second facteur, et plus d'auto-`markUnlocked()`.
+        if (!intoVault && !session.isUnlocked) {
+            return@withContext Outcome.Failure(AppError.Locked())
+        }
         val updated = conversationRepo.bulkMoveToVault(ids, intoVault)
         Outcome.Success(updated)
     }
