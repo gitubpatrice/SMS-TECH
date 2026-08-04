@@ -141,16 +141,36 @@ class EmergencyViewModel @Inject constructor(
             val current = _draft.value
             settings.update { s ->
                 val live = s.security.emergency
+                // v1.27.2 — la MÊME cascade que [disableEmergencyMode] quand l'enregistrement
+                // désactive le mode urgence.
+                //
+                // Le bouton dédié « Désactiver » de [EmergencyScreen] éteint le raccourci
+                // d'écran verrouillé et l'appel police (cascade v1.14.2) ; ce chemin-ci —
+                // décocher « Activer le mode urgence » puis « Enregistrer » — ne le faisait
+                // pas. Le raccourci restait donc posé sur l'écran verrouillé, encore tappable,
+                // alors que le mode était éteint. Le défaut était masqué : la migration de
+                // réparation de [com.filestech.sms.MainApplication] le corrigeait en silence…
+                // au COLD-START SUIVANT seulement.
+                //
+                // On efface aussi les horodatages de déclenchement, pour la même raison qu'en
+                // v1.14.5 sur la jumelle : sinon le bandeau « alerte déclenchée récemment »
+                // survit 30 min à une désactivation.
+                val disabling = !current.enabled
                 s.copy(
                     security = s.security.copy(
                         emergency = current.copy(
-                            lastTriggeredAt = live.lastTriggeredAt,
-                            monotonicLastTriggeredAt = live.monotonicLastTriggeredAt,
+                            lastTriggeredAt = if (disabling) 0L else live.lastTriggeredAt,
+                            monotonicLastTriggeredAt =
+                            if (disabling) 0L else live.monotonicLastTriggeredAt,
                         ),
+                        emergencyShortcutEnabled =
+                        if (disabling) false else s.security.emergencyShortcutEnabled,
+                        emergencyCallPoliceEnabled =
+                        if (disabling) false else s.security.emergencyCallPoliceEnabled,
                     ),
                 )
             }
-            _events.trySend(Event.Saved)
+            _events.trySend(Event.Saved(enabled = current.enabled))
         }
     }
 
@@ -188,7 +208,11 @@ class EmergencyViewModel @Inject constructor(
     }
 
     sealed interface Event {
-        data object Saved : Event
+        /**
+         * v1.27.2 — porte l'état enregistré pour que l'écran nomme ce qui vient de se passer
+         * (« Mode urgence activé » / « désactivé ») au lieu d'un « Enregistré » muet.
+         */
+        data class Saved(val enabled: Boolean) : Event
         data class Triggered(val result: TriggerEmergencyUseCase.Result) : Event
     }
 

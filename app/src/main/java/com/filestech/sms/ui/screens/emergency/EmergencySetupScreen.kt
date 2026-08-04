@@ -86,13 +86,22 @@ fun EmergencySetupScreen(
     val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     val locationGranted = locationPermission.status == PermissionStatus.Granted
 
+    // v1.27.2 — résolues à la composition : un `context.getString` dans le `collect` ajouterait
+    // une instance de `LocalContextGetResourceValueCall` au-delà de la baseline lint.
+    val emergencyEnabledMsg = stringResource(R.string.emergency_saved_enabled)
+    val emergencyDisabledMsg = stringResource(R.string.emergency_saved_disabled)
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             // v1.10.0 audit C2 — `when` exhaustif (le compilateur signale
             // tout nouveau case ajouté à Event).
             when (event) {
                 is EmergencyViewModel.Event.Saved -> {
-                    snackbarHost.showSnackbar(ctx.getString(R.string.action_save))
+                    // v1.27.2 — le message nomme ce qui vient de se passer. Il affichait
+                    // jusqu'ici le libellé du BOUTON (`action_save`), qui ne disait pas si le
+                    // mode urgence venait d'être activé ou éteint.
+                    snackbarHost.showSnackbar(
+                        if (event.enabled) emergencyEnabledMsg else emergencyDisabledMsg,
+                    )
                     onBack()
                 }
                 is EmergencyViewModel.Event.Triggered -> Unit // vient d'EmergencyScreen

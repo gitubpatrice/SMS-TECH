@@ -325,6 +325,8 @@
     <string name="emergency_shortcut_notif_text">Tap to open the emergency page, or dial 112.</string>
     <string name="emergency_shortcut_action_112">Dial 112</string>
     <string name="settings_emergency_shortcut_title">Lock-screen shortcut</string>
+    <string name="emergency_saved_enabled">Emergency mode enabled</string>
+    <string name="emergency_saved_disabled">Emergency mode disabled</string>
     <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
     <string name="settings_emergency_shortcut_desc">Show a persistent notification with quick-dial actions (112/17) accessible without unlocking. Tap the body to open the Emergency screen. Off by default.</string>
     <string name="emergency_shortcut_no_app_to_dial">No app installed to dial 112</string>
