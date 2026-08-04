@@ -693,7 +693,12 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // v1.27.2 (audit externe Gemini 2026-08-04) — biométrie indisponible et aucun code coffre :
     // on explique et on ressort, au lieu d'ouvrir. Un dialogue plutôt qu'un message éphémère,
     // qui ne s'afficherait pas puisqu'on quitte l'écran dans la foulée.
-    if (biometricUnavailable) {
+    // ⚠️ `navEntryResumed` OBLIGATOIRE, même raison que le dialogue de PIN juste en dessous :
+    // présenté pendant l'animation de retour, ce dialogue capterait la fin du geste venu de
+    // l'écran précédent et se refermerait aussitôt en appelant `lockedOnBack` — le dépilement
+    // parasite corrigé en v1.25.4. Omise à la première écriture de ce correctif, rattrapée à la
+    // relecture.
+    if (biometricUnavailable && navEntryResumed) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { biometricUnavailable = false; lockedOnBack() },
             title = { Text(stringResource(R.string.vault_biometric_unavailable_title)) },
