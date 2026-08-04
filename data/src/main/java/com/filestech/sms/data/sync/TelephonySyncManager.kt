@@ -5,9 +5,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import androidx.room.withTransaction
 import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
@@ -57,6 +59,9 @@ class TelephonySyncManager @Inject constructor(
     private val telephonyReader: TelephonyReader,
     private val mirror: ConversationMirror,
     private val messageDao: MessageDao,
+    // v1.27.2 (audit externe 2026-08-04 #6) — transaction Room pour [reconcileDeletions] :
+    // suppression + recalcul des aperçus atomiques, même recette que `purgeHistoryNow` (H9).
+    private val database: AppDatabase,
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
     /**
@@ -304,6 +309,12 @@ class TelephonySyncManager @Inject constructor(
      *     aucune.
      *  3. **Découpage sous la limite SQLite** de 999 paramètres hôtes.
      *
+     * v1.27.2 (audit externe 2026-08-04 #6) — 4ᵉ règle : **toute suppression recalcule les
+     * aperçus**, dans la même transaction (même contrat que `deleteMessage` v1.24.0 et
+     * `purgeHistoryNow` H9). Le recalcul passe par `refreshAllConversationPreviewsAfterPurge`,
+     * qui re-dérive `last_message_preview`/`last_message_at` de chaque conversation depuis ses
+     * propres messages — idempotent, y compris pour le coffre.
+     *
      * Le coffre est déjà exclu par la requête elle-même (`c.in_vault = 0`) : ses messages
      * n'existent que dans notre base et n'ont rien à réconcilier.
      */
@@ -323,9 +334,24 @@ class TelephonySyncManager @Inject constructor(
             systemIds.forEach { alive += "$SMS_URI_PREFIX$it" }
             val gone = mirrored.filterNot { it in alive }
             if (gone.isEmpty()) return@runCatching
+            // v1.27.2 (audit externe 2026-08-04 #6) — suppression ET recalcul des aperçus dans
+            // la MÊME transaction. Ce chemin était le troisième jumeau oublié du correctif
+            // v1.24.0 de `deleteMessage` (déjà porté à `purgeHistoryNow` en v1.26.1 H9) : il
+            // effaçait les lignes sans jamais toucher `conversations.last_message_preview`,
+            // qui conservait donc le CORPS EN CLAIR d'un message supprimé côté système — et
+            // `last_message_at` faussait le tri. Définitivement, de surcroît :
+            // `repairStaleConversationPreviews` est one-shot et déjà consommée sur les
+            // installations existantes. La transaction n'est pas du zèle : sans elle, une mort
+            // du processus entre le DELETE et le refresh recrée exactement l'état permanent
+            // que H9 a fermé — au tour suivant `gone` serait vide et le refresh jamais rejoué.
             var removed = 0
-            gone.chunked(SQLITE_HOST_PARAM_LIMIT).forEach { batch ->
-                removed += messageDao.deleteByTelephonyUris(batch)
+            database.withTransaction {
+                gone.chunked(SQLITE_HOST_PARAM_LIMIT).forEach { batch ->
+                    removed += messageDao.deleteByTelephonyUris(batch)
+                }
+                if (removed > 0) {
+                    messageDao.refreshAllConversationPreviewsAfterPurge()
+                }
             }
             Timber.i("reconcileDeletions: %d local row(s) dropped (deleted system-side)", removed)
         }.onFailure { Timber.w(it, "reconcileDeletions failed") }
