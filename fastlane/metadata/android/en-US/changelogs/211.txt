@@ -1,0 +1,9 @@
+Integrity and security fixes from three independent reviews.
+
+An incoming SMS or MMS can no longer be lost when the database is briefly unavailable.
+
+Composing a message no longer opens the thread of a different contact whose last digits happen to match.
+
+The vault code now guards the data itself: moving a conversation in or out, and running a backup, all require the second factor.
+
+The personal-safety alert still fires after a phone reboot, and its location link now opens correctly.

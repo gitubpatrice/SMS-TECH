@@ -1,0 +1,9 @@
+Correctifs d'integrite et de securite issus de trois relectures independantes.
+
+Un SMS ou un MMS entrant ne peut plus etre perdu si la base est momentanement indisponible.
+
+Composer un message n'ouvre plus la conversation d'un autre correspondant aux chiffres proches.
+
+Le code du coffre garde desormais la donnee : deplacer une conversation ou sauvegarder exigent le second facteur.
+
+L'alerte de securite personnelle part toujours apres un redemarrage.

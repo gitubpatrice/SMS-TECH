@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.27.1** (2026-08-03)
+Current release : **v1.27.2** (2026-08-05)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -80,6 +80,68 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 ---
 
 ## Audit history
+
+### v1.27.2 — Le second facteur du coffre gardait l'écran, pas la donnée
+
+**Versions affectées : toutes, jusqu'à 1.27.1 incluse.**
+
+Quatre chemins ouvraient ou exposaient le coffre sans que son code distinct soit demandé :
+
+- **Déplacer une conversation vers le coffre armait la session.** L'auto-déverrouillage datait de
+  la v1.11.0, antérieure au code du coffre (v1.13.0). Depuis, quiconque passait le verrou principal
+  déplaçait une conversation quelconque puis ouvrait le coffre — code et biométrie sautés, l'écran
+  s'initialisant depuis cette session.
+- **En sortir n'exigeait rien.** Sortir une conversation du coffre révèle du contenu protégé ;
+  seule la variante non groupée portait la garde.
+- **La sauvegarde chiffrée exportait le coffre verrouillé.** `buildPayload` lit toutes les
+  conversations, coffre compris. Le fichier était déchiffrable hors de l'appareil avec la
+  passphrase choisie par celui qui l'exportait.
+- **`observeVault` était le dernier flux de lecture non gardé**, alors que ses trois frères
+  consultaient la session depuis la v1.26.1.
+
+**Correctif.** La garde porte désormais sur l'**accès** et non sur l'affichage : plus
+d'auto-déverrouillage, sortie et export conditionnés au second facteur, et tous les flux de lecture
+alignés. Quand la biométrie est l'unique second facteur et devient indisponible, le coffre n'est
+plus ouvert par défaut — l'application l'explique et renvoie vers la configuration d'un code
+distinct, joignable hors du coffre.
+
+### v1.27.2 — Perte de messages entrants sur erreur de base
+
+**Versions affectées : toutes, jusqu'à 1.27.1 incluse.**
+
+Une indisponibilité momentanée de Room/SQLCipher pouvait faire disparaître un message entrant sans
+trace :
+
+- **SMS.** La consultation de liste noire précédait l'écriture. Son échec terminait le message
+  diffusé par le système sans que `insertInboxSms` ait été appelé : le SMS n'existait ni dans le
+  fournisseur téléphonie, ni dans l'application.
+- **MMS.** Le fichier PDU — seule copie du message et de sa pièce jointe — était supprimé dès que
+  le téléchargement avait réussi, y compris lorsque l'écriture en base échouait ensuite.
+
+**Correctif.** Le décodage précède toute résolution de dépendance ; la consultation de liste noire
+échoue du côté **ouvert** (une erreur laisse passer le message, seul un blocage franc écarte) ; un
+filet de dernier recours écrit le SMS dans la boîte système même base morte ; et le PDU n'est
+supprimé qu'une fois son sort réglé. `CancellationException` traverse ces gardes au lieu d'être
+convertie en « non bloqué ».
+
+⚠️ **Limite assumée.** Si le fournisseur système valide l'insertion puis échoue avant le retour de
+l'appel, le filet réinsère : sémantique « au moins une fois ». Un doublon se voit et s'efface, une
+perte est définitive.
+
+### v1.27.2 — Alerte de sécurité personnelle neutralisable par redémarrage
+
+**Versions affectées : 1.10.0 à 1.27.1.**
+
+Le déclenchement exige que les **deux** horloges aient expiré — murale et monotone — pour qu'une
+avance d'horloge ne puisse pas provoquer une alerte prématurée (SEC-11). Or `elapsedRealtime()`
+repart de zéro à chaque redémarrage, et la récupération de dérive re-calait le compteur sur cette
+valeur : redémarrer plus souvent que le délai configuré empêchait l'alerte de partir,
+indéfiniment. Un vol suivi de redémarrages réguliers la neutralisait ; pour un usage honnête, une
+mise à jour système repoussait l'échéance d'autant.
+
+**Correctif.** Le temps monotone écoulé est capitalisé dans un champ persisté, jalonné à chaque
+tick horaire du worker. Un redémarrage ne coûte plus que le segment non encore jalonné, borné à un
+tick. Aucune horloge murale n'entre dans ce calcul : la protection SEC-11 reste entière.
 
 ### v1.25.0 — Ouverture SQLCipher en clé brute (performance, sans changement de sécurité)
 

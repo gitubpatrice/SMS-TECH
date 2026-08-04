@@ -3,6 +3,59 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.2] — 2026-08-05
+
+Trois relectures indépendantes — Codex, Gemini Pro, et une passe ciblée sur le motif du « jumeau
+asymétrique » — appliquées au dépôt puis **aux correctifs eux-mêmes**. Aucun défaut listé ici n'a
+été trouvé par une seule source : ceux qui ont survécu à l'arbitrage sont ceux dont le chemin a été
+remonté jusqu'à un appelant réel.
+
+### Data integrity
+- **Un SMS entrant ne peut plus être perdu.** Une erreur de base de données survenant avant
+  l'écriture consommait le message diffusé par le système sans rien avoir enregistré : le SMS
+  n'existait alors ni dans la boîte système, ni dans l'application. Le décodage précède désormais
+  toute résolution de dépendance, la consultation de liste noire échoue du côté ouvert, et un
+  filet de dernier recours écrit le message dans la boîte système même quand la base est morte.
+- **Un MMS n'est plus effacé sans avoir été persisté.** Le fichier PDU — seule copie du message et
+  de sa pièce jointe — était supprimé dès que le téléchargement avait réussi, y compris lorsque
+  l'écriture en base échouait ensuite. Il n'est désormais supprimé qu'une fois son sort réglé.
+- **Composer vers un numéro ne peut plus ouvrir la conversation d'un autre.** Le rapprochement se
+  faisait sur huit chiffres, ce qui confondait `06 12 34 56 78` et `07 12 34 56 78` — deux
+  personnes différentes. Un message rédigé ensuite partait au mauvais destinataire.
+- **La synchronisation ne vide plus l'aperçu de conversations étrangères.** Une suppression
+  détectée dans un fil recalculait l'aperçu de tous les autres.
+
+### Security
+- **Le second facteur du coffre garde la donnée, plus seulement l'écran.** Déplacer une
+  conversation vers le coffre ouvrait la session sans authentification ; en sortir n'exigeait
+  rien ; la sauvegarde chiffrée exportait le coffre verrouillé ; et le dernier flux de lecture
+  non gardé a été aligné sur les trois autres.
+- **La biométrie indisponible n'ouvre plus le coffre.** Quand elle était l'unique second facteur,
+  retirer ses empreintes ou une panne de capteur supprimait toute la protection. L'application
+  l'explique désormais et invite à configurer un code du coffre.
+- **La liste noire couvre le renvoi.** Bloquer un correspondant puis toucher une bulle en échec
+  antérieure ré-émettait vers le numéro tout juste bloqué.
+- **Les URI `sms:` sont nettoyées de leur partie requête** sur les deux points d'entrée. Sur l'un
+  d'eux, l'adresse corrompue rendait la garde de liste noire d'envoi silencieusement inopérante.
+- **Le parseur de PDU borne ses allocations** avant de les faire : un MMS malformé pouvait épuiser
+  la mémoire du processus.
+- **Les réactions ne partent plus vers un code court**, potentiellement surtaxé.
+
+### Personal safety
+- **Le deadman survit aux redémarrages.** Le compteur monotone repartait de zéro à chaque
+  redémarrage : redémarrer plus souvent que le délai configuré empêchait l'alerte de partir, et
+  une simple mise à jour système la repoussait d'autant. Le temps écoulé est désormais capitalisé.
+- **Le lien de localisation du SMS d'urgence était cassé en français.** Le séparateur décimal
+  suivait la langue de l'appareil : l'URL partait avec des virgules et n'était pas exploitable.
+- **Désactiver le mode urgence éteint aussi le raccourci d'écran verrouillé** depuis le bouton
+  Enregistrer, et l'écran revient à l'accueil une fois la désactivation écrite.
+
+### UX
+- Messages de confirmation nommés pour le mode urgence et le Safety Call — activé, désactivé,
+  contact ajouté, contact supprimé — au lieu d'accusés génériques.
+- Les conversations dont le dernier message est une pièce jointe sans légende ne s'affichent plus
+  sur une ligne muette.
+
 ## [1.27.1] — 2026-08-03
 
 Deux non-garanties du modèle de menace fermées, sur les surfaces où un secret est saisi ou copié.
