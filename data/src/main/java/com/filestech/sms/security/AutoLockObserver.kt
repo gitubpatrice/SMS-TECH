@@ -136,6 +136,7 @@ class AutoLockObserver @Inject constructor(
      *
      *  - `files/exports/` — generated PDFs and `.smsbk` staging (audit F13)
      *  - `cache/voice_mms/` — un-sent voice-message drafts (audit S-P2-3)
+     *  - `cache/media_outgoing/` — un-sent picked media drafts (v1.27.2, jumeau de `voice_mms`)
      *  - `cache/mms_outgoing/` — built PDU files for in-flight MMS (audit S-P2-3)
      *
      * Recursive delete + isolated `runCatching` per folder so a partial failure on one path does
@@ -152,6 +153,24 @@ class AutoLockObserver @Inject constructor(
         val targets = listOf(
             File(context.filesDir, "exports"),
             File(context.cacheDir, "voice_mms"),
+            // v1.27.2 (audit de cohérence 2026-08-04) — `media_outgoing` manquait, alors que
+            // c'est le jumeau exact de `voice_mms` : les deux mettent en attente une pièce
+            // jointe sortante choisie par l'utilisateur, et
+            // [com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl] les décrit côte à côte —
+            // en affirmant même que les deux sont « wiped wholesale by AutoLockObserver on every
+            // lock cycle ». C'était vrai pour l'un, faux pour l'autre.
+            //
+            // Concrètement : choisir une photo pour un MMS puis verrouiller sans envoyer la
+            // laissait EN CLAIR jusqu'à 24 h (seul le balayage par âge de `TelephonySyncWorker`
+            // finissait par la prendre), là où le brouillon vocal équivalent disparaissait au
+            // premier verrouillage.
+            //
+            // Purge en bloc et non par âge, contrairement à `mms_outgoing` (cf. M10 plus bas) :
+            // ce dossier ne contient QUE des brouillons abandonnés. Une pièce jointe réellement
+            // envoyée est promue dans `filesDir/mms_attachments` AVANT l'écriture de sa ligne
+            // Room, donc aucune bulle ne pointe ici — et le système ne relit rien dans ce
+            // dossier après coup.
+            File(context.cacheDir, "media_outgoing"),
         )
         for (dir in targets) {
             runCatching { if (dir.exists()) dir.deleteRecursively() }

@@ -1086,8 +1086,31 @@ class ThreadViewModel @Inject constructor(
             }.getOrNull()
         }
 
+    /**
+     * v1.27.2 (audit de cohérence 2026-08-04) — mêmes deux gardes que [doSend] et
+     * [dispatchPendingAttachments], qui les portent depuis les audits H7 et H8. Ce troisième
+     * chemin d'envoi avait été nommé par l'audit du 2026-08-03 puis oublié du lot de correctifs.
+     *
+     * - `isSending` : un renvoi part d'un simple appui sur une bulle en échec, et rien à l'écran
+     *   ne change pendant la lecture Room. Deux appuis rapprochés lançaient donc deux renvois
+     *   concurrents — deux SMS réels, facturés, pour un seul message.
+     * - `NonCancellable` : sans lui, un retour arrière pendant le renvoi annulait
+     *   `viewModelScope` au milieu de la séquence (insertion système, miroir Room, appel
+     *   `SmsManager`) et laissait le message ni envoyé ni marqué en échec.
+     *
+     * Le garde s'appuie sur le MÊME drapeau `isSending` que les deux jumeaux : un renvoi et un
+     * envoi ne peuvent donc pas non plus se chevaucher entre eux.
+     */
     fun retry(messageId: Long) {
-        viewModelScope.launch { retrySend.invoke(messageId) }
+        if (_state.value.isSending) return
+        viewModelScope.launch {
+            _state.update { it.copy(isSending = true) }
+            try {
+                withContext(NonCancellable) { retrySend.invoke(messageId) }
+            } finally {
+                _state.update { it.copy(isSending = false) }
+            }
+        }
     }
 
     fun deleteMessage(messageId: Long) {
