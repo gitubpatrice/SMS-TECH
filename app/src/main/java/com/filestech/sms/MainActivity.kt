@@ -518,7 +518,18 @@ class MainActivity : FragmentActivity() {
                     // Multi-recipient possible (séparés par `,` ou `;` selon caller) —
                     // pour cette v1.14.8, on prend le 1er ; le multi-recipient nécessite
                     // de passer par ComposeScreen pour confirmer le groupe (v1.15 backlog).
-                    val raw = data?.schemeSpecificPart?.let { Uri.decode(it) }.orEmpty()
+                    // v1.27.2 (audit externe Gemini 2026-08-04) — la partie `?query` est retirée
+                    // AVANT tout traitement. `sms:0612345678?body=Bonjour` est une forme
+                    // standard (RFC 5724), émise par les navigateurs et les QR codes : son
+                    // `schemeSpecificPart` vaut `0612345678?body=Bonjour` en entier, et rien
+                    // ici ne l'écartait. Le découpage sur `,`/`;` ne l'enlève pas, et la
+                    // validation d'en dessous la laisse passer (longueur correcte, au moins un
+                    // chiffre) — la conversation était donc créée sur une adresse corrompue.
+                    // Retrait structurel, avant décodage : un numéro ne contient jamais de `?`.
+                    val raw = data?.schemeSpecificPart
+                        ?.substringBefore('?')
+                        ?.let { Uri.decode(it) }
+                        .orEmpty()
                     // v1.26.1 (audit B6) — le destinataire est désormais VALIDÉ.
                     //
                     // Toute chaîne non vide était acceptée et ÉCRIVAIT une ligne en base : une

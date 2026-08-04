@@ -60,7 +60,18 @@ class HeadlessSmsSendService : Service() {
         // Parse + validate first (synchronously, cheap), then move the lock check + send into a
         // coroutine — this lets us call `appLock.ensureResolved()` lazily instead of forcing
         // `MainApplication.onCreate` to block the main thread waiting on DataStore (P-P0-5).
+        // v1.27.2 (audit externe Gemini 2026-08-04) — garde jumelle de celle de [MainActivity] :
+        // la partie `?query` d'une URI `smsto:` est retirée avant le découpage.
+        //
+        // Ici la conséquence dépassait l'adresse corrompue. `0612345678?body=Bonjour` contient
+        // des lettres : `blockKey()` bascule alors en régime alphanumérique et rend la chaîne
+        // entière, si bien que la garde de liste noire de [SendSmsUseCase] — qui interroge
+        // `r.raw` — ne pouvait plus jamais correspondre à une clé numérique enregistrée. Une
+        // application tierce contournait donc la liste noire d'envoi en ajoutant `?x` à l'URI.
+        // Même piège que le suffixe `/TYPE=PLMN` fermé en v1.26.1 (H5) : une garde rendue
+        // silencieusement inopérante par du bruit de transport laissé dans l'adresse.
         val numbers = intent.data?.schemeSpecificPart
+            ?.substringBefore('?')
             ?.split(',', ';')
             ?.asSequence()
             ?.map { it.trim() }
