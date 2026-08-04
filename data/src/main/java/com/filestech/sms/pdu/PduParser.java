@@ -208,8 +208,32 @@ public class PduParser {
     }
 
     /** Reads a single byte without sign extension. Returns -1 on EOF. */
+    /**
+     * v1.27.2 — la fin de flux se distingue à nouveau d'un octet {@code 0xFF}.
+     *
+     * <p>Cette méthode rendait {@code in.read() & 0xFF}. Or {@link ByteArrayInputStream#read()}
+     * rend {@code -1} en fin de flux, et {@code -1 & 0xFF} vaut <b>255</b> : la fin de flux
+     * devenait donc un octet ordinaire, et <b>tous les tests {@code == -1} du fichier étaient
+     * morts</b> — ils ne pouvaient jamais être vrais.
+     *
+     * <p>Conséquence atteignable : dans {@code parseWapString}, la boucle
+     * {@code while ((b = extractByteValue(in)) != 0)} n'a pour sortie que sa propre garde
+     * {@code if (b == -1) break;}. Sur un PDU dont la chaîne n'est pas terminée par un zéro, elle
+     * tournait <b>sans fin</b> en écrivant 255 dans un {@code ByteArrayOutputStream} qui grossit
+     * jusqu'à l'{@code OutOfMemoryError}. Le PDU arrive du réseau opérateur et son contenu est
+     * choisi par l'expéditeur : un MMS malformé, ou piégé, tuait le processus de l'application
+     * SMS par défaut.
+     *
+     * <p>Trouvé par {@code PduParserRobustnessTest} au premier tour de fuzz, sur 17 octets
+     * aléatoires. L'audit externe avait bien pointé ce fichier, mais sur les allocations de
+     * {@code parseParts} — bornées en v1.27.2 également, et qui n'étaient pas le chemin
+     * réellement atteint.
+     *
+     * <p>Rendre {@code -1} réarme d'un coup toutes les gardes de fin de flux du fichier.
+     */
     private static int extractByteValue(ByteArrayInputStream in) {
-        return in.read() & 0xFF;
+        int b = in.read();
+        return b < 0 ? -1 : (b & 0xFF);
     }
 
     /** WSP value-length: short (0..30), or 0x1F + uintvar. */
