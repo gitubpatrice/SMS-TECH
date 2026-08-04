@@ -147,6 +147,10 @@ class SafetyCallSetupViewModel @Inject constructor(
         }
         userEdited = true
         _draft.value = current.copy(contacts = current.contacts + candidate)
+        // v1.27.2 — l'ajout est confirmé. Les deux refus (numéro invalide, maximum atteint)
+        // émettaient déjà un message ; le succès, lui, refermait le dialogue en silence, sans
+        // rien dire de ce qui venait d'être enregistré.
+        _events.trySend(Event.ContactAdded)
         return true
     }
 
@@ -157,6 +161,8 @@ class SafetyCallSetupViewModel @Inject constructor(
         _draft.value = current.copy(
             contacts = current.contacts.toMutableList().also { it.removeAt(index) },
         )
+        // v1.27.2 — symétrique de l'ajout : chaque action sur le carnet se confirme.
+        _events.trySend(Event.ContactRemoved)
     }
 
     /**
@@ -221,12 +227,23 @@ class SafetyCallSetupViewModel @Inject constructor(
             // est false, on schedule (no-op ticks) pour qu'un futur enable
             // n'ait pas besoin de cold-start pour démarrer.
             SafetyCallWorker.schedulePeriodic(context)
-            _events.trySend(Event.Saved)
+            _events.trySend(Event.Saved(enabled = toPersist.enabled))
         }
     }
 
     sealed interface Event {
-        data object Saved : Event
+        /**
+         * v1.27.2 — porte l'état enregistré pour que l'écran nomme ce qui vient de se passer
+         * (« Safety call activé » / « désactivé ») au lieu d'un « Contacts et réglages
+         * enregistrés » qui ne disait pas si la surveillance courait ou non.
+         */
+        data class Saved(val enabled: Boolean) : Event
+
+        /** v1.27.2 — confirme l'ajout, le dialogue se refermant sans rien dire jusqu'ici. */
+        data object ContactAdded : Event
+
+        /** v1.27.2 — jumeau de [ContactAdded] : le retrait était muet lui aussi. */
+        data object ContactRemoved : Event
         data class ValidationError(val reason: ValidationReason) : Event
     }
 

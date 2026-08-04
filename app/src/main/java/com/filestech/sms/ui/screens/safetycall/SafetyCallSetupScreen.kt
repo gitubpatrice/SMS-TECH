@@ -115,13 +115,28 @@ fun SafetyCallSetupScreen(
     }
     BackHandler(enabled = navEntryResumed) { requestExit() }
 
+    // v1.27.2 — un message PAR action, résolu à la composition (un `ctx.getString` dans le
+    // `collect` ajouterait une instance de `LocalContextGetResourceValueCall` hors baseline).
+    val safetyEnabledMsg = stringResource(R.string.safety_call_saved_enabled)
+    val safetyDisabledMsg = stringResource(R.string.safety_call_saved_disabled)
+    val contactAddedMsg = stringResource(R.string.safety_call_contact_added)
+    val contactRemovedMsg = stringResource(R.string.safety_call_contact_removed)
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
                 is SafetyCallSetupViewModel.Event.Saved -> {
-                    snackbarHost.showSnackbar(ctx.getString(R.string.safety_call_setup_saved))
+                    // Nomme l'état enregistré : « Contacts et réglages enregistrés » ne disait
+                    // pas si la surveillance courait ou non.
+                    snackbarHost.showSnackbar(
+                        if (event.enabled) safetyEnabledMsg else safetyDisabledMsg,
+                    )
                     onBack()
                 }
+                // v1.27.2 — l'ajout se confirme. Le dialogue se refermait en silence.
+                SafetyCallSetupViewModel.Event.ContactAdded ->
+                    snackbarHost.showSnackbar(contactAddedMsg)
+                SafetyCallSetupViewModel.Event.ContactRemoved ->
+                    snackbarHost.showSnackbar(contactRemovedMsg)
                 is SafetyCallSetupViewModel.Event.ValidationError -> {
                     val msgRes = when (event.reason) {
                         SafetyCallSetupViewModel.ValidationReason.NoContacts ->

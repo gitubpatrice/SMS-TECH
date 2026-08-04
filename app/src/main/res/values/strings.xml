@@ -875,7 +875,10 @@
     <string name="db_recovery_hint">This usually happens after the screen lock is changed or the device is restored, which invalidates the key that protects the database. Restarting the phone is worth trying first. If this screen keeps appearing, reinstalling SMS Tech will rebuild its database from the messages Android already holds.</string>
     <string name="action_add">Add</string>
     <string name="action_discard">Discard</string>
-    <string name="safety_call_setup_saved">Contacts and settings saved</string>
+    <string name="safety_call_saved_enabled">Safety call enabled</string>
+    <string name="safety_call_saved_disabled">Safety call disabled</string>
+    <string name="safety_call_contact_added">Contact added</string>
+    <string name="safety_call_contact_removed">Contact removed</string>
     <string name="safety_call_setup_unsaved_title">Unsaved changes</string>
     <string name="safety_call_setup_unsaved_body">Adding a contact is not enough: it must be saved to be kept. Leaving now would lose it.</string>
     <string name="emergency_location_grant">Allow location</string>
