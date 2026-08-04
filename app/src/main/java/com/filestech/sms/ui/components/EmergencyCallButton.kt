@@ -121,16 +121,44 @@ fun EmergencyCallButton(
                 contentDescription = label
             }
             .pointerInput(holdDurationMs) {
+                // v1.27.2 (audit externe Gemini 2026-08-04) — annulation du hold au-delà du
+                // `touchSlop`, jumelle de celle de [EmergencyHoldButton].
+                //
+                // Ce garde y avait été posé en hotfix CRITIQUE v1.14.2, après un bug remonté par
+                // un utilisateur le 2026-05-22 : un scroll lent traversant le bouton était
+                // interprété comme un appui maintenu de 3 s et déclenchait l'urgence. Le
+                // correctif n'a jamais été porté ICI, où le déclenchement est un APPEL d'urgence
+                // réel — conséquence plus lourde encore que le SMS du jumeau.
+                //
+                // Le `pressed` seul ne suffit pas : même quand un conteneur défilant parent
+                // consomme le déplacement, le pointeur reste `pressed` et le compte à rebours
+                // allait à son terme.
+                val touchSlopPx = viewConfiguration.touchSlop
+                val slopSq = touchSlopPx * touchSlopPx
                 awaitPointerEventScope {
                     while (true) {
                         val down = awaitPointerEvent(PointerEventPass.Main)
-                        if (down.changes.any { it.pressed }) {
-                            isHolding = true
-                            while (true) {
-                                val next = awaitPointerEvent(PointerEventPass.Main)
-                                if (next.changes.none { it.pressed }) {
+                        val firstPressed = down.changes.firstOrNull { it.pressed } ?: continue
+                        val startPos = firstPressed.position
+                        isHolding = true
+                        // `draining` : une fois le drag détecté, on consomme le reste du geste
+                        // jusqu'au UP sans jamais réarmer — sinon le tour de boucle suivant
+                        // re-verrait un pointeur `pressed` et relancerait le compte à rebours
+                        // sur le MÊME geste.
+                        var draining = false
+                        inner@ while (true) {
+                            val next = awaitPointerEvent(PointerEventPass.Main)
+                            val pressed = next.changes.firstOrNull { it.pressed }
+                            if (pressed == null) {
+                                isHolding = false
+                                break@inner
+                            }
+                            if (!draining) {
+                                val dx = pressed.position.x - startPos.x
+                                val dy = pressed.position.y - startPos.y
+                                if (dx * dx + dy * dy > slopSq) {
                                     isHolding = false
-                                    break
+                                    draining = true
                                 }
                             }
                         }
