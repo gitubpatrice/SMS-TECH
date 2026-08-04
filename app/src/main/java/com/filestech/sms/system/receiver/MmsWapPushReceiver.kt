@@ -115,9 +115,9 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 // lettres, traite l'adresse comme un expéditeur alphanumérique et ne peut jamais
                 // correspondre à la clé numérique stockée — la garde serait un no-op silencieux.
                 val fromAddress = parsed.from?.string?.stripMmsAddressSuffix()
-                if (!fromAddress.isNullOrBlank() &&
-                    runCatching { blockedRepo.isBlocked(fromAddress) }.getOrDefault(false)
-                ) {
+                // v1.27.2 (audit externe 2026-08-04 #5) — cf. [isBlockedFailOpen] : même repli
+                // ouvert qu'avant, sans avaler `CancellationException`.
+                if (!fromAddress.isNullOrBlank() && blockedRepo.isBlockedFailOpen(fromAddress)) {
                     Timber.i("Dropping incoming MMS from blocked sender")
                     return@launch
                 }

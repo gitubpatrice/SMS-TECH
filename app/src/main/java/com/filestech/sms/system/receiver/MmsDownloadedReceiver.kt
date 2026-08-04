@@ -187,9 +187,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // référençait — ni ligne Room, ni purge (`purgeTransientCaches` exclut ce
                 // dossier). La photo d'un expéditeur bloqué restait donc sur l'appareil, en
                 // clair, pour toujours. Ici on abandonne avant tout décodage et toute écriture.
-                if (sender.isNotBlank() &&
-                    runCatching { blockedRepo.isBlocked(sender) }.getOrDefault(false)
-                ) {
+                // v1.27.2 (audit externe 2026-08-04 #5) — politique de repli commune aux trois
+                // receivers via [isBlockedFailOpen] : même sens d'échec (ouvert, le message
+                // survit à une erreur de base) qu'avant, mais `CancellationException` n'est plus
+                // avalée et la politique est écrite à UN seul endroit.
+                if (sender.isNotBlank() && blockedRepo.isBlockedFailOpen(sender)) {
                     Timber.i("Dropping downloaded MMS from blocked sender")
                     return@launch
                 }
