@@ -48,3 +48,8 @@ ksp_output.log
 # Build agent / Android Studio caches
 .checkov.cache
 .cache/
+
+# Rapports d'audit IA externe — findings NON VERIFIEES par construction.
+# Ne doivent jamais entrer dans le depot : une hallucination versionnee devient
+# une source qu'un futur lecteur prendrait pour un constat etabli.
+audit/
