@@ -261,6 +261,19 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.room.testing)
+    // v1.27.2 — Hilt dans les tests JVM (Robolectric), pour pouvoir substituer un collaborateur
+    // par un faux qui ÉCHOUE : c'est ainsi qu'on exerce les chemins d'erreur des receveurs, là où
+    // vivaient le SMS perdu et le MMS effacé du 2026-08-04. `hilt-android-testing` n'était déclaré
+    // que pour les tests instrumentés, donc inaccessible sans émulateur.
+    testImplementation(libs.hilt.android.testing)
+    kspTest(libs.hilt.compiler)
+    // `AndroidJUnit4` sert de lanceur aux tests Robolectric ; il n'était lui aussi disponible que
+    // côté instrumenté.
+    testImplementation(libs.androidx.test.ext.junit)
+    // ⚠️ Sans le moteur vintage, une classe JUnit 4 est silencieusement IGNORÉE par la plateforme
+    // JUnit 5 : la tâche passe au vert sans avoir rien exécuté. Le pire des échecs — un test qui
+    // ne teste pas et ne le dit pas.
+    testRuntimeOnly(libs.junit.vintage.engine)
 
     // Android tests
     androidTestImplementation(libs.androidx.test.ext.junit)
