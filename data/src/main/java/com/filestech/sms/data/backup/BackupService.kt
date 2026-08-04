@@ -49,6 +49,9 @@ class BackupService @Inject constructor(
     private val aead: AeadCipher,
     // v1.26.1 (audit C2) — nécessaire pour refuser l'export en session leurre, cf. [writeSmsbk].
     private val appLock: com.filestech.sms.security.AppLockManager,
+    // v1.27.2 (audit externe 2026-08-04 #4) — le second facteur du Coffre garde aussi l'export,
+    // cf. [writeSmsbk].
+    private val vaultSession: com.filestech.sms.security.VaultSessionState,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : BackupRestorer {
 
@@ -93,6 +96,18 @@ class BackupService @Inject constructor(
         // Le `password` est effacé ici : le `finally` qui s'en charge d'ordinaire est situé
         // dans le bloc ci-dessous, qu'on ne rejoint pas sur ce chemin.
         if (appLock.state.value is com.filestech.sms.security.AppLockManager.LockState.PanicDecoy) {
+            password.wipe()
+            return@withContext Outcome.Failure(AppError.Locked())
+        }
+        // v1.27.2 (audit externe 2026-08-04 #4) — le second facteur du Coffre garde aussi
+        // l'EXPORT. `buildPayload()` lit coffre compris (cf. `listAllIncludingArchived`) ;
+        // sans ce garde, quiconque passait le verrou principal exportait l'intégralité du
+        // coffre, déchiffrable HORS de l'appareil avec la passphrase de SON choix —
+        // contournement complet du second facteur, définitif une fois le fichier copié.
+        // On REFUSE plutôt que d'amputer silencieusement la sauvegarde : un `.smsbk` sans le
+        // coffre serait une perte de données à la restauration. Coffre vide = rien à
+        // protéger, l'export reste sans friction.
+        if (!vaultSession.isUnlocked && conversationDao.countInVault() > 0) {
             password.wipe()
             return@withContext Outcome.Failure(AppError.Locked())
         }

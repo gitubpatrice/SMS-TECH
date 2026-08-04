@@ -84,6 +84,16 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations ORDER BY id ASC")
     suspend fun listAllIncludingArchived(): List<ConversationEntity>
 
+    /**
+     * v1.27.2 (audit externe 2026-08-04 #4) — nombre de conversations dans le coffre. Sert au
+     * garde d'export de [com.filestech.sms.data.backup.BackupService.writeSmsbk] : la
+     * sauvegarde lit TOUT (cf. [listAllIncludingArchived]) et ne doit donc partir que si la
+     * session coffre est déverrouillée — ou si le coffre est vide, auquel cas il n'y a rien à
+     * protéger et l'export reste sans friction.
+     */
+    @Query("SELECT COUNT(*) FROM conversations WHERE in_vault = 1")
+    suspend fun countInVault(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ConversationEntity): Long
 

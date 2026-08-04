@@ -339,6 +339,7 @@
     <string name="backup_passphrase_mismatch">Passphrases do not match.</string>
     <string name="backup_export_success">Backup saved.</string>
     <string name="backup_export_failed">Backup failed.</string>
+    <string name="backup_export_vault_locked">Vault locked — open the vault first so the backup can include it.</string>
     <string name="backup_restore_coming_v11">Restore from encrypted file lands in v1.1 — current export already produces a fully self-contained file.</string>
 
     <!-- Migration -->

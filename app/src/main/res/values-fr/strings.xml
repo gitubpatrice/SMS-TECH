@@ -330,6 +330,7 @@
     <string name="backup_passphrase_mismatch">Les phrases ne correspondent pas.</string>
     <string name="backup_export_success">Sauvegarde enregistrée.</string>
     <string name="backup_export_failed">Échec de la sauvegarde.</string>
+    <string name="backup_export_vault_locked">Coffre verrouillé — ouvrez d\'abord le coffre pour que la sauvegarde puisse l\'inclure.</string>
     <string name="backup_restore_coming_v11">La restauration depuis fichier chiffré arrive en v1.1 — l\'export actuel produit déjà un fichier autoportant.</string>
 
     <!-- Migration -->

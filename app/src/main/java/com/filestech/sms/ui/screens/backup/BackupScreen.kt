@@ -65,11 +65,18 @@ import javax.inject.Inject
 class BackupViewModel @Inject constructor(
     private val backupService: BackupService,
     private val restoreBackup: RestoreBackupUseCase,
+    // v1.27.2 (audit externe 2026-08-04 #4) — distingue le refus « second facteur coffre »
+    // du refus « session leurre » : les deux reviennent en AppError.Locked, mais seul le
+    // premier peut être nommé à l'écran. Cf. [exportEncrypted].
+    private val appLock: com.filestech.sms.security.AppLockManager,
 ) : ViewModel() {
 
     sealed interface Event {
         data class ExportDone(val uri: android.net.Uri, val pages: Int = 0) : Event
         data object ExportFailed : Event
+        // v1.27.2 (audit externe 2026-08-04 #4) — l'export exige la session coffre
+        // déverrouillée quand le coffre n'est pas vide ; l'UI invite à l'ouvrir d'abord.
+        data object ExportVaultLocked : Event
         // v1.15.2 — Événements restore. Le succès porte le récap chiffré pour l'affichage,
         // l'échec porte un kind typé qui mappe vers une string d'erreur localisée côté UI.
         data class RestoreDone(val result: RestoreResult) : Event
@@ -98,7 +105,22 @@ class BackupViewModel @Inject constructor(
     fun exportEncrypted(uri: android.net.Uri, passphrase: CharArray) {
         viewModelScope.launch {
             val r = backupService.writeSmsbk(uri, passphrase)
-            _events.tryEmit(if (r is Outcome.Success) Event.ExportDone(uri) else Event.ExportFailed)
+            _events.tryEmit(
+                when {
+                    r is Outcome.Success -> Event.ExportDone(uri)
+                    // v1.27.2 (audit externe 2026-08-04 #4) — AppError.Locked = « le coffre
+                    // exige son second facteur avant l'export »… SAUF en session leurre, où
+                    // writeSmsbk refuse aussi avec Locked : là, message GÉNÉRIQUE. Un libellé
+                    // « déverrouillez le coffre » trahirait l'existence d'un contenu caché au
+                    // détenteur du code panique — la ligne qui trahit le leurre a déjà été un
+                    // vrai défaut de ce dépôt.
+                    r is Outcome.Failure && r.error is AppError.Locked &&
+                        appLock.state.value !is
+                        com.filestech.sms.security.AppLockManager.LockState.PanicDecoy ->
+                        Event.ExportVaultLocked
+                    else -> Event.ExportFailed
+                },
+            )
         }
     }
 
@@ -179,6 +201,10 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
         if (uri != null) restoreUri = uri
     }
 
+    // v1.27.2 (audit externe 2026-08-04 #4) — résolue à la composition via stringResource :
+    // un `context.getString` DANS le collect ajouterait une instance de
+    // LocalContextGetResourceValueCall au-delà de la baseline lint (on n'enterre rien dedans).
+    val vaultLockedMsg = stringResource(R.string.backup_export_vault_locked)
     LaunchedEffect(Unit) {
         viewModel.events.collect { ev ->
             when (ev) {
@@ -188,6 +214,9 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 BackupViewModel.Event.ExportFailed -> snackbarHost.showError(
                     context.getString(R.string.backup_export_failed),
                 )
+                // v1.27.2 (audit externe 2026-08-04 #4) — le coffre n'est pas vide et sa
+                // session est verrouillée : inviter à l'ouvrir plutôt qu'un échec opaque.
+                BackupViewModel.Event.ExportVaultLocked -> snackbarHost.showError(vaultLockedMsg)
                 // v1.15.2 — Événements restore : snackbar avec récap chiffré succès, OU
                 // erreur typée mappée vers la bonne string localisée.
                 is BackupViewModel.Event.RestoreDone -> snackbarHost.showSnackbar(
