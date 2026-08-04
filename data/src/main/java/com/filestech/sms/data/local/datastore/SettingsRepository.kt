@@ -186,6 +186,9 @@ class SettingsRepository @Inject constructor(
                     // héritée) → isExpired retournera false jusqu'au premier
                     // reset (cf. KDoc SafetyCallConfig.monotonicLastActivityAt).
                     monotonicLastActivityAt = p[K.safetyCallMonotonicLastActivityAt] ?: 0L,
+                    // v1.27.2 — absent d'une config antérieure ⇒ `0L`, soit exactement le
+                    // comportement précédent jusqu'au premier jalon du worker. Pas de saut.
+                    monotonicAccumulatedMs = p[K.safetyCallMonotonicAccumulatedMs] ?: 0L,
                     contacts = SafetyCallContactCodec.decode(p[K.safetyCallContactsJson]),
                     template = enumOr(
                         p,
@@ -305,6 +308,7 @@ class SettingsRepository @Inject constructor(
         this[K.safetyCallTimeoutMs] = s.security.safetyCall.timeoutMs
         this[K.safetyCallLastActivityAt] = s.security.safetyCall.lastActivityAt
         this[K.safetyCallMonotonicLastActivityAt] = s.security.safetyCall.monotonicLastActivityAt
+        this[K.safetyCallMonotonicAccumulatedMs] = s.security.safetyCall.monotonicAccumulatedMs
         this[K.safetyCallContactsJson] = SafetyCallContactCodec.encode(s.security.safetyCall.contacts)
         this[K.safetyCallTemplate] = s.security.safetyCall.template.name
         this[K.safetyCallCustomMessage] = s.security.safetyCall.customMessage
@@ -404,6 +408,9 @@ class SettingsRepository @Inject constructor(
         // v1.10.0 SEC-11 — snapshot monotonic du dernier reset, anti clock-forward.
         val safetyCallMonotonicLastActivityAt =
             longPreferencesKey("security.safetyCall.monotonicLastActivityAt")
+        // v1.27.2 — temps monotone capitalisé, pour que le deadman survive aux redémarrages.
+        val safetyCallMonotonicAccumulatedMs =
+            longPreferencesKey("security.safetyCall.monotonicAccumulatedMs")
         val safetyCallContactsJson = stringPreferencesKey("security.safetyCall.contactsJson")
         val safetyCallTemplate = stringPreferencesKey("security.safetyCall.template")
         val safetyCallCustomMessage = stringPreferencesKey("security.safetyCall.customMessage")

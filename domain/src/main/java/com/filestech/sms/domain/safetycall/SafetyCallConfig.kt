@@ -77,6 +77,32 @@ data class SafetyCallConfig(
      */
     val monotonicLastActivityAt: Long = 0L,
     /**
+     * v1.27.2 (audit externe Gemini 2026-08-04) — temps monotone DÉJÀ CAPITALISÉ depuis le
+     * dernier reset, en millisecondes.
+     *
+     * **Le défaut que ce champ ferme.** `SystemClock.elapsedRealtime()` repart de zéro à chaque
+     * redémarrage. La récupération de dérive de [com.filestech.sms.MainApplication] ramenait
+     * alors [monotonicLastActivityAt] à `nowMono`, ce qui remettait aussi le compteur monotone à
+     * zéro. Comme [isExpired] exige que les DEUX horloges aient expiré, il suffisait de
+     * redémarrer plus souvent que [timeoutMs] pour que le deadman ne parte JAMAIS — un vol suivi
+     * de redémarrages réguliers le neutralisait, et une simple mise à jour système à 20 h sur un
+     * délai de 24 h repoussait l'alerte d'autant. Pour une fonction de sécurité personnelle, ne
+     * pas partir est le pire des deux échecs possibles.
+     *
+     * **Comment il est alimenté.** [SafetyCallWorker] jalonne à chaque tick (60 min) : il ajoute
+     * ici le segment écoulé et re-cale [monotonicLastActivityAt] sur `nowMono`. La récupération
+     * de dérive post-redémarrage ne fait donc plus que re-caler l'ancre — ce champ, lui, conserve
+     * tout ce qui a été capitalisé avant. Au pire un redémarrage coûte le segment non encore
+     * jalonné, soit moins d'un tick.
+     *
+     * Remis à `0L` à chaque reset d'activité, **en même temps** que [lastActivityAt] et
+     * [monotonicLastActivityAt] — les trois ne se dissocient jamais.
+     *
+     * Aucune horloge murale n'entre dans ce calcul : la protection contre une avance d'horloge
+     * (SEC-11) reste entière.
+     */
+    val monotonicAccumulatedMs: Long = 0L,
+    /**
      * 1 à 4 contacts d'urgence. Plus de 4 = perte de pertinence (un
      * deadman doit cibler les proches qui vont VRAIMENT réagir). Liste
      * vide = config invalide, [enabled] est forcé à `false` au save.
@@ -110,9 +136,24 @@ data class SafetyCallConfig(
     ): Boolean {
         if (!enabled || lastActivityAt == 0L || monotonicLastActivityAt == 0L) return false
         val wallExpired = (nowMs - lastActivityAt) >= timeoutMs
-        val monoExpired = (nowMonoMs - monotonicLastActivityAt) >= timeoutMs
+        val monoExpired = monoElapsedMs(nowMonoMs) >= timeoutMs
         return wallExpired && monoExpired
     }
+
+    /**
+     * v1.27.2 (audit externe Gemini 2026-08-04) — temps monotone total écoulé depuis le dernier
+     * reset : ce qui a été capitalisé avant le dernier jalon, plus le segment courant.
+     *
+     * Le `coerceAtLeast(0)` couvre l'intervalle entre un redémarrage et le passage de la
+     * récupération de dérive : [monotonicLastActivityAt] y est encore supérieur à `nowMono`, et
+     * un segment négatif retrancherait du temps déjà capitalisé — un deadman qui recule. On
+     * ignore le segment plutôt que de le soustraire ; la récupération re-calera l'ancre juste
+     * après. Le temps déjà capitalisé, lui, n'est jamais perdu.
+     *
+     * Voir [monotonicAccumulatedMs] pour le motif complet.
+     */
+    fun monoElapsedMs(nowMonoMs: Long = SystemClock.elapsedRealtime()): Long =
+        monotonicAccumulatedMs + (nowMonoMs - monotonicLastActivityAt).coerceAtLeast(0L)
 
     /**
      * Retourne `true` quand le timer entre dans la fenêtre de pré-trigger
@@ -128,7 +169,9 @@ data class SafetyCallConfig(
     ): Boolean {
         if (!enabled || lastActivityAt == 0L || monotonicLastActivityAt == 0L) return false
         val elapsedWall = nowMs - lastActivityAt
-        val elapsedMono = nowMonoMs - monotonicLastActivityAt
+        // v1.27.2 — même compteur monotone que [isExpired] : sans quoi la fenêtre
+        // d'avertissement se serait décalée par rapport au déclenchement qu'elle annonce.
+        val elapsedMono = monoElapsedMs(nowMonoMs)
         val wallInWindow = elapsedWall >= (timeoutMs - WARNING_WINDOW_MS) &&
             elapsedWall < timeoutMs
         val monoInWindow = elapsedMono >= (timeoutMs - WARNING_WINDOW_MS) &&

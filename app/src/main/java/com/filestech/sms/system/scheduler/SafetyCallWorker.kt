@@ -67,12 +67,50 @@ class SafetyCallWorker @AssistedInject constructor(
             // Audit H3/PERF-M5 (v1.14.8) — `state.value` zéro-I/O. Le snapshot StateFlow est
             // hydraté au boot (SharingStarted.Eagerly) ; tant que le processus est vivant
             // (et il l'est ici puisque WorkManager nous a réveillés), pas besoin d'ouvrir DataStore.
-            val current = settings.state.value.security.safetyCall
-            if (!current.enabled) {
+            val currentBeforeCheckpoint = settings.state.value.security.safetyCall
+            if (!currentBeforeCheckpoint.enabled) {
                 Timber.d("SafetyCallWorker: disabled, skipping tick")
                 warningNotifier.dismiss()
                 return Result.success()
             }
+            // v1.27.2 (audit externe Gemini 2026-08-04) — JALON du temps monotone.
+            //
+            // On capitalise le segment écoulé depuis le dernier jalon et on re-cale l'ancre.
+            // C'est ce qui permet au compteur monotone de survivre à un redémarrage : sans
+            // jalon, `elapsedRealtime()` repartant de zéro, la récupération de dérive
+            // ramenait le compteur à zéro et redémarrer plus souvent que le délai empêchait
+            // le deadman de partir — indéfiniment.
+            //
+            // Le calcul est fait DANS le `update` (lecture-modification-écriture atomique de
+            // DataStore) : le lire dehors laisserait une fenêtre où un « Je vais bien »
+            // concurrent remettrait les compteurs à zéro et où l'on ré-écrirait par-dessus un
+            // capital périmé — un reset utilisateur silencieusement annulé.
+            //
+            // Aucun `lastActivityAt` n'est touché : un jalon n'est PAS une activité de
+            // l'utilisateur, il ne repousse jamais l'échéance.
+            val nowMonoTick = android.os.SystemClock.elapsedRealtime()
+            settings.update { s ->
+                val cfg = s.security.safetyCall
+                if (!cfg.enabled || cfg.monotonicLastActivityAt == 0L) {
+                    s
+                } else {
+                    s.copy(
+                        security = s.security.copy(
+                            safetyCall = cfg.copy(
+                                monotonicAccumulatedMs = cfg.monoElapsedMs(nowMonoTick),
+                                monotonicLastActivityAt = nowMonoTick,
+                            ),
+                        ),
+                    )
+                }
+            }
+            // On décide sur l'instantané d'AVANT le jalon, et non sur une relecture de
+            // `settings.state` : ce `StateFlow` se ré-hydrate depuis DataStore de façon
+            // asynchrone, une relecture immédiate rendrait donc peut-être encore l'ancienne
+            // valeur. Le jalon est de toute façon neutre pour la décision — il déplace du
+            // temps de `(nowMono - ancre)` vers `monotonicAccumulatedMs` sans en changer la
+            // somme, et `monoElapsedMs` rend la même chose des deux côtés à cet instant.
+            val current = currentBeforeCheckpoint
             when {
                 current.isExpired() -> {
                     Timber.i("SafetyCallWorker: timer expired, delegating to trigger use case")

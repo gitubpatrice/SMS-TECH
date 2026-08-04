@@ -459,6 +459,9 @@ fun SettingsScreen(
                                             lastActivityAt = System.currentTimeMillis(),
                                             // v1.10.0 SEC-11 — couple mono+wall.
                                             monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                                            // v1.27.2 — « Je vais bien » remet aussi le temps
+                                            // capitalisé à zéro : les trois champs ensemble.
+                                            monotonicAccumulatedMs = 0L,
                                         ),
                                     ),
                                 )

@@ -203,6 +203,10 @@ class SafetyCallSetupViewModel @Inject constructor(
                 current.copy(
                     lastActivityAt = System.currentTimeMillis(),
                     monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                    // v1.27.2 — un armement part forcément d'un compteur vide : sans cette
+                    // remise à zéro, un temps capitalisé lors d'une activation précédente
+                    // aurait été rejoué et le deadman serait parti en avance.
+                    monotonicAccumulatedMs = 0L,
                 )
             } else {
                 current

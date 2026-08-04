@@ -173,6 +173,16 @@ class MainApplication : Application(), Configuration.Provider {
                     settingsRepository.update { s ->
                         s.copy(
                             security = s.security.copy(
+                                // v1.27.2 (audit externe Gemini 2026-08-04) — on re-cale l'ancre
+                                // SANS toucher au temps déjà capitalisé
+                                // (`monotonicAccumulatedMs`, jalonné par [SafetyCallWorker]).
+                                //
+                                // Avant, ce re-calage remettait de fait le compteur monotone à
+                                // zéro à chaque redémarrage. Comme `isExpired` exige les DEUX
+                                // horloges, redémarrer plus souvent que le délai suffisait à ce
+                                // que le deadman ne parte jamais. Le capital survit désormais au
+                                // redémarrage ; seul le segment non encore jalonné est perdu,
+                                // soit moins d'un tick.
                                 safetyCall = if (safetyDrift) {
                                     s.security.safetyCall.copy(monotonicLastActivityAt = nowMono)
                                 } else s.security.safetyCall,

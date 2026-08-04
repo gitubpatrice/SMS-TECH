@@ -356,6 +356,9 @@ class MainActivity : FragmentActivity() {
                                     lastActivityAt = System.currentTimeMillis(),
                                     // v1.10.0 SEC-11 — couple mono+wall à chaque reset.
                                     monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                                    // v1.27.2 — le temps capitalisé repart de zéro AVEC les deux
+                                    // autres : les trois champs ne se dissocient jamais.
+                                    monotonicAccumulatedMs = 0L,
                                 ),
                             ),
                         )
@@ -438,6 +441,9 @@ class MainActivity : FragmentActivity() {
                                         lastActivityAt = System.currentTimeMillis(),
                                         // v1.10.0 SEC-11 — couple mono+wall.
                                         monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                                        // v1.27.2 — cf. l'autre site de reset : les trois
+                                        // champs bougent ensemble.
+                                        monotonicAccumulatedMs = 0L,
                                     ),
                                 ),
                             )
