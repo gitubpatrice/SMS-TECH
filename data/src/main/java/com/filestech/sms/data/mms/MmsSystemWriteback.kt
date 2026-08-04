@@ -13,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -87,7 +88,16 @@ class MmsSystemWriteback @Inject constructor(
                 Timber.w("MmsSystemWriteback: cannot canonicalise attachment path '%s'", a.file.path)
                 return false
             }
-            if (sandboxRoots.none { canonical.startsWith(it) }) {
+            // v1.27.2 (audit externe Gemini 2026-08-04) — comparaison par SEGMENT, pas par
+            // préfixe de chaîne. `startsWith` nu acceptait aussi un dossier FRÈRE dont le nom
+            // commence par celui de la racine (« …/cache_autre » passait la garde de
+            // « …/cache »). Les deux autres gardes sandbox du dépôt le font déjà correctement
+            // — `MmsDownloadedReceiver` via `Path.startsWith`, `OutgoingAttachmentStoreImpl` en
+            // concaténant le séparateur ; celle-ci était la seule des trois à comparer des
+            // chaînes nues. Non exploitable aujourd'hui (seule l'application peut écrire dans
+            // son propre répertoire de données), comme le dit déjà le KDoc : c'est une défense
+            // en profondeur, on la rend cohérente avec ses jumelles.
+            if (sandboxRoots.none { canonical == it || canonical.startsWith(it + File.separator) }) {
                 Timber.w("MmsSystemWriteback: attachment escapes sandbox: %s", canonical)
                 return false
             }
