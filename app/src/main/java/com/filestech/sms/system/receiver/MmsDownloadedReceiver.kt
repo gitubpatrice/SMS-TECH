@@ -92,6 +92,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         val scope = entry.applicationScope()
 
         val pending = goAsync()
+        // v1.27.2 (audit externe Gemini 2026-08-04) — le fichier RÉELLEMENT validé par la garde
+        // sandbox ci-dessous, seul autorisé à être supprimé dans le `finally`. Cf. le commentaire
+        // qui accompagne cette suppression.
+        var validatedPdu: File? = null
         scope.launch {
             try {
                 val mirror = entry.mirror()
@@ -114,7 +118,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     return@launch
                 }
                 val pduFile = pduPath?.let { File(it) }
-                if (pduFile == null || !pduFile.exists() || pduFile.length() == 0L) {
+                if (pduFile == null) {
                     Timber.w("MMS PDU missing or empty: %s", pduPath)
                     return@launch
                 }
@@ -133,6 +137,15 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     !canonicalPdu.toPath().startsWith(sandboxDir.toPath())
                 ) {
                     Timber.w("MMS PDU path outside sandbox: %s", pduPath)
+                    return@launch
+                }
+                validatedPdu = canonicalPdu
+                // v1.27.2 (audit externe Gemini 2026-08-04) — le test d'existence/taille est
+                // passé APRÈS la garde sandbox : il touchait auparavant un chemin non validé, et
+                // surtout un PDU vide sortait avant elle — donc, une fois la suppression
+                // restreinte au fichier validé, il n'aurait plus jamais été nettoyé du cache.
+                if (!pduFile.exists() || pduFile.length() == 0L) {
+                    Timber.w("MMS PDU missing or empty: %s", pduPath)
                     return@launch
                 }
                 val bytes = runCatching { pduFile.readBytes() }.getOrNull()
@@ -236,8 +249,22 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
             } catch (t: Throwable) {
                 Timber.w(t, "MMS download handling failed")
             } finally {
-                if (rc == Activity.RESULT_OK && !pduPath.isNullOrBlank()) {
-                    runCatching { File(pduPath).delete() }
+                // v1.27.2 (audit externe Gemini 2026-08-04) — on supprime le fichier VALIDÉ par
+                // la garde sandbox, et uniquement lui.
+                //
+                // Avant : `File(pduPath).delete()` sur le chemin BRUT, exécuté dès que
+                // `rc == RESULT_OK` — donc y compris après le `return@launch` du contrôle
+                // sandbox. La garde couvrait la LECTURE et laissait passer la SUPPRESSION,
+                // pourtant la plus destructrice des deux. Son propre commentaire promettait
+                // qu'une régression future (nouvel intent-filter, `exported` basculé, aide de
+                // test) ne pourrait pas transformer ce receveur en primitive sur des fichiers
+                // arbitraires : c'était vrai en lecture, faux en suppression.
+                //
+                // Non atteignable aujourd'hui (`exported=false`, chemin posé par notre propre
+                // processus) — c'est bien de la défense en profondeur qu'on rend cohérente, pas
+                // une faille ouverte que l'on ferme.
+                if (rc == Activity.RESULT_OK) {
+                    validatedPdu?.let { pdu -> runCatching { pdu.delete() } }
                 }
                 pending.finish()
             }
