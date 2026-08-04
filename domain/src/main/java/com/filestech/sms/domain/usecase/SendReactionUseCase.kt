@@ -172,10 +172,24 @@ class SendReactionUseCase @Inject constructor(
         // Tous les caractères restants doivent être : digits, +, espace, tiret, point,
         // parenthèses. Refuse tout autre symbole exotique.
         if (!matches(Regex("^[+0-9 .()\\-]+$"))) return false
-        // Au moins 4 digits pour exclure les short codes premium courts (32665, etc.).
-        // Les vrais numéros mobiles font ≥10 digits ; on garde une marge confortable à 4
-        // pour ne pas exclure des numéros internationaux courts légitimes (exotiques).
-        return count { it.isDigit() } >= 4
+        // v1.27.2 (audit externe Gemini 2026-08-04) — seuil porté de 4 à
+        // [REACTION_MIN_DIGITS] chiffres.
+        //
+        // ⚠️ Le commentaire précédent affirmait que le seuil de 4 « exclut les short codes
+        // premium courts (32665, etc.) ». C'était FAUX, et son propre exemple le démontrait :
+        // `32665` fait CINQ chiffres, il franchissait donc la garde. Aucun code court n'était
+        // exclu.
+        //
+        // Ce que ça coûtait : une réaction est un VRAI SMS, envoyé automatiquement quand
+        // l'utilisateur touche un emoji. Réagir dans un fil de service (banque, opérateur,
+        // code 2FA) partait donc vers un code court, potentiellement SURTAXÉ, sans que rien
+        // ne l'annonce — et sans le moindre sens fonctionnel : personne ne lit un Tapback à
+        // l'autre bout.
+        //
+        // Restreint AU CHEMIN DES RÉACTIONS. Les trois chemins d'envoi ordinaires gardent
+        // leur seuil : répondre « STOP » à un service est légitime et explicite, l'utilisateur
+        // tape le message. C'est l'automatisme qui pose problème ici, pas la destination.
+        return count { it.isDigit() } >= REACTION_MIN_DIGITS
     }
 
 }
@@ -187,6 +201,20 @@ class SendReactionUseCase @Inject constructor(
  * qui attend une seule trame.
  */
 private const val SMS_UCS2_SEGMENT_CAP = 70
+
+/**
+ * v1.27.2 (audit externe Gemini 2026-08-04) — nombre minimal de chiffres pour qu'une RÉACTION
+ * parte vers un destinataire.
+ *
+ * **Sept.** Les codes courts font mondialement 3 à 6 chiffres (5 en France : 32665, 36000…) ;
+ * sept les écarte tous. Un numéro réel en compte au moins autant dès qu'il porte son indicatif
+ * pays, et les rares numérotations nationales à six chiffres restent joignables par tous les
+ * autres chemins — seule la réaction automatique est refusée.
+ *
+ * Ne PAS aligner les trois use-cases d'envoi ordinaires là-dessus : y écrire volontairement à un
+ * code court est légitime (répondre « STOP »).
+ */
+private const val REACTION_MIN_DIGITS = 7
 
 /** v1.3.2 — wrap fixe `"Reacted "` (8) + `" to «"` (5) + `"»"` (1) + `"…"` éventuel (1). */
 private const val TAPBACK_WRAP_LENGTH = 8 + 5 + 1 + 1

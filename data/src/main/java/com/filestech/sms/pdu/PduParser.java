@@ -372,9 +372,30 @@ public class PduParser {
         long parts = parseUintvarInteger(in);
         PduBody body = new PduBody();
         for (long i = 0; i < parts; i++) {
+            // v1.27.2 (audit externe Gemini 2026-08-04) — le flux est vide : on sort au lieu de
+            // tourner. `parts` vient du PDU, donc d'une entrée non fiable : sans cette sortie,
+            // un compteur absurde combiné à des longueurs nulles faisait boucler la lecture.
+            if (in.available() <= 0) break;
             int headersLength = (int) parseUintvarInteger(in);
             int dataLength = (int) parseUintvarInteger(in);
             if (headersLength <= 0) continue;
+            // v1.27.2 (audit externe Gemini 2026-08-04) — les DEUX longueurs sont bornées par ce
+            // qui RESTE réellement dans le flux avant toute allocation.
+            //
+            // `headersLength` et `dataLength` sortent de `parseUintvarInteger`, donc du PDU
+            // lui-même — une entrée non contrôlée, reçue par un receiver. Un MMS malformé ou
+            // piégé annonçant une longueur énorme faisait allouer un tableau de cette taille et
+            // partait en OutOfMemory, perdant le message et pouvant emporter le processus.
+            //
+            // La borne est logiquement indiscutable : un bloc ne peut pas être plus long que ce
+            // qui reste à lire. Aucun PDU légitime n'est donc rejeté — s'il annonce N octets,
+            // c'est qu'il les porte. Le contrôle `n != headersLength` juste en dessous détectait
+            // bien la troncature, mais APRÈS l'allocation, c'est-à-dire trop tard.
+            //
+            // Gemini n'avait signalé que le bloc d'en-têtes ; `dataBytes` portait exactement le
+            // même défaut, deux lignes plus bas.
+            int remaining = in.available();
+            if (headersLength > remaining || dataLength > remaining) break;
             // Read the headers block
             byte[] hdrBytes = new byte[headersLength];
             int n = in.read(hdrBytes, 0, headersLength);

@@ -141,6 +141,19 @@ class SendMediaMmsUseCase @Inject constructor(
          * image, et non des heures plus tard. Une constante partagee plutot que deux valeurs
          * jumelles vouees a diverger.
          */
+        /**
+         * ⚠️ v1.27.2 — divergence CONNUE et ASSUMÉE avec
+         * [com.filestech.sms.core.mms.MmsConstants.CARRIER_PAYLOAD_CAP_BYTES] (280 Ko), qui est
+         * le seuil de recompression appliqué par l'interface.
+         *
+         * Sans effet aujourd'hui : l'UI recompresse toujours sous 280 Ko avant qu'un fichier
+         * n'atteigne cet use case, les 20 Ko d'écart ne sont donc jamais exercés.
+         *
+         * Arbitrage de Patrice, 2026-08-04 : NE PAS unifier. Descendre ce plafond à 280
+         * rejetterait à l'envoi un message DÉJÀ PROGRAMMÉ dont la pièce jointe tombe entre les
+         * deux valeurs — accepté à la programmation sous l'ancienne limite. Casser un envoi
+         * programmé pour une cohérence sans effet observable n'en vaut pas le prix.
+         */
         const val MAX_PAYLOAD_BYTES = 300L * 1024L
     }
 }
