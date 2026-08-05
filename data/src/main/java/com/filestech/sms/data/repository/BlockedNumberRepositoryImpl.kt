@@ -1,6 +1,7 @@
 package com.filestech.sms.data.repository
 
 import android.os.Build
+import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.blocking.BlockedNumberSystem
@@ -51,9 +52,26 @@ class BlockedNumberRepositoryImpl @Inject constructor(
      * avec la region de la SIM. Aucune migration : `raw_number` est deja stocke.
      */
     override suspend fun isBlocked(rawNumber: String): Boolean = withContext(io) {
-        val key = phoneIdentity.snapshot().key(rawNumber)
+        val ident = phoneIdentity.snapshot()
+        val key = ident.key(rawNumber)
         if (key.isEmpty()) return@withContext false
-        dao.isBlocked(key)
+        if (dao.isBlocked(key)) return@withContext true
+        // 🔴 v1.27.2 — CHEMIN DE TRANSITION, tant que le rekey n'a pas tourné.
+        //
+        // La clé stockée devient l'E.164, mais les entrées héritées portent encore le suffixe de
+        // neuf chiffres jusqu'à la première synchronisation. Or un SMS peut arriver AVANT :
+        // c'est même lui qui démarre le processus. La comparaison exacte ci-dessus ne trouverait
+        // alors rien, et **un numéro bloqué passerait** — une régression de sécurité introduite
+        // par le correctif lui-même.
+        //
+        // ⚠️ On ne se rabat PAS sur une simple égalité de suffixe : ce serait rouvrir la collision
+        // internationale, et bloquer à tort coûte plus cher que laisser passer — le curseur
+        // d'import avance sur la ligne rejetée, donc le message d'un tiers serait perdu
+        // définitivement. On relit donc les entrées du seau et on tranche sur leur forme BRUTE,
+        // avec la même règle d'identité que partout ailleurs.
+        val legacyKey = rawNumber.blockKey()
+        if (legacyKey.isEmpty() || legacyKey == key) return@withContext false
+        dao.findAllByNormalized(legacyKey).any { ident.matches(it.rawNumber, rawNumber) }
     }
 
     override suspend fun block(rawNumber: String, label: String?): Outcome<Unit> = withContext(io) {

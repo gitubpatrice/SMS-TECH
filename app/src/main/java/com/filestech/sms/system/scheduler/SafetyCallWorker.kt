@@ -1,11 +1,13 @@
 package com.filestech.sms.system.scheduler
 
 import android.content.Context
+import android.os.Build
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -289,7 +291,34 @@ class SafetyCallWorker @AssistedInject constructor(
          * délai d'une heure.
          */
         fun enqueueNow(context: Context) {
-            val request = OneTimeWorkRequestBuilder<SafetyCallWorker>().build()
+            val builder = OneTimeWorkRequestBuilder<SafetyCallWorker>()
+            // 🔴 v1.27.2 (relecture Gemini du 2026-08-05, F-02) — TOUTE LA PONCTUALITE SE JOUAIT
+            // SUR CETTE LIGNE.
+            //
+            // WorkManager s'appuie sur JobScheduler, qui **diffère les tâches ordinaires pendant le
+            // Doze**. L'alarme réveillait donc bien le téléphone, le receveur s'exécutait bien, il
+            // mettait ce travail en file… et le système le rangeait jusqu'à la prochaine fenêtre de
+            // maintenance. L'ordonnanceur d'alarme, l'arrondi vers le futur, le réveil
+            // d'avertissement : tout était neutralisé au dernier maillon.
+            //
+            // ⚠️ **Uniquement à partir d'Android 12, et c'est délibéré.** Sur 8 à 11, WorkManager
+            // exécute un travail urgent comme un **service de premier plan**, ce qui impose
+            // `getForegroundInfo()` et affiche une **notification obligatoire** — publiée AVANT que
+            // `doWork` n'ait pu exécuter sa garde mode leurre. Sous contrainte, une notification
+            // SMS Tech apparaîtrait pendant que la personne prétend n'avoir rien à cacher. On
+            // échangerait un défaut de ponctualité contre un défaut de SÉCURITÉ ; sur cette
+            // application, l'échange n'est pas acceptable.
+            //
+            // À partir d'Android 12, le travail urgent passe par un job à haute priorité **sans
+            // aucune notification** : le gain est gratuit, on le prend. En deçà, le tick horaire
+            // reste le filet — exactement le comportement d'avant ce lot, sans régression.
+            //
+            // `RUN_AS_NON_EXPEDITED_WORK_REQUEST` : quota d'urgence épuisé, le travail s'exécute
+            // normalement au lieu d'échouer. Tard vaut mieux que jamais sur un homme-mort.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            }
+            val request = builder.build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 IMMEDIATE_WORK_NAME,
                 // v1.27.2 (audit Codex du 2026-08-05, SC-02) — 🔴 `KEEP`, surtout pas `REPLACE`.
