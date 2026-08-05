@@ -23,6 +23,7 @@ import javax.inject.Singleton
 class BlockedNumberRepositoryImpl @Inject constructor(
     private val dao: BlockedNumberDao,
     private val system: BlockedNumberSystem,
+    private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : BlockedNumberRepository {
 
@@ -38,9 +39,22 @@ class BlockedNumberRepositoryImpl @Inject constructor(
      * enregistrée en `0…`, pendant que ce `isBlocked` répondait `false` et laissait les messages
      * arriver. La clé partagée supprime l'écart au lieu de le rattraper.
      */
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-08) — 🔴 LA CLE SEULE NE PROUVE RIEN.
+     *
+     * `blockKey` retient neuf chiffres, qui ne portent aucune information de pays : bloquer
+     * `+33612345678` faisait rejeter les SMS de `+15612345678`. Et comme le curseur d'import
+     * avance sur les lignes rejetees, le message de ce tiers non bloque n'etait pas seulement
+     * ecarte, il etait **perdu definitivement**.
+     *
+     * La cle reste l'index — c'est elle qui evite de canonicaliser toute la liste a chaque
+     * message — mais la decision se prend sur la forme BRUTE enregistree, canonicalisee en E.164
+     * avec la region de la SIM. Aucune migration : `raw_number` est deja stocke.
+     */
     override suspend fun isBlocked(rawNumber: String): Boolean = withContext(io) {
         val key = rawNumber.blockKey()
-        key.isNotEmpty() && dao.isBlocked(key)
+        if (key.isEmpty()) return@withContext false
+        dao.findAllByNormalized(key).any { phoneIdentity.matches(it.rawNumber, rawNumber) }
     }
 
     override suspend fun block(rawNumber: String, label: String?): Outcome<Unit> = withContext(io) {
@@ -87,5 +101,9 @@ class BlockedNumberRepositoryImpl @Inject constructor(
 
     override suspend fun blockedNormalizedSnapshot(): Set<String> = withContext(io) {
         dao.allNormalized().toHashSet()
+    }
+
+    override suspend fun blockedRawSnapshot(): List<String> = withContext(io) {
+        dao.allRaw()
     }
 }

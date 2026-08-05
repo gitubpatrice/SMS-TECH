@@ -37,6 +37,25 @@ class FindOrCreateSuffixMatchTest {
         lastMessagePreview = null,
     )
 
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-07) — le comparateur est desormais INJECTE : neuf
+     * chiffres ne portent aucune information de pays, et `+1 212 345 6789` partageait sa cle avec
+     * le fixe francais `01 23 45 67 89`. La regle est l'egalite E.164, qui a besoin d'une region.
+     *
+     * Doublure de `PhoneNumberUtils.formatNumberToE164(number, "FR")`, comme dans
+     * `PhoneAddressesMatchTest` : `core` n'a pas de dependance Android.
+     */
+    private fun matchFr(a: String, b: String): Boolean =
+        com.filestech.sms.core.ext.phoneAddressesMatch(a, b) { raw ->
+            val trimmed = raw.trim()
+            val digits = trimmed.filter { it.isDigit() }
+            when {
+                trimmed.startsWith('+') && digits.length in 8..15 -> "+" + digits
+                digits.length == 10 && digits.startsWith("0") -> "+33" + digits.drop(1)
+                else -> null
+            }
+        }
+
     // ──────────── Root cause du doublon : pourquoi le fallback existe ────────────
 
     @Test fun `national and international forms miss exact CSV but share blockKey`() {
@@ -58,7 +77,7 @@ class FindOrCreateSuffixMatchTest {
         val existing = listOf(conv(id = 7L, addressesCsv = "+33612345678"))
         val composed = PhoneAddress.of("06 12 34 56 78")
 
-        val match = ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed)
+        val match = ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr)
 
         assertThat(match).isNotNull()
         assertThat(match!!.id).isEqualTo(7L)
@@ -68,7 +87,7 @@ class FindOrCreateSuffixMatchTest {
         val existing = listOf(conv(id = 3L, addressesCsv = "0612345678"))
         val composed = PhoneAddress.of("+33 6 12 34 56 78")
 
-        val match = ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed)
+        val match = ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr)
 
         assertThat(match?.id).isEqualTo(3L)
     }
@@ -77,7 +96,7 @@ class FindOrCreateSuffixMatchTest {
         val existing = listOf(conv(id = 9L, addressesCsv = "06-12-34-56-78"))
         val composed = PhoneAddress.of("(06) 12 34 56 78")
 
-        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed)?.id)
+        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr)?.id)
             .isEqualTo(9L)
     }
 
@@ -91,7 +110,7 @@ class FindOrCreateSuffixMatchTest {
         val existing = listOf(conv(id = 1L, addressesCsv = "+33612345678"))
         val composed = PhoneAddress.of("07 12 34 56 78")
 
-        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed))
+        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr))
             .isNull()
     }
 
@@ -99,12 +118,12 @@ class FindOrCreateSuffixMatchTest {
         val existing = listOf(conv(id = 1L, addressesCsv = "+33612345678"))
         val composed = PhoneAddress.of("06 99 88 77 66")
 
-        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed)).isNull()
+        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr)).isNull()
     }
 
     @Test fun `empty conversation list returns null`() {
         val composed = PhoneAddress.of("06 12 34 56 78")
-        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(emptyList(), composed)).isNull()
+        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(emptyList(), composed, ::matchFr)).isNull()
     }
 
     @Test fun `short code with less than 8 digits never matches`() {
@@ -113,7 +132,7 @@ class FindOrCreateSuffixMatchTest {
         val existing = listOf(conv(id = 5L, addressesCsv = "3208"))
         val composed = PhoneAddress.of("3208")
 
-        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed)).isNull()
+        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr)).isNull()
     }
 
     @Test fun `alphanumeric sender label never matches by suffix`() {
@@ -123,7 +142,7 @@ class FindOrCreateSuffixMatchTest {
         val existing = listOf(conv(id = 6L, addressesCsv = "SFR 123"))
         val composed = PhoneAddress.of("SFR 123")
 
-        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed)).isNull()
+        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr)).isNull()
     }
 
     // ──────────── Déterminisme ────────────
@@ -135,7 +154,7 @@ class FindOrCreateSuffixMatchTest {
         )
         val composed = PhoneAddress.of("06 12 34 56 78")
 
-        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed)?.id)
+        assertThat(ConversationRepositoryImpl.matchOneToOneByBlockKey(existing, composed, ::matchFr)?.id)
             .isEqualTo(10L)
     }
 }

@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.filestech.sms.core.ext.blockKey
-import com.filestech.sms.core.ext.phoneAddressesMatch
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.core.result.AppError
@@ -67,6 +66,8 @@ class ConversationRepositoryImpl @Inject constructor(
     // + réinstaller SMS Tech ramène les badges (le système avait toujours
     // `READ=0`, jamais aligné par SMS Tech).
     private val telephonyReader: com.filestech.sms.data.sms.TelephonyReader,
+    // v1.27.2 (audit Codex, C-07) — voir [com.filestech.sms.data.sms.PhoneIdentity].
+    private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ConversationRepository {
@@ -105,14 +106,15 @@ class ConversationRepositoryImpl @Inject constructor(
             conversationDao.observe(includeArchived),
             blockedRepo.observe(),
         ) { rows, blocked ->
-            val blockedKeys = blocked
-                .map { it.normalizedNumber }
-                .filter { it.isNotEmpty() }
-                .toHashSet()
+            // v1.27.2 (audit Codex du 2026-08-05, C-08) — MEME comparaison que le filtre de
+            // reception, region comprise. La v1.25.3 avait deja diverge ici, avec des
+            // conversations annoncees bloquees qui continuaient de recevoir ; retomber sur la cle
+            // de neuf chiffres aurait recree l'ecart, dans l'autre sens cette fois.
+            val isBlockedAddress = phoneIdentity.blockedMatcher(blocked.map { it.rawNumber })
             rows.map { row ->
                 val conv = row.toDomain()
                 val allBlocked = conv.addresses.isNotEmpty() &&
-                    conv.addresses.all { addr -> addr.raw.blockKey() in blockedKeys }
+                    conv.addresses.all { addr -> isBlockedAddress(addr.raw) }
                 if (allBlocked) conv.copy(blocked = true) else conv
             }
         }.flowOn(io)
@@ -385,6 +387,7 @@ class ConversationRepositoryImpl @Inject constructor(
                     matchOneToOneByBlockKey(
                         conversationDao.snapshotOneToOneConversations(),
                         addresses.first(),
+                        phoneIdentity::matches,
                     )
                 } else null
 
@@ -439,6 +442,9 @@ class ConversationRepositoryImpl @Inject constructor(
         internal fun matchOneToOneByBlockKey(
             oneToOne: List<ConversationEntity>,
             target: PhoneAddress,
+            // v1.27.2 (audit Codex, C-07) — le comparateur est INJECTE : la regle a besoin de la
+            // region de la SIM, que cette fonction pure ne peut pas resoudre elle-meme.
+            matches: (String, String) -> Boolean,
         ): ConversationEntity? {
             val targetKey = target.raw.stripMmsAddressSuffix().blockKey()
             if (targetKey.length < CONV_MATCH_MIN_DIGITS ||
@@ -452,7 +458,7 @@ class ConversationRepositoryImpl @Inject constructor(
             // [phoneAddressesMatch] ajoute la désambiguïsation par indicatif pays.
             return oneToOne.firstOrNull { conv ->
                 val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
-                convRaw != null && phoneAddressesMatch(convRaw, target.raw)
+                convRaw != null && matches(convRaw, target.raw)
             }
         }
     }

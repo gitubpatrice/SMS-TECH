@@ -148,27 +148,53 @@ fun String.blockKey(): String {
  * le message rédigé partait au mauvais destinataire ; à l'import, les deux historiques
  * fusionnaient, avec divulgation d'un message privé à la clé.
  *
+ * # 🔴 La première correction était INCOMPLÈTE (audit Codex du 2026-08-05, C-07)
+ *
+ * Elle n'exigeait l'égalité des chiffres que lorsque **les deux** écritures portaient un `+`.
+ * Dès qu'une seule était nationale, le suffixe de neuf chiffres redevenait seul juge :
+ *
+ * ```
+ * "+1 212 345 6789"  →  123456789
+ * "01 23 45 67 89"   →  123456789     ← ENCORE LA MÊME CLÉ
+ * ```
+ *
+ * Un correspondant américain enregistré en international et un fixe français reçu au format
+ * national : paire parfaitement plausible, et le mauvais destinataire revenait par la fenêtre.
+ * J'avais fermé une moitié de l'espace de collision en croyant l'avoir fermé en entier — le motif
+ * du **jumeau asymétrique**, dans le correctif censé le traiter.
+ *
  * # La règle
  *
- * Même seau ([blockKey]), **puis** désambiguïsation par l'indicatif : quand les **deux** écritures
- * sont explicitement internationales — un `+` en tête — elles ne se rapprochent que si leurs
- * chiffres sont identiques. Le suffixe n'a alors plus rien à désambiguïser : deux formes
- * internationales du même numéro sont toujours la même suite de chiffres.
+ * Même seau ([blockKey]) pour écarter vite, **puis** égalité **E.164** : deux numéros complets ne
+ * se rapprochent que si leur forme canonique internationale est identique. C'est la seule preuve
+ * qu'ils désignent la même personne, et elle traite d'un coup les quatre combinaisons
+ * national/international.
  *
- * Dès qu'une seule des deux est nationale ou ambiguë (`0612345678`, `612345678`), le suffixe
- * reprend son rôle — c'est exactement le cas pour lequel il existe, et le seul où il est
- * légitime.
+ * [toE164] est injecté — `core` reste sans dépendance Android — et rend `null` quand la
+ * canonicalisation est impossible : région inconnue, numéro invalide pour cette région.
+ *
+ * ⚠️ **Dans ce cas on ÉCHOUE FERMÉ**, volontairement. Ne pas rapprocher crée au pire une
+ * conversation en double, visible et réparable. Rapprocher à tort envoie un message privé à
+ * quelqu'un d'autre. Les deux erreurs ne se valent pas.
  *
  * ⚠️ [stripMmsAddressSuffix] est appliqué ici, aux deux bords : l'en-tête `From:` d'un PDU porte
  * `/TYPE=PLMN`, et [blockKey] bascule en mode alphanumérique dès qu'il voit une lettre. L'oublier
  * d'un seul côté rend le rapprochement silencieusement inopérant — c'est déjà arrivé.
  */
-fun phoneAddressesMatch(a: String, b: String): Boolean {
+fun phoneAddressesMatch(a: String, b: String, toE164: (String) -> String?): Boolean {
     val rawA = a.stripMmsAddressSuffix().trim()
     val rawB = b.stripMmsAddressSuffix().trim()
-    if (rawA.blockKey() != rawB.blockKey()) return false
-    if (!rawA.startsWith('+') || !rawB.startsWith('+')) return true
-    return rawA.filter { it.isDigit() } == rawB.filter { it.isDigit() }
+    val keyA = rawA.blockKey()
+    // Seau grossier d'abord : il écarte l'immense majorité des paires sans appeler libphonenumber.
+    if (keyA != rawB.blockKey()) return false
+    // Libellés alphanumériques (« Free ») et codes courts (« 3646 ») : il n'y a pas de pays à
+    // départager, la clé EST l'identité. `blockKey` rend le libellé en minuscules, ou les chiffres
+    // tels quels quand il y en a moins que le seuil.
+    if (!keyA.all { it.isDigit() } || keyA.length < BLOCK_KEY_SIGNIFICANT_DIGITS) return true
+    // Deux numéros complets : SEULE l'égalité E.164 prouve qu'ils désignent la même personne.
+    // `null` d'un seul côté suffit à refuser — voir l'échec fermé décrit plus haut.
+    val e164A = toE164(rawA)
+    return e164A != null && e164A == toE164(rawB)
 }
 
 /**

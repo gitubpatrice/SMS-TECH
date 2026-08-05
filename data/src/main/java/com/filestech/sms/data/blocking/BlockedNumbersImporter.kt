@@ -35,6 +35,7 @@ import javax.inject.Singleton
 class BlockedNumbersImporter @Inject constructor(
     private val system: BlockedNumberSystem,
     private val repo: BlockedNumberRepository,
+    private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
     private val conversationRepo: ConversationRepository,
     private val conversationDao: ConversationDao,
     // v1.25.4 — accès direct au DAO, comme [conversationDao] : `rekeyLegacyEntries` réécrit une
@@ -168,12 +169,13 @@ class BlockedNumbersImporter @Inject constructor(
      * scheduled boot run) can surface a snackbar.
      */
     suspend fun purgeMatchingConversations(): Int = withContext(io) {
-        val blockedKeys = repo.blockedNormalizedSnapshot()
-            .asSequence()
-            .filter { it.isNotEmpty() }
-            .toHashSet()
-        Timber.i("Purge: %d distinct blocked keys", blockedKeys.size)
-        if (blockedKeys.isEmpty()) return@withContext 0
+        // v1.27.2 (audit Codex du 2026-08-05, C-08) — cette passe SUPPRIME des conversations.
+        // Sur une cle de neuf chiffres, elle pouvait donc effacer la conversation d'un
+        // correspondant etranger qui n'a jamais ete bloque. Comparaison region-aware.
+        val blockedRaw = repo.blockedRawSnapshot().filter { it.isNotBlank() }
+        Timber.i("Purge: %d blocked entries", blockedRaw.size)
+        if (blockedRaw.isEmpty()) return@withContext 0
+        val isBlockedAddress = phoneIdentity.blockedMatcher(blockedRaw)
         // Read directly from the DAO — not `ConversationRepository.observeAll()`. Le motif
         // d'origine (« observeAll filtre déjà les conversations bloquées ») n'est plus vrai
         // depuis la v1.25.3 : elles restent listées, marquées via `Conversation.blocked`. La
@@ -186,19 +188,18 @@ class BlockedNumbersImporter @Inject constructor(
         for (entity in allEntities) {
             val addresses = PhoneAddress.list(entity.addressesCsv)
             if (addresses.isEmpty()) continue
-            val addrKeys = addresses.map { it.raw.blockKey() }
-            val matchCount = addrKeys.count { it in blockedKeys }
+            val matchCount = addresses.count { isBlockedAddress(it.raw) }
             if (matchCount == 0) continue
-            if (matchCount < addrKeys.size) {
+            if (matchCount < addresses.size) {
                 partialMatch += 1
                 // v1.6.1 (audit SEC-05) — `addrs=%s` retiré : les clés de rapprochement sont des
                 // quasi-identifiants PII (RGPD). En release R8 strip tout l'appel Timber via
                 // assumenosideeffects mais en debug logcat les exposait à toute app détentrice
                 // de READ_LOGS.
-                Timber.d("Purge: conv #%d partial-block (%d/%d) — keeping", entity.id, matchCount, addrKeys.size)
+                Timber.d("Purge: conv #%d partial-block (%d/%d) — keeping", entity.id, matchCount, addresses.size)
                 continue
             }
-            Timber.i("Purge: deleting conv #%d (all %d participants blocked)", entity.id, addrKeys.size)
+            Timber.i("Purge: deleting conv #%d (all %d participants blocked)", entity.id, addresses.size)
             runCatching { conversationRepo.delete(entity.id) }
                 .onSuccess { purged += 1 }
                 .onFailure { Timber.w(it, "Purge of blocked conv #%d failed", entity.id) }

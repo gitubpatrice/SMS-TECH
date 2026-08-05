@@ -32,6 +32,18 @@ interface BlockedNumberDao {
     @Query("SELECT normalized_number FROM blocked_numbers")
     suspend fun allNormalized(): List<String>
 
+    /** v1.27.2 (audit Codex, C-08) — formes brutes, seules porteuses de l'indicatif pays. */
+    @Query("SELECT raw_number FROM blocked_numbers")
+    suspend fun allRaw(): List<String>
+
+    /**
+     * v1.27.2 (audit Codex, C-08) — TOUTES les entrees d'un meme seau, pas la premiere.
+     * Deux correspondants distincts peuvent partager une cle de neuf chiffres ; le tri final se
+     * fait sur la forme brute.
+     */
+    @Query("SELECT * FROM blocked_numbers WHERE normalized_number = :normalized")
+    suspend fun findAllByNormalized(normalized: String): List<BlockedNumberEntity>
+
     /**
      * v1.25.4 — instantané complet, `raw_number` compris.
      *

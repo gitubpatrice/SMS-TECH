@@ -35,6 +35,7 @@ class BlocklistGuardTest {
         override suspend fun mirrorFromSystem(rawNumber: String): Outcome<Unit> =
             error("not under test")
         override suspend fun blockedNormalizedSnapshot(): Set<String> = error("not under test")
+        override suspend fun blockedRawSnapshot(): List<String> = emptyList()
     }
 
     @Test fun `blocked sender is still dropped`() = runTest {

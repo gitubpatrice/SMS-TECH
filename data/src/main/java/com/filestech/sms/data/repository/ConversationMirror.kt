@@ -4,7 +4,6 @@ import android.telephony.PhoneNumberUtils
 import androidx.room.withTransaction
 import com.filestech.sms.core.ext.WireAddress
 import com.filestech.sms.core.ext.blockKey
-import com.filestech.sms.core.ext.phoneAddressesMatch
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.dao.AttachmentDao
@@ -14,6 +13,7 @@ import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.entity.AttachmentEntity
 import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
+import com.filestech.sms.data.sms.PhoneIdentity
 import com.filestech.sms.data.sms.PhoneNumberWireFormatter
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.mms.MediaAttachmentSpec
@@ -46,6 +46,9 @@ class ConversationMirror @Inject constructor(
     private val attachmentDao: AttachmentDao,
     private val contacts: ContactRepository,
     private val wireFormatter: PhoneNumberWireFormatter,
+    // v1.27.2 (audit Codex, C-07) — le rapprochement de conversation exige la region : neuf
+    // chiffres ne portent aucune information de pays.
+    private val phoneIdentity: PhoneIdentity,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : OutgoingMessageMirror {
 
@@ -266,7 +269,7 @@ class ConversationMirror @Inject constructor(
         val existing = conversationDao.findByAddressesCsv(csv)
             ?: conversationDao.snapshotOneToOneConversations().firstOrNull { conv ->
                 val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
-                convRaw != null && phoneAddressesMatch(convRaw, addr.raw)
+                convRaw != null && phoneIdentity.matches(convRaw, addr.raw)
             }
             ?: return@withContext null
         val target = when (kind) {
@@ -845,7 +848,7 @@ class ConversationMirror @Inject constructor(
                 // chiffres. [phoneAddressesMatch] ajoute la desambiguisation par indicatif pays.
                 val match = oneToOne.firstOrNull { conv ->
                     val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
-                    convRaw != null && phoneAddressesMatch(convRaw, addresses.first().raw)
+                    convRaw != null && phoneIdentity.matches(convRaw, addresses.first().raw)
                 }
                 if (match != null) {
                     if (systemThreadId > 0L && match.threadId != systemThreadId) {
@@ -927,7 +930,7 @@ class ConversationMirror @Inject constructor(
                 // chiffres. [phoneAddressesMatch] ajoute la desambiguisation par indicatif pays.
                 val match = oneToOne.firstOrNull { conv ->
                     val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
-                    convRaw != null && phoneAddressesMatch(convRaw, addresses.first().raw)
+                    convRaw != null && phoneIdentity.matches(convRaw, addresses.first().raw)
                 }
                 if (match != null) {
                     if (match.displayName == null && resolved != null) {

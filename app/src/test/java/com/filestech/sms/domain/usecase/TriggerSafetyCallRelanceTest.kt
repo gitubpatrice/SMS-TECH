@@ -219,6 +219,7 @@ class TriggerSafetyCallRelanceTest {
         override suspend fun mirrorFromSystem(rawNumber: String): Outcome<Unit> =
             Outcome.Success(Unit)
         override suspend fun blockedNormalizedSnapshot(): Set<String> = emptySet()
+        override suspend fun blockedRawSnapshot(): List<String> = emptyList()
     }
 
     // ──────────────────────────── Montage ────────────────────────────

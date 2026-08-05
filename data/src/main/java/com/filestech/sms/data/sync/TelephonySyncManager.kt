@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
-import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.AppDatabase
@@ -64,6 +63,7 @@ class TelephonySyncManager @Inject constructor(
     private val database: AppDatabase,
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
+    private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
     /**
      * v1.8.0 (audit bug "numéros bloqués importés") — la blocklist système était
      * mirror-ée vers Room **uniquement** au cold-start (`MainApplication.onCreate`).
@@ -251,31 +251,27 @@ class TelephonySyncManager @Inject constructor(
             // silencieuse et définitive de messages d'un numéro NON bloqué qui partage ses
             // 8 derniers chiffres avec un numéro bloqué ; et blocage inopérant sur les
             // expéditeurs alphanumériques, dont la clé se réduisait à la chaîne vide).
-            val roomBlocked = runCatching { blockedRepo.blockedNormalizedSnapshot() }.getOrDefault(emptySet())
+            // v1.27.2 (audit Codex du 2026-08-05, C-08) — formes BRUTES et comparaison
+            // region-aware. Les cles de neuf chiffres confondaient `+33612345678` et
+            // `+15612345678` ; la ligne du tiers etait filtree ET son identifiant franchissait
+            // quand meme le curseur, donc le message etait perdu pour de bon.
+            val roomBlocked = runCatching { blockedRepo.blockedRawSnapshot() }.getOrDefault(emptyList())
             val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
             } else emptyList()
-            val blockedKeys = (roomBlocked.asSequence() + systemBlocked.asSequence())
-                .map { it.blockKey() }
-                .filter { it.isNotEmpty() }
-                .toHashSet()
+            val isBlockedAddress = phoneIdentity.blockedMatcher(roomBlocked + systemBlocked)
             Timber.i(
-                "runSync(%s) blocked sources: room=%d system=%d → keys=%d",
+                "runSync(%s) blocked sources: room=%d system=%d",
                 reason,
                 roomBlocked.size,
                 systemBlocked.size,
-                blockedKeys.size,
             )
 
             var imported = 0
             var skipped = 0
             val newCursor = try {
                 telephonyReader.readSmsSince(sinceId = current, pageSize = 500) { page ->
-                    val filtered = if (blockedKeys.isEmpty()) {
-                        page
-                    } else {
-                        page.filter { it.entity.address.blockKey() !in blockedKeys }
-                    }
+                    val filtered = page.filterNot { isBlockedAddress(it.entity.address) }
                     skipped += page.size - filtered.size
                     if (filtered.isNotEmpty()) {
                         // v1.8.0 (post-audit fix badges fresh install S24) — au

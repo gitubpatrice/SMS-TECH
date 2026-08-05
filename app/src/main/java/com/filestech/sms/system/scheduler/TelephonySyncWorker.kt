@@ -13,7 +13,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.MessageDao
@@ -56,6 +55,7 @@ class TelephonySyncWorker @AssistedInject constructor(
     private val messageDao: MessageDao,
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
+    private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
     private val mmsSystemWriteback: MmsSystemWriteback,
     // v1.26.1 (audit H9) — nécessaire pour rendre la purge automatique atomique, cf. plus bas.
     private val database: com.filestech.sms.data.local.db.AppDatabase,
@@ -211,22 +211,18 @@ class TelephonySyncWorker @AssistedInject constructor(
         // éliminée par le `filter`, si bien qu'un expéditeur alphanumérique bloqué passait.
         // `blockKey()` est idempotente sur sa propre sortie, on peut donc l'appliquer
         // uniformément au snapshot Room (déjà en clés) comme à la lecture système (brute).
-        val roomBlocked = runCatching { blockedRepo.blockedNormalizedSnapshot() }
-            .getOrDefault(emptySet())
+        // v1.27.2 (audit Codex du 2026-08-05, C-08) — jumeau exact du manager : formes BRUTES et
+        // comparaison region-aware. Neuf chiffres confondaient `+33612345678` et `+15612345678`,
+        // et le curseur avancait quand meme sur la ligne rejetee — perte definitive.
+        val roomBlocked = runCatching { blockedRepo.blockedRawSnapshot() }
+            .getOrDefault(emptyList())
         val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
         } else emptyList()
-        val blockedKeys = (roomBlocked.asSequence() + systemBlocked.asSequence())
-            .map { it.blockKey() }
-            .filter { it.isNotEmpty() }
-            .toHashSet()
+        val isBlockedAddress = phoneIdentity.blockedMatcher(roomBlocked + systemBlocked)
         var imported = 0
         val maxSeen = reader.readSmsSince(sinceId = sinceId, pageSize = 500) { page ->
-            val filtered = if (blockedKeys.isEmpty()) {
-                page
-            } else {
-                page.filter { it.entity.address.blockKey() !in blockedKeys }
-            }
+            val filtered = page.filterNot { isBlockedAddress(it.entity.address) }
             if (filtered.isNotEmpty()) {
                 mirror.bulkImportFromTelephony(filtered.map { it.entity })
             }

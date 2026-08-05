@@ -20,4 +20,17 @@ interface BlockedNumberRepository {
 
     /** Returns every blocked normalized number currently mirrored in Room. Snapshot. */
     suspend fun blockedNormalizedSnapshot(): Set<String>
+
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-08) — les formes **BRUTES** enregistrees.
+     *
+     * Les cles de neuf chiffres ne portent aucune information de pays : bloquer `+33612345678`
+     * faisait rejeter les SMS de `+15612345678`, et le curseur d import avancait quand meme sur la
+     * ligne rejetee — le message d un tiers non bloque etait donc perdu DEFINITIVEMENT.
+     *
+     * Les appelants qui filtrent doivent construire leur predicat avec
+     * `PhoneIdentity.blockedMatcher(...)`, qui desambiguise par la region. Les cles restent
+     * utiles comme index, jamais comme preuve.
+     */
+    suspend fun blockedRawSnapshot(): List<String>
 }
