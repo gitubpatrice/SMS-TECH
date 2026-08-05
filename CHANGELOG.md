@@ -49,12 +49,17 @@ remonté jusqu'à un appelant réel.
 - **Le deadman survit aux redémarrages.** Le compteur monotone repartait de zéro à chaque
   redémarrage : redémarrer plus souvent que le délai configuré empêchait l'alerte de partir, et
   une simple mise à jour système la repoussait d'autant. Le temps écoulé est désormais capitalisé.
-- **Ouvrir l'application remet réellement le minuteur à zéro.** Sur un démarrage à froid — c'est-
-  à-dire au moment précis où l'utilisateur prouve qu'il va bien — la remise à zéro était sautée,
-  faute de réglages encore chargés. Le Safety Call continuait de courir vers une fausse alerte.
-- **Le SMS d'urgence part de la SIM choisie.** Déclenché depuis un processus réveillé, l'envoi
-  lisait une configuration vide et retombait sur la SIM système : l'alerte arrivait donc d'un
-  numéro que les contacts ne reconnaissent pas. Même correction pour le renvoi programmé.
+- **Ouvrir l'application remet réellement le minuteur à zéro.** Deux causes indépendantes le
+  faisaient échouer. La remise à zéro était décidée à l'instant de l'ouverture, alors que
+  l'application se déclare verrouillée par défaut : saisir son code ne relançait pas cette
+  décision, si bien que la protection par code — le profil même qui arme un deadman — annulait la
+  preuve d'activité. Et sur un démarrage à froid, les réglages n'étaient pas encore chargés. Dans
+  les deux cas le Safety Call continuait de courir vers une fausse alerte.
+- **Le SMS d'urgence part de la SIM choisie, et vers le bon pays.** Déclenché depuis un processus
+  réveillé, l'envoi lisait une configuration vide : il retombait sur la SIM système — l'alerte
+  arrivait donc d'un numéro que les contacts ne reconnaissent pas — et perdait l'indicatif pays
+  choisi, ce qui pouvait adresser un numéro national à un abonné étranger portant les mêmes
+  chiffres. Même correction pour le renvoi programmé.
 - **Le lien de localisation du SMS d'urgence était cassé en français.** Le séparateur décimal
   suivait la langue de l'appareil : l'URL partait avec des virgules et n'était pas exploitable.
 - **Désactiver le mode urgence éteint aussi le raccourci d'écran verrouillé** depuis le bouton

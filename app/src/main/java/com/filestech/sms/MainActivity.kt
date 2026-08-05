@@ -34,6 +34,7 @@ import com.filestech.sms.system.share.IncomingShareHolder
 import com.filestech.sms.ui.AppRoot
 import com.filestech.sms.ui.theme.SmsTechTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -235,6 +236,11 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        // v1.27.2 — armé UNE fois ici, pas dans `onResume` : `repeatOnLifecycle` gère lui-même le
+        // redémarrage à chaque passage au premier plan. L'appeler depuis `onResume` empilerait un
+        // collecteur de plus à chaque retour dans l'application.
+        observeRealOpenForSafetyCallReset()
+
         // v1.25.2 — Fallback Back au niveau Activity (enregistré AVANT setContent → priorité la plus
         // basse : les BackHandler Compose et le callback interne du NavController passent d'abord). Il
         // ne se déclenche donc QUE lorsque rien d'autre ne consomme le Retour, c.-à-d. sur la
@@ -338,45 +344,83 @@ class MainActivity : FragmentActivity() {
                 com.filestech.sms.system.scheduler.TelephonySyncWorker.enqueueOneShot(this)
             }.onFailure { Timber.w(it, "onResume enqueueOneShot failed") }
         }
+    }
+
+    /**
+     * v1.27.2 (relecture Codex 2026-08-05, finding 1) — la remise à zéro **attend** que
+     * l'application soit réellement ouverte, au lieu d'échantillonner le verrou une seule fois.
+     *
+     * **Le défaut fermé ici, présent depuis v1.10.0.** Le code d'origine lisait
+     * `appLock.state.value` au début d'`onResume`. Or l'état initial d'[AppLockManager] est
+     * `Locked` — volontairement, il échoue fermé. Saisir le bon code ne recrée PAS l'activité : il
+     * ne fait que publier `Unlocked`, et [com.filestech.sms.ui.AppRoot] dépile l'écran de
+     * verrouillage **dans la même activité** par un `popBackStack`. Aucun second `onResume` n'a
+     * donc lieu, et la remise à zéro, déjà abandonnée, ne se retentait jamais.
+     *
+     * Conséquence : pour quiconque protège l'application par un code — c'est-à-dire exactement le
+     * profil qui arme un deadman — ouvrir SMS Tech ne remettait pas le minuteur à zéro. La preuve
+     * d'activité était fournie, ignorée, et l'alerte partait quand même vers les contacts
+     * d'urgence. Une seconde course existait sans verrou : l'état reste `Locked` jusqu'à ce que la
+     * résolution initiale publie `Disabled`.
+     *
+     * `repeatOnLifecycle(RESUMED)` redémarre ce bloc à chaque passage au premier plan et l'annule
+     * au premier plan perdu ; `first { … }` suspend jusqu'au premier état réellement ouvert. On
+     * obtient donc **une remise à zéro par session de premier plan**, qu'elle survienne
+     * immédiatement ou après la saisie du code.
+     *
+     * Les états refusés le restent, et pour la même raison qu'avant :
+     *  - `Locked` / `LockedOut` — quelqu'un a ouvert l'application sans connaître le code ; il ne
+     *    doit pas pouvoir neutraliser le deadman. On attend, sans jamais remettre à zéro.
+     *  - `PanicDecoy` — l'utilisateur est sous contrainte et a saisi le code leurre ; le minuteur
+     *    doit continuer à courir pour que les contacts soient bel et bien alertés.
+     */
+    private fun observeRealOpenForSafetyCallReset() {
         lifecycleScope.launch {
-            runCatching {
-                val lockState = appLock.state.value
-                val isRealOpen = lockState is AppLockManager.LockState.Unlocked ||
-                    lockState is AppLockManager.LockState.Disabled
-                if (!isRealOpen) {
-                    Timber.d("MainActivity: skipping Safety call reset (lockState=%s)", lockState)
-                    return@runCatching
-                }
-                // v1.27.2 — lecture HYDRATÉE obligatoire, cf. [SettingsRepository.hydratedOrNull].
-                //
-                // `state.value` rendait ici les réglages PAR DÉFAUT tant que DataStore n'avait pas
-                // répondu, donc `enabled = false` — et le reset du minuteur était purement et
-                // simplement sauté. Sur un démarrage à froid (l'application vient d'être lancée,
-                // c'est-à-dire exactement quand l'utilisateur PROUVE qu'il va bien), le Safety
-                // call continuait à courir comme si de rien n'était. Le repli échouait donc du
-                // côté dangereux : une fausse alerte envoyée aux contacts d'urgence de quelqu'un
-                // qui venait d'ouvrir l'application.
-                //
-                // `null` = réglages illisibles : on ne reset pas. Ne rien faire laisse le minuteur
-                // courir et l'utilisateur rouvrira l'application ; reset à l'aveugle aurait
-                // désarmé une protection sur la foi d'une lecture ratée.
-                val current = settings.hydratedOrNull()?.security?.safetyCall
-                if (current != null && current.enabled) {
-                    settings.update { s ->
-                        s.copy(
-                            security = s.security.copy(
-                                safetyCall = s.security.safetyCall.copy(
-                                    lastActivityAt = System.currentTimeMillis(),
-                                    // v1.10.0 SEC-11 — couple mono+wall à chaque reset.
-                                    monotonicLastActivityAt = SystemClock.elapsedRealtime(),
-                                    // v1.27.2 — le temps capitalisé repart de zéro AVEC les deux
-                                    // autres : les trois champs ne se dissocient jamais.
-                                    monotonicAccumulatedMs = 0L,
-                                ),
-                            ),
-                        )
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                // Pas de `runCatching` ici : il avalerait la `CancellationException` émise quand
+                // `repeatOnLifecycle` annule ce bloc au passage en arrière-plan. Une annulation
+                // n'est pas un échec, et la confondre avec un échec masque le cycle de vie.
+                try {
+                    // Suspend tant que l'application n'est pas réellement ouverte. `PanicDecoy`
+                    // n'est pas dans la liste : sous contrainte, on ne remet rien à zéro.
+                    appLock.state.first { st ->
+                        st is AppLockManager.LockState.Unlocked ||
+                            st is AppLockManager.LockState.Disabled
                     }
-                    Timber.d("MainActivity: Safety call timer reset on resume")
+                    // v1.27.2 — lecture HYDRATÉE obligatoire, cf. [SettingsRepository.hydratedOrNull].
+                    //
+                    // `state.value` rendait ici les réglages PAR DÉFAUT tant que DataStore n'avait
+                    // pas répondu, donc `enabled = false` — et la remise à zéro était sautée une
+                    // seconde fois, pour une seconde raison.
+                    //
+                    // `null` = réglages illisibles : on ne remet pas à zéro. Ne rien faire laisse
+                    // le minuteur courir et l'utilisateur rouvrira l'application ; remettre à zéro
+                    // à l'aveugle aurait désarmé une protection sur la foi d'une lecture ratée.
+                    val current = settings.hydratedOrNull()?.security?.safetyCall
+                    if (current != null && current.enabled) {
+                        settings.update { s ->
+                            s.copy(
+                                security = s.security.copy(
+                                    safetyCall = s.security.safetyCall.copy(
+                                        lastActivityAt = System.currentTimeMillis(),
+                                        // v1.10.0 SEC-11 — couple mono+wall à chaque reset.
+                                        monotonicLastActivityAt = SystemClock.elapsedRealtime(),
+                                        // v1.27.2 — le temps capitalisé repart de zéro AVEC les
+                                        // deux autres : les trois champs ne se dissocient jamais.
+                                        monotonicAccumulatedMs = 0L,
+                                    ),
+                                ),
+                            )
+                        }
+                        Timber.d("MainActivity: Safety call timer reset (app really open)")
+                    }
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (t: Throwable) {
+                    // Une écriture DataStore en échec ne doit pas faire tomber l'activité. Le
+                    // minuteur reste alors sur son ancienne valeur : c'est le repli sûr, il ne
+                    // désarme rien.
+                    Timber.w(t, "MainActivity: Safety call reset failed")
                 }
             }
         }

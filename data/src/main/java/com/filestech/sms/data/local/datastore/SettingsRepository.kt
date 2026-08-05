@@ -34,14 +34,13 @@ import com.filestech.sms.domain.settings.TextScale
 import com.filestech.sms.domain.settings.ThemeMode
 import com.filestech.sms.domain.settings.VibratePattern
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.launch
@@ -118,37 +117,68 @@ class SettingsRepository @Inject constructor(
      */
     override val state: StateFlow<AppSettings> = _state.asStateFlow()
 
+    /**
+     * v1.27.2 (relecture Codex 2026-08-05, finding 2) — **barrière d'hydratation unique**.
+     *
+     * `true` = la collecte ci-dessous a publié au moins un instantané dans [_state] ;
+     * `false` = le flux s'est terminé sans jamais émettre (fichier illisible après ses reprises).
+     *
+     * Elle existe pour que [hydratedOrNull] n'ait plus sa propre lecture indépendante. Avec deux
+     * lectures concurrentes, l'appelant obtenait le bon instantané pendant que [_state] servait
+     * encore les défauts à tout lecteur synchrone — au premier rang duquel
+     * [com.filestech.sms.data.sms.PhoneNumberWireFormatter], appelé quelques instructions plus
+     * loin sur le MÊME envoi. Un Safety call parti d'un processus froid pouvait ainsi résoudre la
+     * bonne SIM et perdre l'indicatif pays choisi, donc composer un numéro étranger.
+     *
+     * Le contrat est désormais : après le retour de [hydratedOrNull], [state] connaît la même
+     * valeur. Aucun consommateur synchrone ne peut plus voir de défauts derrière une lecture
+     * hydratée réussie.
+     */
+    private val firstHydration = CompletableDeferred<Boolean>()
+
     init {
-        appScope.launch {
+        val job = appScope.launch {
             flow.collect { snapshot ->
                 _state.value = snapshot
                 hydrated = true
+                firstHydration.complete(true)
             }
         }
+        // Débloque les attentes même si la collecte se termine sans avoir rien émis — fichier
+        // illisible, portée annulée, ou coroutine annulée avant d'avoir démarré. Sans ce filet,
+        // `hydratedOrNull()` resterait suspendu POUR TOUJOURS sur le chemin d'un SMS entrant.
+        // `complete` est idempotent : après une hydratation réussie, cet appel est sans effet.
+        job.invokeOnCompletion { firstHydration.complete(false) }
     }
 
     /**
      * v1.27.2 — cf. [AppSettingsSource.hydratedOrNull].
      *
-     * Chemin chaud : aucun I/O. Chemin froid : une lecture DataStore, une seule fois par
-     * démarrage de processus, puis la collecte ci-dessus prend le relais.
+     * Chemin chaud : aucun I/O, une lecture volatile et une lecture de `StateFlow`.
+     * Chemin froid : on **attend la collecte partagée**, on ne lance pas la sienne.
      *
-     * `flow` absorbe déjà les erreurs de lecture ([SETTINGS_READ_RETRIES] reprises puis `catch`) :
-     * un fichier réellement illisible ne fait donc pas lever `first()`, il termine le flux à vide
-     * — d'où le `NoSuchElementException`. On rend `null` plutôt que `AppSettings()` : servir des
-     * défauts silencieux est précisément ce qu'on cherche à empêcher.
+     * C'est le correctif du finding 2 de la relecture du 2026-08-05. La version précédente
+     * appelait `flow.first()` de son côté : elle rendait le bon instantané, mais [_state] pouvait
+     * encore servir les défauts à un lecteur synchrone exécuté juste après, sur le même envoi.
+     * Attendre la barrière garantit que [state] est à jour **avant** le retour, ce qui répare du
+     * même coup tous les consommateurs non convertis et non convertissables — au premier rang
+     * [com.filestech.sms.data.sms.PhoneNumberWireFormatter], qui n'est pas suspendable.
+     *
+     * Effet de bord bienvenu : une seule lecture DataStore au lieu de deux sur un processus froid.
+     *
+     * `null` = le flux s'est terminé sans jamais émettre. `flow` absorbe déjà les erreurs
+     * ([SETTINGS_READ_RETRIES] reprises puis `catch`), donc ce cas signifie « fichier durablement
+     * illisible ». On rend `null` plutôt que `AppSettings()` : servir des défauts silencieux est
+     * précisément ce qu'on cherche à empêcher.
+     *
+     * Ne peut pas se suspendre indéfiniment : la barrière est complétée soit par la première
+     * émission, soit par la fin de la coroutine de collecte (`invokeOnCompletion`).
+     * `CancellationException` traverse `await()` sans être avalée — une annulation n'est pas un
+     * échec de lecture.
      */
     override suspend fun hydratedOrNull(): AppSettings? {
         if (hydrated) return _state.value
-        return try {
-            flow.first()
-        } catch (ce: CancellationException) {
-            // Jamais avalée : une annulation n'est pas un échec de lecture.
-            throw ce
-        } catch (t: Throwable) {
-            Timber.w(t, "SettingsRepository: no hydrated snapshot available")
-            null
-        }
+        return if (firstHydration.await()) _state.value else null
     }
 
     override suspend fun update(transform: (AppSettings) -> AppSettings) {
