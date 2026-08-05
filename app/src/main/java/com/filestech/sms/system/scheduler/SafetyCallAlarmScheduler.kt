@@ -51,12 +51,21 @@ object SafetyCallAlarmScheduler {
     private const val REQUEST_CODE = 0x5AFE
 
     /**
-     * Aligne l'alarme sur [cfg] : la pose à la bonne échéance, ou l'annule s'il n'y a plus rien à
-     * attendre. Idempotent — une alarme déjà posée au même instant est simplement remplacée.
+     * Pose l'alarme à [at], ou l'annule si [at] est `null`.
+     *
+     * ⚠️ **Une échéance déjà dépassée n'est PAS programmée** — et c'est délibéré. Une alarme posée
+     * dans le passé se déclenche immédiatement ; le worker s'exécute, ne trouve rien à faire
+     * (compteur monotone pas encore écoulé, session leurre, envoi qui échoue), la configuration
+     * change au passage, cet observateur repose la même alarme passée, et le cycle recommence :
+     * **une boucle de réveil qui viderait la batterie**. J'ai introduit exactement ce défaut dans la
+     * première version de ce fichier.
+     *
+     * Sur une échéance déjà dépassée on retombe donc sur le tick horaire — c'est-à-dire le
+     * comportement d'avant ce lot, sans régression. Ce qui est gagné, c'est la ponctualité de
+     * toutes les échéances **à venir**, qui sont le cas nominal.
      */
-    fun sync(context: Context, cfg: SafetyCallConfig) {
-        val at = nextWakeUpAt(cfg)
-        if (at == null) {
+    fun apply(context: Context, at: Long?) {
+        if (at == null || at <= System.currentTimeMillis()) {
             cancel(context)
             return
         }
@@ -67,16 +76,28 @@ object SafetyCallAlarmScheduler {
      * Instant du prochain réveil utile, ou `null` s'il n'y en a pas.
      *
      * Fonction **pure**, donc testable sans appareil : c'est elle qui porte toute la décision.
+     *
+     * Les horloges sont passées explicitement parce que le Safety call compte sur **deux** :
+     * la murale et la monotone, et il n'expire que quand les DEUX ont expiré. Ne regarder que la
+     * murale poserait l'alarme trop tôt après un redémarrage — le compteur monotone étant en
+     * retard, le réveil ne trouverait rien à faire.
      */
-    fun nextWakeUpAt(cfg: SafetyCallConfig): Long? = when {
+    fun nextWakeUpAt(cfg: SafetyCallConfig, nowMs: Long, nowMonoMs: Long): Long? = when {
         !cfg.enabled -> null
         // Une séquence ouverte a la priorité : la prochaine relance est le seul rendez-vous utile.
         cfg.hasRelancePending -> cfg.nextRelanceAt()
         // Déclenché et séquence close : plus rien à attendre, le désarmement suit.
         cfg.isTriggered -> null
-        // Jamais initialisé — l'armement posera `lastActivityAt` et repassera par ici.
-        cfg.lastActivityAt == 0L -> null
-        else -> cfg.lastActivityAt + cfg.timeoutMs
+        // Jamais initialisé, ou ancre monotone absente : `isExpired` rend `false` dans les deux
+        // cas, donc un réveil ne servirait à rien. L'ancre manquante est réparée au démarrage
+        // par `MainApplication`.
+        cfg.lastActivityAt == 0L || cfg.monotonicLastActivityAt == 0L -> null
+        else -> {
+            val wallDeadline = cfg.lastActivityAt + cfg.timeoutMs
+            // Ce qu'il reste à courir sur l'horloge monotone, converti en instant mural.
+            val monoDeadline = nowMs + (cfg.timeoutMs - cfg.monoElapsedMs(nowMonoMs))
+            maxOf(wallDeadline, monoDeadline)
+        }
     }
 
     private fun schedule(context: Context, atMs: Long) {
@@ -99,6 +120,19 @@ object SafetyCallAlarmScheduler {
             // filet, et il faut pouvoir lire dans les journaux que la ponctualité est perdue.
             Timber.w(it, "SafetyCallAlarmScheduler: alarme refusee, repli sur le tick horaire")
         }
+    }
+
+    /**
+     * v1.27.2 — repose un réveil dans [delayMs] quand un tick a été **supprimé sans rien décider**.
+     *
+     * Le seul appelant est la garde panic-decoy de [SafetyCallWorker] : si l'alarme d'échéance
+     * sonne pendant une session leurre, le worker se retire sans rien envoyer et l'alarme est
+     * **consommée**. Sans ce rappel, on retomberait sur le tick horaire — donc sur le défaut que
+     * ce lot corrige — juste après une session sous contrainte, c'est-à-dire précisément quand
+     * l'alerte compte le plus.
+     */
+    fun retryIn(context: Context, delayMs: Long) {
+        schedule(context, System.currentTimeMillis() + delayMs)
     }
 
     private fun cancel(context: Context) {

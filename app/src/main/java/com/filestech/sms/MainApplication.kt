@@ -159,13 +159,27 @@ class MainApplication : Application(), Configuration.Provider {
         // Le processus est vivant chaque fois que la configuration change — c'est lui qui la
         // change — et cette collecte est relancée à chaque démarrage à froid, donc l'alarme est
         // reposée après un redémarrage, où le système les efface toutes.
+        // ⚠️ La déduplication porte sur l'INSTANT calculé, pas sur la configuration.
+        //
+        // Le jalon horaire du worker écrit `monotonicAccumulatedMs` et `monotonicLastActivityAt`
+        // à chaque passage : dédupliquer sur la configuration ferait donc reposer une alarme
+        // toutes les heures pour rien. Surtout, l'échec d'un envoi produit un aller-retour du
+        // compteur (réservation puis restitution) qui repasserait deux fois par ici. En
+        // dédupliquant sur l'instant, ces écritures sont invisibles — le jalon déplace du temps
+        // d'un champ à l'autre **sans changer la somme**, donc sans changer l'échéance.
         appScope.launch {
             settingsRepository.flow
-                .map { it.security.safetyCall }
+                .map { s ->
+                    SafetyCallAlarmScheduler.nextWakeUpAt(
+                        cfg = s.security.safetyCall,
+                        nowMs = System.currentTimeMillis(),
+                        nowMonoMs = SystemClock.elapsedRealtime(),
+                    )
+                }
                 .distinctUntilChanged()
-                .collect { cfg ->
-                    runCatching { SafetyCallAlarmScheduler.sync(this@MainApplication, cfg) }
-                        .onFailure { Timber.w(it, "SafetyCallAlarmScheduler.sync failed") }
+                .collect { at ->
+                    runCatching { SafetyCallAlarmScheduler.apply(this@MainApplication, at) }
+                        .onFailure { Timber.w(it, "SafetyCallAlarmScheduler.apply failed") }
                 }
         }
 
@@ -192,10 +206,31 @@ class MainApplication : Application(), Configuration.Provider {
                 // `nowMono - mono` est négatif (< ANTI_SPAM_WINDOW_MS).
                 val emergencyDrift = security.emergency.monotonicLastTriggeredAt > 0L &&
                     security.emergency.monotonicLastTriggeredAt > nowMono
-                if (safetyDrift || emergencyDrift) {
+                // v1.27.2 (relecture Gemini du 2026-08-05) — 🔴 DEADMAN ARMÉ QUI NE PART JAMAIS.
+                //
+                // `isExpired()` rend `false` tant que `monotonicLastActivityAt` vaut `0L` — filet
+                // posé en v1.10.0 pour qu'une configuration héritée de la v1.9.0, dépourvue de
+                // compteur monotone, ne déclenche pas par surprise après la mise à jour.
+                //
+                // Mais **rien ne réparait jamais cet état** : la récupération ci-dessus exige
+                // `> 0L`, et le jalon du worker se retire aussi quand l'ancre vaut `0L`. Un
+                // utilisateur qui met à jour puis part en randonnée sans rouvrir l'application
+                // voit « Activé » dans l'interface et **son deadman ne partira jamais**. Le filet
+                // protégeait contre un faux positif au prix du pire faux négatif possible.
+                //
+                // On pose l'ancre à `nowMono` sans toucher à `lastActivityAt` : le décompte
+                // monotone repart pour un cycle complet, donc rien ne déclenche par surprise —
+                // mais il déclenchera.
+                val safetyUnanchored = security.safetyCall.enabled &&
+                    security.safetyCall.lastActivityAt > 0L &&
+                    security.safetyCall.monotonicLastActivityAt == 0L
+                if (safetyDrift || emergencyDrift || safetyUnanchored) {
                     Timber.i(
-                        "MonotonicDriftRecovery: post-reboot realign (safety=%s, emergency=%s, nowMono=%d)",
-                        safetyDrift, emergencyDrift, nowMono,
+                        "MonotonicDriftRecovery: realign (drift=%s, emergency=%s, unanchored=%s, nowMono=%d)",
+                        safetyDrift,
+                        emergencyDrift,
+                        safetyUnanchored,
+                        nowMono,
                     )
                     settingsRepository.update { s ->
                         s.copy(
@@ -210,7 +245,7 @@ class MainApplication : Application(), Configuration.Provider {
                                 // que le deadman ne parte jamais. Le capital survit désormais au
                                 // redémarrage ; seul le segment non encore jalonné est perdu,
                                 // soit moins d'un tick.
-                                safetyCall = if (safetyDrift) {
+                                safetyCall = if (safetyDrift || safetyUnanchored) {
                                     s.security.safetyCall.copy(monotonicLastActivityAt = nowMono)
                                 } else s.security.safetyCall,
                                 emergency = if (emergencyDrift) {

@@ -137,9 +137,37 @@ data class SafetyCallConfig(
      * même message ; remis à sa valeur d'avant si aucun envoi n'aboutit.
      */
     val messagesSent: Int = 0,
+    /**
+     * v1.27.2 (relecture Gemini du 2026-08-05) — **bail** sur le créneau réservé : horodatage mural
+     * de la réservation, `0L` quand aucun envoi n'est en cours.
+     *
+     * **Le défaut que ce champ ferme.** `TriggerSafetyCallUseCase` réserve le créneau — incrémente
+     * [messagesSent] — **avant** d'envoyer, pour qu'un tick périodique et une relance ponctuelle
+     * qui se croiseraient n'envoient pas deux fois. Mais si le processus meurt entre la réservation
+     * et l'envoi (mémoire insuffisante, mise à jour du système, batterie critique), le tick suivant
+     * lit `messagesSent = 1` et croit le message initial parti : les proches ne reçoivent **jamais**
+     * le message qui explique la situation, et découvrent l'affaire par un « Toujours aucun signe de
+     * ma part, 15 minutes plus tard ». Ce n'est pas un doublon, c'est une **perte**.
+     *
+     * Le bail rend la réservation réversible : passé [CLAIM_LEASE_MS] sans conclusion, le créneau
+     * est considéré comme abandonné et repris. La fenêtre de perte tombe de « définitive » à « au
+     * plus [CLAIM_LEASE_MS] de retard ».
+     *
+     * ⚠️ Le repli va volontairement vers le **doublon** et non vers la perte : reprendre un créneau
+     * dont l'envoi avait en réalité abouti coûte un message en double, ce qui est sans commune
+     * mesure avec une alerte muette.
+     */
+    val claimedAt: Long = 0L,
 ) {
     /** v1.27.2 — `true` dès que le premier message est parti. */
     val isTriggered: Boolean get() = triggeredAt > 0L
+
+    /**
+     * v1.27.2 — `true` si un créneau a été réservé mais jamais conclu, et que le bail a expiré.
+     * Le processus a donc été tué entre la réservation et la fin de l'envoi.
+     */
+    fun isClaimAbandoned(nowMs: Long = System.currentTimeMillis()): Boolean =
+        claimedAt > 0L && (nowMs - claimedAt) >= CLAIM_LEASE_MS
 
     /** v1.27.2 — `true` tant qu'il reste au moins une relance à envoyer. */
     val hasRelancePending: Boolean
@@ -218,12 +246,26 @@ data class SafetyCallConfig(
         // v1.27.2 — même compteur monotone que [isExpired] : sans quoi la fenêtre
         // d'avertissement se serait décalée par rapport au déclenchement qu'elle annonce.
         val elapsedMono = monoElapsedMs(nowMonoMs)
-        val wallInWindow = elapsedWall >= (timeoutMs - WARNING_WINDOW_MS) &&
-            elapsedWall < timeoutMs
-        val monoInWindow = elapsedMono >= (timeoutMs - WARNING_WINDOW_MS) &&
-            elapsedMono < timeoutMs
+        val window = warningWindowMs()
+        val wallInWindow = elapsedWall >= (timeoutMs - window) && elapsedWall < timeoutMs
+        val monoInWindow = elapsedMono >= (timeoutMs - window) && elapsedMono < timeoutMs
         return wallInWindow && monoInWindow
     }
+
+    /**
+     * v1.27.2 (relecture Gemini du 2026-08-05) — fenêtre d'avertissement **proportionnée** à la
+     * durée choisie : un quart du délai, borné entre 15 minutes et 6 heures.
+     *
+     * **Le défaut que ça ferme.** La fenêtre valait 6 h **en dur**, quelle que soit la durée. Avec
+     * le délai d'**une heure** — le minimum que l'interface propose — la condition
+     * `écoulé ≥ délai − 6 h` était vraie **dès l'armement** : la notification « Confirme que tu vas
+     * bien » s'affichait immédiatement et ne quittait plus la barre d'état. Constaté sur appareil
+     * le 2026-08-05. Un avertissement permanent n'avertit plus de rien.
+     *
+     * Concrètement : 1 h → 15 min (notification à H+45) · 24 h → 6 h (à H+18) · 30 jours → 6 h.
+     */
+    fun warningWindowMs(): Long =
+        (timeoutMs / 4).coerceIn(WARNING_WINDOW_MIN_MS, WARNING_WINDOW_MAX_MS)
 
     companion object {
         const val TIMEOUT_24H_MS: Long = 24 * 60 * 60 * 1000L
@@ -232,8 +274,25 @@ data class SafetyCallConfig(
         const val TIMEOUT_MIN_MS: Long = 1 * 60 * 60 * 1000L     // 1h
         const val TIMEOUT_MAX_MS: Long = 720 * 60 * 60 * 1000L   // 30 jours
 
-        /** Fenêtre de pré-trigger : notification 6h avant expiration. */
-        const val WARNING_WINDOW_MS: Long = 6 * 60 * 60 * 1000L
+        /**
+         * Bornes de la fenêtre de pré-trigger. Voir [warningWindowMs] — elle vaut un quart du
+         * délai, ramené dans ces bornes.
+         *
+         * Le plafond de 6 h est l'ancienne valeur fixe : au-delà, un avertissement posé trop tôt
+         * cesse d'être une alerte et devient du décor. Le plancher de 15 min laisse le temps de
+         * réagir même sur le délai minimal d'une heure.
+         */
+        const val WARNING_WINDOW_MAX_MS: Long = 6 * 60 * 60 * 1000L
+        const val WARNING_WINDOW_MIN_MS: Long = 15 * 60 * 1000L
+
+        /**
+         * v1.27.2 — durée de validité du bail posé sur un créneau réservé. Voir [claimedAt].
+         *
+         * Deux minutes : assez long pour qu'un envoi vers quatre contacts aboutisse sur un réseau
+         * lent sans qu'un tick concurrent ne reprenne le créneau, assez court pour qu'un processus
+         * tué ne fasse pas perdre le message initial plus longtemps.
+         */
+        const val CLAIM_LEASE_MS: Long = 2 * 60 * 1000L
 
         /**
          * v1.27.2 — nombre de **relances** après le message initial, décidé par Patrice le

@@ -283,7 +283,7 @@ class TriggerSafetyCallRelanceTest {
         // Les relances ne repetent PAS le message initial : chacune a son propre texte.
         assertThat(sender.bodies.toSet()).hasSize(SafetyCallConfig.TOTAL_MESSAGES)
         // La derniere annonce qu'elle est la derniere.
-        assertThat(sender.bodies.last()).contains("Dernier message")
+        assertThat(sender.bodies.last()).contains("Dernière alerte")
         // Sequence close : le deadman est desarme, sans relance en attente.
         assertThat(settings.safetyCall.enabled).isFalse()
         assertThat(settings.safetyCall.hasRelancePending).isFalse()
@@ -349,6 +349,87 @@ class TriggerSafetyCallRelanceTest {
         assertThat(result).isEqualTo(TriggerSafetyCallUseCase.Result.SequenceComplete)
         assertThat(sender.calls).isEqualTo(0)
         assertThat(settings.safetyCall.enabled).isFalse()
+    }
+
+    /**
+     * 🔴 **Le défaut trouvé par la relecture Gemini du 2026-08-05.**
+     *
+     * Le créneau est réservé — `messagesSent` incrémenté — **avant** l'envoi, pour qu'un tick
+     * périodique et une relance ponctuelle qui se croiseraient n'envoient pas deux fois. Si le
+     * processus meurt dans cet intervalle (mémoire insuffisante, mise à jour du système, batterie
+     * critique), le tick suivant lisait `messagesSent = 1` et croyait le message initial parti.
+     *
+     * Les proches ne recevaient **jamais** le message qui explique la situation : ils
+     * découvraient l'affaire par une relance. Ce n'était pas « au pire un doublon » — comme
+     * l'affirmait mon commentaire — mais une **perte**.
+     *
+     * Le bail rend la réservation réversible : passé `CLAIM_LEASE_MS`, le créneau est repris et
+     * l'envoi retenté dans la même exécution.
+     */
+    @Test
+    fun `un creneau reserve mais jamais conclu est repris et le message initial part`() {
+        val settings = expiredSettings()
+        val sender = CountingSender(succeed = true)
+        val abandonne = System.currentTimeMillis() - SafetyCallConfig.CLAIM_LEASE_MS - 1_000L
+
+        val result = runBlocking {
+            // L'état exact que laisse un processus tué entre la réservation et l'envoi.
+            settings.update { s ->
+                s.copy(
+                    security = s.security.copy(
+                        safetyCall = s.security.safetyCall.copy(
+                            triggeredAt = abandonne,
+                            messagesSent = 1,
+                            claimedAt = abandonne,
+                        ),
+                    ),
+                )
+            }
+            useCase(settings, sender).invoke()
+        }
+
+        assertThat(result).isInstanceOf(TriggerSafetyCallUseCase.Result.Triggered::class.java)
+        assertThat(sender.calls).isEqualTo(1)
+        // LE POINT : c'est le message INITIAL qui part, pas une relance. Sans la reprise, les
+        // contacts auraient recu « toujours aucune activite, 15 minutes plus tard » en premier.
+        assertThat(sender.bodies.single()).doesNotContain("15 minutes")
+        assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
+        // Le bail est leve : sinon le creneau suivant serait bloque deux minutes et la relance
+        // due dans cet intervalle serait sautee.
+        assertThat(settings.safetyCall.claimedAt).isEqualTo(0L)
+    }
+
+    /**
+     * Le versant opposé du bail : tant qu'il court, **rien d'autre ne part**. C'est la ceinture qui
+     * double la comparaison de compteur, pour le cas où deux exécutions liraient le même
+     * instantané.
+     */
+    @Test
+    fun `un bail encore valide empeche un second envoi`() {
+        val settings = expiredSettings()
+        val sender = CountingSender(succeed = true)
+
+        val result = runBlocking {
+            settings.update { s ->
+                s.copy(
+                    security = s.security.copy(
+                        safetyCall = s.security.safetyCall.copy(
+                            // Relance 1 due depuis longtemps...
+                            triggeredAt = System.currentTimeMillis() -
+                                SafetyCallConfig.RELANCE_INTERVAL_MS - 1_000L,
+                            messagesSent = 1,
+                            // ...mais un envoi est en vol, bail pose a l instant.
+                            claimedAt = System.currentTimeMillis(),
+                        ),
+                    ),
+                )
+            }
+            useCase(settings, sender).invoke()
+        }
+
+        assertThat(result).isEqualTo(TriggerSafetyCallUseCase.Result.AlreadySent)
+        assertThat(sender.calls).isEqualTo(0)
+        assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
     }
 
     @Test

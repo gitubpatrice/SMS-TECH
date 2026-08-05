@@ -274,6 +274,7 @@ class SettingsRepository @Inject constructor(
                     // c'est-a-dire « jamais declenche » : le comportement d'avant, sans saut.
                     triggeredAt = p[K.safetyCallTriggeredAt] ?: 0L,
                     messagesSent = p[K.safetyCallMessagesSent] ?: 0,
+                    claimedAt = p[K.safetyCallClaimedAt] ?: 0L,
                     contacts = SafetyCallContactCodec.decode(p[K.safetyCallContactsJson]),
                     template = enumOr(
                         p,
@@ -396,6 +397,7 @@ class SettingsRepository @Inject constructor(
         this[K.safetyCallMonotonicAccumulatedMs] = s.security.safetyCall.monotonicAccumulatedMs
         this[K.safetyCallTriggeredAt] = s.security.safetyCall.triggeredAt
         this[K.safetyCallMessagesSent] = s.security.safetyCall.messagesSent
+        this[K.safetyCallClaimedAt] = s.security.safetyCall.claimedAt
         this[K.safetyCallContactsJson] = SafetyCallContactCodec.encode(s.security.safetyCall.contacts)
         this[K.safetyCallTemplate] = s.security.safetyCall.template.name
         this[K.safetyCallCustomMessage] = s.security.safetyCall.customMessage
@@ -503,6 +505,9 @@ class SettingsRepository @Inject constructor(
         // v1.27.2 — sequence de relances : instant du premier envoi reussi, et compteur de
         // messages deja partis. Cf. [SafetyCallConfig.triggeredAt].
         val safetyCallTriggeredAt = longPreferencesKey("security.safetyCall.triggeredAt")
+
+        /** v1.27.2 — bail sur le créneau réservé. Voir [SafetyCallConfig.claimedAt]. */
+        val safetyCallClaimedAt = longPreferencesKey("security.safetyCall.claimedAt")
         val safetyCallMessagesSent = intPreferencesKey("security.safetyCall.messagesSent")
         val safetyCallContactsJson = stringPreferencesKey("security.safetyCall.contactsJson")
         val safetyCallTemplate = stringPreferencesKey("security.safetyCall.template")

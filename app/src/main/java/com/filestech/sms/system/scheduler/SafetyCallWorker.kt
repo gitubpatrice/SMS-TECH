@@ -64,6 +64,14 @@ class SafetyCallWorker @AssistedInject constructor(
             if (appLock.state.value is AppLockManager.LockState.PanicDecoy) {
                 Timber.i("SafetyCallWorker: PanicDecoy active, suppressing tick")
                 warningNotifier.dismiss()
+                // v1.27.2 (relecture Gemini du 2026-08-05) — l'alarme d'échéance vient peut-être
+                // d'être CONSOMMÉE par ce tick supprimé. Sans ce rappel, on retomberait sur le
+                // tick horaire — donc sur le défaut que ce lot corrige — juste après une session
+                // sous contrainte, c'est-à-dire précisément quand l'alerte compte le plus.
+                //
+                // Aucune information n'est écrite ni affichée : le rappel est invisible pour qui
+                // tient le téléphone.
+                SafetyCallAlarmScheduler.retryIn(applicationContext, PANIC_RETRY_MS)
                 return Result.success()
             }
             // Audit H3/PERF-M5 (v1.14.8) — `state.value` zéro-I/O. Le snapshot StateFlow est
@@ -245,6 +253,14 @@ class SafetyCallWorker @AssistedInject constructor(
 
         /** Période entre 2 ticks. 60 min = compromis précision/batterie. */
         private const val TICK_PERIOD_MINUTES: Long = 60L
+
+        /**
+         * v1.27.2 — délai de rappel quand un tick est supprimé par la garde panic-decoy.
+         *
+         * Quinze minutes : assez court pour ne pas perdre la ponctualité si la session leurre est
+         * brève, assez long pour ne pas transformer une session prolongée en réveil en boucle.
+         */
+        private const val PANIC_RETRY_MS: Long = 15 * 60 * 1000L
 
         /**
          * Schedule le worker périodique. Idempotent (policy KEEP).

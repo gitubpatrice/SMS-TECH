@@ -71,10 +71,52 @@ class TriggerSafetyCallUseCase @Inject constructor(
             return@withContext Result.PanicSuppressed
         }
 
-        val current = settings.flow.first().security.safetyCall
+        var current = settings.flow.first().security.safetyCall
         if (!current.enabled) {
             Timber.d("TriggerSafetyCallUseCase: disabled, skipping")
             return@withContext Result.Disabled
+        }
+
+        // v1.27.2 (relecture Gemini du 2026-08-05) - REPRISE D UN CRENEAU ABANDONNE.
+        //
+        // La reservation ci-dessous incremente `messagesSent` AVANT d envoyer. Si le processus
+        // meurt dans cet intervalle - memoire insuffisante, mise a jour du systeme, batterie
+        // critique - le tick suivant lit `messagesSent = 1` et croit le message initial parti.
+        // Les proches ne recevraient JAMAIS le message qui explique la situation : ils
+        // decouvriraient l affaire par un « Toujours aucun signe de ma part, 15 minutes plus
+        // tard ». Ce n est pas un doublon, c est une PERTE - et mon commentaire d origine
+        // affirmait le contraire.
+        //
+        // Le bail rend la reservation reversible. Passe `CLAIM_LEASE_MS` sans conclusion, le
+        // creneau est repris ici et l envoi sera retente plus bas dans la meme execution.
+        //
+        // Le repli va volontairement vers le DOUBLON : reprendre un creneau dont l envoi avait en
+        // realite abouti coute un message en double, sans commune mesure avec une alerte muette.
+        if (current.isClaimAbandoned()) {
+            Timber.w(
+                "TriggerSafetyCallUseCase: creneau %d abandonne, reprise",
+                current.messagesSent,
+            )
+            settings.update { s ->
+                val cfg = s.security.safetyCall
+                if (!cfg.isClaimAbandoned()) {
+                    s
+                } else {
+                    val rolledBack = (cfg.messagesSent - 1).coerceAtLeast(0)
+                    s.copy(
+                        security = s.security.copy(
+                            safetyCall = cfg.copy(
+                                messagesSent = rolledBack,
+                                // Plus aucun message parti : la sequence n a jamais commence.
+                                triggeredAt = if (rolledBack == 0) 0L else cfg.triggeredAt,
+                                claimedAt = 0L,
+                            ),
+                        ),
+                    )
+                }
+            }
+            current = settings.flow.first().security.safetyCall
+            if (!current.enabled) return@withContext Result.Disabled
         }
 
         // v1.27.2 - deux entrees possibles : le declenchement initial, ou une relance de la
@@ -126,7 +168,10 @@ class TriggerSafetyCallUseCase @Inject constructor(
         var claimed = false
         settings.update { s ->
             val cfg = s.security.safetyCall
-            if (!cfg.enabled || cfg.messagesSent != current.messagesSent) {
+            // `claimedAt != 0L` = un envoi est deja en vol et son bail court encore. On ne double
+            // pas, meme si le compteur coincide.
+            val leaseHeld = cfg.claimedAt != 0L && !cfg.isClaimAbandoned(nowMs)
+            if (!cfg.enabled || cfg.messagesSent != current.messagesSent || leaseHeld) {
                 s
             } else {
                 claimed = true
@@ -135,6 +180,7 @@ class TriggerSafetyCallUseCase @Inject constructor(
                         safetyCall = cfg.copy(
                             triggeredAt = if (cfg.isTriggered) cfg.triggeredAt else nowMs,
                             messagesSent = cfg.messagesSent + 1,
+                            claimedAt = nowMs,
                         ),
                     ),
                 )
@@ -205,12 +251,23 @@ class TriggerSafetyCallUseCase @Inject constructor(
                             safetyCall = cfg.copy(
                                 triggeredAt = if (isRelance) cfg.triggeredAt else 0L,
                                 messagesSent = current.messagesSent,
+                                claimedAt = 0L,
                             ),
                         ),
                     )
                 }
             }
             return@withContext Result.SendFailed(failed = failed)
+        }
+
+        // Envoi conclu : le bail est leve. Sans cette ligne, le creneau suivant serait bloque
+        // pendant deux minutes, et une relance due dans cet intervalle serait sautee.
+        settings.update { s ->
+            s.copy(
+                security = s.security.copy(
+                    safetyCall = s.security.safetyCall.copy(claimedAt = 0L),
+                ),
+            )
         }
 
         val messagesSentNow = current.messagesSent + 1

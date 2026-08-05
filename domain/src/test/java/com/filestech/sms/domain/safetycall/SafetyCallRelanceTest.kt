@@ -154,9 +154,87 @@ class SafetyCallRelanceTest {
         assertThat(textes[0]).contains("15 minutes")
         assertThat(textes[1]).contains("30 minutes")
         assertThat(textes[2]).contains("45 minutes")
-        assertThat(textes.last()).contains("Dernier")
+        assertThat(textes.last()).contains("Dernière alerte")
         // Aucune relance ne doit se faire passer pour le message initial.
         val initial = SafetyCallTemplate.CHECK_IN.render(TIMEOUT)
         assertThat(textes).doesNotContain(initial)
+    }
+
+    /**
+     * v1.27.2 (relecture Gemini du 2026-08-05) — chaque relance doit **nommer l'application** et
+     * **se suffire à elle-même**.
+     *
+     * Nommer : un SMS reçu en pleine nuit disant « vérifie que je vais bien », sans émetteur
+     * identifiable, ressemble à du hameçonnage et se fait ignorer.
+     *
+     * Se suffire : le message initial peut ne jamais être arrivé — réseau coupé, ou processus tué
+     * entre la réservation du créneau et l'envoi. Une relance qui renvoie au message précédent
+     * serait alors incompréhensible pour le seul contact qui reçoit quelque chose.
+     */
+    @Test
+    fun `chaque relance nomme l application et se suffit a elle-meme`() {
+        for (index in 1..SafetyCallConfig.RELANCE_COUNT) {
+            val texte = SafetyCallTemplate.renderRelance(index)
+            assertThat(texte).contains("SMS Tech")
+            // « sans réponse de ma part » est faux — le contact n'a posé aucune question. Ce qui
+            // manque est de l'ACTIVITÉ sur le téléphone.
+            assertThat(texte).doesNotContain("sans réponse")
+            assertThat(texte).contains("activité")
+            // Aucun renvoi à un message que le contact n'a peut-être jamais reçu.
+            assertThat(texte).doesNotContain("relance")
+        }
+    }
+
+    /**
+     * v1.27.2 (relecture Gemini du 2026-08-05) — **la fenêtre d'avertissement était fausse sur les
+     * délais courts.**
+     *
+     * Elle valait 6 h en dur, quelle que soit la durée. Avec le délai d'une heure — le minimum que
+     * l'interface propose — la condition `écoulé ≥ délai − 6 h` était vraie **dès l'armement** :
+     * la notification « Confirme que tu vas bien » s'affichait immédiatement et ne quittait plus la
+     * barre d'état. Un avertissement permanent n'avertit plus de rien.
+     */
+    @Test
+    fun `la fenetre d avertissement est proportionnee a la duree`() {
+        val uneHeure = SafetyCallConfig(timeoutMs = 60 * 60 * 1000L)
+        val vingtQuatre = SafetyCallConfig(timeoutMs = SafetyCallConfig.TIMEOUT_24H_MS)
+        val trenteJours = SafetyCallConfig(timeoutMs = SafetyCallConfig.TIMEOUT_MAX_MS)
+
+        assertThat(uneHeure.warningWindowMs()).isEqualTo(15 * 60 * 1000L)
+        assertThat(vingtQuatre.warningWindowMs()).isEqualTo(6 * 60 * 60 * 1000L)
+        assertThat(trenteJours.warningWindowMs()).isEqualTo(SafetyCallConfig.WARNING_WINDOW_MAX_MS)
+    }
+
+    /**
+     * Le point concret : sur un délai d'une heure, **la notification ne doit PAS être là au
+     * premier instant**. C'est ce que Patrice a constaté sur son téléphone le 2026-08-05.
+     */
+    @Test
+    fun `sur un delai d une heure, pas d avertissement des l armement`() {
+        val uneHeure = 60 * 60 * 1000L
+        val cfg = SafetyCallConfig(
+            enabled = true,
+            timeoutMs = uneHeure,
+            lastActivityAt = TRIGGERED_AT,
+            monotonicLastActivityAt = MONO_ANCHOR,
+            contacts = listOf(SafetyCallContact(phoneNumber = "+33611111111")),
+        )
+
+        // À l'armement : rien.
+        assertThat(cfg.isInWarningWindow(nowMs = TRIGGERED_AT, nowMonoMs = MONO_ANCHOR)).isFalse()
+        // À H+30 : toujours rien.
+        assertThat(
+            cfg.isInWarningWindow(
+                nowMs = TRIGGERED_AT + 30 * 60 * 1000L,
+                nowMonoMs = MONO_ANCHOR + 30 * 60 * 1000L,
+            ),
+        ).isFalse()
+        // À H+50, soit 10 min avant l'échéance : l'avertissement est là. Non-vacuité.
+        assertThat(
+            cfg.isInWarningWindow(
+                nowMs = TRIGGERED_AT + 50 * 60 * 1000L,
+                nowMonoMs = MONO_ANCHOR + 50 * 60 * 1000L,
+            ),
+        ).isTrue()
     }
 }

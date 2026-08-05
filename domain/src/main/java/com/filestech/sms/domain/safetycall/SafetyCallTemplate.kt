@@ -79,21 +79,34 @@ enum class SafetyCallTemplate {
          * dernière relance annonce qu'elle est la dernière**. Sans cela, un contact pourrait
          * attendre une suite qui ne viendra jamais au lieu d'agir.
          *
-         * Chaque texte tient dans un segment SMS UCS-2 (70 caractères accentués) ou deux au pire,
+         * v1.27.2 (relecture Gemini du 2026-08-05) — trois défauts de rédaction corrigés :
+         *
+         *  1. **Chaque texte est désormais autonome.** « Toujours aucun signe de ma part » et
+         *     « Deuxième relance » présumaient que le contact avait reçu et lu le message initial.
+         *     S'il ne l'a pas reçu — réseau, ou processus tué pendant l'envoi — la relance était
+         *     incompréhensible. On parle maintenant d'**absence d'activité**, un fait qui se
+         *     suffit à lui-même.
+         *  2. **« sans réponse de ma part » est faux** : le contact n'a posé aucune question. Ce
+         *     qui manque, c'est de l'activité sur le téléphone, pas une réponse.
+         *  3. **L'application est nommée.** Un SMS reçu en pleine nuit disant « vérifie que je
+         *     vais bien », sans émetteur identifiable, ressemble à du hameçonnage — et se fait
+         *     ignorer.
+         *
+         * Chaque texte tient dans deux segments SMS UCS-2 (70 caractères accentués par segment),
          * comme les modèles ci-dessus.
          */
         fun renderRelance(index: Int): String {
             val minutes = index * (SafetyCallConfig.RELANCE_INTERVAL_MS / 60_000L)
             return when (index) {
                 1 ->
-                    "Toujours aucun signe de ma part, $minutes minutes plus tard. " +
-                        "Merci d'essayer de me joindre."
+                    "Alerte automatique SMS Tech : toujours aucune activité sur mon téléphone, " +
+                        "$minutes minutes plus tard. Merci d'essayer de me joindre."
                 2 ->
-                    "Deuxième relance : $minutes minutes sans réponse de ma part. " +
-                        "Si tu ne me joins pas, préviens un proche."
+                    "Alerte automatique SMS Tech : $minutes minutes sans aucune activité de ma " +
+                        "part. Si tu ne parviens pas à me joindre, préviens un proche."
                 else ->
-                    "Dernier message automatique : $minutes minutes sans réponse. " +
-                        "Merci de vérifier que je vais bien."
+                    "Dernière alerte automatique SMS Tech : $minutes minutes sans activité. " +
+                        "Plus aucun message ne suivra. Merci de vérifier que je vais bien."
             }
         }
 
