@@ -412,8 +412,7 @@ class TelephonySyncManager @Inject constructor(
             // dans les deux cas.
             val alive = HashSet<String>(systemIds.size)
             systemIds.forEach { alive += "$SMS_URI_PREFIX$it" }
-            val candidates = mirrored.filterNot { it in alive }
-            if (candidates.isEmpty()) {
+            if (mirrored.none { it !in alive }) {
                 pendingDeletion = emptySet()
                 return@runCatching
             }
@@ -434,24 +433,31 @@ class TelephonySyncManager @Inject constructor(
             // pagination — et il faut en plus qu'elle soit vue absente sur **deux passes
             // distinctes** avant d'être effacée. Ne rien supprimer se rattrape toujours ; effacer à
             // tort, jamais.
-            val absent = candidates.filter { uri ->
-                val id = uri.removePrefix(SMS_URI_PREFIX).toLongOrNull() ?: return@filter false
-                // `null` = on n'a pas pu savoir ⇒ on ne touche à rien.
-                telephonyReader.smsExists(id) == false
-            }
-            val gone = absent.filter { it in pendingDeletion }
-            pendingDeletion = absent.toSet()
-            if (absent.size < candidates.size) {
+            // La decision entiere vit dans [DeletionReconciliation], volontairement PURE : ce
+            // chemin est le seul de l'application qui efface des messages, et il etait
+            // integralement derriere un `ContentResolver`, donc hors de portee de tout test JVM.
+            // C'est exactement la ou les deux defauts C-03 et C-04 ont vecu.
+            val decision = DeletionReconciliation.decide(
+                mirrored = mirrored,
+                aliveUris = alive,
+                pending = pendingDeletion,
+                probe = { uri ->
+                    val id = uri.removePrefix(SMS_URI_PREFIX).toLongOrNull()
+                    if (id == null) true else telephonyReader.smsExists(id)
+                },
+            )
+            pendingDeletion = decision.nextPending
+            if (decision.unverified > 0) {
                 Timber.w(
-                    "reconcileDeletions: %d/%d absences NON confirmees ligne a ligne — lecture partielle probable",
-                    candidates.size - absent.size,
-                    candidates.size,
+                    "reconcileDeletions: %d absence(s) NON prouvee(s) ligne a ligne — lecture globale probablement incomplete",
+                    decision.unverified,
                 )
             }
+            val gone = decision.toDelete
             if (gone.isEmpty()) {
                 Timber.i(
                     "reconcileDeletions: %d suppression(s) en attente d une seconde passe",
-                    absent.size,
+                    decision.nextPending.size,
                 )
                 return@runCatching
             }
