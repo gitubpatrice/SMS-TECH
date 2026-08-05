@@ -59,6 +59,65 @@ class SafetyCallNoticeTest {
         assertThat(decideAt(armed(), elapsed = ONE_HOUR)).isEqualTo(SafetyCallNotice.None)
     }
 
+    /**
+     * 🔴 **F-01 (relecture Gemini du 2026-08-05)** — la notification disparaissait a l'instant
+     * precis ou la quatrieme alerte partait.
+     *
+     * Le desarmement de fin de sequence est ecrit dans la MEME transaction que la conclusion du
+     * dernier envoi. Le predicat `!enabled` ne distinguait pas les deux facons d'etre desarme :
+     * quelqu'un qui reprenait son telephone une heure plus tard ne voyait aucune trace, et ignorait
+     * donc que ses quatre contacts avaient recu un appel a l'aide.
+     */
+    @Test
+    fun `une sequence terminee reste affichee malgre le desarmement`() {
+        val fini = armed().copy(
+            enabled = false,
+            triggeredAt = ARMED_AT + TIMEOUT,
+            messagesSent = SafetyCallConfig.TOTAL_MESSAGES,
+            claimedAt = 0L,
+        )
+        assertThat(decideAt(fini, elapsed = TIMEOUT + ONE_HOUR)).isEqualTo(
+            SafetyCallNotice.Sequence(
+                delivered = SafetyCallConfig.TOTAL_MESSAGES,
+                total = SafetyCallConfig.TOTAL_MESSAGES,
+                inFlight = false,
+            ),
+        )
+    }
+
+    /**
+     * ⚠️ Mais elle ne survit pas au **mode leurre** : sous contrainte, rien ne doit trahir qu'une
+     * alerte est partie. La garde de securite passe avant tout le reste.
+     */
+    @Test
+    fun `une sequence terminee reste invisible en mode leurre`() {
+        val fini = armed().copy(
+            enabled = false,
+            triggeredAt = ARMED_AT + TIMEOUT,
+            messagesSent = SafetyCallConfig.TOTAL_MESSAGES,
+        )
+        assertThat(decideAt(fini, elapsed = TIMEOUT + ONE_HOUR, isDecoy = true))
+            .isEqualTo(SafetyCallNotice.None)
+    }
+
+    /**
+     * Et un tap sur la notification la retire : `withActivityReset` remet `messagesSent` a zero,
+     * la condition devient fausse d'elle-meme. Aucune notification collante.
+     */
+    @Test
+    fun `un tap sur la notification terminee la fait disparaitre`() {
+        val fini = armed().copy(
+            enabled = false,
+            triggeredAt = ARMED_AT + TIMEOUT,
+            messagesSent = SafetyCallConfig.TOTAL_MESSAGES,
+        )
+        val apresTap = fini.withActivityReset(
+            nowMs = ARMED_AT + TIMEOUT + ONE_HOUR,
+            nowMonoMs = MONO_AT + TIMEOUT + ONE_HOUR,
+        )
+        assertThat(decideAt(apresTap, elapsed = TIMEOUT + ONE_HOUR)).isEqualTo(SafetyCallNotice.None)
+    }
+
     @Test
     fun `un deadman desactive n affiche rien`() {
         assertThat(decideAt(armed().copy(enabled = false), elapsed = 20 * ONE_HOUR))
@@ -219,15 +278,27 @@ class SafetyCallNoticeTest {
         )
     }
 
-    /** Séquence close et bail levé : plus rien à afficher, le désarmement suit. */
+    /**
+     * 🔴 **Contrat INVERSE par F-01 (relecture Gemini du 2026-08-05).**
+     *
+     * Ce test affirmait « sequence close, bail leve : plus rien a afficher ». C'etait le defaut :
+     * les quatre alertes sont parties chez les proches, et la seule personne a l'ignorer etait
+     * celle que ca concernait. La notification reste desormais, jusqu'a ce qu'elle soit vue.
+     */
     @Test
-    fun `une sequence terminee n affiche plus rien`() {
+    fun `une sequence terminee reste affichee jusqu a ce qu on l acquitte`() {
         val fini = armed().copy(
             triggeredAt = ARMED_AT + TIMEOUT,
             messagesSent = SafetyCallConfig.TOTAL_MESSAGES,
             claimedAt = 0L,
         )
-        assertThat(decideAt(fini, elapsed = TIMEOUT)).isEqualTo(SafetyCallNotice.None)
+        assertThat(decideAt(fini, elapsed = TIMEOUT)).isEqualTo(
+            SafetyCallNotice.Sequence(
+                delivered = SafetyCallConfig.TOTAL_MESSAGES,
+                total = SafetyCallConfig.TOTAL_MESSAGES,
+                inFlight = false,
+            ),
+        )
     }
 
     /**

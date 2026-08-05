@@ -87,17 +87,38 @@ sealed interface SafetyCallNotice {
             nowMs: Long,
             nowMonoMs: Long,
         ): SafetyCallNotice {
-            if (isDecoy || !cfg.enabled) return None
-            val sequenceRunning = cfg.isTriggered && (cfg.hasRelancePending || cfg.isSendInFlight)
-            if (sequenceRunning) {
-                return Sequence(
+            if (isDecoy) return None
+            // 🔴 v1.27.2 (relecture Gemini du 2026-08-05, F-01) — UNE SEQUENCE TERMINEE DOIT
+            // RESTER VISIBLE.
+            //
+            // `!enabled` renvoyait `None` sans distinguer les deux facons d'etre desarme. Or le
+            // desarmement de FIN DE SEQUENCE est ecrit dans la meme transaction que la conclusion
+            // du dernier envoi : la notification disparaissait donc **a l'instant precis ou la
+            // quatrieme alerte partait**.
+            //
+            // Quelqu'un qui avait oublie son telephone le reprend une heure plus tard et ne voit
+            // AUCUNE trace : il ignore que ses quatre contacts ont recu un appel a l'aide et sont
+            // peut-etre en train d'appeler les secours. C'est le pire etat possible apres un
+            // declenchement — l'alerte est partie, et seul celui qu'elle concerne l'ignore.
+            //
+            // Elle reste donc affichee tant que la sequence a eu lieu. Un tap la retire, en
+            // passant par le meme chemin que « je vais bien » : `withActivityReset` remet
+            // `messagesSent` a zero, et cette condition devient fausse d'elle-meme.
+            // Sequence en cours OU terminee : dans les deux cas elle reste affichee. Le
+            // desarmement de fin de sequence ne doit pas l'effacer — voir ci-dessus.
+            val sequenceVisible = cfg.isTriggered &&
+                (cfg.hasRelancePending || cfg.isSendInFlight || cfg.messagesDelivered > 0)
+            return when {
+                sequenceVisible -> Sequence(
                     delivered = cfg.messagesDelivered,
                     total = SafetyCallConfig.TOTAL_MESSAGES,
                     inFlight = cfg.isSendInFlight,
                 )
+                !cfg.enabled -> None
+                cfg.isInWarningWindow(nowMs, nowMonoMs) ->
+                    Warning(hoursLeft = hoursLeft(cfg, nowMs, nowMonoMs))
+                else -> None
             }
-            if (!cfg.isInWarningWindow(nowMs, nowMonoMs)) return None
-            return Warning(hoursLeft = hoursLeft(cfg, nowMs, nowMonoMs))
         }
 
         /**
