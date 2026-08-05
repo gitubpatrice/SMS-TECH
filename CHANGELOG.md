@@ -37,6 +37,10 @@ remonté jusqu'à un appelant réel.
   antérieure ré-émettait vers le numéro tout juste bloqué.
 - **Les URI `sms:` sont nettoyées de leur partie requête** sur les deux points d'entrée. Sur l'un
   d'eux, l'adresse corrompue rendait la garde de liste noire d'envoi silencieusement inopérante.
+- **L'aperçu d'un message ne s'affiche plus sur l'écran de verrouillage de qui l'avait masqué.**
+  Les réglages étaient lus dans un instantané que le processus n'avait pas encore chargé : un SMS
+  reçu téléphone endormi — le cas le plus courant — se notifiait avec les valeurs par défaut, dont
+  l'aperçu visible. Le réglage tombait exactement dans la situation contre laquelle il existe.
 - **Le parseur de PDU borne ses allocations** avant de les faire : un MMS malformé pouvait épuiser
   la mémoire du processus.
 - **Les réactions ne partent plus vers un code court**, potentiellement surtaxé.
@@ -45,12 +49,20 @@ remonté jusqu'à un appelant réel.
 - **Le deadman survit aux redémarrages.** Le compteur monotone repartait de zéro à chaque
   redémarrage : redémarrer plus souvent que le délai configuré empêchait l'alerte de partir, et
   une simple mise à jour système la repoussait d'autant. Le temps écoulé est désormais capitalisé.
+- **Ouvrir l'application remet réellement le minuteur à zéro.** Sur un démarrage à froid — c'est-
+  à-dire au moment précis où l'utilisateur prouve qu'il va bien — la remise à zéro était sautée,
+  faute de réglages encore chargés. Le Safety Call continuait de courir vers une fausse alerte.
+- **Le SMS d'urgence part de la SIM choisie.** Déclenché depuis un processus réveillé, l'envoi
+  lisait une configuration vide et retombait sur la SIM système : l'alerte arrivait donc d'un
+  numéro que les contacts ne reconnaissent pas. Même correction pour le renvoi programmé.
 - **Le lien de localisation du SMS d'urgence était cassé en français.** Le séparateur décimal
   suivait la langue de l'appareil : l'URL partait avec des virgules et n'était pas exploitable.
 - **Désactiver le mode urgence éteint aussi le raccourci d'écran verrouillé** depuis le bouton
   Enregistrer, et l'écran revient à l'accueil une fois la désactivation écrite.
 
 ### UX
+- Le récap du Safety Call indique **l'heure à laquelle le minuteur a démarré**. Avec la durée et
+  le temps restant affichés juste en dessous, l'échéance se recoupe de tête.
 - Messages de confirmation nommés pour le mode urgence et le Safety Call — activé, désactivé,
   contact ajouté, contact supprimé — au lieu d'accusés génériques.
 - Les conversations dont le dernier message est une pièce jointe sans légende ne s'affichent plus

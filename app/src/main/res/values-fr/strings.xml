@@ -443,6 +443,7 @@
     <string name="settings_safety_call_im_ok_snack">Minuteur réinitialisé.</string>
     <!-- v1.9.0 — bloc récap actif (visible uniquement si Safety call activé) -->
     <string name="settings_safety_call_armed_chip">Activé</string>
+    <string name="settings_safety_call_armed_started">Minuteur lancé : %1$s à %2$s</string>
     <string name="settings_safety_call_armed_duration">Durée : %1$s</string>
     <string name="settings_safety_call_armed_remaining">Restant : %1$s avant déclenchement</string>
     <string name="settings_safety_call_armed_remaining_imminent">Moins de 2 h avant déclenchement</string>

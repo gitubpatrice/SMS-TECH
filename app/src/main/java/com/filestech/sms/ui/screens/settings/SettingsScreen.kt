@@ -84,8 +84,11 @@ import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
+import com.filestech.sms.ui.util.daySeparatorLabel
+import com.filestech.sms.ui.util.rememberChatFormatters
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2423,7 +2426,9 @@ private fun PurgeNowConfirmDialog(
  * le wizard.
  *
  * Affiche :
- *  - Chip "Armé" coloré (`primaryContainer`)
+ *  - Chip "Activé" coloré (`primaryContainer`)
+ *  - v1.27.2 — heure de démarrage du compte à rebours courant (masquée tant qu'aucun reset n'a
+ *    eu lieu)
  *  - Durée totale configurée (formatée via [SafetyCallTemplate.formatDuration])
  *  - Temps restant avant déclenchement (heures, ou "Moins de 2h" si imminent)
  *  - Liste des contacts (1 ligne avec noms concaténés + "+N autres" si > 2)
@@ -2442,6 +2447,27 @@ private fun SafetyCallArmedRecap(
 ) {
     val durationLabel = com.filestech.sms.domain.safetycall.SafetyCallTemplate
         .formatDuration(config.timeoutMs)
+    // v1.27.2 — moment où le compte à rebours COURANT a démarré. Avec la durée et le restant
+    // affichés juste en dessous, le bloc devient vérifiable de tête : départ + durée = échéance.
+    //
+    // La valeur lue est [SafetyCallConfig.lastActivityAt], c'est-à-dire le dernier reset — pas la
+    // date où la fonction a été activée une fois pour toutes. C'est volontaire, et c'est la seule
+    // valeur honnête : ouvrir SMS Tech relance le minuteur (cf. `MainActivity.onResume`), tout
+    // comme « Je vais bien ». Afficher une date d'activation figée aurait laissé calculer une
+    // échéance fausse sur une fonction où l'heure de déclenchement est précisément l'enjeu — d'où
+    // le libellé « Minuteur lancé », et non « Activé le ».
+    //
+    // `0L` = jamais initialisé : on n'affiche alors rien plutôt qu'une date née de l'époque Unix.
+    val formatters = rememberChatFormatters()
+    val todayLabel = stringResource(R.string.date_today)
+    val yesterdayLabel = stringResource(R.string.date_yesterday)
+    val startedLabel: String? = config.lastActivityAt.takeIf { it > 0L }?.let { startedAt ->
+        stringResource(
+            R.string.settings_safety_call_armed_started,
+            formatters.daySeparatorLabel(startedAt, todayLabel, yesterdayLabel),
+            formatters.time.format(Date(startedAt)),
+        )
+    }
     // v1.10.0 perf P2 — [remainingMs] vient du ViewModel (StateFlow tick 60s),
     // plus de System.currentTimeMillis() à chaque recomposition.
     val remainingLabel = when {
@@ -2534,6 +2560,13 @@ private fun SafetyCallArmedRecap(
         Spacer(Modifier.size(8.dp))
         // Détails — chaque ligne en bodyMedium / onSurfaceVariant pour
         // hiérarchie visuelle (titre en gros, détails en plus discret).
+        if (startedLabel != null) {
+            Text(
+                text = startedLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Text(
             text = stringResource(R.string.settings_safety_call_armed_duration, durationLabel),
             style = MaterialTheme.typography.bodyMedium,
