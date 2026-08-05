@@ -17,9 +17,8 @@ import javax.inject.Inject
  * v1.9.0 — Évalue l'état du Safety call deadman et déclenche l'envoi des
  * SMS d'urgence si le timer a expiré.
  *
- * Appelé depuis [com.filestech.sms.system.scheduler.SafetyCallWorker] toutes
- * les 60 minutes. Idempotent : un second appel après trigger réussi est un
- * no-op puisque `enabled` est désormais `false`.
+ * Appelé depuis [com.filestech.sms.system.scheduler.SafetyCallWorker] au tick périodique (60 min)
+ * et par le travail ponctuel qui porte chaque relance (15 min).
  *
  * **Garde panic-decoy (audit fix CRITICAL)** : si l'app est en session
  * [com.filestech.sms.security.AppLockManager.LockState.PanicDecoy], retourne [Result.PanicSuppressed]
@@ -27,10 +26,25 @@ import javax.inject.Inject
  * d'urgence devant lui, révélant le réseau de soutien de la victime. Le
  * worker du tick suivant retentera dès que la session decoy est quittée.
  *
- * **Désactivation préemptive (audit fix SEC-3)** : `disableSafetyCall()` est
- * appelé AVANT la boucle d'envoi. Si le process crashe entre 2 sends, le
- * tick worker N+1 ne re-déclenchera pas (enabled=false). L'utilisateur
- * réactive manuellement.
+ * **v1.27.2 — le désarmement préemptif de SEC-3 est RENVERSÉ.**
+ *
+ * L'ancien texte de ce bloc décrivait un `disableSafetyCall()` appelé AVANT la boucle d'envoi,
+ * pour qu'un plantage entre deux envois ne relance pas le déclenchement au tick suivant. Le prix
+ * n'avait pas été pesé : quand **tous** les envois échouaient — pas de réseau, mode avion, SIM
+ * absente — le deadman se désarmait quand même, définitivement et en silence. La protection
+ * s'éteignait exactement au moment où elle échouait.
+ *
+ * Le contrat est désormais :
+ *  1. le créneau est **réservé de façon atomique** avant l'envoi, ce qui couvre le doublon que
+ *     SEC-3 cherchait à éviter — y compris entre le tick périodique et une relance qui se
+ *     croiseraient ;
+ *  2. si **aucun** envoi n'aboutit, le créneau est **rendu** : le deadman reste armé et le tick
+ *     suivant retentera ;
+ *  3. le désarmement n'a lieu qu'à la **fin de la séquence** de [SafetyCallConfig.TOTAL_MESSAGES]
+ *     messages, ou sur une configuration invalide (aucun contact, message vide).
+ *
+ * Un plantage entre l'envoi et la libération du créneau coûte au pire **un message en double** —
+ * bien moins grave qu'une protection éteinte sans le dire.
  *
  * **Garde-fous** :
  *  - Refuse si liste de contacts vide.
