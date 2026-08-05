@@ -195,10 +195,16 @@ class BackupRoundTripTest {
             // L'assertion qui porte reellement la preuve : le message du coffre doit avoir atterri
             // dans une conversation `inVault`, PAS dans l'homonyme en clair prealablement pose.
             // Sans la garde, il rejoindrait la conversation en clair et cette assertion tomberait.
-            val ids = dbTarget.messageDao()
-                .findConversationIdsByTelephonyUris(listOf("content://sms/3"))
-            assertThat(ids).hasSize(1)
-            val landedIn = dbTarget.conversationDao().findById(ids[0])
+            // ⚠️ v1.27.2 (audit Codex, LP-03) — NE PAS passer par
+            // `findConversationIdsByTelephonyUris` ici : cette requete est desormais
+            // VOLONTAIREMENT AVEUGLE AU COFFRE (`AND conversation_id IN (... WHERE in_vault = 0)`),
+            // pour que la reconciliation des suppressions ne puisse jamais effacer un message
+            // protege. Lui demander l'identifiant d'un message du Coffre ne rend donc rien — et
+            // c'est correct. C'est le test qui se servait du mauvais outil, pas le produit qui
+            // regressait.
+            val landed = dbTarget.messageDao().findByTelephonyUri("content://sms/3")
+            assertThat(landed).isNotNull()
+            val landedIn = dbTarget.conversationDao().findById(landed!!.conversationId)
             assertThat(landedIn).isNotNull()
             assertThat(landedIn!!.inVault).isTrue()
             assertThat(landedIn.id).isNotEqualTo(99L)

@@ -56,9 +56,17 @@ class MainApplication : Application(), Configuration.Provider {
      * retirer **immédiatement** à l'entrée en mode leurre, sans attendre le prochain réveil du
      * worker.
      */
+    /**
+     * ⚠️ v1.27.2 — `dagger.Lazy`, comme les trois autres injections de cette classe.
+     *
+     * `EagerInjectionGuardTest` a rattrape l'oubli : injecte en dur, ce notificateur etait
+     * construit au DEMARRAGE, sur le fil principal, alors qu'il ne sert qu'a la premiere emission
+     * du reconciliateur. C'est exactement le cout de demarrage a froid que ce depot s'efforce
+     * d'eviter partout ailleurs — et il a ecrit un test de garde pour ca.
+     */
     @Inject
-    lateinit var safetyCallWarningNotifier:
-        com.filestech.sms.system.notifications.SafetyCallWarningNotifier
+    lateinit var safetyCallWarningNotifierLazy:
+        dagger.Lazy<com.filestech.sms.system.notifications.SafetyCallWarningNotifier>
 
     /**
      * v1.8.0 (post-audit fix unread badges) — utilisé une fois au cold-start pour recalculer les
@@ -271,7 +279,7 @@ class MainApplication : Application(), Configuration.Provider {
             }
                 .distinctUntilChanged()
                 .collect { notice ->
-                    runCatching { safetyCallWarningNotifier.reconcile(notice) }
+                    runCatching { safetyCallWarningNotifierLazy.get().reconcile(notice) }
                         .onFailure { Timber.w(it, "SafetyCall: reconciliation notification echouee") }
                 }
         }
