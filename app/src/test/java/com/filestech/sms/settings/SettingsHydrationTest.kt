@@ -16,6 +16,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 
 /**
@@ -59,24 +60,26 @@ class SettingsHydrationTest {
         get() = ApplicationProvider.getApplicationContext()
 
     private companion object {
-        /**
-         * Retard imposé à la collecte interne pour simuler un processus froid.
-         *
-         * Assez long pour dépasser de très loin la gigue d'ordonnancement, assez court pour ne
-         * pas ralentir la tâche de test. Le test ne mesure pas ce délai : il vérifie un ordre.
-         */
-        const val COLD_START_DELAY_MS = 400L
         const val TIMEOUT_MS = 10_000L
     }
 
     /**
-     * **Test de régression du finding 2.**
+     * **Test de régression du finding 2** (relecture Codex du 2026-08-05).
      *
-     * La collecte interne est empêchée de démarrer pendant [COLD_START_DELAY_MS] en occupant le
-     * seul thread de sa portée. Sur l'implémentation précédente, `hydratedOrNull()` rendait
-     * immédiatement la vraie valeur par sa lecture indépendante, et la troisième assertion
-     * échouait : `state` en était encore aux défauts. C'est exactement la fenêtre qui faisait
-     * perdre l'indicatif pays au formatteur non suspendable.
+     * Sur l'implémentation précédente, `hydratedOrNull()` rendait immédiatement la vraie valeur par
+     * sa lecture indépendante, et la troisième assertion échouait : `state` en était encore aux
+     * défauts. C'est exactement la fenêtre qui faisait perdre l'indicatif pays au formatteur non
+     * suspendable, appelé quelques instructions plus loin sur le même envoi.
+     *
+     * ⚠️ **La première version de ce test était instable**, et Codex l'a montré : elle occupait
+     * l'unique thread de la portée par un `Thread.sleep(400)`. L'ordre n'était alors garanti que
+     * pendant ces 400 ms — une pause de ramasse-miettes ou un gel Robolectric plus long libérait le
+     * thread, la collecte publiait, et l'assertion attendant encore le défaut échouait **sur du
+     * code de production correct**. Un gate instable est pire qu'un test absent : il apprend à
+     * relancer plutôt qu'à lire.
+     *
+     * Le verrou est désormais **explicite** : le thread n'est libéré que lorsque le test a
+     * lui-même vérifié l'état initial. Aucune horloge murale n'entre dans l'ordonnancement.
      */
     @Test
     fun apresUneLectureFroide_stateConnaitLaMemeValeur() {
@@ -87,17 +90,22 @@ class SettingsHydrationTest {
             }
             writerScope.cancel()
 
-            // Un thread unique, occupe d'emblee : la collecte du depot ne PEUT pas demarrer avant
-            // que ce sommeil soit termine. Le processus froid est donc simule sans dependre de la
-            // vitesse de la machine.
+            // Un thread unique, occupe par une attente que LE TEST controle : la collecte du depot
+            // ne peut pas demarrer tant que le verrou n'est pas ouvert. Aucune course possible.
+            val gate = CountDownLatch(1)
             val executor = Executors.newSingleThreadExecutor()
-            executor.execute { Thread.sleep(COLD_START_DELAY_MS) }
+            executor.execute { gate.await() }
             val coldScope = CoroutineScope(executor.asCoroutineDispatcher())
             try {
                 val cold = SettingsRepository(context, coldScope)
 
-                // 1. Le snapshot chaud ment encore — il rend le DEFAUT, le plus bavard.
+                // 1. Le snapshot chaud ment encore — il rend le DEFAUT, le plus bavard. Verifie
+                //    pendant que la collecte est TENUE a l'arret.
                 assertThat(cold.state.value.notifications.previewMode).isEqualTo(PreviewMode.ALWAYS)
+
+                // On libere seulement maintenant : `hydratedOrNull` attend la collecte partagee,
+                // il faut donc qu'elle puisse tourner pour que l'appel rende la main.
+                gate.countDown()
 
                 // 2. La lecture hydratee rend le choix REEL de l'utilisateur.
                 val hydrated = withTimeout(TIMEOUT_MS) { cold.hydratedOrNull() }
@@ -107,6 +115,7 @@ class SettingsHydrationTest {
                 //    tout lecteur synchrone execute juste apres lirait encore les defauts.
                 assertThat(cold.state.value.notifications.previewMode).isEqualTo(PreviewMode.NEVER)
             } finally {
+                gate.countDown()
                 coldScope.cancel()
                 executor.shutdownNow()
             }

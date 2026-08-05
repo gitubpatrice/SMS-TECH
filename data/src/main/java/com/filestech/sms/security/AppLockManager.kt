@@ -223,7 +223,21 @@ class AppLockManager @Inject constructor(
     }
 
     /** v1.26.0 — retire le code panique. Le PIN principal et le reste sont intacts. */
-    suspend fun clearPanicCode() = withContext(io) { securityStore.clearPanic() }
+    suspend fun clearPanicCode() = withContext(io) {
+        // v1.27.2 (relecture Gemini 2026-08-05, finding 4) — MÊME garde que [clearPin], dont
+        // celle-ci était le jumeau resté sans protection.
+        //
+        // Sans elle, quelqu'un ayant contraint l'utilisateur à ouvrir la session leurre pouvait
+        // supprimer le code panique depuis les Réglages. Le coffre n'en était pas exposé, mais la
+        // victime perdait sa seule porte de sortie sous contrainte — désarmée par l'agresseur
+        // lui-même, dans la session censée le tenir à distance.
+        //
+        // L'écran est peut-être masqué en session leurre ; le KDoc de [clearPin] dit déjà pourquoi
+        // cela ne suffit pas : « masquer un écran est une énumération, elle vieillit à chaque
+        // point d'entrée ajouté ». Le garde qui compte est ici.
+        if (_state.value is LockState.PanicDecoy) return@withContext
+        securityStore.clearPanic()
+    }
 
     /** v1.26.0 — vrai si un code panique est enregistré. Sert à l'affichage des Réglages. */
     suspend fun isPanicCodeSet(): Boolean = withContext(io) { securityStore.panicSnapshot() != null }

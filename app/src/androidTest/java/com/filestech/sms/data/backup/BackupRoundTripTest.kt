@@ -127,10 +127,30 @@ class BackupRoundTripTest {
             assertThat(convA).isNotNull()
             assertThat(convB).isNotNull()
 
-            val bodies = dbTarget.messageDao().findConversationIdsByTelephonyUris(
-                listOf("content://sms/1", "content://sms/2", "content://sms/3"),
+            // ⚠️ La premiere version s'arretait a `findConversationIdsByTelephonyUris`, qui rend
+            // des IDENTIFIANTS de conversation — pas des corps, malgre le nom que j'avais donne a
+            // la variable (relecture Codex du 2026-08-05, finding 2). Une sauvegarde qui aurait
+            // conserve les URI en vidant tous les corps passait le test.
+            //
+            // On compare donc les couples (telephonyUri, body) un a un.
+            val restoredBodies = dbTarget.messageDao().listAll()
+                .associate { it.telephonyUri to it.body }
+            assertThat(restoredBodies).containsExactlyEntriesIn(
+                mapOf(
+                    "content://sms/1" to BODY_1,
+                    "content://sms/2" to BODY_2,
+                    "content://sms/3" to BODY_VAULT,
+                ),
             )
-            assertThat(bodies).hasSize(2) // les 3 messages se repartissent sur 2 conversations
+
+            // Et le remappage : les 3 messages doivent rester repartis sur DEUX conversations,
+            // celles-la memes, pas melanges.
+            val all = dbTarget.messageDao().listAll()
+            val byUri = all.associateBy { it.telephonyUri }
+            assertThat(byUri.getValue("content://sms/1").conversationId)
+                .isEqualTo(byUri.getValue("content://sms/2").conversationId)
+            assertThat(byUri.getValue("content://sms/3").conversationId)
+                .isNotEqualTo(byUri.getValue("content://sms/1").conversationId)
         }
     }
 
@@ -140,6 +160,17 @@ class BackupRoundTripTest {
      * C'est le correctif H12 : `findByAddressesCsv` ne filtre pas `in_vault`, si bien qu'une
      * conversation protégée pouvait être fusionnée dans son homonyme EN CLAIR et redevenir
      * visible — y compris en mode leurre. Le test le fige côté restauration.
+     *
+     * ⚠️ **Ce test était VACANT dans sa première version** (relecture Gemini du 2026-08-05,
+     * finding 1). Il restaurait dans une base cible **vide** : `findByAddressesCsv` y rendait
+     * toujours `null`, la garde `takeIf { it.inVault == backupConv.inVault }` n'était jamais
+     * atteinte, et le test se contentait de constater qu'une entité avait été recopiée telle
+     * quelle. Il serait resté vert avec le correctif H12 retiré.
+     *
+     * Il faut donc **l'homonyme**. La base cible reçoit d'abord une conversation portant la MÊME
+     * adresse mais **hors du coffre** — exactement le cas d'une réinstallation suivie d'une
+     * synchronisation système, qui est le scénario d'origine du défaut. C'est cette ligne-là qui
+     * arme la garde.
      */
     @Test
     fun uneConversationDuCoffre_resteDansLeCoffreApresRestauration() {
@@ -151,12 +182,26 @@ class BackupRoundTripTest {
             val written = serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
             assertThat(written).isInstanceOf(Outcome.Success::class.java)
 
+            // L'HOMONYME EN CLAIR : sans lui, la garde n'est jamais exercee.
+            dbTarget.conversationDao().upsert(conversation(99L, ADDR_B, inVault = false))
+            assertThat(dbTarget.conversationDao().countInVault()).isEqualTo(0)
+
             serviceFor(dbTarget, VaultSessionState()).readSmsbk(uriOf(backupFile), PASSWORD)
 
-            val restoredVault = dbTarget.conversationDao().findByAddressesCsv(ADDR_B)
-            assertThat(restoredVault).isNotNull()
-            assertThat(restoredVault!!.inVault).isTrue()
+            // Une conversation de coffre a bien ete CREEE a cote de l'homonyme en clair, au lieu
+            // d'etre fusionnee dedans.
             assertThat(dbTarget.conversationDao().countInVault()).isEqualTo(1)
+
+            // L'assertion qui porte reellement la preuve : le message du coffre doit avoir atterri
+            // dans une conversation `inVault`, PAS dans l'homonyme en clair prealablement pose.
+            // Sans la garde, il rejoindrait la conversation en clair et cette assertion tomberait.
+            val ids = dbTarget.messageDao()
+                .findConversationIdsByTelephonyUris(listOf("content://sms/3"))
+            assertThat(ids).hasSize(1)
+            val landedIn = dbTarget.conversationDao().findById(ids[0])
+            assertThat(landedIn).isNotNull()
+            assertThat(landedIn!!.inVault).isTrue()
+            assertThat(landedIn.id).isNotEqualTo(99L)
         }
     }
 
