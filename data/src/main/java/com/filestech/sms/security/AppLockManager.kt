@@ -172,8 +172,31 @@ class AppLockManager @Inject constructor(
             newPin.wipe()
         }
         settings.update { it.copy(security = it.security.copy(lockMode = LockMode.PIN)) }
-        _state.value = LockState.Locked
+        // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-06) — passer par la primitive, pas par une
+        // affectation directe.
+        //
+        // `forceLock()` verrouille aussi la session du Coffre depuis la relecture Gemini. Mais
+        // cette ligne posait `Locked` **directement**, sans passer par elle : ouvrir le Coffre,
+        // changer son code principal, puis rouvrir l'application avec le nouveau code laissait le
+        // Coffre déverrouillé. Le contournement que `forceLock()` prétendait fermer subsistait par
+        // une autre porte.
+        //
+        // Toute transition vers un état fermé passe désormais par [transitionToLocked], et c'est
+        // là qu'est l'invariant — pas chez ses appelants.
+        transitionToLocked()
         SetPinOutcome.Ok
+    }
+
+    /**
+     * v1.27.2 (audit Codex, C-06) — **le seul** moyen de passer à [LockState.Locked].
+     *
+     * L'invariant « application verrouillée ⇒ Coffre verrouillé » est tenu ici, donc pour toutes
+     * les transitions présentes et futures. Le poser chez les appelants était précisément ce qui
+     * avait laissé `setPin` de côté.
+     */
+    private fun transitionToLocked() {
+        _state.value = LockState.Locked
+        vaultSession.lock()
     }
 
     suspend fun clearPin() = withContext(io) {
@@ -229,6 +252,23 @@ class AppLockManager @Inject constructor(
      * sur l'appareil) : un code panique plus faible à casser trahirait la contrainte qu'il protège.
      */
     suspend fun setPanicCode(newCode: CharArray): PanicCodeOutcome = withContext(io) {
+        // v1.27.2 (audit Codex du 2026-08-05, C-11) — garde symétrique de celle de [setPin].
+        //
+        // `setPin` et `clearPanicCode` refusent tous deux d'agir en session leurre ; `setPanicCode`
+        // n'avait rien. L'écran est aujourd'hui masqué dans cet état, mais masquer un écran est
+        // une énumération qui vieillit à chaque point d'entrée ajouté — c'est le raisonnement écrit
+        // dans `clearPin`, et c'est cette omission-là qui avait laissé passer l'évasion par
+        // `setPin`.
+        //
+        // L'enjeu ici est le pire de tous : remplacer le code panique enregistré **désarmerait la
+        // porte de sortie de la victime**. Elle ne pourrait plus jamais rouvrir sa vraie session.
+        //
+        // Même déception que `setPin` : on rend `Ok` sans rien écrire. Une erreur apprendrait à
+        // l'agresseur qu'il existe une session réelle derrière celle qu'il voit.
+        if (_state.value is LockState.PanicDecoy) {
+            newCode.wipe()
+            return@withContext PanicCodeOutcome.Ok
+        }
         try {
             val pinSnap = securityStore.pinSnapshot()
                 ?: return@withContext PanicCodeOutcome.NoPrimaryPin

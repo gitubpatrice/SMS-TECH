@@ -204,10 +204,27 @@ class MainApplication : Application(), Configuration.Provider {
         // en câbler tous sauf un est le motif de défaut qui revient le plus souvent ici.
         appScope.launch {
             settingsRepository.flow
-                .map { it.security.safetyCall.hasRelancePending }
+                // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-01) — `!hasRelancePending` NE SUFFIT
+                // PAS, et cette version-ci a bien failli annuler la dernière alerte pendant son
+                // envoi.
+                //
+                // `messagesSent` compte les créneaux **réservés**, pas les envois conclus. Quand
+                // le worker de la 4ᵉ et dernière relance réserve son créneau, le compteur passe à
+                // 4 AVANT le premier envoi, et `hasRelancePending` — vrai seulement de 1 à 3 —
+                // devient faux immédiatement. Cet observateur recevait donc `false` et appelait
+                // `cancelUniqueWork` sur `RELANCE_WORK_NAME`, c'est-à-dire sur **le worker en
+                // train d'envoyer**. L'annulation pouvait tomber avant le premier SMS ou au
+                // milieu des contacts.
+                //
+                // L'état terminal doit être DURABLE : plus de relance en attente **et** aucun bail
+                // en cours. Tant qu'un créneau est réservé, quelqu'un travaille dessus.
+                .map { s ->
+                    val cfg = s.security.safetyCall
+                    !cfg.enabled || (!cfg.hasRelancePending && cfg.claimedAt == 0L)
+                }
                 .distinctUntilChanged()
-                .collect { pending ->
-                    if (!pending) {
+                .collect { terminal ->
+                    if (terminal) {
                         runCatching { SafetyCallWorker.cancelRelance(this@MainApplication) }
                             .onFailure { Timber.w(it, "SafetyCallWorker.cancelRelance failed") }
                     }

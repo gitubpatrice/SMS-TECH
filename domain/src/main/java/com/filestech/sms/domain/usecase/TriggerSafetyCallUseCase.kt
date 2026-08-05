@@ -124,6 +124,21 @@ class TriggerSafetyCallUseCase @Inject constructor(
         // deux conditions sont donc exclusives, jamais concurrentes.
         val isRelance = current.isTriggered
         if (isRelance && !current.hasRelancePending) {
+            // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-02) — un creneau RESERVE n est pas une
+            // sequence TERMINEE.
+            //
+            // `messagesSent` compte les creneaux reserves, pas les envois conclus. L etat
+            // `messagesSent = 4, claimedAt > 0` est exactement celui qui persiste entre la
+            // reservation du dernier message et sa conclusion. Sans cette garde, un second
+            // controle demarrant dans cette fenetre validait la sequence et desarmait : la
+            // derniere alerte n aurait JAMAIS ete retentee.
+            //
+            // La reprise des creneaux abandonnes est passee juste au-dessus : si l on arrive ici
+            // avec un bail pose, c est qu il est encore VALIDE, donc qu un envoi est en vol.
+            if (current.claimedAt != 0L) {
+                Timber.i("TriggerSafetyCallUseCase: dernier creneau en vol, on ne conclut pas")
+                return@withContext Result.AlreadySent
+            }
             // Sequence terminee sans que le desarmement ait pu s ecrire - processus tue juste
             // apres le dernier envoi. On finit le travail plutot que de laisser un etat bancal.
             Timber.i("TriggerSafetyCallUseCase: relance sequence complete, disarming")
