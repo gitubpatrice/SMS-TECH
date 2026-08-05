@@ -319,6 +319,7 @@
     <string name="settings_emergency_shortcut_title">Raccourci écran verrouillé</string>
     <string name="emergency_saved_enabled">Mode urgence activé</string>
     <string name="emergency_saved_disabled">Mode urgence désactivé</string>
+    <string name="emergency_setup_unsaved_body">Le mode urgence n\'est pas encore enregistré. Quitter maintenant le laisserait dans son état précédent.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action URGENCE en un tap a été retirée. -->
     <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112/17), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
     <string name="emergency_shortcut_no_app_to_dial">Aucune application pour composer le 112</string>

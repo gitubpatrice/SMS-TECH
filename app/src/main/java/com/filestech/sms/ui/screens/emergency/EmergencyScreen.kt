@@ -110,6 +110,8 @@ fun EmergencyScreen(
                     ctxGetter = { ctx },
                 )
                 is EmergencyViewModel.Event.Saved -> Unit // pas pertinent ici
+                // v1.27.2 — émis par l'interrupteur de l'écran de réglages, pas par celui-ci.
+                is EmergencyViewModel.Event.DisabledImmediately -> Unit
                 // v1.27.2 — la désactivation est écrite : on annonce, puis on quitte l'écran.
                 //
                 // Il restait affiché, avec son gros bouton rouge devenu inerte, sur un mode

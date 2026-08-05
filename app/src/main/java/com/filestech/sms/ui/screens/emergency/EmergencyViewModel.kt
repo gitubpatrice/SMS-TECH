@@ -96,6 +96,24 @@ class EmergencyViewModel @Inject constructor(
     private val _draft = MutableStateFlow(EmergencyConfig())
     val draft: StateFlow<EmergencyConfig> = _draft.asStateFlow()
 
+    /**
+     * v1.27.2 — instantane du config PERSISTE au moment ou l ecran s est ouvert.
+     *
+     * Sert a [hasUnsavedChanges]. Le Safety call en dispose depuis la v1.25.5 ; le mode urgence
+     * etait reste en arriere, et quitter son ecran jetait le brouillon EN SILENCE.
+     */
+    private var snapshotInitial: EmergencyConfig = EmergencyConfig()
+
+    /**
+     * v1.27.2 — vrai quand le brouillon diverge de ce qui est enregistre.
+     *
+     * Constate sur appareil par Patrice le 2026-08-05 : « si je fais retour ca m indique rien ».
+     * Activer le mode urgence puis sortir sans enregistrer perdait l intention sans un mot —
+     * sur une fonction qui envoie de vrais SMS avec la position, croire l avoir activee alors
+     * qu elle ne l est pas est exactement le mauvais sens d echec.
+     */
+    val hasUnsavedChanges: Boolean get() = _draft.value != snapshotInitial
+
     private val _events = Channel<Event>(Channel.BUFFERED)
     val events get() = _events.receiveAsFlow()
 
@@ -111,7 +129,9 @@ class EmergencyViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            _draft.value = settings.flow.first().security.emergency
+            val initial = settings.flow.first().security.emergency
+            snapshotInitial = initial
+            _draft.value = initial
         }
     }
 
@@ -119,6 +139,51 @@ class EmergencyViewModel @Inject constructor(
 
     fun setEnabled(enabled: Boolean) {
         _draft.value = _draft.value.copy(enabled = enabled)
+        // v1.27.2 — 🔴 L'INTERRUPTEUR ÉTEINT IMMÉDIATEMENT. Constaté sur appareil par Patrice le
+        // 2026-08-05 : « si je désactive avec le switch seul ça ne désactive pas, il faut taper
+        // sur enregistrer ».
+        //
+        // Le Safety call règle ce cas depuis `d3f4f92`, avec un raisonnement qui vaut mot pour
+        // mot ici — et le mode urgence était resté en arrière. Le jumeau asymétrique, encore.
+        //
+        // L'asymétrie interne, elle, est VOULUE et penche du côté sûr :
+        //
+        //  - **Éteindre** ne demande aucune validation et l'intention ne souffre aucune ambiguïté.
+        //    Croire avoir coupé une fonction qui envoie de vrais SMS avec sa position, et la
+        //    laisser active, est inacceptable.
+        //  - **Allumer** reste soumis à [save], qui vérifie qu'il existe au moins un contact. Un
+        //    mode urgence activé sans destinataire ne ferait rien, en silence.
+        //
+        // `appScope` et non `viewModelScope` : même raison que [save] et [disableEmergencyMode] —
+        // l'écriture ne doit pas mourir avec l'écran. La cascade est identique à celle de [save],
+        // raccourci d'écran verrouillé et appel police compris.
+        if (!enabled) {
+            appScope.launch {
+                settings.update { s ->
+                    s.copy(
+                        security = s.security.copy(
+                            emergency = s.security.emergency.copy(
+                                enabled = false,
+                                lastTriggeredAt = 0L,
+                                monotonicLastTriggeredAt = 0L,
+                            ),
+                            emergencyShortcutEnabled = false,
+                            emergencyCallPoliceEnabled = false,
+                        ),
+                    )
+                }
+                snapshotInitial = snapshotInitial.copy(
+                    enabled = false,
+                    lastTriggeredAt = 0L,
+                    monotonicLastTriggeredAt = 0L,
+                )
+                _draft.value = _draft.value.copy(
+                    lastTriggeredAt = 0L,
+                    monotonicLastTriggeredAt = 0L,
+                )
+                _events.trySend(Event.DisabledImmediately)
+            }
+        }
     }
 
     fun setTemplate(template: EmergencyTemplate) {
@@ -181,6 +246,7 @@ class EmergencyViewModel @Inject constructor(
                     ),
                 )
             }
+            snapshotInitial = settings.flow.first().security.emergency
             _events.trySend(Event.Saved(enabled = current.enabled))
         }
     }
@@ -229,6 +295,13 @@ class EmergencyViewModel @Inject constructor(
          * v1.27.2 — la désactivation est ÉCRITE. L'écran s'en sert pour revenir en arrière :
          * une fois le mode éteint il n'a plus d'objet, et son gros bouton rouge devient inerte.
          */
+        /**
+         * v1.27.2 — l'interrupteur a ETEINT le mode urgence sur-le-champ, sans passer par
+         * « Enregistrer ». L'ecran s'en sert pour confirmer, sans quoi rien ne distinguerait
+         * une desactivation effective d'un simple mouvement d'interrupteur.
+         */
+        data object DisabledImmediately : Event
+
         data object Disabled : Event
         data class Triggered(val result: TriggerEmergencyUseCase.Result) : Event
     }

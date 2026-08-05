@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.screens.emergency
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,11 +10,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -28,19 +31,26 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyTemplate
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
@@ -73,10 +83,30 @@ fun EmergencySetupScreen(
     viewModel: EmergencyViewModel = hiltViewModel(),
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    // v1.27.2 — etat REELLEMENT ENREGISTRE. Distinct de `draft.enabled`, qui n est qu une
+    // intention tant que l activation n a pas ete validee.
+    val savedEnabled = viewModel.state.collectAsStateWithLifecycle().value.enabled
     val contactsCount by viewModel.safetyCallContactsCount.collectAsStateWithLifecycle()
     // v1.25.5 — la liste elle-même, pour l'afficher au lieu d'un simple compte.
     val emergencyContacts by viewModel.safetyCallContacts.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
+
+    // v1.27.2 — AVERTISSEMENT AU RETOUR. Constate sur appareil : « si je fais retour ca m indique
+    // rien ». Quitter jetait le brouillon en silence — sur une fonction qui envoie de vrais SMS
+    // avec la position, croire l avoir activee alors qu elle ne l est pas est le mauvais sens
+    // d echec. Le Safety call previent depuis la v1.25.5 ; celui-ci etait reste en arriere.
+    //
+    // `BackHandler` arme seulement une fois la destination RESUMED : compose pendant la
+    // transition d arrivee, il capterait la fin du geste parti de l ecran precedent et ouvrirait
+    // ce dialogue par-dessus lui. Voir le correctif du Coffre en v1.25.4.
+    val navEntryOwner = LocalLifecycleOwner.current
+    val navEntryState by navEntryOwner.lifecycle.currentStateAsState()
+    val navEntryResumed = navEntryState.isAtLeast(Lifecycle.State.RESUMED)
+    var confirmExitOpen by remember { mutableStateOf(false) }
+    val requestExit: () -> Unit = {
+        if (viewModel.hasUnsavedChanges) confirmExitOpen = true else onBack()
+    }
+    BackHandler(enabled = navEntryResumed) { requestExit() }
     // v1.10.0 audit S1+U2 — prompt permission ACCESS_FINE_LOCATION quand
     // l'user active "Inclure la position". Sans ça, le switch ON sans
     // permission = SMS sans coordonnées en cas d'urgence (faux sentiment
@@ -93,6 +123,12 @@ fun EmergencySetupScreen(
             // v1.10.0 audit C2 — `when` exhaustif (le compilateur signale
             // tout nouveau case ajouté à Event).
             when (event) {
+                // v1.27.2 — l'interrupteur a éteint sur-le-champ. On le confirme sans fermer
+                // l'écran : la personne est peut-être en train d'ajuster d'autres réglages, et
+                // rien ne reste à valider pour cette action-là.
+                is EmergencyViewModel.Event.DisabledImmediately -> {
+                    snackbarHost.showSnackbar(emergencyDisabledMsg)
+                }
                 is EmergencyViewModel.Event.Saved -> {
                     // v1.27.2 — le message nomme ce qui vient de se passer. Il affichait
                     // jusqu'ici le libellé du BOUTON (`action_save`), qui ne disait pas si le
@@ -110,12 +146,33 @@ fun EmergencySetupScreen(
         }
     }
 
+    if (confirmExitOpen) {
+        AlertDialog(
+            onDismissRequest = { confirmExitOpen = false },
+            title = { Text(stringResource(R.string.safety_call_setup_unsaved_title)) },
+            text = { Text(stringResource(R.string.emergency_setup_unsaved_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmExitOpen = false
+                    // `save` emet `Saved`, dont l observateur appelle deja `onBack()`.
+                    viewModel.save()
+                }) { Text(stringResource(R.string.safety_call_setup_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    confirmExitOpen = false
+                    onBack()
+                }) { Text(stringResource(R.string.action_discard)) }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.emergency_setup_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = requestExit) {
                         Icon(
                             Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = stringResource(R.string.action_back),
@@ -151,6 +208,45 @@ fun EmergencySetupScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // v1.27.2 — indicateur d'état, calqué sur celui du Safety call.
+                        //
+                        // ⚠️ Il est lu depuis l'état RÉELLEMENT ENREGISTRÉ, jamais depuis la
+                        // position de l'interrupteur : celui-ci n'est qu'une intention tant que
+                        // l'activation n'a pas été validée, et un indicateur qui le suivrait
+                        // mentirait exactement comme lui. C'est la leçon du Safety call.
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = stringResource(R.string.safety_call_setup_state_label),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (savedEnabled) {
+                                    stringResource(R.string.safety_call_setup_state_on)
+                                } else {
+                                    stringResource(R.string.safety_call_setup_state_off)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (savedEnabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                            )
+                        }
+                        // L'interrupteur éteint immédiatement ; il n'allume qu'au moment
+                        // d'enregistrer. On nomme donc l'écart plutôt que de le laisser deviner.
+                        if (draft.enabled && !savedEnabled) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.safety_call_setup_state_unsaved),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
                     Switch(
                         checked = draft.enabled,

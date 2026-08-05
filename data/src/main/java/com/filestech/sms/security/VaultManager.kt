@@ -7,6 +7,7 @@ import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.vault.VaultMover
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -69,6 +70,22 @@ class VaultManager @Inject constructor(
     // L'API publique ci-dessous est inchangée : aucun appelant n'est touché.
 
     val isVaultUnlockedInSession: Boolean get() = session.isUnlocked
+
+    /**
+     * v1.27.2 — le même état, mais **observable**.
+     *
+     * Constaté sur appareil le 2026-08-05 : le Coffre ouvert, l'application passée en
+     * arrière-plan puis rouverte, l'écran affichait **« le coffre est vide »**. Le contenu était
+     * bien protégé — `observeVault` rend une liste vide dès que la session est fermée, et les
+     * données sont intactes en base — mais l'écran, lui, gardait un état déverrouillé **local**
+     * figé par un `remember`, lu une seule fois à l'entrée.
+     *
+     * Il croyait donc être encore ouvert, recevait une liste vide, et annonçait un coffre vide au
+     * lieu de redemander le second facteur. La garde était sur l'accès, l'affichage mentait — et
+     * il mentait dans le sens le plus inquiétant qui soit pour l'utilisateur : celui de la perte
+     * de données.
+     */
+    val unlockedInSession: StateFlow<Boolean> get() = session.unlocked
 
     /** Marks the vault as opened for this app session. Caller must already be authenticated. */
     fun markUnlocked() { session.markUnlocked() }

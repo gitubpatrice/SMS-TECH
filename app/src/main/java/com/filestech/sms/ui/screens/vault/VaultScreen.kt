@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -139,6 +140,13 @@ class VaultViewModel @Inject constructor(
      * attendu.
      */
     fun isVaultSessionUnlocked(): Boolean = vault.isVaultUnlockedInSession
+
+    /**
+     * v1.27.2 — la session du Coffre, **observable**. Voir [VaultManager.unlockedInSession] pour
+     * le défaut que ça ferme : l'écran gardait un état déverrouillé figé et annonçait « le coffre
+     * est vide » au lieu de redemander le second facteur.
+     */
+    val vaultSessionOpen: StateFlow<Boolean> = vault.unlockedInSession
 
     /**
      * v1.14.0 — verrouille explicitement le coffre. Appelé à chaque sortie
@@ -323,6 +331,35 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // coffre (aucun code coffre configuré) et elle est indisponible. On ne peut donc pas
     // authentifier : on l'explique au lieu d'ouvrir. Cf. l'effet d'entrée plus bas.
     var biometricUnavailable by remember { mutableStateOf(false) }
+
+    // v1.27.2 — 🔴 « LE COFFRE EST VIDE » ALORS QU'IL NE L'ÉTAIT PAS.
+    //
+    // Constaté sur appareil par Patrice le 2026-08-05 : Coffre ouvert, application mise en
+    // arrière-plan, retour — l'écran annonçait un coffre vide.
+    //
+    // `unlocked` ci-dessus est lu **une seule fois**, à la composition. Quand la session se ferme
+    // en arrière-plan — ce que fait `lockVaultOnLeave`, actif par défaut — cet écran ne le voyait
+    // pas : il se croyait encore déverrouillé, recevait de `observeVault` la liste vide que la
+    // garde d'accès rend justement dans ce cas, et concluait « vide ».
+    //
+    // Le contenu était donc bien protégé, et les données intactes en base. Mais l'affichage
+    // mentait, et dans le sens le plus inquiétant qui soit : celui de la perte de données.
+    //
+    // On suit désormais la session. `wasOpen` évite de sortir dès la première composition, avant
+    // que le second facteur n'ait eu le temps d'ouvrir la session : seule une transition
+    // ouvert → fermé fait sortir.
+    val sessionOpen by viewModel.vaultSessionOpen.collectAsStateWithLifecycle()
+    var wasOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(sessionOpen) {
+        if (sessionOpen) {
+            wasOpen = true
+        } else if (wasOpen) {
+            // La session a été fermée sous nos pieds. On ne montre rien et on sort : rentrer dans
+            // le Coffre redemandera le second facteur, ce qui est la vérité de l'état.
+            unlocked = null
+            onBack()
+        }
+    }
     val ctx = LocalContext.current
 
     // v1.13.0 — si le PIN/pass distinct coffre est ON, on attend la validation
