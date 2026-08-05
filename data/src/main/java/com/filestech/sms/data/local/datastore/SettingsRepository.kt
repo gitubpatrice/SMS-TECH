@@ -325,6 +325,7 @@ class SettingsRepository @Inject constructor(
                 isDefaultSmsApp = p[K.isDefault] ?: false,
                 mmsRoamingAutoDownload = p[K.mmsRoaming] ?: false,
                 lastSyncedSmsId = p[K.lastSyncedSmsId] ?: 0L,
+                mmsImportCompleted = p[K.mmsImportCompleted] ?: false,
                 splashShown = p[K.splashShown] ?: false,
                 keepAliveService = p[K.keepAliveService] ?: false,
                 unreadResetV180 = p[K.unreadResetV180] ?: false,
@@ -444,6 +445,7 @@ class SettingsRepository @Inject constructor(
         this[K.isDefault] = s.advanced.isDefaultSmsApp
         this[K.mmsRoaming] = s.advanced.mmsRoamingAutoDownload
         this[K.lastSyncedSmsId] = s.advanced.lastSyncedSmsId
+        this[K.mmsImportCompleted] = s.advanced.mmsImportCompleted
         this[K.splashShown] = s.advanced.splashShown
         this[K.keepAliveService] = s.advanced.keepAliveService
         this[K.unreadResetV180] = s.advanced.unreadResetV180
@@ -576,6 +578,13 @@ class SettingsRepository @Inject constructor(
         // Bumped from a boolean ("didInitialSmsImport") to a long cursor: the latter encodes the
         // same first-run signal (0 vs > 0) AND tells the sync manager where to resume from.
         val lastSyncedSmsId = longPreferencesKey("advanced.lastSyncedSmsId")
+
+        /**
+         * v1.27.2 (audit Codex du 2026-08-05, P-10) — preuve PERSISTEE qu'un import MMS est alle
+         * jusqu'a sa derniere page. `hasAnyMms` ne prouvait qu'une chose : une page avait ete
+         * ecrite. Voir [com.filestech.sms.domain.settings.AdvancedSettings.mmsImportCompleted].
+         */
+        val mmsImportCompleted = booleanPreferencesKey("advanced.mmsImportCompleted")
         val splashShown = booleanPreferencesKey("advanced.splashShown")
         val keepAliveService = booleanPreferencesKey("advanced.keepAliveService")
         // v1.8.0 — flag one-shot pour la migration de purge des badges hérités v1.7.1.

@@ -120,16 +120,30 @@ class TelephonyReader @Inject constructor(
      * Uses a minimal projection (`_ID` only) so it stays cheap even on devices with 50 k messages.
      * Callers should still gate behind [snapshotSmsFingerprint] when possible — even a minimal
      * projection allocates 50 k `Long` boxes plus a `HashSet` of the same size.
+     *
+     * ⚠️ **v1.27.2 (audit Codex du 2026-08-05, P-09) — `null` ≠ tableau vide.**
+     *
+     * La signature rendait `LongArray` et repliait sur un tableau vide quand le `ContentResolver`
+     * rendait un curseur `null` — fournisseur indisponible, permission retirée en cours de route.
+     * L'appelant ne pouvait donc PAS distinguer « le système n'a plus aucun SMS » d'« on n'a rien
+     * pu lire », alors que le premier autorise une suppression et le second l'interdit
+     * absolument. C'est le motif du **repli qui échoue du mauvais côté**, sur le seul chemin de
+     * l'application qui efface des messages.
+     *
+     * Désormais : `null` = lecture impossible, tableau vide = fournisseur réellement vide. Une
+     * exception (`SecurityException`…) continue de remonter à l'appelant, qui ne supprime alors
+     * rien non plus.
      */
-    fun readAllSmsIds(): LongArray {
-        val ids = ArrayList<Long>(1024)
-        resolver.query(
+    fun readAllSmsIds(): LongArray? {
+        val cursor = resolver.query(
             Telephony.Sms.CONTENT_URI,
             arrayOf(Telephony.Sms._ID),
             null,
             null,
             null,
-        )?.use { c ->
+        ) ?: return null
+        val ids = ArrayList<Long>(1024)
+        cursor.use { c ->
             val idx = c.getColumnIndexOrThrow(Telephony.Sms._ID)
             while (c.moveToNext()) ids += c.getLong(idx)
         }

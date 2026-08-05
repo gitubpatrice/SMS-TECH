@@ -216,6 +216,42 @@ data class SafetyCallConfig(
     val isTriggered: Boolean get() = triggeredAt > 0L
 
     /**
+     * v1.27.2 (audit Codex du 2026-08-05, P-06) — un envoi est **en vol** : le créneau est réservé,
+     * l'envoi n'est pas encore conclu.
+     */
+    val isSendInFlight: Boolean get() = claimedAt != 0L
+
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, P-06) — nombre de messages dont l'envoi est **conclu**,
+     * c'est-à-dire dont au moins une remise a réussi *et* a été persistée.
+     *
+     * # Le défaut que ce dérivé ferme
+     *
+     * [messagesSent] compte les créneaux **réservés**. La réservation est écrite AVANT le premier
+     * `SmsManager.send`, et c'est délibéré — c'est elle qui empêche deux workers d'envoyer le même
+     * message. Mais la notification lisait ce compteur et annonçait « alerte envoyée, 1 message
+     * sur 4 » **à un instant où aucun SMS n'était parti**. Si tous les envois échouaient, le
+     * créneau était rendu et la notification disparaissait ; si le processus mourait entre les
+     * deux, l'affirmation fausse restait affichée jusqu'à la reprise du bail.
+     *
+     * Sur une fonction de sécurité personnelle, faire croire que les proches sont prévenus alors
+     * que rien n'est parti est le pire retour possible.
+     *
+     * # Pourquoi un dérivé suffit, sans champ persisté de plus
+     *
+     * Un bail ne couvre **qu'un seul** créneau : celui qui vient d'être réservé. Les trois
+     * transitions le maintiennent :
+     *  - réservation → `messagesSent + 1` **et** `claimedAt = now` ;
+     *  - conclusion → `claimedAt = 0`, compteur inchangé ;
+     *  - restitution / reprise → compteur ramené en arrière **et** `claimedAt = 0`.
+     *
+     * Donc `messagesSent − (bail ? 1 : 0)` est exactement le nombre d'envois conclus, sans
+     * sixième champ à câbler aux trois endroits de la sérialisation DataStore.
+     */
+    val messagesDelivered: Int
+        get() = (messagesSent - if (isSendInFlight) 1 else 0).coerceAtLeast(0)
+
+    /**
      * v1.27.2 — `true` si un créneau a été réservé mais jamais conclu, et que le bail a expiré.
      * Le processus a donc été tué entre la réservation et la fin de l'envoi.
      */
@@ -389,9 +425,15 @@ data class SafetyCallConfig(
         /**
          * v1.27.2 — durée de validité du bail posé sur un créneau réservé. Voir [claimedAt].
          *
-         * Deux minutes : assez long pour qu'un envoi vers quatre contacts aboutisse sur un réseau
-         * lent sans qu'un tick concurrent ne reprenne le créneau, assez court pour qu'un processus
-         * tué ne fasse pas perdre le message initial plus longtemps.
+         * ⚠️ **Ce seuil mesure la progression, pas l'ancienneté** (audit Codex du 2026-08-05,
+         * P-04). Le bail est **renouvelé entre deux contacts** par
+         * `TriggerSafetyCallUseCase.renewClaim` : deux minutes comptent donc depuis le dernier
+         * contact traité, jamais depuis le début de la boucle. Un propriétaire vivant mais lent ne
+         * se fait plus reprendre son créneau ; un processus mort, si.
+         *
+         * Deux minutes : assez long pour qu'un envoi vers un contact aboutisse sur un réseau lent
+         * sans qu'un tick concurrent ne reprenne le créneau, assez court pour qu'un processus tué
+         * ne fasse pas perdre le message initial plus longtemps.
          */
         const val CLAIM_LEASE_MS: Long = 2 * 60 * 1000L
 

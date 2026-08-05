@@ -12,7 +12,6 @@ import androidx.work.WorkerParameters
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.usecase.TriggerSafetyCallUseCase
 import com.filestech.sms.security.AppLockManager
-import com.filestech.sms.system.notifications.SafetyCallWarningNotifier
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -28,17 +27,21 @@ import java.util.concurrent.TimeUnit
  *     coût négligeable d'un tick par heure).
  *  3. Si `isExpired()` → délègue à [TriggerSafetyCallUseCase]
  *     qui envoie les SMS aux contacts et désactive la config.
- *  4. Sinon, si `isInWarningWindow()` (6h avant expiration) → pose une
- *     notification persistante "Confirme que tu vas bien" via
- *     [SafetyCallWarningNotifier]. Tap notif = reset timer.
- *  5. Sinon, hors fenêtre : annule toute notif warning éventuellement
- *     présente (cas où l'user a reset depuis dehors et la notif traîne).
+ *  4. Sinon, rien : il **n'affiche plus aucune notification**.
  *
- * **Granularité 60 min** : compromis entre précision et batterie. Un trigger
- * peut donc se déclencher avec jusqu'à 60 min de retard sur le seuil exact
- * (acceptable pour des durées ≥ 24h). Pour la fenêtre de warning, ça veut
- * dire que la notif peut apparaître entre 6h et 5h avant expiration —
- * largement assez pour que l'user voie et reset.
+ * ⚠️ **v1.27.2 (audit Codex du 2026-08-05, P-05) — ce worker n'est plus un afficheur.**
+ * L'avertissement de pré-déclenchement comme le suivi de séquence appartiennent au réconciliateur
+ * unique de [com.filestech.sms.MainApplication], qui décide sur trois états exclusifs via
+ * [com.filestech.sms.domain.safetycall.SafetyCallNotice]. Deux écrivains sans état commun
+ * laissaient les deux notifications coexister, et l'avertissement survivait à l'entrée en mode
+ * leurre.
+ *
+ * Le jalon monotone écrit à chaque tick suffit à réveiller ce réconciliateur : c'est cette écriture
+ * qui fait descendre le compte à rebours affiché.
+ *
+ * **Granularité 60 min** : compromis entre précision et batterie, désormais doublé par le réveil à
+ * l'échéance de [SafetyCallAlarmScheduler]. Ce tick reste le filet — les alarmes ne survivent pas à
+ * un redémarrage, et certains OEM les effacent à la fermeture forcée.
  *
  * **Idempotence** : `KEEP` policy au schedule — si le worker est déjà
  * schedulé, on garde l'existant (évite reset du compteur de période à
@@ -50,7 +53,6 @@ class SafetyCallWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val settings: SettingsRepository,
     private val triggerSafetyCall: TriggerSafetyCallUseCase,
-    private val warningNotifier: SafetyCallWarningNotifier,
     private val appLock: AppLockManager,
 ) : CoroutineWorker(appContext, params) {
 
@@ -63,7 +65,11 @@ class SafetyCallWorker @AssistedInject constructor(
             // par d'autres chemins).
             if (appLock.state.value is AppLockManager.LockState.PanicDecoy) {
                 Timber.i("SafetyCallWorker: PanicDecoy active, suppressing tick")
-                warningNotifier.dismiss()
+                // v1.27.2 (audit Codex du 2026-08-05, P-05) — plus aucun retrait de notification
+                // ici : le réconciliateur unique de `MainApplication` observe déjà `appLock.state`
+                // et retire LES DEUX notifications à l'entrée en mode leurre. Le worker n'en
+                // retirait qu'une, et l'autre survivait à la session sous contrainte.
+                //
                 // v1.27.2 (relecture Gemini du 2026-08-05) — l'alarme d'échéance vient peut-être
                 // d'être CONSOMMÉE par ce tick supprimé. Sans ce rappel, on retomberait sur le
                 // tick horaire — donc sur le défaut que ce lot corrige — juste après une session
@@ -100,7 +106,6 @@ class SafetyCallWorker @AssistedInject constructor(
             val currentBeforeCheckpoint = settings.flow.first().security.safetyCall
             if (!currentBeforeCheckpoint.enabled) {
                 Timber.d("SafetyCallWorker: disabled, skipping tick")
-                warningNotifier.dismiss()
                 return Result.success()
             }
             // v1.27.2 (audit externe Gemini 2026-08-04) — JALON du temps monotone.
@@ -167,21 +172,20 @@ class SafetyCallWorker @AssistedInject constructor(
                     Timber.i("SafetyCallWorker: timer expired, delegating to trigger use case")
                     reflectSequence(triggerSafetyCall())
                 }
-                current.isInWarningWindow() -> {
-                    val msToExpiry = (current.lastActivityAt + current.timeoutMs) -
-                        System.currentTimeMillis()
-                    Timber.i(
-                        "SafetyCallWorker: in warning window (%d min before expiry)",
-                        msToExpiry / 60_000L,
-                    )
-                    warningNotifier.showWarning(msToExpiryMs = msToExpiry)
-                }
-                else -> {
-                    // Hors fenêtre de warning : on s'assure qu'aucune notif
-                    // résiduelle ne traîne (cas où l'user a reset depuis
-                    // ailleurs et le badge système est encore présent).
-                    warningNotifier.dismiss()
-                }
+                // v1.27.2 (audit Codex du 2026-08-05, P-05) — CE WORKER N'AFFICHE PLUS RIEN.
+                //
+                // Il posait ici l'avertissement de pré-déclenchement et le retirait dans l'`else`.
+                // Deux écrivains pour deux notifications, sans état commun : à l'expiration, la
+                // branche d'envoi ci-dessus ne retirait jamais l'avertissement, et le
+                // réconciliateur publiait la séquence à côté. 🔴 En entrant en mode leurre, seule
+                // la séquence disparaissait — l'avertissement, lui, révélait durablement à
+                // l'agresseur qu'une fonction d'alerte existait.
+                //
+                // L'affichage appartient désormais en entier au réconciliateur unique de
+                // `MainApplication`, qui décide via [SafetyCallNotice.decide] sur trois états
+                // exclusifs. Le jalon monotone écrit plus haut suffit à le réveiller : c'est cette
+                // écriture qui fait descendre le compte à rebours affiché, à chaque tick.
+                else -> Timber.d("SafetyCallWorker: rien a declencher a ce tick")
             }
             Result.success()
         } catch (t: Throwable) {

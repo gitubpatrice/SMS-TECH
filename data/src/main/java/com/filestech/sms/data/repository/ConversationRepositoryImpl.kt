@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.filestech.sms.core.ext.blockKey
+import com.filestech.sms.core.ext.phoneAddressesMatch
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.core.result.AppError
@@ -445,9 +446,13 @@ class ConversationRepositoryImpl @Inject constructor(
             ) {
                 return null
             }
+            // v1.27.2 (audit Codex du 2026-08-05, P-11) — le seau `blockKey` ne suffit pas :
+            // `+33 6 12 34 56 78` et `+1 561 234 5678` rendent la même clé de neuf chiffres, et le
+            // repli ouvrait alors la conversation du premier pour un message destiné au second.
+            // [phoneAddressesMatch] ajoute la désambiguïsation par indicatif pays.
             return oneToOne.firstOrNull { conv ->
-                PhoneAddress.list(conv.addressesCsv).firstOrNull()
-                    ?.raw?.stripMmsAddressSuffix()?.blockKey() == targetKey
+                val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
+                convRaw != null && phoneAddressesMatch(convRaw, target.raw)
             }
         }
     }

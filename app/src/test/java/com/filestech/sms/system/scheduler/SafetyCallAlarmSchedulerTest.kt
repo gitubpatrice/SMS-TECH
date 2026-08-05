@@ -163,6 +163,55 @@ class SafetyCallAlarmSchedulerTest {
             .isLessThan(deadline + SafetyCallConfig.RELANCE_INTERVAL_MS)
     }
 
+    /**
+     * 🔴 **P-03 (audit Codex du 2026-08-05) — l'arrondi allait VERS LE PASSÉ.**
+     *
+     * La quantification s'écrivait `at / 1000 * 1000`. Une échéance à `T = …999 ms` était donc
+     * programmée à `T − 999 ms`. Le système garantit de ne pas livrer avant l'instant demandé, mais
+     * l'instant demandé était **déjà antérieur à l'échéance métier** : livrée dans cet intervalle,
+     * l'alarme réveillait un worker qui ne trouvait rien à faire et rendait `success()`.
+     *
+     * L'alarme était alors **consommée sans rien produire**, et rien ne la reposait : le collecteur
+     * recalcule la même valeur quantifiée et `distinctUntilChanged` supprime l'émission. La
+     * ponctualité retombait sur le tick horaire — jusqu'à une heure plus tard.
+     *
+     * Une seconde de trop ne coûte rien ; une milliseconde de moins coûtait une heure.
+     */
+    @Test
+    fun `une echeance non alignee est arrondie vers le futur, jamais vers le passe`() {
+        val offset = 999L
+        val cfg = armed().copy(
+            lastActivityAt = ARMED_AT + offset,
+            monotonicLastActivityAt = MONO_AT + offset,
+        )
+        val deadline = ARMED_AT + offset + TIMEOUT
+
+        val at = SafetyCallAlarmScheduler.nextWakeUpAt(
+            cfg,
+            nowMs = ARMED_AT + offset + ONE_HOUR,
+            nowMonoMs = MONO_AT + offset + ONE_HOUR,
+        )
+
+        // LE POINT : le réveil ne peut PAS tomber avant l'échéance réelle.
+        assertThat(at).isNotNull()
+        assertThat(at!!).isAtLeast(deadline)
+        // Arrondi à la seconde SUPÉRIEURE : …999 → la seconde suivante, soit 1 ms plus tard.
+        assertThat(at).isEqualTo(deadline + 1L)
+        // Non-vacuité : l'ancien arrondi vers le bas serait tombé 999 ms AVANT l'échéance.
+        assertThat(deadline / 1_000L * 1_000L).isLessThan(deadline)
+    }
+
+    /** Une échéance déjà alignée à la seconde n'est pas déplacée par l'arrondi. */
+    @Test
+    fun `une echeance alignee a la seconde n est pas deplacee`() {
+        val at = SafetyCallAlarmScheduler.nextWakeUpAt(
+            armed(),
+            nowMs = ARMED_AT + ONE_HOUR,
+            nowMonoMs = MONO_AT + ONE_HOUR,
+        )
+        assertThat(at).isEqualTo(ARMED_AT + TIMEOUT)
+    }
+
     @Test
     fun `un deadman desactive n arme aucun reveil`() {
         assertThat(

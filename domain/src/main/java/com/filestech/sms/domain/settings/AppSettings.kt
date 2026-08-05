@@ -324,6 +324,31 @@ data class AdvancedSettings(
      */
     val lastSyncedSmsId: Long = 0L,
     /**
+     * v1.27.2 (audit Codex du 2026-08-05, P-10) — `true` une fois qu'un import MMS a été mené
+     * **jusqu'à sa dernière page**.
+     *
+     * # Le défaut que ce marqueur ferme
+     *
+     * L'import MMS se déclenchait sur `isFirstRun || !hasAnyMms`, c'est-à-dire sur une preuve
+     * indirecte : « la base contient au moins un MMS ». Or il écrit **page par page**. Une
+     * exception après la première page laissait donc :
+     *  - `hasAnyMms = true` — grâce à cette seule page ;
+     *  - `isFirstRun = false` dès que le curseur SMS avançait, ce qui suit immédiatement.
+     *
+     * `needsMmsImport` devenait faux et **les pages restantes n'étaient jamais relues**.
+     * L'historique MMS restait durablement amputé : les messages sont toujours dans le
+     * fournisseur Android, mais l'application ne les réimportait plus sans remise à zéro externe.
+     *
+     * Le marqueur est posé **après** la dernière page, jamais avant. Une interruption — annulation
+     * comprise — le laisse à `false`, et la passe suivante rejoue l'import en entier. C'est sans
+     * risque : l'insertion est idempotente (`telephony_uri` UNIQUE + `IGNORE`).
+     *
+     * ⚠️ Les installations existantes n'ont pas ce marqueur : elles rejouent donc **une** passe
+     * complète de validation au prochain démarrage. C'est exactement le rattrapage voulu pour
+     * celles dont l'import s'était interrompu sans que rien ne le signale.
+     */
+    val mmsImportCompleted: Boolean = false,
+    /**
      * v1.3.7 — `true` une fois que le splash de présentation a été vu (à la première
      * ouverture après install). Tant que `false`, l'ouverture de l'app passe par
      * [com.filestech.sms.ui.screens.splash.SplashScreen] (logo scale+fade + tagline,

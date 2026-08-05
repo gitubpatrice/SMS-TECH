@@ -11,7 +11,7 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.sync.TelephonySyncManager
 import com.filestech.sms.di.ApplicationScope
-import com.filestech.sms.domain.safetycall.SafetyCallConfig
+import com.filestech.sms.domain.safetycall.SafetyCallNotice
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
 import com.filestech.sms.system.notifications.NotificationChannelInitializer
@@ -232,48 +232,47 @@ class MainApplication : Application(), Configuration.Provider {
                 }
         }
 
-        // v1.27.2 (audit Codex du 2026-08-05, C-07 / C-08) — RÉCONCILIATION UNIQUE de la
-        // notification de séquence, sur le couple (configuration persistée, état du verrou).
+        // v1.27.2 (audit Codex du 2026-08-05, C-07 / C-08 puis P-05 / P-06) — RÉCONCILIATION
+        // UNIQUE des DEUX notifications du Safety call, sur le couple (configuration persistée,
+        // état du verrou).
         //
-        // Elle annonce « alerte envoyée, N messages sur M à vos proches ». Deux écrivains se la
-        // disputaient — ce worker et cet observateur — sans état commun, d'où deux trous
-        // symétriques :
+        // Elles étaient trois à écrire ici sans état commun — le worker pour l'avertissement de
+        // pré-déclenchement, le worker encore pour la séquence, cet observateur pour la séquence —
+        // et chaque trou venait de là :
         //
-        //  - le worker la REPUBLIAIT après coup alors que l'application venait d'entrer en mode
-        //    leurre : sous contrainte, l'agresseur voyait réapparaître qu'un réseau de soutien
+        //  - le worker REPUBLIAIT la séquence après coup alors que l'application venait d'entrer en
+        //    mode leurre : sous contrainte, l'agresseur voyait réapparaître qu'un réseau de soutien
         //    avait été prévenu, et plus rien ne venait l'effacer ;
         //  - à l'inverse, un processus tué entre le dernier envoi et le retrait laissait une
-        //    notification « alerte en cours » que personne ne réconciliait au redémarrage.
+        //    notification « alerte en cours » que personne ne réconciliait au redémarrage ;
+        //  - 🔴 et surtout, l'avertissement n'était JAMAIS retiré au déclenchement. Les deux
+        //    notifications restaient affichées côte à côte, et l'avertissement **survivait à
+        //    l'entrée en mode leurre** — il révélait à qui tenait le téléphone qu'une fonction
+        //    d'alerte existait et courait.
         //
         // Un seul propriétaire, donc, qui décide sur l'état réel plutôt que sur l'enchaînement des
         // évènements. Il se rejoue à chaque changement de configuration, à chaque changement de
         // verrou, et **à chaque démarrage à froid** — ce qui ferme aussi le cas du processus tué.
         //
-        // La condition d'affichage inclut `claimedAt != 0L` : sur le tout dernier créneau,
-        // `hasRelancePending` devient faux dès la réservation, et la notification aurait disparu
-        // pendant l'envoi du dernier message.
+        // ⚠️ La décision elle-même vit dans le domaine ([SafetyCallNotice.decide]), pas ici. Elle
+        // était intestable à cet endroit, et c'est précisément pour ça que les trois défauts
+        // ci-dessus sont passés.
         appScope.launch {
             combine(
                 settingsRepository.flow.map { it.security.safetyCall },
                 appLock.state.map { it is AppLockManager.LockState.PanicDecoy },
             ) { cfg, isDecoy ->
-                val sequenceRunning = cfg.enabled &&
-                    cfg.isTriggered &&
-                    (cfg.hasRelancePending || cfg.claimedAt != 0L)
-                if (isDecoy || !sequenceRunning) null else cfg.messagesSent
+                SafetyCallNotice.decide(
+                    cfg = cfg,
+                    isDecoy = isDecoy,
+                    nowMs = System.currentTimeMillis(),
+                    nowMonoMs = SystemClock.elapsedRealtime(),
+                )
             }
                 .distinctUntilChanged()
-                .collect { sent ->
-                    runCatching {
-                        if (sent == null) {
-                            safetyCallWarningNotifier.dismissSequence()
-                        } else {
-                            safetyCallWarningNotifier.showSequenceActive(
-                                sent,
-                                SafetyCallConfig.TOTAL_MESSAGES,
-                            )
-                        }
-                    }.onFailure { Timber.w(it, "SafetyCall: reconciliation notification echouee") }
+                .collect { notice ->
+                    runCatching { safetyCallWarningNotifier.reconcile(notice) }
+                        .onFailure { Timber.w(it, "SafetyCall: reconciliation notification echouee") }
                 }
         }
 

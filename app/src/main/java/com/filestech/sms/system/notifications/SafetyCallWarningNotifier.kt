@@ -12,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
+import com.filestech.sms.domain.safetycall.SafetyCallNotice
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -50,19 +51,63 @@ class SafetyCallWarningNotifier @Inject constructor(
 ) {
 
     /**
+     * v1.27.2 (audit Codex du 2026-08-05, P-05) — **le seul point d'entrée** de l'affichage du
+     * Safety call.
+     *
+     * # Le défaut que ce point unique ferme
+     *
+     * Les deux notifications — avertissement de pré-déclenchement et suivi de séquence — portaient
+     * des identifiants distincts et personne ne possédait les deux. À l'expiration, la branche
+     * d'envoi ne retirait jamais l'avertissement : la séquence se publiait à côté, et les deux
+     * restaient affichées. `isInWarningWindow` devenant faux n'y changeait rien — c'est un
+     * prédicat, pas un effet de retrait.
+     *
+     * 🔴 Pire : à l'entrée en **mode leurre**, seule la séquence était retirée. L'avertissement
+     * survivait à la session sous contrainte et révélait à l'agresseur qu'une fonction d'alerte
+     * existait — exactement ce que le mode leurre doit rendre invisible.
+     *
+     * # L'ordre des opérations n'est pas négociable
+     *
+     * On **retire d'abord**, on publie ensuite. L'inverse laisserait une fraction de seconde avec
+     * les deux notifications à l'écran, ce qui rouvrirait le défaut.
+     *
+     * Les deux publications partagent volontairement le **même code de requête** de
+     * [PendingIntent] : il n'existe donc qu'un seul intent vivant à la fois, porteur du nonce
+     * courant. Leur donner des codes distincts recréerait deux intents dont l'un serait invalidé
+     * par la rotation du nonce de l'autre — le tap de la notification affichée ne réinitialiserait
+     * alors plus rien.
+     */
+    fun reconcile(notice: SafetyCallNotice) {
+        when (notice) {
+            SafetyCallNotice.None -> {
+                dismissWarning()
+                dismissSequence()
+            }
+            is SafetyCallNotice.Warning -> {
+                dismissSequence()
+                showWarning(notice.hoursLeft)
+            }
+            is SafetyCallNotice.Sequence -> {
+                dismissWarning()
+                showSequence(notice.delivered, notice.total, notice.inFlight)
+            }
+        }
+    }
+
+    /**
      * Affiche / met à jour la notification de warning. Idempotent : si la
      * notif existe déjà, elle est mise à jour avec le nouveau texte (compte
      * à rebours en heures).
      *
-     * @param msToExpiryMs millisecondes restantes avant trigger automatique.
-     *   Utilisé pour afficher "Plus que ~5h" dans le texte de la notif.
+     * @param hoursLeft heures restantes avant trigger automatique, déjà arrondies par
+     *   [SafetyCallNotice.decide] — c'est la seule granularité que la notification affiche, et
+     *   c'est sur elle que le réconciliateur déduplique.
      */
-    fun showWarning(msToExpiryMs: Long) {
+    private fun showWarning(hoursLeft: Int) {
         if (!hasPostPermission()) {
             Timber.w("SafetyCallWarningNotifier: POST_NOTIFICATIONS not granted, skipping warning")
             return
         }
-        val hoursLeft = (msToExpiryMs / 3_600_000L).coerceAtLeast(0L).toInt()
         val title = context.getString(R.string.safety_call_warning_title)
         val body = if (hoursLeft >= 2) {
             context.getString(R.string.safety_call_warning_body_hours, hoursLeft)
@@ -121,13 +166,21 @@ class SafetyCallWarningNotifier @Inject constructor(
      * ([ACTION_SAFETY_CALL_RESET], nonce compris) qui, depuis l'audit Codex, désactive le deadman
      * et clôt la séquence quand l'alerte est déjà partie.
      *
-     * Même identifiant de notification que l'avertissement : elle le **remplace** proprement, sans
-     * jamais laisser les deux cohabiter.
-     *
      * ⚠️ Rien n'y révèle l'identité des contacts, et le canal reste `PRIVATE` : sous contrainte, la
      * notification dit qu'une alerte est partie, jamais à qui.
+     *
+     * # v1.27.2 (audit Codex du 2026-08-05, P-06) — elle n'annonce plus un envoi qui n'a pas eu lieu
+     *
+     * Elle lisait `messagesSent`, qui compte les créneaux **réservés**. Or la réservation est
+     * écrite avant le premier `SmsManager.send` — c'est elle qui empêche deux workers d'envoyer le
+     * même message. La notification affirmait donc « alerte envoyée, 1 message sur 4 » à un instant
+     * où **rien n'était parti**, et cette affirmation survivait à une mort du processus.
+     *
+     * [delivered] ne compte désormais que les envois **conclus**. Tant qu'il vaut zéro, le texte
+     * dit « envoi en cours » et n'affirme rien. Faire croire à quelqu'un que ses proches sont
+     * prévenus alors que rien n'est parti est le pire retour possible sur une fonction de sécurité.
      */
-    fun showSequenceActive(messagesSent: Int, totalMessages: Int) {
+    private fun showSequence(delivered: Int, totalMessages: Int, inFlight: Boolean) {
         if (!hasPostPermission()) {
             Timber.w("SafetyCallWarningNotifier: POST_NOTIFICATIONS not granted, skipping sequence")
             return
@@ -142,17 +195,24 @@ class SafetyCallWarningNotifier @Inject constructor(
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val body = context.getString(
-            R.string.safety_call_sequence_body,
-            messagesSent,
-            totalMessages,
-        )
+        // Rien de conclu : on décrit ce qui se passe réellement, sans rien affirmer.
+        val sending = delivered == 0
+        val title = if (sending) {
+            R.string.safety_call_sequence_title_sending
+        } else {
+            R.string.safety_call_sequence_title
+        }
+        val body = if (sending) {
+            context.getString(R.string.safety_call_sequence_body_sending)
+        } else {
+            context.getString(R.string.safety_call_sequence_body, delivered, totalMessages)
+        }
         val notif = NotificationCompat.Builder(
             context,
             NotificationChannelInitializer.CHANNEL_SAFETY_CALL_WARNING,
         )
             .setSmallIcon(R.drawable.ic_notification_message)
-            .setContentTitle(context.getString(R.string.safety_call_sequence_title))
+            .setContentTitle(context.getString(title))
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setOngoing(true)
@@ -165,18 +225,18 @@ class SafetyCallWarningNotifier @Inject constructor(
         @android.annotation.SuppressLint("MissingPermission")
         NotificationManagerCompat.from(context).notify(NOTIF_ID_SEQUENCE, notif)
         Timber.i(
-            "SafetyCallWarningNotifier: posted sequence notice (%d/%d)",
-            messagesSent,
+            "SafetyCallWarningNotifier: posted sequence notice (%d/%d, enVol=%s)",
+            delivered,
             totalMessages,
+            inFlight,
         )
     }
 
     /**
-     * Annule la notification de warning si présente. Safe à appeler même si
-     * pas de notif active. Appelé par le worker quand l'user a reset le
-     * timer (hors fenêtre de warning) ou quand le trigger a été exécuté.
+     * Annule la notification d'avertissement si présente. Safe à appeler même si aucune notif n'est
+     * active.
      */
-    fun dismiss() {
+    private fun dismissWarning() {
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)
             ?.cancel(NOTIF_ID_DEADMAN_WARNING)
     }
@@ -186,12 +246,10 @@ class SafetyCallWarningNotifier @Inject constructor(
      * l'avertissement de pre-declenchement.
      *
      * Les deux partageaient un identifiant, ce qui les faisait se remplacer l'une l'autre et
-     * obligeait un seul appelant a arbitrer entre elles. Separees, chacune a son proprietaire :
-     * l'avertissement au worker, la sequence au reconciliateur de `MainApplication`. Elles ne
-     * peuvent de toute facon pas coexister — `isInWarningWindow` rend `false` des que la
-     * sequence est ouverte.
+     * obligeait un seul appelant a arbitrer entre elles. Separees, elles ont un unique
+     * proprietaire — [reconcile] — qui garantit leur exclusion mutuelle.
      */
-    fun dismissSequence() {
+    private fun dismissSequence() {
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)
             ?.cancel(NOTIF_ID_SEQUENCE)
     }

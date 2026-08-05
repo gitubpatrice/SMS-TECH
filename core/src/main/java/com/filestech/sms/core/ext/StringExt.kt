@@ -129,6 +129,49 @@ fun String.blockKey(): String {
 }
 
 /**
+ * v1.27.2 (audit Codex du 2026-08-05, P-11) — deux écritures brutes désignent-elles le **même
+ * correspondant** ? La seule règle de rapprochement de conversation, des quatre côtés.
+ *
+ * # 🔴 Le défaut que ça ferme
+ *
+ * [blockKey] retient les neuf derniers chiffres. C'est ce qu'il faut pour réunir les deux écritures
+ * d'un même numéro français — `06 12 34 56 78` composé, `+33612345678` stocké — mais neuf chiffres
+ * ne portent aucune information de pays :
+ *
+ * ```
+ * "+33 6 12 34 56 78"  →  612345678
+ * "+1 561 234 5678"    →  612345678     ← MÊME CLÉ, DEUX PERSONNES
+ * ```
+ *
+ * Quand l'égalité stricte du CSV échouait, le repli prenait **la première conversation portant
+ * cette clé**. Composer vers le numéro américain pouvait donc ouvrir la conversation française, et
+ * le message rédigé partait au mauvais destinataire ; à l'import, les deux historiques
+ * fusionnaient, avec divulgation d'un message privé à la clé.
+ *
+ * # La règle
+ *
+ * Même seau ([blockKey]), **puis** désambiguïsation par l'indicatif : quand les **deux** écritures
+ * sont explicitement internationales — un `+` en tête — elles ne se rapprochent que si leurs
+ * chiffres sont identiques. Le suffixe n'a alors plus rien à désambiguïser : deux formes
+ * internationales du même numéro sont toujours la même suite de chiffres.
+ *
+ * Dès qu'une seule des deux est nationale ou ambiguë (`0612345678`, `612345678`), le suffixe
+ * reprend son rôle — c'est exactement le cas pour lequel il existe, et le seul où il est
+ * légitime.
+ *
+ * ⚠️ [stripMmsAddressSuffix] est appliqué ici, aux deux bords : l'en-tête `From:` d'un PDU porte
+ * `/TYPE=PLMN`, et [blockKey] bascule en mode alphanumérique dès qu'il voit une lettre. L'oublier
+ * d'un seul côté rend le rapprochement silencieusement inopérant — c'est déjà arrivé.
+ */
+fun phoneAddressesMatch(a: String, b: String): Boolean {
+    val rawA = a.stripMmsAddressSuffix().trim()
+    val rawB = b.stripMmsAddressSuffix().trim()
+    if (rawA.blockKey() != rawB.blockKey()) return false
+    if (!rawA.startsWith('+') || !rawB.startsWith('+')) return true
+    return rawA.filter { it.isDigit() } == rawB.filter { it.isDigit() }
+}
+
+/**
  * Avatar initials: first letter of first two words, uppercased. Falls back to '?'.
  */
 fun String.avatarInitials(maxChars: Int = 2): String {

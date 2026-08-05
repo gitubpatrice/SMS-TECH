@@ -121,7 +121,13 @@ class TriggerSafetyCallUseCase @Inject constructor(
             // Sequence terminee sans que le desarmement ait pu s ecrire - processus tue juste
             // apres le dernier envoi. On finit le travail plutot que de laisser un etat bancal.
             Timber.i("TriggerSafetyCallUseCase: relance sequence complete, disarming")
-            disableSafetyCall()
+            // v1.27.2 (audit Codex, P-02) — le rattrapage exige que la sequence soit TOUJOURS
+            // complete et sans bail au moment de l ecriture, pas seulement au moment de la lecture.
+            disableSafetyCall(current.generation) { cfg ->
+                cfg.isTriggered &&
+                    cfg.messagesSent >= SafetyCallConfig.TOTAL_MESSAGES &&
+                    cfg.claimedAt == 0L
+            }
             return@withContext Result.SequenceComplete
         }
         if (!isRelance && !current.isExpired()) {
@@ -137,17 +143,17 @@ class TriggerSafetyCallUseCase @Inject constructor(
         }
         if (current.contacts.isEmpty()) {
             Timber.w("TriggerSafetyCallUseCase: expired but no contacts configured - disabling")
-            disableSafetyCall()
+            // v1.27.2 (audit Codex, P-02) — la liste doit etre ENCORE vide a l ecriture : quelqu un
+            // a pu ajouter un contact depuis les Reglages entre la lecture et ce desarmement.
+            disableSafetyCall(current.generation) { cfg -> cfg.contacts.isEmpty() }
             return@withContext Result.NoContacts
         }
-        val body = if (isRelance) {
-            SafetyCallTemplate.renderRelance(current.messagesSent)
-        } else {
-            current.template.render(current.timeoutMs, current.customMessage)
-        }.trim()
+        val body = renderBody(current, isRelance)
         if (body.isBlank()) {
             Timber.w("TriggerSafetyCallUseCase: rendered body is blank - disabling")
-            disableSafetyCall()
+            // v1.27.2 (audit Codex, P-02) — le message doit etre ENCORE vide a l ecriture : le
+            // texte personnalise a pu etre corrige depuis les Reglages entre-temps.
+            disableSafetyCall(current.generation) { cfg -> renderBody(cfg, isRelance).isBlank() }
             return@withContext Result.EmptyBody
         }
 
@@ -336,8 +342,9 @@ class TriggerSafetyCallUseCase @Inject constructor(
      * `lastActivityAt` fermait la fenetre « instantane -> reservation », pas
      * « reservation -> envoi » : quelqu'un qui confirmait aller bien PENDANT la boucle ne
      * l'arretait pas, et les SMS d'urgence continuaient de partir vers ses proches. Un SMS deja
-     * parti ne se rattrape pas — le cout est une lecture DataStore chaude par destinataire, sur un
-     * chemin qui en compte quatre au maximum.
+     * parti ne se rattrape pas — le cout est une ecriture DataStore par destinataire, sur un chemin
+     * qui en compte quatre au maximum, et elle sert doublement puisqu'elle RENOUVELLE LE BAIL
+     * (audit Codex du 2026-08-05, P-04 — voir [renewClaim]).
      *
      * Un contact invalide n'interrompt PAS les autres : un seul mauvais numero ne doit pas priver
      * les trois autres proches de l'alerte.
@@ -351,7 +358,7 @@ class TriggerSafetyCallUseCase @Inject constructor(
         var sent = 0
         var failed = 0
         for ((index, contact) in contacts.withIndex()) {
-            if (!stillOwnsClaim(claimId, generation)) {
+            if (!renewClaim(claimId, generation, System.currentTimeMillis())) {
                 Timber.i("TriggerSafetyCallUseCase: creneau perdu en cours d envoi, arret")
                 return SendTally(sent, failed, superseded = true)
             }
@@ -404,19 +411,101 @@ class TriggerSafetyCallUseCase @Inject constructor(
 
     /**
      * v1.27.2 (audit Codex, C-03 / C-04) — le créneau réservé nous appartient-il **toujours** ?
+     * Si oui, le bail est **renouvelé** dans la même transaction.
      *
-     * Deux façons de le perdre : un autre worker a repris un bail qu'il croyait abandonné, ou
-     * l'utilisateur a confirmé aller bien et ouvert une nouvelle génération de cycle. Dans les
-     * deux cas, ce worker n'a plus rien à envoyer ni rien à écrire.
+     * Trois façons de le perdre : un autre worker a repris un bail qu'il croyait abandonné
+     * (`claimId` a changé, ou le bail a été levé sans que nous l'ayons fait), ou l'utilisateur a
+     * confirmé aller bien et ouvert une nouvelle génération de cycle. Dans tous les cas, ce worker
+     * n'a plus rien à envoyer ni rien à écrire.
+     *
+     * # Pourquoi renouveler (audit Codex du 2026-08-05, P-04)
+     *
+     * [SafetyCallConfig.CLAIM_LEASE_MS] valait deux minutes pour **toute la boucle d'envoi**. Le
+     * seuil répondait donc à la question « ce worker a-t-il commencé il y a plus de deux
+     * minutes ? », alors que la seule question utile est « ce worker **avance-t-il encore** ? ». Un
+     * propriétaire vivant mais lent — accès ContentProvider, appel OEM, verrou DataStore — voyait
+     * son créneau repris alors qu'il travaillait, avec à la clé une alerte en double.
+     *
+     * En renouvelant entre deux contacts, le bail cesse de mesurer l'ancienneté pour mesurer la
+     * **progression** : deux minutes sans le moindre contact traité, c'est un processus mort. Un
+     * envoi réellement bloqué ne renouvelle rien, puisque le renouvellement est *entre* les envois
+     * et jamais pendant.
+     *
+     * Le coût est d'au plus quatre écritures DataStore par alerte — le nombre maximum de contacts.
      */
-    private suspend fun stillOwnsClaim(claimId: Long, generation: Long): Boolean {
-        val cfg = settings.flow.first().security.safetyCall
-        return cfg.claimId == claimId && cfg.generation == generation
+    private suspend fun renewClaim(claimId: Long, generation: Long, nowMs: Long): Boolean {
+        var owned = false
+        settings.update { s ->
+            val cfg = s.security.safetyCall
+            val lost = cfg.claimId != claimId ||
+                cfg.generation != generation ||
+                // Bail levé sans que nous l'ayons fait : une reprise après expiration efface
+                // `claimedAt` sans toucher à `claimId`. Sans ce terme, la fenêtre entre la reprise
+                // et la réservation du repreneur nous aurait fait croire que le créneau est encore
+                // le nôtre.
+                cfg.claimedAt == 0L
+            if (lost) {
+                s
+            } else {
+                owned = true
+                s.copy(
+                    security = s.security.copy(safetyCall = cfg.copy(claimedAt = nowMs)),
+                )
+            }
+        }
+        return owned
     }
 
-    private suspend fun disableSafetyCall() {
+    /**
+     * Rend le corps du message pour [cfg]. Fonction **pure**, donc réutilisable dans une
+     * transaction DataStore pour revalider une décision prise sur un instantané plus ancien.
+     */
+    private fun renderBody(cfg: SafetyCallConfig, isRelance: Boolean): String =
+        if (isRelance) {
+            SafetyCallTemplate.renderRelance(cfg.messagesSent)
+        } else {
+            cfg.template.render(cfg.timeoutMs, cfg.customMessage)
+        }.trim()
+
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, P-02) — désarme le deadman **seulement si l'état qui a
+     * motivé la décision est toujours celui qui est persisté**.
+     *
+     * # Le défaut que cette garde ferme
+     *
+     * La primitive écrivait `enabled = false` sans rien vérifier. Un worker parti sur un cycle
+     * déjà complet (`messagesSent = 4`) pouvait donc arriver ici **après** que l'utilisateur ait
+     * rouvert l'application ou confirmé aller bien : `withActivityReset()` avait entre-temps ouvert
+     * le cycle `G+1`, armé et non déclenché, et ce désarmement aveugle l'éteignait. L'interface
+     * confirmait « Activé », et plus rien ne protégeait personne.
+     *
+     * La conclusion nominale, elle, était déjà atomique : elle compare `(claimId, generation)` et
+     * désarme dans la même transaction que la levée du bail. Le trou n'était que sur les trois
+     * chemins de récupération — rattrapage de séquence complète, aucun contact, message vide.
+     *
+     * @param expectedGeneration génération du cycle sur laquelle la décision a été prise. Une
+     *   génération différente signifie qu'un nouveau cycle a été ouvert : ce worker n'a plus rien
+     *   à dire sur celui-là.
+     * @param stillJustified revalidation, évaluée **dans** la transaction, de la raison précise du
+     *   désarmement. La génération seule ne suffit pas : ajouter un contact ou corriger un message
+     *   personnalisé depuis les Réglages ne l'incrémente pas.
+     */
+    private suspend fun disableSafetyCall(
+        expectedGeneration: Long,
+        stillJustified: (SafetyCallConfig) -> Boolean,
+    ) {
+        var disabled = false
         settings.update { s ->
-            s.copy(security = s.security.copy(safetyCall = s.security.safetyCall.copy(enabled = false)))
+            val cfg = s.security.safetyCall
+            if (!cfg.enabled || cfg.generation != expectedGeneration || !stillJustified(cfg)) {
+                s
+            } else {
+                disabled = true
+                s.copy(security = s.security.copy(safetyCall = cfg.copy(enabled = false)))
+            }
+        }
+        if (!disabled) {
+            Timber.i("TriggerSafetyCallUseCase: desarmement abandonne, l etat a change entre-temps")
         }
     }
 

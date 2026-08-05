@@ -40,7 +40,7 @@ class SafetyCallIntentToken @Inject constructor() {
 
     /**
      * Génère un nouveau nonce et l'enregistre comme courant. Appelé par
-     * [SafetyCallWarningNotifier.showWarning] AVANT la construction du
+     * [SafetyCallWarningNotifier.reconcile] AVANT la construction du
      * PendingIntent.
      */
     fun rotate(): Long {

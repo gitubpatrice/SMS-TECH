@@ -503,6 +503,8 @@
     <string name="safety_call_warning_body_imminent">Safety call will trigger in less than 2 hours. Tap to reset now.</string>
     <string name="safety_call_sequence_title">SMS Tech — alert sent</string>
     <string name="safety_call_sequence_body">%1$d of %2$d messages sent to your contacts. Tap if you\'re OK: the follow-ups will stop.</string>
+    <string name="safety_call_sequence_title_sending">SMS Tech — sending alert</string>
+    <string name="safety_call_sequence_body_sending">The alert is being sent to your contacts. Tap if you\'re OK: sending will stop.</string>
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Emergency mode</string>
     <string name="settings_emergency_title">Emergency mode</string>

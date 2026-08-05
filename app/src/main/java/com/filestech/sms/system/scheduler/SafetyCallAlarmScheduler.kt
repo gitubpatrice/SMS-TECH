@@ -59,6 +59,18 @@ object SafetyCallAlarmScheduler {
     private const val QUANTUM_MS = 1_000L
 
     /**
+     * v1.27.2 (audit Codex du 2026-08-05, P-07) — instant du dernier rendez-vous de rattrapage
+     * posé, ou `0L`. Voir [apply].
+     *
+     * ⚠️ **Mémoire de processus, délibérément**, et non un champ persisté : c'est un garde-fou de
+     * batterie, pas une garantie fonctionnelle. Une mort du processus la perd, et le pire qui
+     * puisse alors arriver est un rattrapage de plus — exactement le comportement d'avant ce
+     * correctif. Le filet fonctionnel, lui, reste le tick horaire.
+     */
+    @Volatile
+    private var pastDueRetryAt: Long = 0L
+
+    /**
      * v1.27.2 (audit Codex, C-09) — délai du rendez-vous de rattrapage quand l'échéance est déjà
      * dépassée.
      *
@@ -99,12 +111,34 @@ object SafetyCallAlarmScheduler {
             // délai d'une heure pouvait encore subir près d'une heure de retard sur ce sous-cas
             // (démarrage à froid, restitution de créneau, alarme perdue par l'OEM).
             //
-            // On programme donc un rendez-vous **borné et strictement futur**. Il ne peut pas
-            // s'emballer : cet observateur ne réémet que sur un changement de décision, et une
-            // décision inchangée ne repose rien.
-            schedule(context, now + PAST_DUE_RETRY_MS)
+            // On programme donc un rendez-vous **borné et strictement futur**.
+            //
+            // v1.27.2 (audit Codex du 2026-08-05, P-07) — 🔴 le commentaire d'origine affirmait ici
+            // qu'« une décision inchangée ne repose rien », donc que ce rattrapage ne pouvait pas
+            // s'emballer. C'était faux, et de la façon la plus banale : sur un échec total d'envoi,
+            // la décision CHANGE deux fois par tentative — la réservation la porte sur l'expiration
+            // future du bail, la restitution la ramène sur l'échéance dépassée. Les deux
+            // franchissent `distinctUntilChanged`, et chaque retour ici reposait cinq minutes de
+            // plus. En mode avion, sans SIM ou sur une téléphonie en panne, l'aller-retour ne
+            // s'arrêtait jamais.
+            //
+            // Un rattrapage déjà armé et encore à venir est donc CONSERVÉ. Le rythme est ainsi
+            // borné à un réveil par tranche de cinq minutes, quoi qu'il arrive en amont.
+            val armed = pastDueRetryAt
+            if (armed > now) {
+                Timber.d(
+                    "SafetyCallAlarmScheduler: rattrapage deja arme dans %d s, on garde",
+                    (armed - now) / 1_000L,
+                )
+                return
+            }
+            val retryAt = now + PAST_DUE_RETRY_MS
+            pastDueRetryAt = retryAt
+            schedule(context, retryAt)
             return
         }
+        // Une échéance future réelle remplace le rattrapage : il n'a plus lieu d'être mémorisé.
+        pastDueRetryAt = 0L
         schedule(context, at)
     }
 
@@ -157,7 +191,32 @@ object SafetyCallAlarmScheduler {
         // exigeant une égalité bit à bit, l'invariant « aucune reprogrammation au jalon » n'était
         // pas exact. Arrondir à la seconde l'absorbe, sans rien coûter à la ponctualité — le
         // système ne garantit de toute façon pas mieux que la minute sur ce type d'alarme.
-        return at / QUANTUM_MS * QUANTUM_MS
+        return ceilToQuantum(at)
+    }
+
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, P-03) — arrondit **vers le futur**, jamais vers le passé.
+     *
+     * # Le défaut que ça ferme
+     *
+     * La quantification s'écrivait `at / QUANTUM_MS * QUANTUM_MS`, c'est-à-dire un arrondi vers le
+     * bas. Une échéance à `T = …999 ms` était donc programmée à `T − 999 ms`. Le système garantit
+     * de ne pas livrer **avant l'instant demandé**, mais l'instant demandé était déjà antérieur à
+     * l'échéance métier : livrée dans cet intervalle, l'alarme réveillait un worker qui constatait
+     * que le deadman n'avait pas encore expiré — ou que le bail n'était pas encore abandonné — et
+     * rendait `success()`.
+     *
+     * 🔴 **L'alarme était alors consommée, et rien ne la reposait** : le collecteur recalcule la
+     * même valeur quantifiée, `distinctUntilChanged` supprime l'émission, et la ponctualité
+     * retombait sur le tick horaire — jusqu'à une heure plus tard. Sur le dernier créneau, c'est
+     * précisément le cas que la programmation de l'expiration du bail voulait fermer.
+     *
+     * Une seconde de trop est sans conséquence : le système ne garantit pas mieux que la minute sur
+     * `setAndAllowWhileIdle`. Une milliseconde de moins coûtait une heure.
+     */
+    private fun ceilToQuantum(at: Long): Long {
+        val floored = Math.floorDiv(at, QUANTUM_MS) * QUANTUM_MS
+        return if (floored == at) at else floored + QUANTUM_MS
     }
 
     private fun schedule(context: Context, atMs: Long) {
@@ -194,10 +253,14 @@ object SafetyCallAlarmScheduler {
      * l'alerte compte le plus.
      */
     fun retryIn(context: Context, delayMs: Long) {
+        // Ce rendez-vous remplace physiquement l'alarme : le rattrapage mémorisé ne décrit plus
+        // ce qui est réellement armé, il ne doit donc plus servir à supprimer une programmation.
+        pastDueRetryAt = 0L
         schedule(context, System.currentTimeMillis() + delayMs)
     }
 
     private fun cancel(context: Context) {
+        pastDueRetryAt = 0L
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         manager.cancel(pendingIntent(context))
     }

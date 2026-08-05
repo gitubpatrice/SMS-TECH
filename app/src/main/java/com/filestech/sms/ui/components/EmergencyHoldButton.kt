@@ -144,13 +144,35 @@ fun EmergencyHoldButton(
                     //     donc protégé, ce que le correctif v1.14.2 avait mis en place après un
                     //     déclenchement intempestif signalé le 2026-05-22.
                     //  2. **Ensuite** — l'intention de maintenir est établie. Seule une sortie
-                    //     FRANCHE annule : le doigt doit quitter le bouton, qui fait 200 dp. Une
-                    //     dérive de quelques millimètres ne veut plus rien dire, et n'annule plus.
+                    //     FRANCHE annule : le doigt doit quitter le DISQUE visible. Une dérive de
+                    //     quelques millimètres ne veut plus rien dire, et n'annule plus.
+                    //
+                    // v1.27.2 (audit Codex du 2026-08-05, P-08) — DEUX TROUS RESTAIENT OUVERTS
+                    // dans cette version en deux temps :
+                    //
+                    //  - un glissement démarré APRÈS 300 ms, resté dans les bornes, n'annulait plus
+                    //    rien **et le composant ne revendiquait pas le geste** : la page défilait
+                    //    pendant que l'anneau se remplissait. Trois secondes de contact plus tard,
+                    //    de VRAIS SMS d'urgence partaient — et la position était partagée — sur un
+                    //    geste destiné à faire défiler l'écran. Le correctif v1.14.2 fermait le
+                    //    scroll rapide, celui-ci rouvrait le scroll lent ;
+                    //  - les bornes testées étaient le CARRÉ de 200 dp, alors que le bouton visible
+                    //    est le disque inscrit. Une dérive en diagonale vers un coin restait donc
+                    //    acceptée bien qu'ayant quitté le bouton à l'écran.
+                    //
+                    // La règle devient donc : passé la fenêtre de discrimination, le composant
+                    // **consomme** le geste — le parent ne peut plus défiler, le contrat est net —
+                    // et seule une sortie du disque l'annule. Et à tout instant, un geste déjà
+                    // consommé par un ancêtre annule le maintien : il ne nous appartient pas.
                     val touchSlopPx = viewConfiguration.touchSlop
                     val slopSq = touchSlopPx * touchSlopPx
                     // ⚠️ `this@pointerInput.size` et non `size` : le paramètre `size: Dp` du
                     // composable masque celui de la zone de pointeur, qui est en PIXELS.
                     val boundsPx = this@pointerInput.size
+                    val centerX = boundsPx.width / 2f
+                    val centerY = boundsPx.height / 2f
+                    val radiusPx = minOf(boundsPx.width, boundsPx.height) / 2f
+                    val radiusSq = radiusPx * radiusPx
                     awaitPointerEventScope {
                         while (true) {
                             // Attend le 1er DOWN, ignore les autres pointeurs.
@@ -174,20 +196,37 @@ fun EmergencyHoldButton(
                                 if (!draining) {
                                     val inDiscriminationWindow =
                                         (pressed.uptimeMillis - downTime) < SCROLL_DISCRIMINATION_MS
-                                    val cancelled = if (inDiscriminationWindow) {
-                                        val dx = pressed.position.x - startPos.x
-                                        val dy = pressed.position.y - startPos.y
-                                        dx * dx + dy * dy > slopSq
-                                    } else {
-                                        val p = pressed.position
-                                        p.x < 0f || p.y < 0f ||
-                                            p.x > boundsPx.width || p.y > boundsPx.height
+                                    val cancelled = when {
+                                        // Un ancêtre a déjà pris le geste (défilement, glissement
+                                        // imbriqué). Ce n'est pas un maintien, quel que soit le
+                                        // moment : on ne déclenche pas une alerte sur le geste de
+                                        // quelqu'un d'autre.
+                                        pressed.isConsumed -> true
+                                        inDiscriminationWindow -> {
+                                            val dx = pressed.position.x - startPos.x
+                                            val dy = pressed.position.y - startPos.y
+                                            dx * dx + dy * dy > slopSq
+                                        }
+                                        // Sortie du DISQUE visible, et non du carré englobant :
+                                        // les coins n'ont jamais fait partie du bouton.
+                                        else -> {
+                                            val dx = pressed.position.x - centerX
+                                            val dy = pressed.position.y - centerY
+                                            dx * dx + dy * dy > radiusSq
+                                        }
                                     }
                                     if (cancelled) {
                                         // Annule le hold et draine jusqu'à UP pour ne pas
                                         // re-fire isHolding au tour suivant sur le même geste.
                                         isHolding = false
                                         draining = true
+                                    } else if (!inDiscriminationWindow) {
+                                        // Le maintien est établi : le composant REVENDIQUE le
+                                        // geste. Sans cette ligne, un glissement lent démarré après
+                                        // la fenêtre de discrimination faisait défiler la page
+                                        // pendant que l'anneau se remplissait — et l'alerte partait
+                                        // pour de bon au bout de trois secondes.
+                                        pressed.consume()
                                     }
                                 }
                             }
