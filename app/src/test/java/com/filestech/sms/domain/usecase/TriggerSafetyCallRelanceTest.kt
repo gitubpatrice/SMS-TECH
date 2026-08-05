@@ -69,7 +69,12 @@ class TriggerSafetyCallRelanceTest {
         val safetyCall get() = _state.value.security.safetyCall
     }
 
-    private class CountingSender(private val succeed: Boolean) : SmsSender {
+    /**
+     * [succeed] est **mutable** : c'est ce qui permet de faire échouer une relance APRÈS un premier
+     * envoi réussi, donc de tester le chemin d'échec de la séquence — celui où `triggeredAt` ne
+     * doit surtout pas être effacé.
+     */
+    private class CountingSender(var succeed: Boolean) : SmsSender {
         var calls = 0
         val bodies = mutableListOf<String>()
         override fun send(
@@ -182,6 +187,23 @@ class TriggerSafetyCallRelanceTest {
         io = Dispatchers.Unconfined,
     )
 
+    /**
+     * Fait comme si quinze minutes venaient de s'écouler, en reculant `triggeredAt` d'un
+     * intervalle : la relance suivante devient due sans qu'aucun test n'ait à attendre.
+     */
+    private suspend fun rewindTriggeredAt(settings: FakeSettings) {
+        settings.update { s ->
+            s.copy(
+                security = s.security.copy(
+                    safetyCall = s.security.safetyCall.copy(
+                        triggeredAt = s.security.safetyCall.triggeredAt -
+                            SafetyCallConfig.RELANCE_INTERVAL_MS,
+                    ),
+                ),
+            )
+        }
+    }
+
     // ──────────────────────────── Les tests ────────────────────────────
 
     @Test
@@ -252,17 +274,7 @@ class TriggerSafetyCallRelanceTest {
         runBlocking {
             uc.invoke() // message initial
             repeat(SafetyCallConfig.RELANCE_COUNT) {
-                // On avance l'horloge en reculant `triggeredAt` : la relance devient due.
-                settings.update { s ->
-                    s.copy(
-                        security = s.security.copy(
-                            safetyCall = s.security.safetyCall.copy(
-                                triggeredAt = s.security.safetyCall.triggeredAt -
-                                    SafetyCallConfig.RELANCE_INTERVAL_MS,
-                            ),
-                        ),
-                    )
-                }
+                rewindTriggeredAt(settings)
                 uc.invoke()
             }
         }
@@ -275,6 +287,68 @@ class TriggerSafetyCallRelanceTest {
         // Sequence close : le deadman est desarme, sans relance en attente.
         assertThat(settings.safetyCall.enabled).isFalse()
         assertThat(settings.safetyCall.hasRelancePending).isFalse()
+    }
+
+    /**
+     * **Le jumeau asymétrique** du test d'échec ci-dessus — et le motif qui a produit onze des
+     * dix-sept correctifs du 2026-08-04, donc celui qu'il faut tenir des deux côtés.
+     *
+     * Sur un échec, le chemin **initial** remet `triggeredAt` à `0L` : rien n'est parti, la
+     * séquence n'a pas commencé. Le chemin **relance**, lui, doit le **conserver** : le premier
+     * message est déjà chez les contacts. L'effacer ferait repartir la séquence à zéro, et les
+     * proches recevraient à nouveau le message d'origine — puis les relances — en boucle.
+     */
+    @Test
+    fun `une relance qui echoue rend le creneau sans effacer le declenchement`() {
+        val settings = expiredSettings()
+        val sender = CountingSender(succeed = true)
+        val uc = useCase(settings, sender)
+
+        val result = runBlocking {
+            uc.invoke() // message initial : parti, sequence ouverte
+            rewindTriggeredAt(settings)
+            sender.succeed = false // reseau perdu entre le message initial et la relance
+            uc.invoke()
+        }
+
+        assertThat(result).isInstanceOf(TriggerSafetyCallUseCase.Result.SendFailed::class.java)
+        // Non-vacuite : la relance a bien ete TENTEE, elle n'a pas ete court-circuitee.
+        assertThat(sender.calls).isEqualTo(2)
+        // Le creneau est rendu : la relance 1 sera retentee au tick suivant.
+        assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
+        assertThat(settings.safetyCall.enabled).isTrue()
+        // LE POINT : le declenchement n'est PAS efface, sinon la sequence repartirait a zero.
+        assertThat(settings.safetyCall.isTriggered).isTrue()
+    }
+
+    /**
+     * Le processus a pu être tué juste après le dernier envoi, avant que le désarmement ne
+     * s'écrive. On finit le travail plutôt que de laisser un deadman armé qui, `triggeredAt` étant
+     * posé et la séquence close, ne partirait plus jamais.
+     */
+    @Test
+    fun `une sequence deja complete se referme sans renvoyer de message`() {
+        val settings = expiredSettings()
+        val sender = CountingSender(succeed = true)
+
+        val result = runBlocking {
+            settings.update { s ->
+                s.copy(
+                    security = s.security.copy(
+                        safetyCall = s.security.safetyCall.copy(
+                            triggeredAt = System.currentTimeMillis() -
+                                SafetyCallConfig.TOTAL_MESSAGES * SafetyCallConfig.RELANCE_INTERVAL_MS,
+                            messagesSent = SafetyCallConfig.TOTAL_MESSAGES,
+                        ),
+                    ),
+                )
+            }
+            useCase(settings, sender).invoke()
+        }
+
+        assertThat(result).isEqualTo(TriggerSafetyCallUseCase.Result.SequenceComplete)
+        assertThat(sender.calls).isEqualTo(0)
+        assertThat(settings.safetyCall.enabled).isFalse()
     }
 
     @Test
