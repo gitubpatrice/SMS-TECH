@@ -620,7 +620,12 @@ class TelephonyReader @Inject constructor(
                 }
             }
         }
-        return acc.mapValues { (_, v) -> v.first.toString() to v.second }
+        // ⚠️ v1.27.2 — `ok` DOIT sortir d'ici. La première version le posait sans jamais le rendre :
+        // la fonction retournait toujours une carte, `flushPending` rendait donc toujours `true`,
+        // et un échec de lecture des parts ne pouvait plus invalider la complétion de l'import.
+        // C'est-à-dire exactement le défaut C-05 que ce code est censé fermer, réintroduit dans
+        // son propre correctif.
+        return if (ok) acc.mapValues { (_, v) -> v.first.toString() to v.second } else null
     }
 
     /** Métadonnées MMS captées en pass 1 avant la résolution batchée des parts en pass 2.
