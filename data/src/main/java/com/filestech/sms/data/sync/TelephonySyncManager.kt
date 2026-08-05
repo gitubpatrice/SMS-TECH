@@ -213,7 +213,15 @@ class TelephonySyncManager @Inject constructor(
                     } else {
                         Timber.i("runSync(%s) MMS import: 0 rows in system provider", reason)
                     }
-                }.onFailure { Timber.w(it, "MMS import failed") }
+                }.onFailure {
+                    // v1.27.2 (relecture Gemini du 2026-08-05) — une annulation n'est PAS un
+                    // échec. `runCatching` attrape `Throwable`, donc `CancellationException`
+                    // comprise : une mise en veille pendant l'import était journalisée comme
+                    // « MMS import failed » et la coroutine continuait comme si de rien n'était,
+                    // alors qu'elle est censée s'arrêter. Le motif a déjà mordu sur ce dépôt.
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    Timber.w(it, "MMS import failed")
+                }
             }
             // Union the Room mirror with a fresh read of the system blocklist. The Room snapshot
             // covers app-initiated blocks; the live system read covers entries the user already
@@ -334,10 +342,38 @@ class TelephonySyncManager @Inject constructor(
                 Timber.w("reconcileDeletions: provider returned 0 SMS while %d mirrored — skipped", mirrored.size)
                 return@runCatching
             }
+            // v1.27.2 (relecture Gemini du 2026-08-05) — GARDE-FOU 5 : PROPORTIONNALITÉ.
+            //
+            // Les quatre gardes précédentes ne protègent que du cas « lecture vide ». Une lecture
+            // **partielle mais non vide** les franchit toutes, et tout ce qui manque à la page est
+            // alors considéré comme supprimé côté système : ce chemin efface définitivement des
+            // messages parfaitement valides.
+            //
+            // ⚠️ Le mécanisme avancé par la relecture — troncature silencieuse du `CursorWindow` —
+            // n'est PAS démontré : un curseur correctement itéré recharge sa fenêtre de façon
+            // transparente, et une exception en cours d'itération remonterait jusqu'au
+            // `runCatching` englobant, qui ne supprimerait alors rien. La garde n'est donc pas
+            // posée pour ce scénario-là.
+            //
+            // Elle est posée parce que la conséquence est irréversible et que le coût est nul.
+            // Une synchronisation normale voit disparaître quelques messages — ceux que
+            // l'utilisateur vient d'effacer ailleurs. Voir disparaître la MOITIÉ du miroir d'un
+            // coup ne décrit aucun usage réel : c'est la signature d'une lecture incomplète,
+            // quelle qu'en soit la cause. On refuse, on trace, et la passe suivante retentera sur
+            // une lecture saine. Ne rien supprimer est toujours rattrapable ; supprimer à tort ne
+            // l'est pas.
             val alive = HashSet<String>(systemIds.size)
             systemIds.forEach { alive += "$SMS_URI_PREFIX$it" }
             val gone = mirrored.filterNot { it in alive }
             if (gone.isEmpty()) return@runCatching
+            if (gone.size > mirrored.size * MAX_DELETION_RATIO) {
+                Timber.e(
+                    "reconcileDeletions: %d/%d lignes manquantes — lecture probablement incomplete, ANNULE",
+                    gone.size,
+                    mirrored.size,
+                )
+                return@runCatching
+            }
             // v1.27.2 (audit externe 2026-08-04 #6) — suppression ET recalcul des aperçus dans
             // la MÊME transaction. Ce chemin était le troisième jumeau oublié du correctif
             // v1.24.0 de `deleteMessage` (déjà porté à `purgeHistoryNow` en v1.26.1 H9) : il
@@ -383,6 +419,16 @@ class TelephonySyncManager @Inject constructor(
     private companion object {
         /** v1.26.1 (audit F6) — seules les lignes SMS sont réconciliables, cf. [reconcileDeletions]. */
         const val SMS_URI_PREFIX = "content://sms/"
+
+        /**
+         * v1.27.2 — proportion de lignes manquantes au-delà de laquelle [reconcileDeletions]
+         * refuse de supprimer quoi que ce soit.
+         *
+         * La moitié : assez haut pour ne jamais gêner un usage réel — personne n'efface la moitié
+         * de sa messagerie depuis une autre application entre deux passes de synchronisation —
+         * et assez bas pour arrêter net une lecture système incomplète.
+         */
+        const val MAX_DELETION_RATIO = 0.5
 
         /** SQLite plafonne `IN (…)` à 999 paramètres hôtes ; on reste dessous. */
         const val SQLITE_HOST_PARAM_LIMIT = 900

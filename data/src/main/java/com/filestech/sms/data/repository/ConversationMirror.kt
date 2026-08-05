@@ -1062,10 +1062,25 @@ class ConversationMirror @Inject constructor(
 
     private suspend fun touchConversation(convId: Long, date: Long, preview: String, deltaUnread: Int) {
         val current = conversationDao.findById(convId) ?: return
+        // v1.27.2 (relecture Gemini du 2026-08-05) — 🔴 L'APERÇU ÉTAIT LE JUMEAU OUBLIÉ DE LA DATE.
+        //
+        // `lastMessageAt` était protégé par `maxOf` contre un recul dans le temps — un import par
+        // lots, ou un message retardé par le réseau, ne devait pas faire remonter une vieille date.
+        // La ligne suivante écrasait pourtant `lastMessagePreview` **sans la même garde**.
+        //
+        // Résultat : la conversation gardait sa date récente, restait donc en haut de la liste,
+        // mais affichait le texte d'un message parfois vieux de plusieurs années. Deux champs qui
+        // décrivent le MÊME message et qui pouvaient se contredire.
+        //
+        // On n'écrit désormais l'aperçu que si ce message est bien le plus récent. Le `>=` couvre
+        // l'égalité stricte : deux messages à la même milliseconde, le dernier arrivé gagne, ce
+        // qui reste le comportement d'avant.
+        val isNewest = date >= current.lastMessageAt
         conversationDao.update(
             current.copy(
                 lastMessageAt = maxOf(date, current.lastMessageAt),
-                lastMessagePreview = preview.take(MAX_PREVIEW),
+                lastMessagePreview =
+                if (isNewest) preview.take(MAX_PREVIEW) else current.lastMessagePreview,
                 unreadCount = (current.unreadCount + deltaUnread).coerceAtLeast(0),
             ),
         )
