@@ -163,7 +163,7 @@ class SafetyCallWarningNotifier @Inject constructor(
             .build()
 
         @android.annotation.SuppressLint("MissingPermission")
-        NotificationManagerCompat.from(context).notify(NOTIF_ID_DEADMAN_WARNING, notif)
+        NotificationManagerCompat.from(context).notify(NOTIF_ID_SEQUENCE, notif)
         Timber.i(
             "SafetyCallWarningNotifier: posted sequence notice (%d/%d)",
             messagesSent,
@@ -179,6 +179,21 @@ class SafetyCallWarningNotifier @Inject constructor(
     fun dismiss() {
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)
             ?.cancel(NOTIF_ID_DEADMAN_WARNING)
+    }
+
+    /**
+     * v1.27.2 (audit Codex, C-07 / C-08) — retire la notification de SEQUENCE, distincte de
+     * l'avertissement de pre-declenchement.
+     *
+     * Les deux partageaient un identifiant, ce qui les faisait se remplacer l'une l'autre et
+     * obligeait un seul appelant a arbitrer entre elles. Separees, chacune a son proprietaire :
+     * l'avertissement au worker, la sequence au reconciliateur de `MainApplication`. Elles ne
+     * peuvent de toute facon pas coexister — `isInWarningWindow` rend `false` des que la
+     * sequence est ouverte.
+     */
+    fun dismissSequence() {
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)
+            ?.cancel(NOTIF_ID_SEQUENCE)
     }
 
     private fun hasPostPermission(): Boolean {
@@ -201,6 +216,9 @@ class SafetyCallWarningNotifier @Inject constructor(
 
         /** ID de la notification (unique stable pour update/dismiss). */
         private const val NOTIF_ID_DEADMAN_WARNING = 0x44454144 // 'DEAD'
+
+        /** v1.27.2 — la notification de sequence est INDEPENDANTE de l'avertissement. */
+        private const val NOTIF_ID_SEQUENCE = 0x53455151 // 'SEQQ'
         private const val REQUEST_SAFETY_CALL_RESET = 0x52455354    // 'REST'
     }
 }

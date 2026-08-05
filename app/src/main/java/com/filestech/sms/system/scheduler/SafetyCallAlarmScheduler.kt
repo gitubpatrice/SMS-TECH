@@ -51,6 +51,23 @@ object SafetyCallAlarmScheduler {
     private const val REQUEST_CODE = 0x5AFE
 
     /**
+     * v1.27.2 (audit Codex, C-10) — pas de quantification de l'instant de réveil.
+     *
+     * Une seconde : au-dessus de la dérive observée entre les deux lectures d'horloge, très en
+     * dessous de la précision que le système garantit sur `setAndAllowWhileIdle`.
+     */
+    private const val QUANTUM_MS = 1_000L
+
+    /**
+     * v1.27.2 (audit Codex, C-09) — délai du rendez-vous de rattrapage quand l'échéance est déjà
+     * dépassée.
+     *
+     * Cinq minutes : assez court pour que la ponctualité ne retombe pas sur le tick horaire,
+     * assez long pour qu'un rattrapage répété reste indolore en batterie.
+     */
+    private const val PAST_DUE_RETRY_MS = 5 * 60 * 1000L
+
+    /**
      * Pose l'alarme à [at], ou l'annule si [at] est `null`.
      *
      * ⚠️ **Une échéance déjà dépassée n'est PAS programmée** — et c'est délibéré. Une alarme posée
@@ -65,8 +82,27 @@ object SafetyCallAlarmScheduler {
      * toutes les échéances **à venir**, qui sont le cas nominal.
      */
     fun apply(context: Context, at: Long?) {
-        if (at == null || at <= System.currentTimeMillis()) {
+        if (at == null) {
             cancel(context)
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (at <= now) {
+            // v1.27.2 (audit Codex du 2026-08-05, C-09) — une échéance DÉJÀ DÉPASSÉE n'est plus
+            // simplement abandonnée.
+            //
+            // On ne peut pas la programmer telle quelle : une alarme posée dans le passé se
+            // déclenche immédiatement, le worker ne trouve rien à faire, la configuration change
+            // au jalon, l'alarme est reposée — c'est la boucle de réveil que j'avais introduite.
+            //
+            // Mais l'annuler purement et simplement rendait la ponctualité au tick horaire : un
+            // délai d'une heure pouvait encore subir près d'une heure de retard sur ce sous-cas
+            // (démarrage à froid, restitution de créneau, alarme perdue par l'OEM).
+            //
+            // On programme donc un rendez-vous **borné et strictement futur**. Il ne peut pas
+            // s'emballer : cet observateur ne réémet que sur un changement de décision, et une
+            // décision inchangée ne repose rien.
+            schedule(context, now + PAST_DUE_RETRY_MS)
             return
         }
         schedule(context, at)
@@ -82,22 +118,46 @@ object SafetyCallAlarmScheduler {
      * murale poserait l'alarme trop tôt après un redémarrage — le compteur monotone étant en
      * retard, le réveil ne trouverait rien à faire.
      */
-    fun nextWakeUpAt(cfg: SafetyCallConfig, nowMs: Long, nowMonoMs: Long): Long? = when {
-        !cfg.enabled -> null
-        // Une séquence ouverte a la priorité : la prochaine relance est le seul rendez-vous utile.
-        cfg.hasRelancePending -> cfg.nextRelanceAt()
-        // Déclenché et séquence close : plus rien à attendre, le désarmement suit.
-        cfg.isTriggered -> null
-        // Jamais initialisé, ou ancre monotone absente : `isExpired` rend `false` dans les deux
-        // cas, donc un réveil ne servirait à rien. L'ancre manquante est réparée au démarrage
-        // par `MainApplication`.
-        cfg.lastActivityAt == 0L || cfg.monotonicLastActivityAt == 0L -> null
-        else -> {
-            val wallDeadline = cfg.lastActivityAt + cfg.timeoutMs
-            // Ce qu'il reste à courir sur l'horloge monotone, converti en instant mural.
-            val monoDeadline = nowMs + (cfg.timeoutMs - cfg.monoElapsedMs(nowMonoMs))
-            maxOf(wallDeadline, monoDeadline)
+    fun nextWakeUpAt(cfg: SafetyCallConfig, nowMs: Long, nowMonoMs: Long): Long? {
+        val nominal = when {
+            !cfg.enabled -> null
+            // Une séquence ouverte a la priorité : la prochaine relance est le seul rendez-vous
+            // utile.
+            cfg.hasRelancePending -> cfg.nextRelanceAt()
+            // Déclenché et séquence close : plus rien à attendre, le désarmement suit.
+            cfg.isTriggered -> null
+            // Jamais initialisé, ou ancre monotone absente : `isExpired` rend `false` dans les deux
+            // cas, donc un réveil ne servirait à rien. L'ancre manquante est réparée au démarrage
+            // par `MainApplication`.
+            cfg.lastActivityAt == 0L || cfg.monotonicLastActivityAt == 0L -> null
+            else -> {
+                val wallDeadline = cfg.lastActivityAt + cfg.timeoutMs
+                // Ce qu'il reste à courir sur l'horloge monotone, converti en instant mural.
+                val monoDeadline = nowMs + (cfg.timeoutMs - cfg.monoElapsedMs(nowMonoMs))
+                maxOf(wallDeadline, monoDeadline)
+            }
         }
+        // v1.27.2 (audit Codex du 2026-08-05, C-05) — L'EXPIRATION DU BAIL DOIT ÊTRE PROGRAMMÉE.
+        //
+        // Le bail rendait un créneau abandonné *éligible* à la reprise, sans garantir aucun
+        // réveil pour la faire : sur les créneaux 1 à 3 le prochain rendez-vous était la relance
+        // suivante, quinze minutes plus tard ; sur le dernier, `isTriggered` rendait `null` et
+        // plus rien ne venait. Les deux minutes annoncées pouvaient donc en valoir soixante.
+        //
+        // Tant qu'un créneau est réservé, le prochain instant utile est **au plus tard** son
+        // expiration : c'est là qu'on saura si son propriétaire est mort.
+        val leaseExpiry = cfg.claimedAt.takeIf { it != 0L }?.plus(SafetyCallConfig.CLAIM_LEASE_MS)
+        val at = listOfNotNull(nominal, leaseExpiry).minOrNull() ?: return null
+        // v1.27.2 (audit Codex, C-10) — QUANTIFICATION À LA SECONDE.
+        //
+        // Quand l'échéance monotone domine, l'instant calculé vaut
+        // `nowWall + timeout − capital − (nowMono − ancre)`, donc dépend de `nowWall − nowMono`.
+        // Les deux horloges sont lues sur deux lignes distinctes : leur écart observé varie de
+        // quelques fractions de milliseconde d'une émission à l'autre. `distinctUntilChanged`
+        // exigeant une égalité bit à bit, l'invariant « aucune reprogrammation au jalon » n'était
+        // pas exact. Arrondir à la seconde l'absorbe, sans rien coûter à la ponctualité — le
+        // système ne garantit de toute façon pas mieux que la minute sur ce type d'alarme.
+        return at / QUANTUM_MS * QUANTUM_MS
     }
 
     private fun schedule(context: Context, atMs: Long) {

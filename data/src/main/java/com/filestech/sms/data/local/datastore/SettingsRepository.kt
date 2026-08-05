@@ -275,6 +275,8 @@ class SettingsRepository @Inject constructor(
                     triggeredAt = p[K.safetyCallTriggeredAt] ?: 0L,
                     messagesSent = p[K.safetyCallMessagesSent] ?: 0,
                     claimedAt = p[K.safetyCallClaimedAt] ?: 0L,
+                    claimId = p[K.safetyCallClaimId] ?: 0L,
+                    generation = p[K.safetyCallGeneration] ?: 0L,
                     contacts = SafetyCallContactCodec.decode(p[K.safetyCallContactsJson]),
                     template = enumOr(
                         p,
@@ -398,6 +400,8 @@ class SettingsRepository @Inject constructor(
         this[K.safetyCallTriggeredAt] = s.security.safetyCall.triggeredAt
         this[K.safetyCallMessagesSent] = s.security.safetyCall.messagesSent
         this[K.safetyCallClaimedAt] = s.security.safetyCall.claimedAt
+        this[K.safetyCallClaimId] = s.security.safetyCall.claimId
+        this[K.safetyCallGeneration] = s.security.safetyCall.generation
         this[K.safetyCallContactsJson] = SafetyCallContactCodec.encode(s.security.safetyCall.contacts)
         this[K.safetyCallTemplate] = s.security.safetyCall.template.name
         this[K.safetyCallCustomMessage] = s.security.safetyCall.customMessage
@@ -508,6 +512,12 @@ class SettingsRepository @Inject constructor(
 
         /** v1.27.2 — bail sur le créneau réservé. Voir [SafetyCallConfig.claimedAt]. */
         val safetyCallClaimedAt = longPreferencesKey("security.safetyCall.claimedAt")
+
+        /** v1.27.2 (audit Codex, C-03) — proprietaire du creneau reserve. */
+        val safetyCallClaimId = longPreferencesKey("security.safetyCall.claimId")
+
+        /** v1.27.2 (audit Codex, C-04) — generation du cycle, incrementee a chaque reset. */
+        val safetyCallGeneration = longPreferencesKey("security.safetyCall.generation")
         val safetyCallMessagesSent = intPreferencesKey("security.safetyCall.messagesSent")
         val safetyCallContactsJson = stringPreferencesKey("security.safetyCall.contactsJson")
         val safetyCallTemplate = stringPreferencesKey("security.safetyCall.template")

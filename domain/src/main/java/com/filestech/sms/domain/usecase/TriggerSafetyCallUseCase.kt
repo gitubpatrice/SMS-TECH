@@ -4,6 +4,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
+import com.filestech.sms.domain.safetycall.SafetyCallContact
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettingsSource
@@ -93,29 +94,7 @@ class TriggerSafetyCallUseCase @Inject constructor(
         // Le repli va volontairement vers le DOUBLON : reprendre un creneau dont l envoi avait en
         // realite abouti coute un message en double, sans commune mesure avec une alerte muette.
         if (current.isClaimAbandoned()) {
-            Timber.w(
-                "TriggerSafetyCallUseCase: creneau %d abandonne, reprise",
-                current.messagesSent,
-            )
-            settings.update { s ->
-                val cfg = s.security.safetyCall
-                if (!cfg.isClaimAbandoned()) {
-                    s
-                } else {
-                    val rolledBack = (cfg.messagesSent - 1).coerceAtLeast(0)
-                    s.copy(
-                        security = s.security.copy(
-                            safetyCall = cfg.copy(
-                                messagesSent = rolledBack,
-                                // Plus aucun message parti : la sequence n a jamais commence.
-                                triggeredAt = if (rolledBack == 0) 0L else cfg.triggeredAt,
-                                claimedAt = 0L,
-                            ),
-                        ),
-                    )
-                }
-            }
-            current = settings.flow.first().security.safetyCall
+            current = reclaimAbandonedSlot(current.messagesSent)
             if (!current.enabled) return@withContext Result.Disabled
         }
 
@@ -180,6 +159,17 @@ class TriggerSafetyCallUseCase @Inject constructor(
         //
         // La reservation echoue si quelqu un a deja pris ce creneau : on ne fait alors rien.
         val nowMs = System.currentTimeMillis()
+        // v1.27.2 (audit Codex du 2026-08-05, C-03 / C-04) — IDENTITE DU PROPRIETAIRE.
+        //
+        // Le bail seul disait qu UN envoi etait en cours, pas LEQUEL. Un worker bloque plus de
+        // `CLAIM_LEASE_MS` voyait son creneau repris - ce qui est voulu - puis, en revenant
+        // tardivement, concluait ou restituait la reservation du SECOND. Et une remise a zero
+        // faite pendant la boucle d envoi ne l arretait pas.
+        //
+        // On retient donc deux jetons : le numero de reservation qu on vient d ecrire, et la
+        // generation du cycle sur laquelle on a decide. Toute ecriture ulterieure les exige.
+        val myGeneration = current.generation
+        var myClaimId = 0L
         var claimed = false
         settings.update { s ->
             val cfg = s.security.safetyCall
@@ -197,17 +187,23 @@ class TriggerSafetyCallUseCase @Inject constructor(
             // Regroupe pour rester sous le seuil de complexite de detekt, et parce que les
             // deux termes disent la meme chose : l instantane sur lequel ce worker a decide
             // est perime.
-            val staleSnapshot = cfg.messagesSent != current.messagesSent || activityMoved
+            // La generation est le jeton PROPRE : `lastActivityAt` peut coincider par hasard, une
+            // generation non. Les deux sont compares, le second est le garde-fou du premier.
+            val staleSnapshot = cfg.messagesSent != current.messagesSent ||
+                activityMoved ||
+                cfg.generation != myGeneration
             if (!cfg.enabled || staleSnapshot || leaseHeld) {
                 s
             } else {
                 claimed = true
+                myClaimId = cfg.claimId + 1
                 s.copy(
                     security = s.security.copy(
                         safetyCall = cfg.copy(
                             triggeredAt = if (cfg.isTriggered) cfg.triggeredAt else nowMs,
                             messagesSent = cfg.messagesSent + 1,
                             claimedAt = nowMs,
+                            claimId = myClaimId,
                         ),
                     ),
                 )
@@ -228,33 +224,10 @@ class TriggerSafetyCallUseCase @Inject constructor(
             isRelance,
         )
 
-        var sent = 0
-        var failed = 0
-        current.contacts.forEachIndexed { index, contact ->
-            if (!contact.isValid()) {
-                Timber.w("TriggerSafetyCallUseCase: skipping invalid contact #%d", index)
-                failed++
-                return@forEachIndexed
-            }
-            val target = PhoneAddress.of(contact.phoneNumber)
-            if (target.normalized.isEmpty()) {
-                Timber.w("TriggerSafetyCallUseCase: skipping unresolvable contact #%d", index)
-                failed++
-                return@forEachIndexed
-            }
-            val outcome = sendSms(
-                recipients = listOf(target),
-                body = body,
-                appendSignature = false,
-            )
-            when (outcome) {
-                is Outcome.Success -> sent++
-                is Outcome.Failure -> {
-                    Timber.w("TriggerSafetyCallUseCase: send failed for contact #%d", index)
-                    failed++
-                }
-            }
-        }
+        val tally = sendToContacts(current.contacts, body, myClaimId, myGeneration)
+        val sent = tally.sent
+        val failed = tally.failed
+        val superseded = tally.superseded
 
         // v1.27.2 - ANNULATION DE LA RESERVATION si RIEN n est parti.
         //
@@ -266,11 +239,22 @@ class TriggerSafetyCallUseCase @Inject constructor(
         // La reservation atomique ci-dessus couvre deja le doublon. Ici on REND le creneau pour
         // que le tick suivant retente. Un plantage entre l envoi et cette ligne coute au pire UN
         // message en double : bien moins grave qu une protection eteinte sans le dire.
+        // v1.27.2 (audit Codex, C-04) — le creneau nous a ete retire en cours de route : une
+        // remise a zero de l utilisateur, ou une reprise apres expiration du bail. On ne touche
+        // plus a rien — ni restitution, ni conclusion, ni desarmement : l etat appartient
+        // desormais a quelqu un d autre.
+        if (superseded) {
+            return@withContext Result.Superseded
+        }
+
         if (sent == 0) {
             Timber.w("TriggerSafetyCallUseCase: nothing sent - releasing slot for next tick")
             settings.update { s ->
                 val cfg = s.security.safetyCall
-                if (cfg.messagesSent != current.messagesSent + 1) {
+                // Restitution conditionnee a la PROPRIETE, pas au seul compteur : sans
+                // `claimId`, un worker revenu tardivement restituait la reservation d un autre,
+                // ramenant le compteur en arriere pendant un envoi reel.
+                if (cfg.claimId != myClaimId || cfg.generation != myGeneration) {
                     s
                 } else {
                     s.copy(
@@ -279,6 +263,7 @@ class TriggerSafetyCallUseCase @Inject constructor(
                                 triggeredAt = if (isRelance) cfg.triggeredAt else 0L,
                                 messagesSent = current.messagesSent,
                                 claimedAt = 0L,
+                                claimId = 0L,
                             ),
                         ),
                     )
@@ -289,28 +274,138 @@ class TriggerSafetyCallUseCase @Inject constructor(
 
         // Envoi conclu : le bail est leve. Sans cette ligne, le creneau suivant serait bloque
         // pendant deux minutes, et une relance due dans cet intervalle serait sautee.
-        settings.update { s ->
-            s.copy(
-                security = s.security.copy(
-                    safetyCall = s.security.safetyCall.copy(claimedAt = 0L),
-                ),
-            )
-        }
-
+        //
+        // v1.27.2 (audit Codex, C-03) — la levee est CONDITIONNEE a la propriete. Sans elle, un
+        // worker revenu tardivement levait le bail d un envoi en cours et ouvrait la porte a un
+        // troisieme concurrent.
         val messagesSentNow = current.messagesSent + 1
         val remaining = SafetyCallConfig.TOTAL_MESSAGES - messagesSentNow
+        var concluded = false
+        settings.update { s ->
+            val cfg = s.security.safetyCall
+            if (cfg.claimId != myClaimId || cfg.generation != myGeneration) {
+                s
+            } else {
+                concluded = true
+                s.copy(
+                    security = s.security.copy(
+                        // Le desarmement de fin de sequence est ecrit DANS la meme transaction
+                        // que la levee du bail. Separes, un reset glisse entre les deux pouvait
+                        // desactiver le cycle tout neuf que l utilisateur venait d ouvrir.
+                        safetyCall = cfg.copy(
+                            claimedAt = 0L,
+                            claimId = 0L,
+                            enabled = if (remaining <= 0) false else cfg.enabled,
+                        ),
+                    ),
+                )
+            }
+        }
+        if (!concluded) {
+            Timber.i("TriggerSafetyCallUseCase: creneau perdu apres envoi, conclusion abandonnee")
+            return@withContext Result.Superseded
+        }
         if (remaining <= 0) {
             Timber.i(
                 "TriggerSafetyCallUseCase: sequence complete (%d messages), disarming",
                 messagesSentNow,
             )
-            disableSafetyCall()
         }
         Result.Triggered(
             sent = sent,
             failed = failed,
             nextRelanceInMs = if (remaining > 0) SafetyCallConfig.RELANCE_INTERVAL_MS else null,
         )
+    }
+
+    /** Bilan d'une passe d'envoi. [superseded] = le creneau nous a ete retire en cours de route. */
+    private data class SendTally(val sent: Int, val failed: Int, val superseded: Boolean)
+
+    /**
+     * Envoie [body] a chaque contact, en verifiant AVANT CHAQUE ENVOI que le creneau nous
+     * appartient toujours.
+     *
+     * v1.27.2 (audit Codex, C-04) — la verification est dans la boucle, pas avant elle. Comparer
+     * `lastActivityAt` fermait la fenetre « instantane -> reservation », pas
+     * « reservation -> envoi » : quelqu'un qui confirmait aller bien PENDANT la boucle ne
+     * l'arretait pas, et les SMS d'urgence continuaient de partir vers ses proches. Un SMS deja
+     * parti ne se rattrape pas — le cout est une lecture DataStore chaude par destinataire, sur un
+     * chemin qui en compte quatre au maximum.
+     *
+     * Un contact invalide n'interrompt PAS les autres : un seul mauvais numero ne doit pas priver
+     * les trois autres proches de l'alerte.
+     */
+    private suspend fun sendToContacts(
+        contacts: List<SafetyCallContact>,
+        body: String,
+        claimId: Long,
+        generation: Long,
+    ): SendTally {
+        var sent = 0
+        var failed = 0
+        for ((index, contact) in contacts.withIndex()) {
+            if (!stillOwnsClaim(claimId, generation)) {
+                Timber.i("TriggerSafetyCallUseCase: creneau perdu en cours d envoi, arret")
+                return SendTally(sent, failed, superseded = true)
+            }
+            val target = contact.takeIf { it.isValid() }?.let { PhoneAddress.of(it.phoneNumber) }
+            if (target == null || target.normalized.isEmpty()) {
+                Timber.w("TriggerSafetyCallUseCase: skipping unusable contact #%d", index)
+                failed++
+                continue
+            }
+            when (sendSms(recipients = listOf(target), body = body, appendSignature = false)) {
+                is Outcome.Success -> sent++
+                is Outcome.Failure -> {
+                    Timber.w("TriggerSafetyCallUseCase: send failed for contact #%d", index)
+                    failed++
+                }
+            }
+        }
+        return SendTally(sent, failed, superseded = false)
+    }
+
+    /**
+     * v1.27.2 — reprend un creneau dont le bail a expire, et rend la configuration RELUE.
+     *
+     * Extrait de `invoke` pour la lisibilite autant que pour la complexite : la reprise est une
+     * operation a part entiere, avec sa propre garde de concurrence (`isClaimAbandoned` est
+     * re-teste DANS la transaction, car un autre worker a pu reprendre le creneau entre-temps).
+     */
+    private suspend fun reclaimAbandonedSlot(slot: Int): SafetyCallConfig {
+        Timber.w("TriggerSafetyCallUseCase: creneau %d abandonne, reprise", slot)
+        settings.update { s ->
+            val cfg = s.security.safetyCall
+            if (!cfg.isClaimAbandoned()) {
+                s
+            } else {
+                val rolledBack = (cfg.messagesSent - 1).coerceAtLeast(0)
+                s.copy(
+                    security = s.security.copy(
+                        safetyCall = cfg.copy(
+                            messagesSent = rolledBack,
+                            // Plus aucun message parti : la sequence n a jamais commence.
+                            triggeredAt = if (rolledBack == 0) 0L else cfg.triggeredAt,
+                            claimedAt = 0L,
+                            claimId = 0L,
+                        ),
+                    ),
+                )
+            }
+        }
+        return settings.flow.first().security.safetyCall
+    }
+
+    /**
+     * v1.27.2 (audit Codex, C-03 / C-04) — le créneau réservé nous appartient-il **toujours** ?
+     *
+     * Deux façons de le perdre : un autre worker a repris un bail qu'il croyait abandonné, ou
+     * l'utilisateur a confirmé aller bien et ouvert une nouvelle génération de cycle. Dans les
+     * deux cas, ce worker n'a plus rien à envoyer ni rien à écrire.
+     */
+    private suspend fun stillOwnsClaim(claimId: Long, generation: Long): Boolean {
+        val cfg = settings.flow.first().security.safetyCall
+        return cfg.claimId == claimId && cfg.generation == generation
     }
 
     private suspend fun disableSafetyCall() {
@@ -353,6 +448,17 @@ class TriggerSafetyCallUseCase @Inject constructor(
 
         /** v1.27.2 - le creneau avait deja ete pris par un autre tick. Rien n a ete envoye. */
         data object AlreadySent : Result
+
+        /**
+         * v1.27.2 (audit Codex, C-03 / C-04) — le creneau nous a ete RETIRE en cours de route :
+         * reprise par un autre worker apres expiration du bail, ou nouvelle generation de cycle
+         * ouverte par une confirmation « je vais bien ».
+         *
+         * Distinct de [AlreadySent], qui signifie « on n a jamais obtenu le creneau ». Ici on
+         * l avait, et on a pu envoyer une partie des messages avant de le perdre. L appelant ne
+         * doit RIEN conclure de cet etat : il appartient desormais a quelqu un d autre.
+         */
+        data object Superseded : Result
 
         /** v1.27.2 - la sequence de relances est terminee ; le deadman vient d etre desarme. */
         data object SequenceComplete : Result

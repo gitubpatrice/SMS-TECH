@@ -10,7 +10,6 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.usecase.TriggerSafetyCallUseCase
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.system.notifications.SafetyCallWarningNotifier
@@ -154,13 +153,6 @@ class SafetyCallWorker @AssistedInject constructor(
                         )
                         reflectSequence(triggerSafetyCall())
                     } else {
-                        // v1.27.2 — (re)pose la notification de séquence : le processus a pu
-                        // mourir depuis le dernier envoi, et sans elle l'utilisateur n'a plus
-                        // aucun moyen simple d'arrêter les relances.
-                        warningNotifier.showSequenceActive(
-                            current.messagesSent,
-                            SafetyCallConfig.TOTAL_MESSAGES,
-                        )
                         // Pas encore l'heure : on se contente de (re)poser le rendez-vous, au cas
                         // où le travail ponctuel aurait été perdu — redémarrage, nettoyage OEM.
                         current.nextRelanceAt()?.let { at ->
@@ -235,24 +227,26 @@ class SafetyCallWorker @AssistedInject constructor(
      * seule source de vérité — et qui donne aussi le vrai compteur, là où `messagesSent + 1`
      * supposait que la réservation avait réussi.
      */
-    private suspend fun reflectSequence(result: TriggerSafetyCallUseCase.Result) {
+    private fun reflectSequence(result: TriggerSafetyCallUseCase.Result) {
         planNextRelance(result)
-        // Sous contrainte, rien ne s'affiche : une notification annonçant qu'une alerte est partie
-        // révélerait à l'agresseur l'existence du réseau de soutien de la victime.
-        if (result is TriggerSafetyCallUseCase.Result.PanicSuppressed) {
-            warningNotifier.dismiss()
-            return
-        }
-        val after = settings.flow.first().security.safetyCall
-        if (after.hasRelancePending) {
-            warningNotifier.showSequenceActive(
-                after.messagesSent,
-                SafetyCallConfig.TOTAL_MESSAGES,
-            )
-        } else {
-            // Séquence close, désarmée, ou jamais ouverte : la notification n'a plus d'objet.
-            warningNotifier.dismiss()
-        }
+        // v1.27.2 (audit Codex du 2026-08-05, C-07 / C-08) — CE WORKER NE TOUCHE PLUS À LA
+        // NOTIFICATION DE SÉQUENCE.
+        //
+        // Il la posait ici, après l'envoi. Deux trous en découlaient :
+        //
+        //  - **C-07** : entre sa garde panic-decoy et cette ligne, l'application pouvait entrer en
+        //    mode leurre. L'observateur retirait bien la notification, puis le worker la
+        //    REPUBLIAIT depuis l'état persistant — et plus rien ne venait l'effacer. Sous
+        //    contrainte, l'agresseur voyait réapparaître qu'une alerte et un réseau de proches
+        //    existaient.
+        //  - **C-08** : à l'inverse, si le processus mourait entre le dernier envoi et le
+        //    `dismiss`, Android conservait une notification « alerte en cours » que personne ne
+        //    réconciliait au redémarrage.
+        //
+        // Les deux viennent de la même cause : deux écrivains pour un même affichage, sans état
+        // commun. `MainApplication` en est désormais l'unique propriétaire, et il décide sur le
+        // couple (configuration persistée, état du verrou) — donc en réagissant aussi bien à
+        // l'entrée en leurre qu'à un « Je vais bien », et en se rejouant à chaque démarrage.
     }
 
     companion object {

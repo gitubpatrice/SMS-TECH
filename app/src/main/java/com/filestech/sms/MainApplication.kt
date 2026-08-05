@@ -11,6 +11,7 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.sync.TelephonySyncManager
 import com.filestech.sms.di.ApplicationScope
+import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
 import com.filestech.sms.system.notifications.NotificationChannelInitializer
@@ -21,6 +22,7 @@ import com.filestech.sms.system.service.KeepAliveService
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -218,10 +220,9 @@ class MainApplication : Application(), Configuration.Provider {
                 //
                 // L'état terminal doit être DURABLE : plus de relance en attente **et** aucun bail
                 // en cours. Tant qu'un créneau est réservé, quelqu'un travaille dessus.
-                .map { s ->
-                    val cfg = s.security.safetyCall
-                    !cfg.enabled || (!cfg.hasRelancePending && cfg.claimedAt == 0L)
-                }
+                // Le prédicat vit dans le domaine, pas ici : il était intestable à cet endroit, et
+                // c'est précisément pour ça que le défaut est passé.
+                .map { it.security.safetyCall.isSequenceTerminal }
                 .distinctUntilChanged()
                 .collect { terminal ->
                     if (terminal) {
@@ -231,28 +232,48 @@ class MainApplication : Application(), Configuration.Provider {
                 }
         }
 
-        // v1.27.2 — 🔴 LA NOTIFICATION DE SÉQUENCE NE DOIT JAMAIS SURVIVRE À UNE ENTRÉE EN MODE
-        // LEURRE.
+        // v1.27.2 (audit Codex du 2026-08-05, C-07 / C-08) — RÉCONCILIATION UNIQUE de la
+        // notification de séquence, sur le couple (configuration persistée, état du verrou).
         //
-        // Elle annonce « alerte envoyée, N messages sur M à vos proches ». Sous contrainte, la
-        // laisser affichée révélerait à l'agresseur qu'un réseau de soutien a été prévenu —
-        // exactement ce que le mode leurre existe pour cacher, et le contraire de ce que fait le
-        // reste de l'application, qui masque jusqu'à l'existence des fonctions de sécurité
-        // personnelle.
+        // Elle annonce « alerte envoyée, N messages sur M à vos proches ». Deux écrivains se la
+        // disputaient — ce worker et cet observateur — sans état commun, d'où deux trous
+        // symétriques :
         //
-        // Le worker la retire déjà quand il tourne, mais il ne tourne qu'au réveil suivant : la
-        // notification restait visible jusqu'à quinze minutes, ou une heure. Ici la réaction est
-        // immédiate, à la transition d'état — et en un seul endroit, donc pour tous les chemins
-        // qui entrent en leurre.
+        //  - le worker la REPUBLIAIT après coup alors que l'application venait d'entrer en mode
+        //    leurre : sous contrainte, l'agresseur voyait réapparaître qu'un réseau de soutien
+        //    avait été prévenu, et plus rien ne venait l'effacer ;
+        //  - à l'inverse, un processus tué entre le dernier envoi et le retrait laissait une
+        //    notification « alerte en cours » que personne ne réconciliait au redémarrage.
+        //
+        // Un seul propriétaire, donc, qui décide sur l'état réel plutôt que sur l'enchaînement des
+        // évènements. Il se rejoue à chaque changement de configuration, à chaque changement de
+        // verrou, et **à chaque démarrage à froid** — ce qui ferme aussi le cas du processus tué.
+        //
+        // La condition d'affichage inclut `claimedAt != 0L` : sur le tout dernier créneau,
+        // `hasRelancePending` devient faux dès la réservation, et la notification aurait disparu
+        // pendant l'envoi du dernier message.
         appScope.launch {
-            appLock.state
-                .map { it is AppLockManager.LockState.PanicDecoy }
+            combine(
+                settingsRepository.flow.map { it.security.safetyCall },
+                appLock.state.map { it is AppLockManager.LockState.PanicDecoy },
+            ) { cfg, isDecoy ->
+                val sequenceRunning = cfg.enabled &&
+                    cfg.isTriggered &&
+                    (cfg.hasRelancePending || cfg.claimedAt != 0L)
+                if (isDecoy || !sequenceRunning) null else cfg.messagesSent
+            }
                 .distinctUntilChanged()
-                .collect { isDecoy ->
-                    if (isDecoy) {
-                        runCatching { safetyCallWarningNotifier.dismiss() }
-                            .onFailure { Timber.w(it, "PanicDecoy: safety call notice dismiss failed") }
-                    }
+                .collect { sent ->
+                    runCatching {
+                        if (sent == null) {
+                            safetyCallWarningNotifier.dismissSequence()
+                        } else {
+                            safetyCallWarningNotifier.showSequenceActive(
+                                sent,
+                                SafetyCallConfig.TOTAL_MESSAGES,
+                            )
+                        }
+                    }.onFailure { Timber.w(it, "SafetyCall: reconciliation notification echouee") }
                 }
         }
 

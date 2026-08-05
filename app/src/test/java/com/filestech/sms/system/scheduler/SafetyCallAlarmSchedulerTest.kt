@@ -144,12 +144,23 @@ class SafetyCallAlarmSchedulerTest {
                 .toList()
         }
 
+        // v1.27.2 (audit Codex, C-05) — la deuxième décision n'est PLUS la relance à quinze
+        // minutes, mais **l'expiration du bail à deux minutes**.
+        //
+        // Tant qu'un créneau est réservé, le prochain instant utile est celui où l'on saura si son
+        // propriétaire est mort. Avant, le bail rendait un créneau abandonné éligible à la reprise
+        // sans garantir aucun réveil pour la faire : les deux minutes annoncées pouvaient en valoir
+        // quinze, ou soixante sur le dernier créneau.
         assertThat(decisions).containsExactly(
             deadline,
-            deadline + SafetyCallConfig.RELANCE_INTERVAL_MS,
+            deadline + SafetyCallConfig.CLAIM_LEASE_MS,
             deadline,
         ).inOrder()
         assertThat(decisions.last()).isLessThan(afterDeadlineWall)
+        // Ce qui compte pour la ponctualité : le réveil du bail tombe bien AVANT celui de la
+        // relance qu'il précède.
+        assertThat(deadline + SafetyCallConfig.CLAIM_LEASE_MS)
+            .isLessThan(deadline + SafetyCallConfig.RELANCE_INTERVAL_MS)
     }
 
     @Test

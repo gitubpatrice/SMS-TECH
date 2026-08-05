@@ -158,7 +158,60 @@ data class SafetyCallConfig(
      * mesure avec une alerte muette.
      */
     val claimedAt: Long = 0L,
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-03) — **identité du propriétaire** du créneau réservé.
+     * `0L` quand aucun envoi n'est en cours.
+     *
+     * **Le défaut que ce champ ferme.** Le bail seul dit *qu'un* envoi est en cours, pas *lequel*.
+     * Un worker bloqué plus de [CLAIM_LEASE_MS] voyait donc son créneau repris par un second — ce
+     * qui est voulu — puis, en revenant tardivement, **concluait ou restituait la réservation du
+     * second**. Compteur ramené en arrière pendant un envoi réel, bail levé prématurément, et un
+     * troisième concurrent autorisé dans la foulée.
+     *
+     * Chaque réservation incrémente donc ce jeton, et le worker ne modifie plus l'état que s'il
+     * y retrouve le sien. Un compteur suffit : il est monotone, unique, et survit au processus —
+     * là où un identifiant tiré au hasard aurait demandé une source d'aléa dans une couche qui
+     * doit rester déterministe et testable.
+     */
+    val claimId: Long = 0L,
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-04) — **génération du cycle**, incrémentée à chaque
+     * remise à zéro de l'activité.
+     *
+     * **Le défaut que ce champ ferme.** Comparer `lastActivityAt` fermait la fenêtre
+     * « instantané → réservation », mais pas « réservation → envoi ». Une personne qui confirmait
+     * aller bien **pendant** la boucle d'envoi ne l'arrêtait pas : les SMS d'urgence continuaient
+     * de partir vers ses proches, et le désarmement final pouvait même éteindre le nouveau cycle
+     * qu'elle venait d'ouvrir en rouvrant l'application.
+     *
+     * La génération est relue **avant chaque envoi** et dans chaque écriture de conclusion : dès
+     * qu'elle a bougé, le worker n'a plus rien à faire ici.
+     */
+    val generation: Long = 0L,
 ) {
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-01) — la séquence est-elle **durablement** terminée ?
+     *
+     * # Le défaut que ce prédicat ferme
+     *
+     * `!hasRelancePending` ne suffit pas. [messagesSent] compte les créneaux **réservés**, pas les
+     * envois conclus : quand le worker du dernier message réserve son créneau, le compteur atteint
+     * [TOTAL_MESSAGES] **avant le premier SMS**, et `hasRelancePending` devient faux
+     * instantanément. Un observateur qui s'y fiait concluait « séquence finie » et annulait le
+     * travail en cours — c'est-à-dire **le worker en train d'envoyer la dernière alerte**.
+     *
+     * Tant qu'un bail est posé, quelqu'un travaille sur ce créneau. L'état terminal exige donc les
+     * deux : plus aucune relance en attente, **et** aucune réservation en cours.
+     *
+     * # Pourquoi ici et pas chez l'appelant
+     *
+     * Il vivait dans `MainApplication`, donc hors de portée des tests — et c'est précisément
+     * pour ça que le défaut est passé. Ici, il se teste contre les états réels que produit
+     * `TriggerSafetyCallUseCase` pendant un envoi.
+     */
+    val isSequenceTerminal: Boolean
+        get() = !enabled || (!hasRelancePending && claimedAt == 0L)
+
     /** v1.27.2 — `true` dès que le premier message est parti. */
     val isTriggered: Boolean get() = triggeredAt > 0L
 
@@ -208,6 +261,10 @@ data class SafetyCallConfig(
         triggeredAt = 0L,
         messagesSent = 0,
         claimedAt = 0L,
+        claimId = 0L,
+        // v1.27.2 (audit Codex, C-04) — le cycle change d'identité. Tout worker parti sur la
+        // génération précédente doit s'arrêter, y compris s'il est déjà dans sa boucle d'envoi.
+        generation = generation + 1,
     )
 
     /** v1.27.2 — `true` tant qu'il reste au moins une relance à envoyer. */
