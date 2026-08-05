@@ -67,7 +67,27 @@ class SafetyCallWorker @AssistedInject constructor(
             // Audit H3/PERF-M5 (v1.14.8) — `state.value` zéro-I/O. Le snapshot StateFlow est
             // hydraté au boot (SharingStarted.Eagerly) ; tant que le processus est vivant
             // (et il l'est ici puisque WorkManager nous a réveillés), pas besoin d'ouvrir DataStore.
-            val currentBeforeCheckpoint = settings.state.value.security.safetyCall
+            // v1.27.2 (défaut remonté par Patrice le 2026-08-05 : « le Safety Call n'envoie
+            // jamais rien ») — lecture SUSPENDUE de DataStore, et non plus l'instantané chaud.
+            //
+            // `settings.state` est un `stateIn(..., SharingStarted.Eagerly, AppSettings())` : sa
+            // valeur initiale est la configuration PAR DÉFAUT, dans laquelle `safetyCall.enabled`
+            // vaut **false**. L'hydratation depuis DataStore est asynchrone.
+            //
+            // Or ce worker est réveillé par WorkManager, c'est-à-dire le plus souvent sur un
+            // processus qui vient de DÉMARRER. La garde ci-dessous lisait donc `enabled = false`
+            // avant que DataStore n'ait répondu, concluait « Safety call désactivé », **effaçait
+            // la notification d'avertissement** et rendait `success()`. Le deadman ne partait
+            // jamais — silencieusement, et d'autant plus sûrement que le processus était mort,
+            // c'est-à-dire exactement quand la personne n'utilise plus son téléphone.
+            //
+            // ⚠️ Le commentaire d'origine affirmait le contraire : « le processus est vivant ici
+            // puisque WorkManager nous a réveillés ». C'est précisément l'inverse — être réveillé
+            // signifie que le processus vient de naître. Un repli qui échoue du mauvais côté sur
+            // une fonction de sécurité personnelle.
+            //
+            // `TriggerSafetyCallUseCase` lit déjà, lui, via `settings.flow.first()`.
+            val currentBeforeCheckpoint = settings.flow.first().security.safetyCall
             if (!currentBeforeCheckpoint.enabled) {
                 Timber.d("SafetyCallWorker: disabled, skipping tick")
                 warningNotifier.dismiss()

@@ -69,8 +69,19 @@ class TelephonySyncWorker @AssistedInject constructor(
             // purge auto) = 2× IO + 2× désérialisation proto. Worker s'exécute toutes
             // les 12 h donc impact absolu faible, mais le pattern est aligné avec
             // PERF-01 dans le reste du code.
-            // Audit H3 (v1.14.8) — `state.value` zéro-I/O. Snapshot hydraté au boot.
-            val snapshot = settings.state.value
+            // v1.27.2 — lecture SUSPENDUE, comme [SafetyCallWorker]. Même défaut, même cause :
+            // `settings.state` démarre sur `AppSettings()` et s'hydrate depuis DataStore de façon
+            // asynchrone. Un worker réveillé par WorkManager tourne le plus souvent sur un
+            // processus qui vient de démarrer — il lisait donc les valeurs PAR DÉFAUT.
+            //
+            // Ici la conséquence n'est pas une alerte manquée mais un `lastSyncedSmsId = 0`, soit
+            // une réimportation complète prise pour un premier lancement : les messages importés
+            // y sont marqués comme LUS (cf. `isFirstRun` dans `TelephonySyncManager`), et le
+            // curseur est réécrit derrière. Coûteux et faux, dans le silence.
+            //
+            // Le gain de latence invoqué (audit H3) n'a aucun sens sur une tâche qui s'exécute
+            // toutes les 12 h.
+            val snapshot = settings.flow.first()
             runImport(snapshot)
             // Audit M-6: opportunistic housekeeping. Outbound MMS / voice caches accumulate when
             // the `SmsSentReceiver` never fires (process force-killed, OS skips the broadcast);
