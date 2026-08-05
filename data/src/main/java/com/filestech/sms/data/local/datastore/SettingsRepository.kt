@@ -270,6 +270,10 @@ class SettingsRepository @Inject constructor(
                     // v1.27.2 — absent d'une config antérieure ⇒ `0L`, soit exactement le
                     // comportement précédent jusqu'au premier jalon du worker. Pas de saut.
                     monotonicAccumulatedMs = p[K.safetyCallMonotonicAccumulatedMs] ?: 0L,
+                    // v1.27.2 — sequence de relances. Absents d'une config anterieure => 0,
+                    // c'est-a-dire « jamais declenche » : le comportement d'avant, sans saut.
+                    triggeredAt = p[K.safetyCallTriggeredAt] ?: 0L,
+                    messagesSent = p[K.safetyCallMessagesSent] ?: 0,
                     contacts = SafetyCallContactCodec.decode(p[K.safetyCallContactsJson]),
                     template = enumOr(
                         p,
@@ -390,6 +394,8 @@ class SettingsRepository @Inject constructor(
         this[K.safetyCallLastActivityAt] = s.security.safetyCall.lastActivityAt
         this[K.safetyCallMonotonicLastActivityAt] = s.security.safetyCall.monotonicLastActivityAt
         this[K.safetyCallMonotonicAccumulatedMs] = s.security.safetyCall.monotonicAccumulatedMs
+        this[K.safetyCallTriggeredAt] = s.security.safetyCall.triggeredAt
+        this[K.safetyCallMessagesSent] = s.security.safetyCall.messagesSent
         this[K.safetyCallContactsJson] = SafetyCallContactCodec.encode(s.security.safetyCall.contacts)
         this[K.safetyCallTemplate] = s.security.safetyCall.template.name
         this[K.safetyCallCustomMessage] = s.security.safetyCall.customMessage
@@ -493,6 +499,11 @@ class SettingsRepository @Inject constructor(
         // v1.27.2 — temps monotone capitalisé, pour que le deadman survive aux redémarrages.
         val safetyCallMonotonicAccumulatedMs =
             longPreferencesKey("security.safetyCall.monotonicAccumulatedMs")
+
+        // v1.27.2 — sequence de relances : instant du premier envoi reussi, et compteur de
+        // messages deja partis. Cf. [SafetyCallConfig.triggeredAt].
+        val safetyCallTriggeredAt = longPreferencesKey("security.safetyCall.triggeredAt")
+        val safetyCallMessagesSent = intPreferencesKey("security.safetyCall.messagesSent")
         val safetyCallContactsJson = stringPreferencesKey("security.safetyCall.contactsJson")
         val safetyCallTemplate = stringPreferencesKey("security.safetyCall.template")
         val safetyCallCustomMessage = stringPreferencesKey("security.safetyCall.customMessage")

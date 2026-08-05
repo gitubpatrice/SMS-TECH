@@ -447,6 +447,12 @@ fun SettingsScreen(
                 icon = Icons.Outlined.Shield,
             ) {
                 val safetyCall = state.security.safetyCall
+                // Hissés au niveau de la composition : les appeler dans le lambda déclencherait
+                // `LocalContextGetResourceValueCall` (lint), et un `ctx.getString` dans un
+                // rappel ne suit pas les changements de langue.
+                val imOkResetMessage = stringResource(R.string.settings_safety_call_im_ok_snack)
+                val imOkStopsRelancesMessage =
+                    stringResource(R.string.settings_safety_call_im_ok_stops_relances)
                 if (safetyCall.enabled) {
                     // Récap visible quand armé : durée, restant, contacts,
                     // template + 2 actions (Modifier / Je vais bien).
@@ -455,23 +461,48 @@ fun SettingsScreen(
                         remainingMs = safetyCallRemainingMs,
                         onModify = onOpenSafetyCall,
                         onImOk = {
+                            // v1.27.2 — deux sens, selon qu'une séquence de relances est ouverte
+                            // ou non. Décision de Patrice, 2026-08-05.
+                            //
+                            //  - AVANT déclenchement : « Je vais bien » remet le minuteur à zéro,
+                            //    comportement d'origine.
+                            //  - APRÈS déclenchement : il **désactive** le Safety Call et arrête
+                            //    les relances. Le cycle est clos ; la personne a confirmé aller
+                            //    bien, elle réarmera quand elle le voudra. Se contenter de
+                            //    remettre le minuteur à zéro laisserait `triggeredAt` posé et les
+                            //    relances continueraient de partir.
+                            val wasTriggered = safetyCall.isTriggered
                             viewModel.update { s ->
+                                val cfg = s.security.safetyCall
                                 s.copy(
                                     security = s.security.copy(
-                                        safetyCall = s.security.safetyCall.copy(
-                                            lastActivityAt = System.currentTimeMillis(),
-                                            // v1.10.0 SEC-11 — couple mono+wall.
-                                            monotonicLastActivityAt = SystemClock.elapsedRealtime(),
-                                            // v1.27.2 — « Je vais bien » remet aussi le temps
-                                            // capitalisé à zéro : les trois champs ensemble.
-                                            monotonicAccumulatedMs = 0L,
-                                        ),
+                                        safetyCall = if (cfg.isTriggered) {
+                                            cfg.copy(
+                                                enabled = false,
+                                                triggeredAt = 0L,
+                                                messagesSent = 0,
+                                            )
+                                        } else {
+                                            cfg.copy(
+                                                lastActivityAt = System.currentTimeMillis(),
+                                                // v1.10.0 SEC-11 — couple mono+wall.
+                                                monotonicLastActivityAt =
+                                                    SystemClock.elapsedRealtime(),
+                                                // v1.27.2 — « Je vais bien » remet aussi le temps
+                                                // capitalisé à zéro : les trois champs ensemble.
+                                                monotonicAccumulatedMs = 0L,
+                                            )
+                                        },
                                     ),
                                 )
                             }
                             rootScope.launch {
                                 snackbarHost.showSnackbar(
-                                    ctx.getString(R.string.settings_safety_call_im_ok_snack),
+                                    if (wasTriggered) {
+                                        imOkStopsRelancesMessage
+                                    } else {
+                                        imOkResetMessage
+                                    },
                                 )
                             }
                         },
@@ -2558,9 +2589,29 @@ private fun SafetyCallArmedRecap(
             }
         }
         Spacer(Modifier.size(8.dp))
+        // v1.27.2 — la séquence de relances passe AVANT tout le reste : l'alerte est déjà
+        // partie, la durée et le temps restant n'ont plus de sens à cet instant. Le libellé dit
+        // exactement où en est la séquence, pour qu'on ne se demande pas si ça continue.
+        if (config.isTriggered) {
+            Text(
+                text = stringResource(
+                    R.string.settings_safety_call_triggered_state,
+                    config.messagesSent,
+                    com.filestech.sms.domain.safetycall.SafetyCallConfig.TOTAL_MESSAGES,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                text = stringResource(R.string.settings_safety_call_triggered_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.size(4.dp))
+        }
         // Détails — chaque ligne en bodyMedium / onSurfaceVariant pour
         // hiérarchie visuelle (titre en gros, détails en plus discret).
-        if (startedLabel != null) {
+        if (!config.isTriggered && startedLabel != null) {
             Text(
                 text = startedLabel,
                 style = MaterialTheme.typography.bodyMedium,

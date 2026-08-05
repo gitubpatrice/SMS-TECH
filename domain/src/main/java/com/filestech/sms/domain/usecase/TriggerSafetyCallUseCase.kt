@@ -3,6 +3,8 @@ package com.filestech.sms.domain.usecase
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.safetycall.SafetyCallConfig
+import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.CoroutineDispatcher
@@ -60,33 +62,84 @@ class TriggerSafetyCallUseCase @Inject constructor(
             Timber.d("TriggerSafetyCallUseCase: disabled, skipping")
             return@withContext Result.Disabled
         }
-        if (!current.isExpired()) {
+
+        // v1.27.2 - deux entrees possibles : le declenchement initial, ou une relance de la
+        // sequence deja ouverte. `isExpired` rend `false` des que `triggeredAt` est pose : les
+        // deux conditions sont donc exclusives, jamais concurrentes.
+        val isRelance = current.isTriggered
+        if (isRelance && !current.hasRelancePending) {
+            // Sequence terminee sans que le desarmement ait pu s ecrire - processus tue juste
+            // apres le dernier envoi. On finit le travail plutot que de laisser un etat bancal.
+            Timber.i("TriggerSafetyCallUseCase: relance sequence complete, disarming")
+            disableSafetyCall()
+            return@withContext Result.SequenceComplete
+        }
+        if (!isRelance && !current.isExpired()) {
             Timber.d(
                 "TriggerSafetyCallUseCase: armed but not expired (lastActivity=%d, timeout=%dh)",
                 current.lastActivityAt, current.timeoutMs / 3_600_000L,
             )
             return@withContext Result.NotExpired
         }
+        if (isRelance && !current.isRelanceDue()) {
+            Timber.d("TriggerSafetyCallUseCase: relance %d not due yet", current.messagesSent)
+            return@withContext Result.NotExpired
+        }
         if (current.contacts.isEmpty()) {
-            Timber.w("TriggerSafetyCallUseCase: expired but no contacts configured — disabling")
+            Timber.w("TriggerSafetyCallUseCase: expired but no contacts configured - disabling")
             disableSafetyCall()
             return@withContext Result.NoContacts
         }
-        val body = current.template
-            .render(current.timeoutMs, current.customMessage)
-            .trim()
+        val body = if (isRelance) {
+            SafetyCallTemplate.renderRelance(current.messagesSent)
+        } else {
+            current.template.render(current.timeoutMs, current.customMessage)
+        }.trim()
         if (body.isBlank()) {
-            Timber.w("TriggerSafetyCallUseCase: expired but rendered body is blank — disabling")
+            Timber.w("TriggerSafetyCallUseCase: rendered body is blank - disabling")
             disableSafetyCall()
             return@withContext Result.EmptyBody
         }
 
-        Timber.i(
-            "TriggerSafetyCallUseCase: TRIGGER — sending to %d contact(s), template=%s, timeout=%dh",
-            current.contacts.size, current.template.name, current.timeoutMs / 3_600_000L,
-        )
+        // v1.27.2 - RESERVATION ATOMIQUE du creneau, AVANT l envoi.
+        //
+        // `settings.update` s execute sous le verrou d ecriture de DataStore : le test et
+        // l increment sont donc indivisibles. Sans cela, le tick periodique (60 min) et la
+        // relance ponctuelle (15 min) pourraient se croiser et envoyer deux fois le meme message.
+        //
+        // La reservation echoue si quelqu un a deja pris ce creneau : on ne fait alors rien.
+        val nowMs = System.currentTimeMillis()
+        var claimed = false
+        settings.update { s ->
+            val cfg = s.security.safetyCall
+            if (!cfg.enabled || cfg.messagesSent != current.messagesSent) {
+                s
+            } else {
+                claimed = true
+                s.copy(
+                    security = s.security.copy(
+                        safetyCall = cfg.copy(
+                            triggeredAt = if (cfg.isTriggered) cfg.triggeredAt else nowMs,
+                            messagesSent = cfg.messagesSent + 1,
+                        ),
+                    ),
+                )
+            }
+        }
+        if (!claimed) {
+            Timber.i(
+                "TriggerSafetyCallUseCase: slot %d already claimed, skipping",
+                current.messagesSent,
+            )
+            return@withContext Result.AlreadySent
+        }
 
-        disableSafetyCall()
+        Timber.i(
+            "TriggerSafetyCallUseCase: SEND #%d - %d contact(s), relance=%s",
+            current.messagesSent + 1,
+            current.contacts.size,
+            isRelance,
+        )
 
         var sent = 0
         var failed = 0
@@ -116,11 +169,50 @@ class TriggerSafetyCallUseCase @Inject constructor(
             }
         }
 
-        Timber.i(
-            "TriggerSafetyCallUseCase: TRIGGER done — sent=%d failed=%d, deadman now disabled",
-            sent, failed,
+        // v1.27.2 - ANNULATION DE LA RESERVATION si RIEN n est parti.
+        //
+        // C est le renversement assume du correctif SEC-3, qui desarmait AVANT la boucle d envoi
+        // pour qu un plantage entre deux envois ne relance pas le declenchement. Le prix n avait
+        // pas ete pese : sans reseau, en mode avion ou sans SIM, le deadman se desarmait quand
+        // meme - definitivement et en silence, exactement au moment ou il echouait.
+        //
+        // La reservation atomique ci-dessus couvre deja le doublon. Ici on REND le creneau pour
+        // que le tick suivant retente. Un plantage entre l envoi et cette ligne coute au pire UN
+        // message en double : bien moins grave qu une protection eteinte sans le dire.
+        if (sent == 0) {
+            Timber.w("TriggerSafetyCallUseCase: nothing sent - releasing slot for next tick")
+            settings.update { s ->
+                val cfg = s.security.safetyCall
+                if (cfg.messagesSent != current.messagesSent + 1) {
+                    s
+                } else {
+                    s.copy(
+                        security = s.security.copy(
+                            safetyCall = cfg.copy(
+                                triggeredAt = if (isRelance) cfg.triggeredAt else 0L,
+                                messagesSent = current.messagesSent,
+                            ),
+                        ),
+                    )
+                }
+            }
+            return@withContext Result.SendFailed(failed = failed)
+        }
+
+        val messagesSentNow = current.messagesSent + 1
+        val remaining = SafetyCallConfig.TOTAL_MESSAGES - messagesSentNow
+        if (remaining <= 0) {
+            Timber.i(
+                "TriggerSafetyCallUseCase: sequence complete (%d messages), disarming",
+                messagesSentNow,
+            )
+            disableSafetyCall()
+        }
+        Result.Triggered(
+            sent = sent,
+            failed = failed,
+            nextRelanceInMs = if (remaining > 0) SafetyCallConfig.RELANCE_INTERVAL_MS else null,
         )
-        return@withContext Result.Triggered(sent = sent, failed = failed)
     }
 
     private suspend fun disableSafetyCall() {
@@ -154,6 +246,23 @@ class TriggerSafetyCallUseCase @Inject constructor(
          * lesquels l'envoi a échoué (numéro invalide, default SMS app,
          * blocklist, échec sender).
          */
-        data class Triggered(val sent: Int, val failed: Int) : Result
+        data class Triggered(
+            val sent: Int,
+            val failed: Int,
+            /** v1.27.2 - delai avant la prochaine relance, ou `null` si la sequence est finie. */
+            val nextRelanceInMs: Long? = null,
+        ) : Result
+
+        /** v1.27.2 - le creneau avait deja ete pris par un autre tick. Rien n a ete envoye. */
+        data object AlreadySent : Result
+
+        /** v1.27.2 - la sequence de relances est terminee ; le deadman vient d etre desarme. */
+        data object SequenceComplete : Result
+
+        /**
+         * v1.27.2 - AUCUN envoi n a abouti. Le creneau a ete rendu : le deadman reste arme et le
+         * tick suivant retentera. Ne JAMAIS desarmer sur ce chemin.
+         */
+        data class SendFailed(val failed: Int) : Result
     }
 }

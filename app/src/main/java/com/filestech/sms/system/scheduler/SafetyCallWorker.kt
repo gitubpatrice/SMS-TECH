@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -132,10 +134,31 @@ class SafetyCallWorker @AssistedInject constructor(
             // somme, et `monoElapsedMs` rend la même chose des deux côtés à cet instant.
             val current = currentBeforeCheckpoint
             when {
+                // v1.27.2 — une séquence de relances est ouverte : elle a la priorité sur tout le
+                // reste. `isExpired` et `isInWarningWindow` rendent déjà `false` dans cet état,
+                // mais l'ordre est explicite pour que la lecture ne laisse aucun doute.
+                current.hasRelancePending -> {
+                    if (current.isRelanceDue()) {
+                        Timber.i(
+                            "SafetyCallWorker: relance %d due, delegating",
+                            current.messagesSent,
+                        )
+                        planNextRelance(triggerSafetyCall())
+                    } else {
+                        // Pas encore l'heure : on se contente de (re)poser le rendez-vous, au cas
+                        // où le travail ponctuel aurait été perdu — redémarrage, nettoyage OEM.
+                        current.nextRelanceAt()?.let { at ->
+                            scheduleRelance(
+                                applicationContext,
+                                (at - System.currentTimeMillis()).coerceAtLeast(0L),
+                            )
+                        }
+                    }
+                }
                 current.isExpired() -> {
                     Timber.i("SafetyCallWorker: timer expired, delegating to trigger use case")
                     warningNotifier.dismiss()
-                    triggerSafetyCall()
+                    planNextRelance(triggerSafetyCall())
                 }
                 current.isInWarningWindow() -> {
                     val msToExpiry = (current.lastActivityAt + current.timeoutMs) -
@@ -160,8 +183,44 @@ class SafetyCallWorker @AssistedInject constructor(
         }
     }
 
+    /**
+     * v1.27.2 — pose le rendez-vous de la relance suivante quand le use case en annonce une.
+     *
+     * Un travail **ponctuel** est indispensable : le tick périodique est à 60 min alors que
+     * les relances sont à 15 min. Sans lui, la séquence s'étirerait sur quatre heures au lieu
+     * de quarante-cinq minutes.
+     */
+    private fun planNextRelance(result: TriggerSafetyCallUseCase.Result) {
+        val next = (result as? TriggerSafetyCallUseCase.Result.Triggered)?.nextRelanceInMs ?: return
+        scheduleRelance(applicationContext, next)
+    }
+
     companion object {
         const val WORK_NAME = "safety_call_check_periodic"
+
+        /** v1.27.2 — nom unique du travail ponctuel qui porte la prochaine relance. */
+        const val RELANCE_WORK_NAME = "safety_call_relance_oneshot"
+
+        /**
+         * v1.27.2 — programme la prochaine relance dans [delayMs].
+         *
+         * `REPLACE` et non `KEEP` : si un rendez-vous plus ancien traîne — relance perdue,
+         * worker rejoué après un redémarrage, nettoyage OEM — c'est **toujours le calcul le
+         * plus récent** qui fait foi. Deux rendez-vous concurrents ne pourraient de toute
+         * façon pas envoyer deux fois : la réservation atomique du créneau, côté use case,
+         * s'en charge.
+         */
+        fun scheduleRelance(context: Context, delayMs: Long) {
+            val request = OneTimeWorkRequestBuilder<SafetyCallWorker>()
+                .setInitialDelay(delayMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                RELANCE_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request,
+            )
+            Timber.i("SafetyCallWorker: relance scheduled in %d min", delayMs / 60_000L)
+        }
 
         /** Période entre 2 ticks. 60 min = compromis précision/batterie. */
         private const val TICK_PERIOD_MINUTES: Long = 60L

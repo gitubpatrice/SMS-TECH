@@ -456,6 +456,9 @@
     <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
     <string name="settings_safety_call_armed_chip">Enabled</string>
     <string name="settings_safety_call_armed_started">Timer started: %1$s at %2$s</string>
+    <string name="settings_safety_call_im_ok_stops_relances">Safety call turned off. No further message will be sent.</string>
+    <string name="settings_safety_call_triggered_state">Alert sent — message %1$d of %2$d</string>
+    <string name="settings_safety_call_triggered_hint">Follow-ups are sent every 15 minutes. Tap “I’m OK” to stop them.</string>
     <string name="settings_safety_call_armed_duration">Duration: %1$s</string>
     <string name="settings_safety_call_armed_remaining">Remaining: %1$s before trigger</string>
     <string name="settings_safety_call_armed_remaining_imminent">Less than 2 h before trigger</string>

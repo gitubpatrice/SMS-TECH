@@ -116,7 +116,45 @@ data class SafetyCallConfig(
      * accents). Ignoré pour les autres templates.
      */
     val customMessage: String = "",
+    /**
+     * v1.27.2 — horodatage mural du **premier envoi réussi**. `0L` = jamais déclenché.
+     *
+     * Tant qu'il vaut `0L`, le deadman est en veille et [isExpired] décide seul. Dès qu'il est
+     * posé, la séquence de relances prend le relais et [isExpired] rend `false` — sans quoi le
+     * message initial repartirait à chaque tick.
+     *
+     * Horloge **murale** assumée ici, contrairement au décompte avant déclenchement : ce qu'elle
+     * protégeait — ne pas partir trop tôt — est déjà joué. Avancer l'horloge à ce stade ne ferait
+     * que grouper des relances déjà décidées, jamais en créer.
+     */
+    val triggeredAt: Long = 0L,
+    /**
+     * v1.27.2 — nombre de messages **déjà partis** dans la séquence courante : `1` après le
+     * message initial, jusqu'à [TOTAL_MESSAGES]. `0` = rien n'est parti.
+     *
+     * Incrémenté de façon atomique **avant** l'envoi (cf. `TriggerSafetyCallUseCase`) pour qu'un
+     * tick périodique et une relance ponctuelle qui se croiseraient n'envoient pas deux fois le
+     * même message ; remis à sa valeur d'avant si aucun envoi n'aboutit.
+     */
+    val messagesSent: Int = 0,
 ) {
+    /** v1.27.2 — `true` dès que le premier message est parti. */
+    val isTriggered: Boolean get() = triggeredAt > 0L
+
+    /** v1.27.2 — `true` tant qu'il reste au moins une relance à envoyer. */
+    val hasRelancePending: Boolean
+        get() = isTriggered && messagesSent in 1 until TOTAL_MESSAGES
+
+    /** v1.27.2 — instant de la prochaine relance, ou `null` s'il n'y en a plus. */
+    fun nextRelanceAt(): Long? =
+        if (hasRelancePending) triggeredAt + messagesSent * RELANCE_INTERVAL_MS else null
+
+    /** v1.27.2 — `true` quand la prochaine relance est due. */
+    fun isRelanceDue(nowMs: Long = System.currentTimeMillis()): Boolean {
+        val due = nextRelanceAt() ?: return false
+        return nowMs >= due
+    }
+
     /**
      * Retourne `true` quand le timer a expiré du point de vue WALL-CLOCK
      * ET MONOTONIC. Faux si [enabled] = false, si [lastActivityAt] = 0L
@@ -134,6 +172,11 @@ data class SafetyCallConfig(
         nowMs: Long = System.currentTimeMillis(),
         nowMonoMs: Long = SystemClock.elapsedRealtime(),
     ): Boolean {
+        // v1.27.2 — une fois déclenché, le décompte initial est CLOS : c'est la séquence de
+        // relances qui prend le relais. Sans cette ligne, `lastActivityAt` n'ayant pas bougé, le
+        // message initial repartirait à chaque tick — indéfiniment, puisque le deadman ne se
+        // désarme plus tout de suite.
+        if (isTriggered) return false
         if (!enabled || lastActivityAt == 0L || monotonicLastActivityAt == 0L) return false
         val wallExpired = (nowMs - lastActivityAt) >= timeoutMs
         val monoExpired = monoElapsedMs(nowMonoMs) >= timeoutMs
@@ -167,6 +210,9 @@ data class SafetyCallConfig(
         nowMs: Long = System.currentTimeMillis(),
         nowMonoMs: Long = SystemClock.elapsedRealtime(),
     ): Boolean {
+        // v1.27.2 — plus d'avertissement une fois le message parti : il annonce un déclenchement
+        // qui a déjà eu lieu. C'est la séquence de relances qui informe désormais.
+        if (isTriggered) return false
         if (!enabled || lastActivityAt == 0L || monotonicLastActivityAt == 0L) return false
         val elapsedWall = nowMs - lastActivityAt
         // v1.27.2 — même compteur monotone que [isExpired] : sans quoi la fenêtre
@@ -188,6 +234,28 @@ data class SafetyCallConfig(
 
         /** Fenêtre de pré-trigger : notification 6h avant expiration. */
         const val WARNING_WINDOW_MS: Long = 6 * 60 * 60 * 1000L
+
+        /**
+         * v1.27.2 — nombre de **relances** après le message initial, décidé par Patrice le
+         * 2026-08-05.
+         *
+         * Le déclenchement ne désarme plus le deadman sur-le-champ : si l'application a envoyé
+         * l'alerte, c'est que la personne n'a pas donné signe de vie, et un unique SMS peut être
+         * manqué — téléphone en silencieux, contact endormi, réseau capricieux.
+         *
+         * **Borné à trois, volontairement.** La cause la plus probable d'un déclenchement n'est
+         * pas un malaise mais une batterie à plat, un voyage sans réseau ou un oubli. Une relance
+         * sans fin inonderait des proches sans que personne puisse l'arrêter — celui qui le
+         * pourrait est précisément celui qui ne regarde pas son téléphone — et apprendrait aux
+         * contacts à ignorer l'alerte le jour où elle est vraie.
+         */
+        const val RELANCE_COUNT: Int = 3
+
+        /** v1.27.2 — intervalle entre deux messages de la séquence. */
+        const val RELANCE_INTERVAL_MS: Long = 15 * 60 * 1000L
+
+        /** v1.27.2 — total envoyé sur une séquence complète : le message initial + les relances. */
+        const val TOTAL_MESSAGES: Int = RELANCE_COUNT + 1
 
         /** Nombre maximum de contacts d'urgence. */
         const val MAX_CONTACTS: Int = 4

@@ -68,6 +68,36 @@ enum class SafetyCallTemplate {
 
     companion object {
         /**
+         * v1.27.2 — texte de la **relance** numéro [index] (1 à
+         * [SafetyCallConfig.RELANCE_COUNT]).
+         *
+         * Indépendant du [SafetyCallTemplate] choisi : la relance est un suivi de ce qui est déjà
+         * parti, quel qu'il soit — y compris un message personnalisé. Répéter le texte initial mot
+         * pour mot aurait ressemblé à un défaut de l'application, pas à une insistance.
+         *
+         * La progression est explicite — le temps écoulé, puis une consigne qui monte — et **la
+         * dernière relance annonce qu'elle est la dernière**. Sans cela, un contact pourrait
+         * attendre une suite qui ne viendra jamais au lieu d'agir.
+         *
+         * Chaque texte tient dans un segment SMS UCS-2 (70 caractères accentués) ou deux au pire,
+         * comme les modèles ci-dessus.
+         */
+        fun renderRelance(index: Int): String {
+            val minutes = index * (SafetyCallConfig.RELANCE_INTERVAL_MS / 60_000L)
+            return when (index) {
+                1 ->
+                    "Toujours aucun signe de ma part, $minutes minutes plus tard. " +
+                        "Merci d'essayer de me joindre."
+                2 ->
+                    "Deuxième relance : $minutes minutes sans réponse de ma part. " +
+                        "Si tu ne me joins pas, préviens un proche."
+                else ->
+                    "Dernier message automatique : $minutes minutes sans réponse. " +
+                        "Merci de vérifier que je vais bien."
+            }
+        }
+
+        /**
          * Convertit une durée en label français lisible :
          *  - 24 h ou multiple entier d'heures → "X heures"
          *  - Multiple entier de jours → "X jour(s)"

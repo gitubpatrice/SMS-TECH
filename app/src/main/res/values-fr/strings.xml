@@ -444,6 +444,9 @@
     <!-- v1.9.0 — bloc récap actif (visible uniquement si Safety call activé) -->
     <string name="settings_safety_call_armed_chip">Activé</string>
     <string name="settings_safety_call_armed_started">Minuteur lancé : %1$s à %2$s</string>
+    <string name="settings_safety_call_im_ok_stops_relances">Safety call désactivé. Plus aucun message ne partira.</string>
+    <string name="settings_safety_call_triggered_state">Alerte envoyée — message %1$d sur %2$d</string>
+    <string name="settings_safety_call_triggered_hint">Les relances partent toutes les 15 minutes. Appuyez sur « Je vais bien » pour les arrêter.</string>
     <string name="settings_safety_call_armed_duration">Durée : %1$s</string>
     <string name="settings_safety_call_armed_remaining">Restant : %1$s avant déclenchement</string>
     <string name="settings_safety_call_armed_remaining_imminent">Moins de 2 h avant déclenchement</string>
