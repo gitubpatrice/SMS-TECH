@@ -3,6 +3,11 @@ package com.filestech.sms.system.scheduler
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
 /**
@@ -13,6 +18,12 @@ import org.junit.jupiter.api.Test
  * trop tôt, un deadman qui ne part pas — ou une **boucle de réveil** qui vide la batterie.
  */
 class SafetyCallAlarmSchedulerTest {
+
+    private data class TimedConfig(
+        val config: SafetyCallConfig,
+        val wallNow: Long,
+        val monotonicNow: Long,
+    )
 
     private companion object {
         const val ARMED_AT = 1_700_000_000_000L
@@ -96,6 +107,49 @@ class SafetyCallAlarmSchedulerTest {
 
         assertThat(SafetyCallAlarmScheduler.nextWakeUpAt(apres, now, nowMono))
             .isEqualTo(SafetyCallAlarmScheduler.nextWakeUpAt(avant, now, nowMono))
+    }
+
+    /**
+     * Reproduit le flux de décision de `MainApplication` avec ses deux horloges injectées. Après
+     * un échec total, la restitution repasse par l'échéance initiale désormais passée. Le jalon
+     * suivant ne doit pas réémettre cette même décision et réarmer une boucle immédiate.
+     */
+    @Test
+    fun `le flux deduplique une echeance passee apres restitution du creneau`() {
+        val deadline = ARMED_AT + TIMEOUT
+        val claimed = armed().copy(triggeredAt = deadline, messagesSent = 1, claimedAt = deadline)
+        val rolledBack = armed()
+        val afterDeadlineWall = deadline + 1_000L
+        val afterDeadlineMono = MONO_AT + TIMEOUT + 1_000L
+        val checkpointed = rolledBack.copy(
+            monotonicAccumulatedMs = rolledBack.monoElapsedMs(afterDeadlineMono),
+            monotonicLastActivityAt = afterDeadlineMono,
+        )
+
+        val decisions = runBlocking {
+            listOf(
+                TimedConfig(armed(), ARMED_AT + ONE_HOUR, MONO_AT + ONE_HOUR),
+                TimedConfig(claimed, deadline, MONO_AT + TIMEOUT),
+                TimedConfig(rolledBack, afterDeadlineWall, afterDeadlineMono),
+                TimedConfig(checkpointed, afterDeadlineWall, afterDeadlineMono),
+            ).asFlow()
+                .map { timed ->
+                    SafetyCallAlarmScheduler.nextWakeUpAt(
+                        timed.config,
+                        nowMs = timed.wallNow,
+                        nowMonoMs = timed.monotonicNow,
+                    )
+                }
+                .distinctUntilChanged()
+                .toList()
+        }
+
+        assertThat(decisions).containsExactly(
+            deadline,
+            deadline + SafetyCallConfig.RELANCE_INTERVAL_MS,
+            deadline,
+        ).inOrder()
+        assertThat(decisions.last()).isLessThan(afterDeadlineWall)
     }
 
     @Test

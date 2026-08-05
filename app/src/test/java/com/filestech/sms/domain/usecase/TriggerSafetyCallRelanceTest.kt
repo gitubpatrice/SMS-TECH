@@ -16,18 +16,24 @@ import com.filestech.sms.domain.sender.SmsSender
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * v1.27.2 — **séquence de relances du Safety call**, décidée par Patrice le 2026-08-05 : le
@@ -96,18 +102,63 @@ class TriggerSafetyCallRelanceTest {
         }
     }
 
-    /**
-     * v1.27.2 (audit Codex, SC-03) — simule l'entrelacement réel : le use-case a lu son instantané
-     * ([perime]) juste avant que l'utilisateur ne confirme aller bien, mais il écrit dans le
-     * stockage à jour. Seule la comparaison faite DANS la transaction peut rattraper ça.
-     */
-    private class StaleReadingSettings(
-        private val perime: AppSettings,
+    /** Force deux appels à atteindre leur première transaction avant d'en laisser passer un. */
+    private class ClaimBarrierSettings(
         private val store: FakeSettings,
+        private val parties: Int = 2,
     ) : AppSettingsSource {
-        override val flow: Flow<AppSettings> = flowOf(perime)
+        private val arrivals = AtomicInteger(0)
+        private val barrier = CompletableDeferred<Unit>()
+
+        override val flow: Flow<AppSettings> = store.flow
         override val state: StateFlow<AppSettings> = store.state
-        override suspend fun hydratedOrNull(): AppSettings = perime
+        override suspend fun hydratedOrNull(): AppSettings = store.hydratedOrNull()
+
+        override suspend fun update(transform: (AppSettings) -> AppSettings) {
+            val position = arrivals.incrementAndGet()
+            if (position <= parties) {
+                if (position == parties) barrier.complete(Unit)
+                barrier.await()
+            }
+            store.update(transform)
+        }
+    }
+
+    /** Suspend la première transaction après la lecture du snapshot, avant la réservation. */
+    private class BeforeReservationSettings(private val store: FakeSettings) : AppSettingsSource {
+        private val firstUpdate = AtomicBoolean(true)
+        val reservationReached = CompletableDeferred<Unit>()
+        val continueReservation = CompletableDeferred<Unit>()
+
+        override val flow: Flow<AppSettings> = store.flow
+        override val state: StateFlow<AppSettings> = store.state
+        override suspend fun hydratedOrNull(): AppSettings = store.hydratedOrNull()
+
+        override suspend fun update(transform: (AppSettings) -> AppSettings) {
+            if (firstUpdate.compareAndSet(true, false)) {
+                reservationReached.complete(Unit)
+                continueReservation.await()
+            }
+            store.update(transform)
+        }
+    }
+
+    /** Bloque le premier passage dans l'envoi, nécessairement après la réservation persistée. */
+    private class CancelAfterClaimSettings(private val store: FakeSettings) : AppSettingsSource {
+        private val blockFirstSend = AtomicBoolean(true)
+        val afterClaim = CompletableDeferred<Unit>()
+
+        override val flow: Flow<AppSettings> = store.flow
+        override val state: StateFlow<AppSettings> = store.state
+
+        override suspend fun hydratedOrNull(): AppSettings {
+            if (blockFirstSend.compareAndSet(true, false)) {
+                afterClaim.complete(Unit)
+                awaitCancellation()
+            }
+            return store.hydratedOrNull()
+        }
+
         override suspend fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
     }
 
@@ -252,7 +303,8 @@ class TriggerSafetyCallRelanceTest {
         val settings = expiredSettings()
         val sender = CountingSender(succeed = false)
 
-        val result = runBlocking { useCase(settings, sender).invoke() }
+        val uc = useCase(settings, sender)
+        val result = runBlocking { uc.invoke() }
 
         assertThat(result).isInstanceOf(TriggerSafetyCallUseCase.Result.SendFailed::class.java)
         assertThat(sender.calls).isEqualTo(1)
@@ -262,24 +314,74 @@ class TriggerSafetyCallRelanceTest {
         assertThat(settings.safetyCall.messagesSent).isEqualTo(0)
         // Donc le tick suivant retentera exactement le meme declenchement.
         assertThat(settings.safetyCall.isExpired()).isTrue()
+
+        sender.succeed = true
+        val retry = runBlocking { uc.invoke() }
+        assertThat(retry).isInstanceOf(TriggerSafetyCallUseCase.Result.Triggered::class.java)
+        assertThat(sender.calls).isEqualTo(2)
+        assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
+        assertThat(settings.safetyCall.claimedAt).isEqualTo(0L)
     }
 
     @Test
     fun `deux ticks qui se croisent n envoient qu un seul message`() {
-        val settings = expiredSettings()
+        val store = expiredSettings()
+        val settings = ClaimBarrierSettings(store)
         val sender = CountingSender(succeed = true)
         val uc = useCase(settings, sender)
 
         runBlocking {
-            uc.invoke()
-            // Second appel avec le MEME instantane de depart : c'est le tick periodique qui
-            // arrive pendant que la relance ponctuelle vient de passer.
-            val second = uc.invoke()
-            assertThat(second).isEqualTo(TriggerSafetyCallUseCase.Result.NotExpired)
+            val first = async(Dispatchers.Default) { uc.invoke() }
+            val second = async(Dispatchers.Default) { uc.invoke() }
+            val results = withTimeout(5_000L) { listOf(first.await(), second.await()) }
+
+            assertThat(results.count { it is TriggerSafetyCallUseCase.Result.Triggered }).isEqualTo(1)
+            assertThat(results.count { it is TriggerSafetyCallUseCase.Result.AlreadySent }).isEqualTo(1)
         }
 
         assertThat(sender.calls).isEqualTo(1)
-        assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
+        assertThat(store.safetyCall.messagesSent).isEqualTo(1)
+        assertThat(store.safetyCall.claimedAt).isEqualTo(0L)
+    }
+
+    @Test
+    fun `une annulation apres reservation avant envoi laisse un bail recuperable`() {
+        val store = expiredSettings()
+        val settings = CancelAfterClaimSettings(store)
+        val sender = CountingSender(succeed = true)
+        val uc = useCase(settings, sender)
+
+        runBlocking {
+            val running = async(Dispatchers.Default) { uc.invoke() }
+            withTimeout(5_000L) { settings.afterClaim.await() }
+
+            // Point exact de l'entrelacement : le compteur et le bail sont persistés, mais le
+            // premier appel à SmsSender n'a pas encore eu lieu.
+            assertThat(store.safetyCall.messagesSent).isEqualTo(1)
+            assertThat(store.safetyCall.claimedAt).isGreaterThan(0L)
+            assertThat(sender.calls).isEqualTo(0)
+
+            running.cancelAndJoin()
+            assertThat(running.isCancelled).isTrue()
+
+            // Simule le prochain réveil après expiration du bail : le même créneau doit repartir.
+            store.update { s ->
+                s.copy(
+                    security = s.security.copy(
+                        safetyCall = s.security.safetyCall.copy(
+                            claimedAt = System.currentTimeMillis() -
+                                SafetyCallConfig.CLAIM_LEASE_MS - 1_000L,
+                        ),
+                    ),
+                )
+            }
+            val retry = uc.invoke()
+            assertThat(retry).isInstanceOf(TriggerSafetyCallUseCase.Result.Triggered::class.java)
+        }
+
+        assertThat(sender.calls).isEqualTo(1)
+        assertThat(store.safetyCall.messagesSent).isEqualTo(1)
+        assertThat(store.safetyCall.claimedAt).isEqualTo(0L)
     }
 
     @Test
@@ -465,11 +567,14 @@ class TriggerSafetyCallRelanceTest {
     @Test
     fun `une remise a zero entre l instantane et la reservation annule l envoi`() {
         val store = expiredSettings()
-        val perime = runBlocking { store.flow.first() }
+        val interleaved = BeforeReservationSettings(store)
         val sender = CountingSender(succeed = true)
+        val uc = useCase(interleaved, sender)
 
         val result = runBlocking {
-            // L'utilisateur confirme aller bien PENDANT que le worker tenait son instantané.
+            val worker = async(Dispatchers.Default) { uc.invoke() }
+            // Le worker a lu son instantané expiré et attend juste avant sa transaction.
+            withTimeout(5_000L) { interleaved.reservationReached.await() }
             store.update { s ->
                 s.copy(
                     security = s.security.copy(
@@ -477,8 +582,8 @@ class TriggerSafetyCallRelanceTest {
                     ),
                 )
             }
-            // Le worker reprend avec sa vue périmée.
-            useCase(StaleReadingSettings(perime, store), sender).invoke()
+            interleaved.continueReservation.complete(Unit)
+            withTimeout(5_000L) { worker.await() }
         }
 
         assertThat(result).isEqualTo(TriggerSafetyCallUseCase.Result.AlreadySent)
