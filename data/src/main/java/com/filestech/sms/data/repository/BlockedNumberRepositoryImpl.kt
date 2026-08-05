@@ -102,7 +102,27 @@ class BlockedNumberRepositoryImpl @Inject constructor(
 
     override suspend fun unblock(rawNumber: String): Outcome<Unit> = withContext(io) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) system.unblock(rawNumber)
-        dao.deleteByNormalized(phoneIdentity.snapshot().key(rawNumber))
+        // 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-01) — LE JUMEAU DE `isBlocked`, QUE J AVAIS
+        // OUBLIE.
+        //
+        // J avais ajoute le chemin de transition a la LECTURE sans le porter a l ECRITURE. Tant
+        // que le rekey n a pas tourne, la ligne heritee porte encore le suffixe de neuf chiffres :
+        // supprimer la seule cle E.164 ne trouvait rien. Le systeme etait bien debloque, la ligne
+        // Room restait — et au rekey suivant elle redevenait active. **Le deblocage semblait sans
+        // effet, et le blocage revenait tout seul.** Il fallait debloquer deux fois.
+        //
+        // Le motif du jumeau asymetrique, une fois de plus, dans le correctif meme qui le traitait.
+        val ident = phoneIdentity.snapshot()
+        val key = ident.key(rawNumber)
+        dao.deleteByNormalized(key)
+        val legacyKey = rawNumber.blockKey()
+        if (legacyKey.isNotEmpty() && legacyKey != key) {
+            // On ne supprime que les entrees heritees dont la forme BRUTE designe bien ce
+            // correspondant : le seau de neuf chiffres peut en contenir d autres, d un autre pays.
+            dao.findAllByNormalized(legacyKey)
+                .filter { ident.matches(it.rawNumber, rawNumber) }
+                .forEach { dao.delete(it.id) }
+        }
         Outcome.Success(Unit)
     }
 

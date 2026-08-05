@@ -445,7 +445,24 @@ interface MessageDao {
      * manager's deletion-reconciliation pass. SQLite caps `IN (…)` at 999 host parameters; the
      * caller chunks larger inputs.
      */
-    @Query("DELETE FROM messages WHERE telephony_uri IN (:uris)")
+    /**
+     * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-03) — LE PREDICAT COFFRE EST DANS LA REQUETE.
+     *
+     * `listMirroredTelephonyUris` excluait bien `in_vault = 1`, mais cette lecture a lieu AVANT les
+     * sondes provider. Entre-temps, `moveToVault` peut poser `in_vault = 1` dans une autre
+     * transaction : la suppression effacait alors du contenu que l utilisateur venait tout juste de
+     * mettre a l abri, irreversiblement.
+     *
+     * Un `findById` avant le DELETE recreerait la meme course. La condition doit etre SQL, donc
+     * evaluee atomiquement avec l ecriture.
+     */
+    @Query(
+        """
+        DELETE FROM messages
+        WHERE telephony_uri IN (:uris)
+          AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
     suspend fun deleteByTelephonyUris(uris: List<String>): Int
 
     /**
@@ -457,7 +474,14 @@ interface MessageDao {
      * TOUTES les conversations, y compris celles qu'aucune suppression ne touchait — voir le
      * commentaire de cette passe pour ce que ça coûtait.
      */
-    @Query("SELECT DISTINCT conversation_id FROM messages WHERE telephony_uri IN (:uris)")
+    /** v1.27.2 (audit Codex, LP-03) — meme exclusion du Coffre que la suppression qui suit. */
+    @Query(
+        """
+        SELECT DISTINCT conversation_id FROM messages
+        WHERE telephony_uri IN (:uris)
+          AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
     suspend fun findConversationIdsByTelephonyUris(uris: List<String>): List<Long>
 
     /**

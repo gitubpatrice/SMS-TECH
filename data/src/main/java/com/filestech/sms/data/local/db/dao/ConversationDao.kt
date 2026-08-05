@@ -214,12 +214,30 @@ interface ConversationDao {
      * `NOT EXISTS` porte sur TOUTES les lignes, sentinelles de reaction comprises : on ne supprime
      * que ce qui ne contient plus rien du tout. Une conversation dont il reste ne serait-ce qu'une
      * sentinelle est conservee — elle porte encore un etat que le miroir doit refleter.
+     *
+     * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-02 / LP-03) — « AUCUN MESSAGE » N EST PAS
+     * « CONVERSATION VIDE ».
+     *
+     * La premiere version ne testait que `messages`. Or une conversation sans message peut porter
+     * un BROUILLON non envoye, et etre referencee par un ENVOI PROGRAMME — cette reference n a
+     * meme pas de cle etrangere. Quelqu un qui laisse un brouillon dans un fil, puis supprime le
+     * dernier SMS de ce fil depuis une autre application, perdait donc son texte non envoye et
+     * laissait un envoi programme orphelin. Une suppression faite AILLEURS ne peut pas exprimer
+     * l intention d effacer ces donnees, qui n existent que dans SMS Tech.
+     *
+     * Et `in_vault = 0` est exige ICI, dans le SQL : le fil a pu etre mis au Coffre entre la
+     * photographie des URI et cette transaction.
      */
     @Query(
         """
         DELETE FROM conversations
         WHERE id = :conversationId
+          AND in_vault = 0
+          AND (draft IS NULL OR TRIM(draft) = '')
           AND NOT EXISTS (SELECT 1 FROM messages WHERE conversation_id = :conversationId)
+          AND NOT EXISTS (
+              SELECT 1 FROM scheduled_messages WHERE conversation_id = :conversationId
+          )
         """,
     )
     suspend fun deleteIfEmpty(conversationId: Long): Int
