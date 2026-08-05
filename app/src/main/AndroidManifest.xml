@@ -300,6 +300,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- v1.27.2 — réveil à l'échéance exacte du Safety call.
+             `exported=false` : l'alarme est posée par un PendingIntent interne
+             visant explicitement ce composant. Aucune application tierce ne peut
+             donc forger l'échéance et faire partir le SMS d'urgence en avance.
+             Aucune permission requise (`setAndAllowWhileIdle`). -->
+        <receiver
+            android:name=".system.receiver.SafetyCallAlarmReceiver"
+            android:exported="false" />
+
         <!-- 6) HeadlessSmsSendService — required for default SMS app -->
         <service
             android:name=".system.service.HeadlessSmsSendService"

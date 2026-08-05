@@ -14,6 +14,7 @@ import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
 import com.filestech.sms.system.notifications.NotificationChannelInitializer
+import com.filestech.sms.system.scheduler.SafetyCallAlarmScheduler
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
 import com.filestech.sms.system.service.KeepAliveService
@@ -141,6 +142,32 @@ class MainApplication : Application(), Configuration.Provider {
         // enable ultérieur via Settings n'a pas besoin de cold-start pour
         // commencer à fonctionner — le tick suivant arme déjà le timer.
         SafetyCallWorker.schedulePeriodic(this)
+
+        // v1.27.2 — RÉVEIL À L'ÉCHÉANCE, en plus du tick horaire.
+        //
+        // Le tick de 60 min ne PROGRAMME rien : il échantillonne. Une échéance atteinte à 14:25
+        // partait donc au premier passage suivant — 14:48 le 2026-08-05, soit 23 minutes de retard
+        // sur un délai d'UNE HEURE, qui est le minimum que l'interface propose. L'application
+        // offrait un réglage qu'elle ne savait pas honorer.
+        //
+        // Un unique observateur, ici, plutôt qu'un appel à chaque écriture : le Safety call est
+        // modifié depuis six endroits (armement, « Je vais bien », ouverture de l'application, tap
+        // sur la notification, jalon horaire, envoi d'une relance). En câbler cinq sur six est
+        // exactement le motif de défaut qui a produit la majorité des correctifs de ce mois-ci.
+        // Ce collecteur les couvre tous, y compris ceux qu'on ajoutera demain.
+        //
+        // Le processus est vivant chaque fois que la configuration change — c'est lui qui la
+        // change — et cette collecte est relancée à chaque démarrage à froid, donc l'alarme est
+        // reposée après un redémarrage, où le système les efface toutes.
+        appScope.launch {
+            settingsRepository.flow
+                .map { it.security.safetyCall }
+                .distinctUntilChanged()
+                .collect { cfg ->
+                    runCatching { SafetyCallAlarmScheduler.sync(this@MainApplication, cfg) }
+                        .onFailure { Timber.w(it, "SafetyCallAlarmScheduler.sync failed") }
+                }
+        }
 
         // v1.10.0 SEC-11 — drift recovery post-reboot. `elapsedRealtime` est
         // remis à 0 par un reboot tandis que la valeur persistée

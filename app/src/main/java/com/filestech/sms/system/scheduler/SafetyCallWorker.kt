@@ -201,6 +201,27 @@ class SafetyCallWorker @AssistedInject constructor(
         /** v1.27.2 — nom unique du travail ponctuel qui porte la prochaine relance. */
         const val RELANCE_WORK_NAME = "safety_call_relance_oneshot"
 
+        /** v1.27.2 — nom unique du contrôle immédiat déclenché par l'alarme d'échéance. */
+        const val IMMEDIATE_WORK_NAME = "safety_call_check_now"
+
+        /**
+         * v1.27.2 — contrôle **immédiat**, déclenché par
+         * [com.filestech.sms.system.receiver.SafetyCallAlarmReceiver] à l'échéance exacte.
+         *
+         * C'est ce qui rend le déclenchement ponctuel : sans lui, une échéance atteinte à 14:25
+         * attendait le tick horaire suivant — 14:48 le 2026-08-05, 23 minutes de retard sur un
+         * délai d'une heure.
+         */
+        fun enqueueNow(context: Context) {
+            val request = OneTimeWorkRequestBuilder<SafetyCallWorker>().build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                IMMEDIATE_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request,
+            )
+            Timber.i("SafetyCallWorker: controle immediat mis en file")
+        }
+
         /**
          * v1.27.2 — programme la prochaine relance dans [delayMs].
          *
