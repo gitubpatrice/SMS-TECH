@@ -50,6 +50,15 @@ class MainApplication : Application(), Configuration.Provider {
     @Inject lateinit var emergencyShortcutNotifier: com.filestech.sms.system.notifications.EmergencyShortcutNotifier
 
     /**
+     * v1.27.2 — porteur de la notification de séquence du Safety call. Injecté ici pour pouvoir la
+     * retirer **immédiatement** à l'entrée en mode leurre, sans attendre le prochain réveil du
+     * worker.
+     */
+    @Inject
+    lateinit var safetyCallWarningNotifier:
+        com.filestech.sms.system.notifications.SafetyCallWarningNotifier
+
+    /**
      * v1.8.0 (post-audit fix unread badges) — utilisé une fois au cold-start pour recalculer les
      * compteurs `conversations.unread_count` après l'import blocklist (cf.
      * [ConversationDao.recomputeAllUnreadCounts]). Les migrations one-shot qui utilisaient aussi
@@ -180,6 +189,31 @@ class MainApplication : Application(), Configuration.Provider {
                 .collect { at ->
                     runCatching { SafetyCallAlarmScheduler.apply(this@MainApplication, at) }
                         .onFailure { Timber.w(it, "SafetyCallAlarmScheduler.apply failed") }
+                }
+        }
+
+        // v1.27.2 — 🔴 LA NOTIFICATION DE SÉQUENCE NE DOIT JAMAIS SURVIVRE À UNE ENTRÉE EN MODE
+        // LEURRE.
+        //
+        // Elle annonce « alerte envoyée, N messages sur M à vos proches ». Sous contrainte, la
+        // laisser affichée révélerait à l'agresseur qu'un réseau de soutien a été prévenu —
+        // exactement ce que le mode leurre existe pour cacher, et le contraire de ce que fait le
+        // reste de l'application, qui masque jusqu'à l'existence des fonctions de sécurité
+        // personnelle.
+        //
+        // Le worker la retire déjà quand il tourne, mais il ne tourne qu'au réveil suivant : la
+        // notification restait visible jusqu'à quinze minutes, ou une heure. Ici la réaction est
+        // immédiate, à la transition d'état — et en un seul endroit, donc pour tous les chemins
+        // qui entrent en leurre.
+        appScope.launch {
+            appLock.state
+                .map { it is AppLockManager.LockState.PanicDecoy }
+                .distinctUntilChanged()
+                .collect { isDecoy ->
+                    if (isDecoy) {
+                        runCatching { safetyCallWarningNotifier.dismiss() }
+                            .onFailure { Timber.w(it, "PanicDecoy: safety call notice dismiss failed") }
+                    }
                 }
         }
 
