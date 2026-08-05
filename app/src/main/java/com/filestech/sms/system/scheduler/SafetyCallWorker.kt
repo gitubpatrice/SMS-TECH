@@ -265,6 +265,24 @@ class SafetyCallWorker @AssistedInject constructor(
         const val IMMEDIATE_WORK_NAME = "safety_call_check_now"
 
         /**
+         * v1.27.2 — annule le rendez-vous de relance en attente.
+         *
+         * Constaté sur appareil le 2026-08-05 : après avoir arrêté le Safety call en pleine
+         * séquence, le travail ponctuel de la relance suivante restait **en file**. Il était
+         * inoffensif — le worker relit la configuration au réveil et ne trouve plus rien à
+         * envoyer — mais c'est un réveil orphelin, qui sort le téléphone de veille pour rien et
+         * survit à l'événement qui l'avait justifié.
+         *
+         * Appelé depuis l'observateur unique de `MainApplication`, dès que la séquence cesse
+         * d'être ouverte : fin normale, « Je vais bien », désactivation, ou simple ouverture de
+         * l'application.
+         */
+        fun cancelRelance(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(RELANCE_WORK_NAME)
+            Timber.d("SafetyCallWorker: rendez-vous de relance annule")
+        }
+
+        /**
          * v1.27.2 — contrôle **immédiat**, déclenché par
          * [com.filestech.sms.system.receiver.SafetyCallAlarmReceiver] à l'échéance exacte.
          *

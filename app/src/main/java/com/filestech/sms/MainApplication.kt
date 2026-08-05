@@ -192,6 +192,28 @@ class MainApplication : Application(), Configuration.Provider {
                 }
         }
 
+        // v1.27.2 — pas de réveil orphelin quand la séquence de relances se ferme.
+        //
+        // Constaté sur appareil le 2026-08-05 : après avoir arrêté le Safety call en pleine
+        // séquence, le travail ponctuel de la relance suivante restait **en file**. Inoffensif —
+        // le worker relit la configuration et ne trouve plus rien à envoyer — mais il sort le
+        // téléphone de veille pour rien, et il survit à l'événement qui l'avait justifié.
+        //
+        // Même endroit et même raison que l'alarme : la séquence se ferme depuis plusieurs
+        // chemins (fin normale, « Je vais bien », désactivation, ouverture de l'application), et
+        // en câbler tous sauf un est le motif de défaut qui revient le plus souvent ici.
+        appScope.launch {
+            settingsRepository.flow
+                .map { it.security.safetyCall.hasRelancePending }
+                .distinctUntilChanged()
+                .collect { pending ->
+                    if (!pending) {
+                        runCatching { SafetyCallWorker.cancelRelance(this@MainApplication) }
+                            .onFailure { Timber.w(it, "SafetyCallWorker.cancelRelance failed") }
+                    }
+                }
+        }
+
         // v1.27.2 — 🔴 LA NOTIFICATION DE SÉQUENCE NE DOIT JAMAIS SURVIVRE À UNE ENTRÉE EN MODE
         // LEURRE.
         //
