@@ -1,15 +1,7 @@
 package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.domain.mms.MediaAttachmentSpec
-import com.filestech.sms.domain.model.BlockedNumber
-import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.domain.repository.BlockedNumberRepository
-import com.filestech.sms.domain.repository.OutgoingMessageMirror
-import com.filestech.sms.domain.sender.DefaultSmsAppChecker
-import com.filestech.sms.domain.sender.SentSmsRecorder
-import com.filestech.sms.domain.sender.SmsSender
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
 import com.filestech.sms.domain.settings.ConversationSettings
@@ -21,7 +13,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
-import java.io.File
 
 /**
  * v1.27.2 — fige le **sens dans lequel l'envoi échoue** quand les réglages sont illisibles.
@@ -47,8 +38,8 @@ import java.io.File
  * quand même ; le second prouve que les réglages réels sont bien appliqués quand ils existent,
  * sans quoi le premier serait satisfait par un use-case qui les ignorerait toujours.
  *
- * Faux écrits à la main : `:domain` n'a ni mockk ni Robolectric, et ne doit pas en gagner pour
- * cinq interfaces à une méthode.
+ * Les faux collaborateurs vivent dans `SendSmsFakes.kt`, partagés avec
+ * [TriggerSafetyCallRelanceTest].
  */
 class SendSmsSettingsFallbackTest {
 
@@ -57,93 +48,6 @@ class SendSmsSettingsFallbackTest {
         const val SIGNATURE = "Patrice"
         const val BODY = "Message d'urgence"
         const val RECIPIENT = "+33611111111"
-    }
-
-    // ──────────────────────────── Faux ────────────────────────────
-
-    private class RecordingSender : SmsSender {
-        var lastSubId: Int? = null
-        var lastText: String? = null
-        var lastDeliveryReport: Boolean? = null
-        var callCount = 0
-
-        override fun send(
-            localMessageId: Long,
-            destination: String,
-            text: String,
-            subId: Int?,
-            requestDeliveryReport: Boolean,
-        ): Outcome<Unit> {
-            callCount++
-            lastSubId = subId
-            lastText = text
-            lastDeliveryReport = requestDeliveryReport
-            return Outcome.Success(Unit)
-        }
-    }
-
-    private class RecordingRecorder : SentSmsRecorder {
-        var lastSubId: Int? = null
-        override fun insertSentSms(
-            address: String,
-            body: String,
-            date: Long,
-            threadId: Long?,
-            subId: Int?,
-        ): String? {
-            lastSubId = subId
-            return "content://sms/1"
-        }
-    }
-
-    private class NoopMirror : OutgoingMessageMirror {
-        override suspend fun upsertOutgoingSms(
-            address: String,
-            body: String,
-            date: Long,
-            telephonyUri: String?,
-            subId: Int?,
-            initialStatus: MessageStatus,
-            replyToMessageId: Long?,
-            localMirrorBody: String?,
-        ): Long = 1L
-
-        override suspend fun updateOutgoingStatus(
-            localId: Long,
-            status: MessageStatus,
-            errorCode: Int?,
-        ) = Unit
-
-        // Non exercees par SendSmsUseCase, mais l'interface les impose.
-        override suspend fun resetOutgoingForRetry(localId: Long) = Unit
-
-        override suspend fun upsertOutgoingMms(
-            address: String,
-            audioFile: File,
-            mimeType: String,
-            durationMs: Long,
-            date: Long,
-            subId: Int?,
-        ): Long = error("non utilise")
-
-        override suspend fun upsertOutgoingMediaMms(
-            address: String,
-            attachments: List<MediaAttachmentSpec>,
-            textBody: String,
-            date: Long,
-            subId: Int?,
-        ): Long = error("non utilise")
-    }
-
-    private class NeverBlocked : BlockedNumberRepository {
-        override fun observe(): Flow<List<BlockedNumber>> = flowOf(emptyList())
-        override suspend fun isBlocked(rawNumber: String): Boolean = false
-        override suspend fun block(rawNumber: String, label: String?): Outcome<Unit> =
-            Outcome.Success(Unit)
-        override suspend fun unblock(rawNumber: String): Outcome<Unit> = Outcome.Success(Unit)
-        override suspend fun mirrorFromSystem(rawNumber: String): Outcome<Unit> =
-            Outcome.Success(Unit)
-        override suspend fun blockedNormalizedSnapshot(): Set<String> = emptySet()
     }
 
     /**
@@ -167,19 +71,6 @@ class SendSmsSettingsFallbackTest {
         override suspend fun update(transform: (AppSettings) -> AppSettings) = Unit
     }
 
-    private fun useCase(
-        settings: AppSettingsSource,
-        sender: SmsSender,
-        recorder: SentSmsRecorder,
-    ) = SendSmsUseCase(
-        defaultAppManager = object : DefaultSmsAppChecker { override fun isDefault() = true },
-        sentSmsRecorder = recorder,
-        sender = sender,
-        mirror = NoopMirror(),
-        blockedRepo = NeverBlocked(),
-        settings = settings,
-    )
-
     // ──────────────────────────── Les tests ────────────────────────────
 
     @Test
@@ -188,7 +79,7 @@ class SendSmsSettingsFallbackTest {
         val recorder = RecordingRecorder()
 
         val outcome = runBlocking {
-            useCase(UnreadableSettings(), sender, recorder)
+            sendSmsUseCase(UnreadableSettings(), sender, recorder)
                 .invoke(recipients = listOf(PhoneAddress.of(RECIPIENT)), body = BODY)
         }
 
@@ -212,7 +103,7 @@ class SendSmsSettingsFallbackTest {
         )
 
         val outcome = runBlocking {
-            useCase(RealSettings(configured), sender, recorder)
+            sendSmsUseCase(RealSettings(configured), sender, recorder)
                 .invoke(recipients = listOf(PhoneAddress.of(RECIPIENT)), body = BODY)
         }
 
