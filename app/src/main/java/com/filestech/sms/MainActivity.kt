@@ -401,14 +401,18 @@ class MainActivity : FragmentActivity() {
                         settings.update { s ->
                             s.copy(
                                 security = s.security.copy(
-                                    safetyCall = s.security.safetyCall.copy(
-                                        lastActivityAt = System.currentTimeMillis(),
-                                        // v1.10.0 SEC-11 — couple mono+wall à chaque reset.
-                                        monotonicLastActivityAt = SystemClock.elapsedRealtime(),
-                                        // v1.27.2 — le temps capitalisé repart de zéro AVEC les
-                                        // deux autres : les trois champs ne se dissocient jamais.
-                                        monotonicAccumulatedMs = 0L,
-                                    ),
+                                    // v1.27.2 (audit Codex, SC-03) — `withActivityReset` ferme AUSSI
+                                    // la séquence de relances. Avant, ouvrir l'application après le
+                                    // départ de l'alerte laissait `triggeredAt` posé : les proches
+                                    // continuaient de recevoir une relance toutes les quinze
+                                    // minutes alors que la personne venait précisément de prouver
+                                    // qu'elle allait bien.
+                                    //
+                                    // Pas de `disarmIfTriggered` ici : ouvrir son téléphone ne vaut
+                                    // pas renoncer à sa protection. On referme la séquence et on
+                                    // repart pour un cycle. Le geste explicite « Je vais bien »,
+                                    // lui, désactive.
+                                    safetyCall = s.security.safetyCall.withActivityReset(),
                                 ),
                             )
                         }
@@ -494,14 +498,14 @@ class MainActivity : FragmentActivity() {
                         settings.update { s ->
                             s.copy(
                                 security = s.security.copy(
-                                    safetyCall = s.security.safetyCall.copy(
-                                        lastActivityAt = System.currentTimeMillis(),
-                                        // v1.10.0 SEC-11 — couple mono+wall.
-                                        monotonicLastActivityAt = SystemClock.elapsedRealtime(),
-                                        // v1.27.2 — cf. l'autre site de reset : les trois
-                                        // champs bougent ensemble.
-                                        monotonicAccumulatedMs = 0L,
-                                    ),
+                                    // v1.27.2 (audit Codex, SC-03) — le tap sur la notification EST
+                                    // le geste « Je vais bien » : il doit se comporter exactement
+                                    // comme le bouton des Réglages, désactivation comprise si
+                                    // l'alerte est déjà partie. Deux boutons portant la même
+                                    // promesse et agissant différemment, c'est le jumeau
+                                    // asymétrique — le motif de défaut le plus fréquent ici.
+                                    safetyCall = s.security.safetyCall
+                                        .withActivityReset(disarmIfTriggered = true),
                                 ),
                             )
                         }

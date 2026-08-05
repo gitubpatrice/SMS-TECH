@@ -103,10 +103,12 @@ object SafetyCallAlarmScheduler {
     private fun schedule(context: Context, atMs: Long) {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val pending = pendingIntent(context)
-        // `setAndAllowWhileIdle` remplace déjà toute alarme portant le même PendingIntent ; le
-        // `cancel` explicite couvre le cas où la précédente aurait été posée par une version
-        // antérieure avec des extras différents.
-        manager.cancel(pending)
+        // v1.27.2 (audit Codex du 2026-08-05, SC-06) — **pas de `cancel` préalable.**
+        //
+        // `setAndAllowWhileIdle` remplace déjà toute alarme portant le même `PendingIntent`. Le
+        // `cancel` explicite n'apportait rien et ouvrait une fenêtre : une mort du processus entre
+        // les deux supprimait l'ancienne alarme **sans poser la nouvelle**, laissant le deadman
+        // sans réveil jusqu'au prochain tick horaire.
         runCatching {
             manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pending)
         }.onSuccess {

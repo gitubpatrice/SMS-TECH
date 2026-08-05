@@ -224,7 +224,18 @@ class SafetyCallWorker @AssistedInject constructor(
             val request = OneTimeWorkRequestBuilder<SafetyCallWorker>().build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 IMMEDIATE_WORK_NAME,
-                ExistingWorkPolicy.REPLACE,
+                // v1.27.2 (audit Codex du 2026-08-05, SC-02) — 🔴 `KEEP`, surtout pas `REPLACE`.
+                //
+                // `REPLACE` ANNULE le travail deja actif. Si l alarme etait livree deux fois, le
+                // second appel tuait le premier worker — potentiellement APRES qu il ait reserve
+                // son creneau mais AVANT le premier envoi. Le compteur restait alors a « un
+                // message parti » sans qu aucun SMS ne soit parti, et la sequence enchainait sur
+                // une relance : les proches n auraient JAMAIS recu le message initial.
+                //
+                // Deux controles identiques n ont aucune raison de s annuler l un l autre : le
+                // second n apporte rien que le premier ne fasse deja. On garde donc celui qui
+                // tourne. Le bail (`claimedAt`) couvre le cas ou il meurt malgre tout.
+                ExistingWorkPolicy.KEEP,
                 request,
             )
             Timber.i("SafetyCallWorker: controle immediat mis en file")

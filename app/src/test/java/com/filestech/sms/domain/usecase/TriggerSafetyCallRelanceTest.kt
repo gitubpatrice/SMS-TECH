@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -92,6 +94,21 @@ class TriggerSafetyCallRelanceTest {
                 Outcome.Failure(AppError.Telephony("réseau indisponible"))
             }
         }
+    }
+
+    /**
+     * v1.27.2 (audit Codex, SC-03) — simule l'entrelacement réel : le use-case a lu son instantané
+     * ([perime]) juste avant que l'utilisateur ne confirme aller bien, mais il écrit dans le
+     * stockage à jour. Seule la comparaison faite DANS la transaction peut rattraper ça.
+     */
+    private class StaleReadingSettings(
+        private val perime: AppSettings,
+        private val store: FakeSettings,
+    ) : AppSettingsSource {
+        override val flow: Flow<AppSettings> = flowOf(perime)
+        override val state: StateFlow<AppSettings> = store.state
+        override suspend fun hydratedOrNull(): AppSettings = perime
+        override suspend fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
     }
 
     private class NoopRecorder : SentSmsRecorder {
@@ -173,7 +190,7 @@ class TriggerSafetyCallRelanceTest {
         },
     )
 
-    private fun useCase(settings: FakeSettings, sender: SmsSender) = TriggerSafetyCallUseCase(
+    private fun useCase(settings: AppSettingsSource, sender: SmsSender) = TriggerSafetyCallUseCase(
         sendSms = SendSmsUseCase(
             defaultAppManager = object : DefaultSmsAppChecker { override fun isDefault() = true },
             sentSmsRecorder = NoopRecorder(),
@@ -430,6 +447,45 @@ class TriggerSafetyCallRelanceTest {
         assertThat(result).isEqualTo(TriggerSafetyCallUseCase.Result.AlreadySent)
         assertThat(sender.calls).isEqualTo(0)
         assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
+    }
+
+    /**
+     * 🔴 **Le défaut SC-03 de l'audit Codex du 2026-08-05 : une fausse urgence juste après
+     * « Je vais bien ».**
+     *
+     * La réservation ne comparait que `enabled` et `messagesSent`. Or une remise à zéro de
+     * l'utilisateur — ouverture de l'application, tap sur la notification, bouton dédié — déplace
+     * `lastActivityAt` **sans toucher au compteur**. Un worker parti avec un instantané d'avant la
+     * confirmation réservait donc le créneau et envoyait quand même : les proches recevaient une
+     * urgence à la seconde où la personne venait de confirmer aller bien.
+     *
+     * On simule l'entrelacement exact : le use-case lit un instantané expiré, puis le stockage
+     * bouge sous lui avant qu'il ne réserve.
+     */
+    @Test
+    fun `une remise a zero entre l instantane et la reservation annule l envoi`() {
+        val store = expiredSettings()
+        val perime = runBlocking { store.flow.first() }
+        val sender = CountingSender(succeed = true)
+
+        val result = runBlocking {
+            // L'utilisateur confirme aller bien PENDANT que le worker tenait son instantané.
+            store.update { s ->
+                s.copy(
+                    security = s.security.copy(
+                        safetyCall = s.security.safetyCall.withActivityReset(),
+                    ),
+                )
+            }
+            // Le worker reprend avec sa vue périmée.
+            useCase(StaleReadingSettings(perime, store), sender).invoke()
+        }
+
+        assertThat(result).isEqualTo(TriggerSafetyCallUseCase.Result.AlreadySent)
+        // LE POINT : aucune fausse urgence n'est partie.
+        assertThat(sender.calls).isEqualTo(0)
+        assertThat(store.safetyCall.messagesSent).isEqualTo(0)
+        assertThat(store.safetyCall.isTriggered).isFalse()
     }
 
     @Test

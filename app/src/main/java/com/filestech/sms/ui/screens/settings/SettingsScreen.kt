@@ -1,6 +1,5 @@
 package com.filestech.sms.ui.screens.settings
 
-import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -442,78 +441,72 @@ fun SettingsScreen(
             // v1.10.0 audit SEC-1 (extension) — masquée en PanicDecoy par
             // cohérence avec Mode urgence : ne pas révéler à l'agresseur
             // l'existence des features de sécurité personnelle.
-            if (!isPanicDecoy) SectionCard(
-                title = stringResource(R.string.settings_section_safety_call),
-                icon = Icons.Outlined.Shield,
-            ) {
-                val safetyCall = state.security.safetyCall
-                // Hissés au niveau de la composition : les appeler dans le lambda déclencherait
-                // `LocalContextGetResourceValueCall` (lint), et un `ctx.getString` dans un
-                // rappel ne suit pas les changements de langue.
-                val imOkResetMessage = stringResource(R.string.settings_safety_call_im_ok_snack)
-                val imOkStopsRelancesMessage =
-                    stringResource(R.string.settings_safety_call_im_ok_stops_relances)
-                if (safetyCall.enabled) {
-                    // Récap visible quand armé : durée, restant, contacts,
-                    // template + 2 actions (Modifier / Je vais bien).
-                    SafetyCallArmedRecap(
-                        config = safetyCall,
-                        remainingMs = safetyCallRemainingMs,
-                        onModify = onOpenSafetyCall,
-                        onImOk = {
-                            // v1.27.2 — deux sens, selon qu'une séquence de relances est ouverte
-                            // ou non. Décision de Patrice, 2026-08-05.
-                            //
-                            //  - AVANT déclenchement : « Je vais bien » remet le minuteur à zéro,
-                            //    comportement d'origine.
-                            //  - APRÈS déclenchement : il **désactive** le Safety Call et arrête
-                            //    les relances. Le cycle est clos ; la personne a confirmé aller
-                            //    bien, elle réarmera quand elle le voudra. Se contenter de
-                            //    remettre le minuteur à zéro laisserait `triggeredAt` posé et les
-                            //    relances continueraient de partir.
-                            val wasTriggered = safetyCall.isTriggered
-                            viewModel.update { s ->
-                                val cfg = s.security.safetyCall
-                                s.copy(
-                                    security = s.security.copy(
-                                        safetyCall = if (cfg.isTriggered) {
-                                            cfg.copy(
-                                                enabled = false,
-                                                triggeredAt = 0L,
-                                                messagesSent = 0,
-                                            )
+            if (!isPanicDecoy) {
+                SectionCard(
+                    title = stringResource(R.string.settings_section_safety_call),
+                    icon = Icons.Outlined.Shield,
+                ) {
+                    val safetyCall = state.security.safetyCall
+                    // Hissés au niveau de la composition : les appeler dans le lambda déclencherait
+                    // `LocalContextGetResourceValueCall` (lint), et un `ctx.getString` dans un
+                    // rappel ne suit pas les changements de langue.
+                    val imOkResetMessage = stringResource(R.string.settings_safety_call_im_ok_snack)
+                    val imOkStopsRelancesMessage =
+                        stringResource(R.string.settings_safety_call_im_ok_stops_relances)
+                    if (safetyCall.enabled) {
+                        // Récap visible quand armé : durée, restant, contacts,
+                        // template + 2 actions (Modifier / Je vais bien).
+                        SafetyCallArmedRecap(
+                            config = safetyCall,
+                            remainingMs = safetyCallRemainingMs,
+                            onModify = onOpenSafetyCall,
+                            onImOk = {
+                                // v1.27.2 — deux sens, selon qu'une séquence de relances est ouverte
+                                // ou non. Décision de Patrice, 2026-08-05.
+                                //
+                                //  - AVANT déclenchement : « Je vais bien » remet le minuteur à zéro,
+                                //    comportement d'origine.
+                                //  - APRÈS déclenchement : il **désactive** le Safety Call et arrête
+                                //    les relances. Le cycle est clos ; la personne a confirmé aller
+                                //    bien, elle réarmera quand elle le voudra. Se contenter de
+                                //    remettre le minuteur à zéro laisserait `triggeredAt` posé et les
+                                //    relances continueraient de partir.
+                                val wasTriggered = safetyCall.isTriggered
+                                viewModel.update { s ->
+                                    val cfg = s.security.safetyCall
+                                    s.copy(
+                                        security = s.security.copy(
+                                            // v1.27.2 (audit Codex, SC-03) — un seul appel, partagé avec
+                                            // le tap sur la notification et l'ouverture de
+                                            // l'application. La branche `isTriggered` oubliait de
+                                            // remettre les horloges à zéro, et la branche normale
+                                            // oubliait de fermer la séquence : chacune faisait la
+                                            // moitié du travail de l'autre.
+                                            safetyCall = cfg.withActivityReset(
+                                                disarmIfTriggered = true,
+                                            ),
+                                        ),
+                                    )
+                                }
+                                rootScope.launch {
+                                    snackbarHost.showSnackbar(
+                                        if (wasTriggered) {
+                                            imOkStopsRelancesMessage
                                         } else {
-                                            cfg.copy(
-                                                lastActivityAt = System.currentTimeMillis(),
-                                                // v1.10.0 SEC-11 — couple mono+wall.
-                                                monotonicLastActivityAt =
-                                                    SystemClock.elapsedRealtime(),
-                                                // v1.27.2 — « Je vais bien » remet aussi le temps
-                                                // capitalisé à zéro : les trois champs ensemble.
-                                                monotonicAccumulatedMs = 0L,
-                                            )
+                                            imOkResetMessage
                                         },
-                                    ),
-                                )
-                            }
-                            rootScope.launch {
-                                snackbarHost.showSnackbar(
-                                    if (wasTriggered) {
-                                        imOkStopsRelancesMessage
-                                    } else {
-                                        imOkResetMessage
-                                    },
-                                )
-                            }
-                        },
-                    )
-                } else {
-                    NavigationRow(
-                        title = stringResource(R.string.settings_safety_call_title),
-                        description = stringResource(R.string.settings_safety_call_disabled) +
-                            "\n" + stringResource(R.string.settings_safety_call_desc),
-                        onClick = onOpenSafetyCall,
-                    )
+                                    )
+                                }
+                            },
+                        )
+                    } else {
+                        NavigationRow(
+                            title = stringResource(R.string.settings_safety_call_title),
+                            description = stringResource(R.string.settings_safety_call_disabled) +
+                                "\n" + stringResource(R.string.settings_safety_call_desc),
+                            onClick = onOpenSafetyCall,
+                        )
+                    }
                 }
             }
 

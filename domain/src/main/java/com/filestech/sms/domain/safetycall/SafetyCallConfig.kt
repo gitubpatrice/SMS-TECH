@@ -169,6 +169,47 @@ data class SafetyCallConfig(
     fun isClaimAbandoned(nowMs: Long = System.currentTimeMillis()): Boolean =
         claimedAt > 0L && (nowMs - claimedAt) >= CLAIM_LEASE_MS
 
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, SC-03) — **le seul et unique** moyen d'enregistrer une
+     * activité de l'utilisateur.
+     *
+     * # Le défaut que ça ferme
+     *
+     * Quatre endroits remettaient le minuteur à zéro : ouverture réelle de l'application, tap sur
+     * la notification d'avertissement, bouton « Je vais bien », armement. Ils recopiaient tous les
+     * trois champs d'horloge à la main — et **aucun des deux premiers ne clôturait la séquence de
+     * relances**. Quelqu'un qui ouvrait l'application après le départ de l'alerte continuait donc
+     * à voir ses proches recevoir des relances toutes les quinze minutes, alors qu'il venait très
+     * précisément de prouver qu'il allait bien.
+     *
+     * Le jumeau asymétrique est ici : le bouton « Je vais bien » des Réglages, lui, fermait bien la
+     * séquence. Les trois autres non.
+     *
+     * # Les cinq champs partent ensemble, toujours
+     *
+     * Les trois horloges (murale, ancre monotone, capital monotone) **ne se dissocient jamais** :
+     * garder du capital d'un cycle précédent ferait partir le deadman en avance. `triggeredAt`,
+     * `messagesSent` et `claimedAt` ferment la séquence et libèrent tout bail en cours.
+     *
+     * @param disarmIfTriggered `true` pour le geste explicite « je vais bien » : si l'alerte est
+     *   déjà partie, le deadman est **désactivé**, comme demandé par Patrice le 2026-08-05. Une
+     *   simple ouverture de l'application se contente, elle, de refermer la séquence et de repartir
+     *   pour un cycle — ouvrir son téléphone ne vaut pas renoncer à sa protection.
+     */
+    fun withActivityReset(
+        nowMs: Long = System.currentTimeMillis(),
+        nowMonoMs: Long = SystemClock.elapsedRealtime(),
+        disarmIfTriggered: Boolean = false,
+    ): SafetyCallConfig = copy(
+        enabled = if (disarmIfTriggered && isTriggered) false else enabled,
+        lastActivityAt = nowMs,
+        monotonicLastActivityAt = nowMonoMs,
+        monotonicAccumulatedMs = 0L,
+        triggeredAt = 0L,
+        messagesSent = 0,
+        claimedAt = 0L,
+    )
+
     /** v1.27.2 — `true` tant qu'il reste au moins une relance à envoyer. */
     val hasRelancePending: Boolean
         get() = isTriggered && messagesSent in 1 until TOTAL_MESSAGES

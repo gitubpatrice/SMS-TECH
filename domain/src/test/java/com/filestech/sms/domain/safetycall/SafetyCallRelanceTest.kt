@@ -186,6 +186,55 @@ class SafetyCallRelanceTest {
     }
 
     /**
+     * v1.27.2 (audit Codex du 2026-08-05, SC-03) — **une remise à zéro doit CLORE la séquence.**
+     *
+     * Quatre endroits recopiaient les trois horloges à la main, et **aucun des deux qui comptent —
+     * ouverture réelle de l'application, tap sur la notification — ne remettait `triggeredAt` ni
+     * `messagesSent` à zéro**. Quelqu'un qui ouvrait l'application après le départ de l'alerte
+     * continuait donc à voir ses proches recevoir une relance toutes les quinze minutes, alors
+     * qu'il venait très précisément de prouver qu'il allait bien.
+     */
+    @Test
+    fun `une remise a zero ferme la sequence de relances`() {
+        val enCours = config(messagesSent = 2).copy(claimedAt = TRIGGERED_AT)
+
+        val apres = enCours.withActivityReset(nowMs = TRIGGERED_AT + 1, nowMonoMs = MONO_ANCHOR + 1)
+
+        assertThat(apres.isTriggered).isFalse()
+        assertThat(apres.messagesSent).isEqualTo(0)
+        assertThat(apres.hasRelancePending).isFalse()
+        assertThat(apres.claimedAt).isEqualTo(0L)
+        // Les trois horloges repartent ENSEMBLE : garder du capital d'un cycle précédent ferait
+        // partir le deadman en avance.
+        assertThat(apres.lastActivityAt).isEqualTo(TRIGGERED_AT + 1)
+        assertThat(apres.monotonicLastActivityAt).isEqualTo(MONO_ANCHOR + 1)
+        assertThat(apres.monotonicAccumulatedMs).isEqualTo(0L)
+        // Une simple ouverture ne désarme PAS : ouvrir son téléphone ne vaut pas renoncer à sa
+        // protection.
+        assertThat(apres.enabled).isTrue()
+    }
+
+    /**
+     * Le geste explicite « Je vais bien », lui, **désactive** si l'alerte est déjà partie — c'est
+     * ce que Patrice a demandé le 2026-08-05. Les deux assertions du bas tiennent l'asymétrie :
+     * avant déclenchement, le même geste se contente de remettre le minuteur à zéro.
+     */
+    @Test
+    fun `je vais bien desactive apres declenchement, pas avant`() {
+        val declenche = config(messagesSent = 1)
+        val arme = config(messagesSent = 0, triggeredAt = 0L)
+
+        // Horloges explicites : les valeurs par défaut appellent `SystemClock.elapsedRealtime()`,
+        // que `:domain` ne bouchonne pas — l'appel lèverait « not mocked ».
+        val now = TRIGGERED_AT + 1
+        val mono = MONO_ANCHOR + 1
+        assertThat(
+            declenche.withActivityReset(now, mono, disarmIfTriggered = true).enabled,
+        ).isFalse()
+        assertThat(arme.withActivityReset(now, mono, disarmIfTriggered = true).enabled).isTrue()
+    }
+
+    /**
      * v1.27.2 (relecture Gemini du 2026-08-05) — **la fenêtre d'avertissement était fausse sur les
      * délais courts.**
      *

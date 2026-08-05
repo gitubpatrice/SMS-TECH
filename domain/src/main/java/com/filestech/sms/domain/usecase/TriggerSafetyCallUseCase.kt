@@ -171,7 +171,19 @@ class TriggerSafetyCallUseCase @Inject constructor(
             // `claimedAt != 0L` = un envoi est deja en vol et son bail court encore. On ne double
             // pas, meme si le compteur coincide.
             val leaseHeld = cfg.claimedAt != 0L && !cfg.isClaimAbandoned(nowMs)
-            if (!cfg.enabled || cfg.messagesSent != current.messagesSent || leaseHeld) {
+            // v1.27.2 (audit Codex du 2026-08-05, SC-03) — 🔴 UNE FAUSSE ALERTE APRÈS « JE VAIS
+            // BIEN ». La condition ne comparait que `enabled` et `messagesSent`. Or une remise a
+            // zero de l utilisateur - ouverture de l application, tap sur la notification, bouton
+            // dedie - deplace `lastActivityAt` SANS toucher au compteur. Un worker parti avec un
+            // instantane d avant la confirmation reservait donc le creneau et envoyait quand meme :
+            // les proches recevaient une urgence a la seconde ou la personne venait de confirmer
+            // aller bien. En comparant l horodatage d activite, l instantane perime est rejete.
+            val activityMoved = cfg.lastActivityAt != current.lastActivityAt
+            // Regroupe pour rester sous le seuil de complexite de detekt, et parce que les
+            // deux termes disent la meme chose : l instantane sur lequel ce worker a decide
+            // est perime.
+            val staleSnapshot = cfg.messagesSent != current.messagesSent || activityMoved
+            if (!cfg.enabled || staleSnapshot || leaseHeld) {
                 s
             } else {
                 claimed = true

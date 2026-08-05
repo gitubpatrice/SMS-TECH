@@ -1,7 +1,6 @@
 package com.filestech.sms.ui.screens.safetycall
 
 import android.content.Context
-import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.filestech.sms.data.local.datastore.SettingsRepository
@@ -250,14 +249,11 @@ class SafetyCallSetupViewModel @Inject constructor(
             val wasDisabled = !snapshotInitial.enabled
             val toPersist = if (current.enabled && wasDisabled) {
                 // v1.10.0 SEC-11 — couple mono+wall au premier arming.
-                current.copy(
-                    lastActivityAt = System.currentTimeMillis(),
-                    monotonicLastActivityAt = SystemClock.elapsedRealtime(),
-                    // v1.27.2 — un armement part forcément d'un compteur vide : sans cette
-                    // remise à zéro, un temps capitalisé lors d'une activation précédente
-                    // aurait été rejoué et le deadman serait parti en avance.
-                    monotonicAccumulatedMs = 0L,
-                )
+                // v1.27.2 (audit Codex, SC-03) — même remise à zéro que partout ailleurs. Un
+                // armement part forcément d'un état vide : sans cela, un temps capitalisé ou une
+                // séquence de relances restée ouverte lors d'une activation précédente seraient
+                // rejoués, et le deadman partirait en avance — ou reprendrait ses relances.
+                current.withActivityReset()
             } else {
                 current
             }
