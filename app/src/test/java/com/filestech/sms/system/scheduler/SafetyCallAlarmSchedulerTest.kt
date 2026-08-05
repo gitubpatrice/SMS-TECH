@@ -41,15 +41,52 @@ class SafetyCallAlarmSchedulerTest {
         contacts = listOf(SafetyCallContact(phoneNumber = "+33611111111")),
     )
 
+    /**
+     * 🔴 **F-01 (relecture Gemini du 2026-08-05) — l'avertissement aussi a besoin d'un réveil.**
+     *
+     * Seule l'échéance était programmée. L'avertissement « Confirmez que vous allez bien »
+     * dépendait du tick horaire : il ne s'affichait que si un tick tombait par hasard dans la
+     * fenêtre. Depuis que celle-ci est proportionnelle, celle d'un délai d'**une heure** ne dure
+     * que quinze minutes — le tick n'y tombe qu'une fois sur quatre, et trois fois sur quatre de
+     * vrais SMS partaient aux proches **sans que la personne ait jamais été prévenue**.
+     */
     @Test
-    fun `un deadman arme se reveille a l echeance, pas avant`() {
-        // Les deux horloges avancent du même pas : l'échéance monotone tombe sur la murale.
-        val at = SafetyCallAlarmScheduler.nextWakeUpAt(
+    fun `un deadman arme se reveille d abord pour AVERTIR, puis a l echeance`() {
+        val deadline = ARMED_AT + TIMEOUT
+        val debutFenetre = deadline - armed().warningWindowMs()
+
+        // Loin de l'échéance : le rendez-vous utile est l'ouverture de la fenêtre d'avertissement.
+        val avant = SafetyCallAlarmScheduler.nextWakeUpAt(
             armed(),
             nowMs = ARMED_AT + ONE_HOUR,
             nowMonoMs = MONO_AT + ONE_HOUR,
         )
-        assertThat(at).isEqualTo(ARMED_AT + TIMEOUT)
+        assertThat(avant).isEqualTo(debutFenetre)
+        // Non-vacuité : c'est bien AVANT l'échéance, sinon l'avertissement n'avertirait de rien.
+        assertThat(avant!!).isLessThan(deadline)
+
+        // Une fois dans la fenêtre, le rendez-vous redevient l'échéance elle-même.
+        val dedans = SafetyCallAlarmScheduler.nextWakeUpAt(
+            armed(),
+            nowMs = debutFenetre,
+            nowMonoMs = MONO_AT + (debutFenetre - ARMED_AT),
+        )
+        assertThat(dedans).isEqualTo(deadline)
+    }
+
+    /**
+     * Le cas qui a rendu F-01 visible : un délai d'**une heure**, le minimum que l'interface
+     * propose. La fenêtre n'y vaut que quinze minutes, et aucun tick horaire ne peut la garantir.
+     */
+    @Test
+    fun `sur un delai d une heure, l avertissement est programme a quinze minutes de l echeance`() {
+        val court = armed().copy(timeoutMs = SafetyCallConfig.TIMEOUT_MIN_MS)
+        val deadline = ARMED_AT + SafetyCallConfig.TIMEOUT_MIN_MS
+
+        val at = SafetyCallAlarmScheduler.nextWakeUpAt(court, nowMs = ARMED_AT, nowMonoMs = MONO_AT)
+
+        assertThat(at).isEqualTo(deadline - SafetyCallConfig.WARNING_WINDOW_MIN_MS)
+        assertThat(court.warningWindowMs()).isEqualTo(SafetyCallConfig.WARNING_WINDOW_MIN_MS)
     }
 
     @Test
@@ -60,7 +97,7 @@ class SafetyCallAlarmSchedulerTest {
             nowMs = ARMED_AT + ONE_HOUR,
             nowMonoMs = MONO_AT + ONE_HOUR,
         )
-        assertThat(at).isEqualTo(ARMED_AT + ONE_HOUR + TIMEOUT)
+        assertThat(at).isEqualTo(ARMED_AT + ONE_HOUR + TIMEOUT - reset.warningWindowMs())
     }
 
     /**
@@ -81,9 +118,13 @@ class SafetyCallAlarmSchedulerTest {
         val at = SafetyCallAlarmScheduler.nextWakeUpAt(armed(), nowMs = now, nowMonoMs = nowMono)
 
         // Il reste 22 h de compteur monotone à courir : c'est ça qui fait foi, pas les 14 h
-        // restantes de l'horloge murale.
-        assertThat(at).isEqualTo(now + (TIMEOUT - 2 * ONE_HOUR))
-        assertThat(at).isGreaterThan(ARMED_AT + TIMEOUT)
+        // restantes de l'horloge murale. Le rendez-vous est celui de l'avertissement (F-01), qui
+        // se déduit de la MÊME échéance — donc le décalage monotone se répercute à l'identique.
+        val echeanceMonotone = now + (TIMEOUT - 2 * ONE_HOUR)
+        assertThat(at).isEqualTo(echeanceMonotone - armed().warningWindowMs())
+        // LE POINT : la monotone repousse, elle n'avance jamais. Comparé à ce que l'horloge murale
+        // seule aurait donné, le réveil est bien plus TARDIF.
+        assertThat(at!!).isGreaterThan(ARMED_AT + TIMEOUT - armed().warningWindowMs())
     }
 
     /**
@@ -129,6 +170,8 @@ class SafetyCallAlarmSchedulerTest {
         val decisions = runBlocking {
             listOf(
                 TimedConfig(armed(), ARMED_AT + ONE_HOUR, MONO_AT + ONE_HOUR),
+                // Puis on entre dans la fenetre d'avertissement : la decision devient l'echeance.
+                TimedConfig(armed(), deadline - 60_000L, MONO_AT + TIMEOUT - 60_000L),
                 TimedConfig(claimed, deadline, MONO_AT + TIMEOUT),
                 TimedConfig(rolledBack, afterDeadlineWall, afterDeadlineMono),
                 TimedConfig(checkpointed, afterDeadlineWall, afterDeadlineMono),
@@ -152,6 +195,7 @@ class SafetyCallAlarmSchedulerTest {
         // sans garantir aucun réveil pour la faire : les deux minutes annoncées pouvaient en valoir
         // quinze, ou soixante sur le dernier créneau.
         assertThat(decisions).containsExactly(
+            deadline - armed().warningWindowMs(),
             deadline,
             deadline + SafetyCallConfig.CLAIM_LEASE_MS,
             deadline,
@@ -186,10 +230,12 @@ class SafetyCallAlarmSchedulerTest {
         )
         val deadline = ARMED_AT + offset + TIMEOUT
 
+        // On se place DANS la fenetre d'avertissement pour que l'echeance domine la decision.
+        val ecoule = TIMEOUT - 60_000L
         val at = SafetyCallAlarmScheduler.nextWakeUpAt(
             cfg,
-            nowMs = ARMED_AT + offset + ONE_HOUR,
-            nowMonoMs = MONO_AT + offset + ONE_HOUR,
+            nowMs = ARMED_AT + offset + ecoule,
+            nowMonoMs = MONO_AT + offset + ecoule,
         )
 
         // LE POINT : le réveil ne peut PAS tomber avant l'échéance réelle.
@@ -204,10 +250,11 @@ class SafetyCallAlarmSchedulerTest {
     /** Une échéance déjà alignée à la seconde n'est pas déplacée par l'arrondi. */
     @Test
     fun `une echeance alignee a la seconde n est pas deplacee`() {
+        val ecoule = TIMEOUT - 60_000L
         val at = SafetyCallAlarmScheduler.nextWakeUpAt(
             armed(),
-            nowMs = ARMED_AT + ONE_HOUR,
-            nowMonoMs = MONO_AT + ONE_HOUR,
+            nowMs = ARMED_AT + ecoule,
+            nowMonoMs = MONO_AT + ecoule,
         )
         assertThat(at).isEqualTo(ARMED_AT + TIMEOUT)
     }

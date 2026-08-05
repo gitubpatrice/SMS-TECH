@@ -168,7 +168,30 @@ object SafetyCallAlarmScheduler {
                 val wallDeadline = cfg.lastActivityAt + cfg.timeoutMs
                 // Ce qu'il reste à courir sur l'horloge monotone, converti en instant mural.
                 val monoDeadline = nowMs + (cfg.timeoutMs - cfg.monoElapsedMs(nowMonoMs))
-                maxOf(wallDeadline, monoDeadline)
+                val deadline = maxOf(wallDeadline, monoDeadline)
+                // 🔴 v1.27.2 (relecture Gemini du 2026-08-05, F-01) — L'AVERTISSEMENT AUSSI A
+                // BESOIN D'UN RÉVEIL.
+                //
+                // Seule l'échéance était programmée. L'avertissement « Confirmez que vous allez
+                // bien », lui, dépendait du **tick horaire** : il ne s'affichait que si un tick
+                // tombait par hasard dans la fenêtre.
+                //
+                // Tant que la fenêtre valait 6 h en dur, elle en attrapait forcément un. Depuis
+                // qu'elle est proportionnelle — un quart du délai — celle d'un délai d'**une
+                // heure** ne dure que quinze minutes : le tick horaire n'y tombe qu'une fois sur
+                // quatre. Trois fois sur quatre, de VRAIS SMS partaient aux proches **sans que la
+                // personne ait jamais eu l'occasion de dire qu'elle allait bien**. C'est le pire
+                // reproche qu'on puisse faire à cette fonction : alerter sans prévenir.
+                //
+                // Le réveil de l'avertissement passe donc AVANT celui de l'échéance qu'il annonce.
+                // Aucune boucle possible : au réveil suivant `nowMs >= warningStart`, la décision
+                // devient l'échéance, et `distinctUntilChanged` ne voit qu'une transition.
+                //
+                // On soustrait de `deadline` — le PLUS TARDIF des deux compteurs — et non de la
+                // seule échéance murale : `isInWarningWindow` exige les deux horloges, avertir sur
+                // la murale seule poserait une notification que le prédicat démentirait.
+                val warningStart = deadline - cfg.warningWindowMs()
+                if (nowMs < warningStart) warningStart else deadline
             }
         }
         // v1.27.2 (audit Codex du 2026-08-05, C-05) — L'EXPIRATION DU BAIL DOIT ÊTRE PROGRAMMÉE.
