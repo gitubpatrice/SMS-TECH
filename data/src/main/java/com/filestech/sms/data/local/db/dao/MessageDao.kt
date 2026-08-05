@@ -436,6 +436,7 @@ interface MessageDao {
         SELECT m.telephony_uri FROM messages m
         JOIN conversations c ON c.id = m.conversation_id
         WHERE m.telephony_uri IS NOT NULL AND c.in_vault = 0
+        ORDER BY m.telephony_uri
         """,
     )
     suspend fun listMirroredTelephonyUris(): List<String>

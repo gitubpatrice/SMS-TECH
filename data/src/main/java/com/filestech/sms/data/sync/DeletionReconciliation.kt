@@ -90,11 +90,29 @@ internal object DeletionReconciliation {
         // les candidats restants sont recalcules au tour suivant. Une reconciliation qui prend
         // quelques passes de plus est sans consequence ; une synchronisation qui bloque plusieurs
         // minutes en a.
-        val probed = candidates.take(MAX_PROBES_PER_PASS)
+        // 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-06) — LES CANDIDATS DEJA EN ATTENTE PASSENT
+        // EN PREMIER, sans quoi la regle des deux passes ne converge JAMAIS au-dela du budget.
+        //
+        // `candidates.take(300)` prenait les 300 premiers de l'instantane courant, et la requete
+        // SQL n'avait aucun `ORDER BY`. Avec 600 candidats et un ordre qui alterne entre `[A, B]`
+        // et `[B, A]` : la passe 1 memorise A, la passe 2 sonde B et OUBLIE A, la passe 3 sonde A
+        // et oublie B. Aucune intersection, donc **aucune suppression, indefiniment**. SQLite ne
+        // promet aucun ordre sans `ORDER BY` — et une ecriture concurrente suffit a le changer.
+        //
+        // Deux corrections, et il faut les deux : un ordre stable cote SQL, et la priorite aux
+        // URI dont l'absence est deja attestee. Ce sont elles qui peuvent etre CONFIRMEES ; les
+        // sonder en dernier revenait a ne jamais rien conclure.
+        val prioritaires = candidates.filter { it in pending }
+        val probed = (prioritaires + candidates.filterNot { it in pending })
+            .take(MAX_PROBES_PER_PASS)
         val absent = probed.filter { probe(it) == false }
+        val probedSet = probed.toSet()
         return Decision(
             toDelete = absent.filter { it in pending },
-            nextPending = absent.toSet(),
+            // ⚠️ On CONSERVE l'attente des candidats qu'on n'a pas eu le budget de re-sonder.
+            // Les ecraser reviendrait a perdre la preuve de premiere absence a chaque passe, et
+            // c'est exactement le mecanisme de non-convergence ci-dessus.
+            nextPending = absent.toSet() + candidates.filter { it in pending && it !in probedSet },
             unverified = probed.size - absent.size,
             deferred = candidates.size - probed.size,
         )
