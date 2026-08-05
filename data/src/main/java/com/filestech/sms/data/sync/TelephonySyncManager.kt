@@ -58,6 +58,7 @@ class TelephonySyncManager @Inject constructor(
     private val telephonyReader: TelephonyReader,
     private val mirror: ConversationMirror,
     private val messageDao: MessageDao,
+    private val conversationDao: com.filestech.sms.data.local.db.dao.ConversationDao,
     // v1.27.2 (audit externe 2026-08-04 #6) — transaction Room pour [reconcileDeletions] :
     // suppression + recalcul des aperçus atomiques, même recette que `purgeHistoryNow` (H9).
     private val database: AppDatabase,
@@ -492,7 +493,22 @@ class TelephonySyncManager @Inject constructor(
                     removed += messageDao.deleteByTelephonyUris(batch)
                 }
                 if (removed > 0) {
-                    affected.forEach { convId -> messageDao.refreshConversationPreview(convId) }
+                    affected.forEach { convId ->
+                        messageDao.refreshConversationPreview(convId)
+                        // v1.27.2 (test appareil du 2026-08-05) — l'apercu ne suffisait pas.
+                        //
+                        // Constate en supprimant une conversation depuis Google Messages sur le
+                        // S9 : la ligne `messages` partait bien, mais la conversation restait
+                        // affichee avec un badge « 1 » de non-lu et une date au 1er janvier 1970.
+                        // Un badge qui annonce un message que l'utilisateur ne peut plus ouvrir,
+                        // et une coquille en tete de liste. Aucun test JVM ne pouvait le voir :
+                        // il fallait regarder l'ecran.
+                        conversationDao.recomputeUnreadCount(convId)
+                        val vide = conversationDao.deleteIfEmpty(convId)
+                        if (vide > 0) {
+                            Timber.i("reconcileDeletions: conversation %d devenue vide, retiree", convId)
+                        }
+                    }
                 }
             }
             Timber.i("reconcileDeletions: %d local row(s) dropped (deleted system-side)", removed)

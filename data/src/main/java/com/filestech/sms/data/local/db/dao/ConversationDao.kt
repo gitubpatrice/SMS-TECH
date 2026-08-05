@@ -175,6 +175,55 @@ interface ConversationDao {
     @Query("DELETE FROM conversations WHERE id = :id")
     suspend fun delete(id: Long)
 
+    /**
+     * v1.27.2 (test appareil du 2026-08-05) — recalcule le compteur de non-lus d'UNE conversation.
+     *
+     * ⚠️ Le defaut que ca ferme, trouve en supprimant une conversation depuis Google Messages sur
+     * le S9 : `reconcileDeletions` effacait bien la ligne `messages` et rafraichissait l'apercu,
+     * mais ne touchait JAMAIS `unread_count`. La conversation restait affichee avec une pastille
+     * « 1 » alors que son unique message n'existait plus. Un badge qui affirme un message que
+     * l'utilisateur ne peut pas ouvrir.
+     *
+     * Meme predicat de sentinelle que `refreshConversationPreview` : une reaction repliee ne
+     * compte pas comme un message non lu.
+     */
+    @Query(
+        """
+        UPDATE conversations
+        SET unread_count = (
+            SELECT COUNT(*) FROM messages
+            WHERE conversation_id = :conversationId
+              AND read = 0
+              AND direction = 0
+              AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+        )
+        WHERE id = :conversationId
+        """,
+    )
+    suspend fun recomputeUnreadCount(conversationId: Long)
+
+    /**
+     * v1.27.2 (test appareil du 2026-08-05) — supprime une conversation devenue **entierement
+     * vide**.
+     *
+     * ⚠️ Meme constat : apres suppression du dernier message depuis une autre application, il
+     * restait une coquille sans apercu, datee du **1er janvier 1970** (`last_message_at = 0`) et
+     * portant un faux badge. L'utilisateur avait supprime la conversation ailleurs ; la voir
+     * survivre sous cette forme n'a aucun sens.
+     *
+     * `NOT EXISTS` porte sur TOUTES les lignes, sentinelles de reaction comprises : on ne supprime
+     * que ce qui ne contient plus rien du tout. Une conversation dont il reste ne serait-ce qu'une
+     * sentinelle est conservee — elle porte encore un etat que le miroir doit refleter.
+     */
+    @Query(
+        """
+        DELETE FROM conversations
+        WHERE id = :conversationId
+          AND NOT EXISTS (SELECT 1 FROM messages WHERE conversation_id = :conversationId)
+        """,
+    )
+    suspend fun deleteIfEmpty(conversationId: Long): Int
+
     @Query("SELECT COUNT(*) FROM conversations WHERE unread_count > 0 AND in_vault = 0")
     fun observeUnreadConversationCount(): Flow<Int>
 }
