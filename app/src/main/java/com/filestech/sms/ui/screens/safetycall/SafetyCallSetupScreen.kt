@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -86,6 +89,8 @@ fun SafetyCallSetupScreen(
     viewModel: SafetyCallSetupViewModel = hiltViewModel(),
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    // v1.27.2 — l'etat REELLEMENT enregistre, pour que l'indicateur ne suive pas le brouillon.
+    val savedEnabled by viewModel.savedEnabled.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     var addContactDialogOpen by remember { mutableStateOf(false) }
     var customDurationDialogOpen by remember { mutableStateOf(false) }
@@ -121,6 +126,7 @@ fun SafetyCallSetupScreen(
     val safetyDisabledMsg = stringResource(R.string.safety_call_saved_disabled)
     val contactAddedMsg = stringResource(R.string.safety_call_contact_added)
     val contactRemovedMsg = stringResource(R.string.safety_call_contact_removed)
+    val disabledNowMsg = stringResource(R.string.safety_call_setup_disabled_now)
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -137,6 +143,10 @@ fun SafetyCallSetupScreen(
                     snackbarHost.showSnackbar(contactAddedMsg)
                 SafetyCallSetupViewModel.Event.ContactRemoved ->
                     snackbarHost.showSnackbar(contactRemovedMsg)
+                // v1.27.2 — l'interrupteur a éteint sur-le-champ : on le confirme, sans quitter
+                // l'écran (l'utilisateur peut vouloir continuer à modifier).
+                SafetyCallSetupViewModel.Event.DisabledImmediately ->
+                    snackbarHost.showSnackbar(disabledNowMsg)
                 is SafetyCallSetupViewModel.Event.ValidationError -> {
                     val msgRes = when (event.reason) {
                         SafetyCallSetupViewModel.ValidationReason.NoContacts ->
@@ -182,7 +192,11 @@ fun SafetyCallSetupScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            StatusSection(draft = draft, onToggle = viewModel::setEnabled)
+            StatusSection(
+                draft = draft,
+                savedEnabled = savedEnabled,
+                onToggle = viewModel::setEnabled,
+            )
             DurationSection(
                 draft = draft,
                 onSelect = viewModel::setTimeoutMs,
@@ -264,6 +278,7 @@ fun SafetyCallSetupScreen(
 @Composable
 private fun StatusSection(
     draft: SafetyCallConfig,
+    savedEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
 ) {
     SectionCard(title = stringResource(R.string.safety_call_setup_section_status)) {
@@ -283,6 +298,47 @@ private fun StatusSection(
                 )
             }
             Switch(checked = draft.enabled, onCheckedChange = onToggle)
+        }
+
+        // v1.27.2 — l'état RÉELLEMENT enregistré, et non la position de l'interrupteur.
+        //
+        // Un indicateur qui suivrait le brouillon mentirait exactement comme lui : c'est ce qui a
+        // fait croire à une désactivation qui n'avait jamais été écrite. Ici, ce qui s'affiche
+        // vient de DataStore.
+        Spacer(Modifier.height(12.dp))
+        val activeColor = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+            com.filestech.sms.ui.theme.BrandSuccessDark
+        } else {
+            com.filestech.sms.ui.theme.BrandSuccessLight
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.safety_call_setup_state_label),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = if (savedEnabled) {
+                    stringResource(R.string.safety_call_setup_state_on)
+                } else {
+                    stringResource(R.string.safety_call_setup_state_off)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (savedEnabled) activeColor else MaterialTheme.colorScheme.error,
+            )
+        }
+
+        // Et quand l'intention diverge de l'enregistré, on le NOMME — plutôt que de laisser
+        // deviner que l'interrupteur n'a pas encore d'effet.
+        if (draft.enabled != savedEnabled) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.safety_call_setup_state_unsaved),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }

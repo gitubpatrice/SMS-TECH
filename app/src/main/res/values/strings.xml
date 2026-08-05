@@ -450,11 +450,11 @@
     <string name="settings_safety_call_title">Safety call</string>
     <string name="settings_safety_call_desc">Send an automatic SMS to your emergency contacts if you don\'t open SMS Tech for a configured duration. Designed for solo travel, isolated living, professions at risk.</string>
     <string name="settings_safety_call_disabled">Disabled</string>
-    <string name="settings_safety_call_enabled">Armed · resets in %1$s</string>
+    <string name="settings_safety_call_enabled">Enabled · resets in %1$s</string>
     <string name="settings_safety_call_im_ok">I\'m OK — reset timer</string>
     <string name="settings_safety_call_im_ok_snack">Timer reset.</string>
     <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
-    <string name="settings_safety_call_armed_chip">Armed</string>
+    <string name="settings_safety_call_armed_chip">Enabled</string>
     <string name="settings_safety_call_armed_duration">Duration: %1$s</string>
     <string name="settings_safety_call_armed_remaining">Remaining: %1$s before trigger</string>
     <string name="settings_safety_call_armed_remaining_imminent">Less than 2 h before trigger</string>
@@ -462,6 +462,7 @@
     <string name="settings_safety_call_armed_contacts_many">Contacts: %1$s (+%2$d others)</string>
     <string name="settings_safety_call_armed_template">Template: %1$s</string>
     <string name="settings_safety_call_armed_modify">Modify</string>
+    <string name="settings_safety_call_armed_actions_hint">“I\'m OK” resets the timer: the countdown restarts from the full duration, and no message is sent. “Modify” opens the settings (duration, contacts, message).</string>
     <string name="settings_safety_call_armed_im_ok_short">I\'m OK</string>
     <string name="safety_call_setup_title">Safety call</string>
     <string name="safety_call_setup_section_status">Status</string>
@@ -500,10 +501,10 @@
     <string name="settings_emergency_title">Emergency mode</string>
     <string name="settings_emergency_desc">A hold-3s button sends an SMS to your emergency contacts with your current location. Distinct from Safety call (which is automatic on inactivity). Disabled by default.</string>
     <string name="settings_emergency_disabled">Disabled</string>
-    <string name="settings_emergency_enabled">Armed</string>
+    <string name="settings_emergency_enabled">Enabled</string>
     <string name="settings_emergency_open">Open emergency</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
-    <string name="settings_emergency_armed_chip">Armed</string>
+    <string name="settings_emergency_armed_chip">Enabled</string>
     <string name="settings_emergency_armed_template">Template: %1$s</string>
     <string name="settings_emergency_armed_location">GPS location included</string>
     <string name="settings_emergency_armed_no_location">No GPS location</string>
@@ -880,6 +881,11 @@
     <string name="safety_call_saved_disabled">Safety call disabled</string>
     <string name="safety_call_contact_added">Contact added</string>
     <string name="safety_call_contact_removed">Contact removed</string>
+    <string name="safety_call_setup_state_label">State:</string>
+    <string name="safety_call_setup_state_on">Enabled</string>
+    <string name="safety_call_setup_state_off">Disabled</string>
+    <string name="safety_call_setup_state_unsaved">Unsaved changes — tap Save to apply them.</string>
+    <string name="safety_call_setup_disabled_now">Safety call disabled immediately.</string>
     <string name="safety_call_setup_unsaved_title">Unsaved changes</string>
     <string name="safety_call_setup_unsaved_body">Adding a contact is not enough: it must be saved to be kept. Leaving now would lose it.</string>
     <string name="emergency_location_grant">Allow location</string>

@@ -1,23 +1,26 @@
 package com.filestech.sms.ui.screens.safetycall
 
+import android.content.Context
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.domain.safetycall.SafetyCallContact
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
+import com.filestech.sms.domain.safetycall.SafetyCallContact
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 /**
@@ -102,9 +105,50 @@ class SafetyCallSetupViewModel @Inject constructor(
         }
     }
 
+    /**
+     * v1.27.2 — état **RÉELLEMENT ENREGISTRÉ**, lu en continu depuis DataStore.
+     *
+     * Distinct de `draft.enabled`, qui n'est qu'une intention tant qu'on n'a pas enregistré.
+     * L'écran affiche celui-ci : un indicateur qui suivrait la position de l'interrupteur
+     * mentirait exactement comme lui.
+     */
+    val savedEnabled: StateFlow<Boolean> = settings.flow
+        .map { it.security.safetyCall.enabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+    /**
+     * v1.27.2 — l'interrupteur **désactive immédiatement**, et n'active qu'au moment
+     * d'enregistrer.
+     *
+     * L'asymétrie est volontaire, et elle penche du côté sûr :
+     *
+     *  - **Éteindre** ne demande aucune validation et l'intention ne souffre aucune ambiguïté.
+     *    Croire avoir coupé une surveillance qui tourne encore est inacceptable — c'est ce que
+     *    l'utilisateur a vécu, et l'avertissement de sortie arrivait trop tard, quand il pensait
+     *    déjà avoir agi.
+     *  - **Allumer** doit rester soumis à [save], qui vérifie qu'il existe au moins un contact.
+     *    Un Safety Call activé sans destinataire ne ferait rien, en silence — précisément la
+     *    famille de défauts que ce lot corrige.
+     *
+     * L'écriture met aussi [snapshotInitial] à jour, sans quoi l'écran réclamerait ensuite
+     * d'enregistrer une modification déjà persistée.
+     */
     fun setEnabled(enabled: Boolean) {
         userEdited = true
         _draft.value = _draft.value.copy(enabled = enabled)
+        if (!enabled) {
+            viewModelScope.launch {
+                settings.update { s ->
+                    s.copy(
+                        security = s.security.copy(
+                            safetyCall = s.security.safetyCall.copy(enabled = false),
+                        ),
+                    )
+                }
+                snapshotInitial = snapshotInitial.copy(enabled = false)
+                _events.trySend(Event.DisabledImmediately)
+            }
+        }
     }
 
     fun setTimeoutMs(timeoutMs: Long) {
@@ -244,6 +288,9 @@ class SafetyCallSetupViewModel @Inject constructor(
 
         /** v1.27.2 — jumeau de [ContactAdded] : le retrait était muet lui aussi. */
         data object ContactRemoved : Event
+
+        /** v1.27.2 — l'interrupteur a éteint le Safety Call sur-le-champ, sans passer par Enregistrer. */
+        data object DisabledImmediately : Event
         data class ValidationError(val reason: ValidationReason) : Event
     }
 

@@ -2575,6 +2575,18 @@ private fun SafetyCallArmedRecap(
                 Text(stringResource(R.string.settings_safety_call_armed_im_ok_short))
             }
         }
+        // v1.27.2 — ce que font réellement les deux boutons, écrit sous eux.
+        //
+        // « Je vais bien » remet le minuteur à zéro et n'envoie RIEN. Rien ne le disait, et le
+        // libellé laissait imaginer un message adressé aux contacts — c'est ce qu'a compris
+        // l'utilisateur. Sur une fonction où l'on doit savoir exactement ce qui part et ce qui
+        // ne part pas, l'ambiguïté n'est pas acceptable.
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.settings_safety_call_armed_actions_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

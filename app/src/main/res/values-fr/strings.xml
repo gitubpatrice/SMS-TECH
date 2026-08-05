@@ -438,11 +438,11 @@
     <string name="settings_safety_call_title">Safety call</string>
     <string name="settings_safety_call_desc">Envoie un SMS automatique à vos contacts d\'urgence si vous n\'ouvrez pas SMS Tech pendant une durée configurée. Conçu pour les voyages solo, les personnes vivant seules, les professions à risque.</string>
     <string name="settings_safety_call_disabled">Désactivé</string>
-    <string name="settings_safety_call_enabled">Armé · réinitialise dans %1$s</string>
+    <string name="settings_safety_call_enabled">Activé · réinitialise dans %1$s</string>
     <string name="settings_safety_call_im_ok">Je vais bien — réinitialiser le minuteur</string>
     <string name="settings_safety_call_im_ok_snack">Minuteur réinitialisé.</string>
-    <!-- v1.9.0 — bloc récap actif (visible uniquement si Safety call armé) -->
-    <string name="settings_safety_call_armed_chip">Armé</string>
+    <!-- v1.9.0 — bloc récap actif (visible uniquement si Safety call activé) -->
+    <string name="settings_safety_call_armed_chip">Activé</string>
     <string name="settings_safety_call_armed_duration">Durée : %1$s</string>
     <string name="settings_safety_call_armed_remaining">Restant : %1$s avant déclenchement</string>
     <string name="settings_safety_call_armed_remaining_imminent">Moins de 2 h avant déclenchement</string>
@@ -450,6 +450,9 @@
     <string name="settings_safety_call_armed_contacts_many">Contacts : %1$s (+%2$d autres)</string>
     <string name="settings_safety_call_armed_template">Modèle : %1$s</string>
     <string name="settings_safety_call_armed_modify">Modifier</string>
+    <!-- v1.27.2 — le bouton « Je vais bien » ne disait pas ce qu'il fait : la remise à zéro
+         du minuteur n'est explicite nulle part, et « envoyer » pouvait s'imaginer. -->
+    <string name="settings_safety_call_armed_actions_hint">« Je vais bien » remet le minuteur à zéro : le compte à rebours repart de la durée complète, et aucun message n\'est envoyé. « Modifier » ouvre les réglages (durée, contacts, message).</string>
     <string name="settings_safety_call_armed_im_ok_short">Je vais bien</string>
     <string name="safety_call_setup_title">Safety call</string>
     <string name="safety_call_setup_section_status">État</string>
@@ -478,7 +481,7 @@
     <string name="safety_call_setup_template_preview">Aperçu</string>
     <string name="safety_call_setup_save">Enregistrer</string>
     <string name="safety_call_setup_save_validation_no_contacts">Ajoutez au moins un contact avant d\'activer.</string>
-    <string name="safety_call_setup_shared_with_emergency">Ces contacts servent aussi au Mode urgence, qui est encore armé. Vider la liste le laisserait sans personne à alerter. Désactivez d\'abord le Mode urgence, ou gardez au moins un contact.</string>
+    <string name="safety_call_setup_shared_with_emergency">Ces contacts servent aussi au Mode urgence, qui est encore activé. Vider la liste le laisserait sans personne à alerter. Désactivez d\'abord le Mode urgence, ou gardez au moins un contact.</string>
     <string name="safety_call_setup_save_validation_custom_empty">Le message personnalisé ne peut pas être vide.</string>
     <string name="safety_call_warning_title">SMS Tech — confirmez que vous allez bien</string>
     <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Appuyez pour réinitialiser le minuteur.</string>
@@ -488,10 +491,10 @@
     <string name="settings_emergency_title">Mode urgence</string>
     <string name="settings_emergency_desc">Un bouton maintenu 3 s envoie un SMS à vos contacts d\'urgence avec votre position actuelle. Distinct du Safety call (qui est automatique sur inactivité). Désactivé par défaut.</string>
     <string name="settings_emergency_disabled">Désactivé</string>
-    <string name="settings_emergency_enabled">Armé</string>
+    <string name="settings_emergency_enabled">Activé</string>
     <string name="settings_emergency_open">Ouvrir l\'urgence</string>
     <!-- v1.10.0+ — Récap Mode urgence armé (miroir de safety_call_armed_*) -->
-    <string name="settings_emergency_armed_chip">Armé</string>
+    <string name="settings_emergency_armed_chip">Activé</string>
     <string name="settings_emergency_armed_template">Modèle : %1$s</string>
     <string name="settings_emergency_armed_location">Position GPS incluse</string>
     <string name="settings_emergency_armed_no_location">Sans position GPS</string>
@@ -863,6 +866,12 @@
     <string name="safety_call_saved_disabled">Safety call désactivé</string>
     <string name="safety_call_contact_added">Contact ajouté</string>
     <string name="safety_call_contact_removed">Contact supprimé</string>
+    <!-- v1.27.2 — l'etat REELLEMENT enregistre, distinct de la position de l'interrupteur. -->
+    <string name="safety_call_setup_state_label">État :</string>
+    <string name="safety_call_setup_state_on">Activé</string>
+    <string name="safety_call_setup_state_off">Désactivé</string>
+    <string name="safety_call_setup_state_unsaved">Modifications non enregistrées — touchez Enregistrer pour les appliquer.</string>
+    <string name="safety_call_setup_disabled_now">Safety call désactivé immédiatement.</string>
     <string name="safety_call_setup_unsaved_title">Modifications non enregistrées</string>
     <string name="safety_call_setup_unsaved_body">Ajouter un contact ne suffit pas : il faut enregistrer pour le conserver. Quitter maintenant le perdrait.</string>
     <string name="emergency_location_grant">Autoriser la localisation</string>

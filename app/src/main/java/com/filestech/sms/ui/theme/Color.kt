@@ -40,6 +40,22 @@ internal val BrandDanger = Color(0xFFC62828)
 internal val BrandBlocked = Color(0xFFE65100)
 
 /**
+ * v1.27.2 — vert d'**état actif**, pour dire « cette protection tourne réellement ».
+ *
+ * Deux teintes, parce qu'un seul vert ne peut pas être lisible sur fond clair ET sur fond sombre.
+ * `0xFF2E7D32` atteint 5,6:1 sur blanc — au-dessus du seuil AA de 4,5:1 pour du texte de taille
+ * normale — mais tombe à 2,6:1 sur une surface sombre, donc illisible. `0xFF81C784` couvre ce
+ * second cas.
+ *
+ * Le rouge correspondant n'est **pas** défini ici : l'état « désactivé » utilise
+ * `MaterialTheme.colorScheme.error`, qui s'adapte déjà au thème par construction. [BrandDanger]
+ * reste réservé à l'intention destructrice (supprimer, purger), qui n'est pas le sujet ici — un
+ * Safety Call éteint n'est pas un danger, c'est une absence de protection.
+ */
+internal val BrandSuccessLight = Color(0xFF2E7D32)
+internal val BrandSuccessDark = Color(0xFF81C784)
+
+/**
  * Incoming chat-bubble background — a slate-blue ("gris bleu") that reads warmer than the
  * default `surfaceContainerHigh` and visually pairs with the outgoing brand-blue bubble. Two
  * tones so the bubble stays legible in both light and dark themes.
