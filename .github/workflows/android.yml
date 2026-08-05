@@ -3,6 +3,20 @@ name: Android CI
 on:
   push:
     branches: [ main, develop ]
+    # 🔴 v1.27.2 (2026-08-05) — LES TAGS DECLENCHENT LA CI, eux aussi.
+    #
+    # Sans cette ligne, un tag ne verifiait RIEN par lui-meme. Le 2026-08-05, la sequence a ete :
+    # tag v1.27.2 pousse sur `main` -> la CI demarre sur le commit de branche -> la release GitHub
+    # est creee A LA MAIN 33 secondes plus tard -> la CI echoue 10 minutes apres, sur deux tests
+    # instrumentes. Quatre APK etaient en ligne bien avant que quiconque puisse le savoir.
+    #
+    # ⚠️ La publication reste MANUELLE (`gh release create` : les APK sont signees en local, la
+    # cle n'est pas dans la CI). Ce declencheur ne peut donc pas BLOQUER une publication — il
+    # garantit seulement qu'un tag est integralement verifie, tests instrumentes compris, et que
+    # l'echec est visible sur le tag lui-meme et non noye dans l'historique de la branche.
+    #
+    # La regle qui reste humaine : ne jamais publier avant que la CI du tag soit verte.
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, develop ]
 
