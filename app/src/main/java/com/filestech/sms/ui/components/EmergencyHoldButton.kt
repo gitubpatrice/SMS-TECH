@@ -126,9 +126,31 @@ fun EmergencyHoldButton(
                     // cette protection, un scroll lent qui traversait le bouton
                     // était interprété comme un appui maintenu 3s → trigger
                     // SMS d'urgence intempestif (bug user reported 2026-05-22).
-                    // `viewConfiguration.touchSlop` ≈ 24dp en density standard.
+                    // v1.27.2 (relecture Gemini du 2026-08-05) — 🔴 `touchSlop` NE VAUT QUE
+                    // PENDANT LES PREMIÈRES CENTAINES DE MILLISECONDES.
+                    //
+                    // Le seuil est calibré pour trancher « scroll ou tap » en ~500 ms. On
+                    // l'appliquait ici pendant **trois secondes entières** : passé le premier
+                    // instant, le moindre tremblement, le roulement de la pulpe du doigt ou
+                    // quelques pas suffisaient à dépasser le seuil. Le maintien était alors annulé
+                    // **en silence** — l'anneau se rembobinait, et quelqu'un en train de demander
+                    // du secours pouvait rester le doigt appuyé sur un bouton qui ne déclencherait
+                    // jamais.
+                    //
+                    // Nouvelle règle, en deux temps :
+                    //
+                    //  1. **Les 300 premières ms** — le doute « scroll ou appui ? » est réel :
+                    //     `touchSlop` tranche, exactement comme avant. Le scroll de la page reste
+                    //     donc protégé, ce que le correctif v1.14.2 avait mis en place après un
+                    //     déclenchement intempestif signalé le 2026-05-22.
+                    //  2. **Ensuite** — l'intention de maintenir est établie. Seule une sortie
+                    //     FRANCHE annule : le doigt doit quitter le bouton, qui fait 200 dp. Une
+                    //     dérive de quelques millimètres ne veut plus rien dire, et n'annule plus.
                     val touchSlopPx = viewConfiguration.touchSlop
                     val slopSq = touchSlopPx * touchSlopPx
+                    // ⚠️ `this@pointerInput.size` et non `size` : le paramètre `size: Dp` du
+                    // composable masque celui de la zone de pointeur, qui est en PIXELS.
+                    val boundsPx = this@pointerInput.size
                     awaitPointerEventScope {
                         while (true) {
                             // Attend le 1er DOWN, ignore les autres pointeurs.
@@ -136,9 +158,10 @@ fun EmergencyHoldButton(
                             val firstPressed = down.changes.firstOrNull { it.pressed }
                                 ?: continue
                             val startPos = firstPressed.position
+                            val downTime = firstPressed.uptimeMillis
                             isHolding = true
-                            // Attend la libération (UP), la perte de focus, OU
-                            // un mouvement > touchSlop (= drag/scroll, pas hold).
+                            // Attend la libération (UP), la perte de focus, un drag pendant la
+                            // fenêtre de discrimination, OU une sortie du bouton après elle.
                             var draining = false
                             inner@ while (true) {
                                 val next = awaitPointerEvent(PointerEventPass.Main)
@@ -149,13 +172,20 @@ fun EmergencyHoldButton(
                                     break@inner
                                 }
                                 if (!draining) {
-                                    val dx = pressed.position.x - startPos.x
-                                    val dy = pressed.position.y - startPos.y
-                                    if (dx * dx + dy * dy > slopSq) {
-                                        // Drag détecté (probable scroll parent)
-                                        // → annule le hold et draine jusqu'à UP
-                                        // pour ne pas re-fire isHolding au
-                                        // tour suivant sur le même geste.
+                                    val inDiscriminationWindow =
+                                        (pressed.uptimeMillis - downTime) < SCROLL_DISCRIMINATION_MS
+                                    val cancelled = if (inDiscriminationWindow) {
+                                        val dx = pressed.position.x - startPos.x
+                                        val dy = pressed.position.y - startPos.y
+                                        dx * dx + dy * dy > slopSq
+                                    } else {
+                                        val p = pressed.position
+                                        p.x < 0f || p.y < 0f ||
+                                            p.x > boundsPx.width || p.y > boundsPx.height
+                                    }
+                                    if (cancelled) {
+                                        // Annule le hold et draine jusqu'à UP pour ne pas
+                                        // re-fire isHolding au tour suivant sur le même geste.
                                         isHolding = false
                                         draining = true
                                     }
@@ -210,3 +240,13 @@ fun EmergencyHoldButton(
 }
 
 private const val DEFAULT_HOLD_MS: Long = 3_000L
+
+/**
+ * v1.27.2 — durée pendant laquelle `touchSlop` peut encore annuler le maintien.
+ *
+ * Au-delà, l'intention de maintenir est établie et seule une sortie du bouton annule. 300 ms est
+ * plus long que le délai d'appui long d'Android (500 ms est le seuil de reconnaissance, mais un
+ * scroll se manifeste bien plus tôt) et assez court pour qu'un tremblement de main n'ait pas le
+ * temps de déplacer le doigt au-delà du seuil.
+ */
+private const val SCROLL_DISCRIMINATION_MS: Long = 300L

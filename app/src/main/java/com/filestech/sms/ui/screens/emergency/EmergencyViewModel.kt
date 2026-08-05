@@ -137,7 +137,18 @@ class EmergencyViewModel @Inject constructor(
      * un paramètre setup ferait sauter son propre cooldown anti-spam.
      */
     fun save() {
-        viewModelScope.launch {
+        // v1.27.2 (relecture Gemini du 2026-08-05) — 🔴 `appScope`, PAS `viewModelScope`.
+        //
+        // Le jumeau asymétrique dans sa forme la plus pure. [disableEmergencyMode] a été passé sur
+        // `appScope` précisément parce que l'écran se referme dès l'événement émis : le ViewModel
+        // est détruit et l'écriture DataStore annulée en plein vol. Ce chemin-ci fait exactement la
+        // MÊME cascade de désactivation — et il était resté sur `viewModelScope`.
+        //
+        // Conséquence : décocher « Activer le mode urgence » puis « Enregistrer » émettait
+        // `Event.Saved`, l'écran se fermait, la coroutine mourait avant l'écriture. **L'utilisateur
+        // était persuadé d'avoir éteint le mode urgence, et le raccourci d'écran verrouillé restait
+        // posé et tappable.** Un réglage de sécurité qui ment sur son propre état.
+        appScope.launch {
             val current = _draft.value
             settings.update { s ->
                 val live = s.security.emergency

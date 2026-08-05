@@ -282,8 +282,34 @@ class MainApplication : Application(), Configuration.Provider {
                                 safetyCall = if (safetyDrift || safetyUnanchored) {
                                     s.security.safetyCall.copy(monotonicLastActivityAt = nowMono)
                                 } else s.security.safetyCall,
+                                // v1.27.2 (relecture Gemini du 2026-08-05) — on REND LA MAIN à
+                                // l'horloge murale au lieu de recaler l'ancre sur `nowMono`.
+                                //
+                                // Poser `nowMono` relançait un cooldown de 60 secondes que
+                                // l'utilisateur n'avait jamais déclenché : après CHAQUE
+                                // redémarrage, le bouton d'urgence restait inerte une minute. Sur
+                                // un bouton de panique, échouer fermé signifie « le bouton ne
+                                // marche pas ». C'est le mauvais côté, sans discussion possible.
+                                //
+                                // `0L` n'est pas un bricolage : c'est la valeur que
+                                // [EmergencyConfig.isInAntiSpamWindow] interprète déjà comme
+                                // « pas de compteur monotone exploitable, l'horloge murale
+                                // décide » — le chemin prévu pour les configurations héritées.
+                                // C'est exactement notre situation après un redémarrage, où le
+                                // compteur monotone ne peut plus rien affirmer.
+                                //
+                                // L'anti-spam reste donc porté par la murale : si soixante
+                                // secondes se sont réellement écoulées, le cooldown est
+                                // réellement fini. Et le prochain déclenchement repose une vraie
+                                // ancre monotone, ce qui restaure la protection SEC-4 contre une
+                                // avance d'horloge par root.
+                                //
+                                // ⚠️ Ne PAS écrire `nowMono - ANTI_SPAM_WINDOW_MS` : sur un
+                                // téléphone démarré depuis moins d'une minute, la valeur serait
+                                // NÉGATIVE, et une ancre négative persistée échappe ensuite à la
+                                // garde `> 0L` de cette même récupération.
                                 emergency = if (emergencyDrift) {
-                                    s.security.emergency.copy(monotonicLastTriggeredAt = nowMono)
+                                    s.security.emergency.copy(monotonicLastTriggeredAt = 0L)
                                 } else s.security.emergency,
                             ),
                         )
