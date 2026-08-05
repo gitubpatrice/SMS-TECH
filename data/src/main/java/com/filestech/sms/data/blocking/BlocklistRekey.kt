@@ -1,7 +1,5 @@
 package com.filestech.sms.data.blocking
 
-import com.filestech.sms.core.ext.blockKey
-
 /**
  * v1.25.4 — décision, séparée de l'exécution, de la conversion des entrées de liste noire vers
  * [blockKey].
@@ -48,11 +46,17 @@ internal sealed interface RekeyAction {
  * La clé se recalcule depuis `rawNumber`, seul champ à avoir gardé la forme d'origine : la clé
  * enregistrée, elle, a déjà perdu les lettres qui permettraient de la reconstituer.
  */
-internal fun planBlocklistRekey(entries: List<LegacyBlockEntry>): List<RekeyAction> {
+internal fun planBlocklistRekey(
+    entries: List<LegacyBlockEntry>,
+    // v1.27.2 (audit Codex final, F-03) — la cle est INJECTEE : elle depend desormais de la
+    // region, que ce module pur ne peut pas resoudre. C'est ce qui convertit les entrees
+    // heritees de la cle a neuf chiffres vers l'identite E.164, sans migration Room.
+    key: (String) -> String,
+): List<RekeyAction> {
     val actions = mutableListOf<RekeyAction>()
     val claimed = HashSet<String>()
     for (entry in entries.sortedBy { it.createdAt }) {
-        val key = entry.rawNumber.blockKey()
+        val key = key(entry.rawNumber)
         if (key.isEmpty()) continue
         when {
             !claimed.add(key) -> actions += RekeyAction.Collapse(entry.id, key)

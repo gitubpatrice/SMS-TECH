@@ -286,7 +286,8 @@ class TelephonySyncManager @Inject constructor(
             val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
             } else emptyList()
-            val isBlockedAddress = phoneIdentity.blockedMatcher(roomBlocked + systemBlocked)
+            val isBlockedAddress = phoneIdentity.snapshot()
+                .blockedMatcher(roomBlocked + systemBlocked)
             Timber.i(
                 "runSync(%s) blocked sources: room=%d system=%d",
                 reason,
@@ -448,6 +449,12 @@ class TelephonySyncManager @Inject constructor(
                 },
             )
             pendingDeletion = decision.nextPending
+            if (decision.deferred > 0) {
+                Timber.i(
+                    "reconcileDeletions: %d candidat(s) reportes a la passe suivante (budget de sondes)",
+                    decision.deferred,
+                )
+            }
             if (decision.unverified > 0) {
                 Timber.w(
                     "reconcileDeletions: %d absence(s) NON prouvee(s) ligne a ligne — lecture globale probablement incomplete",

@@ -2,46 +2,37 @@ package com.filestech.sms.data.sms
 
 import android.telephony.PhoneNumberUtils
 import com.filestech.sms.core.ext.WireAddress
-import com.filestech.sms.core.ext.blockKey
-import com.filestech.sms.core.ext.phoneAddressesMatch
-import com.filestech.sms.core.ext.stripMmsAddressSuffix
+import com.filestech.sms.core.ext.phoneIdentityKey
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * v1.27.2 (audit Codex du 2026-08-05, C-07 / C-08) — **l'identité d'un correspondant**, et le seul
- * endroit du dépôt qui décide si deux écritures désignent la même personne.
+ * v1.27.2 — **l'identité d'un correspondant**, et le seul endroit du dépôt qui décide si deux
+ * écritures désignent la même personne.
  *
- * # Le défaut que cette classe ferme
+ * # Le défaut d'origine (audit Codex, C-07 / C-08)
  *
- * Le rapprochement se faisait sur les **neuf derniers chiffres**. Neuf chiffres ne portent aucune
- * information de pays :
+ * Le rapprochement se faisait sur les **neuf derniers chiffres**, qui ne portent aucune
+ * information de pays : `+33 6 12 34 56 78` et `+1 561 234 5678` partageaient leur clé. Composer
+ * vers l'un ouvrait la conversation de l'autre — **message au mauvais destinataire** — et côté
+ * liste noire, bloquer l'un faisait rejeter les messages de l'autre, **définitivement**, le
+ * curseur d'import avançant sur la ligne écartée.
  *
- * ```
- * "+1 212 345 6789"  →  123456789
- * "01 23 45 67 89"   →  123456789
- * ```
+ * # 🔴 Pourquoi il faut un INSTANTANÉ, et pas une lecture à la volée (audit Codex final, F-01)
  *
- * Conséquences constatées, toutes réelles :
- *  - composer vers l'un ouvrait la conversation de l'autre, et **le message partait au mauvais
- *    destinataire** ;
- *  - à l'import, les deux historiques fusionnaient ;
- *  - 🔴 côté liste noire, bloquer `+33612345678` faisait rejeter les SMS de `+15612345678` — et le
- *    curseur d'import avançait quand même sur la ligne rejetée, donc **le message d'un tiers non
- *    bloqué était perdu définitivement**, pas seulement retardé.
+ * La première version appelait `defaultRegionIso()`, qui lit `settings.state.value`. Or ce
+ * `StateFlow` démarre sur la configuration **par défaut** et n'est hydraté qu'ensuite, de façon
+ * asynchrone. C'est très exactement le piège qui rendait le Safety call muet : un chemin réveillé
+ * par le système lisait des valeurs par défaut en croyant lire les réglages.
  *
- * # Pourquoi ici, et une seule fois
+ * Conséquence ici : sur un import à froid, le réglage « Indicatif pays par défaut » pouvait être
+ * ignoré au profit du pays de la SIM. Une SIM étrangère avec un override français canonicalisait
+ * alors ses `06…` avec la mauvaise région — doublons de conversation **permanents**, et expéditeur
+ * réellement bloqué traité comme non bloqué.
  *
- * La règle a besoin de la **région** (SIM, ou le réglage « Indicatif pays par défaut ») pour
- * canonicaliser une forme nationale. `core` doit rester sans dépendance Android, et le
- * rapprochement est utilisé depuis six endroits — quatre replis de conversation, la réception, les
- * imports. En câbler cinq sur six est le motif de défaut qui revient le plus souvent sur ce dépôt.
- *
- * # Aucune migration de données
- *
- * `blocked_numbers` conserve déjà `raw_number` à côté de sa clé. La désambiguïsation se fait donc
- * **à la comparaison**, sur la forme brute stockée : rien à réécrire dans la base de l'utilisateur,
- * et les entrées existantes deviennent correctes sans qu'il ait à retoucher sa liste.
+ * [snapshot] franchit donc la barrière `hydratedOrNull()` **une seule fois**, puis fige la région
+ * pour toute l'opération. Les appelants prennent un instantané en tête de passe et ne consultent
+ * plus rien : la même décision vaut du premier au dernier message.
  */
 @Singleton
 class PhoneIdentity @Inject constructor(
@@ -49,43 +40,54 @@ class PhoneIdentity @Inject constructor(
 ) {
 
     /**
-     * Forme canonique E.164 de [raw], ou `null` si elle ne peut pas être établie avec certitude —
-     * région indéterminable, numéro invalide pour cette région, expéditeur alphanumérique, code
-     * court.
+     * Résout la région **après hydratation** des réglages, puis rend un instantané figé.
      *
-     * ⚠️ `null` n'est pas un repli permissif : les appelants **échouent fermé** dessus.
+     * ⚠️ Suspend, et c'est le point : toute décision d'identité doit attendre cette barrière.
      */
-    fun canonical(raw: String): String? {
-        val trimmed = raw.stripMmsAddressSuffix().trim()
-        if (trimmed.isEmpty()) return null
-        return WireAddress.toE164OrRaw(trimmed, wireFormatter.defaultRegionIso()) { number, region ->
-            PhoneNumberUtils.formatNumberToE164(number, region)
-        }.takeIf { it.startsWith("+") }
-    }
-
-    /** Ces deux écritures désignent-elles le **même** correspondant ? */
-    fun matches(a: String, b: String): Boolean = phoneAddressesMatch(a, b) { canonical(it) }
+    suspend fun snapshot(): Snapshot = Snapshot(wireFormatter.hydratedDefaultRegionIso())
 
     /**
-     * Construit un prédicat « cette adresse est-elle bloquée ? » à partir des formes **brutes**
-     * enregistrées, en résolvant la région **une seule fois**.
-     *
-     * Le seau [blockKey] sert d'index : sans lui, chaque message entrant comparerait son adresse à
-     * toute la liste noire. Avec lui, on ne canonicalise que les candidats du même seau — au plus
-     * un ou deux.
+     * Décision d'identité à région **figée**. Pure une fois construite : aucune lecture de
+     * réglages, donc aucun risque de changer d'avis au milieu d'un import.
      */
-    fun blockedMatcher(blockedRaw: Collection<String>): (String) -> Boolean {
-        if (blockedRaw.isEmpty()) return { false }
-        val byKey = HashMap<String, MutableList<String>>(blockedRaw.size)
-        for (raw in blockedRaw) {
-            val key = raw.stripMmsAddressSuffix().blockKey()
-            if (key.isEmpty()) continue
-            byKey.getOrPut(key) { mutableListOf() } += raw
+    class Snapshot(private val regionIso: String?) {
+
+        /**
+         * `true` si la région a pu être établie. Quand elle ne l'est pas, les formes nationales ne
+         * se canonicalisent pas et le rapprochement se dégrade vers un refus — un doublon de
+         * conversation visible plutôt qu'un message au mauvais destinataire.
+         */
+        val regionKnown: Boolean get() = !regionIso.isNullOrBlank()
+
+        /** Forme canonique E.164, ou `null` si elle ne peut pas être établie avec certitude. */
+        fun canonical(raw: String): String? =
+            WireAddress.toE164OrRaw(raw.trim(), regionIso) { number, region ->
+                PhoneNumberUtils.formatNumberToE164(number, region)
+            }.takeIf { it.startsWith("+") }
+
+        /** Clé d'identité stockable et comparable. Voir [phoneIdentityKey]. */
+        fun key(raw: String): String = phoneIdentityKey(raw) { canonical(it) }
+
+        /** Ces deux écritures désignent-elles le **même** correspondant ? */
+        fun matches(a: String, b: String): Boolean {
+            val ka = key(a)
+            return ka.isNotEmpty() && ka == key(b)
         }
-        if (byKey.isEmpty()) return { false }
-        return { address ->
-            val key = address.stripMmsAddressSuffix().blockKey()
-            byKey[key]?.any { matches(it, address) } == true
+
+        /**
+         * Prédicat « cette adresse est-elle bloquée ? », construit une fois par passe.
+         *
+         * v1.27.2 (audit Codex final, F-02 / F-04) — l'index est désormais dérivé de la **clé
+         * d'identité**, plus du seau de neuf chiffres. Deux gains : la comparaison ne peut plus
+         * refuser une équivalence E.164 valide hors de France, et l'adresse entrante n'est
+         * canonicalisée **qu'une seule fois** au lieu d'une fois par candidat.
+         */
+        fun blockedMatcher(blockedRaw: Collection<String>): (String) -> Boolean {
+            if (blockedRaw.isEmpty()) return { false }
+            val keys = HashSet<String>(blockedRaw.size)
+            for (raw in blockedRaw) key(raw).takeIf { it.isNotEmpty() }?.let { keys += it }
+            if (keys.isEmpty()) return { false }
+            return { address -> key(address).takeIf { it.isNotEmpty() } in keys }
         }
     }
 }

@@ -182,19 +182,61 @@ fun String.blockKey(): String {
  * d'un seul côté rend le rapprochement silencieusement inopérant — c'est déjà arrivé.
  */
 fun phoneAddressesMatch(a: String, b: String, toE164: (String) -> String?): Boolean {
-    val rawA = a.stripMmsAddressSuffix().trim()
-    val rawB = b.stripMmsAddressSuffix().trim()
-    val keyA = rawA.blockKey()
-    // Seau grossier d'abord : il écarte l'immense majorité des paires sans appeler libphonenumber.
-    if (keyA != rawB.blockKey()) return false
-    // Libellés alphanumériques (« Free ») et codes courts (« 3646 ») : il n'y a pas de pays à
-    // départager, la clé EST l'identité. `blockKey` rend le libellé en minuscules, ou les chiffres
-    // tels quels quand il y en a moins que le seuil.
-    if (!keyA.all { it.isDigit() } || keyA.length < BLOCK_KEY_SIGNIFICANT_DIGITS) return true
-    // Deux numéros complets : SEULE l'égalité E.164 prouve qu'ils désignent la même personne.
-    // `null` d'un seul côté suffit à refuser — voir l'échec fermé décrit plus haut.
-    val e164A = toE164(rawA)
-    return e164A != null && e164A == toE164(rawB)
+    val keyA = phoneIdentityKey(a, toE164)
+    return keyA.isNotEmpty() && keyA == phoneIdentityKey(b, toE164)
+}
+
+/**
+ * v1.27.2 (audit Codex final du 2026-08-05, F-02 / F-03 / F-05) — **l'identité d'un correspondant,
+ * sous forme d'une clé unique et stockable.**
+ *
+ * # 🔴 Les trois défauts que ça ferme
+ *
+ * La version précédente comparait d'abord les deux [blockKey] et rendait `false` s'ils
+ * différaient — **avant même de consulter l'E.164**. Elle n'était donc « région-aware » que pour
+ * les plans de numérotation dont le numéro national significatif fait neuf chiffres, c'est-à-dire
+ * la France, celle sur laquelle je l'avais testée :
+ *
+ * ```
+ * Singapour  national "65218000"    -> blockKey 65218000    ┐ même E.164 +6565218000,
+ *            international "+6565218000" -> blockKey 565218000   ┘ et pourtant REFUSÉS
+ * ```
+ *
+ * Elle imposait ensuite une canonicalisation réussie **des deux côtés**, si bien que deux chaînes
+ * **identiques** mais non canonicalisables — code long avec `*`/`#`, format OEM — ne se
+ * reconnaissaient plus : un expéditeur affiché comme bloqué passait quand même (F-05).
+ *
+ * Enfin, la clé de neuf chiffres était **stockée** dans `blocked_numbers`, sous un index UNIQUE.
+ * Deux correspondants de pays différents ne pouvaient donc pas y coexister : bloquer le second
+ * évinçait silencieusement le premier (F-03). Une clé E.164 les sépare, et l'index redevient
+ * correct **sans migration** — le rekey existant convertit les entrées héritées.
+ *
+ * # La règle, dans l'ordre
+ *
+ * 1. **Libellé alphanumérique** (« Free », « SFR 123 ») → le libellé en minuscules. Il n'y a pas
+ *    de pays à départager, et `+`/E.164 n'ont aucun sens ici.
+ * 2. **E.164 si on peut la calculer** → c'est l'identité, complète et non ambiguë. Elle réunit
+ *    d'elle-même le national et l'international du même numéro, dans **tous** les plans.
+ * 3. **Forme explicitement internationale non canonicalisable** → ses propres chiffres, préfixés.
+ *    ⚠️ Surtout pas le suffixe de neuf chiffres : `+1 212 345 6789` percuterait le fixe français
+ *    `01 23 45 67 89`, et le message partirait au mauvais destinataire.
+ * 4. **Sinon** (national ou ambigu, région inconnue) → [blockKey], le repli historique.
+ *
+ * Deux formes non canonicalisables et **identiques** rendent donc la même clé : elles se
+ * reconnaissent, ce que l'échec fermé interdisait à tort.
+ */
+fun phoneIdentityKey(raw: String, toE164: (String) -> String?): String {
+    val trimmed = raw.stripMmsAddressSuffix().trim()
+    if (trimmed.isEmpty()) return ""
+    if (trimmed.any { it.isLetter() }) return trimmed.lowercase()
+    toE164(trimmed)?.takeIf { it.isNotBlank() }?.let { return it }
+    // Non canonicalisable. Une forme explicitement internationale garde SES chiffres — la rabattre
+    // sur neuf ferait percuter `+1 212 345 6789` et le fixe francais `01 23 45 67 89`.
+    return if (trimmed.startsWith('+')) {
+        "+" + trimmed.filter { it.isDigit() }
+    } else {
+        trimmed.blockKey()
+    }
 }
 
 /**

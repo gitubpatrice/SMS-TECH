@@ -219,7 +219,9 @@ class TelephonySyncWorker @AssistedInject constructor(
         val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
         } else emptyList()
-        val isBlockedAddress = phoneIdentity.blockedMatcher(roomBlocked + systemBlocked)
+        // v1.27.2 (audit Codex final, F-01) — instantane pris APRES hydratation, une seule fois.
+        val isBlockedAddress = phoneIdentity.snapshot()
+            .blockedMatcher(roomBlocked + systemBlocked)
         var imported = 0
         val maxSeen = reader.readSmsSince(sinceId = sinceId, pageSize = 500) { page ->
             val filtered = page.filterNot { isBlockedAddress(it.entity.address) }

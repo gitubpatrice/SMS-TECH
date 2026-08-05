@@ -57,6 +57,29 @@ class PhoneNumberWireFormatter @Inject constructor(
     fun defaultRegionIso(): String? = resolveRegion(null)
 
     /**
+     * 🔴 v1.27.2 (audit Codex final du 2026-08-05, F-01) — la meme region, mais **apres la barriere
+     * d'hydratation**.
+     *
+     * [defaultRegionIso] lit `settings.state.value`, dont la valeur INITIALE est la configuration
+     * par defaut : l'override « Indicatif pays par defaut » y vaut `null` tant que DataStore n'a
+     * pas repondu. Sur un chemin reveille par le systeme — import a froid, worker — la region
+     * retombait donc silencieusement sur celle de la SIM, et une SIM etrangere canonicalisait les
+     * numeros nationaux avec le mauvais pays.
+     *
+     * C'est le meme piege que celui qui rendait le Safety call muet, et le depot le documente
+     * lui-meme : tout chemin reveille par le systeme doit passer par `hydratedOrNull()`.
+     *
+     * Reservee aux decisions d'identite, qui sont suspendables. Le chemin d'ENVOI garde
+     * [defaultRegionIso] : il est appele depuis un contexte deja hydrate, et le rendre suspendable
+     * n'apporterait rien.
+     */
+    suspend fun hydratedDefaultRegionIso(): String? {
+        val hydrated = runCatching { settings.hydratedOrNull() }.getOrNull()
+        return hydrated?.sending?.defaultRegionIso?.takeIf { it.isNotBlank() }
+            ?: simRegionIso(null)
+    }
+
+    /**
      * The default region for national numbers: the user's explicit override (Settings → Envoi →
      * "Indicatif pays par défaut") when set, otherwise the SIM country. The override is what lets
      * someone on a foreign SIM keep texting national numbers of another country (e.g. a Luxembourg

@@ -266,10 +266,11 @@ class ConversationMirror @Inject constructor(
         // v1.27.2 (audit Codex du 2026-08-05, P-11) — même règle qu'aux trois autres replis :
         // `blockKey` seul ferait poser une réaction reçue de `+1 561 234 5678` sur la conversation
         // de `+33 6 12 34 56 78`.
+        val ident = phoneIdentity.snapshot()
         val existing = conversationDao.findByAddressesCsv(csv)
             ?: conversationDao.snapshotOneToOneConversations().firstOrNull { conv ->
                 val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
-                convRaw != null && phoneIdentity.matches(convRaw, addr.raw)
+                convRaw != null && ident.matches(convRaw, addr.raw)
             }
             ?: return@withContext null
         val target = when (kind) {
@@ -842,13 +843,14 @@ class ConversationMirror @Inject constructor(
             // précisément le cas que ce repli existe pour couvrir.
             val incomingKey = addresses.first().raw.stripMmsAddressSuffix().blockKey()
             if (incomingKey.length >= CONV_MATCH_MIN_DIGITS && incomingKey.all { it.isDigit() }) {
+                val ident = phoneIdentity.snapshot()
                 val oneToOne = conversationDao.snapshotOneToOneConversations()
                 // v1.27.2 (audit Codex du 2026-08-05, P-11) — le seau `blockKey` ne suffit
                 // pas : `+33 6 12 34 56 78` et `+1 561 234 5678` rendent la meme cle de neuf
                 // chiffres. [phoneAddressesMatch] ajoute la desambiguisation par indicatif pays.
                 val match = oneToOne.firstOrNull { conv ->
                     val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
-                    convRaw != null && phoneIdentity.matches(convRaw, addresses.first().raw)
+                    convRaw != null && ident.matches(convRaw, addresses.first().raw)
                 }
                 if (match != null) {
                     if (systemThreadId > 0L && match.threadId != systemThreadId) {
@@ -924,13 +926,14 @@ class ConversationMirror @Inject constructor(
             // précisément le cas que ce repli existe pour couvrir.
             val incomingKey = addresses.first().raw.stripMmsAddressSuffix().blockKey()
             if (incomingKey.length >= CONV_MATCH_MIN_DIGITS && incomingKey.all { it.isDigit() }) {
+                val ident = phoneIdentity.snapshot()
                 val oneToOne = conversationDao.snapshotOneToOneConversations()
                 // v1.27.2 (audit Codex du 2026-08-05, P-11) — le seau `blockKey` ne suffit
                 // pas : `+33 6 12 34 56 78` et `+1 561 234 5678` rendent la meme cle de neuf
                 // chiffres. [phoneAddressesMatch] ajoute la desambiguisation par indicatif pays.
                 val match = oneToOne.firstOrNull { conv ->
                     val convRaw = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw
-                    convRaw != null && phoneIdentity.matches(convRaw, addresses.first().raw)
+                    convRaw != null && ident.matches(convRaw, addresses.first().raw)
                 }
                 if (match != null) {
                     if (match.displayName == null && resolved != null) {

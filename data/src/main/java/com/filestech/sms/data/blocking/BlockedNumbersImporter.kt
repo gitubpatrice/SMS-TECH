@@ -108,8 +108,10 @@ class BlockedNumbersImporter @Inject constructor(
         val entities = runCatching { blockedNumberDao.all() }.getOrDefault(emptyList())
         if (entities.isEmpty()) return@withContext 0
         val byId = entities.associateBy { it.id }
+        val ident = phoneIdentity.snapshot()
         val plan = planBlocklistRekey(
-            entities.map {
+            key = ident::key,
+            entries = entities.map {
                 LegacyBlockEntry(
                     id = it.id,
                     rawNumber = it.rawNumber,
@@ -175,7 +177,8 @@ class BlockedNumbersImporter @Inject constructor(
         val blockedRaw = repo.blockedRawSnapshot().filter { it.isNotBlank() }
         Timber.i("Purge: %d blocked entries", blockedRaw.size)
         if (blockedRaw.isEmpty()) return@withContext 0
-        val isBlockedAddress = phoneIdentity.blockedMatcher(blockedRaw)
+        // v1.27.2 (audit Codex final, F-01) — instantane pris UNE fois, apres hydratation.
+        val isBlockedAddress = phoneIdentity.snapshot().blockedMatcher(blockedRaw)
         // Read directly from the DAO — not `ConversationRepository.observeAll()`. Le motif
         // d'origine (« observeAll filtre déjà les conversations bloquées ») n'est plus vrai
         // depuis la v1.25.3 : elles restent listées, marquées via `Conversation.blocked`. La

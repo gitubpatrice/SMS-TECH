@@ -1,7 +1,6 @@
 package com.filestech.sms.data.repository
 
 import android.os.Build
-import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.blocking.BlockedNumberSystem
@@ -52,14 +51,24 @@ class BlockedNumberRepositoryImpl @Inject constructor(
      * avec la region de la SIM. Aucune migration : `raw_number` est deja stocke.
      */
     override suspend fun isBlocked(rawNumber: String): Boolean = withContext(io) {
-        val key = rawNumber.blockKey()
+        val key = phoneIdentity.snapshot().key(rawNumber)
         if (key.isEmpty()) return@withContext false
-        dao.findAllByNormalized(key).any { phoneIdentity.matches(it.rawNumber, rawNumber) }
+        dao.isBlocked(key)
     }
 
     override suspend fun block(rawNumber: String, label: String?): Outcome<Unit> = withContext(io) {
         if (rawNumber.isBlank()) return@withContext Outcome.Failure(AppError.Validation("number is blank"))
-        val normalized = rawNumber.blockKey()
+        // 🔴 v1.27.2 (audit Codex final, F-03) — la cle STOCKEE est l'identite E.164.
+        //
+        // L'index sur `normalized_number` est UNIQUE. Avec la cle de neuf chiffres,
+        // `+33612345678` et `+15612345678` la partageaient : bloquer le second EVINCAIT
+        // silencieusement le premier, et en debloquer un retirait la protection de l'autre.
+        // Une cle E.164 les separe, et l'index redevient correct SANS migration — le rekey
+        // existant convertit les entrees heritees a la premiere synchronisation.
+        val normalized = phoneIdentity.snapshot().key(rawNumber)
+        if (normalized.isEmpty()) {
+            return@withContext Outcome.Failure(AppError.Validation("identite indeterminable"))
+        }
         val systemUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) system.block(rawNumber) else null
         dao.upsert(
             BlockedNumberEntity(
@@ -75,13 +84,14 @@ class BlockedNumberRepositoryImpl @Inject constructor(
 
     override suspend fun unblock(rawNumber: String): Outcome<Unit> = withContext(io) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) system.unblock(rawNumber)
-        dao.deleteByNormalized(rawNumber.blockKey())
+        dao.deleteByNormalized(phoneIdentity.snapshot().key(rawNumber))
         Outcome.Success(Unit)
     }
 
     override suspend fun mirrorFromSystem(rawNumber: String): Outcome<Unit> = withContext(io) {
         if (rawNumber.isBlank()) return@withContext Outcome.Failure(AppError.Validation("number is blank"))
-        val normalized = rawNumber.blockKey()
+        val normalized = phoneIdentity.snapshot().key(rawNumber)
+        if (normalized.isEmpty()) return@withContext Outcome.Success(Unit)
         // No-op when already mirrored — keeps `created_at` stable and avoids a write storm at
         // boot when nothing has changed since last launch.
         if (dao.isBlocked(normalized)) return@withContext Outcome.Success(Unit)

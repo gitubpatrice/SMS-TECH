@@ -53,6 +53,82 @@ class PhoneAddressesMatchTest {
     private fun match(a: String, b: String) = phoneAddressesMatch(a, b) { frE164(it) }
 
     /**
+     * Doublure region **Singapour** — le contre-exemple officiel que Codex a exhibe. Le numero
+     * national y fait HUIT chiffres, si bien que le suffixe de neuf chiffres differe entre les deux
+     * ecritures du meme numero.
+     */
+    private fun sgE164(raw: String): String? {
+        val t = raw.trim()
+        val d = t.filter { it.isDigit() }
+        return when {
+            t.startsWith('+') && d.length in 8..15 -> "+" + d
+            d.length == 8 -> "+65" + d
+            else -> null
+        }
+    }
+
+    /**
+     * 🔴 **F-02 (audit Codex final)** — ma regle n'etait « region-aware » que pour la France.
+     *
+     * Elle comparait d'abord les deux [blockKey] et rendait `false` s'ils differaient, **avant meme
+     * de consulter l'E.164**. A Singapour, le national fait huit chiffres :
+     *
+     * ```
+     * "65218000"     -> blockKey 65218000
+     * "+6565218000"  -> blockKey 565218000     ← cles DIFFERENTES
+     * E.164 des deux = +6565218000             ← et pourtant le MEME numero
+     * ```
+     *
+     * Je n'avais teste que des numeros francais, ou le national significatif fait neuf chiffres —
+     * exactement la taille de la cle. La coincidence masquait l'erreur.
+     */
+    @Test
+    fun `un national de huit chiffres se rapproche de son international`() {
+        // Non-vacuite : les deux cles de repli DIFFERENT bien, c'est tout le probleme.
+        assertThat("65218000".blockKey()).isNotEqualTo("+6565218000".blockKey())
+        assertThat(phoneAddressesMatch("65218000", "+6565218000") { sgE164(it) }).isTrue()
+    }
+
+    /**
+     * 🔴 **F-05** — deux ecritures **identiques** mais non canonicalisables ne se reconnaissaient
+     * plus : l'ancienne regle exigeait une canonicalisation reussie des DEUX cotes. Un expediteur
+     * enregistre comme bloque pouvait donc passer.
+     */
+    @Test
+    fun `deux ecritures identiques non canonicalisables se reconnaissent`() {
+        val jamais = { _: String -> null as String? }
+        assertThat(phoneAddressesMatch("+331234*5678#", "+331234*5678#", jamais)).isTrue()
+        assertThat(phoneAddressesMatch("0123456789", "0123456789", jamais)).isTrue()
+    }
+
+    /**
+     * ⚠️ Le garde-fou de C-07 doit survivre a F-05 : sans region, une forme explicitement
+     * internationale garde SES chiffres et ne se rabat PAS sur le suffixe de neuf. Sans quoi
+     * `+1 212 345 6789` percuterait a nouveau le fixe francais `01 23 45 67 89`.
+     */
+    @Test
+    fun `sans region, un international ne percute pas un national`() {
+        val jamais = { _: String -> null as String? }
+        assertThat(phoneAddressesMatch("+12123456789", "0123456789", jamais)).isFalse()
+    }
+
+    /**
+     * 🔴 **F-03** — la cle d'identite est ce qui est STOCKE dans `blocked_numbers`, sous un index
+     * UNIQUE. Deux correspondants de pays differents doivent donc en produire deux DIFFERENTES,
+     * sans quoi bloquer le second evince silencieusement le premier.
+     */
+    @Test
+    fun `deux pays differents produisent deux cles stockables distinctes`() {
+        val a = phoneIdentityKey("+33612345678") { frE164(it) }
+        val b = phoneIdentityKey("+15612345678") { frE164(it) }
+        assertThat(a).isNotEqualTo(b)
+        // Non-vacuite : leur cle de repli, elle, etait bien la meme — c'est le defaut d'origine.
+        assertThat("+33612345678".blockKey()).isEqualTo("+15612345678".blockKey())
+        // Et les deux ecritures du meme numero rendent bien UNE seule cle.
+        assertThat(phoneIdentityKey("0612345678") { frE164(it) }).isEqualTo(a)
+    }
+
+    /**
      * 🔴 **C-07** — le cas que la première correction laissait passer : une seule des deux formes
      * porte un `+`. Codex l'a établi en exécutant la fonction compilée.
      */

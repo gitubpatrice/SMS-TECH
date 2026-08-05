@@ -37,6 +37,15 @@ package com.filestech.sms.data.sync
 internal object DeletionReconciliation {
 
     /**
+     * v1.27.2 (audit Codex final, F-04) — sondes unitaires autorisees par passe.
+     *
+     * 300 : assez pour absorber d'un coup toute suppression realiste faite depuis une autre
+     * application, assez peu pour qu'une lecture globale defaillante sur un historique de plusieurs
+     * dizaines de milliers de messages ne bloque pas la synchronisation.
+     */
+    const val MAX_PROBES_PER_PASS = 300
+
+    /**
      * @param toDelete les URI dont l'absence est **prouvée individuellement et confirmée** sur deux
      *   passes. C'est la seule liste qu'il soit légitime d'effacer.
      * @param nextPending les URI vues absentes à cette passe, à reporter à la suivante.
@@ -47,6 +56,11 @@ internal object DeletionReconciliation {
         val toDelete: List<String>,
         val nextPending: Set<String>,
         val unverified: Int,
+        /**
+         * Candidats **non sondes** a cette passe, faute de budget. Ils reviendront au tour suivant.
+         * Toujours a tracer : un nombre non nul signifie que la reconciliation n'a pas fini.
+         */
+        val deferred: Int,
     )
 
     /**
@@ -63,12 +77,26 @@ internal object DeletionReconciliation {
         probe: (String) -> Boolean?,
     ): Decision {
         val candidates = mirrored.filterNot { it in aliveUris }
-        if (candidates.isEmpty()) return Decision(emptyList(), emptySet(), 0)
-        val absent = candidates.filter { probe(it) == false }
+        if (candidates.isEmpty()) return Decision(emptyList(), emptySet(), 0, 0)
+        // 🔴 v1.27.2 (audit Codex final du 2026-08-05, F-04) — LE NOMBRE DE SONDES EST BORNE.
+        //
+        // La preuve individuelle est une requete `ContentResolver` par candidat. Sur un historique
+        // de 50 000 messages et un fournisseur vide — ou une lecture globale fortement tronquee —
+        // c'etaient 50 000 requetes sequentielles, PUIS 50 000 de plus a la passe suivante, dans
+        // le chemin normal de chaque synchronisation. Le mutex retenait les demandes suivantes, et
+        // un processus tue en cours de balayage recommencait tout sans jamais converger.
+        //
+        // On en traite donc un lot par passe. La convergence est plus lente, jamais compromise :
+        // les candidats restants sont recalcules au tour suivant. Une reconciliation qui prend
+        // quelques passes de plus est sans consequence ; une synchronisation qui bloque plusieurs
+        // minutes en a.
+        val probed = candidates.take(MAX_PROBES_PER_PASS)
+        val absent = probed.filter { probe(it) == false }
         return Decision(
             toDelete = absent.filter { it in pending },
             nextPending = absent.toSet(),
-            unverified = candidates.size - absent.size,
+            unverified = probed.size - absent.size,
+            deferred = candidates.size - probed.size,
         )
     }
 }

@@ -110,7 +110,8 @@ class ConversationRepositoryImpl @Inject constructor(
             // reception, region comprise. La v1.25.3 avait deja diverge ici, avec des
             // conversations annoncees bloquees qui continuaient de recevoir ; retomber sur la cle
             // de neuf chiffres aurait recree l'ecart, dans l'autre sens cette fois.
-            val isBlockedAddress = phoneIdentity.blockedMatcher(blocked.map { it.rawNumber })
+            val isBlockedAddress = phoneIdentity.snapshot()
+                .blockedMatcher(blocked.map { it.rawNumber })
             rows.map { row ->
                 val conv = row.toDomain()
                 val allBlocked = conv.addresses.isNotEmpty() &&
@@ -387,7 +388,7 @@ class ConversationRepositoryImpl @Inject constructor(
                     matchOneToOneByBlockKey(
                         conversationDao.snapshotOneToOneConversations(),
                         addresses.first(),
-                        phoneIdentity::matches,
+                        phoneIdentity.snapshot()::matches,
                     )
                 } else null
 
