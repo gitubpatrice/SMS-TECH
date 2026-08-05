@@ -65,6 +65,43 @@ remonté jusqu'à un appelant réel.
 - **Désactiver le mode urgence éteint aussi le raccourci d'écran verrouillé** depuis le bouton
   Enregistrer, et l'écran revient à l'accueil une fois la désactivation écrite.
 
+### Personal safety — séquence d'alerte
+- **Le Safety Call relance désormais trois fois, à quinze minutes d'intervalle.** L'alerte initiale
+  ne partait qu'une fois : un proche qui ne consultait pas son téléphone à cet instant précis
+  pouvait ne jamais voir passer l'appel à l'aide. Les trois relances portent un **texte différent
+  à chaque envoi** — elles rappellent l'absence d'activité, sa durée, et la dernière annonce
+  explicitement qu'aucun message ne suivra. Répondre « Je vais bien » désarme toute la séquence.
+- **L'alerte ne peut plus partir sans que l'avertissement ait été affiché.** Seule l'échéance était
+  programmée ; la notification « confirmez que vous allez bien » dépendait d'une vérification
+  horaire. Sur un délai d'une heure — le plus court proposé — la fenêtre d'avertissement ne dure
+  que quinze minutes : trois fois sur quatre, de vrais SMS partaient aux proches sans que la
+  personne ait jamais eu l'occasion de dire qu'elle allait bien.
+- **La notification de séquence reste affichée après le dernier envoi.** Elle disparaissait à
+  l'instant précis où la quatrième alerte partait : quelqu'un qui reprenait son téléphone une heure
+  plus tard ne voyait aucune trace, et ignorait donc que ses contacts avaient reçu un appel à
+  l'aide et cherchaient peut-être à joindre les secours.
+- **Le mode leurre efface toute trace du Safety Call.** L'avertissement de pré-déclenchement
+  survivait à l'entrée en session sous contrainte — révélant à un agresseur qu'une fonction
+  d'alerte existait et courait.
+
+### Data integrity — réconciliation et identité
+- **Un numéro français et un numéro étranger ne sont plus confondus.** Le rapprochement se faisait
+  sur les neuf derniers chiffres : `+33 6 12 34 56 78` et `+1 561 234 5678` donnaient la même clé.
+  Un message pouvait partir au mauvais destinataire, et deux historiques fusionner.
+- **Un brouillon n'est plus perdu lors d'une suppression faite ailleurs.** Le nettoyage des
+  conversations devenues vides ne regardait que les messages : un fil ne contenant plus qu'un
+  **brouillon non envoyé** ou référencé par un **envoi programmé** était supprimé avec eux. Une
+  suppression faite dans une autre application ne peut pas exprimer l'intention d'effacer des
+  données qui n'existent que dans SMS Tech.
+- **Une conversation mise au coffre pendant une synchronisation ne peut plus être supprimée.** La
+  garde était évaluée avant les vérifications, laissant une fenêtre où le contenu tout juste mis à
+  l'abri était effacé.
+- **Les messages supprimés ailleurs finissent toujours par disparaître.** Au-delà d'un certain
+  volume, la réconciliation pouvait alterner indéfiniment entre deux lots sans jamais rien
+  conclure, laissant des messages affichés pour toujours.
+- **Les conversations vides héritées sont retirées.** Celles qui restaient affichées sans aperçu,
+  datées du 1ᵉʳ janvier 1970, ne redevenaient jamais candidates au nettoyage.
+
 ### UX
 - Le récap du Safety Call indique **l'heure à laquelle le minuteur a démarré**. Avec la durée et
   le temps restant affichés juste en dessous, l'échéance se recoupe de tête.

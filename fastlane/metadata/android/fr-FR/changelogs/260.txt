@@ -1,0 +1,9 @@
+Le Safety Call relance desormais 3 fois, toutes les 15 minutes, avec un message qui evolue. Repondre « Je vais bien » desactive toute la sequence.
+
+L'avertissement s'affiche toujours avant qu'une alerte ne parte, meme sur un delai d'une heure.
+
+Un numero francais et un numero etranger aux chiffres proches ne sont plus confondus.
+
+Un brouillon n'est plus perdu quand la conversation est supprimee depuis une autre application.
+
+Le mode leurre n'affiche plus aucune trace du Safety Call.

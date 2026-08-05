@@ -1,0 +1,9 @@
+Safety Call now sends 3 follow-ups, 15 minutes apart, each with a different message. Replying "I'm fine" cancels the whole sequence.
+
+The warning is always shown before any alert goes out, even on a one-hour delay.
+
+A French number and a foreign one with similar digits are no longer confused.
+
+A draft is no longer lost when the conversation is deleted from another app.
+
+Decoy mode leaves no trace of Safety Call.
