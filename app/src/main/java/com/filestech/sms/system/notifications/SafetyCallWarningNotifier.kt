@@ -106,6 +106,72 @@ class SafetyCallWarningNotifier @Inject constructor(
     }
 
     /**
+     * v1.27.2 — notification **pendant la séquence de relances**, posée dès le premier message
+     * envoyé et maintenue jusqu'au dernier.
+     *
+     * # Pourquoi elle est indispensable
+     *
+     * Avant, l'avertissement était retiré au déclenchement et **rien ne le remplaçait**. Or la
+     * séquence dure désormais trois quarts d'heure : sans notification, le seul moyen d'arrêter les
+     * relances était d'ouvrir l'application et d'aller dans les Réglages. Quelqu'un qui veut
+     * simplement dire « je vais bien » et couper l'alerte devait donc naviguer dans un menu — au
+     * pire moment possible.
+     *
+     * Le tap emprunte **exactement le même chemin** que le bouton des Réglages
+     * ([ACTION_SAFETY_CALL_RESET], nonce compris) qui, depuis l'audit Codex, désactive le deadman
+     * et clôt la séquence quand l'alerte est déjà partie.
+     *
+     * Même identifiant de notification que l'avertissement : elle le **remplace** proprement, sans
+     * jamais laisser les deux cohabiter.
+     *
+     * ⚠️ Rien n'y révèle l'identité des contacts, et le canal reste `PRIVATE` : sous contrainte, la
+     * notification dit qu'une alerte est partie, jamais à qui.
+     */
+    fun showSequenceActive(messagesSent: Int, totalMessages: Int) {
+        if (!hasPostPermission()) {
+            Timber.w("SafetyCallWarningNotifier: POST_NOTIFICATIONS not granted, skipping sequence")
+            return
+        }
+        val token = intentToken.rotate()
+        val tapIntent = PendingIntent.getActivity(
+            context,
+            REQUEST_SAFETY_CALL_RESET,
+            Intent(context, MainActivity::class.java)
+                .setAction(ACTION_SAFETY_CALL_RESET)
+                .putExtra(EXTRA_RESET_TOKEN, token)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val body = context.getString(
+            R.string.safety_call_sequence_body,
+            messagesSent,
+            totalMessages,
+        )
+        val notif = NotificationCompat.Builder(
+            context,
+            NotificationChannelInitializer.CHANNEL_SAFETY_CALL_WARNING,
+        )
+            .setSmallIcon(R.drawable.ic_notification_message)
+            .setContentTitle(context.getString(R.string.safety_call_sequence_title))
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(tapIntent)
+            .build()
+
+        @android.annotation.SuppressLint("MissingPermission")
+        NotificationManagerCompat.from(context).notify(NOTIF_ID_DEADMAN_WARNING, notif)
+        Timber.i(
+            "SafetyCallWarningNotifier: posted sequence notice (%d/%d)",
+            messagesSent,
+            totalMessages,
+        )
+    }
+
+    /**
      * Annule la notification de warning si présente. Safe à appeler même si
      * pas de notif active. Appelé par le worker quand l'user a reset le
      * timer (hors fenêtre de warning) ou quand le trigger a été exécuté.

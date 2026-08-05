@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.usecase.TriggerSafetyCallUseCase
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.system.notifications.SafetyCallWarningNotifier
@@ -151,8 +152,15 @@ class SafetyCallWorker @AssistedInject constructor(
                             "SafetyCallWorker: relance %d due, delegating",
                             current.messagesSent,
                         )
-                        planNextRelance(triggerSafetyCall())
+                        reflectSequence(triggerSafetyCall())
                     } else {
+                        // v1.27.2 — (re)pose la notification de séquence : le processus a pu
+                        // mourir depuis le dernier envoi, et sans elle l'utilisateur n'a plus
+                        // aucun moyen simple d'arrêter les relances.
+                        warningNotifier.showSequenceActive(
+                            current.messagesSent,
+                            SafetyCallConfig.TOTAL_MESSAGES,
+                        )
                         // Pas encore l'heure : on se contente de (re)poser le rendez-vous, au cas
                         // où le travail ponctuel aurait été perdu — redémarrage, nettoyage OEM.
                         current.nextRelanceAt()?.let { at ->
@@ -165,8 +173,7 @@ class SafetyCallWorker @AssistedInject constructor(
                 }
                 current.isExpired() -> {
                     Timber.i("SafetyCallWorker: timer expired, delegating to trigger use case")
-                    warningNotifier.dismiss()
-                    planNextRelance(triggerSafetyCall())
+                    reflectSequence(triggerSafetyCall())
                 }
                 current.isInWarningWindow() -> {
                     val msToExpiry = (current.lastActivityAt + current.timeoutMs) -
@@ -201,6 +208,51 @@ class SafetyCallWorker @AssistedInject constructor(
     private fun planNextRelance(result: TriggerSafetyCallUseCase.Result) {
         val next = (result as? TriggerSafetyCallUseCase.Result.Triggered)?.nextRelanceInMs ?: return
         scheduleRelance(applicationContext, next)
+    }
+
+    /**
+     * v1.27.2 — pose le rendez-vous suivant **et** met la notification en accord avec l'état réel
+     * de la séquence.
+     *
+     * Les deux vont ensemble et c'est délibéré : programmer une relance sans laisser à
+     * l'utilisateur le moyen de l'arrêter, c'est ce que faisait la version précédente. Le seul
+     * moyen d'y couper court était d'ouvrir l'application et de fouiller les Réglages.
+     *
+     * ⚠️ **La décision est prise sur l'ÉTAT PERSISTÉ, pas sur le type du résultat.**
+     *
+     * La première version énumérait les résultats et retirait la notification dans tout le reste
+     * (`else`). Deux cas y tombaient à tort, et ce sont précisément ceux où la séquence est
+     * **encore ouverte** :
+     *
+     *  - [TriggerSafetyCallUseCase.Result.SendFailed] sur une relance — le créneau est rendu, le
+     *    deadman reste armé, les relances suivantes vont partir ; retirer la notification privait
+     *    l'utilisateur de son seul moyen de les arrêter jusqu'au prochain réveil ;
+     *  - [TriggerSafetyCallUseCase.Result.AlreadySent] — un autre worker a pris le créneau et
+     *    envoie ; la séquence court toujours.
+     *
+     * Énumérer des cas pour décider d'une garde est le motif de défaut qui revient le plus souvent
+     * sur ce projet : la liste vieillit à chaque résultat ajouté. On relit donc l'état, qui est la
+     * seule source de vérité — et qui donne aussi le vrai compteur, là où `messagesSent + 1`
+     * supposait que la réservation avait réussi.
+     */
+    private suspend fun reflectSequence(result: TriggerSafetyCallUseCase.Result) {
+        planNextRelance(result)
+        // Sous contrainte, rien ne s'affiche : une notification annonçant qu'une alerte est partie
+        // révélerait à l'agresseur l'existence du réseau de soutien de la victime.
+        if (result is TriggerSafetyCallUseCase.Result.PanicSuppressed) {
+            warningNotifier.dismiss()
+            return
+        }
+        val after = settings.flow.first().security.safetyCall
+        if (after.hasRelancePending) {
+            warningNotifier.showSequenceActive(
+                after.messagesSent,
+                SafetyCallConfig.TOTAL_MESSAGES,
+            )
+        } else {
+            // Séquence close, désarmée, ou jamais ouverte : la notification n'a plus d'objet.
+            warningNotifier.dismiss()
+        }
     }
 
     companion object {

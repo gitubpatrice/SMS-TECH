@@ -490,6 +490,8 @@
     <string name="safety_call_warning_title">SMS Tech — confirmez que vous allez bien</string>
     <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Appuyez pour réinitialiser le minuteur.</string>
     <string name="safety_call_warning_body_imminent">Le Safety call se déclenchera dans moins de 2 heures. Appuyez pour réinitialiser maintenant.</string>
+    <string name="safety_call_sequence_title">SMS Tech — alerte envoyée</string>
+    <string name="safety_call_sequence_body">%1$d message sur %2$d envoyé à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</string>
     <!-- v1.10.0 — Mode urgence (actif, déclenché par l\'user via hold 3s) -->
     <string name="settings_section_emergency">Mode urgence</string>
     <string name="settings_emergency_title">Mode urgence</string>
