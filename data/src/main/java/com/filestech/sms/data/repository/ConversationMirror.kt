@@ -1,8 +1,6 @@
 package com.filestech.sms.data.repository
 
-import android.telephony.PhoneNumberUtils
 import androidx.room.withTransaction
-import com.filestech.sms.core.ext.WireAddress
 import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.data.local.db.AppDatabase
@@ -14,7 +12,6 @@ import com.filestech.sms.data.local.db.entity.AttachmentEntity
 import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.sms.PhoneIdentity
-import com.filestech.sms.data.sms.PhoneNumberWireFormatter
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.mms.MediaAttachmentSpec
 import com.filestech.sms.domain.model.MessageDirection
@@ -45,7 +42,6 @@ class ConversationMirror @Inject constructor(
     private val scheduledMessageDao: ScheduledMessageDao,
     private val attachmentDao: AttachmentDao,
     private val contacts: ContactRepository,
-    private val wireFormatter: PhoneNumberWireFormatter,
     // v1.27.2 (audit Codex, C-07) — le rapprochement de conversation exige la region : neuf
     // chiffres ne portent aucune information de pays.
     private val phoneIdentity: PhoneIdentity,
@@ -988,17 +984,25 @@ class ConversationMirror @Inject constructor(
     suspend fun dedupeSameNumberConversations(): Boolean = withContext(io) {
         val oneToOne = conversationDao.snapshotOneToOneConversations().filterNot { it.inVault }
         if (oneToOne.size < 2) return@withContext false
-        val region = wireFormatter.defaultRegionIso()
+        // 🔴 v1.27.2 (audit Codex final, F-01 — le JUMEAU) — region HYDRATEE.
+        //
+        // Cette passe lisait `defaultRegionIso()`, donc `settings.state.value`, dont la valeur
+        // initiale est la configuration par defaut. Sur un demarrage a froid, l'override
+        // « Indicatif pays par defaut » etait ignore : la dedup ne trouvait alors aucun groupe a
+        // fusionner, rendait `false`... et `StartupMigrations` posait DEFINITIVEMENT son drapeau
+        // `dedupSameNumberV1230`. Les doublons devenaient permanents, sans rejeu possible.
+        //
+        // On passe par le meme instantane que le reste de l'identite.
+        val ident = phoneIdentity.snapshot()
         val candidates = oneToOne.mapNotNull { conv ->
             val raw = PhoneAddress.list(conv.addressesCsv).singleOrNull()?.raw ?: return@mapNotNull null
             DedupCandidate(id = conv.id, rawAddress = raw, lastMessageAt = conv.lastMessageAt)
         }
-        val plans = planSameNumberMerges(candidates) { raw ->
-            WireAddress.toE164OrRaw(raw, region) { number, r ->
-                PhoneNumberUtils.formatNumberToE164(number, r)
-            }.takeIf { it.startsWith("+") }
-        }
-        if (plans.isEmpty()) return@withContext false
+        val plans = planSameNumberMerges(candidates) { raw -> ident.canonical(raw) }
+        // ⚠️ Sans region fiable, aucune forme nationale ne se canonicalise : ne rien trouver ne
+        // prouve alors RIEN. On rend `true` pour que la migration one-shot ne se croie pas
+        // terminee et rejoue au prochain demarrage, region hydratee.
+        if (plans.isEmpty()) return@withContext !ident.regionKnown
         database.withTransaction {
             for (plan in plans) {
                 // 1) reparent AVANT toute suppression (FK CASCADE sur messages.conversation_id).
