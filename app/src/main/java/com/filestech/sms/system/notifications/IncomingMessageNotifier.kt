@@ -20,6 +20,7 @@ import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.notification.ConversationNotificationCanceller
 import com.filestech.sms.domain.repository.ContactRepository
+import com.filestech.sms.domain.settings.NotificationSettings
 import com.filestech.sms.domain.settings.NotificationStyle
 import com.filestech.sms.domain.settings.PreviewMode
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -56,9 +57,7 @@ class IncomingMessageNotifier @Inject constructor(
         // côté Vault reste comptabilisé (via Room) pour le récap à l'ouverture
         // explicite du coffre.
         //
-        // Lecture synchrone Room (~1-3 ms) acceptable sur SMS entrant — bien
-        // moins coûteuse qu'un round-trip DataStore (10-15 ms) qu'on évite
-        // déjà via `settings.state.value` ci-dessous.
+        // Lecture synchrone Room (~1-3 ms) acceptable sur SMS entrant.
         // v1.26.1 (audit H16) — le repli dit désormais « traiter comme SI c'était dans le coffre ».
         //
         // Il disait l'inverse (`false` = « pas dans le coffre ») : toute erreur de lecture Room /
@@ -102,12 +101,23 @@ class IncomingMessageNotifier @Inject constructor(
         // Falls back gracefully if READ_CONTACTS is denied or no match exists.
         val senderName = runCatching { contacts.lookupByPhone(address)?.displayName }.getOrNull()
             ?.takeIf { it.isNotBlank() } ?: address
-        // v1.6.1 (audit PERF-11) — lecture synchrone via le snapshot chaud StateFlow
-        // hydraté par [SettingsRepository.state] au boot. Avant : `flow.first()` =
-        // ouverture DataStore + désérialisation proto sur CHAQUE SMS entrant (5-15 ms
-        // sous charge), retardant la notif d'autant.
-        val s = settings.state.value
-        if (!s.notifications.enabled) return@withContext
+        // v1.6.1 (audit PERF-11) — on évite `flow.first()` sur chaque SMS entrant (ouverture
+        // DataStore + désérialisation, 5-15 ms sous charge, notification retardée d'autant).
+        //
+        // v1.27.2 — mais on ne peut PAS se contenter de `settings.state.value` ici. Ce
+        // `StateFlow` démarre sur `AppSettings()` et s'hydrate depuis DataStore de façon
+        // asynchrone : tant que la première émission n'est pas arrivée, il rend les valeurs PAR
+        // DÉFAUT. Or un SMS entrant réveille très souvent un processus qui VIENT de naître —
+        // c'est même le cas nominal quand le téléphone dort. Le défaut par défaut le plus grave
+        // est `previewMode = ALWAYS` : l'aperçu du message s'affichait sur l'écran de
+        // verrouillage de quelqu'un qui avait explicitement choisi de le masquer. Le réglage
+        // tombait exactement dans la situation contre laquelle il existe.
+        //
+        // [hydratedOrNull] garde le chemin chaud à coût nul et ne paie la lecture qu'une fois
+        // par démarrage à froid. Même famille de défaut que celui corrigé dans
+        // [com.filestech.sms.system.scheduler.SafetyCallWorker].
+        val notifSettings = settings.hydratedOrNull()?.notifications ?: FALLBACK_NOTIFICATIONS
+        if (!notifSettings.enabled) return@withContext
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     context, Manifest.permission.POST_NOTIFICATIONS,
@@ -128,7 +138,7 @@ class IncomingMessageNotifier @Inject constructor(
         // donc en désamorçant le son on neutralise effectivement le pop-up tout
         // en conservant le badge + icône shade. Compromis volontairement
         // documenté dans le toggle UI ([R.string.settings_notif_style_desc]).
-        val channelId = when (s.notifications.style) {
+        val channelId = when (notifSettings.style) {
             NotificationStyle.SILENT -> NotificationChannelInitializer.CHANNEL_INCOMING_SILENT
             NotificationStyle.HEADS_UP, NotificationStyle.BANNER ->
                 NotificationChannelInitializer.CHANNEL_INCOMING
@@ -138,7 +148,7 @@ class IncomingMessageNotifier @Inject constructor(
         // OEMs that disregarded VISIBILITY_PRIVATE. Both WHEN_UNLOCKED and NEVER now ship a
         // placeholder for setContentText; the real body only flows through MessagingStyle, which
         // honours the OS lock-screen redaction.
-        val hidePreview = when (s.notifications.previewMode) {
+        val hidePreview = when (notifSettings.previewMode) {
             PreviewMode.ALWAYS -> false
             PreviewMode.WHEN_UNLOCKED, PreviewMode.NEVER -> true
         }
@@ -198,7 +208,7 @@ class IncomingMessageNotifier @Inject constructor(
                 ),
             )
             .setVisibility(
-                when (s.notifications.previewMode) {
+                when (notifSettings.previewMode) {
                     PreviewMode.WHEN_UNLOCKED -> NotificationCompat.VISIBILITY_PRIVATE
                     PreviewMode.NEVER -> NotificationCompat.VISIBILITY_SECRET
                     PreviewMode.ALWAYS -> NotificationCompat.VISIBILITY_PUBLIC
@@ -214,7 +224,7 @@ class IncomingMessageNotifier @Inject constructor(
             // if (sbn.tag == tag) nm.cancel(tag, sbn.id)`. Simple, fiable, pas de
             // summary à gérer.
             .also { b ->
-                if (s.notifications.inlineReply) {
+                if (notifSettings.inlineReply) {
                     b.addAction(buildReplyAction(address, messageId, notificationId))
                 }
                 b.addAction(buildMarkReadAction(address, messageId, notificationId))
@@ -227,7 +237,7 @@ class IncomingMessageNotifier @Inject constructor(
                 // mais sans son la notif retombe à un simple badge dans le shade.
                 // En SILENT, le canal LOW se charge déjà de masquer son + heads-up,
                 // donc pas besoin de setSound ici.
-                if (s.notifications.style == NotificationStyle.BANNER) {
+                if (notifSettings.style == NotificationStyle.BANNER) {
                     b.setSound(null)
                     b.setDefaults(0)
                 }
@@ -390,6 +400,31 @@ class IncomingMessageNotifier @Inject constructor(
         const val EXTRA_ADDRESS = "address"
         const val EXTRA_MESSAGE_ID = "messageId"
         const val EXTRA_CONVERSATION_ID = "conversationId"
+
+        /**
+         * v1.27.2 — réglages retenus quand DataStore reste **illisible**
+         * ([SettingsRepository.hydratedOrNull] rend `null` après ses reprises).
+         *
+         * Ce n'est PAS `NotificationSettings()` : les défauts du constructeur sont taillés pour
+         * un premier lancement confortable, pas pour un repli. Ici chaque champ est choisi par
+         * le sens dans lequel il échoue :
+         *
+         *  - `previewMode = NEVER` — masquer un aperçu que l'utilisateur voulait voir est une
+         *    gêne visible et réversible ; afficher un aperçu qu'il avait masqué est une fuite
+         *    silencieuse sur un écran verrouillé. Ce n'est pas symétrique.
+         *  - `inlineReply = false` — pas de champ de saisie posé sur la base d'une configuration
+         *    qu'on ne sait pas lire.
+         *  - `enabled = true` — on notifie quand même. Taire un SMS entrant dans une application
+         *    de SMS est un échec fonctionnel que l'utilisateur subit sans comprendre, alors que
+         *    la notification masquée ne divulgue rien : l'expéditeur seul, sans le corps.
+         *  - `style = HEADS_UP` — comportement attendu par défaut, sans effet sur la vie privée.
+         */
+        private val FALLBACK_NOTIFICATIONS = NotificationSettings(
+            enabled = true,
+            style = NotificationStyle.HEADS_UP,
+            previewMode = PreviewMode.NEVER,
+            inlineReply = false,
+        )
 
         private const val BASE_TAG = 0x10000 // ensures non-zero notif ids
         private const val REPLY_REQUEST_SALT = 0x52455050 // 'REPL'

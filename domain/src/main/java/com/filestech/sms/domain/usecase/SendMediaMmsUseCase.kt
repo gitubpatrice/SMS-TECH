@@ -12,6 +12,7 @@ import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -62,8 +63,14 @@ class SendMediaMmsUseCase @Inject constructor(
         // front, so every recipient row references the same durable file. Cf. [OutgoingAttachmentStore].
         val durableAttachments = attachments.map { it.copy(file = attachmentStore.promoteToDurable(it.file)) }
 
-        // Audit H3 (v1.14.8) — `state.value` zéro-I/O au lieu de `flow.first()` (DataStore read).
-        val s = settings.state.value
+        // Audit H3 (v1.14.8) — on évite `flow.first()` (ouverture DataStore) sur chaque envoi.
+        //
+        // v1.27.2 — mais pas via `state.value` : il rend les valeurs PAR DÉFAUT tant que le
+        // processus n'est pas hydraté, et cet envoi n'est pas toujours déclenché depuis
+        // l'interface — [com.filestech.sms.system.scheduler.ScheduledSendAttempt] le rejoue depuis
+        // un worker réveillé à froid. `defaultSubId` y valait alors `null` : le renvoi partait de
+        // la SIM système au lieu de celle choisie. Même correctif que [SendSmsUseCase].
+        val s = settings.hydratedOrNull() ?: AppSettings()
         val effectiveSubId = subId ?: s.sending.defaultSubId
         val deliveryReports = s.sending.deliveryReports
         val now = System.currentTimeMillis()

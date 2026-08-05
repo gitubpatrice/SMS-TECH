@@ -10,6 +10,7 @@ import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SentSmsRecorder
 import com.filestech.sms.domain.sender.SmsSender
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -69,10 +70,23 @@ class SendSmsUseCase @Inject constructor(
         if (recipients.isEmpty()) return Outcome.Failure(AppError.Validation("no recipients"))
         if (body.isBlank()) return Outcome.Failure(AppError.Validation("body is blank"))
 
-        // Audit H3 (v1.14.8) — `state.value` est le snapshot chaud StateFlow (Eagerly hydraté
-        // au boot via [SettingsRepository.state]) → lecture zéro-I/O. Avant : `flow.first()`
-        // ouvrait DataStore + désérialisation Protobuf sur CHAQUE envoi SMS (5-15 ms).
-        val s = settings.state.value
+        // Audit H3 (v1.14.8) — on évite `flow.first()` sur CHAQUE envoi (ouverture DataStore +
+        // désérialisation, 5-15 ms).
+        //
+        // v1.27.2 — mais pas via `state.value`, qui rend les valeurs PAR DÉFAUT tant que le
+        // processus n'est pas hydraté. Cet envoi n'est pas toujours déclenché depuis l'interface :
+        // le Safety call et le mode urgence passent ici depuis un worker réveillé à froid, et la
+        // réponse rapide depuis une notification aussi. On y lisait alors `defaultSubId = null`
+        // — le SMS d'urgence partait de la SIM système au lieu de celle choisie, donc d'un autre
+        // numéro que celui que les contacts reconnaissent — et une signature vide.
+        //
+        // [AppSettingsSource.hydratedOrNull] ne coûte rien quand le processus est chaud, ce qui
+        // reste le cas de tous les envois faits depuis l'interface.
+        //
+        // Repli sur les valeurs par défaut si les réglages sont illisibles : ici elles ne
+        // dégradent que du confort (pas de signature, SIM système, pas d'accusé de réception).
+        // Refuser l'envoi coûterait le message lui-même — y compris un message d'urgence.
+        val s = settings.hydratedOrNull() ?: AppSettings()
         val signature = s.conversations.signature?.takeIf { it.isNotBlank() }
         val finalBody = if (appendSignature && signature != null) "$body\n--\n$signature" else body
         val deliveryReports = s.sending.deliveryReports

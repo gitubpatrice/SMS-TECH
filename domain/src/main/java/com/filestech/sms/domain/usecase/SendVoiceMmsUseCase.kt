@@ -10,6 +10,7 @@ import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -45,8 +46,12 @@ class SendVoiceMmsUseCase @Inject constructor(
             return Outcome.Failure(AppError.Validation("audio file missing or empty"))
         }
 
-        // Audit H3 (v1.14.8) — `state.value` zéro-I/O au lieu de `flow.first()`.
-        val s = settings.state.value
+        // Audit H3 (v1.14.8) — on évite `flow.first()` (ouverture DataStore) sur chaque envoi.
+        //
+        // v1.27.2 — mais pas via `state.value`, qui rend les valeurs PAR DÉFAUT sur un processus
+        // non hydraté. Aligné sur [SendSmsUseCase] et [SendMediaMmsUseCase] : les trois chemins
+        // d'envoi lisent désormais la même chose de la même façon.
+        val s = settings.hydratedOrNull() ?: AppSettings()
         val deliveryReports = s.sending.deliveryReports
         val effectiveSubId = subId ?: s.sending.defaultSubId
 

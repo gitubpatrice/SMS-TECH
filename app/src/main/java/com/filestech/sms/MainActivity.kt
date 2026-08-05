@@ -347,8 +347,21 @@ class MainActivity : FragmentActivity() {
                     Timber.d("MainActivity: skipping Safety call reset (lockState=%s)", lockState)
                     return@runCatching
                 }
-                val current = settings.state.value.security.safetyCall
-                if (current.enabled) {
+                // v1.27.2 — lecture HYDRATÉE obligatoire, cf. [SettingsRepository.hydratedOrNull].
+                //
+                // `state.value` rendait ici les réglages PAR DÉFAUT tant que DataStore n'avait pas
+                // répondu, donc `enabled = false` — et le reset du minuteur était purement et
+                // simplement sauté. Sur un démarrage à froid (l'application vient d'être lancée,
+                // c'est-à-dire exactement quand l'utilisateur PROUVE qu'il va bien), le Safety
+                // call continuait à courir comme si de rien n'était. Le repli échouait donc du
+                // côté dangereux : une fausse alerte envoyée aux contacts d'urgence de quelqu'un
+                // qui venait d'ouvrir l'application.
+                //
+                // `null` = réglages illisibles : on ne reset pas. Ne rien faire laisse le minuteur
+                // courir et l'utilisateur rouvrira l'application ; reset à l'aveugle aurait
+                // désarmé une protection sur la foi d'une lecture ratée.
+                val current = settings.hydratedOrNull()?.security?.safetyCall
+                if (current != null && current.enabled) {
                     settings.update { s ->
                         s.copy(
                             security = s.security.copy(

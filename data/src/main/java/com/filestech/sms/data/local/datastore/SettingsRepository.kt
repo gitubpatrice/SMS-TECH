@@ -34,15 +34,17 @@ import com.filestech.sms.domain.settings.TextScale
 import com.filestech.sms.domain.settings.ThemeMode
 import com.filestech.sms.domain.settings.VibratePattern
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retry
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -85,20 +87,69 @@ class SettingsRepository @Inject constructor(
         .map { prefs -> prefs.toAppSettings() }
 
     /**
+     * v1.27.2 — `true` dès que [_state] a reçu au moins une valeur VENUE DU STOCKAGE.
+     *
+     * Écrit **après** la publication dans [_state] et lu **avant** [_state] : les deux champs
+     * étant volatils (`MutableStateFlow.value` l'est par construction), quiconque observe
+     * `hydrated == true` voit forcément l'instantané qui l'a précédé. L'inverse — annoncer puis
+     * publier — aurait laissé une fenêtre où l'on affirme « hydraté » en servant encore les
+     * défauts, ce qui est exactement le défaut qu'on ferme ici.
+     */
+    @Volatile
+    private var hydrated: Boolean = false
+
+    private val _state = MutableStateFlow(AppSettings())
+
+    /**
      * v1.6.1 (audit PERF-01 / PERF-11) — snapshot chaud partagé via [StateFlow]. Tous
      * les call sites qui n'ont besoin que de la valeur courante des settings (notif
      * incoming, dispatch SMS, worker auto-purge) devraient lire `state.value` au lieu
      * de `flow.first()` qui ouvre/lit/ferme le fichier DataStore à chaque appel
      * (~5-10 ms × N call sites).
      *
-     * `SharingStarted.Eagerly` car on est `@Singleton` scoped à l'app : on garde un
-     * unique collect actif pour toute la durée de vie du processus, ce qui est exactement
-     * le comportement attendu (les settings sont consultés en permanence par les
-     * receivers, workers, viewmodels). Le seul coût est la première hydration au boot.
+     * Collecte unique lancée dans [appScope] (`@Singleton` scoped à l'app), équivalente au
+     * `stateIn(..., SharingStarted.Eagerly, ...)` d'origine. La collecte est explicite ici pour
+     * une seule raison : pouvoir lever [hydrated] APRÈS la publication (cf. ci-dessus), ce que
+     * `stateIn` ne permet pas — un `onEach` en amont l'aurait levé AVANT.
+     *
+     * ⚠️ La valeur initiale reste `AppSettings()`, donc les DÉFAUTS. Lire `state.value` sur un
+     * processus démarré à froid ne rend pas les réglages de l'utilisateur : utiliser
+     * [hydratedOrNull] sur tout chemin réveillé par le système.
      */
-    override val state: StateFlow<AppSettings> = flow.stateIn(
-        appScope, SharingStarted.Eagerly, AppSettings(),
-    )
+    override val state: StateFlow<AppSettings> = _state.asStateFlow()
+
+    init {
+        appScope.launch {
+            flow.collect { snapshot ->
+                _state.value = snapshot
+                hydrated = true
+            }
+        }
+    }
+
+    /**
+     * v1.27.2 — cf. [AppSettingsSource.hydratedOrNull].
+     *
+     * Chemin chaud : aucun I/O. Chemin froid : une lecture DataStore, une seule fois par
+     * démarrage de processus, puis la collecte ci-dessus prend le relais.
+     *
+     * `flow` absorbe déjà les erreurs de lecture ([SETTINGS_READ_RETRIES] reprises puis `catch`) :
+     * un fichier réellement illisible ne fait donc pas lever `first()`, il termine le flux à vide
+     * — d'où le `NoSuchElementException`. On rend `null` plutôt que `AppSettings()` : servir des
+     * défauts silencieux est précisément ce qu'on cherche à empêcher.
+     */
+    override suspend fun hydratedOrNull(): AppSettings? {
+        if (hydrated) return _state.value
+        return try {
+            flow.first()
+        } catch (ce: CancellationException) {
+            // Jamais avalée : une annulation n'est pas un échec de lecture.
+            throw ce
+        } catch (t: Throwable) {
+            Timber.w(t, "SettingsRepository: no hydrated snapshot available")
+            null
+        }
+    }
 
     override suspend fun update(transform: (AppSettings) -> AppSettings) {
         context.dataStore.edit { prefs ->
