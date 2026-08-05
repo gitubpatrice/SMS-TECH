@@ -104,6 +104,19 @@ class TelephonySyncManager @Inject constructor(
     @Volatile private var started: Boolean = false
 
     /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-03 / C-04) — URI vues absentes du fournisseur a la
+     * passe PRECEDENTE.
+     *
+     * Une suppression n'est appliquee qu'a la deuxieme observation consecutive de l'absence, sur
+     * deux lectures separees dans le temps. Deux requetes consecutives contre le meme fournisseur
+     * ne sont pas deux observations independantes ; deux passes espacees le sont bien davantage.
+     *
+     * Memoire de processus, delibrement : la perdre au redemarrage ne coute qu'une passe de plus
+     * avant de converger — l'erreur penche du bon cote.
+     */
+    @Volatile private var pendingDeletion: Set<String> = emptySet()
+
+    /**
      * Called from [com.filestech.sms.MainApplication.onCreate]. Idempotent — the `started` guard
      * keeps repeated calls (Application instances on configuration change, defensive call from
      * `TelephonySyncWorker.doWork`) cheap.
@@ -203,7 +216,7 @@ class TelephonySyncManager @Inject constructor(
                     // 5-10 s. The chunk size is 200, balancing transaction lock duration
                     // against per-page overhead.
                     var imported = 0
-                    telephonyReader.readMmsBatched(pageSize = 200) { page ->
+                    val complete = telephonyReader.readMmsBatched(pageSize = 200) { page ->
                         // v1.8.0 (post-audit fix badges fresh install S24) — au 1er
                         // sync (Room vide), tous les messages historiques sont
                         // considérés comme déjà vus. Sans ça, l'user voit des
@@ -219,14 +232,27 @@ class TelephonySyncManager @Inject constructor(
                         mirror.bulkImportMmsFromTelephony(pageForImport)
                         imported += pageForImport.size
                     }
-                    // v1.27.2 (audit Codex, P-10) — LA DERNIÈRE PAGE EST PASSÉE.
+                    // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-05) — LE RETOUR NE PROUVAIT RIEN.
                     //
-                    // `readMmsBatched` est revenu normalement : toutes les pages ont été lues et
-                    // écrites. C'est le seul endroit où poser le marqueur — le poser plus haut
-                    // referait exactement le défaut que ce champ ferme. Une exception ou une
-                    // annulation saute cette ligne, et la passe suivante rejouera tout.
-                    settings.update { s ->
-                        s.copy(advanced = s.advanced.copy(mmsImportCompleted = true))
+                    // La premiere version posait le marqueur des que `readMmsBatched` revenait
+                    // normalement. Or un `resolver.query(...)` rendant `null` — fournisseur
+                    // indisponible, permission retiree — faisait sortir `?.use {}` sans rien
+                    // executer, et la fonction revenait justement... normalement. L'historique MMS
+                    // restait ampute DE FACON PERMANENTE, puisque les passes suivantes sautent
+                    // alors l'import. Le meme motif que `readAllSmsIds()` rendant un tableau vide
+                    // sur echec : le jumeau qui n'avait pas ete corrige.
+                    //
+                    // `readMmsBatched` rend desormais un drapeau explicite : curseur principal,
+                    // adresses et parts doivent TOUS avoir ete lus pour qu'il vaille `true`.
+                    if (complete) {
+                        settings.update { s ->
+                            s.copy(advanced = s.advanced.copy(mmsImportCompleted = true))
+                        }
+                    } else {
+                        Timber.w(
+                            "runSync(%s) import MMS INCOMPLET (lecture fournisseur partielle) — rejeu au prochain passage",
+                            reason,
+                        )
                     }
                     if (imported > 0) {
                         Timber.i("runSync(%s) imported %d MMS rows (firstRun=%b hasAnyMms=%b)", reason, imported, isFirstRun, hasAnyMms)
@@ -386,23 +412,48 @@ class TelephonySyncManager @Inject constructor(
             // dans les deux cas.
             val alive = HashSet<String>(systemIds.size)
             systemIds.forEach { alive += "$SMS_URI_PREFIX$it" }
-            val gone = mirrored.filterNot { it in alive }
-            if (gone.isEmpty()) return@runCatching
-            val massive = systemIds.isEmpty() || gone.size > mirrored.size * MAX_DELETION_RATIO
-            if (massive && !confirmsSameAliveSet(systemIds)) {
-                Timber.e(
-                    "reconcileDeletions: %d/%d lignes manquantes NON confirmees par une 2e lecture, ANNULE",
-                    gone.size,
-                    mirrored.size,
-                )
+            val candidates = mirrored.filterNot { it in alive }
+            if (candidates.isEmpty()) {
+                pendingDeletion = emptySet()
                 return@runCatching
             }
-            if (massive) {
+            // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-03 / C-04) — LE RATIO N'EST PLUS UNE PREUVE.
+            //
+            // Deux défauts se cachaient derrière lui :
+            //
+            //  - il ne se déclenchait qu'AU-DESSUS de 50 %. Une lecture partielle rendant 60
+            //    identifiants sur 100 donnait `gone = 40`, soit 40 % : aucune confirmation, et
+            //    **40 messages parfaitement valides étaient effacés définitivement** ;
+            //  - la seconde lecture censée confirmer n'était pas une observation indépendante.
+            //    Même fournisseur, même projection, même processus, quelques millisecondes
+            //    d'écart : une troncature déterministe se reproduit à l'identique et validait la
+            //    suppression du reste.
+            //
+            // On ne déduit donc plus rien d'une absence dans une liste. Chaque ligne candidate est
+            // interrogée par son **URI canonique** — une question fermée, insensible à la
+            // pagination — et il faut en plus qu'elle soit vue absente sur **deux passes
+            // distinctes** avant d'être effacée. Ne rien supprimer se rattrape toujours ; effacer à
+            // tort, jamais.
+            val absent = candidates.filter { uri ->
+                val id = uri.removePrefix(SMS_URI_PREFIX).toLongOrNull() ?: return@filter false
+                // `null` = on n'a pas pu savoir ⇒ on ne touche à rien.
+                telephonyReader.smsExists(id) == false
+            }
+            val gone = absent.filter { it in pendingDeletion }
+            pendingDeletion = absent.toSet()
+            if (absent.size < candidates.size) {
                 Timber.w(
-                    "reconcileDeletions: suppression massive CONFIRMEE (%d/%d) par une 2e lecture",
-                    gone.size,
-                    mirrored.size,
+                    "reconcileDeletions: %d/%d absences NON confirmees ligne a ligne — lecture partielle probable",
+                    candidates.size - absent.size,
+                    candidates.size,
                 )
+            }
+            if (gone.isEmpty()) {
+                Timber.i(
+                    "reconcileDeletions: %d suppression(s) en attente d une seconde passe",
+                    absent.size,
+                )
+                return@runCatching
             }
             // v1.27.2 (audit externe 2026-08-04 #6) — suppression ET recalcul des aperçus dans
             // la MÊME transaction. Ce chemin était le troisième jumeau oublié du correctif
@@ -442,26 +493,6 @@ class TelephonySyncManager @Inject constructor(
         }.onFailure { Timber.w(it, "reconcileDeletions failed") }
     }
 
-    /**
-     * v1.27.2 (audit Codex du 2026-08-05, P-09) — une **seconde lecture complète** rend-elle
-     * exactement le même ensemble d'identifiants vivants que [first] ?
-     *
-     * C'est la preuve de complétude que le seuil de proportionnalité, seul, ne fournissait pas.
-     * Deux lectures indépendantes tronquées au même endroit sont invraisemblables ; deux lectures
-     * saines coïncident toujours. Un SMS reçu entre les deux fait échouer la confirmation — la
-     * passe suivante retentera, et c'est le bon sens de l'erreur.
-     *
-     * Comparer les tailles puis l'appartenance suffit : les identifiants du fournisseur sont
-     * uniques, donc même cardinal + inclusion ⇒ même ensemble.
-     */
-    private fun confirmsSameAliveSet(first: LongArray): Boolean {
-        val second = telephonyReader.readAllSmsIds() ?: return false
-        if (second.size != first.size) return false
-        val firstSet = HashSet<Long>(first.size)
-        first.forEach { firstSet += it }
-        return second.all { it in firstSet }
-    }
-
     private fun hasReadSmsPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
             PackageManager.PERMISSION_GRANTED
@@ -469,16 +500,6 @@ class TelephonySyncManager @Inject constructor(
     private companion object {
         /** v1.26.1 (audit F6) — seules les lignes SMS sont réconciliables, cf. [reconcileDeletions]. */
         const val SMS_URI_PREFIX = "content://sms/"
-
-        /**
-         * v1.27.2 — proportion de lignes manquantes au-delà de laquelle [reconcileDeletions]
-         * refuse de supprimer quoi que ce soit.
-         *
-         * La moitié : assez haut pour ne jamais gêner un usage réel — personne n'efface la moitié
-         * de sa messagerie depuis une autre application entre deux passes de synchronisation —
-         * et assez bas pour arrêter net une lecture système incomplète.
-         */
-        const val MAX_DELETION_RATIO = 0.5
 
         /** SQLite plafonne `IN (…)` à 999 paramètres hôtes ; on reste dessous. */
         const val SQLITE_HOST_PARAM_LIMIT = 900

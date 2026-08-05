@@ -134,6 +134,33 @@ class TelephonyReader @Inject constructor(
      * exception (`SecurityException`…) continue de remonter à l'appelant, qui ne supprime alors
      * rien non plus.
      */
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-03 / C-04) — **preuve individuelle** qu'un SMS a bien
+     * disparu du fournisseur.
+     *
+     * `true` = la ligne existe encore · `false` = elle a réellement été supprimée · `null` = on n'a
+     * pas pu savoir (fournisseur indisponible, permission retirée).
+     *
+     * # Pourquoi une requête par identifiant
+     *
+     * La réconciliation déduisait la suppression d'une **absence dans une lecture globale** :
+     * « tout ce qui manque à la liste est supprimé ». Une lecture partielle mais non vide franchit
+     * cette logique, et jusqu'à la moitié du miroir pouvait être effacée alors que les messages
+     * existaient toujours. Relire deux fois n'y changeait rien : deux requêtes identiques contre le
+     * même fournisseur peuvent reproduire la même troncature — ce ne sont pas deux observations
+     * indépendantes.
+     *
+     * Interroger l'URI canonique de la ligne pose une question **fermée**, dont la réponse ne
+     * dépend d'aucune pagination : « celle-ci existe-t-elle ? ». C'est la seule preuve qui vaille
+     * avant un effacement irréversible.
+     */
+    fun smsExists(id: Long): Boolean? = runCatching {
+        val uri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, id.toString())
+        val cursor = resolver.query(uri, arrayOf(Telephony.Sms._ID), null, null, null)
+            ?: return@runCatching null
+        cursor.use { it.moveToFirst() }
+    }.getOrNull()
+
     fun readAllSmsIds(): LongArray? {
         val cursor = resolver.query(
             Telephony.Sms.CONTENT_URI,
@@ -409,20 +436,37 @@ class TelephonyReader @Inject constructor(
      * Marked `suspend` so [onPage] can call into Room (which is suspend-only). Caller must
      * already be in a coroutine context (typically `Dispatchers.IO` via `withContext`).
      */
-    suspend fun readMmsBatched(pageSize: Int, onPage: suspend (List<MmsImportRow>) -> Unit) {
-        if (pageSize <= 0) return
+    /**
+     * v1.27.2 (audit Codex du 2026-08-05, C-05) — rend `true` seulement si **toutes** les lectures
+     * necessaires ont abouti.
+     *
+     * # Le defaut que ce retour ferme
+     *
+     * Un `resolver.query(...)` qui rend `null` — fournisseur indisponible, permission retiree —
+     * faisait sortir `?.use {}` sans rien executer, et la fonction revenait NORMALEMENT. L'appelant
+     * en concluait « import termine » et posait le marqueur de completion : l'historique MMS
+     * restait ampute **de facon permanente**, puisque les passes suivantes sautent alors l'import.
+     *
+     * Le retour ne prouvait que le retour de la fonction, jamais le succes des lectures. C'est le
+     * meme motif que `readAllSmsIds()` rendant un tableau vide sur echec — le jumeau qui n'avait
+     * pas ete corrige.
+     */
+    suspend fun readMmsBatched(pageSize: Int, onPage: suspend (List<MmsImportRow>) -> Unit): Boolean {
+        if (pageSize <= 0) return false
+        var complete = true
         // v1.2.7 audit P5 — 2 passes par page : on collecte d'abord les métadonnées + adresse
         // de tous les MMS du chunk, puis on fait UN seul query `content://mms/part` filtré par
         // `mid IN (…)` et on dispatche les parts en mémoire. Gain mesuré : 200 queries Telephony
         // → 3 queries par chunk de 200 MMS (~5 s économisées sur premier import 500 MMS S9).
         val pending = ArrayList<PendingMms>(pageSize)
-        resolver.query(
+        val mainCursor = resolver.query(
             Uri.parse("content://mms"),
             arrayOf("_id", "thread_id", "date", "read", "msg_box", "sub_id"),
             null,
             null,
             "date DESC",
-        )?.use { c ->
+        ) ?: return false
+        mainCursor.use { c ->
             while (c.moveToNext()) {
                 val mmsId = c.getLong(0)
                 val threadId = c.getLong(1)
@@ -443,6 +487,13 @@ class TelephonyReader @Inject constructor(
 
                 // Adresse FROM/TO reste N+1 (URI `addr` non-batchable de façon fiable côté AOSP).
                 val resolvedAddress = readMmsAddress(mmsId, direction)
+                if (resolvedAddress == null) {
+                    // v1.27.2 (audit Codex, C-05) — la requete d'adresse a ECHOUE. Ce n'est pas
+                    // « un MMS sans adresse exploitable », c'est « on n'a pas pu lire ». La passe
+                    // ne peut donc pas etre declaree complete.
+                    complete = false
+                    continue
+                }
                 if (resolvedAddress.isBlank()) {
                     // v1.8.0 (bug 1 fix) — Timber log quand un MMS est skippé pour
                     // adresse vide. Permet de diagnostiquer les régressions OEM
@@ -470,21 +521,40 @@ class TelephonyReader @Inject constructor(
                     subId = subId,
                 )
                 if (pending.size >= pageSize) {
-                    onPage(flushPendingWithBatchedParts(pending))
+                    if (!flushPending(pending, onPage)) complete = false
                     pending.clear()
                 }
             }
         }
-        if (pending.isNotEmpty()) onPage(flushPendingWithBatchedParts(pending))
+        if (pending.isNotEmpty()) {
+            if (!flushPending(pending, onPage)) complete = false
+        }
+        return complete
     }
 
     /**
      * Résout les parts du chunk via UN seul `content://mms/part WHERE mid IN (…)` puis assemble
      * les `MmsImportRow`. Drop les rows pure-text-empty pour cohérence avec l'ancien flow.
      */
-    private fun flushPendingWithBatchedParts(pending: List<PendingMms>): List<MmsImportRow> {
-        if (pending.isEmpty()) return emptyList()
+    /**
+     * v1.27.2 (audit Codex, C-05) — enveloppe qui distingue « page ecrite » de « parts illisibles ».
+     * Rend `false` quand la lecture des parts a echoue : la page est quand meme remise a
+     * l'appelant, mais la passe ne pourra pas etre declaree complete.
+     */
+    private suspend fun flushPending(
+        pending: List<PendingMms>,
+        onPage: suspend (List<MmsImportRow>) -> Unit,
+    ): Boolean {
         val partsByMid = readMmsPartsBatched(pending.map { it.telephonyId })
+        onPage(flushPendingWithBatchedParts(pending, partsByMid ?: emptyMap()))
+        return partsByMid != null
+    }
+
+    private fun flushPendingWithBatchedParts(
+        pending: List<PendingMms>,
+        partsByMid: Map<Long, Pair<String, List<MmsPartImport>>>,
+    ): List<MmsImportRow> {
+        if (pending.isEmpty()) return emptyList()
         val out = ArrayList<MmsImportRow>(pending.size)
         for (p in pending) {
             val (textBody, attachments) = partsByMid[p.telephonyId] ?: ("" to emptyList())
@@ -510,8 +580,10 @@ class TelephonyReader @Inject constructor(
      * placeholders ; on chunk les ids à 500 pour rester sous la limite avec marge. Retourne
      * un map `mid → (textBody, attachments)`.
      */
-    private fun readMmsPartsBatched(mids: List<Long>): Map<Long, Pair<String, List<MmsPartImport>>> {
+    /** v1.27.2 (audit Codex, C-05) — `null` = au moins une requete de parts a echoue. */
+    private fun readMmsPartsBatched(mids: List<Long>): Map<Long, Pair<String, List<MmsPartImport>>>? {
         if (mids.isEmpty()) return emptyMap()
+        var ok = true
         val acc = HashMap<Long, Pair<StringBuilder, ArrayList<MmsPartImport>>>(mids.size)
         for (m in mids) acc[m] = StringBuilder() to ArrayList(2)
 
@@ -524,7 +596,7 @@ class TelephonyReader @Inject constructor(
                 "mid IN ($placeholders)",
                 args,
                 null,
-            )?.use { c ->
+            ).also { if (it == null) ok = false }?.use { c ->
                 while (c.moveToNext()) {
                     val partId = c.getLong(0)
                     val mid = c.getLong(1)
@@ -577,17 +649,19 @@ class TelephonyReader @Inject constructor(
      * Skips the AOSP placeholder `insert-address-token`.
      */
     // v1.16.0 — Param `direction` typé enum (était Int).
-    private fun readMmsAddress(mmsId: Long, direction: MessageDirection): String {
+    /** v1.27.2 (audit Codex, C-05) — `null` = la requete d'adresse a echoue, distinct de « vide ». */
+    private fun readMmsAddress(mmsId: Long, direction: MessageDirection): String? {
         var from = ""
         var firstTo = ""
         var fallbackGeneric = ""
-        resolver.query(
+        val cursor = resolver.query(
             Uri.parse("content://mms/$mmsId/addr"),
             arrayOf("address", "type"),
             null,
             null,
             null,
-        )?.use { c ->
+        ) ?: return null
+        cursor.use { c ->
             while (c.moveToNext()) {
                 val addr = c.getString(0) ?: continue
                 if (addr == "insert-address-token") continue

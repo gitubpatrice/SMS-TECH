@@ -72,6 +72,49 @@ class SafetyCallNoticeTest {
     }
 
     /**
+     * 🔴 **C-09 (audit Codex du 2026-08-05) — la fenêtre d'avertissement pouvait être VIDE.**
+     *
+     * Le prédicat exigeait de CHAQUE horloge qu'elle soit entrée dans sa fenêtre **et encore sous
+     * son échéance**. Or les deux divergent — redémarrage prolongé, correction d'horloge. Sur un
+     * délai de 24 h (fenêtre 6 h), si l'échéance monotone tombe 8 h après la murale : avant
+     * l'entrée du monotone dans sa fenêtre, il n'y est pas ; après, la murale a déjà dépassé son
+     * échéance. **Intersection vide, avertissement impossible**, et de vrais SMS partaient sans
+     * que personne n'ait été prévenu.
+     */
+    @Test
+    fun `une derive d horloges superieure a la fenetre laisse quand meme avertir`() {
+        val retardMono = 8 * ONE_HOUR
+        val ecouleMural = 26 * ONE_HOUR
+        val notice = SafetyCallNotice.decide(
+            cfg = armed(),
+            isDecoy = false,
+            nowMs = ARMED_AT + ecouleMural,
+            nowMonoMs = MONO_AT + ecouleMural - retardMono,
+        )
+
+        // Le compteur monotone vient d'entrer dans sa fenêtre (18 h sur 24 h)...
+        assertThat(notice).isInstanceOf(SafetyCallNotice.Warning::class.java)
+        // ...alors que le compteur mural a DÉJÀ dépassé son échéance de 2 h. C'est exactement
+        // l'état que l'ancien prédicat rendait inatteignable.
+        assertThat(ecouleMural).isGreaterThan(TIMEOUT)
+        // Et le deadman n'a pas encore expiré : les deux horloges sont requises pour ça.
+        assertThat(
+            armed().isExpired(
+                nowMs = ARMED_AT + ecouleMural,
+                nowMonoMs = MONO_AT + ecouleMural - retardMono,
+            ),
+        ).isFalse()
+    }
+
+    /** Une fois les DEUX horloges expirées, l'avertissement s'efface : l'envoi prend le relais. */
+    @Test
+    fun `l avertissement cesse quand les deux horloges ont expire`() {
+        val ecoule = 30 * ONE_HOUR
+        assertThat(decideAt(armed(), elapsed = ecoule)).isEqualTo(SafetyCallNotice.None)
+        assertThat(armed().isExpired(ARMED_AT + ecoule, MONO_AT + ecoule)).isTrue()
+    }
+
+    /**
      * 🔴 **P-05, le cœur du constat** : dès que la séquence démarre, l'avertissement n'a plus
      * d'objet — il annonçait un déclenchement qui a eu lieu. Les deux états sont exclusifs, donc
      * l'afficheur retire l'un en publiant l'autre.

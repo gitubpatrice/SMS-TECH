@@ -29,6 +29,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
+    // v1.27.2 (audit Codex, C-06) — seul porteur du pipeline complet SMS + MMS.
+    private val telephonySyncManager: com.filestech.sms.data.sync.TelephonySyncManager,
     val defaultAppManager: DefaultSmsAppManager,
     private val panic: PanicService,
     private val appLock: AppLockManager,
@@ -248,7 +250,25 @@ class SettingsViewModel @Inject constructor(
      * dans le system provider.
      */
     fun forceResyncFromTelephony() = viewModelScope.launch {
-        settings.update { it.copy(advanced = it.advanced.copy(lastSyncedSmsId = 0L)) }
+        // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-06) — CE BOUTON NE RESYNCHRONISAIT PAS LES MMS.
+        //
+        // Il ne remettait que le curseur SMS a zero, puis enfilait `TelephonySyncWorker` — qui ne
+        // lit aucun MMS et REAVANCE le curseur. Quand `TelephonySyncManager` reprenait la main,
+        // `isFirstRun` etait redevenu faux, `hasAnyMms` etait vrai, et le marqueur de completion
+        // MMS aussi : l'import MMS restait saute. Le dialogue annonce pourtant « fournisseur
+        // SMS/MMS », et c'est le geste presente comme reparant un historique incomplet.
+        //
+        // Les DEUX marqueurs sont donc invalides dans la meme ecriture, et c'est le manager —
+        // seul porteur du pipeline complet SMS + MMS — qui est sollicite.
+        settings.update {
+            it.copy(
+                advanced = it.advanced.copy(
+                    lastSyncedSmsId = 0L,
+                    mmsImportCompleted = false,
+                ),
+            )
+        }
+        telephonySyncManager.requestSync("resynchronisation manuelle")
         TelephonySyncWorker.enqueueOneShot(context)
         _events.send(Event.ResyncRequested)
     }

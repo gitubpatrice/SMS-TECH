@@ -166,6 +166,23 @@ fun EmergencyHoldButton(
                     // consommé par un ancêtre annule le maintien : il ne nous appartient pas.
                     val touchSlopPx = viewConfiguration.touchSlop
                     val slopSq = touchSlopPx * touchSlopPx
+                    // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-01) — UNE GARDE DE DÉPLACEMENT
+                    // SUBSISTE APRÈS LA FENÊTRE DE DISCRIMINATION.
+                    //
+                    // La version précédente ne testait plus que la sortie du disque. Un doigt posé,
+                    // immobile 300 ms, puis glissant de 60 à 80 dp sans quitter un disque de
+                    // 100 dp de rayon déclenchait donc l'alerte au bout de trois secondes.
+                    // `pressed.consume()` empêchait le parent de défiler — le symptôme visible —
+                    // **sans fermer le faux déclenchement**. J'avais présenté ce comportement
+                    // comme un contrat assumé ; c'était une rationalisation.
+                    //
+                    // Le seuil est délibérément entre les deux : très au-dessus de `touchSlop`,
+                    // pour qu'un tremblement ou le roulement de la pulpe du doigt n'annule pas
+                    // l'appel au secours de quelqu'un ; très en dessous du rayon, pour qu'une
+                    // trajectoire de défilement l'annule. Sur un bouton de sécurité, en cas de
+                    // doute, l'état sûr est l'annulation.
+                    val driftTolerancePx = HOLD_DRIFT_TOLERANCE.toPx()
+                    val driftSq = driftTolerancePx * driftTolerancePx
                     // ⚠️ `this@pointerInput.size` et non `size` : le paramètre `size: Dp` du
                     // composable masque celui de la zone de pointeur, qui est en PIXELS.
                     val boundsPx = this@pointerInput.size
@@ -181,38 +198,55 @@ fun EmergencyHoldButton(
                                 ?: continue
                             val startPos = firstPressed.position
                             val downTime = firstPressed.uptimeMillis
+                            // v1.27.2 (audit Codex du 2026-08-05, C-02) — on suit CE pointeur, pas
+                            // « le premier appuyé ».
+                            //
+                            // La boucle reprenait `firstOrNull { it.pressed }` à chaque évènement,
+                            // sans vérifier l'identifiant. Un second doigt posé pendant le maintien
+                            // devenait donc le propriétaire quand le premier se relevait : le
+                            // minuteur, lui, continuait de courir depuis le DOWN d'origine. Une
+                            // main qui en remplace une autre pouvait déclencher sans qu'aucun
+                            // doigt n'ait tenu les trois secondes.
+                            val ownerId = firstPressed.id
                             isHolding = true
                             // Attend la libération (UP), la perte de focus, un drag pendant la
                             // fenêtre de discrimination, OU une sortie du bouton après elle.
                             var draining = false
                             inner@ while (true) {
                                 val next = awaitPointerEvent(PointerEventPass.Main)
-                                val pressed = next.changes.firstOrNull { it.pressed }
+                                // Le propriétaire du geste, et lui seul. Un autre doigt ne peut
+                                // pas reprendre le maintien en cours (C-02).
+                                val pressed = next.changes
+                                    .firstOrNull { it.id == ownerId && it.pressed }
                                 if (pressed == null) {
-                                    // UP / cancel — fin propre du geste.
+                                    // UP / cancel du propriétaire — fin propre du geste. On draine
+                                    // jusqu'à ce que plus aucun pointeur ne soit appuyé, pour ne
+                                    // pas réarmer un maintien sur un doigt resté posé (C-02).
                                     isHolding = false
-                                    break@inner
-                                }
-                                if (!draining) {
+                                    if (next.changes.none { it.pressed }) break@inner
+                                    draining = true
+                                } else if (!draining) {
                                     val inDiscriminationWindow =
                                         (pressed.uptimeMillis - downTime) < SCROLL_DISCRIMINATION_MS
+                                    val dx = pressed.position.x - startPos.x
+                                    val dy = pressed.position.y - startPos.y
+                                    val movedSq = dx * dx + dy * dy
                                     val cancelled = when {
                                         // Un ancêtre a déjà pris le geste (défilement, glissement
                                         // imbriqué). Ce n'est pas un maintien, quel que soit le
                                         // moment : on ne déclenche pas une alerte sur le geste de
                                         // quelqu'un d'autre.
                                         pressed.isConsumed -> true
-                                        inDiscriminationWindow -> {
-                                            val dx = pressed.position.x - startPos.x
-                                            val dy = pressed.position.y - startPos.y
-                                            dx * dx + dy * dy > slopSq
-                                        }
-                                        // Sortie du DISQUE visible, et non du carré englobant :
-                                        // les coins n'ont jamais fait partie du bouton.
+                                        // Premier instant : `touchSlop` tranche « scroll ou
+                                        // appui ? », et le parent reste libre de défiler.
+                                        inDiscriminationWindow -> movedSq > slopSq
+                                        // Ensuite : une dérive franche annule quand même (C-01),
+                                        // et la sortie du DISQUE visible aussi — les coins du
+                                        // carré englobant n'ont jamais fait partie du bouton.
                                         else -> {
-                                            val dx = pressed.position.x - centerX
-                                            val dy = pressed.position.y - centerY
-                                            dx * dx + dy * dy > radiusSq
+                                            val ox = pressed.position.x - centerX
+                                            val oy = pressed.position.y - centerY
+                                            movedSq > driftSq || ox * ox + oy * oy > radiusSq
                                         }
                                     }
                                     if (cancelled) {
@@ -289,3 +323,17 @@ private const val DEFAULT_HOLD_MS: Long = 3_000L
  * temps de déplacer le doigt au-delà du seuil.
  */
 private const val SCROLL_DISCRIMINATION_MS: Long = 300L
+
+/**
+ * v1.27.2 (audit Codex du 2026-08-05, C-01) — dérive tolérée **après** la fenêtre de
+ * discrimination, mesurée depuis le point d'appui initial.
+ *
+ * 24 dp : environ le triple de `touchSlop`, donc un tremblement de main, le roulement de la pulpe
+ * du doigt ou quelques pas ne coupent pas un appel au secours. Et le quart du rayon du bouton,
+ * donc toute trajectoire ressemblant à un défilement l'annule bien avant d'en sortir.
+ *
+ * ⚠️ Ne pas remonter ce seuil pour « plus de confort » : c'est exactement ce raisonnement qui avait
+ * produit la version sans garde du tout, où un glissement de 60 à 80 dp envoyait de vrais SMS
+ * d'urgence.
+ */
+private val HOLD_DRIFT_TOLERANCE: Dp = 24.dp

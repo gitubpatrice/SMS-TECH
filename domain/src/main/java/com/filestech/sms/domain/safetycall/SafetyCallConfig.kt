@@ -384,9 +384,28 @@ data class SafetyCallConfig(
         // d'avertissement se serait décalée par rapport au déclenchement qu'elle annonce.
         val elapsedMono = monoElapsedMs(nowMonoMs)
         val window = warningWindowMs()
-        val wallInWindow = elapsedWall >= (timeoutMs - window) && elapsedWall < timeoutMs
-        val monoInWindow = elapsedMono >= (timeoutMs - window) && elapsedMono < timeoutMs
-        return wallInWindow && monoInWindow
+        // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-09) — LA FENÊTRE POUVAIT ÊTRE VIDE.
+        //
+        // La version précédente exigeait de CHAQUE compteur qu'il soit à la fois entré dans sa
+        // fenêtre **et encore sous son échéance** :
+        //
+        //     wallInWindow = elapsedWall >= timeout - window && elapsedWall < timeout
+        //     monoInWindow = elapsedMono >= timeout - window && elapsedMono < timeout
+        //
+        // Or les deux horloges divergent — un redémarrage prolongé, une correction d'horloge. Sur
+        // un délai de 24 h (fenêtre 6 h), si l'échéance monotone tombe 8 h après la murale :
+        // avant l'entrée du monotone dans sa fenêtre, `monoInWindow` est faux ; après, la murale a
+        // déjà dépassé son échéance et `wallInWindow` devient faux à son tour. **L'intersection
+        // est vide, et l'avertissement ne peut alors JAMAIS s'afficher** — le deadman envoie de
+        // vrais SMS sans que personne n'ait été prévenu. C'est exactement le défaut que le réveil
+        // d'avertissement venait de fermer, rouvert par le prédicat qu'il interroge.
+        //
+        // La règle correcte : les deux compteurs ont franchi leur seuil d'avertissement, et le
+        // deadman n'a pas encore expiré. La fenêtre commence donc au plus tardif des deux seuils
+        // et se termine quand les DEUX échéances sont dépassées — jamais vide.
+        val bothReachedWarning = elapsedWall >= (timeoutMs - window) &&
+            elapsedMono >= (timeoutMs - window)
+        return bothReachedWarning && !isExpired(nowMs, nowMonoMs)
     }
 
     /**
