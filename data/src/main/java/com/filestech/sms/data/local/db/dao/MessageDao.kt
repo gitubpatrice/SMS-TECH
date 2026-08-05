@@ -146,7 +146,24 @@ interface MessageDao {
      * à l'utilisateur de re-aligner à tout moment si Room se désynchronise
      * à nouveau (lecture dans une autre app SMS).
      */
-    @Query("UPDATE messages SET read = 1 WHERE direction = 0 AND read = 0")
+    /*
+     * v1.27.2 (relecture Gemini du 2026-08-05) — le Coffre est désormais EXCLU.
+     *
+     * La requête écrivait sur toute la base. « Tout marquer comme lu », depuis les Réglages ou
+     * depuis la migration de démarrage, marquait donc lus les messages du Coffre **alors qu'il est
+     * verrouillé** : une écriture dans une zone censée être inaccessible, et la perte de l'état
+     * « non lu » que l'utilisateur retrouverait en l'ouvrant.
+     *
+     * Sous-requête plutôt que `JOIN` : SQLite n'accepte pas de jointure dans un `UPDATE`. L'index
+     * sur `in_vault` (cf. [ConversationEntity]) la rend négligeable.
+     */
+    @Query(
+        """
+        UPDATE messages SET read = 1
+        WHERE direction = 0 AND read = 0
+          AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
     suspend fun markAllIncomingAsRead(): Int
 
     @Query("UPDATE messages SET read = :read WHERE id = :id")

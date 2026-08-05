@@ -122,6 +122,10 @@ class AutoLockObserver @Inject constructor(
                 return@launch
             }
             if (ms > 0) delay(ms)
+            // v1.27.2 (relecture Gemini du 2026-08-05) — le Coffre survivait au verrouillage de
+            // l'application quand `lockVaultOnLeave` était décoché. L'invariant « application
+            // verrouillée ⇒ Coffre verrouillé » est désormais tenu par [AppLockManager.forceLock]
+            // lui-même, donc par TOUS ses appelants et non par cet endroit seul.
             appLock.forceLock()
             // Audit F13 + S-P2-3: when the lock kicks in, purge generated PDFs, export staging
             // AND the transient audio caches (un-sent voice MMS drafts, sent-PDU staging). Each

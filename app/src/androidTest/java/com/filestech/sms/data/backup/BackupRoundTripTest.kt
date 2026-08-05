@@ -305,6 +305,10 @@ class BackupRoundTripTest {
             securityStore = SecurityStore(context),
             settings = SettingsRepository(context, scope),
             kdf = PasswordKdf(),
+            // v1.27.2 — `forceLock` verrouille désormais aussi le Coffre. Ces tests n'appellent
+            // pas `forceLock`, mais le constructeur l'exige : on passe la MÊME session que celle
+            // du service, sans quoi le test exercerait deux états distincts.
+            vaultSession = vault,
             io = Dispatchers.IO,
         ),
         vaultSession = vault,

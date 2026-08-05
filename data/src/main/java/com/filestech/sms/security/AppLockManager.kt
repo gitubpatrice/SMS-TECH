@@ -30,6 +30,12 @@ class AppLockManager @Inject constructor(
     private val securityStore: SecurityStore,
     private val settings: SettingsRepository,
     private val kdf: PasswordKdf,
+    /**
+     * v1.27.2 — porteur de la session du Coffre. Injecté ici pour que [forceLock] puisse tenir
+     * l'invariant « application verrouillée ⇒ Coffre verrouillé » en un seul point. Sans
+     * dépendance propre, donc aucun cycle avec [VaultManager].
+     */
+    private val vaultSession: VaultSessionState,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : PanicStateProvider {
 
@@ -117,6 +123,24 @@ class AppLockManager @Inject constructor(
     }
 
     suspend fun setPin(newPin: CharArray): SetPinOutcome = withContext(io) {
+        // v1.27.2 (relecture Gemini du 2026-08-05) — 🔴 ÉVASION DU MODE LEURRE.
+        //
+        // [clearPin] et [clearPanicCode] refusent tous deux d'agir en session leurre, et le
+        // commentaire de [clearPin] explique pourquoi : « masquer un écran est une énumération,
+        // le vrai garde est ici ». Ce garde manquait **précisément ici** — le jumeau asymétrique.
+        //
+        // Sans lui, l'agresseur qui atteint l'écran de changement de code depuis la session leurre
+        // écrase le PIN principal, verrouille l'application, la rouvre avec SON code, et sort
+        // définitivement du leurre : vraie session, et le Coffre avec.
+        //
+        // On rend `Ok` plutôt qu'un refus : dans une session leurre, tout est déception par
+        // construction. Un message d'erreur apprendrait à l'agresseur qu'il existe une session
+        // réelle derrière celle qu'il voit — exactement ce que le leurre existe pour cacher.
+        // Aucun secret n'est écrit, l'utilisateur légitime retrouve son PIN intact.
+        if (_state.value is LockState.PanicDecoy) {
+            newPin.wipe()
+            return@withContext SetPinOutcome.Ok
+        }
         try {
             // v1.26.1 (audit C3) — refus SYMÉTRIQUE de celui de [setPanicCode].
             //
@@ -377,6 +401,26 @@ class AppLockManager @Inject constructor(
     fun forceLock() {
         val current = _state.value
         if (current != LockState.Disabled) _state.value = LockState.Locked
+        // v1.27.2 (relecture Gemini du 2026-08-05) — 🔴 LE COFFRE SURVIVAIT AU VERROUILLAGE.
+        //
+        // `AutoLockObserver` ne verrouillait le Coffre que si `lockVaultOnLeave` était coché — un
+        // réglage de CONFORT, prévu pour basculer un instant sur une autre application sans
+        // redemander le second facteur. Décoché, l'application se verrouillait mais la session du
+        // Coffre restait OUVERTE : quiconque rouvrait ensuite avec le PIN principal trouvait le
+        // Coffre déverrouillé. **Le second facteur était purement et simplement contourné.**
+        //
+        // Même motif que le défaut corrigé en v1.25.4 (« le Coffre s'ouvrait AVANT son second
+        // facteur ») : la garde était sur l'affichage, pas sur l'accès.
+        //
+        // La garantie est posée ICI et non chez l'appelant, pour la même raison que l'alarme du
+        // Safety call : `forceLock` a plusieurs appelants, et en câbler tous sauf un est le motif
+        // de défaut qui revient le plus souvent sur ce projet. Ici, l'invariant « application
+        // verrouillée ⇒ Coffre verrouillé » vaut pour tout appelant, y compris ceux qu'on
+        // ajoutera plus tard.
+        //
+        // [VaultSessionState] n'a AUCUNE dépendance — elle a été extraite exactement pour ça —
+        // donc aucun cycle avec [VaultManager], qui dépend de ce gestionnaire.
+        vaultSession.lock()
     }
 
     // -------- Biometric handshake (fixes F2 audit finding) ------------------------------------
