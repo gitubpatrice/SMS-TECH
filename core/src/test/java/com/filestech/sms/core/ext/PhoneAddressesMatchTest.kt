@@ -102,6 +102,27 @@ class PhoneAddressesMatchTest {
     }
 
     /**
+     * 🔴 **LP-04 (audit Codex du 2026-08-05)** — sans region, deux ecritures du MEME numero
+     * international doivent rendre la MEME cle.
+     *
+     * Je reutilisais `WireAddress.toE164OrRaw`, dont le contrat est celui du chemin d'ENVOI : elle
+     * retombe volontairement sur la chaine BRUTE quand la conversion echoue. En la filtrant sur
+     * `startsWith("+")`, j'acceptais donc le brut ponctue comme une canonicalisation reussie, et le
+     * repli qui ne garde que les chiffres n'etait jamais atteint.
+     */
+    @Test
+    fun `sans region, deux ecritures du meme international rendent la meme cle`() {
+        val jamais = { _: String -> null as String? }
+        val espace = phoneIdentityKey("+33 6 12 34 56 78", jamais)
+        val compact = phoneIdentityKey("+33612345678", jamais)
+        assertThat(espace).isEqualTo(compact)
+        // Et c'est bien la forme sans separateurs qui est retenue.
+        assertThat(compact).isEqualTo("+33612345678")
+        // Le rapprochement suit.
+        assertThat(phoneAddressesMatch("+33 6 12 34 56 78", "+33612345678", jamais)).isTrue()
+    }
+
+    /**
      * ⚠️ Le garde-fou de C-07 doit survivre a F-05 : sans region, une forme explicitement
      * internationale garde SES chiffres et ne se rabat PAS sur le suffixe de neuf. Sans quoi
      * `+1 212 345 6789` percuterait a nouveau le fixe francais `01 23 45 67 89`.

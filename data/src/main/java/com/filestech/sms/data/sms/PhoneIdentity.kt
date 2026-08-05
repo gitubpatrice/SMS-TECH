@@ -1,7 +1,6 @@
 package com.filestech.sms.data.sms
 
 import android.telephony.PhoneNumberUtils
-import com.filestech.sms.core.ext.WireAddress
 import com.filestech.sms.core.ext.phoneIdentityKey
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -60,10 +59,34 @@ class PhoneIdentity @Inject constructor(
         val regionKnown: Boolean get() = !regionIso.isNullOrBlank()
 
         /** Forme canonique E.164, ou `null` si elle ne peut pas être établie avec certitude. */
-        fun canonical(raw: String): String? =
-            WireAddress.toE164OrRaw(raw.trim(), regionIso) { number, region ->
-                PhoneNumberUtils.formatNumberToE164(number, region)
-            }.takeIf { it.startsWith("+") }
+        fun canonical(raw: String): String? {
+            // 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-04) — NE PAS REUTILISER `toE164OrRaw` ICI.
+            //
+            // Son contrat est celui du chemin d'ENVOI : « ne jamais casser un envoi », donc elle
+            // retombe volontairement sur la chaine BRUTE quand la conversion echoue. Je m'en
+            // servais en la filtrant sur `startsWith("+")` — et j'acceptais donc le brut ponctue
+            // comme s'il etait une canonicalisation reussie :
+            //
+            //     Snapshot(null).key("+33 6 12 34 56 78") = "+33 6 12 34 56 78"
+            //     Snapshot(null).key("+33612345678")      = "+33612345678"
+            //
+            // Deux cles DIFFERENTES pour le meme numero, sur un appareil ou ni la SIM ni le reseau
+            // ne donnent la region. Le repli de `phoneIdentityKey` — qui ne garde que les chiffres,
+            // justement pour eviter ca — n'etait jamais atteint, puisque je lui presentais un
+            // succes.
+            //
+            // Deux contrats differents demandent deux fonctions differentes. Ici on rend `null` des
+            // que la conversion n'a pas REELLEMENT eu lieu, et le repli fait son travail.
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return null
+            // ISO 3166-1 alpha-2 stricte : tout le reste signifie « aucune region fiable ».
+            val region = regionIso?.trim()?.uppercase()
+                ?.takeIf { iso -> iso.length == 2 && iso.all { it in 'A'..'Z' } }
+                ?: return null
+            return runCatching { PhoneNumberUtils.formatNumberToE164(trimmed, region) }
+                .getOrNull()
+                ?.takeIf { it.length > 1 && it.startsWith("+") }
+        }
 
         /** Clé d'identité stockable et comparable. Voir [phoneIdentityKey]. */
         fun key(raw: String): String = phoneIdentityKey(raw) { canonical(it) }
