@@ -261,7 +261,10 @@ data class SafetyCallConfig(
         triggeredAt = 0L,
         messagesSent = 0,
         claimedAt = 0L,
-        claimId = 0L,
+        // ⚠️ v1.27.2 (audit Codex, P-01) — `claimId` n'est PAS remis à zéro : il doit rester
+        // strictement croissant sur toute la vie de l'installation, sans quoi un worker encore
+        // en vol et son successeur porteraient la même identité. C'est [generation] qui
+        // invalide les workers de l'ancien cycle.
         // v1.27.2 (audit Codex, C-04) — le cycle change d'identité. Tout worker parti sur la
         // génération précédente doit s'arrêter, y compris s'il est déjà dans sa boucle d'envoi.
         generation = generation + 1,

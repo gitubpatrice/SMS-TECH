@@ -203,6 +203,15 @@ class TriggerSafetyCallUseCase @Inject constructor(
                             triggeredAt = if (cfg.isTriggered) cfg.triggeredAt else nowMs,
                             messagesSent = cfg.messagesSent + 1,
                             claimedAt = nowMs,
+                            // ⚠️ v1.27.2 (audit Codex, P-01) — STRICTEMENT CROISSANT.
+                            // La premiere version remettait `claimId` a zero a chaque
+                            // conclusion, restitution et reprise : la reservation suivante
+                            // recalculait donc `0 + 1` et REUTILISAIT l identite du worker
+                            // precedent. Un ancien proprietaire encore vivant et son repreneur
+                            // portaient le meme couple `(claimId, generation)`, et
+                            // `stillOwnsClaim` ne pouvait plus les distinguer — le protocole
+                            // entier ne servait a rien. C est `claimedAt` qui dit s il y a un
+                            // bail actif, jamais `claimId`.
                             claimId = myClaimId,
                         ),
                     ),
@@ -263,7 +272,6 @@ class TriggerSafetyCallUseCase @Inject constructor(
                                 triggeredAt = if (isRelance) cfg.triggeredAt else 0L,
                                 messagesSent = current.messagesSent,
                                 claimedAt = 0L,
-                                claimId = 0L,
                             ),
                         ),
                     )
@@ -294,7 +302,6 @@ class TriggerSafetyCallUseCase @Inject constructor(
                         // desactiver le cycle tout neuf que l utilisateur venait d ouvrir.
                         safetyCall = cfg.copy(
                             claimedAt = 0L,
-                            claimId = 0L,
                             enabled = if (remaining <= 0) false else cfg.enabled,
                         ),
                     ),
@@ -387,7 +394,6 @@ class TriggerSafetyCallUseCase @Inject constructor(
                             // Plus aucun message parti : la sequence n a jamais commence.
                             triggeredAt = if (rolledBack == 0) 0L else cfg.triggeredAt,
                             claimedAt = 0L,
-                            claimId = 0L,
                         ),
                     ),
                 )
