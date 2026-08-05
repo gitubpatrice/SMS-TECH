@@ -242,6 +242,36 @@ interface ConversationDao {
     )
     suspend fun deleteIfEmpty(conversationId: Long): Int
 
+    /**
+     * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-07) — REPRISE HISTORIQUE des coquilles **deja
+     * creees**.
+     *
+     * [deleteIfEmpty] ne s applique qu aux conversations dont un message vient d etre supprime :
+     * leur identifiant est releve dans le lot `gone` AVANT le `DELETE`. Une coquille deja vide n a
+     * plus aucun message, donc ne peut plus apparaitre dans ce lot — elle etait condamnee a rester
+     * affichee pour toujours, datee du 1er janvier 1970 et parfois porteuse d un faux badge.
+     *
+     * Cette requete est la passe de rattrapage, executee UNE fois au demarrage. Elle porte
+     * exactement les memes gardes que [deleteIfEmpty] — brouillon, envoi programme, Coffre — parce
+     * que « aucun message » ne veut pas dire « rien a perdre » : un fil vide peut porter un texte
+     * non envoye, ou etre reference par un envoi programme sans cle etrangere.
+     *
+     * Rend le nombre de coquilles retirees, pour que l appelant ne memorise la completion que sur
+     * une base reellement propre.
+     */
+    @Query(
+        """
+        DELETE FROM conversations
+        WHERE in_vault = 0
+          AND (draft IS NULL OR TRIM(draft) = '')
+          AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id)
+          AND NOT EXISTS (
+              SELECT 1 FROM scheduled_messages sm WHERE sm.conversation_id = conversations.id
+          )
+        """,
+    )
+    suspend fun deleteAllEmptyConversations(): Int
+
     @Query("SELECT COUNT(*) FROM conversations WHERE unread_count > 0 AND in_vault = 0")
     fun observeUnreadConversationCount(): Flow<Int>
 }

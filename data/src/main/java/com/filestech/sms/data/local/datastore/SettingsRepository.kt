@@ -333,6 +333,8 @@ class SettingsRepository @Inject constructor(
                 attachmentsMovedToFilesDirV147 = p[K.attachmentsMovedToFilesDirV147] ?: false,
                 startupDbMigrationsDone = p[K.startupDbMigrationsDone] ?: false,
                 staleConversationPreviewsRepairedV1240 = p[K.staleConversationPreviewsRepairedV1240] ?: false,
+                identityDedupRepairedV1272 = p[K.identityDedupRepairedV1272] ?: false,
+                emptyConversationsPurgedV1272 = p[K.emptyConversationsPurgedV1272] ?: false,
             ),
         )
     }
@@ -453,6 +455,8 @@ class SettingsRepository @Inject constructor(
         this[K.attachmentsMovedToFilesDirV147] = s.advanced.attachmentsMovedToFilesDirV147
         this[K.startupDbMigrationsDone] = s.advanced.startupDbMigrationsDone
         this[K.staleConversationPreviewsRepairedV1240] = s.advanced.staleConversationPreviewsRepairedV1240
+        this[K.identityDedupRepairedV1272] = s.advanced.identityDedupRepairedV1272
+        this[K.emptyConversationsPurgedV1272] = s.advanced.emptyConversationsPurgedV1272
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -596,5 +600,13 @@ class SettingsRepository @Inject constructor(
         val startupDbMigrationsDone = booleanPreferencesKey("advanced.startupDbMigrationsDone")
         val staleConversationPreviewsRepairedV1240 =
             booleanPreferencesKey("advanced.staleConversationPreviewsRepairedV1240")
+
+        /** v1.27.2 (audit Codex, LP-05) — rejeu de la dedup avec l identite region-aware. */
+        val identityDedupRepairedV1272 =
+            booleanPreferencesKey("advanced.identityDedupRepairedV1272")
+
+        /** v1.27.2 (audit Codex, LP-07) — purge des coquilles deja creees. */
+        val emptyConversationsPurgedV1272 =
+            booleanPreferencesKey("advanced.emptyConversationsPurgedV1272")
     }
 }

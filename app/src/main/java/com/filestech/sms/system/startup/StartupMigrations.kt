@@ -75,6 +75,19 @@ class StartupMigrations @Inject constructor(
             }.onFailure { Timber.w(it, "stale conversation preview repair failed") }
         }
 
+        // 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-05 / LP-07) — DEUX REPARATIONS QUI DOIVENT
+        // TOURNER SUR UN PARC DEJA MARQUE.
+        //
+        // Elles sont placees AVANT le court-circuit global, comme la reparation des apercus
+        // ci-dessus, et pour la meme raison : une installation VICTIME des deux defauts a
+        // precisement deja tous les anciens drapeaux a `true`. C est la signature du probleme, pas
+        // son absence. Les gader derriere `startupDbMigrationsDone` revenait a ne jamais reparer
+        // les bases que ces correctifs visent.
+        runCatching { repairIdentityDedupV1272(advanced) }
+            .onFailure { Timber.w(it, "v1.27.2 identity dedup repair failed") }
+        runCatching { purgeEmptyConversationsV1272(advanced) }
+            .onFailure { Timber.w(it, "v1.27.2 empty conversations purge failed") }
+
         // Global short-circuit: an up-to-date install does no migration work and never opens the
         // database. This is the whole point of the consolidation.
         if (advanced.startupDbMigrationsDone) return@withContext
@@ -122,6 +135,48 @@ class StartupMigrations @Inject constructor(
             "v1.8.0 migration unreadResetV180 done: marked %d incoming messages as read",
             touched,
         )
+    }
+
+    /**
+     * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-05) — rejoue la déduplication avec **l'identité
+     * région-aware corrigée**.
+     *
+     * `dedupSameNumberV1230` ne peut pas servir de garde : une installation victime du défaut l'a
+     * déjà à `true`. Elle avait comparé les numéros sur une région lue **avant hydratation** —
+     * donc souvent celle de la SIM au lieu du réglage — conclu que la base était propre, et posé le
+     * drapeau. Le correctif d'identité ne rejouait jamais là où il servait.
+     *
+     * Le drapeau n'est posé que si la passe rend `false`, c'est-à-dire si plus rien n'a été
+     * fusionné : tant qu'elle travaille encore, on rejoue au démarrage suivant. Même contrat que
+     * la passe d'origine, nouveau numéro de version.
+     */
+    private suspend fun repairIdentityDedupV1272(advanced: AdvancedSettings) {
+        if (advanced.identityDedupRepairedV1272) return
+        val merged = conversationMirror.get().dedupeSameNumberConversations()
+        if (!merged) {
+            settings.update { s -> s.copy(advanced = s.advanced.copy(identityDedupRepairedV1272 = true)) }
+            Timber.i("v1.27.2 identity dedup repair: base propre")
+        } else {
+            Timber.i("v1.27.2 identity dedup repair: doublons fusionnes, rejeu au prochain demarrage")
+        }
+    }
+
+    /**
+     * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-07) — retire les conversations **coquilles** déjà
+     * créées avant le correctif.
+     *
+     * Le nettoyage ajouté à `reconcileDeletions` ne s'applique qu'aux conversations dont un message
+     * vient d'être supprimé. Une coquille déjà vide n'a plus aucun message : elle ne peut donc plus
+     * être candidate, et restait affichée indéfiniment — sans aperçu, datée du 1ᵉʳ janvier 1970.
+     *
+     * ⚠️ Mêmes gardes que [ConversationDao.deleteIfEmpty] : brouillon, envoi programmé, Coffre.
+     * « Aucun message » ne veut pas dire « rien à perdre ».
+     */
+    private suspend fun purgeEmptyConversationsV1272(advanced: AdvancedSettings) {
+        if (advanced.emptyConversationsPurgedV1272) return
+        val removed = conversationDao.get().deleteAllEmptyConversations()
+        settings.update { s -> s.copy(advanced = s.advanced.copy(emptyConversationsPurgedV1272 = true)) }
+        if (removed > 0) Timber.i("v1.27.2: %d conversation(s) coquille(s) retiree(s)", removed)
     }
 
     /**

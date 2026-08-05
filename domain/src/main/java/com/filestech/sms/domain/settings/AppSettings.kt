@@ -414,6 +414,29 @@ data class AdvancedSettings(
      */
     val staleConversationPreviewsRepairedV1240: Boolean = false,
     /**
+     * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-05) — REJOUE la deduplication avec l identite
+     * region-aware corrigee.
+     *
+     * `dedupSameNumberV1230` ne peut pas servir : une installation VICTIME du defaut l a
+     * precisement deja a `true` — c est meme la signature du probleme. Elle avait fusionne (ou
+     * refuse de fusionner) sous une region fausse, declare la base propre, et pose le drapeau. Le
+     * correctif d identite ne rejouait donc jamais sur les bases qu il cherche a reparer.
+     *
+     * Nouveau drapeau, nouvelle version : c est la seule facon de rattraper un parc deja marque.
+     * Pose UNIQUEMENT quand la passe rend `false`, c est-a-dire quand la base est reellement
+     * propre — tant qu elle fusionne encore, on rejoue au demarrage suivant.
+     */
+    val identityDedupRepairedV1272: Boolean = false,
+    /**
+     * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-07) — retire les conversations **coquilles** deja
+     * creees avant le correctif.
+     *
+     * Le nettoyage introduit le meme soir ne s applique qu aux conversations dont un message vient
+     * d etre supprime. Une coquille deja vide n a plus de message, donc n est jamais candidate :
+     * elle restait affichee indefiniment, datee du 1er janvier 1970.
+     */
+    val emptyConversationsPurgedV1272: Boolean = false,
+    /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante
      * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour
