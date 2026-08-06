@@ -454,17 +454,19 @@ fun SettingsScreen(
                     val imOkResetMessage = stringResource(R.string.settings_safety_call_im_ok_snack)
                     val imOkStopsRelancesMessage =
                         stringResource(R.string.settings_safety_call_im_ok_stops_relances)
-                    // 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-05) — `|| isTriggered`,
-                    // sans quoi l'état terminal était un CHEMIN MORT.
+                    // 🔴 v1.27.3 — CETTE CONDITION EST REVENUE À `enabled` SEUL, ET C'EST DÉLIBÉRÉ.
                     //
-                    // Le désarmement de fin de séquence écrit `enabled = false` dans la transaction
-                    // du dernier envoi. Le récapitulatif — qui porte le texte « Séquence terminée »
-                    // ajouté par ce lot — n'était donc **jamais** atteint dans l'état terminal
-                    // nominal : les Réglages affichaient un simple « Désactivé », et il fallait
-                    // ouvrir l'écran de configuration et descendre jusqu'à l'historique pour
-                    // comprendre qu'une alerte venait de partir. Le motif du chemin mort, dans du
-                    // code écrit le jour même.
-                    if (safetyCall.enabled || safetyCall.isTriggered) {
+                    // Une première tentative de fermer SC-1273-05 avait écrit `enabled ||
+                    // isTriggered` ici. C'était faux : ce composant s'appelle `SafetyCallArmedRecap`
+                    // et sa puce dit « Activé » en couleur primaire. Avec une séquence terminale non
+                    // acquittée — `enabled = false`, `triggeredAt` encore posé — les Réglages
+                    // annonçaient donc **« Activé » sur une protection éteinte**. Constaté par
+                    // Patrice sur son S24 dans les minutes suivant l'installation.
+                    //
+                    // C'est exactement le défaut que tout ce lot combat, reproduit en voulant le
+                    // corriger : faire croire à une protection qui n'existe pas. L'état terminal
+                    // s'affiche donc dans la branche « désactivé », où il est vrai.
+                    if (safetyCall.enabled) {
                         // Récap visible quand armé : durée, restant, contacts,
                         // template + 2 actions (Modifier / Je vais bien).
                         SafetyCallArmedRecap(
@@ -513,8 +515,22 @@ fun SettingsScreen(
                     } else {
                         NavigationRow(
                             title = stringResource(R.string.settings_safety_call_title),
-                            description = stringResource(R.string.settings_safety_call_disabled) +
-                                "\n" + stringResource(R.string.settings_safety_call_desc),
+                            // v1.27.3 (relecture Codex, SC-1273-05) — L'ÉTAT TERMINAL SE DIT ICI.
+                            //
+                            // Le désarmement de fin de séquence écrit `enabled = false` dans la
+                            // transaction du dernier envoi : l'état terminal nominal passe donc
+                            // toujours par cette branche. Elle n'affichait qu'un « Désactivé » nu, et
+                            // il fallait ouvrir l'écran de configuration puis descendre jusqu'à
+                            // l'historique pour comprendre qu'une alerte venait de partir.
+                            //
+                            // Le dire ici est à la fois vrai et suffisant : la protection **est**
+                            // coupée, et on ajoute seulement ce qui manquait — qu'elle l'est parce
+                            // qu'une alerte est allée au bout.
+                            description = if (safetyCall.isTriggered) {
+                                stringResource(R.string.settings_safety_call_disabled_after_alert)
+                            } else {
+                                stringResource(R.string.settings_safety_call_disabled)
+                            } + "\n" + stringResource(R.string.settings_safety_call_desc),
                             onClick = onOpenSafetyCall,
                         )
                     }

@@ -451,6 +451,7 @@
     <string name="settings_safety_call_title">Safety call</string>
     <string name="settings_safety_call_desc">Send an automatic SMS to your emergency contacts if you don\'t open SMS Tech for a configured duration. Designed for solo travel, isolated living, professions at risk.</string>
     <string name="settings_safety_call_disabled">Disabled</string>
+    <string name="settings_safety_call_disabled_after_alert">Disabled — an alert ran to completion</string>
     <string name="settings_safety_call_enabled">Enabled · resets in %1$s</string>
     <string name="settings_safety_call_im_ok">I\'m OK — reset timer</string>
     <string name="settings_safety_call_im_ok_snack">Timer reset.</string>

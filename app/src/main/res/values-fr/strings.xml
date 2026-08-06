@@ -439,6 +439,7 @@
     <string name="settings_safety_call_title">Safety call</string>
     <string name="settings_safety_call_desc">Envoie un SMS automatique à vos contacts d\'urgence si vous n\'ouvrez pas SMS Tech pendant une durée configurée. Conçu pour les voyages solo, les personnes vivant seules, les professions à risque.</string>
     <string name="settings_safety_call_disabled">Désactivé</string>
+    <string name="settings_safety_call_disabled_after_alert">Désactivé — une alerte est allée au bout</string>
     <string name="settings_safety_call_enabled">Activé · réinitialise dans %1$s</string>
     <string name="settings_safety_call_im_ok">Je vais bien — réinitialiser le minuteur</string>
     <string name="settings_safety_call_im_ok_snack">Minuteur réinitialisé.</string>
