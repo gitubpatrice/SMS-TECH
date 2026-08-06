@@ -1,7 +1,0 @@
-Le Safety Call garde desormais une trace de ses declenchements : date, nombre de messages partis et destinataires, dans ses reglages.
-
-La notification de fin affiche l'heure reelle de l'alerte, dit que la protection est desactivee et propose de la reactiver. Elle ne sonne plus lorsqu'elle se reaffiche.
-
-Les reglages n'annoncent plus « Active » sur une protection eteinte.
-
-Un avertissement rappelle que le minuteur repart de zero des que vous ouvrez l'application.

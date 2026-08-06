@@ -1,0 +1,9 @@
+Safety Call now keeps a record of its triggers: date, messages sent, recipients.
+
+The closing notification shows the real time of the alert, states that protection is off, and offers to turn it back on. It no longer makes a sound when it reappears, and swiping it now counts as "seen".
+
+Acting from the notification finally shows a confirmation.
+
+Settings no longer say "On" for a protection that is off.
+
+Better contrast for labels on orange.

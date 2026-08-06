@@ -1,0 +1,9 @@
+Le Safety Call garde une trace de ses declenchements : date, messages partis, destinataires.
+
+La notification de fin affiche l'heure reelle de l'alerte, dit que la protection est coupee et propose de la reactiver. Elle ne sonne plus en se reaffichant, et la balayer vaut « j'ai vu ».
+
+Agir depuis la notification affiche enfin une confirmation.
+
+Les reglages n'annoncent plus « Active » sur une protection eteinte.
+
+Meilleur contraste des libelles sur fond orange.
