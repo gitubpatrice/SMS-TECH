@@ -33,9 +33,26 @@ internal val BrandDanger = Color(0xFFC62828)
  * pas la même gravité. Deux teintes, deux messages : l'utilisateur ne doit pas hésiter entre le
  * geste réversible et celui qui ne l'est pas.
  *
- * `0xFFE65100` et non un orange plus clair : le blanc posé dessus atteint 4,87:1, au-dessus du
- * seuil AA de 4,5:1 exigé pour du texte de taille normale (libellé de bouton). Les oranges plus
- * vifs tombent sous ce seuil et rendent le libellé blanc illisible.
+ * 🔴 **Le contraste documenté ici était FAUX** (relecture Codex du 2026-08-06, SC-UI-1273-02). Ce
+ * commentaire affirmait que « le blanc posé dessus atteint 4,87:1, au-dessus du seuil AA ». Calcul
+ * WCAG refait, à partir de la luminance relative `0,22708` de `0xFFE65100` :
+ *
+ * ```
+ * blanc opaque ..... 3,79:1   ← SOUS le seuil AA de 4,5:1
+ * noir opaque ...... 5,54:1   ← conforme
+ * ```
+ *
+ * ⚠️ **Un chiffre faux dans un commentaire ne se contente pas d'être faux : il justifie des choix.**
+ * Celui-ci a servi à poser du texte blanc sur cet orange, et il aurait continué à le faire.
+ *
+ * Conséquence encore ouverte, hors périmètre de la v1.27.3 : **un libellé de bouton blanc sur cette
+ * couleur est lui aussi sous le seuil AA.** Le bandeau d'avertissement du Safety call est passé au
+ * noir, mais les autres usages n'ont pas été revus — ils vivent sur des écrans que le test sur
+ * appareil de cette version n'a pas exercés. À traiter séparément, avec un relevé de tous les
+ * couples fond/premier plan.
+ *
+ * La teinte elle-même reste `0xFFE65100` : c'est le premier plan qu'il faut choisir noir, pas le
+ * fond qu'il faut assombrir — modifier cette couleur toucherait tous ses autres usages.
  */
 internal val BrandBlocked = Color(0xFFE65100)
 
@@ -43,9 +60,11 @@ internal val BrandBlocked = Color(0xFFE65100)
  * v1.27.3 — orange d'**avertissement**, pour prévenir sans alarmer.
  *
  * Même teinte que [BrandBlocked], et **délibérément un alias plutôt qu'une seconde valeur** : c'est
- * la même famille de message — « attention, mais rien d'irréversible » — et son contraste est déjà
- * démontré au-dessus du seuil AA pour du texte blanc. Dupliquer le littéral aurait laissé les deux
- * dériver l'un de l'autre au premier ajustement.
+ * la même famille de message — « attention, mais rien d'irréversible ». Dupliquer le littéral aurait
+ * laissé les deux dériver l'un de l'autre au premier ajustement.
+ *
+ * ⚠️ **Le premier plan posé dessus doit être NOIR**, pas blanc : voir [BrandBlocked], où le calcul
+ * est refait. Le blanc n'atteint que 3,79:1 sur cette teinte, le noir 5,54:1.
  *
  * Le nom existe parce que l'usage n'est pas le blocage : un lecteur du bandeau d'avertissement du
  * Safety call ne doit pas avoir à se demander pourquoi il lit « Blocked ».

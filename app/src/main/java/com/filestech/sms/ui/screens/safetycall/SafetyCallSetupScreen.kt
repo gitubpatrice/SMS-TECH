@@ -587,25 +587,42 @@ private fun TimerResetWarning() {
             .background(BrandWarning, shape = RoundedCornerShape(8.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
+        // 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-UI-1273-02) — **noir, pas blanc.**
+        //
+        // La première version posait du blanc sur cet orange en s'appuyant sur un contraste de
+        // 4,87:1 que j'avais écrit dans le code. **Ce chiffre était faux.** Calcul WCAG refait :
+        //
+        //   luminance relative de #E65100 .... 0,22708
+        //   blanc opaque ..................... 3,79:1   ← sous le seuil AA de 4,5:1
+        //   blanc à 85 % composé ............. 3,12:1   ← pire encore
+        //   noir opaque ...................... 5,54:1   ← conforme
+        //
+        // Le titre est en `bodyMedium` et le corps en `bodySmall` : ni l'un ni l'autre n'entre dans
+        // la définition du « grand texte », le seuil applicable est donc bien 4,5:1.
+        //
+        // Et **plus d'opacité sur le corps** : c'est la phrase qui porte la règle complète — ouvrir
+        // ET déverrouiller remet le minuteur à zéro, se servir du téléphone pour autre chose ne
+        // change rien. La dégrader était exactement le mauvais arbitrage.
+        //
+        // Le fond orange et l'alias [BrandWarning] sont conservés : la teinte est délibérée, et
+        // toucher `BrandBlocked` globalement affecterait d'autres écrans.
         Icon(
             imageVector = Icons.Outlined.WarningAmber,
             contentDescription = null,
-            tint = Color.White,
+            tint = Color.Black,
             modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.size(8.dp))
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.safety_call_reset_warning_title),
-                color = Color.White,
+                color = Color.Black,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             )
             Spacer(Modifier.size(4.dp))
             Text(
                 text = stringResource(R.string.safety_call_reset_warning_body),
-                // 0.85f et pas moins : sous cette valeur le corps du texte tombe sous le seuil AA
-                // de 4,5:1 sur cet orange, et c'est précisément la phrase qui porte l'information.
-                color = Color.White.copy(alpha = 0.85f),
+                color = Color.Black,
                 style = MaterialTheme.typography.bodySmall,
             )
         }

@@ -48,6 +48,25 @@ tous été trouvés en le regardant fonctionner, ou par une relecture des correc
   l'écran : enregistrer pendant une séquence pouvait persister une protection « active » sans aucune
   alarme programmée, tout en confirmant l'activation à l'écran.
 
+### Relecture externe, à un commit de la publication
+- **« Une alerte est allée au bout » pouvait décrire une séquence que l'utilisateur venait
+  d'interrompre.** Couper l'interrupteur ne remet à zéro que `enabled` : l'horodatage de déclenchement
+  et le compteur partiel survivent. Arrêter une alerte après deux envois sur quatre affichait donc une
+  fin complète. Le libellé dit désormais « une alerte s'est déclenchée », vrai dans les deux cas — le
+  détail complet/interrompu vit déjà dans l'historique, avec ses comptes.
+- **Le bandeau d'avertissement était illisible pour la norme.** Son texte blanc sur l'orange
+  `#E65100` n'atteint que **3,79:1**, et **3,12:1** avec l'opacité appliquée au corps, là où
+  l'accessibilité AA exige 4,5:1 pour du texte de taille normale. Passé en **noir** : 5,54:1, et
+  l'opacité retirée — c'était la phrase portant la règle de sécurité qui était la plus dégradée.
+  - ⚠️ Le contraste documenté dans le code était **faux** : un commentaire affirmait 4,87:1 depuis
+    plusieurs versions. Un chiffre faux dans un commentaire ne se contente pas d'être faux, **il
+    justifie des choix** — celui-ci a servi à poser du texte blanc sur cet orange, et aucun test ne
+    pouvait le contredire. Les deux ratios sont désormais figés dans un test exécutable.
+  - ⚠️ **Conséquence encore ouverte** : le même chiffre faux justifiait aussi un libellé de bouton
+    blanc sur cette couleur, ailleurs dans l'application. Ce libellé est donc lui aussi sous le seuil.
+    Non corrigé ici — il touche des écrans que le test sur appareil de cette version n'a pas exercés,
+    et il mérite un relevé de tous les couples fond/premier plan.
+
 ## [1.27.2] — 2026-08-05
 
 Trois relectures indépendantes — Codex, Gemini Pro, et une passe ciblée sur le motif du « jumeau
