@@ -208,7 +208,20 @@ class SafetyCallWarningNotifier @Inject constructor(
         }
         val builder = NotificationCompat.Builder(
             context,
-            NotificationChannelInitializer.CHANNEL_SAFETY_CALL_WARNING,
+            // 🔴 v1.27.3 — LE REÇU NE SONNE PLUS.
+            //
+            // Constaté sur le S24 : cette notification sonnait à répétition des heures après le
+            // départ de l'alerte, et a été prise deux fois pour un nouveau déclenchement. Sur
+            // API 26+ le son se règle **par canal** : ni `setOnlyAlertOnce` ni `setSilent` ne
+            // pouvaient y suffire, il fallait un canal.
+            //
+            // Une séquence terminée est un reçu ; l'avertissement de pré-déclenchement et la
+            // séquence en cours, eux, demandent une action et gardent `IMPORTANCE_HIGH`.
+            if (notice.terminal) {
+                NotificationChannelInitializer.CHANNEL_SAFETY_CALL_RECEIPT
+            } else {
+                NotificationChannelInitializer.CHANNEL_SAFETY_CALL_WARNING
+            },
         )
             .setSmallIcon(R.drawable.ic_notification_message)
             .setContentTitle(title)
@@ -247,7 +260,10 @@ class SafetyCallWarningNotifier @Inject constructor(
         // récepteur ferait de ce bouton un coupe-circuit du deadman en un geste, sans le code de
         // l'application. Le réarmement, lui, est sans risque dans ce sens — il ne peut que remettre
         // la protection en marche.
-        if (notice.terminal) {
+        // v1.27.3 (relecture Codex, SC-1273-02) — `canRearm` : sans destinataire, le réarmement ne
+        // pourrait pas aboutir, et l'afficher quand même produisait un échec silencieux qui retirait
+        // la notification comme un succès.
+        if (notice.terminal && notice.canRearm) {
             builder.addAction(
                 R.drawable.ic_notification_message,
                 context.getString(R.string.safety_call_notif_action_rearm),

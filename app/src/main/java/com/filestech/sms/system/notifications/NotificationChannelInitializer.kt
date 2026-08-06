@@ -80,6 +80,31 @@ class NotificationChannelInitializer @Inject constructor(
             enableVibration(true)
             setShowBadge(true)
         }
+        // 🔴 v1.27.3 — CANAL DÉDIÉ AU REÇU DE FIN DE SÉQUENCE, EN IMPORTANCE BASSE.
+        //
+        // Constaté par Patrice sur son S24 le 2026-08-06 : la notification de fin de séquence
+        // **sonnait** à répétition, plusieurs heures après que l'alerte était partie, et il l'a prise
+        // deux fois pour un nouveau déclenchement.
+        //
+        // La cause exacte de la republication n'est pas établie — un `setOnlyAlertOnce(true)` devrait
+        // rendre une mise à jour muette, mais Samsung retire les notifications d'une application mise
+        // en sommeil, et l'application en poste alors une VRAIE nouvelle au réveil. Ce canal-ci rend
+        // le correctif **indépendant du diagnostic** : sur API 26+ le son est réglé par canal, donc
+        // `setSilent()` sur le constructeur n'aurait rien changé.
+        //
+        // Et c'est la bonne conception de toute façon : une séquence terminée est un **reçu**, pas une
+        // alerte. L'avertissement de pré-déclenchement et la séquence en cours doivent réveiller —
+        // ils demandent une action. Celui-ci informe, et n'a rien à interrompre.
+        val safetyCallReceipt = NotificationChannel(
+            CHANNEL_SAFETY_CALL_RECEIPT,
+            context.getString(LABEL_SAFETY_CALL_RECEIPT_RES),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(DESC_SAFETY_CALL_RECEIPT_RES)
+            setShowBadge(true)
+            enableVibration(false)
+            setSound(null, null)
+        }
         // v1.12.0 — canal dédié pour le raccourci d'urgence (notification
         // persistante posée si l'user active "Bouton URGENCE dans les notifs").
         // IMPORTANCE_LOW : pas de son, pas de heads-up, pas de vibration —
@@ -96,7 +121,16 @@ class NotificationChannelInitializer @Inject constructor(
             setSound(null, null)
         }
         nm.createNotificationChannels(
-            listOf(incoming, incomingSilent, sent, failed, background, safetyCallWarning, emergencyShortcut),
+            listOf(
+                incoming,
+                incomingSilent,
+                sent,
+                failed,
+                background,
+                safetyCallWarning,
+                safetyCallReceipt,
+                emergencyShortcut,
+            ),
         )
     }
 
@@ -106,8 +140,18 @@ class NotificationChannelInitializer @Inject constructor(
         const val CHANNEL_SENT = "sent_messages"
         const val CHANNEL_FAILED = "failed_messages"
         const val CHANNEL_BACKGROUND = "background_tasks"
+
         /** v1.9.0 — canal dédié au warning Safety Call (avant trigger). */
         const val CHANNEL_SAFETY_CALL_WARNING = "safety_call_warning"
+
+        /**
+         * v1.27.3 — canal du **reçu** de fin de séquence, en importance basse.
+         *
+         * Distinct de [CHANNEL_SAFETY_CALL_WARNING], qui doit réveiller parce qu'il demande une
+         * action. Une séquence terminée n'a rien à interrompre : elle informe.
+         */
+        const val CHANNEL_SAFETY_CALL_RECEIPT = "safety_call_receipt"
+
         /** v1.12.0 — canal pour le raccourci d'urgence (action URGENCE + action 112). */
         const val CHANNEL_EMERGENCY_SHORTCUT = "emergency_shortcut"
 
@@ -123,6 +167,8 @@ class NotificationChannelInitializer @Inject constructor(
         private val DESC_BACKGROUND_RES = com.filestech.sms.R.string.channel_background_desc
         private val LABEL_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_label
         private val DESC_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_desc
+        private val LABEL_SAFETY_CALL_RECEIPT_RES = com.filestech.sms.R.string.channel_safety_call_receipt_label
+        private val DESC_SAFETY_CALL_RECEIPT_RES = com.filestech.sms.R.string.channel_safety_call_receipt_desc
         private val LABEL_EMERGENCY_SHORTCUT_RES = com.filestech.sms.R.string.channel_emergency_shortcut_label
         private val DESC_EMERGENCY_SHORTCUT_RES = com.filestech.sms.R.string.channel_emergency_shortcut_desc
     }

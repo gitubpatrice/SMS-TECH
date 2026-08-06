@@ -59,6 +59,17 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var safetyCallIntentToken: SafetyCallIntentToken
 
     /**
+     * v1.27.3 (relecture Codex du 2026-08-06, SC-1273-06) — republication de la notification du
+     * Safety call quand une écriture échoue **après** que son nonce a été consommé.
+     *
+     * `dagger.Lazy` volontairement : le notifieur n'a rien à construire au démarrage, et la garde
+     * d'architecture du dépôt refuse l'injection eager sur le fil principal.
+     */
+    @Inject
+    lateinit var safetyCallNotifierLazy:
+        dagger.Lazy<com.filestech.sms.system.notifications.SafetyCallWarningNotifier>
+
+    /**
      * v1.14.7 — safety net : déclenche un delta-sync à chaque retour foreground.
      * Pattern single-flight + Mutex côté manager → re-tap rapides sont free.
      * Couvre les cas où Samsung Freecess ou un OEM agressif a gelé le worker
@@ -510,6 +521,18 @@ class MainActivity : FragmentActivity() {
                             )
                         }
                         Timber.i("MainActivity: deadman timer reset via warning notif tap")
+                    }.onFailure { t ->
+                        // v1.27.3 (relecture Codex du 2026-08-06, SC-1273-06) — JUMEAU DU CHEMIN DE
+                        // RÉARMEMENT, et défaut préexistant.
+                        //
+                        // Le nonce est consommé AVANT l'écriture. Si celle-ci échoue, l'état ne
+                        // change pas, aucune émission ne déclenche de réconciliation, et la
+                        // notification — non balayable, `setOngoing(true)` — reste affichée avec un
+                        // jeton mort. Chaque tap suivant est alors rejeté **avant même** de retenter
+                        // l'écriture : l'unique moyen d'arrêter une alerte devient définitivement
+                        // inerte, en silence.
+                        Timber.w(t, "MainActivity: reset write failed — republishing notice")
+                        republishSafetyCallNotice()
                     }
                 }
                 incomingShare.clear()
@@ -539,26 +562,49 @@ class MainActivity : FragmentActivity() {
                     return
                 }
                 lifecycleScope.launch {
+                    var rearmed = false
                     runCatching {
                         settings.update { s ->
                             val cfg = s.security.safetyCall
-                            // Sans contact, `enabled = true` est un état invalide que le prochain
-                            // tick corrigerait en désarmant (`Result.NoContacts`) — après avoir
-                            // affiché « Activé » entre-temps. On referme le cycle sans armer, et
-                            // l'utilisateur passera par les Réglages, seul endroit où ajouter un
-                            // contact.
-                            val rearmed = cfg.contacts.isNotEmpty()
+                            // 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-02) — SANS CONTACT,
+                            // ON NE TOUCHE À RIEN.
+                            //
+                            // La version précédente refermait le cycle **puis** écrivait
+                            // `enabled = false` : la notification disparaissait donc exactement comme
+                            // en cas de succès, alors que la protection restait coupée, sans le
+                            // moindre retour. Un échec silencieux, et du mauvais côté.
+                            //
+                            // `SafetyCallNotice` ne propose plus l'action dans ce cas ; cette garde
+                            // reste en défense en profondeur, pour un intent resté en cache. Elle
+                            // **préserve** l'état : la notification demeure, et le tap de son corps
+                            // mène à l'application où l'on peut ajouter un contact.
+                            if (cfg.contacts.isEmpty()) return@update s
+                            rearmed = true
                             s.copy(
                                 security = s.security.copy(
                                     // `withActivityReset` sans `disarmIfTriggered` : il archive la
                                     // séquence dans [SafetyCallConfig.history], referme le cycle et
                                     // repart d'un minuteur neuf, en préservant `enabled`.
-                                    safetyCall = cfg.withActivityReset()
-                                        .copy(enabled = rearmed),
+                                    //
+                                    // ⚠️ `enabled = true` explicitement : l'état terminal a
+                                    // `enabled = false`, et `withActivityReset` le préserve tel quel
+                                    // sans `disarmIfTriggered`. Sans cette ligne, « Réactiver »
+                                    // effacerait le cycle sans rien réarmer.
+                                    safetyCall = cfg.withActivityReset().copy(enabled = true),
                                 ),
                             )
                         }
-                        Timber.i("MainActivity: safety call re-armed via notification action")
+                        if (rearmed) {
+                            Timber.i("MainActivity: safety call re-armed via notification action")
+                        } else {
+                            Timber.w("MainActivity: rearm refused — no contact configured")
+                        }
+                    }.onFailure { t ->
+                        // v1.27.3 (relecture Codex, SC-1273-06) — le nonce a déjà été consommé et
+                        // l'écriture a échoué : sans republication, la notification reste affichée
+                        // avec deux surfaces portant un jeton mort, et plus rien n'y répond jamais.
+                        Timber.w(t, "MainActivity: rearm write failed — republishing notice")
+                        republishSafetyCallNotice()
                     }
                 }
                 incomingShare.clear()
@@ -693,6 +739,43 @@ class MainActivity : FragmentActivity() {
                 // a changé, pas question d'attacher une PJ oubliée à la conversation
                 // qu'il vient d'ouvrir.
                 incomingShare.clear()
+            }
+        }
+    }
+
+    /**
+     * v1.27.3 (relecture Codex du 2026-08-06, SC-1273-06) — republie la notification du Safety call
+     * avec un **nonce neuf**, après l'échec d'une écriture dont le nonce a déjà été consommé.
+     *
+     * # Le défaut que ça ferme
+     *
+     * `SafetyCallIntentToken.consume` est mono-usage et s'exécute **avant** la mutation. Si DataStore
+     * échoue, l'état persisté ne bouge pas, donc aucune émission ne déclenche la réconciliation qui
+     * régénérerait le jeton. La notification, non balayable, reste alors affichée avec un corps et une
+     * action portant tous deux un jeton mort — et chaque geste suivant est rejeté **avant même** de
+     * retenter l'écriture. Sur la seule commande capable d'arrêter une alerte, l'inertie définitive
+     * est inacceptable.
+     *
+     * Republier appelle `showSequence`, qui rotationne un jeton neuf : les deux surfaces redeviennent
+     * vivantes, et un second geste de l'utilisateur retentera réellement l'écriture.
+     *
+     * ⚠️ On relit l'état **persisté** plutôt que de reconstruire une décision à la main : si
+     * l'écriture avait en fait abouti, ou si le mode leurre s'est engagé entre-temps,
+     * [SafetyCallNotice.decide] rendra la bonne réponse — y compris `None`, qui retire tout.
+     */
+    private fun republishSafetyCallNotice() {
+        lifecycleScope.launch {
+            runCatching {
+                val cfg = settings.hydratedOrNull()?.security?.safetyCall ?: return@runCatching
+                val notice = com.filestech.sms.domain.safetycall.SafetyCallNotice.decide(
+                    cfg = cfg,
+                    isDecoy = appLock.state.value is AppLockManager.LockState.PanicDecoy,
+                    nowMs = System.currentTimeMillis(),
+                    nowMonoMs = android.os.SystemClock.elapsedRealtime(),
+                )
+                safetyCallNotifierLazy.get().reconcile(notice)
+            }.onFailure { t ->
+                Timber.w(t, "MainActivity: safety call notice republication failed")
             }
         }
     }

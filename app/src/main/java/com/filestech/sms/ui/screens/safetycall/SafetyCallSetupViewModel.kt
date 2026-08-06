@@ -283,7 +283,6 @@ class SafetyCallSetupViewModel @Inject constructor(
             // le timer à maintenant. Si on était déjà enabled, on garde le
             // lastActivityAt existant (pas de reset implicite via un simple
             // change de template).
-            val wasDisabled = !snapshotInitial.enabled
             // 🔴 v1.27.3 — LE BROUILLON N'ÉCRASE PLUS L'ÉTAT D'EXÉCUTION.
             //
             // Cette écriture remplaçait `safetyCall` **en entier** par le brouillon, or celui-ci est
@@ -310,6 +309,27 @@ class SafetyCallSetupViewModel @Inject constructor(
             settings.update { s ->
                 val live = s.security.safetyCall
                 val merged = live.withUserEdits(current)
+                // 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-01) — LA TRANSITION SE DÉCIDE
+                // SUR L'ÉTAT LIVE, PAS SUR L'INSTANTANÉ D'OUVERTURE.
+                //
+                // La version précédente de ce correctif lisait `!snapshotInitial.enabled`, figé à
+                // l'ouverture de l'écran. Or le désarmement de fin de séquence tombe entre-temps :
+                //
+                //  1. l'écran est ouvert alors que le Safety call est armé ⇒ instantané `enabled = true` ;
+                //  2. la 4ᵉ alerte se conclut ⇒ l'état LIVE devient `enabled = false`, `triggeredAt > 0`,
+                //     `messagesSent = TOTAL_MESSAGES` ;
+                //  3. l'utilisateur enregistre une modification quelconque.
+                //
+                // `wasDisabled` valait alors `false`, la remise à zéro était sautée, et l'état
+                // persisté devenait `enabled = true` **avec la séquence terminale encore posée**.
+                // Dans cet état `isExpired` rend `false`, `hasRelancePending` est faux et
+                // `nextWakeUpAt` rend `null` : **aucune alarme n'est programmée**, alors que l'écran
+                // confirme l'activation. Croire à une protection qui n'existe pas est le pire état
+                // que cette fonction puisse produire — et ce correctif-ci l'avait introduit en
+                // fermant l'écrasement de `claimId`.
+                //
+                // Relue dans la transaction, `live.enabled` porte la vérité du moment de l'écriture.
+                val isLiveRearm = current.enabled && !live.enabled
                 // v1.10.0 SEC-11 — couple mono+wall au premier arming.
                 // v1.27.2 (audit Codex, SC-03) — même remise à zéro que partout ailleurs. Un
                 // armement part forcément d'un état vide : sans cela, un temps capitalisé ou une
@@ -317,7 +337,7 @@ class SafetyCallSetupViewModel @Inject constructor(
                 // rejoués, et le deadman partirait en avance — ou reprendrait ses relances.
                 // Appliquée à `merged`, donc à l'état LIVE : elle archive la séquence réellement
                 // en cours, et non celle que le brouillon croyait connaître.
-                persisted = if (current.enabled && wasDisabled) merged.withActivityReset() else merged
+                persisted = if (isLiveRearm) merged.withActivityReset() else merged
                 s.copy(security = s.security.copy(safetyCall = persisted))
             }
             val toPersist = persisted

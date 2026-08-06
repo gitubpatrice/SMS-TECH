@@ -335,9 +335,23 @@ fun AppRoot() {
             )
         }
         composable<SafetyCallSetup> {
-            com.filestech.sms.ui.screens.safetycall.SafetyCallSetupScreen(
-                onBack = { nav.popBackStack() },
-            )
+            // 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-03) — GARDE SYNCHRONE, EN PLUS DU
+            // DÉPILAGE.
+            //
+            // Le dépilage ci-dessus vit dans un `LaunchedEffect` : c'est une réaction
+            // **post-composition**, pas une interdiction d'accès. Quand le mode leurre s'engage alors
+            // que cet écran est déjà ouvert — ou qu'il est restauré sous l'écran de verrouillage —
+            // le ViewModel est créé et l'écran composé AVANT que la route soit retirée. Depuis
+            // v1.27.3 cet écran affiche l'historique des déclenchements : sous contrainte, les dates
+            // et les noms du réseau de soutien pouvaient donc être révélés le temps d'une frame.
+            //
+            // Ne rien composer est la seule garde qui porte sur l'ACCÈS. Le dépilage reste, pour
+            // ramener l'utilisateur à la liste des conversations.
+            if (!isPanicDecoy) {
+                com.filestech.sms.ui.screens.safetycall.SafetyCallSetupScreen(
+                    onBack = { nav.popBackStack() },
+                )
+            }
         }
         composable<Emergency> {
             com.filestech.sms.ui.screens.emergency.EmergencyScreen(

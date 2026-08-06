@@ -83,8 +83,37 @@ class SafetyCallNoticeTest {
                 inFlight = false,
                 terminal = true,
                 triggeredAt = ARMED_AT + TIMEOUT,
+                canRearm = true,
             ),
         )
+    }
+
+    /**
+     * 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-02) — SANS CONTACT, PAS DE BOUTON
+     * « RÉACTIVER ».
+     *
+     * Le réarmement ne peut pas aboutir sans destinataire. Proposer l'action quand même produisait un
+     * échec silencieux **du mauvais côté** : le cycle terminal était refermé, la notification
+     * disparaissait exactement comme lors d'un succès, et la protection restait coupée sans le moindre
+     * retour à l'utilisateur.
+     */
+    @Test
+    fun `une sequence terminee sans contact ne propose pas le rearmement`() {
+        val finiSansContact = armed().copy(
+            enabled = false,
+            contacts = emptyList(),
+            triggeredAt = ARMED_AT + TIMEOUT,
+            messagesSent = SafetyCallConfig.TOTAL_MESSAGES,
+            claimedAt = 0L,
+        )
+        val notice = decideAt(finiSansContact, elapsed = TIMEOUT + ONE_HOUR)
+
+        // La notification reste — l'alerte est bien partie, il faut le dire...
+        assertThat(notice).isInstanceOf(SafetyCallNotice.Sequence::class.java)
+        val sequence = notice as SafetyCallNotice.Sequence
+        assertThat(sequence.terminal).isTrue()
+        // ...mais sans proposer un geste qui ne pourrait pas tenir sa promesse.
+        assertThat(sequence.canRearm).isFalse()
     }
 
     /**
@@ -239,6 +268,7 @@ class SafetyCallNoticeTest {
                 inFlight = true,
                 terminal = false,
                 triggeredAt = ARMED_AT + TIMEOUT,
+                canRearm = true,
             ),
         )
     }
@@ -258,6 +288,7 @@ class SafetyCallNoticeTest {
                 inFlight = false,
                 terminal = false,
                 triggeredAt = ARMED_AT + TIMEOUT,
+                canRearm = true,
             ),
         )
     }
@@ -286,6 +317,7 @@ class SafetyCallNoticeTest {
                 // « Safety call désactivé » **pendant** l'envoi de la dernière alerte.
                 terminal = false,
                 triggeredAt = ARMED_AT + TIMEOUT,
+                canRearm = true,
             ),
         )
     }
@@ -311,6 +343,7 @@ class SafetyCallNoticeTest {
                 inFlight = false,
                 terminal = true,
                 triggeredAt = ARMED_AT + TIMEOUT,
+                canRearm = true,
             ),
         )
     }

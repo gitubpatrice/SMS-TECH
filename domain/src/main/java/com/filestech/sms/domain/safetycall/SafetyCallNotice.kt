@@ -79,6 +79,7 @@ sealed interface SafetyCallNotice {
         val inFlight: Boolean,
         val terminal: Boolean,
         val triggeredAt: Long,
+        val canRearm: Boolean,
     ) : SafetyCallNotice
 
     companion object {
@@ -152,6 +153,17 @@ sealed interface SafetyCallNotice {
                     // Cette valeur est stable sur tout le cycle : elle n'ajoute donc aucune
                     // republication au `distinctUntilChanged` de l'appelant.
                     triggeredAt = cfg.triggeredAt,
+                    // 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-02) — UN BOUTON QUI NE
+                    // PEUT PAS TENIR SA PROMESSE NE DOIT PAS EXISTER.
+                    //
+                    // « Réactiver » réarmait sans contact : la garde côté écrivain rendait
+                    // `enabled = false` tout en refermant le cycle, donc **la notification
+                    // disparaissait exactement comme en cas de succès** et la protection restait
+                    // coupée. Aucun retour, aucune erreur — un échec silencieux, et du mauvais côté.
+                    //
+                    // La décision remonte donc ici : sans destinataire, l'action n'est pas proposée,
+                    // et le tap du corps mène à l'application où l'on peut ajouter un contact.
+                    canRearm = cfg.contacts.isNotEmpty(),
                 )
                 !cfg.enabled -> None
                 cfg.isInWarningWindow(nowMs, nowMonoMs) ->

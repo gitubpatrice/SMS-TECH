@@ -35,10 +35,19 @@ package com.filestech.sms.domain.safetycall
  *   que relu depuis [SafetyCallConfig.TOTAL_MESSAGES] : si cette constante change un jour, un
  *   historique ancien continuera d'afficher « 2 sur 4 » et non « 2 sur 6 », qui serait un mensonge
  *   rétroactif.
- * @param recipients libellés des destinataires **tels qu'ils étaient au déclenchement** : le nom
- *   s'il était renseigné, le numéro sinon. Recopiés et non référencés, parce que la liste de
- *   contacts peut avoir changé depuis, et que « vers qui c'est parti » est une question sur le
- *   passé.
+ * @param recipients libellés des contacts **à qui l'alerte a été adressée** : le nom s'il était
+ *   renseigné, le numéro sinon. Recopiés et non référencés, parce que la liste de contacts peut avoir
+ *   changé depuis, et que « vers qui c'est parti » est une question sur le passé.
+ *
+ *   ⚠️ **Ce champ dit « adressé à », jamais « reçu par »** — et l'interface le formule ainsi
+ *   (relecture Codex du 2026-08-06, SC-1273-04). `sendToContacts` ne conserve qu'un total
+ *   `sent`/`failed` et conclut une passe dès qu'**un** envoi réussit : un contact dont les quatre
+ *   envois ont échoué — numéro invalide, par exemple — figure donc dans cette liste. Affirmer qu'il a
+ *   été alerté serait un mensonge sur une fonction de sécurité.
+ *
+ *   Le fermer vraiment exigerait de persister les issues par destinataire **dans la transaction de
+ *   conclusion**, c'est-à-dire sur le chemin d'envoi, que cette fonctionnalité ne doit pas toucher.
+ *   Le libellé honnête est donc préféré au champ trompeur.
  */
 data class SafetyCallTriggerRecord(
     val triggeredAt: Long,

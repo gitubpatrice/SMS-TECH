@@ -284,4 +284,68 @@ class SafetyCallHistoryTest {
         assertThat(merged.monotonicAccumulatedMs).isEqualTo(777L)
         assertThat(merged.history).isEqualTo(live.history)
     }
+
+    /**
+     * 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-01) — LA TRANSITION D'ARMEMENT SE DÉCIDE SUR
+     * L'ÉTAT LIVE, PAS SUR L'INSTANTANÉ D'OUVERTURE.
+     *
+     * Scénario de concurrence exact, celui que mon correctif précédent avait ouvert :
+     *
+     *  1. l'écran s'ouvre alors que le Safety call est armé ⇒ le brouillon porte `enabled = true` ;
+     *  2. la 4ᵉ alerte se conclut ⇒ l'état LIVE devient `enabled = false`, séquence terminale posée ;
+     *  3. l'utilisateur enregistre une modification quelconque.
+     *
+     * Décider sur l'instantané donnait « déjà activé, rien à faire », donc **pas** de remise à zéro :
+     * l'état persisté devenait `enabled = true` **avec la séquence terminale encore posée**. Or dans
+     * cet état `isExpired` rend `false` pour toujours et `nextWakeUpAt` rend `null` — **aucune alarme
+     * n'est programmée**, alors que l'écran confirme l'activation. Une protection annoncée et
+     * inexistante, ce qui est le pire état que cette fonction puisse produire.
+     */
+    @Test
+    fun `enregistrer pendant la conclusion terminale ouvre bien un nouveau cycle`() {
+        // Ce que la transaction relit : le moteur vient de désarmer en concluant la 4ᵉ alerte.
+        val live = armed().copy(
+            enabled = false,
+            triggeredAt = TRIGGERED_AT,
+            messagesSent = SafetyCallConfig.TOTAL_MESSAGES,
+            claimedAt = 0L,
+            claimId = 17L,
+            generation = 4L,
+        )
+        // Ce que l'écran croit, figé à son ouverture : armé, aucune séquence.
+        val draft = live.copy(enabled = true, triggeredAt = 0L, messagesSent = 0)
+
+        val merged = live.withUserEdits(draft)
+        val isLiveRearm = draft.enabled && !live.enabled
+        assertThat(isLiveRearm).isTrue() // non-vacuité : l'ancien prédicat rendait `false` ici
+        val persisted = if (isLiveRearm) merged.reset() else merged
+
+        assertThat(persisted.enabled).isTrue()
+        assertThat(persisted.triggeredAt).isEqualTo(0L)
+        assertThat(persisted.messagesSent).isEqualTo(0)
+        assertThat(persisted.generation).isEqualTo(5L)
+        assertThat(persisted.claimId).isEqualTo(17L) // invariant P-01 : jamais rembobiné
+        // La séquence qui vient de s'achever n'est pas perdue au passage.
+        assertThat(persisted.history).hasSize(1)
+        assertThat(persisted.history.single().triggeredAt).isEqualTo(TRIGGERED_AT)
+        // 🔴 Le cœur du constat : l'état persisté doit pouvoir EXPIRER.
+        assertThat(persisted.isExpired(RESET_AT + TIMEOUT + 1, RESET_MONO + TIMEOUT + 1)).isTrue()
+    }
+
+    /**
+     * ⚠️ Le revers : modifier un simple modèle sur un Safety call **déjà armé** ne doit PAS remettre
+     * le minuteur à zéro. Un prédicat trop large rallongerait le délai à chaque enregistrement.
+     */
+    @Test
+    fun `enregistrer sans changer l armement ne remet pas le minuteur a zero`() {
+        val live = armed().copy(generation = 3L)
+        val draft = live.copy(template = SafetyCallTemplate.URGENT)
+
+        assertThat(draft.enabled && !live.enabled).isFalse()
+
+        val persisted = live.withUserEdits(draft)
+        assertThat(persisted.template).isEqualTo(SafetyCallTemplate.URGENT)
+        assertThat(persisted.lastActivityAt).isEqualTo(ARMED_AT)
+        assertThat(persisted.generation).isEqualTo(3L)
+    }
 }

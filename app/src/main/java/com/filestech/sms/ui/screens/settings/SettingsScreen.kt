@@ -454,7 +454,17 @@ fun SettingsScreen(
                     val imOkResetMessage = stringResource(R.string.settings_safety_call_im_ok_snack)
                     val imOkStopsRelancesMessage =
                         stringResource(R.string.settings_safety_call_im_ok_stops_relances)
-                    if (safetyCall.enabled) {
+                    // 🔴 v1.27.3 (relecture Codex du 2026-08-06, SC-1273-05) — `|| isTriggered`,
+                    // sans quoi l'état terminal était un CHEMIN MORT.
+                    //
+                    // Le désarmement de fin de séquence écrit `enabled = false` dans la transaction
+                    // du dernier envoi. Le récapitulatif — qui porte le texte « Séquence terminée »
+                    // ajouté par ce lot — n'était donc **jamais** atteint dans l'état terminal
+                    // nominal : les Réglages affichaient un simple « Désactivé », et il fallait
+                    // ouvrir l'écran de configuration et descendre jusqu'à l'historique pour
+                    // comprendre qu'une alerte venait de partir. Le motif du chemin mort, dans du
+                    // code écrit le jour même.
+                    if (safetyCall.enabled || safetyCall.isTriggered) {
                         // Récap visible quand armé : durée, restant, contacts,
                         // template + 2 actions (Modifier / Je vais bien).
                         SafetyCallArmedRecap(
