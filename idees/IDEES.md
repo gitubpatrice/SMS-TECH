@@ -249,3 +249,77 @@ réparations ayant ouvert autre chose. Les traiter en dernier, un par un, avec l
 concerne les sauvegardes. Seule la base Room est chiffrée (SQLCipher). Le journal ne dégraderait donc
 pas la confidentialité **à contenu et emplacement égaux** — mais il ne doit pas pour autant
 l'aggraver, d'où la condition 4.
+
+---
+
+## 2. Contraste des textes de marque posés sur `surface`
+
+- **Date** : 2026-08-06
+- **État** : `à instruire` — **mesuré, pas corrigé**, et délibérément
+- **Portée** : décision de design, pas retouche de teinte
+
+### Le fait mesuré
+
+`BrandBlocked` / `BrandWarning` valent `#E65100`, de luminance relative **0,22708**. Contre du
+blanc : **3,79:1**. Le seuil WCAG 2.1 AA pour du texte de taille normale est **4,5:1**.
+
+Le contraste étant **symétrique**, cela vaut dans les deux sens : de l'orange posé sur du blanc
+échoue tout autant que du blanc posé sur de l'orange. Quatre sites posent cette teinte en
+**couleur de texte** sur `surface` :
+
+| Site | Style | Thème clair | Thème sombre |
+|---|---|---|---|
+| `ConversationRow` (numéro bloqué) | `bodyMedium` SemiBold | 3,79:1 ❌ | 4,94:1 ✅ |
+| `ConversationsScreen` (en-tête « Bloqués ») | `titleSmall` | 3,79:1 ❌ | 4,94:1 ✅ |
+| `ConversationsScreen` (action « Bloquer ») | `bodyLarge` | 3,79:1 ❌ | 4,94:1 ✅ |
+| `ThreadScreen` (action « Bloquer ») | `bodyLarge` | 3,79:1 ❌ | 4,94:1 ✅ |
+
+Aucun n'entre dans la définition WCAG du « grand texte » (18 pt, ou 14 pt gras) : 14 sp ≈ 10,5 pt.
+Les **icônes** teintées de la même couleur, elles, passent : le critère 1.4.11 (non-textuel) demande
+3:1, et 3,79 le franchit.
+
+### Pourquoi ce n'est PAS corrigeable en changeant la couleur
+
+C'est le cœur de la décision, et c'est ce qui distingue ce constat des deux boutons corrigés en
+v1.27.4 : **le fond de ces textes n'est pas connu à l'avance.** Le thème comprend cinq schémas, dont
+`dynamicLightColorScheme` / `dynamicDarkColorScheme` — Material You — où `surface` **dérive du fond
+d'écran de l'utilisateur**. Il n'existe donc aucune valeur d'orange dont on puisse démontrer qu'elle
+atteint 4,5:1 contre un fond inconnu.
+
+Assombrir la teinte « pour le thème clair » aggraverait par ailleurs le thème sombre, où la valeur
+actuelle passe déjà. Une correction correcte demanderait un jeton dépendant du schéma, ce qui ne
+résout toujours rien sous Material You.
+
+⚠️ **Un demi-correctif serait pire que l'absence de correctif** : il déplacerait l'échec sans le
+supprimer, tout en donnant l'impression que le sujet est traité — et un futur relecteur lirait le
+nouveau jeton comme une garantie.
+
+### La piste qui marche, et elle est déjà dans le dépôt
+
+Ne pas poser ces textes sur `surface`. `ConversationRow` le fait **déjà** pour son cadre :
+`BrandBlocked.copy(alpha = 0.08f)` en fond, avec une bordure à `0,45f`. Un libellé posé sur un fond
+**fixe** redevient mesurable, et `onBrandContainer` rend alors le premier plan sans qu'on ait à
+l'écrire.
+
+⇒ Traiter ces quatre sites en **puces / pastilles à fond fixe**, et non en texte coloré. C'est une
+décision d'apparence : elle change ce que Patrice voit, elle demande donc son accord avant d'être
+engagée.
+
+### Ce que la v1.27.4 a corrigé, par contraste
+
+Les deux **boutons** — confirmation de blocage dans `ConversationsScreen` et
+`DestructiveConfirmDialog` de `ThreadScreen` — posaient du blanc sur un fond de marque **fixe**.
+Mesurable, donc corrigeable, donc corrigé : le premier plan est désormais **calculé** par
+`onBrandContainer`, jamais écrit en dur. Le piège évité au passage mérite d'être retenu : passer
+l'orange au noir en dur aurait fait tomber le rouge destructif `#C62828` de 5,62:1 à **3,74:1**, donc
+sous le seuil. Un seul premier plan écrit en dur ne pouvait pas être juste pour les deux teintes que
+ce composant partage.
+
+### Leçon générale
+
+**Un chiffre faux dans un commentaire ne se contente pas d'être faux : il justifie des choix.** Le
+KDoc de `BrandBlocked` affirmait « 4,87:1 » depuis plusieurs versions. Aucun test ne pouvait le
+contredire, puisque la valeur vivait dans un commentaire. Elle a servi à poser du blanc sur cette
+teinte à deux endroits. Les ratios sont désormais dans `BrandWarningContrastTest`, qui verrouille
+**aussi que le blanc échoue** — ne verrouiller que « le noir passe » laisserait revenir au blanc sans
+rien casser.
