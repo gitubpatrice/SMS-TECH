@@ -56,11 +56,29 @@ sealed interface SafetyCallNotice {
      * [SafetyCallConfig.messagesDelivered]. [inFlight] dit qu'un envoi est en cours : tant qu'il
      * est vrai avec `delivered == 0`, rien n'est encore parti et la notification ne doit rien
      * affirmer.
+     *
+     * # v1.27.3 — [terminal], et le défaut qu'il ferme
+     *
+     * La notification disait, jusqu'à la dernière alerte incluse : « Appuyez si vous allez bien :
+     * **les relances s'arrêteront** ». Après le quatrième message il n'y a plus rien à arrêter, et
+     * surtout le Safety call est **déjà désactivé** — le désarmement de fin de séquence est écrit
+     * dans la même transaction que la conclusion du dernier envoi.
+     *
+     * 🔴 Le texte ne le disait pas. Quelqu'un lisant cette notification croyait donc son deadman
+     * encore en veille, alors qu'aucune alarme n'était même programmée : `isExpired`,
+     * `isInWarningWindow` et `nextWakeUpAt` se taisent tous les trois dès que `isTriggered`. Croire
+     * à une protection qui n'existe pas est le pire état que cette fonction puisse produire — pire
+     * qu'une fausse alerte, qui au moins se constate.
+     *
+     * L'état terminal est donc porté explicitement jusqu'à l'afficheur, pour qu'il puisse dire les
+     * deux choses vraies : les messages sont partis, **et** la protection est coupée.
      */
     data class Sequence(
         val delivered: Int,
         val total: Int,
         val inFlight: Boolean,
+        val terminal: Boolean,
+        val triggeredAt: Long,
     ) : SafetyCallNotice
 
     companion object {
@@ -113,6 +131,27 @@ sealed interface SafetyCallNotice {
                     delivered = cfg.messagesDelivered,
                     total = SafetyCallConfig.TOTAL_MESSAGES,
                     inFlight = cfg.isSendInFlight,
+                    // v1.27.3 — `messagesDelivered >= TOTAL_MESSAGES` est **exactement** l'état
+                    // terminal, et pas une approximation : `messagesDelivered` vaut
+                    // `messagesSent − (bail ? 1 : 0)`, donc l'atteindre impose à la fois que les
+                    // quatre créneaux soient consommés et qu'aucun envoi ne soit en vol. Tester
+                    // `!hasRelancePending` à la place aurait rendu `true` dès la réservation du
+                    // dernier créneau, c'est-à-dire **pendant** l'envoi de la dernière alerte.
+                    terminal = cfg.messagesDelivered >= SafetyCallConfig.TOTAL_MESSAGES,
+                    // v1.27.3 — l'heure du DÉCLENCHEMENT, pour que la notification l'affiche au
+                    // lieu de l'heure de sa dernière publication.
+                    //
+                    // 🔴 Le défaut : le constructeur de notification met `when` à l'heure courante
+                    // par défaut, et la réconciliation se rejoue à chaque démarrage à froid du
+                    // processus. La notification était donc réhorodatée à « maintenant »,
+                    // remontait en tête du volet et se présentait comme une alerte NEUVE —
+                    // mesuré sur appareil le 2026-08-06 : déclenchée à 23:53, elle affichait
+                    // 11:01 le lendemain matin. Sur une fonction de sécurité, faire croire à un
+                    // second déclenchement qui n'a pas eu lieu est inacceptable.
+                    //
+                    // Cette valeur est stable sur tout le cycle : elle n'ajoute donc aucune
+                    // republication au `distinctUntilChanged` de l'appelant.
+                    triggeredAt = cfg.triggeredAt,
                 )
                 !cfg.enabled -> None
                 cfg.isInWarningWindow(nowMs, nowMonoMs) ->

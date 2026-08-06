@@ -188,6 +188,29 @@ data class SafetyCallConfig(
      * qu'elle a bougé, le worker n'a plus rien à faire ici.
      */
     val generation: Long = 0L,
+    /**
+     * v1.27.3 — **historique des déclenchements passés**, du plus ancien au plus récent, borné à
+     * [MAX_HISTORY] entrées.
+     *
+     * # Pourquoi ce champ existe
+     *
+     * `triggeredAt` et `messagesSent` décrivent la séquence **en cours**, et [withActivityReset] les
+     * remet à zéro. Sans archivage, l'application était incapable de répondre à « est-ce que ça
+     * s'est déjà déclenché, et vers qui ? » — la seule trace était une notification, qui se balaie
+     * et ne survit pas au redémarrage.
+     *
+     * # Où l'archivage a lieu, et pourquoi c'est le seul endroit sûr
+     *
+     * Dans [withActivityReset], qui est le **point de passage unique** de toutes les remises à zéro :
+     * « Je vais bien », tap sur la notification, ouverture de l'application, et réactivation du
+     * switch depuis les Réglages y passent tous.
+     *
+     * Les deux autres écritures de `triggeredAt = 0L` dans `TriggerSafetyCallUseCase` sont des
+     * **restitutions de créneau** après un envoi totalement échoué : `messagesDelivered` y vaut
+     * zéro, il n'y a donc rien à archiver. La garde `messagesDelivered > 0` couvre ce cas sans avoir
+     * à toucher au chemin d'envoi.
+     */
+    val history: List<SafetyCallTriggerRecord> = emptyList(),
 ) {
     /**
      * v1.27.2 (audit Codex du 2026-08-05, C-01) — la séquence est-elle **durablement** terminée ?
@@ -297,6 +320,10 @@ data class SafetyCallConfig(
         triggeredAt = 0L,
         messagesSent = 0,
         claimedAt = 0L,
+        // v1.27.3 — on ARCHIVE avant d'effacer. Cette ligne est la raison d'être de [history] :
+        // les trois champs juste au-dessus sont la seule trace qu'une alerte est partie, et ils
+        // disparaissent ici.
+        history = historyWithCurrentCycle,
         // ⚠️ v1.27.2 (audit Codex, P-01) — `claimId` n'est PAS remis à zéro : il doit rester
         // strictement croissant sur toute la vie de l'installation, sans quoi un worker encore
         // en vol et son successeur porteraient la même identité. C'est [generation] qui
@@ -304,6 +331,95 @@ data class SafetyCallConfig(
         // v1.27.2 (audit Codex, C-04) — le cycle change d'identité. Tout worker parti sur la
         // génération précédente doit s'arrêter, y compris s'il est déjà dans sa boucle d'envoi.
         generation = generation + 1,
+    )
+
+    /**
+     * v1.27.3 — [history] augmentée du cycle **en cours**, ou inchangée s'il n'y a rien à retenir.
+     *
+     * # Une seule expression pour l'archivage ET pour l'affichage
+     *
+     * C'est ce que [withActivityReset] écrit, et c'est aussi ce que l'écran lit. Les séparer aurait
+     * recréé le motif dominant du dépôt — le jumeau asymétrique — et le défaut était déjà là :
+     *
+     * 🔴 (relecture Gemini du 2026-08-06, F-02) le désarmement de fin de séquence est écrit dans la
+     * transaction du dernier envoi, **sans passer par [withActivityReset]**. Le cycle achevé restait
+     * donc dans les champs courants, non archivé. Et comme la remise à zéro d'ouverture
+     * d'application est conditionnée à `enabled` — faux après ce désarmement — **ouvrir
+     * l'application n'archivait rien non plus.** Un écran qui n'aurait lu que [history] aurait donc
+     * affiché « aucun déclenchement enregistré » à l'instant précis où quatre SMS venaient de partir
+     * chez les proches, en contredisant la notification affichée juste à côté.
+     *
+     * En lisant cette liste-ci, l'écran voit le cycle courant tant qu'il n'est pas archivé, puis le
+     * même enregistrement une fois archivé — sans doublon, puisque l'archivage remplace [history]
+     * par cette valeur et que `triggeredAt` retombe à zéro dans la même opération.
+     *
+     * # Les deux gardes, et pourquoi chacune est nécessaire
+     *
+     * `isTriggered` écarte les cycles jamais déclenchés — ouvrir l'application dix fois par jour
+     * n'ajoute rien.
+     *
+     * `messagesDelivered > 0` écarte les **restitutions de créneau** : `TriggerSafetyCallUseCase`
+     * remet `triggeredAt` à zéro quand un envoi a totalement échoué, et un enregistrement
+     * « déclenché, 0 message parti » ferait croire à une alerte qui n'a jamais eu lieu. C'est la
+     * garde qui permet de tout traiter ici sans toucher au chemin d'envoi. Elle écarte aussi, au
+     * passage, le premier créneau **en vol** : rien n'est affiché avant qu'un envoi soit conclu.
+     *
+     * ⚠️ [SafetyCallTriggerRecord.recipients] est recopié depuis [contacts] **à l'instant de la
+     * lecture**, non à celui du déclenchement : modifier sa liste de contacts pendant une séquence
+     * en cours ferait donc retenir la nouvelle liste. Le cas est étroit et sans conséquence de
+     * sécurité, et le fermer exigerait un champ persisté de plus, écrit dans la transaction de
+     * réservation — c'est-à-dire sur le chemin d'envoi, que cette fonctionnalité ne doit pas
+     * toucher.
+     */
+    val historyWithCurrentCycle: List<SafetyCallTriggerRecord>
+        get() {
+            if (!isTriggered || messagesDelivered <= 0) return history
+            val record = SafetyCallTriggerRecord(
+                triggeredAt = triggeredAt,
+                messagesDelivered = messagesDelivered,
+                totalMessages = TOTAL_MESSAGES,
+                recipients = contacts.map { c -> c.sanitizedDisplayName() ?: c.phoneNumber },
+            )
+            return (history + record).takeLast(MAX_HISTORY)
+        }
+
+    /**
+     * v1.27.3 — cette configuration **LIVE**, mise à jour des seuls champs qu'un formulaire édite.
+     *
+     * # 🔴 Le défaut que cette fonction ferme
+     *
+     * L'écran de configuration édite une copie locale, hydratée **une seule fois** à son ouverture,
+     * et son bouton d'enregistrement remplaçait `safetyCall` **en entier** par cette copie. Tout ce
+     * que l'utilisateur n'édite pas y était donc périmé. Enregistrer pendant qu'une séquence
+     * courait :
+     *
+     *  - effaçait `triggeredAt`, `messagesSent` et `claimedAt` — l'alerte en cours disparaissait des
+     *    Réglages et de la notification, sans que rien ne soit annulé côté worker ;
+     *  - **rembobinait `claimId` et `generation`**, c'est-à-dire précisément les deux invariants
+     *    posés par P-01 et C-04 : un worker encore en vol et son successeur pouvaient dès lors
+     *    porter la même identité, et un cycle clos redevenait « courant » ;
+     *  - et depuis que [history] existe, écrasait l'historique avec une copie d'avant l'archivage,
+     *    perdant définitivement la trace d'un déclenchement.
+     *
+     * # Pourquoi ici et pas dans le ViewModel
+     *
+     * Parce que là-bas, c'était intestable — et c'est exactement pour ça que le défaut a vécu si
+     * longtemps. Ici, la frontière entre « ce que l'utilisateur décide » et « ce que le moteur
+     * tient » est explicite, et un test peut vérifier qu'aucun champ ne change de camp par accident.
+     *
+     * # La règle, pour tout champ ajouté demain
+     *
+     * Cinq champs viennent du formulaire : [enabled], [timeoutMs], [contacts], [template],
+     * [customMessage]. **Tout le reste appartient au moteur** — les trois horloges, la séquence, le
+     * bail, l'identité du propriétaire, la génération, l'historique — et ne doit jamais transiter par
+     * un brouillon d'écran.
+     */
+    fun withUserEdits(draft: SafetyCallConfig): SafetyCallConfig = copy(
+        enabled = draft.enabled,
+        timeoutMs = draft.timeoutMs,
+        contacts = draft.contacts,
+        template = draft.template,
+        customMessage = draft.customMessage,
     )
 
     /** v1.27.2 — `true` tant qu'il reste au moins une relance à envoyer. */
@@ -480,6 +596,17 @@ data class SafetyCallConfig(
 
         /** Nombre maximum de contacts d'urgence. */
         const val MAX_CONTACTS: Int = 4
+
+        /**
+         * v1.27.3 — nombre de déclenchements conservés dans [history].
+         *
+         * Borné parce que DataStore relit et réécrit **l'intégralité** du fichier de préférences à
+         * chaque écriture : une liste non bornée alourdirait chaque remise à zéro du minuteur, donc
+         * chaque ouverture de l'application. Dix entrées répondent à « est-ce que ça s'est déjà
+         * déclenché, quand, et vers qui ? » ; au-delà, l'information est historique et n'a plus
+         * d'usage pratique.
+         */
+        const val MAX_HISTORY: Int = 10
 
         /** Cap du message custom (1 segment SMS UCS-2 sûr avec marge). */
         const val MAX_CUSTOM_MESSAGE_LENGTH: Int = 140

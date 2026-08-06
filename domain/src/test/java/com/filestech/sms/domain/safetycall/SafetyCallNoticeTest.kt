@@ -81,6 +81,8 @@ class SafetyCallNoticeTest {
                 delivered = SafetyCallConfig.TOTAL_MESSAGES,
                 total = SafetyCallConfig.TOTAL_MESSAGES,
                 inFlight = false,
+                terminal = true,
+                triggeredAt = ARMED_AT + TIMEOUT,
             ),
         )
     }
@@ -235,6 +237,8 @@ class SafetyCallNoticeTest {
                 delivered = 0,
                 total = SafetyCallConfig.TOTAL_MESSAGES,
                 inFlight = true,
+                terminal = false,
+                triggeredAt = ARMED_AT + TIMEOUT,
             ),
         )
     }
@@ -252,6 +256,8 @@ class SafetyCallNoticeTest {
                 delivered = 1,
                 total = SafetyCallConfig.TOTAL_MESSAGES,
                 inFlight = false,
+                terminal = false,
+                triggeredAt = ARMED_AT + TIMEOUT,
             ),
         )
     }
@@ -274,6 +280,12 @@ class SafetyCallNoticeTest {
                 delivered = SafetyCallConfig.TOTAL_MESSAGES - 1,
                 total = SafetyCallConfig.TOTAL_MESSAGES,
                 inFlight = true,
+                // 🔴 v1.27.3 — NON TERMINAL, et c'est tout l'enjeu : le dernier créneau est
+                // réservé mais son envoi n'est pas conclu. Un `terminal` fondé sur
+                // `!hasRelancePending` aurait rendu `true` ici, et la notification aurait annoncé
+                // « Safety call désactivé » **pendant** l'envoi de la dernière alerte.
+                terminal = false,
+                triggeredAt = ARMED_AT + TIMEOUT,
             ),
         )
     }
@@ -297,6 +309,8 @@ class SafetyCallNoticeTest {
                 delivered = SafetyCallConfig.TOTAL_MESSAGES,
                 total = SafetyCallConfig.TOTAL_MESSAGES,
                 inFlight = false,
+                terminal = true,
+                triggeredAt = ARMED_AT + TIMEOUT,
             ),
         )
     }

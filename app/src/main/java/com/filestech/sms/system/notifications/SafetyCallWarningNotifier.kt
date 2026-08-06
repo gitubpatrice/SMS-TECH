@@ -89,7 +89,7 @@ class SafetyCallWarningNotifier @Inject constructor(
             }
             is SafetyCallNotice.Sequence -> {
                 dismissWarning()
-                showSequence(notice.delivered, notice.total, notice.inFlight)
+                showSequence(notice)
             }
         }
     }
@@ -117,16 +117,7 @@ class SafetyCallWarningNotifier @Inject constructor(
 
         // v1.9.0 audit fix SEC-10 — rote un nouveau nonce et l'embarque
         // dans l'intent. Sans nonce valide, MainActivity rejettera le reset.
-        val token = intentToken.rotate()
-        val tapIntent = PendingIntent.getActivity(
-            context,
-            REQUEST_SAFETY_CALL_RESET,
-            Intent(context, MainActivity::class.java)
-                .setAction(ACTION_SAFETY_CALL_RESET)
-                .putExtra(EXTRA_RESET_TOKEN, token)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val tapIntent = resetActivityIntent(intentToken.rotate())
 
         val notif = NotificationCompat.Builder(
             context,
@@ -180,39 +171,47 @@ class SafetyCallWarningNotifier @Inject constructor(
      * dit « envoi en cours » et n'affirme rien. Faire croire à quelqu'un que ses proches sont
      * prévenus alors que rien n'est parti est le pire retour possible sur une fonction de sécurité.
      */
-    private fun showSequence(delivered: Int, totalMessages: Int, inFlight: Boolean) {
+    private fun showSequence(notice: SafetyCallNotice.Sequence) {
         if (!hasPostPermission()) {
             Timber.w("SafetyCallWarningNotifier: POST_NOTIFICATIONS not granted, skipping sequence")
             return
         }
+        // ⚠️ v1.27.3 — UN SEUL nonce pour tous les intents de cette publication.
+        //
+        // [SafetyCallIntentToken.consume] est mono-usage et `rotate()` invalide le précédent.
+        // Appeler `rotate()` une fois par intent aurait donc laissé le corps de la notification et
+        // l'action « Réactiver » porter des jetons périmés : seul le dernier construit aurait
+        // fonctionné, les autres se seraient fait rejeter en silence par `MainActivity`.
         val token = intentToken.rotate()
-        val tapIntent = PendingIntent.getActivity(
-            context,
-            REQUEST_SAFETY_CALL_RESET,
-            Intent(context, MainActivity::class.java)
-                .setAction(ACTION_SAFETY_CALL_RESET)
-                .putExtra(EXTRA_RESET_TOKEN, token)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val tapIntent = resetActivityIntent(token)
         // Rien de conclu : on décrit ce qui se passe réellement, sans rien affirmer.
-        val sending = delivered == 0
-        val title = if (sending) {
-            R.string.safety_call_sequence_title_sending
-        } else {
-            R.string.safety_call_sequence_title
+        val sending = notice.delivered == 0
+        val title = when {
+            sending -> context.getString(R.string.safety_call_sequence_title_sending)
+            notice.terminal -> context.getString(R.string.safety_call_sequence_title_done)
+            else -> context.getString(R.string.safety_call_sequence_title)
         }
-        val body = if (sending) {
-            context.getString(R.string.safety_call_sequence_body_sending)
-        } else {
-            context.getString(R.string.safety_call_sequence_body, delivered, totalMessages)
+        val body = when {
+            sending -> context.getString(R.string.safety_call_sequence_body_sending)
+            notice.terminal -> context.resources.getQuantityString(
+                R.plurals.safety_call_sequence_body_done,
+                notice.delivered,
+                notice.delivered,
+                notice.total,
+            )
+            else -> context.resources.getQuantityString(
+                R.plurals.safety_call_sequence_body,
+                notice.delivered,
+                notice.delivered,
+                notice.total,
+            )
         }
-        val notif = NotificationCompat.Builder(
+        val builder = NotificationCompat.Builder(
             context,
             NotificationChannelInitializer.CHANNEL_SAFETY_CALL_WARNING,
         )
             .setSmallIcon(R.drawable.ic_notification_message)
-            .setContentTitle(context.getString(title))
+            .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setOngoing(true)
@@ -220,17 +219,86 @@ class SafetyCallWarningNotifier @Inject constructor(
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(tapIntent)
-            .build()
+
+        // 🔴 v1.27.3 — L'HEURE AFFICHÉE ÉTAIT CELLE DE LA DERNIÈRE PUBLICATION, PAS DU
+        // DÉCLENCHEMENT.
+        //
+        // Sans `setWhen`, le constructeur met l'heure courante. Or la réconciliation se rejoue à
+        // chaque démarrage à froid du processus : la notification était réhorodatée, remontait en
+        // tête du volet et se présentait comme une alerte NEUVE. Mesuré sur le S24 le 2026-08-06 —
+        // déclenchement à 23:53, notification affichant « 11h01 » le lendemain matin, prise pour un
+        // second déclenchement.
+        //
+        // Avec l'instant du déclenchement, une republication devient invisible : même contenu, même
+        // horodatage. Et le proche qui arrive lit l'heure à laquelle l'alerte est réellement partie,
+        // ce qui est tout l'intérêt de laisser cette notification affichée.
+        if (notice.triggeredAt > 0L) {
+            builder.setWhen(notice.triggeredAt).setShowWhen(true)
+        }
+
+        // v1.27.3 — « Réactiver », et SEULEMENT dans l'état terminal.
+        //
+        // Avant la fin de la séquence, le geste utile est « je vais bien » : il est déjà porté par
+        // le corps de la notification. Une fois la séquence close, le Safety call s'est désactivé
+        // tout seul, et le geste utile devient l'inverse — se remettre sous protection.
+        //
+        // ⚠️ L'action passe par `startActivity`, JAMAIS par un `BroadcastReceiver` qui basculerait
+        // le réglage directement. Une action de notification est atteignable depuis le volet : un
+        // récepteur ferait de ce bouton un coupe-circuit du deadman en un geste, sans le code de
+        // l'application. Le réarmement, lui, est sans risque dans ce sens — il ne peut que remettre
+        // la protection en marche.
+        if (notice.terminal) {
+            builder.addAction(
+                R.drawable.ic_notification_message,
+                context.getString(R.string.safety_call_notif_action_rearm),
+                rearmActivityIntent(token),
+            )
+        }
 
         @android.annotation.SuppressLint("MissingPermission")
-        NotificationManagerCompat.from(context).notify(NOTIF_ID_SEQUENCE, notif)
+        NotificationManagerCompat.from(context).notify(NOTIF_ID_SEQUENCE, builder.build())
         Timber.i(
-            "SafetyCallWarningNotifier: posted sequence notice (%d/%d, enVol=%s)",
-            delivered,
-            totalMessages,
-            inFlight,
+            "SafetyCallWarningNotifier: posted sequence notice (%d/%d, enVol=%s, terminal=%s)",
+            notice.delivered,
+            notice.total,
+            notice.inFlight,
+            notice.terminal,
         )
     }
+
+    /**
+     * Intent « je vais bien » : remet le minuteur à zéro, et désarme si l'alerte est déjà partie.
+     * Partagé par la notification d'avertissement et celle de séquence — ils utilisent volontairement
+     * le **même code de requête**, pour qu'il n'existe qu'un seul intent vivant à la fois.
+     */
+    private fun resetActivityIntent(token: Long): PendingIntent = PendingIntent.getActivity(
+        context,
+        REQUEST_SAFETY_CALL_RESET,
+        Intent(context, MainActivity::class.java)
+            .setAction(ACTION_SAFETY_CALL_RESET)
+            .putExtra(EXTRA_RESET_TOKEN, token)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /**
+     * v1.27.3 — intent de **réarmement**, porteur du même nonce que le tap du corps.
+     *
+     * Code de requête distinct de [REQUEST_SAFETY_CALL_RESET], sans quoi les deux intents
+     * s'écraseraient l'un l'autre. Cela crée bien deux `PendingIntent` vivants dont l'un portera un
+     * jeton périmé après la prochaine rotation — mais l'action n'existe que sur la notification
+     * terminale, et [reconcile] la retire avant toute autre publication. Aucun bouton périmé n'est
+     * donc atteignable.
+     */
+    private fun rearmActivityIntent(token: Long): PendingIntent = PendingIntent.getActivity(
+        context,
+        REQUEST_SAFETY_CALL_REARM,
+        Intent(context, MainActivity::class.java)
+            .setAction(ACTION_SAFETY_CALL_REARM)
+            .putExtra(EXTRA_RESET_TOKEN, token)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
 
     /**
      * Annule la notification d'avertissement si présente. Safe à appeler même si aucune notif n'est
@@ -267,6 +335,16 @@ class SafetyCallWarningNotifier @Inject constructor(
         const val ACTION_SAFETY_CALL_RESET = "com.filestech.sms.SAFETY_CALL_RESET"
 
         /**
+         * v1.27.3 — action du bouton « Réactiver » de la notification terminale.
+         *
+         * Distincte de [ACTION_SAFETY_CALL_RESET] parce que le sens est **inverse** : celle-ci
+         * remet le Safety call en marche, l'autre le désarme. Les confondre aurait produit le
+         * jumeau asymétrique habituel — un bouton dont le libellé promet une chose et dont le
+         * chemin fait l'autre.
+         */
+        const val ACTION_SAFETY_CALL_REARM = "com.filestech.sms.SAFETY_CALL_REARM"
+
+        /**
          * v1.9.0 audit fix SEC-10 — extra portant le nonce anti-spoofing.
          * Validé par `MainActivity.handleSharedIntent` via [SafetyCallIntentToken.consume].
          */
@@ -278,5 +356,8 @@ class SafetyCallWarningNotifier @Inject constructor(
         /** v1.27.2 — la notification de sequence est INDEPENDANTE de l'avertissement. */
         private const val NOTIF_ID_SEQUENCE = 0x53455151 // 'SEQQ'
         private const val REQUEST_SAFETY_CALL_RESET = 0x52455354    // 'REST'
+
+        /** v1.27.3 — code distinct, sans quoi l'intent de réarmement écraserait celui de reset. */
+        private const val REQUEST_SAFETY_CALL_REARM = 0x52454152    // 'REAR'
     }
 }

@@ -458,8 +458,14 @@
     <string name="settings_safety_call_armed_chip">Enabled</string>
     <string name="settings_safety_call_armed_started">Timer started: %1$s at %2$s</string>
     <string name="settings_safety_call_im_ok_stops_relances">Safety call turned off. No further message will be sent.</string>
-    <string name="settings_safety_call_triggered_state">Alert sent — message %1$d of %2$d</string>
+    <plurals name="settings_safety_call_triggered_state">
+        <item quantity="one">Alert sent — %1$d message of %2$d</item>
+        <item quantity="other">Alert sent — %1$d messages of %2$d</item>
+    </plurals>
     <string name="settings_safety_call_triggered_hint">Follow-ups are sent every 15 minutes. Tap “I’m OK” to stop them.</string>
+    <string name="settings_safety_call_triggered_state_sending">Sending alert…</string>
+    <string name="settings_safety_call_triggered_hint_done">Sequence complete: Safety call turned itself off. Turn it back on to be protected again.</string>
+    <string name="settings_safety_call_rearmed">Safety call turned back on. The timer starts over.</string>
     <string name="settings_safety_call_armed_duration">Duration: %1$s</string>
     <string name="settings_safety_call_armed_remaining">Remaining: %1$s before trigger</string>
     <string name="settings_safety_call_armed_remaining_imminent">Less than 2 h before trigger</string>
@@ -502,9 +508,26 @@
     <string name="safety_call_warning_body_hours">Safety call will trigger in about %1$d hours. Tap to reset the timer.</string>
     <string name="safety_call_warning_body_imminent">Safety call will trigger in less than 2 hours. Tap to reset now.</string>
     <string name="safety_call_sequence_title">SMS Tech — alert sent</string>
-    <string name="safety_call_sequence_body">%1$d of %2$d messages sent to your contacts. Tap if you\'re OK: the follow-ups will stop.</string>
+    <plurals name="safety_call_sequence_body">
+        <item quantity="one">%1$d of %2$d message sent to your contacts. Tap if you\'re OK: the follow-ups will stop.</item>
+        <item quantity="other">%1$d of %2$d messages sent to your contacts. Tap if you\'re OK: the follow-ups will stop.</item>
+    </plurals>
     <string name="safety_call_sequence_title_sending">SMS Tech — sending alert</string>
     <string name="safety_call_sequence_body_sending">The alert is being sent to your contacts. Tap if you\'re OK: sending will stop.</string>
+    <string name="safety_call_sequence_title_done">SMS Tech — alert sent, Safety call off</string>
+    <plurals name="safety_call_sequence_body_done">
+        <item quantity="one">%1$d of %2$d message was sent to your contacts. Safety call is now off — tap “Turn back on” to arm it again.</item>
+        <item quantity="other">All %1$d messages were sent to your contacts. Safety call is now off — tap “Turn back on” to arm it again.</item>
+    </plurals>
+    <string name="safety_call_notif_action_rearm">Turn back on</string>
+    <string name="safety_call_history_title">Trigger history</string>
+    <string name="safety_call_history_empty">No trigger recorded.</string>
+    <plurals name="safety_call_history_count">
+        <item quantity="one">%1$d of %2$d message sent</item>
+        <item quantity="other">%1$d of %2$d messages sent</item>
+    </plurals>
+    <string name="safety_call_history_recipients">To: %1$s</string>
+    <string name="safety_call_history_stopped">Sequence stopped — you confirmed you were OK.</string>
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Emergency mode</string>
     <string name="settings_emergency_title">Emergency mode</string>

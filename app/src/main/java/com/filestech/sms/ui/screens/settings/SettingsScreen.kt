@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -2586,17 +2587,42 @@ private fun SafetyCallArmedRecap(
         // partie, la durée et le temps restant n'ont plus de sens à cet instant. Le libellé dit
         // exactement où en est la séquence, pour qu'on ne se demande pas si ça continue.
         if (config.isTriggered) {
+            // 🔴 v1.27.3 — CE BLOC ÉTAIT LE JUMEAU ASYMÉTRIQUE DE LA NOTIFICATION.
+            //
+            // Il lisait `messagesSent`, qui compte les créneaux **réservés**, là où la notification
+            // avait été corrigée (P-06) pour lire `messagesDelivered`, les envois **conclus**.
+            // Pendant un envoi en vol, les Réglages affirmaient donc qu'un message était parti
+            // alors que rien ne l'était — exactement le défaut que P-06 avait relevé, resté ouvert
+            // sur ce jumeau-ci.
+            //
+            // Et la première réservation portant `messagesDelivered` à zéro, afficher le compte
+            // brut aurait annoncé « 0 message sur 4 » : un envoi en cours a donc son propre texte,
+            // qui n'affirme rien.
+            val delivered = config.messagesDelivered
+            val total = com.filestech.sms.domain.safetycall.SafetyCallConfig.TOTAL_MESSAGES
             Text(
-                text = stringResource(
-                    R.string.settings_safety_call_triggered_state,
-                    config.messagesSent,
-                    com.filestech.sms.domain.safetycall.SafetyCallConfig.TOTAL_MESSAGES,
-                ),
+                text = if (delivered == 0) {
+                    stringResource(R.string.settings_safety_call_triggered_state_sending)
+                } else {
+                    pluralStringResource(
+                        R.plurals.settings_safety_call_triggered_state,
+                        delivered,
+                        delivered,
+                        total,
+                    )
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                text = stringResource(R.string.settings_safety_call_triggered_hint),
+                // La séquence close, « les relances partent toutes les 15 minutes » est faux : il
+                // n'en reste aucune, et surtout le Safety call s'est désactivé tout seul. Ne pas le
+                // dire laissait croire à une protection encore en veille.
+                text = if (delivered >= total) {
+                    stringResource(R.string.settings_safety_call_triggered_hint_done)
+                } else {
+                    stringResource(R.string.settings_safety_call_triggered_hint)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

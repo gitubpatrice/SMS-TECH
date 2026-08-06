@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -62,9 +63,12 @@ import androidx.lifecycle.compose.currentStateAsState
 import com.filestech.sms.R
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
+import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.theme.BrandBlue
+import java.text.DateFormat
+import java.util.Date
 
 /**
  * v1.9.0 — Écran de configuration du Safety call.
@@ -91,6 +95,9 @@ fun SafetyCallSetupScreen(
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     // v1.27.2 — l'etat REELLEMENT enregistre, pour que l'indicateur ne suive pas le brouillon.
     val savedEnabled by viewModel.savedEnabled.collectAsStateWithLifecycle()
+    // v1.27.3 — historique des declenchements passes, lu depuis DataStore et non depuis le
+    // brouillon : ce sont des faits, pas une saisie.
+    val history by viewModel.history.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     var addContactDialogOpen by remember { mutableStateOf(false) }
     var customDurationDialogOpen by remember { mutableStateOf(false) }
@@ -225,6 +232,10 @@ fun SafetyCallSetupScreen(
             ) {
                 Text(stringResource(R.string.safety_call_setup_save))
             }
+            // v1.27.3 — l'historique vient APRÈS le bouton d'enregistrement : ce n'est pas un champ
+            // du formulaire mais une lecture du passé, et il ne doit pas s'interposer entre la
+            // saisie et l'action qui la valide.
+            HistorySection(history = history)
             Spacer(Modifier.size(24.dp))
         }
     }
@@ -534,6 +545,81 @@ private fun TemplateOption(label: String, selected: Boolean, onClick: () -> Unit
         }
         Spacer(Modifier.size(12.dp))
         Text(label, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * v1.27.3 — **historique des déclenchements**, du plus récent au plus ancien.
+ *
+ * # La question à laquelle cette section répond
+ *
+ * « Est-ce que ça s'est déjà déclenché, quand, et vers qui ? » — sans réponse jusqu'ici. La
+ * notification de fin de séquence ne pouvait pas la porter : elle se balaie, elle ne survit pas au
+ * redémarrage, et elle disparaît dès qu'on la tape, y compris sans l'avoir lue.
+ *
+ * # La garde du mode leurre est en amont, et c'est délibéré
+ *
+ * Rien ici ne teste `isPanicDecoy`, parce que cet écran n'est **pas atteignable** sous contrainte :
+ * la route est dépilée à l'entrée en mode leurre (`AppRoot`) et la section qui y mène est masquée
+ * dans les Réglages. Une troisième garde sur l'affichage laisserait croire que l'accès, lui, est
+ * ouvert — c'est exactement l'inversion qui a produit le constat P-05.
+ *
+ * # Ce qui n'est pas affiché
+ *
+ * Jamais le corps des messages. Un historique qui les conserverait deviendrait, pour qui s'emparerait
+ * du téléphone, la description écrite d'un réseau de soutien et de la façon de l'alerter.
+ */
+@Composable
+private fun HistorySection(history: List<SafetyCallTriggerRecord>) {
+    // Un seul formateur pour toute la liste, mémorisé : `DateFormat` n'est pas thread-safe, et la
+    // composition est mono-thread par définition. Même motif que [ChatFormatters].
+    val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
+    SectionCard(title = stringResource(R.string.safety_call_history_title)) {
+        if (history.isEmpty()) {
+            Text(
+                stringResource(R.string.safety_call_history_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@SectionCard
+        }
+        history.forEachIndexed { index, record ->
+            if (index > 0) Spacer(Modifier.size(12.dp))
+            Text(
+                dateFormat.format(Date(record.triggeredAt)),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                pluralStringResource(
+                    R.plurals.safety_call_history_count,
+                    record.messagesDelivered,
+                    record.messagesDelivered,
+                    record.totalMessages,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (record.recipients.isNotEmpty()) {
+                Text(
+                    stringResource(
+                        R.string.safety_call_history_recipients,
+                        record.recipients.joinToString(", "),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!record.isComplete) {
+                // Une séquence écourtée et une séquence menée à terme sont deux issues très
+                // différentes ; le seul couple de nombres les rendrait mal.
+                Text(
+                    stringResource(R.string.safety_call_history_stopped),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

@@ -7,6 +7,7 @@ import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
+import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -85,8 +86,20 @@ class SafetyCallSetupViewModel @Inject constructor(
      * dont le bouton s'intitulait « Enregistrer », donnait toute raison de croire que le contact
      * était acquis. Il ne l'était pas — seul le bouton du bas écrit sur le disque. L'écran s'en
      * sert désormais pour prévenir avant de sortir.
+     *
+     * # v1.27.3 — la comparaison porte sur les champs du FORMULAIRE, pas sur tout l'objet
+     *
+     * Depuis que [save] fusionne le brouillon dans la configuration LIVE, [snapshotInitial] porte
+     * l'état d'exécution réel (séquence, bail, génération, historique) alors que le brouillon garde
+     * celui d'à l'ouverture. Une égalité brute serait donc **fausse juste après un enregistrement**,
+     * et l'écran aurait réclamé de sauver ce qu'il venait de sauver.
+     *
+     * La bonne question n'est pas « ces deux objets sont-ils identiques ? » mais « appliquer les
+     * modifications du formulaire changerait-il quelque chose ? » — et c'est exactement ce que
+     * [SafetyCallConfig.withUserEdits] exprime.
      */
-    val hasUnsavedChanges: Boolean get() = _draft.value != snapshotInitial
+    val hasUnsavedChanges: Boolean
+        get() = snapshotInitial.withUserEdits(_draft.value) != snapshotInitial
 
     private val _events = Channel<Event>(Channel.BUFFERED)
     val events get() = _events.receiveAsFlow()
@@ -114,6 +127,30 @@ class SafetyCallSetupViewModel @Inject constructor(
     val savedEnabled: StateFlow<Boolean> = settings.flow
         .map { it.security.safetyCall.enabled }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+    /**
+     * v1.27.3 — **historique des déclenchements**, du plus récent au plus ancien.
+     *
+     * Lu depuis DataStore et non depuis le brouillon : ce n'est pas une saisie, c'est un fait
+     * passé, et le brouillon ne doit ni le modifier ni le perdre en cas d'abandon.
+     *
+     * 🔴 v1.27.3 (relecture Gemini du 2026-08-06, F-02) — on lit
+     * [SafetyCallConfig.historyWithCurrentCycle], **pas `history`**. Le désarmement de fin de
+     * séquence est écrit dans la transaction du dernier envoi, sans passer par `withActivityReset` :
+     * le cycle achevé n'est donc pas encore archivé. Et comme la remise à zéro d'ouverture
+     * d'application est conditionnée à `enabled` — faux après ce désarmement — elle ne l'archive pas
+     * davantage. Lire `history` seul aurait affiché « aucun déclenchement enregistré » à l'instant
+     * précis où quatre SMS venaient de partir, en contredisant la notification d'à côté.
+     *
+     * ⚠️ Aucune garde de mode leurre ici, **et c'est délibéré** : elle serait redondante et, pire,
+     * elle donnerait l'illusion que cet écran est atteignable sous contrainte. Il ne l'est pas — la
+     * route `SafetyCallSetup` est dépilée dès l'entrée en mode leurre (`AppRoot`), et la section qui
+     * y mène est masquée dans les Réglages. La garde porte sur l'**accès**, pas sur l'affichage,
+     * comme l'exige le motif de défaut dominant de ce dépôt.
+     */
+    val history: StateFlow<List<SafetyCallTriggerRecord>> = settings.flow
+        .map { it.security.safetyCall.historyWithCurrentCycle.asReversed() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
     /**
      * v1.27.2 — l'interrupteur **désactive immédiatement**, et n'active qu'au moment
@@ -247,19 +284,43 @@ class SafetyCallSetupViewModel @Inject constructor(
             // lastActivityAt existant (pas de reset implicite via un simple
             // change de template).
             val wasDisabled = !snapshotInitial.enabled
-            val toPersist = if (current.enabled && wasDisabled) {
+            // 🔴 v1.27.3 — LE BROUILLON N'ÉCRASE PLUS L'ÉTAT D'EXÉCUTION.
+            //
+            // Cette écriture remplaçait `safetyCall` **en entier** par le brouillon, or celui-ci est
+            // hydraté une seule fois à l'ouverture de l'écran et ne porte donc que des valeurs
+            // périmées pour tout ce que l'utilisateur n'édite pas. Enregistrer pendant qu'une
+            // séquence courait :
+            //
+            //  - effaçait `triggeredAt`, `messagesSent` et `claimedAt` — l'alerte en cours
+            //    disparaissait des Réglages et de la notification, sans rien annuler côté worker ;
+            //  - **rembobinait `claimId` et `generation`**, c'est-à-dire exactement l'invariant que
+            //    P-01 et C-04 avaient établi : un worker encore en vol et son successeur pouvaient
+            //    dès lors porter la même identité, et un cycle clos redevenait « courant » ;
+            //  - et depuis v1.27.3, écraserait [SafetyCallConfig.history] avec une copie d'avant
+            //    l'archivage, perdant définitivement la trace d'un déclenchement.
+            //
+            // On fusionne donc les **cinq champs que l'écran édite** dans la configuration LIVE,
+            // relue sous le verrou d'écriture de DataStore. Tout le reste — horloges, séquence,
+            // bail, identité, génération, historique — appartient au moteur, pas au formulaire.
+            //
+            // La frontière elle-même vit dans le domaine ([SafetyCallConfig.withUserEdits]), pas
+            // ici : à cet endroit elle était intestable, et c'est précisément pour ça que le défaut
+            // a vécu si longtemps.
+            var persisted = current
+            settings.update { s ->
+                val live = s.security.safetyCall
+                val merged = live.withUserEdits(current)
                 // v1.10.0 SEC-11 — couple mono+wall au premier arming.
                 // v1.27.2 (audit Codex, SC-03) — même remise à zéro que partout ailleurs. Un
                 // armement part forcément d'un état vide : sans cela, un temps capitalisé ou une
                 // séquence de relances restée ouverte lors d'une activation précédente seraient
                 // rejoués, et le deadman partirait en avance — ou reprendrait ses relances.
-                current.withActivityReset()
-            } else {
-                current
+                // Appliquée à `merged`, donc à l'état LIVE : elle archive la séquence réellement
+                // en cours, et non celle que le brouillon croyait connaître.
+                persisted = if (current.enabled && wasDisabled) merged.withActivityReset() else merged
+                s.copy(security = s.security.copy(safetyCall = persisted))
             }
-            settings.update { s ->
-                s.copy(security = s.security.copy(safetyCall = toPersist))
-            }
+            val toPersist = persisted
             // v1.25.5 — le brouillon vient d'être écrit : il n'y a plus rien à perdre, donc plus
             // de garde de sortie à déclencher.
             snapshotInitial = toPersist

@@ -278,6 +278,10 @@ class SettingsRepository @Inject constructor(
                     claimId = p[K.safetyCallClaimId] ?: 0L,
                     generation = p[K.safetyCallGeneration] ?: 0L,
                     contacts = SafetyCallContactCodec.decode(p[K.safetyCallContactsJson]),
+                    // v1.27.3 — absent d'une config anterieure => liste vide, c'est-a-dire
+                    // « aucun declenchement connu ». Les cycles anterieurs a cette version ne
+                    // seront donc pas dans l'historique : ils n'ont jamais ete archives.
+                    history = SafetyCallHistoryCodec.decode(p[K.safetyCallHistory]),
                     template = enumOr(
                         p,
                         K.safetyCallTemplate,
@@ -406,6 +410,7 @@ class SettingsRepository @Inject constructor(
         this[K.safetyCallClaimId] = s.security.safetyCall.claimId
         this[K.safetyCallGeneration] = s.security.safetyCall.generation
         this[K.safetyCallContactsJson] = SafetyCallContactCodec.encode(s.security.safetyCall.contacts)
+        this[K.safetyCallHistory] = SafetyCallHistoryCodec.encode(s.security.safetyCall.history)
         this[K.safetyCallTemplate] = s.security.safetyCall.template.name
         this[K.safetyCallCustomMessage] = s.security.safetyCall.customMessage
         // v1.10.0 — Mode urgence.
@@ -526,6 +531,9 @@ class SettingsRepository @Inject constructor(
         val safetyCallGeneration = longPreferencesKey("security.safetyCall.generation")
         val safetyCallMessagesSent = intPreferencesKey("security.safetyCall.messagesSent")
         val safetyCallContactsJson = stringPreferencesKey("security.safetyCall.contactsJson")
+
+        /** v1.27.3 — historique des declenchements, encode par [SafetyCallHistoryCodec]. */
+        val safetyCallHistory = stringPreferencesKey("security.safetyCall.history")
         val safetyCallTemplate = stringPreferencesKey("security.safetyCall.template")
         val safetyCallCustomMessage = stringPreferencesKey("security.safetyCall.customMessage")
         // v1.10.0 — Mode urgence (réutilise les contacts Safety call).

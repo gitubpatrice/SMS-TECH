@@ -446,8 +446,14 @@
     <string name="settings_safety_call_armed_chip">Activé</string>
     <string name="settings_safety_call_armed_started">Minuteur lancé : %1$s à %2$s</string>
     <string name="settings_safety_call_im_ok_stops_relances">Safety call désactivé. Plus aucun message ne partira.</string>
-    <string name="settings_safety_call_triggered_state">Alerte envoyée — message %1$d sur %2$d</string>
+    <plurals name="settings_safety_call_triggered_state">
+        <item quantity="one">Alerte envoyée — %1$d message sur %2$d</item>
+        <item quantity="other">Alerte envoyée — %1$d messages sur %2$d</item>
+    </plurals>
     <string name="settings_safety_call_triggered_hint">Les relances partent toutes les 15 minutes. Appuyez sur « Je vais bien » pour les arrêter.</string>
+    <string name="settings_safety_call_triggered_state_sending">Alerte en cours d\'envoi…</string>
+    <string name="settings_safety_call_triggered_hint_done">Séquence terminée : le Safety call s\'est désactivé tout seul. Réactivez-le pour être protégé à nouveau.</string>
+    <string name="settings_safety_call_rearmed">Safety call réactivé. Le minuteur repart de zéro.</string>
     <string name="settings_safety_call_armed_duration">Durée : %1$s</string>
     <string name="settings_safety_call_armed_remaining">Restant : %1$s avant déclenchement</string>
     <string name="settings_safety_call_armed_remaining_imminent">Moins de 2 h avant déclenchement</string>
@@ -492,9 +498,26 @@
     <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Appuyez pour réinitialiser le minuteur.</string>
     <string name="safety_call_warning_body_imminent">Le Safety call se déclenchera dans moins de 2 heures. Appuyez pour réinitialiser maintenant.</string>
     <string name="safety_call_sequence_title">SMS Tech — alerte envoyée</string>
-    <string name="safety_call_sequence_body">%1$d message sur %2$d envoyé à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</string>
+    <plurals name="safety_call_sequence_body">
+        <item quantity="one">%1$d message sur %2$d envoyé à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</item>
+        <item quantity="other">%1$d messages sur %2$d envoyés à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</item>
+    </plurals>
     <string name="safety_call_sequence_title_sending">SMS Tech — envoi de l\'alerte</string>
     <string name="safety_call_sequence_body_sending">L\'alerte est en cours d\'envoi à vos proches. Appuyez si vous allez bien : l\'envoi s\'arrêtera.</string>
+    <string name="safety_call_sequence_title_done">SMS Tech — alerte envoyée, Safety call désactivé</string>
+    <plurals name="safety_call_sequence_body_done">
+        <item quantity="one">%1$d message sur %2$d est parti à vos proches. Le Safety call est maintenant désactivé — appuyez sur « Réactiver » pour le remettre en marche.</item>
+        <item quantity="other">Les %1$d messages sont partis à vos proches. Le Safety call est maintenant désactivé — appuyez sur « Réactiver » pour le remettre en marche.</item>
+    </plurals>
+    <string name="safety_call_notif_action_rearm">Réactiver</string>
+    <string name="safety_call_history_title">Historique des déclenchements</string>
+    <string name="safety_call_history_empty">Aucun déclenchement enregistré.</string>
+    <plurals name="safety_call_history_count">
+        <item quantity="one">%1$d message sur %2$d envoyé</item>
+        <item quantity="other">%1$d messages sur %2$d envoyés</item>
+    </plurals>
+    <string name="safety_call_history_recipients">Vers : %1$s</string>
+    <string name="safety_call_history_stopped">Séquence interrompue — vous avez confirmé aller bien.</string>
     <!-- v1.10.0 — Mode urgence (actif, déclenché par l\'user via hold 3s) -->
     <string name="settings_section_emergency">Mode urgence</string>
     <string name="settings_emergency_title">Mode urgence</string>

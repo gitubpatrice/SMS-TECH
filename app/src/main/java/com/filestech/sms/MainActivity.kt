@@ -514,6 +514,55 @@ class MainActivity : FragmentActivity() {
                 }
                 incomingShare.clear()
             }
+            SafetyCallWarningNotifier.ACTION_SAFETY_CALL_REARM -> {
+                // v1.27.3 — bouton « Réactiver » de la notification de fin de séquence.
+                //
+                // # Pourquoi ce chemin existe
+                //
+                // Le désarmement de fin de séquence est écrit dans la même transaction que la
+                // conclusion du dernier envoi : quand cette notification s'affiche, le Safety call
+                // est **déjà coupé**, et aucune alarme n'est même programmée. Le seul geste que la
+                // notification proposait jusqu'ici — taper son corps — désarme aussi. Elle n'offrait
+                // donc aucun moyen de se remettre sous protection, et son texte ne disait même pas
+                // que la protection était tombée.
+                //
+                // ⚠️ Contrairement au reset, le réarmement est **sans risque depuis le volet** : il
+                // ne peut que remettre la protection en marche. C'est la raison pour laquelle il est
+                // acceptable en action de notification, là où un bouton « Désactiver » aurait offert
+                // à qui tient le téléphone un coupe-circuit du deadman sans le code de l'application.
+                val token = intent.getLongExtra(
+                    SafetyCallWarningNotifier.EXTRA_RESET_TOKEN, 0L,
+                )
+                if (!safetyCallIntentToken.consume(token)) {
+                    Timber.w("MainActivity: rejecting SAFETY_CALL_REARM — invalid/missing token")
+                    incomingShare.clear()
+                    return
+                }
+                lifecycleScope.launch {
+                    runCatching {
+                        settings.update { s ->
+                            val cfg = s.security.safetyCall
+                            // Sans contact, `enabled = true` est un état invalide que le prochain
+                            // tick corrigerait en désarmant (`Result.NoContacts`) — après avoir
+                            // affiché « Activé » entre-temps. On referme le cycle sans armer, et
+                            // l'utilisateur passera par les Réglages, seul endroit où ajouter un
+                            // contact.
+                            val rearmed = cfg.contacts.isNotEmpty()
+                            s.copy(
+                                security = s.security.copy(
+                                    // `withActivityReset` sans `disarmIfTriggered` : il archive la
+                                    // séquence dans [SafetyCallConfig.history], referme le cycle et
+                                    // repart d'un minuteur neuf, en préservant `enabled`.
+                                    safetyCall = cfg.withActivityReset()
+                                        .copy(enabled = rearmed),
+                                ),
+                            )
+                        }
+                        Timber.i("MainActivity: safety call re-armed via notification action")
+                    }
+                }
+                incomingShare.clear()
+            }
             com.filestech.sms.system.receiver.EmergencyShortcutReceiver.ACTION_OPEN_EMERGENCY -> {
                 // v1.14.1 — l'utilisateur a tapé le corps de la notification
                 // persistante du raccourci urgence (PendingIntent setContentIntent
