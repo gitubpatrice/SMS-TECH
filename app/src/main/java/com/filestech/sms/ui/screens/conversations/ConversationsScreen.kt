@@ -1038,11 +1038,21 @@ private fun SwipeableConversationRow(
                         pendingBlock = false
                         onBlock()
                     },
-                    // v1.25.3 — orange « blocage » + texte blanc. Volontairement PAS le rouge
-                    // destructif : ce geste se défait, contrairement à la suppression.
+                    // v1.25.3 — orange « blocage ». Volontairement PAS le rouge destructif : ce
+                    // geste se défait, contrairement à la suppression.
+                    //
+                    // 🔴 v1.27.4 — LE LIBELLÉ N'EST PLUS ÉCRIT EN DUR, IL EST CALCULÉ.
+                    //
+                    // Il était `Color.White`, « parce que le KDoc de BrandBlocked affirmait
+                    // 4,87:1 ». Ce chiffre était FAUX : blanc sur #E65100 donne **3,79:1**, sous le
+                    // seuil AA de 4,5:1 — et un libellé de bouton en 14sp medium est bien du texte
+                    // normal. Le noir donne **5,54:1**. Voir [onBrandContainer], qui explique
+                    // pourquoi passer au noir *en dur* aurait cassé le jumeau rouge.
                     colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
                         containerColor = com.filestech.sms.ui.theme.BrandBlocked,
-                        contentColor = androidx.compose.ui.graphics.Color.White,
+                        contentColor = com.filestech.sms.ui.theme.onBrandContainer(
+                            com.filestech.sms.ui.theme.BrandBlocked,
+                        ),
                     ),
                 ) { Text(stringResource(R.string.action_block)) }
             },

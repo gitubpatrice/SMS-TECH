@@ -82,4 +82,44 @@ class BrandWarningContrastTest {
         // La valeur citée dans le KDoc de [BrandBlocked]. Elle y est désormais vérifiable.
         assertThat(luminance(BrandWarning)).isWithin(0.000_01).of(0.227_08)
     }
+
+    // ------------------------------------------------------------------------------------------
+    // v1.27.4 — [onBrandContainer] : le premier plan est CALCULÉ, plus écrit au site d'appel.
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    fun `le premier plan calcule sur l'orange est le noir`() {
+        // Le blanc était écrit en dur sur deux écrans, sur la foi d'un ratio faux.
+        assertThat(onBrandContainer(BrandBlocked)).isEqualTo(Color.Black)
+    }
+
+    @Test
+    fun `le premier plan calcule sur le rouge destructif reste le blanc`() {
+        // 🔴 LE TEST QUI COMPTE LE PLUS DE CE FICHIER.
+        //
+        // Les deux teintes passent par le MÊME composant de confirmation. Passer l'orange au noir
+        // en dur — la correction naïve — aurait fait tomber le rouge de 5,62:1 à 3,74:1, soit sous
+        // le seuil AA : on aurait réparé un écran en cassant l'autre, sans qu'aucun test existant
+        // ne s'en aperçoive. C'est exactement la forme du jumeau asymétrique.
+        assertThat(onBrandContainer(BrandDanger)).isEqualTo(Color.White)
+    }
+
+    @Test
+    fun `les deux ratios du rouge destructif sont ceux mesures`() {
+        // Figés pour la même raison que ceux de l'orange : un ratio qui ne vit que dans un
+        // commentaire finit par justifier un choix qu'il ne soutient pas.
+        assertThat(contrast(Color.White, BrandDanger)).isWithin(TOLERANCE).of(5.62)
+        assertThat(contrast(Color.Black, BrandDanger)).isWithin(TOLERANCE).of(3.74)
+    }
+
+    @Test
+    fun `le premier plan calcule franchit toujours le seuil AA sur les deux teintes de marque`() {
+        // L'invariant que les sites d'appel ont le droit de supposer. Si une teinte de marque est un
+        // jour retouchée jusqu'à ce que NI le noir NI le blanc ne passent, ce test tombe — et c'est
+        // le seul moment où [onBrandContainer] ne suffit plus, puisqu'elle rend le meilleur des
+        // deux, pas une garantie de seuil. Le KDoc le dit ; ce test le prouve.
+        for (brand in listOf(BrandBlocked, BrandWarning, BrandDanger)) {
+            assertThat(contrast(onBrandContainer(brand), brand)).isGreaterThan(AA_NORMAL_TEXT)
+        }
+    }
 }

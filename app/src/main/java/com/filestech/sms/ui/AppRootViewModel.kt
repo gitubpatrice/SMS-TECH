@@ -8,6 +8,7 @@ import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.system.notifications.NotificationIntentToken
 import com.filestech.sms.system.notifications.PendingNavHolder
+import com.filestech.sms.system.notifications.SafetyCallAckHolder
 import com.filestech.sms.system.share.IncomingShareHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -34,6 +35,13 @@ class AppRootViewModel @Inject constructor(
      * the tap "did nothing".
      */
     val pendingNav: PendingNavHolder,
+    /**
+     * v1.27.4 — exposé pour que [AppRoot] confirme un geste Safety call fait depuis une
+     * notification. Ces gestes réussissaient **en silence** : le tap acquittait l'alerte et
+     * ouvrait la liste des SMS sans un mot, indiscernable d'une notification ratée. Motif du
+     * jumeau asymétrique sur un couple déjà recousu une fois — voir [SafetyCallAckHolder].
+     */
+    val safetyCallAck: SafetyCallAckHolder,
     /**
      * v1.26.1 (audit H2) — authentifie l'intent d'ouverture de conversation avant toute
      * navigation. Voir [isNotificationIntentAuthentic].

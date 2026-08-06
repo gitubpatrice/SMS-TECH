@@ -1,15 +1,27 @@
 package com.filestech.sms.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.filestech.sms.R
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.system.notifications.SafetyCallAckHolder
+import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.navigation.About
 import com.filestech.sms.ui.navigation.Backup
 import com.filestech.sms.ui.navigation.Blocked
@@ -17,11 +29,11 @@ import com.filestech.sms.ui.navigation.Compose
 import com.filestech.sms.ui.navigation.Conversations
 import com.filestech.sms.ui.navigation.Emergency
 import com.filestech.sms.ui.navigation.EmergencySetup
-import com.filestech.sms.ui.navigation.SafetyCallSetup
 import com.filestech.sms.ui.navigation.Lock
 import com.filestech.sms.ui.navigation.Migration
-import com.filestech.sms.ui.navigation.Settings
+import com.filestech.sms.ui.navigation.SafetyCallSetup
 import com.filestech.sms.ui.navigation.ScheduledMessages
+import com.filestech.sms.ui.navigation.Settings
 import com.filestech.sms.ui.navigation.Thread
 import com.filestech.sms.ui.navigation.Vault
 import com.filestech.sms.ui.screens.about.AboutScreen
@@ -416,9 +428,113 @@ fun AppRoot() {
         }
     }
 
+    // v1.27.4 — CONFIRMATION D'UN GESTE SAFETY CALL VENU D'UNE NOTIFICATION.
+    //
+    // # Pourquoi ici, au niveau du graphe, et pas dans un écran
+    //
+    // Le geste est fait dans le volet de notifications ; l'application s'ouvre ensuite sur la
+    // destination courante, qui n'est pas connue d'avance. Brancher la confirmation sur
+    // `ConversationsScreen` — la destination observée par Patrice le 2026-08-06 — aurait produit
+    // exactement le défaut que ce dépôt rencontre le plus : une garde correcte sur LE chemin
+    // testé, muette sur les autres. Quelqu'un qui tape la notification alors que l'application est
+    // déjà ouverte sur les Réglages n'aurait rien vu.
+    //
+    // Rendu en overlay APRÈS le `NavHost`, sur le pattern déjà documenté pour `SplashScreen` :
+    // le `Surface` parent empile ses enfants. Aucun des vingt écrans n'est modifié.
+    //
+    // # Les deux gardes
+    //
+    // ⚠️ `isPanicDecoy` n'est pas une précaution de forme. Une confirmation « Safety call
+    // désactivé » affichée en session leurre révélerait à qui tient le téléphone qu'une fonction
+    // d'alerte existe — c'est la raison d'être de `SafetyCallNotice` et de la garde de navigation
+    // ci-dessus. On **efface** alors le porteur au lieu de le laisser en attente : le garder
+    // ferait surgir la phrase à la sortie du leurre.
+    //
+    // `showLock` fait l'inverse : on ne consomme pas, on attend. La confirmation est vraie et le
+    // TTL de 2 min de [SafetyCallAckHolder] couvre un déverrouillage lent, précisément pour que
+    // l'attente aboutisse au lieu d'avaler le message.
+    SafetyCallAckOverlay(
+        holder = rootViewModel.safetyCallAck,
+        showLock = showLock,
+        isPanicDecoy = isPanicDecoy,
+    )
+
     // Splash de première ouverture, rendu EN OVERLAY au-dessus du graphe (le Surface parent empile
     // ses enfants). N'apparaît qu'à la 1ʳᵉ ouverture (SplashViewModel.shouldShow) ; pour toutes les
     // suivantes, SplashScreen ne rend rien. Il n'est plus une destination du NavHost afin que
     // Conversations reste la racine non-dépilable (cf. startDestination ci-dessus).
     SplashScreen(onFinished = {})
+}
+
+/**
+ * v1.27.4 — affiche la confirmation posée par
+ * [com.filestech.sms.MainActivity] après un geste Safety call fait depuis une notification.
+ *
+ * Composant séparé pour une raison précise : il porte son propre `SnackbarHostState`, aligné en bas
+ * de l'écran par-dessus le graphe. L'application n'a pas d'hôte de snackbar global — chaque écran
+ * `remember` le sien — et en introduire un aurait demandé de toucher les vingt écrans.
+ *
+ * Les libellés sont **ceux des Réglages** pour deux des trois cas, volontairement : le même geste
+ * doit se lire de la même façon selon qu'il est fait dans l'application ou depuis le volet. C'est
+ * la moitié « visible » du jumeau asymétrique que ce lot referme.
+ */
+@Composable
+private fun SafetyCallAckOverlay(
+    holder: SafetyCallAckHolder,
+    showLock: Boolean,
+    isPanicDecoy: Boolean,
+) {
+    val pendingAck by holder.pending.collectAsStateWithLifecycle()
+    val host = remember { SnackbarHostState() }
+
+    // Hissés hors du `LaunchedEffect` : un `stringResource` ne s'appelle pas depuis une coroutine,
+    // et une chaîne résolue au moment du geste ne suivrait pas un changement de langue.
+    val timerResetMessage = stringResource(R.string.settings_safety_call_im_ok_snack)
+    val disarmedMessage = stringResource(R.string.settings_safety_call_im_ok_stops_relances)
+    val rearmedMessage = stringResource(R.string.safety_call_ack_rearmed)
+
+    // ⚠️ DEUX EFFETS, ET C'EST OBLIGATOIRE — un seul ne montrerait jamais rien.
+    //
+    // `holder.consume()` remet le porteur à `null`, donc `pendingAck` change, donc un
+    // `LaunchedEffect` clé sur `pendingAck` **se relance et annule sa coroutine précédente**. Or
+    // `showSnackbar` suspend pendant toute la durée d'affichage : appelé dans cet effet, il serait
+    // annulé par la consommation qui vient juste de le précéder. Le correctif aurait compilé, la
+    // gate serait passée, et la confirmation n'aurait pas paru.
+    //
+    // C'est le motif du chemin mort, dans sa version la plus fourbe : le code s'exécute, mais son
+    // effet est défait par sa propre condition de déclenchement.
+    //
+    // Premier effet : décider. Il consomme et ne fait rien de suspendu.
+    var message by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(pendingAck, showLock, isPanicDecoy) {
+        if (pendingAck == null) return@LaunchedEffect
+        if (isPanicDecoy) {
+            // Voir la note d'appel : en session leurre on efface, on n'attend pas.
+            holder.clear()
+            return@LaunchedEffect
+        }
+        if (showLock) return@LaunchedEffect
+        val consumed = holder.consume() ?: return@LaunchedEffect
+        message = when (consumed.ack) {
+            SafetyCallAckHolder.Ack.TIMER_RESET -> timerResetMessage
+            SafetyCallAckHolder.Ack.DISARMED -> disarmedMessage
+            SafetyCallAckHolder.Ack.REARMED -> rearmedMessage
+        }
+    }
+
+    // Second effet : afficher. Sa clé ne bouge plus pendant l'affichage, donc rien ne l'interrompt.
+    // La remise à `null` a lieu APRÈS le retour de `showSnackbar`, ce qui rend le composant prêt
+    // pour un geste suivant sans jamais réafficher le précédent.
+    LaunchedEffect(message) {
+        val current = message ?: return@LaunchedEffect
+        host.showSnackbar(current)
+        message = null
+    }
+
+    // `fillMaxSize` + alignement bas : l'hôte se place là où tous les autres écrans posent le leur.
+    // Le `Box` ne capte aucun geste — un `SnackbarHost` vide ne dessine rien et ne consomme pas les
+    // touches, donc l'overlay est transparent à l'usage tant qu'aucune confirmation n'est en cours.
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        SmsTechSnackbarHost(host)
+    }
 }

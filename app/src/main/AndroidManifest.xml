@@ -286,6 +286,20 @@
             android:name=".system.notifications.NotificationActionReceiver"
             android:exported="false" />
 
+        <!-- v1.27.4 — `deleteIntent` du reçu de fin de séquence Safety call : le balayage
+             vaut « j'ai vu » et archive le cycle, sans quoi la notification revenait au
+             démarrage à froid suivant.
+
+             `exported="false"` est une condition de sûreté, pas une convention : ce
+             récepteur écrit dans la configuration du deadman. Il est atteignable
+             UNIQUEMENT via le PendingIntent interne posé sur la notification TERMINALE,
+             où la protection est déjà coupée et où acquitter n'affaiblit donc rien. La
+             démonstration complète est dans SafetyCallReceiptDismissReceiver ; ne pas
+             élargir sa portée sans l'avoir lue. -->
+        <receiver
+            android:name=".system.notifications.SafetyCallReceiptDismissReceiver"
+            android:exported="false" />
+
         <!-- v1.12.0 — Raccourci urgence (notification persistante lock-screen).
              `exported=false` : seul SMS Tech peut déclencher les actions
              SHORTCUT_TRIGGER_EMERGENCY / SHORTCUT_DIAL_112 via PendingIntent

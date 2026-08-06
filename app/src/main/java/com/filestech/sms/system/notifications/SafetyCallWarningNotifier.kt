@@ -127,7 +127,24 @@ class SafetyCallWarningNotifier @Inject constructor(
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setOngoing(true) // non swipable — l'user DOIT taper pour reset
+            // v1.27.4 — ⚠️ CE DRAPEAU NE REND PLUS RIEN NON-BALAYABLE, et le commentaire qu'il
+            // portait l'affirmait depuis v1.9.0 : « non swipable — l'user DOIT taper pour reset ».
+            // Depuis Android 14, une notification `ongoing` se balaie. Mesuré sur le S24 (Android
+            // 16) le 2026-08-06.
+            //
+            // Il est conservé parce qu'il reste utile — la notification ne se ferme pas au tap et
+            // reste en tête du volet — mais **on ne s'appuie plus dessus comme sur une garantie**.
+            // Aucun `setDeleteIntent` ici, délibérément : le balayage de l'avertissement est INERTE,
+            // et il doit l'être. Un `deleteIntent` sur cet état donnerait à qui tient le téléphone
+            // un coupe-circuit du deadman en un geste depuis le volet, écran verrouillé, sans le
+            // code de l'application. Le tap, lui, passe par `startActivity` et exige un
+            // déverrouillage.
+            //
+            // Conséquence assumée : un balayage ne change pas l'état, donc la réconciliation
+            // suivante republie l'avertissement. Il **échoue du bon côté** — l'information revient
+            // au lieu d'être perdue. Cf. [SafetyCallReceiptDismissReceiver] pour le seul état où
+            // acquitter par balayage est sûr.
+            .setOngoing(true)
             .setOnlyAlertOnce(true) // pas de re-son à chaque mise à jour heure
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -227,7 +244,12 @@ class SafetyCallWarningNotifier @Inject constructor(
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setOngoing(true)
+            // v1.27.4 — une séquence EN COURS reste accrochée ; un REÇU se balaie.
+            //
+            // Tant que des relances peuvent partir, cette notification est le seul geste facile
+            // pour dire « je vais bien » : elle doit rester en place. Une fois la séquence close,
+            // elle ne demande plus rien — c'est un reçu, et le maintenir accroché n'a plus d'objet.
+            .setOngoing(!notice.terminal)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -247,6 +269,20 @@ class SafetyCallWarningNotifier @Inject constructor(
         // ce qui est tout l'intérêt de laisser cette notification affichée.
         if (notice.triggeredAt > 0L) {
             builder.setWhen(notice.triggeredAt).setShowWhen(true)
+        }
+
+        // v1.27.4 — LE BALAYAGE DU REÇU VAUT « J'AI VU », et seulement du reçu.
+        //
+        // Sans cela, balayer retirait l'affichage sans rien changer, et la notification revenait au
+        // démarrage à froid suivant : le cycle n'était pas archivé, donc `decide` rendait encore
+        // `Sequence(terminal = true)`. Constaté par Patrice le 2026-08-06.
+        //
+        // ⚠️ La garde `notice.terminal` n'est pas une commodité, c'est la condition de sûreté :
+        // hors état terminal, ce même `deleteIntent` serait un coupe-circuit du deadman atteignable
+        // depuis le volet. Toute la démonstration est dans
+        // [SafetyCallReceiptDismissReceiver] — la lire avant d'élargir cette condition.
+        if (notice.terminal) {
+            builder.setDeleteIntent(receiptSeenIntent())
         }
 
         // v1.27.3 — « Réactiver », et SEULEMENT dans l'état terminal.
@@ -317,6 +353,26 @@ class SafetyCallWarningNotifier @Inject constructor(
     )
 
     /**
+     * v1.27.4 — intent de **rejet** du reçu de fin de séquence, posé en `deleteIntent`.
+     *
+     * `getBroadcast` vers un récepteur `exported="false"` : inatteignable depuis l'extérieur, donc
+     * sans nonce — en poser un invaliderait celui du corps et du bouton « Réactiver », puisque
+     * [SafetyCallIntentToken.consume] est mono-usage. Le raisonnement complet, et la raison pour
+     * laquelle ce chemin n'existe que dans l'état terminal, sont dans
+     * [SafetyCallReceiptDismissReceiver].
+     *
+     * Code de requête propre : partager celui du reset ou du réarmement les ferait s'écraser
+     * mutuellement, `FLAG_UPDATE_CURRENT` réécrivant l'intent en place.
+     */
+    private fun receiptSeenIntent(): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        REQUEST_SAFETY_CALL_RECEIPT_SEEN,
+        Intent(context, SafetyCallReceiptDismissReceiver::class.java)
+            .setAction(SafetyCallReceiptDismissReceiver.ACTION_SAFETY_CALL_RECEIPT_SEEN),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /**
      * Annule la notification d'avertissement si présente. Safe à appeler même si aucune notif n'est
      * active.
      */
@@ -375,5 +431,8 @@ class SafetyCallWarningNotifier @Inject constructor(
 
         /** v1.27.3 — code distinct, sans quoi l'intent de réarmement écraserait celui de reset. */
         private const val REQUEST_SAFETY_CALL_REARM = 0x52454152    // 'REAR'
+
+        /** v1.27.4 — code du `deleteIntent` du reçu ; distinct des deux précédents. */
+        private const val REQUEST_SAFETY_CALL_RECEIPT_SEEN = 0x5345454E // 'SEEN'
     }
 }

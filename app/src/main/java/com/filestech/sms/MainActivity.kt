@@ -28,6 +28,7 @@ import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.notifications.PendingNavHolder
+import com.filestech.sms.system.notifications.SafetyCallAckHolder
 import com.filestech.sms.system.notifications.SafetyCallIntentToken
 import com.filestech.sms.system.notifications.SafetyCallWarningNotifier
 import com.filestech.sms.system.share.IncomingShareHolder
@@ -57,6 +58,13 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var appLock: AppLockManager
     @Inject lateinit var incomingShare: IncomingShareHolder
     @Inject lateinit var safetyCallIntentToken: SafetyCallIntentToken
+
+    /**
+     * v1.27.4 — porteur de la confirmation à afficher après un geste Safety call venu d'une
+     * notification. Sans lui, ces gestes réussissaient **en silence** ; le raisonnement complet est
+     * dans [com.filestech.sms.system.notifications.SafetyCallAckHolder].
+     */
+    @Inject lateinit var safetyCallAck: SafetyCallAckHolder
 
     /**
      * v1.27.3 (relecture Codex du 2026-08-06, SC-1273-06) — republication de la notification du
@@ -505,8 +513,14 @@ class MainActivity : FragmentActivity() {
                     return
                 }
                 lifecycleScope.launch {
+                    // v1.27.4 — l'état AVANT l'écriture décide de la phrase à confirmer, et il doit
+                    // être relevé dans la transaction : le lire après, c'est le lire déjà remis à
+                    // zéro par `withActivityReset`. Même relevé que celui du bouton des Réglages,
+                    // qui capture `wasTriggered` avant sa propre mutation.
+                    var wasTriggered = false
                     runCatching {
                         settings.update { s ->
+                            wasTriggered = s.security.safetyCall.isTriggered
                             s.copy(
                                 security = s.security.copy(
                                     // v1.27.2 (audit Codex, SC-03) — le tap sur la notification EST
@@ -520,8 +534,30 @@ class MainActivity : FragmentActivity() {
                                 ),
                             )
                         }
+                        // v1.27.4 — LA CONFIRMATION, et elle est POSÉE APRÈS L'ÉCRITURE.
+                        //
+                        // Elle est dans le bloc de succès, jamais avant : une confirmation émise
+                        // avant l'écriture affirmerait un fait non acquis, exactement le défaut
+                        // P-06 corrigé en v1.27.2 sur cette même fonction — la notification
+                        // annonçait « alerte envoyée » à un instant où rien n'était parti.
+                        safetyCallAck.set(
+                            if (wasTriggered) {
+                                SafetyCallAckHolder.Ack.DISARMED
+                            } else {
+                                SafetyCallAckHolder.Ack.TIMER_RESET
+                            },
+                        )
                         Timber.i("MainActivity: deadman timer reset via warning notif tap")
                     }.onFailure { t ->
+                        // v1.27.4 — une annulation n'est PAS un échec.
+                        //
+                        // `runCatching` capture `CancellationException` comme n'importe quoi
+                        // d'autre. Si l'activité disparaît pendant l'écriture, la brancher sur le
+                        // chemin d'échec lancerait une republication sur un scope déjà mort — donc
+                        // sans effet — tout en faisant croire, en journal, à un échec d'écriture.
+                        // La règle vaut dans tout le dépôt : ne jamais avaler une annulation
+                        // autour d'un appel suspend.
+                        if (t is kotlinx.coroutines.CancellationException) throw t
                         // v1.27.3 (relecture Codex du 2026-08-06, SC-1273-06) — JUMEAU DU CHEMIN DE
                         // RÉARMEMENT, et défaut préexistant.
                         //
@@ -595,11 +631,26 @@ class MainActivity : FragmentActivity() {
                             )
                         }
                         if (rearmed) {
+                            // v1.27.4 — LA FACE JUMELLE, confirmée elle aussi.
+                            //
+                            // Ne confirmer que l'acquittement aurait rouvert le motif que ce lot
+                            // ferme : deux actions de la même notification, l'une qui parle et
+                            // l'autre muette. « Réactiver » est même le geste dont la confirmation
+                            // compte le plus — il remet une protection en marche, et rien à l'écran
+                            // ne le montre puisque l'application s'ouvre sur la liste des SMS.
+                            //
+                            // ⚠️ Dans la branche `else`, on ne confirme RIEN : le réarmement a été
+                            // refusé faute de contact, l'état est préservé, et afficher une
+                            // confirmation serait le pire retour possible — annoncer une protection
+                            // qui n'existe pas.
+                            safetyCallAck.set(SafetyCallAckHolder.Ack.REARMED)
                             Timber.i("MainActivity: safety call re-armed via notification action")
                         } else {
                             Timber.w("MainActivity: rearm refused — no contact configured")
                         }
                     }.onFailure { t ->
+                        // v1.27.4 — jumeau du chemin de reset : une annulation n'est pas un échec.
+                        if (t is kotlinx.coroutines.CancellationException) throw t
                         // v1.27.3 (relecture Codex, SC-1273-06) — le nonce a déjà été consommé et
                         // l'écriture a échoué : sans republication, la notification reste affichée
                         // avec deux surfaces portant un jeton mort, et plus rien n'y répond jamais.

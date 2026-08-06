@@ -287,3 +287,61 @@ internal fun starColor(scheme: ColorScheme): Color {
     val luma = 0.2126f * s.red + 0.7152f * s.green + 0.0722f * s.blue
     return if (luma < 0.5f) BrandStarDark else BrandStarLight
 }
+
+/**
+ * v1.27.4 — noir ou blanc, **celui des deux qui contraste le mieux** avec [background].
+ *
+ * # Pourquoi calculer plutôt qu'écrire la couleur au site d'appel
+ *
+ * Parce qu'on s'est trompé, et pas une fois. Le KDoc de [BrandBlocked] a affirmé pendant plusieurs
+ * versions que « le blanc posé dessus atteint 4,87:1 ». Faux : **3,79:1**, sous le seuil AA de
+ * 4,5:1. Et ce chiffre ne dormait pas dans un commentaire — il a servi à poser du texte blanc sur
+ * cet orange sur **deux écrans**, dont un bouton de confirmation.
+ *
+ * ⚠️ Le piège de la correction naïve, qu'il faut nommer : passer tous ces libellés au noir aurait
+ * **cassé l'autre appelant**. Le même composant de confirmation sert le rouge destructif
+ * [BrandDanger], où les ratios s'inversent — blanc **5,62:1**, noir **3,74:1**. Corriger l'orange en
+ * noir en dur aurait donc fait descendre le rouge sous le seuil : le jumeau asymétrique, produit en
+ * voulant réparer.
+ *
+ * Dériver le premier plan du fond ferme les deux cas d'un coup, et surtout **ferme la classe** :
+ * changer une teinte de marque ne peut plus laisser derrière elle un premier plan illisible, et
+ * aucun futur commentaire n'a plus à énoncer un ratio pour justifier un choix.
+ *
+ * # Ce que la fonction ne prétend pas faire
+ *
+ * Elle garantit le **meilleur des deux**, pas le franchissement du seuil : sur un fond de luminance
+ * moyenne, ni le noir ni le blanc n'atteignent 4,5:1, et elle rendra quand même le moins mauvais.
+ * Elle s'applique donc à des fonds de marque **fixes**, mesurés, dont on sait que l'un des deux
+ * passe. Elle n'est **pas** une réponse aux textes de marque posés sur `surface` : sous Material You,
+ * `surface` dérive du fond d'écran, et aucune couleur ne peut y garantir un ratio.
+ *
+ * Formule WCAG 2.1 complète — pas la luminance approchée de [starColor] et [settingsBlockColor], qui
+ * n'ont à trancher qu'un « clair ou sombre » sans seuil à respecter.
+ */
+internal fun onBrandContainer(background: Color): Color =
+    if (contrastRatioAgainst(background, Color.White) >=
+        contrastRatioAgainst(background, Color.Black)
+    ) {
+        Color.White
+    } else {
+        Color.Black
+    }
+
+/** Ratio de contraste WCAG 2.1 entre deux couleurs opaques. Symétrique. */
+private fun contrastRatioAgainst(a: Color, b: Color): Double {
+    val la = relativeLuminance(a)
+    val lb = relativeLuminance(b)
+    return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
+}
+
+/** Luminance relative WCAG 2.1 d'une couleur sRGB. */
+private fun relativeLuminance(color: Color): Double {
+    fun linearize(channel: Float): Double {
+        val c = channel.toDouble()
+        return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * linearize(color.red) +
+        0.7152 * linearize(color.green) +
+        0.0722 * linearize(color.blue)
+}
