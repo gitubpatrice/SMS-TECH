@@ -87,5 +87,45 @@ class PanicService @Inject constructor(
             context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         }.onFailure { Timber.w(it, "wipe file dirs") }
         runCatching { settings.update { com.filestech.sms.domain.settings.AppSettings() } }
+        // 🔴 v1.28.0 — LE JOURNAL TECHNIQUE DU SAFETY CALL EST DÉTRUIT ICI, ET APRÈS LA REMISE À
+        // ZÉRO DES RÉGLAGES.
+        //
+        // # Pourquoi c'est obligatoire
+        //
+        // Un effacement de contrainte qui laisserait derrière lui un journal nommant les
+        // destinataires — même réduits à une empreinte salée — annulerait sa propre raison d'être.
+        // Le journal contient la chronologie des alertes, donc la preuve qu'un dispositif de
+        // sécurité personnelle existait.
+        //
+        // # Pourquoi APRÈS, et pas dans le bloc d'effacement des répertoires au-dessus
+        //
+        // L'ordre est la seule chose qui rende cette suppression définitive. `AppSettings()` remet
+        // `journalUntilMs` à `0` et le sel à vide, donc `isJournalActive` devient faux : plus aucun
+        // appelant n'écrira. Supprimer AVANT aurait laissé une fenêtre où un worker déjà en vol,
+        // encore sous l'ancien réglage, recrée le fichier juste après sa destruction — et le journal
+        // survivrait à l'effacement panique en toute discrétion.
+        //
+        // ⚠️ Le répertoire est supprimé en entier, pas seulement le fichier : un élagage interrompu
+        // peut laisser un résidu, et une suppression nommant un seul fichier ne le verrait pas.
+        runCatching {
+            File(context.filesDir, SAFETY_CALL_DIAG_DIR).deleteRecursively()
+        }.onFailure { Timber.w(it, "wipe safety call diagnostic journal") }
+    }
+
+    companion object {
+        /**
+         * v1.28.0 — répertoire du journal technique du Safety call, sous `filesDir`.
+         *
+         * ⚠️ **Nom volontairement neutre**, comme le fichier qu'il contient : il ne doit pas nommer
+         * le Safety call. Le mode leurre repose sur l'absence de toute trace désignant le
+         * dispositif ; un répertoire `safety-call/` l'annoncerait à qui inspecte le stockage.
+         *
+         * La valeur est partagée avec le module Hilt qui construit
+         * [com.filestech.sms.data.safetycall.SafetyCallJournalFile] — un seul endroit la déclare,
+         * sans quoi l'effacement panique et l'écrivain pourraient viser deux répertoires
+         * différents. C'est précisément le motif du jumeau asymétrique, et il serait ici invisible :
+         * tout continuerait de fonctionner, seul l'effacement manquerait sa cible.
+         */
+        const val SAFETY_CALL_DIAG_DIR: String = "diag"
     }
 }

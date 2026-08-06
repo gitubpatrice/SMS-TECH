@@ -282,6 +282,10 @@ class SettingsRepository @Inject constructor(
                     // « aucun declenchement connu ». Les cycles anterieurs a cette version ne
                     // seront donc pas dans l'historique : ils n'ont jamais ete archives.
                     history = SafetyCallHistoryCodec.decode(p[K.safetyCallHistory]),
+                    // v1.28.0 — journal technique. Les deux replis valent « éteint » : une clé
+                    // absente donne `0L` et `""`, et `isJournalActive` est faux dans les deux cas.
+                    journalUntilMs = p[K.safetyCallJournalUntilMs] ?: 0L,
+                    journalSalt = p[K.safetyCallJournalSalt].orEmpty(),
                     template = enumOr(
                         p,
                         K.safetyCallTemplate,
@@ -411,6 +415,10 @@ class SettingsRepository @Inject constructor(
         this[K.safetyCallGeneration] = s.security.safetyCall.generation
         this[K.safetyCallContactsJson] = SafetyCallContactCodec.encode(s.security.safetyCall.contacts)
         this[K.safetyCallHistory] = SafetyCallHistoryCodec.encode(s.security.safetyCall.history)
+        // v1.28.0 — journal technique. ⚠️ Ces deux lignes sont le 2ᵉ des TROIS points de câblage
+        // DataStore ; en oublier un fait un champ qui se lit mais ne se persiste pas, ou l'inverse.
+        this[K.safetyCallJournalUntilMs] = s.security.safetyCall.journalUntilMs
+        this[K.safetyCallJournalSalt] = s.security.safetyCall.journalSalt
         this[K.safetyCallTemplate] = s.security.safetyCall.template.name
         this[K.safetyCallCustomMessage] = s.security.safetyCall.customMessage
         // v1.10.0 — Mode urgence.
@@ -534,6 +542,17 @@ class SettingsRepository @Inject constructor(
 
         /** v1.27.3 — historique des declenchements, encode par [SafetyCallHistoryCodec]. */
         val safetyCallHistory = stringPreferencesKey("security.safetyCall.history")
+        /**
+         * v1.28.0 — échéance du journal technique de diagnostic, en horloge murale. `0` = éteint.
+         *
+         * ⚠️ Écrit **en clair** dans le DataStore, comme tout ce fichier — seule la base Room est
+         * chiffrée (SQLCipher). Ce n'est pas un secret : c'est une date. Le sel voisin, lui, n'a de
+         * valeur que couplé au contenu du journal, qui vit dans le même bac à sable.
+         */
+        val safetyCallJournalUntilMs = longPreferencesKey("security.safetyCall.journalUntilMs")
+
+        /** v1.28.0 — sel d'installation pour réduire les destinataires du journal. Vide = éteint. */
+        val safetyCallJournalSalt = stringPreferencesKey("security.safetyCall.journalSalt")
         val safetyCallTemplate = stringPreferencesKey("security.safetyCall.template")
         val safetyCallCustomMessage = stringPreferencesKey("security.safetyCall.customMessage")
         // v1.10.0 — Mode urgence (réutilise les contacts Safety call).

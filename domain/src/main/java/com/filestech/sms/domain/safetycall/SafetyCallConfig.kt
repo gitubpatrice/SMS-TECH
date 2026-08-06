@@ -211,7 +211,54 @@ data class SafetyCallConfig(
      * à toucher au chemin d'envoi.
      */
     val history: List<SafetyCallTriggerRecord> = emptyList(),
+    /**
+     * v1.28.0 — **échéance du journal technique de diagnostic**, en horloge murale. `0` = éteint.
+     *
+     * # Un seul champ porte l'activation ET son expiration, délibérément
+     *
+     * La condition d'origine disait « opt-in strict, et **auto-expirant plutôt que permanent** :
+     * proposer *journaliser les 24 prochaines heures* et non un interrupteur qu'on oublie
+     * d'éteindre ». Deux champs — un booléen et une date — auraient permis l'état incohérent qui
+     * compte : `enabled = true` avec une échéance dépassée. Il aurait fallu que **chaque** lecteur
+     * pense à croiser les deux, et le premier qui l'oublie journalise indéfiniment.
+     *
+     * Avec une seule échéance, il n'existe aucun état à concilier : la question « le journal est-il
+     * actif ? » n'a qu'une réponse, celle de [isJournalActive]. Le repli échoue du bon côté — un
+     * champ absent, mal relu ou remis à zéro vaut **éteint**, jamais « allumé pour toujours ».
+     *
+     * ⚠️ [withActivityReset] ne le touche pas, et c'est voulu : une remise à zéro du minuteur n'est
+     * pas une décision sur le diagnostic. Éteindre le journal à chaque « Je vais bien » le rendrait
+     * inutile précisément sur les cycles qu'on cherche à observer.
+     */
+    val journalUntilMs: Long = 0L,
+    /**
+     * v1.28.0 — sel propre à l'installation, servant à réduire les destinataires dans le journal.
+     *
+     * Vide = pas de sel, donc **pas de journalisation de destinataire** : [isJournalActive] est faux
+     * sans sel valide, et [com.filestech.sms.domain.safetycall.journal.SafetyCallJournalRedactor]
+     * rend de son côté un jeton opaque plutôt qu'une empreinte faible. Deux gardes indépendantes,
+     * parce qu'un sel court transformerait l'empreinte en simple troncature, laquelle collisionne —
+     * et une collision, dans ce journal, se lit comme un doublon d'envoi chez le même proche, soit
+     * exactement le contresens qu'il existe pour écarter.
+     */
+    val journalSalt: String = "",
 ) {
+    /**
+     * v1.28.0 — le journal technique est-il actif à [nowMs] ?
+     *
+     * **Le seul point de vérité.** Aucun appelant ne doit relire `journalUntilMs` pour en décider :
+     * la condition tient en une expression, et la dupliquer serait le motif du jumeau asymétrique
+     * appliqué à une garde de confidentialité.
+     *
+     * Le sel entre dans la condition parce qu'un journal sans sel exploitable ne peut pas tenir sa
+     * promesse — « l'identité sans la divulgation ». Mieux vaut ne rien écrire que d'écrire une
+     * empreinte faible sur une fonction de contrainte.
+     */
+    fun isJournalActive(nowMs: Long = System.currentTimeMillis()): Boolean =
+        journalUntilMs > nowMs &&
+            journalSalt.length >=
+            com.filestech.sms.domain.safetycall.journal.SafetyCallJournalRedactor.SALT_MIN_LENGTH
+
     /**
      * v1.27.2 (audit Codex du 2026-08-05, C-01) — la séquence est-elle **durablement** terminée ?
      *
