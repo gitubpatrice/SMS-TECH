@@ -1,0 +1,7 @@
+Safety Call now keeps a record of its triggers: date, number of messages sent and recipients, in its settings.
+
+The closing notification shows the real time of the alert, states that protection is now off, and offers to turn it back on. It no longer makes a sound when it reappears.
+
+Settings no longer say "On" for a protection that is off.
+
+A warning reminds you that the timer restarts as soon as you open the app.

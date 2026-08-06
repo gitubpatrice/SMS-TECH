@@ -3,6 +3,51 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.3] — 2026-08-06
+
+Le Safety Call a été **testé de bout en bout sur deux téléphones**, avec deux contacts et un délai
+d'une heure : huit envois, quatre par numéro, aucun doublon. Ce chemin — le renouvellement de bail
+entre deux destinataires — n'avait jamais tourné sur un appareil réel. Les défauts corrigés ici ont
+tous été trouvés en le regardant fonctionner, ou par une relecture des correctifs eux-mêmes.
+
+### Safety Call
+- **La fin d'une séquence dit enfin que la protection est tombée.** Le désarmement est écrit dans la
+  transaction du dernier envoi : à la fin d'une alerte, le Safety Call est déjà éteint. La
+  notification, elle, disait seulement « appuyez si vous allez bien » — laissant croire à une
+  protection qui n'existait plus. Elle l'annonce désormais et propose un bouton **Réactiver**.
+- **La notification n'invente plus son heure.** Faute d'appeler `setWhen()`, elle prenait l'heure
+  courante à chaque republication — c'est-à-dire à chaque démarrage à froid du processus — remontait
+  en tête du volet et se laissait prendre pour un nouveau déclenchement. Elle affiche maintenant
+  l'instant réel de l'alerte, et ne bouge plus.
+- **Elle ne sonne plus en se réaffichant.** Le son étant attaché au canal sur Android 8 et suivants,
+  ni `setSilent` ni `setOnlyAlertOnce` ne pouvaient l'en empêcher : le reçu de fin de séquence a
+  désormais son propre canal, en importance basse, sans son ni vibration. L'avertissement, lui, garde
+  son importance haute.
+- **Un historique des déclenchements** dans les réglages : date, nombre de messages effectivement
+  conclus sur le total prévu, destinataires, et la distinction entre une séquence menée à terme et
+  une séquence interrompue. Dix déclenchements conservés. Le mode leurre le masque entièrement, par
+  l'accès et non par l'affichage.
+  - ⚠️ Le libellé dit « adressé à », jamais « reçu par » : l'envoi ne conserve qu'un total
+    envoyés/échoués, et affirmer qu'un contact a été alerté serait un mensonge sur une fonction de
+    sécurité.
+- **Un avertissement avant d'enregistrer** rappelle que le minuteur repart de zéro dès que
+  l'application est ouverte et déverrouillée — et que se servir du téléphone pour autre chose ne
+  compte pas.
+
+### Corrections de mes propres correctifs
+- **Les réglages annonçaient « Activé » sur une protection éteinte.** Élargir la condition du
+  récapitulatif à « activé ou déclenché » a fait afficher la puce « Activé » du composant
+  `SafetyCallArmedRecap` alors que la protection était tombée. L'information de fin de séquence vit
+  désormais dans la branche désactivée, là où elle est vraie.
+- **Enregistrer les réglages ne rembobine plus le moteur.** La sauvegarde écrasait la configuration
+  entière depuis un brouillon figé à l'ouverture de l'écran : elle effaçait l'horodatage de
+  déclenchement et faisait reculer les deux compteurs qui garantissent qu'un worker et son
+  successeur ne portent pas la même identité. Cinq champs viennent du formulaire, tout le reste
+  appartient au moteur.
+- **La décision d'activation se prend sur l'état courant**, et non sur l'instantané d'ouverture de
+  l'écran : enregistrer pendant une séquence pouvait persister une protection « active » sans aucune
+  alarme programmée, tout en confirmant l'activation à l'écran.
+
 ## [1.27.2] — 2026-08-05
 
 Trois relectures indépendantes — Codex, Gemini Pro, et une passe ciblée sur le motif du « jumeau
