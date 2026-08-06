@@ -96,6 +96,48 @@ class SafetyCallReceiptDismissReceiver : BroadcastReceiver() {
                     // par ailleurs (tap, Réglages, réarmement). Ne pas écrire évite de faire
                     // avancer `generation` pour rien, ce qui invaliderait des workers vivants.
                     if (!cfg.isTriggered) return@update s
+                    // 🔴 LA GARDE D'ÉTAT — c'est elle qui rend ce chemin sûr, pas `exported=false`.
+                    //
+                    // (relecture GPT-5.2 du 2026-08-06, SC-DELINT-REPLAY, CONFIRMÉ, CRITIQUE)
+                    //
+                    // # L'attaque
+                    //
+                    // Un `PendingIntent` est une **capacité réutilisable**, pas un message. Une
+                    // application dotée de l'accès *notification listener* lit le
+                    // `StatusBarNotification`, donc `notification.deleteIntent`, et peut en garder
+                    // la référence puis appeler `send()` quand elle veut. `exported="false"` ne
+                    // protège de rien dans ce cas : ce n'est pas elle qui atteint le récepteur,
+                    // c'est le jeton qu'elle détient.
+                    //
+                    // Sans cette garde, la seule condition était `isTriggered`. Un rejeu **pendant
+                    // une séquence en cours** aurait donc désarmé le Safety call et coupé les
+                    // relances restantes — précisément le coupe-circuit du deadman que ce fichier
+                    // prétend interdire. Et l'aggravant : avant ce lot, un tel écouteur pouvait
+                    // masquer la notification (`cancelNotification`, qui ne lève pas le
+                    // `deleteIntent`) mais **pas** toucher à l'état. C'est le `deleteIntent` qui
+                    // ouvrait la porte.
+                    //
+                    // # Pourquoi cette condition exactement
+                    //
+                    // C'est **mot pour mot** celle qui décide de poser le `deleteIntent`, dans
+                    // `SafetyCallNotice.decide` : `messagesDelivered >= TOTAL_MESSAGES`. En écrire
+                    // une variante ici — `isSequenceTerminal`, par exemple, qui n'a pas la même
+                    // définition — aurait créé un jumeau asymétrique entre la surface qui offre le
+                    // geste et le code qui l'exécute.
+                    //
+                    // `!cfg.enabled` s'y ajoute en repli fermé : **on ne coupe jamais par un
+                    // balayage une protection encore armée.** Si les deux se contredisaient un
+                    // jour, le balayage devient inerte et le reçu revient — il échoue du bon côté.
+                    //
+                    // ⚠️ Un jeton de cycle dans les extras ne servirait à RIEN, et c'est
+                    // contre-intuitif : avec `FLAG_UPDATE_CURRENT`, chaque publication réécrit les
+                    // extras du `PendingIntent` **en place**. Un jeton capturé délivrerait donc
+                    // toujours les extras courants, et toute vérification d'égalité passerait. Seule
+                    // une garde sur l'état courant ferme le rejeu.
+                    val sequenceFinished =
+                        cfg.messagesDelivered >= com.filestech.sms.domain.safetycall
+                            .SafetyCallConfig.TOTAL_MESSAGES
+                    if (!sequenceFinished || cfg.enabled) return@update s
                     s.copy(
                         security = s.security.copy(
                             // Exactement le geste du tap du corps : archive le cycle, referme,
