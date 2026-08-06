@@ -206,6 +206,42 @@ L'idée de départ était de sortir **l'historique utilisateur** dans un fichier
 
 L'historique utilisateur reste donc dans DataStore, clé `security.safetyCall.history`.
 
+### Plan de câblage — la seconde moitié, à approuver avant d'écrire
+
+Points d'appel réels, relevés dans le code et non supposés. Le risque est indiqué pour chacun : c'est
+lui qui décide de l'ordre.
+
+| # | Où | Ce qui s'écrit | Risque |
+|---|---|---|---|
+| 1 | `SafetyCallWorker.doWork()`, à l'entrée | `WAKE` : heure nominale, heure réelle, retard, Doze, économiseur | 🟢 additif, hors transaction |
+| 2 | `SafetyCallWorker.doWork()`, quand armé et rien dû | `HEARTBEAT` : temps restant | 🟢 |
+| 3 | `SafetyCallAlarmScheduler`, après programmation | `NEXT` : échéance et motif | 🟢 |
+| 4 | Après `TriggerSafetyCallUseCase` | `TRIGGER`, puis un `SEND` **par destinataire** | 🟠 voir ci-dessous |
+| 5 | Prise et renouvellement du bail | `LEASE` | 🟢 |
+| 6 | `MainActivity.observeRealOpenForSafetyCallReset()` + actions de notification | `RESET` **avec sa cause** | 🟠 chemin déjà réparé 3 fois |
+| 7 | Désarmement de fin de séquence et `withActivityReset` | `DISARM` avec motif | 🟠 même transaction que l'archivage |
+| 8 | `PanicService` (effacement) | `SafetyCallJournalFile.clear()` | 🔴 **obligatoire** |
+| 9 | `SettingsRepository` | opt-in + échéance d'expiration + sel — **3 points de câblage chacun** | 🟢 mais mécanique |
+
+🚫 **Le seul endroit où il ne faut RIEN écrire** : la branche `PanicDecoy` de `doWork()`, en haut du
+worker. Une ligne de journal y serait une trace produite pendant une session sous contrainte — le
+contraire du leurre. Le worker y saute déjà son tick sans rien afficher ni écrire ; le journal doit
+faire de même.
+
+⚠️ **Le point 4 est le seul qui demande de la prudence, et il faut le dire avant de commencer.** Le
+résultat **par destinataire** est la ligne la plus précieuse du journal — c'est la seule preuve
+qu'aucun proche n'a reçu deux fois la même relance. Or `sendToContacts` ne conserve qu'un total
+`sent`/`failed`. L'obtenir suppose que le cas d'usage **rende** davantage d'information.
+
+C'est faisable sans violer la condition 3 : **enrichir une valeur de retour n'est pas écrire dans la
+transaction d'envoi.** La limite à ne pas franchir est de persister quoi que ce soit de plus dans la
+transaction de conclusion. Si l'enrichissement du retour s'avérait impossible sans y toucher, alors le
+journal se contente de l'agrégat — et le dit, plutôt que de laisser croire à une preuve par
+destinataire qu'il n'a pas.
+
+⚠️ Les points 6 et 7 touchent des chemins **déjà réparés trois fois le 2026-08-06**, chacune de ces
+réparations ayant ouvert autre chose. Les traiter en dernier, un par un, avec la gate entre chaque.
+
 ### À savoir avant d'implémenter
 
 `SettingsRepository` écrit les réglages **en clair** dans le protobuf DataStore — y compris
