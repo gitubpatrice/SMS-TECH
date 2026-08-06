@@ -6,9 +6,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -493,42 +491,63 @@ private fun SafetyCallAckOverlay(
     val disarmedMessage = stringResource(R.string.settings_safety_call_im_ok_stops_relances)
     val rearmedMessage = stringResource(R.string.safety_call_ack_rearmed)
 
-    // ⚠️ DEUX EFFETS, ET C'EST OBLIGATOIRE — un seul ne montrerait jamais rien.
+    // ⚠️ L'ORDRE EST TOUT : ON AFFICHE, PUIS ON CONSOMME. Jamais l'inverse.
     //
-    // `holder.consume()` remet le porteur à `null`, donc `pendingAck` change, donc un
-    // `LaunchedEffect` clé sur `pendingAck` **se relance et annule sa coroutine précédente**. Or
-    // `showSnackbar` suspend pendant toute la durée d'affichage : appelé dans cet effet, il serait
-    // annulé par la consommation qui vient juste de le précéder. Le correctif aurait compilé, la
-    // gate serait passée, et la confirmation n'aurait pas paru.
+    // # Le premier piège — consommer avant d'afficher n'affiche rien
     //
-    // C'est le motif du chemin mort, dans sa version la plus fourbe : le code s'exécute, mais son
-    // effet est défait par sa propre condition de déclenchement.
+    // `holder.consume()` remet le porteur à `null`, donc `pendingAck` change, donc cet effet
+    // **se relance et annule sa coroutine précédente**. Or `showSnackbar` suspend pendant toute la
+    // durée d'affichage. Consommer d'abord, c'est donc annuler l'affichage qu'on vient de décider :
+    // le code s'exécute, la gate passe, et rien ne paraît. Motif du chemin mort, version fourbe —
+    // l'effet est défait par sa propre condition de déclenchement.
     //
-    // Premier effet : décider. Il consomme et ne fait rien de suspendu.
-    var message by remember { mutableStateOf<String?>(null) }
+    // # Le second piège — un état local ne survit pas à une rotation
+    //
+    // (relecture Gemini du 2026-08-06, SC-ACK-LOSS, CONFIRMÉ) Une première correction scindait ce
+    // bloc en deux effets et gardait la phrase dans un `remember`. Ça marchait, sauf sur recréation
+    // d'activité : rotation, pliage, bascule de thème, changement de taille de police. Le porteur
+    // avait déjà été consommé, `remember` était perdu, et la confirmation disparaissait
+    // **définitivement** — rétablissant exactement le silence que ce lot corrige.
+    //
+    // La relecture proposait `rememberSaveable`. Ne pas le suivre : ce serait ajouter un second
+    // dépositaire de la même information, à durée de vie différente de celle du porteur, donc
+    // capable de ressortir une phrase que le TTL de 2 minutes aurait dû périmer. Deux sources de
+    // vérité pour un même fait, c'est le doublon que la doctrine interdit.
+    //
+    // # Ce que l'ordre inverse donne, sans aucun état local
+    //
+    // Le porteur reste la seule source. Il n'est vidé qu'une fois la phrase réellement affichée :
+    //
+    //  - rotation en cours d'affichage → le porteur est encore plein, la nouvelle activité réaffiche ;
+    //  - processus tué → le porteur meurt avec lui, et c'est correct : plus personne n'attend ;
+    //  - verrou levé en cours de route → l'effet est relancé, l'affichage reprend après
+    //    déverrouillage ;
+    //  - péremption → tranchée par le porteur lui-même, pas par une copie.
     LaunchedEffect(pendingAck, showLock, isPanicDecoy) {
-        if (pendingAck == null) return@LaunchedEffect
+        val current = pendingAck ?: return@LaunchedEffect
         if (isPanicDecoy) {
             // Voir la note d'appel : en session leurre on efface, on n'attend pas.
             holder.clear()
             return@LaunchedEffect
         }
         if (showLock) return@LaunchedEffect
-        val consumed = holder.consume() ?: return@LaunchedEffect
-        message = when (consumed.ack) {
-            SafetyCallAckHolder.Ack.TIMER_RESET -> timerResetMessage
-            SafetyCallAckHolder.Ack.DISARMED -> disarmedMessage
-            SafetyCallAckHolder.Ack.REARMED -> rearmedMessage
+        // La péremption est tranchée ici parce qu'on ne consomme plus en tête. Effacer plutôt que
+        // laisser en place : un porteur périmé qui resterait plein rejouerait cette évaluation à
+        // chaque recomposition, sans jamais rien afficher.
+        if (current.isExpired()) {
+            holder.clear()
+            return@LaunchedEffect
         }
-    }
-
-    // Second effet : afficher. Sa clé ne bouge plus pendant l'affichage, donc rien ne l'interrompt.
-    // La remise à `null` a lieu APRÈS le retour de `showSnackbar`, ce qui rend le composant prêt
-    // pour un geste suivant sans jamais réafficher le précédent.
-    LaunchedEffect(message) {
-        val current = message ?: return@LaunchedEffect
-        host.showSnackbar(current)
-        message = null
+        host.showSnackbar(
+            when (current.ack) {
+                SafetyCallAckHolder.Ack.TIMER_RESET -> timerResetMessage
+                SafetyCallAckHolder.Ack.DISARMED -> disarmedMessage
+                SafetyCallAckHolder.Ack.REARMED -> rearmedMessage
+            },
+        )
+        // Affiché : le porteur peut être vidé. Cette ligne re-clé l'effet, mais elle est la
+        // dernière — il n'y a plus rien à annuler.
+        holder.consume()
     }
 
     // `fillMaxSize` + alignement bas : l'hôte se place là où tous les autres écrans posent le leur.
