@@ -1,3 +1,14 @@
+> ⚠️ **CE FICHIER EST INCOMPLET À DESSEIN — DESTINÉ À GEMINI, VIA L'API, PAS À CODEX.**
+>
+> Il annonce « le diff ci-dessous » et ce diff **n'est PAS dans le fichier** : il est concaténé à
+> l'envoi (`git diff` + les fichiers neufs), parce que Gemini n'a pas accès au dépôt.
+>
+> Le coller tel quel dans un relecteur produit une revue vide. **C'est arrivé le 2026-08-06** :
+> ce fichier a été collé dans Codex, qui a correctement refusé de spéculer et n'a rendu aucun
+> constat — une passe d'audit perdue.
+>
+> **Pour Codex, utiliser `PROMPT-CODEX-V1273.md`**, qui suppose l'accès au dépôt.
+
 # Relecture adversariale — SMS Tech v1.27.3 : état terminal du Safety call + historique des déclenchements
 
 Tu es relecteur de code Android/Kotlin senior. Tu relis un **lot de correctifs écrit aujourd'hui**
