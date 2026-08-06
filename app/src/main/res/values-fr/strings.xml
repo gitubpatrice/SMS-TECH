@@ -509,6 +509,8 @@
         <item quantity="other">Les %1$d messages sont partis à vos proches. Le Safety call est maintenant désactivé — appuyez sur « Réactiver » pour le remettre en marche.</item>
     </plurals>
     <string name="safety_call_notif_action_rearm">Réactiver</string>
+    <string name="safety_call_reset_warning_title">Le minuteur repart de zéro quand vous ouvrez SMS Tech</string>
+    <string name="safety_call_reset_warning_body">Une fois le Safety call activé, le minuteur se remet à zéro dès que vous ouvrez cette application et la déverrouillez. Utiliser votre téléphone pour autre chose ne change rien : si vous n\'ouvrez pas SMS Tech pendant la durée choisie, l\'alerte part vers vos contacts.</string>
     <string name="safety_call_history_title">Historique des déclenchements</string>
     <string name="safety_call_history_empty">Aucun déclenchement enregistré.</string>
     <plurals name="safety_call_history_count">

@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.screens.safetycall
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,12 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,6 +70,7 @@ import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.theme.BrandBlue
+import com.filestech.sms.ui.theme.BrandWarning
 import java.text.DateFormat
 import java.util.Date
 
@@ -219,6 +223,10 @@ fun SafetyCallSetupScreen(
                 onSelectTemplate = viewModel::setTemplate,
                 onCustomMessageChange = viewModel::setCustomMessage,
             )
+            Spacer(Modifier.size(8.dp))
+            // v1.27.3 — l'avertissement se lit JUSTE AVANT le geste qui engage. Demande de Patrice
+            // le 2026-08-06, après que deux de ses propres tests se soient arrêtés là-dessus.
+            TimerResetWarning()
             Spacer(Modifier.size(8.dp))
             // v1.10.0 — BrandBlue + texte blanc (identité marque), demande
             // user 2026-05-21. Cohérent avec Mode urgence Setup.
@@ -545,6 +553,62 @@ private fun TemplateOption(label: String, selected: Boolean, onClick: () -> Unit
         }
         Spacer(Modifier.size(12.dp))
         Text(label, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * v1.27.3 — **le comportement le plus surprenant de la fonction, dit à l'endroit où il compte.**
+ *
+ * # Pourquoi ce bandeau existe
+ *
+ * Rien dans l'application n'expliquait que le minuteur repart de zéro à chaque ouverture. Patrice
+ * l'a découvert en testant : deux de ses essais du 2026-08-05 se sont arrêtés d'eux-mêmes parce qu'il
+ * avait rouvert SMS Tech entre-temps, et il a d'abord cru à un défaut.
+ *
+ * # Le texte est exact, et sa précision n'est pas cosmétique
+ *
+ * La remise à zéro exige **deux** conditions, pas une : `repeatOnLifecycle(RESUMED)` **et** un état
+ * de verrou `Unlocked`/`Disabled` (`MainActivity.observeRealOpenForSafetyCallReset`). Donc ouvrir et
+ * **déverrouiller** — arriver sur l'écran de verrouillage sans entrer son code ne remet rien à zéro.
+ *
+ * ⚠️ Et surtout : **utiliser le téléphone pour autre chose ne compte pas.** Une formulation du genre
+ * « si vous touchez à l'application » laisserait croire qu'il faut cesser de se servir de son
+ * téléphone, ce qui rendrait la fonction inutilisable. Sur une fonction de sécurité, un avertissement
+ * approximatif est pire que pas d'avertissement.
+ *
+ * La dernière phrase énonce la conséquence — l'alerte part — parce que c'est elle qui donne son sens
+ * à tout le reste.
+ */
+@Composable
+private fun TimerResetWarning() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(BrandWarning, shape = RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.WarningAmber,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.size(8.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.safety_call_reset_warning_title),
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Spacer(Modifier.size(4.dp))
+            Text(
+                text = stringResource(R.string.safety_call_reset_warning_body),
+                // 0.85f et pas moins : sous cette valeur le corps du texte tombe sous le seuil AA
+                // de 4,5:1 sur cet orange, et c'est précisément la phrase qui porte l'information.
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }
 

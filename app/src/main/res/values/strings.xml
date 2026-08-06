@@ -519,6 +519,8 @@
         <item quantity="other">All %1$d messages were sent to your contacts. Safety call is now off — tap “Turn back on” to arm it again.</item>
     </plurals>
     <string name="safety_call_notif_action_rearm">Turn back on</string>
+    <string name="safety_call_reset_warning_title">The timer restarts when you open SMS Tech</string>
+    <string name="safety_call_reset_warning_body">Once Safety call is on, the timer restarts as soon as you open this app and unlock it. Using your phone for anything else makes no difference: if you do not open SMS Tech within the chosen delay, the alert goes out to your contacts.</string>
     <string name="safety_call_history_title">Trigger history</string>
     <string name="safety_call_history_empty">No trigger recorded.</string>
     <plurals name="safety_call_history_count">

@@ -40,6 +40,19 @@ internal val BrandDanger = Color(0xFFC62828)
 internal val BrandBlocked = Color(0xFFE65100)
 
 /**
+ * v1.27.3 — orange d'**avertissement**, pour prévenir sans alarmer.
+ *
+ * Même teinte que [BrandBlocked], et **délibérément un alias plutôt qu'une seconde valeur** : c'est
+ * la même famille de message — « attention, mais rien d'irréversible » — et son contraste est déjà
+ * démontré au-dessus du seuil AA pour du texte blanc. Dupliquer le littéral aurait laissé les deux
+ * dériver l'un de l'autre au premier ajustement.
+ *
+ * Le nom existe parce que l'usage n'est pas le blocage : un lecteur du bandeau d'avertissement du
+ * Safety call ne doit pas avoir à se demander pourquoi il lit « Blocked ».
+ */
+internal val BrandWarning = BrandBlocked
+
+/**
  * v1.27.2 — vert d'**état actif**, pour dire « cette protection tourne réellement ».
  *
  * Deux teintes, parce qu'un seul vert ne peut pas être lisible sur fond clair ET sur fond sombre.
