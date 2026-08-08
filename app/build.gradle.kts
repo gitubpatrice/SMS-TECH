@@ -12,15 +12,26 @@ plugins {
     alias(libs.plugins.baselineprofile)
 }
 
-// versionCode = nombre de commits si dispo, sinon 1
-val gitCommitCount: Int by lazy {
-    runCatching {
-        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
-            .directory(rootProject.projectDir)
-            .redirectErrorStream(true)
-            .start()
-        process.inputStream.bufferedReader().readText().trim().toInt()
-    }.getOrDefault(1)
+// La version publiee vient de `version.properties`, versionne a la racine — jamais de l'historique.
+//
+// Elle etait derivee de `git rev-list --count HEAD`. Deux defauts, mesures le 2026-08-08 :
+//   - un rebase / squash / une greffe d'historique fait BAISSER le versionCode, et Android refuse
+//     alors d'installer par-dessus : toutes les installations existantes cessent de se mettre a jour ;
+//   - hors depot git (archive source, tarball), `runCatching` retombait sur `getOrDefault(1)` et
+//     produisait versionCode=1 **en silence**. Verifie : `git archive` + `assembleRelease` donnait 1.
+//
+// Le repli silencieux etait le pire des deux : rien dans la sortie de build ne le signalait.
+// Ici, un fichier absent ou malforme fait ECHOUER la configuration, bruyamment.
+val versionProps = Properties().apply {
+    val f = rootProject.file("version.properties")
+    require(f.exists()) { "version.properties absent a la racine du projet." }
+    f.inputStream().use { load(it) }
+}
+val appVersionCode: Int = requireNotNull(versionProps.getProperty("versionCode")?.trim()?.toIntOrNull()) {
+    "versionCode absent ou non entier dans version.properties."
+}
+val appVersionName: String = requireNotNull(versionProps.getProperty("versionName")?.trim()?.ifBlank { null }) {
+    "versionName absent ou vide dans version.properties."
 }
 
 val keystoreProps = Properties().apply {
@@ -39,8 +50,8 @@ android {
         applicationId = "com.filestech.sms"
         minSdk = 26
         targetSdk = 35
-        versionCode = gitCommitCount.coerceAtLeast(1)
-        versionName = "1.27.4"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "com.filestech.sms.HiltTestRunner"
         vectorDrawables { useSupportLibrary = true }
