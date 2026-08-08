@@ -1,12 +1,12 @@
 [versions]
 # Build
 agp = "8.13.2"
-kotlin = "2.3.20"
+kotlin = "2.4.10"
 ksp = "2.3.9"
 java = "17"
 
 # AndroidX / Compose
-compose-bom = "2026.06.00"
+compose-bom = "2026.06.01"
 # core-ktx/lifecycle plafonnés au dernier palier compatible AGP 8.13 / compileSdk 36.
 # core-ktx 1.19 et lifecycle 2.11 exigent AGP 9.1 + compileSdk 37 (hors périmètre).
 core-ktx = "1.18.0"
