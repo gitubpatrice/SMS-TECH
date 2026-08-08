@@ -55,6 +55,11 @@ class EagerInjectionGuardTest {
             "com.filestech.sms.system.notifications.SafetyCallIntentToken",
             "com.filestech.sms.system.notifications.PendingNavHolder",
             "com.filestech.sms.data.local.db.DatabaseRepairState", // a StateFlow holder, no DAO
+            // v1.27.4 — same shape as PendingNavHolder and IncomingShareHolder above:
+            // `@Inject constructor()` with no arguments, a MutableStateFlow and nothing else.
+            // It cannot reach a DAO because it depends on nothing. Added here rather than
+            // wrapped in Lazy, which is the decision this test asks for.
+            "com.filestech.sms.system.notifications.SafetyCallAckHolder",
             "kotlinx.coroutines.CoroutineDispatcher",
         ),
         "com.filestech.sms.system.receiver.SmsDeliverReceiver" to setOf(
