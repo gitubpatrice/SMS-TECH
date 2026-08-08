@@ -88,14 +88,31 @@ class DatabaseFactory @Inject constructor(
             // `adb install -r` over a v1 install upgrades transparently without re-prompting
             // the user for setup or re-importing SMS.
             //
-            // v1.2.7 audit Q3 NOTE : `fallbackToDestructiveMigrationOnDowngrade(false)` →
-            // un user qui installerait un APK plus ANCIEN sur une DB plus récente
-            // crashera à l'ouverture (IllegalStateException Room). Politique assumée :
-            // on préfère un crash visible (qui pousse à réinstaller la bonne version) plutôt
-            // qu'un wipe silencieux de toutes les conversations. La documentation utilisateur
-            // précise que les downgrades ne sont pas supportés (cf. SECURITY.md).
+            // ⚠️ LA LIGNE `fallbackToDestructiveMigrationOnDowngrade(false)` A ÉTÉ RETIRÉE ICI.
+            // NE PAS LA REMETTRE. Elle faisait exactement le contraire de ce que son commentaire
+            // annonçait, et ce commentaire est reproduit ci-dessous pour que personne ne refasse
+            // le raisonnement :
+            //
+            //   « un user qui installerait un APK plus ANCIEN sur une DB plus récente crashera à
+            //     l'ouverture (IllegalStateException Room). Politique assumée : on préfère un crash
+            //     visible […] plutôt qu'un wipe silencieux de toutes les conversations. »
+            //
+            // L'intention est la bonne. L'appel faisait l'inverse. Depuis Room 2.7, la méthode sans
+            // argument est dépréciée et une surcharge `(dropAllTables: Boolean)` l'a remplacée :
+            // **l'appeler ARME la migration destructive**, et le booléen ne dit que s'il faut vider
+            // aussi les tables inconnues de Room. `(false)` ne veut donc pas dire « interdire », il
+            // veut dire « détruire seulement mes tables à moi » — c'est-à-dire toutes les
+            // conversations. Avec `allowBackup=false`, elles n'ont pas d'autre exemplaire.
+            //
+            // Vérifié au désassemblage de room-runtime 2.8.4, pas de mémoire :
+            //   javap -p 'androidx/room/RoomDatabase$Builder.class'
+            //   → fallbackToDestructiveMigrationOnDowngrade()
+            //   → fallbackToDestructiveMigrationOnDowngrade(boolean)   ← c'est celle-ci qu'on appelait
+            //
+            // Sans aucun appel, Room lève `IllegalStateException` sur un downgrade : le crash visible
+            // que la politique demandait depuis le début. Le même piège a été trouvé et corrigé dans
+            // Agenda Tech le 2026-08-08 ; il vient du changement de signature, pas d'une inattention.
             .addMigrations(*Migrations.ALL)
-            .fallbackToDestructiveMigrationOnDowngrade(false)
             .build()
         // ⚠️ NE JAMAIS APPELER `raw.wipe()` ICI — c'était le défaut SEC-CRIT corrigé en v1.24.0.
         //
