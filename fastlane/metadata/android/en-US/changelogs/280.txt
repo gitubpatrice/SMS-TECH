@@ -1,0 +1,5 @@
+An important database fix.
+
+Installing an older build of SMS Tech over a newer database silently reset that database. The app now shows its recovery screen instead of starting over empty.
+
+Your SMS messages were never at stake — Android keeps its own copy. What disappeared without a word was the app's own data: scheduled messages, Safety Call history, per-conversation settings.

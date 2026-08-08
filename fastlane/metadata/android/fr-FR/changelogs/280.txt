@@ -1,0 +1,5 @@
+Correction importante sur la base de donnees.
+
+Installer une version plus ancienne de SMS Tech par-dessus une base plus recente reinitialisait cette base en silence. L'application affiche desormais son ecran de recuperation au lieu de repartir a vide.
+
+Vos SMS eux-memes n'etaient pas en jeu : Android en garde sa propre copie. Ce qui disparaissait sans un mot, ce sont les donnees propres a l'application — messages programmes, historique du Safety Call, reglages de conversation.
