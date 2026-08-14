@@ -1,0 +1,5 @@
+Nothing changes in the app.
+
+The previous release was meant to let anyone rebuild the published APK and obtain the very same file. F-Droid's check failed by a hair: four small native libraries differed, because the tool that slims them down is not quite the same from one machine to the next. They are now copied verbatim instead.
+
+The code itself already matched bit for bit.

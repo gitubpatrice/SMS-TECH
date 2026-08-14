@@ -1,0 +1,5 @@
+Rien ne change dans l'application.
+
+La version précédente devait permettre à quiconque de reconstruire l'APK publié et d'obtenir le même fichier. La vérification de F-Droid a échoué de peu : quatre petites bibliothèques natives différaient, parce que l'outil qui les allège n'est pas exactement le même d'une machine à l'autre. Elles sont désormais recopiées telles quelles.
+
+Le code, lui, était déjà identique au bit près.

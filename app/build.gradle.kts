@@ -136,6 +136,17 @@ android {
     }
 
     packaging {
+        // Reproductibilité. AGP retire les symboles de debug des bibliothèques natives avec
+        // l'outil `strip` du NDK — et deux NDK différents ne produisent pas les mêmes octets.
+        // C'est ce qui faisait échouer la vérification F-Droid en 1.27.5 : `classes.dex` était
+        // identique, seuls les quatre `libdatastore_shared_counter.so` (AndroidX DataStore)
+        // différaient, parce que leur buildserver n'a pas le même NDK que la machine de release.
+        //
+        // En conservant les symboles, AGP ne strip pas : le fichier est recopié tel quel depuis
+        // l'AAR, donc identique partout. Coût : quelques kilo-octets.
+        jniLibs {
+            keepDebugSymbols += "**/libdatastore_shared_counter.so"
+        }
         resources {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",
