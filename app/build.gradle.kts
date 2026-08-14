@@ -40,6 +40,19 @@ val keystoreProps = Properties().apply {
 }
 
 android {
+    // AGP glisse par defaut, dans le bloc de signature de l'APK, la liste CHIFFREE de nos
+    // dependances, a destination de la console Play. Aucune application Files Tech n'est
+    // publiee sur Play : ce bloc ne sert rien ici, et un blob illisible n'a pas sa place dans
+    // un binaire dont tout l'argument est d'etre verifiable. Le scanner F-Droid le refuse
+    // (« found extra signing block 'Dependency metadata' »).
+    //
+    // Mesure sur Agenda Tech : 9085 octets retires. Constate present sur TOUTES les apps du
+    // portefeuille le 2026-08-14 — il ne pouvait pas etre vu plus tot, car les controles
+    // n'analysaient que des APK NON SIGNES, qui n'ont pas de bloc de signature.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
     namespace = "com.filestech.sms"
     // compileSdk 36 requis par les androidx récents (core-ktx 1.16+, lifecycle 2.11,
     // compose-bom 2026.x, activity 1.13). targetSdk reste 35 : on compile contre
