@@ -1,0 +1,5 @@
+Rien ne change dans l'application. Cette version change ce que contient le fichier que vous installez.
+
+L'outil de compilation de Google glissait dans chaque APK la liste chiffrée de nos bibliothèques, destinée à sa console Play. SMS Tech n'est pas sur Play, et un bloc illisible n'a pas sa place dans une application qui vous demande de lui faire confiance. Il est retiré.
+
+Le build devient aussi reproductible : chacun peut reconstruire cet APK et obtenir le même fichier, octet pour octet.

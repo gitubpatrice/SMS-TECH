@@ -1,0 +1,5 @@
+Nothing changes in the app. This release changes what is inside the file you install.
+
+Google's build tooling was placing an encrypted list of our libraries inside every APK, meant for its Play console. SMS Tech is not on Play, and an unreadable block has no place in an app that asks you to trust it. It is gone.
+
+The build is also reproducible now: anyone can rebuild this APK from the source and obtain the very same file, byte for byte.
