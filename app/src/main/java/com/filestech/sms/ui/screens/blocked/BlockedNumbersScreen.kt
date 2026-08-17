@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -68,6 +70,11 @@ fun BlockedNumbersScreen(onBack: () -> Unit, viewModel: BlockedNumbersViewModel 
     /** v1.25.3 (audit M21) — numéro en attente de confirmation de déblocage. */
     var confirmUnblockFor by remember { mutableStateOf<String?>(null) }
 
+    // Lu une fois : le bouton flottant s'en sert DEUX fois — comme nom accessible et comme libellé
+    // visible. Deux appels diraient la même chose, mais laisseraient croire que les deux valeurs
+    // peuvent diverger, alors que c'est précisément ce qu'il ne faut pas. Voir le bouton plus bas.
+    val ajouterUnNumero = stringResource(R.string.blocked_add)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -80,10 +87,29 @@ fun BlockedNumbersScreen(onBack: () -> Unit, viewModel: BlockedNumbersViewModel 
             )
         },
         floatingActionButton = {
+            // 🔴🔴 **Le nom accessible est posé sur le BOUTON. Sans lui, ce bouton était MUET.**
+            //
+            // `ExtendedFloatingActionButton` de material3 1.4.0 (BOM Compose 2026.06.00) enveloppe
+            // son emplacement `text` dans un `clearAndSetSemantics` : le libellé est **dessiné** et
+            // **absent de l'arbre de sémantique fusionné**, celui que lit un lecteur d'écran.
+            //
+            // Mesuré sur le S9 le 2026-08-17, sur la **1.27.3 publiée** : ce nœud portait
+            // `clickable=true`, `text=""`, `content-desc=""`, et `NAF="true"` — la marque que
+            // `uiautomator` pose lui-même sur un nœud cliquable sans nom. TalkBack annonçait donc
+            // « bouton », sans dire lequel, sur le seul moyen d'ajouter un numéro à la liste.
+            //
+            // ⚠️ `contentDescription = null` sur l'icône reste correct et le demeure : une icône
+            // décorative ne se nomme pas, et la nommer ici ajouterait une **seconde** source de
+            // libellé — donc une annonce en double le jour où material3 cesse d'effacer le slot, et
+            // un arrêt de focus parasite si son `mergeDescendants` change. La propriété appartient à
+            // l'**action**, pas au pictogramme.
+            //
+            // Trouvé en portant Notes Tech, qui écrivait exactement le même code.
             ExtendedFloatingActionButton(
-                text = { Text(stringResource(R.string.blocked_add)) },
+                text = { Text(ajouterUnNumero) },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 onClick = { showDialog = true },
+                modifier = Modifier.semantics { contentDescription = ajouterUnNumero },
             )
         },
     ) { padding ->
