@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'fix/**', 'feat/**' ]
     # 🔴 v1.27.2 (2026-08-05) — LES TAGS DECLENCHENT LA CI, eux aussi.
     #
     # Sans cette ligne, un tag ne verifiait RIEN par lui-meme. Le 2026-08-05, la sequence a ete :
