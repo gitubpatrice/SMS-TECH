@@ -1,0 +1,3 @@
+Accessibility fix.
+
+- On the blocked-numbers screen, the "Add a number" floating button was silent to a screen reader: TalkBack announced "button" without saying which, on the only way to add a number to the list. Material 3 draws that button's label but keeps it out of the accessibility tree, so the name is now set on the button itself. Measured on a device before and after.

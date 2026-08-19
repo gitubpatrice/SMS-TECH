@@ -1,0 +1,3 @@
+Correctif d'accessibilite.
+
+- Sur l'ecran des numeros bloques, le bouton flottant « Ajouter un numero » etait muet pour un lecteur d'ecran : TalkBack annoncait « bouton » sans dire lequel, sur le seul moyen d'ajouter un numero a la liste. Material 3 dessine le libelle de ce bouton mais le garde hors de l'arbre d'accessibilite ; le nom est desormais pose sur le bouton lui-meme. Mesure sur appareil avant et apres.

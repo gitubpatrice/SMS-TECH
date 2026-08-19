@@ -3,6 +3,20 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.8] — 2026-08-19
+
+### Accessibilité
+- **Le bouton « Ajouter un numéro » était muet pour un lecteur d'écran.** Sur l'écran des numéros
+  bloqués, `ExtendedFloatingActionButton` (material3 1.4.0) enveloppe son emplacement `text` dans un
+  `clearAndSetSemantics` : le libellé est **dessiné** mais **absent de l'arbre de sémantique
+  fusionné**, celui que lit TalkBack. Mesuré sur appareil : le nœud portait `clickable=true`,
+  `text=""`, `content-desc=""` et `NAF="true"`. TalkBack annonçait donc « bouton », sans dire lequel,
+  sur le seul moyen d'ajouter un numéro à la liste. Le nom accessible est désormais posé sur le
+  **bouton**, pas sur son icône — une icône décorative ne se nomme pas, et la nommer créerait une
+  seconde source de libellé, donc une annonce en double le jour où material3 cessera d'effacer le
+  slot. L'autre bouton flottant de l'application, celui des conversations, porte bien son nom : il a
+  été vérifié, pas supposé.
+
 ## [1.27.7] — 2026-08-19
 
 **Aucun changement fonctionnel.** Métadonnées F-Droid uniquement, à la demande des relecteurs de
