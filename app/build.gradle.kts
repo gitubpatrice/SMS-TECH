@@ -121,6 +121,16 @@ android {
                 "proguard-rules.pro",
             )
             if (keystoreProps.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
+
+            // AGP 8.3+ ecrit META-INF/version-control-info.textproto dans l'APK de release :
+            // le SHA du commit construit. Deux defauts, tous deux mesures sur Agenda Tech :
+            //   - il se PERIME en build incremental — l'APK publie en 1.0.1 portait le commit
+            //     PRECEDENT, donc une provenance fausse dans un binaire cense etre verifiable ;
+            //   - il rend l'APK dependant du commit alors que rien d'autre n'a change. Une
+            //     correction de metadonnees fastlane, qui ne touche pas une ligne de code,
+            //     produit alors un binaire different et impose une nouvelle version publiee.
+            // Retire : F-Droid epingle deja le commit dans sa recette, la provenance ne se perd pas.
+            vcsInfo { include = false }
         }
     }
 

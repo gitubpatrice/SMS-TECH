@@ -3,6 +3,53 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.7] — 2026-08-19
+
+**Aucun changement fonctionnel.** Métadonnées F-Droid uniquement, à la demande des relecteurs de
+`fdroiddata!38458`.
+
+- **La description du store était écrite en Markdown.** Ses soulignements Setext (`Features` suivi
+  d'une ligne de `=`) étaient rendus en `<h1>` par le contrôle F-Droid. Réécrite en HTML, comme
+  Agenda Tech avant elle. Mesuré avec leur propre outil : deux `<h1>` avant, zéro après.
+- **Icône de store ajoutée** — 512×512, dans `fastlane/.../images/icon.png`, absente jusqu'ici.
+- **La description annonçait une fonction qui n'existe plus.** Elle promettait une traduction locale
+  « via les modèles Google ML Kit » et déclarait les serveurs Google parmi les connexions réseau.
+  ML Kit a été retiré en **1.7.0** : la traduction délègue depuis à l'application de traduction de
+  l'utilisateur par un Intent système, et la seule connexion de l'app est le MMSC de l'opérateur.
+  L'écran « À propos » de l'application disait déjà juste — seule la description du store était
+  restée en arrière. Le mode urgence et les messages planifiés y sont désormais décrits, ce qui
+  explique enfin les permissions de localisation et d'appel.
+- **`vcsInfo { include = false }`** : AGP écrivait le SHA du commit dans l'APK. Ce champ se périme
+  en construction incrémentale — l'APK d'Agenda Tech publié en 1.0.1 portait le commit précédent —
+  et il rendait le binaire dépendant du commit alors même qu'aucune ligne de code ne changeait.
+
+## [1.27.6] — 2026-08-14
+
+**Aucun changement fonctionnel.** La vérification F-Droid de la 1.27.5 échouait sur quatre fichiers
+seulement : les bibliothèques natives `libdatastore_shared_counter.so` d'AndroidX DataStore.
+`classes.dex` était identique. AGP les dépouille de leurs symboles avec l'outil du NDK, et deux NDK
+ne produisent pas les mêmes octets. `keepDebugSymbols` les fait recopier telles quelles depuis l'AAR.
+
+## [1.27.5] — 2026-08-14
+
+**Aucun changement fonctionnel.** Le binaire publié devient reproductible : cloner le dépôt au tag
+et reconstruire donne le même APK, octet pour octet.
+
+- Retrait du plugin `foojay-resolver-convention`, inutilisé mais pas neutre : sa seule présence
+  changeait les noms d'obfuscation attribués par R8 et le nombre de champs du dex.
+- Retrait du bloc « Dependency metadata » qu'AGP glissait dans le bloc de signature à destination de
+  la console Play. Aucune application Files Tech n'y est publiée. Il était là depuis toujours et
+  personne ne l'avait vu : les contrôles n'examinaient que des APK non signés.
+
+## [1.27.4] — 2026-08-08
+
+- **`fallbackToDestructiveMigrationOnDowngrade(false)` faisait l'inverse de ce qu'il annonçait.**
+  Depuis Room 2.7, appeler cette méthode **active** le repli destructif ; son booléen ne décide que
+  du périmètre des tables vidées. Vérifié au désassemblage de `room-runtime 2.8.4`. Installer un APK
+  plus ancien par-dessus une base plus récente réinitialisait donc les données propres à
+  l'application — messages programmés, historique Safety Call, réglages de conversation — en
+  silence. Les SMS eux-mêmes ne risquaient rien : Android en garde sa propre copie.
+
 ## [1.27.3] — 2026-08-06
 
 Le Safety Call a été **testé de bout en bout sur deux téléphones**, avec deux contacts et un délai

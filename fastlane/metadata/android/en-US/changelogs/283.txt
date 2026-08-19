@@ -1,0 +1,5 @@
+F-Droid metadata only. No functional change, no code change.
+
+- Store description rewritten in HTML: F-Droid's check rendered the old Markdown underlines as headings.
+- Store icon added.
+- Description corrected. Translation is delegated to your own translation app through a system Intent: the ML Kit models were removed in 1.7.0, and the app connects to nothing but your carrier's MMSC, for MMS. Emergency mode and scheduled messages are now described too.

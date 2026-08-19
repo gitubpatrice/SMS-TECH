@@ -1,0 +1,5 @@
+Metadonnees F-Droid uniquement. Aucun changement fonctionnel.
+
+- Description du store reecrite en HTML : le controle F-Droid rendait les anciens soulignements Markdown en titres.
+- Icone de store ajoutee.
+- Description corrigee. La traduction est deleguee a votre app de traduction par un Intent systeme : les modeles ML Kit ont ete retires en 1.7.0, et l'app ne se connecte qu'au MMSC de votre operateur. Le mode urgence et les messages planifies sont desormais decrits.

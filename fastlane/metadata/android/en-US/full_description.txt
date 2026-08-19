@@ -1,30 +1,35 @@
 SMS Tech is an ad-free, tracker-free SMS / MMS app for Android. It replaces the stock messaging app while keeping every message on your device — no cloud, no analytics, no third-party SDK shipping your data anywhere.
 
-Features
-========
+<b>Features</b>
 
-• SMS and MMS — full default-SMS-app support on Android 8 (API 26) through 15+
-• Voice messages — push-to-talk recording, sent as a real MMS (compatible with every recipient that has MMS)
-• Encrypted vault — hide sensitive conversations behind SQLCipher + Android Keystore. Toggle "Lock vault on leave" to re-lock the vault every time the app goes to background
-• Panic code — a second unlock PIN that opens the app in a decoy view where the vault stays invisible and inaccessible
-• Biometric unlock — fingerprint or face, with a PIN fallback you set yourself
-• Contextual reply — long-press a message, pick "Reply" and your composer shows a mini-quote so the recipient sees what you are answering
-• On-device translation — translate any message to your locale using Google ML Kit models cached locally. No text is ever sent to any server
-• OS-wide blocked numbers — at first launch, SMS Tech mirrors the system blocklist (Phone app, Samsung Messages) and retroactively deletes the conversations that match
-• Attachment picker — Photo, Video, File, Contact card. Photos are automatically re-encoded as JPEG to fit MMS carrier caps
-• Full-text search across every conversation, with FTS4 indexing
-• Export a conversation as a PDF for archival
-• Encrypted local backup using a passphrase distinct from your unlock PIN
-• Themes — Light / Dark / AMOLED / "Dark Tech" slate-blue accent
-• French and English UI
-• Confirmation toggle in Settings → Send → "Confirm before send" lets you require a confirmation dialog before any SMS, MMS or attachment is dispatched
+<ul>
+<li>SMS and MMS — full default-SMS-app support on Android 8 (API 26) through 15+</li>
+<li>Voice messages — push-to-talk recording sent as a real MMS, capped at 60 s / 300 KB so every carrier accepts it</li>
+<li>Encrypted vault — hide sensitive conversations behind SQLCipher, with the key wrapped in the Android Keystore. Toggle "Lock vault on leave" to re-lock it every time the app goes to background</li>
+<li>Panic code — a second unlock PIN that opens the app in a decoy view where the vault stays invisible and inaccessible</li>
+<li>Emergency mode — hold the button for 3 s to send an alert SMS to your Safety Call contacts, with a single GPS fix if you granted location; without that permission the SMS still goes out, only without coordinates. Quick access to 112 / 15 / 17 / 18, and shortcuts on the lockscreen notification. Placing the call directly is opt-in: by default the dialer simply opens pre-filled</li>
+<li>Biometric unlock — fingerprint or face, with a PIN fallback you set yourself</li>
+<li>Contextual reply — long-press a message, pick "Reply" and your composer shows a mini-quote so the recipient sees what you are answering</li>
+<li>Delegated translation — long-press a message and pick "Translate" to hand the text to whichever translation app you have installed (Google Translate, DeepL, Aves Translate …) through a system Intent. No translation model is bundled, and SMS Tech itself sends nothing anywhere</li>
+<li>Scheduled messages — write an SMS, pick a date and time, and it is sent at that moment even if the app is closed</li>
+<li>OS-wide blocked numbers — at first launch, SMS Tech mirrors the system blocklist (Phone app, Samsung Messages) and retroactively deletes the conversations that match</li>
+<li>Attachment picker — Photo, Video, File, Contact card. Photos are automatically re-encoded as JPEG to fit MMS carrier caps</li>
+<li>Full-text search across every conversation, with FTS4 indexing</li>
+<li>Export a conversation as a PDF for archival</li>
+<li>Encrypted local backup using a passphrase distinct from your unlock PIN</li>
+<li>Themes — Light / Dark / AMOLED / "Dark Tech" slate-blue accent</li>
+<li>French and English UI</li>
+<li>Confirmation toggle in Settings → Send → "Confirm before send" requires a confirmation dialog before any SMS, MMS or attachment is dispatched</li>
+</ul>
 
-Privacy
-=======
+<b>Privacy</b>
 
-• No analytics, no crash reporters, no third-party tracking SDK
-• Only network usage: your carrier MMSC (for MMS transport) and Google ML Kit servers (one-time, on first translation, to download the language model)
-• Apache License 2.0 — source code at https://github.com/gitubpatrice/SMS-TECH
-• Security model documented at https://github.com/gitubpatrice/SMS-TECH/blob/main/SECURITY.md
+<ul>
+<li>No analytics, no crash reporters, no third-party tracking SDK</li>
+<li>Only network usage: your carrier's MMSC, for MMS transport. Nothing else leaves the phone</li>
+<li>Location and phone-call permissions serve Emergency mode only. Both are opt-in, neither is ever used in the background, and the app works without granting either</li>
+<li>Apache License 2.0 — source code at https://github.com/gitubpatrice/SMS-TECH</li>
+<li>Security model documented at https://github.com/gitubpatrice/SMS-TECH/blob/main/SECURITY.md</li>
+</ul>
 
 Project home: https://files-tech.com/sms-tech.php
