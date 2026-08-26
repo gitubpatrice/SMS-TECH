@@ -1,5 +1,9 @@
 package com.filestech.sms.ui.screens.conversations
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -74,7 +78,26 @@ class ConversationsViewModel @Inject constructor(
 
     private val archivedFlag: Boolean = savedStateHandle.get<Boolean>("archived") ?: false
 
-    private val query = MutableStateFlow("")
+    /**
+     * v1.27.9 — **texte saisi dans le champ de recherche, en état Compose (snapshot).**
+     *
+     * `OutlinedTextField(value = …, onValueChange = …)` exige que la valeur remontée par
+     * `onValueChange` lui revienne **dans la même recomposition**. Elle transitait ici par un
+     * `MutableStateFlow` qui alimentait `UiState.query` **après le `debounce(200 ms)`** : le
+     * champ se voyait donc réécrire, 200 ms plus tard, une valeur périmée — **et la position
+     * de curseur qui l'accompagne**. Mesuré sur Galaxy S9 (v1.27.8) : « christine » tapé au
+     * clavier donnait `hrrrttttc`, et trois « effacer » retiraient des lettres au milieu du
+     * mot au lieu de la dernière.
+     *
+     * Le champ lit désormais [searchInput] directement : la frappe est rendue dans la frame
+     * courante. Le `debounce` reste intact — il ne pilote plus que le **filtrage**, ce qui
+     * était sa seule raison d'être (audit PERF-06).
+     */
+    var searchInput by mutableStateOf("")
+        private set
+
+    /** Pont état Compose → Flow, en entrée de [debouncedQuery]. */
+    private val query = snapshotFlow { searchInput }
 
     /**
      * Bumped whenever the host screen suspects the OS-side default-SMS state may have changed
@@ -111,7 +134,12 @@ class ConversationsViewModel @Inject constructor(
         val settings: AppSettings = AppSettings(),
         val isDefaultSmsApp: Boolean = true,
         val archived: Boolean = false,
-        val query: String = "",
+        /**
+         * v1.27.9 — le texte saisi **n'est plus** dans [UiState] : il vit dans
+         * [ConversationsViewModel.searchInput] (état Compose), seul moyen de le rendre au
+         * champ dans la frame courante. Ne rien remettre ici : une valeur de champ de
+         * saisie qui repasse par `StateFlow` + `debounce` casse la saisie au clavier.
+         */
         val filtered: Boolean = false,
         val isImporting: Boolean = false,
         val importedCount: Int = 0,
@@ -211,7 +239,6 @@ class ConversationsViewModel @Inject constructor(
             settings = s,
             isDefaultSmsApp = defaultAppManager.isDefault(),
             archived = archivedFlag,
-            query = q,
             filtered = q.isNotBlank(),
             // Show the "Importing your SMS…" banner only during the very first sync — after that,
             // delta syncs touch a handful of rows and complete in milliseconds, no banner needed.
@@ -270,8 +297,8 @@ class ConversationsViewModel @Inject constructor(
         viewModelScope.launch { repo.markAllRead() }
     }
 
-    fun setQuery(q: String) { query.update { q } }
-    fun clearQuery() { query.update { "" } }
+    fun setQuery(q: String) { searchInput = q }
+    fun clearQuery() { searchInput = "" }
 
     private fun filterConversations(rows: List<Conversation>, q: String): List<Conversation> {
         if (q.isBlank()) return rows

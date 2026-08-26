@@ -3,6 +3,31 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.9] — 2026-08-26
+
+### Corrigé
+- **La recherche était inutilisable au clavier.** Dans la liste des conversations, taper
+  « christine » écrivait `hrrrttttc`, et la touche « effacer » retirait des lettres au milieu du
+  mot au lieu de la dernière. Cause : la `value` des champs de recherche revenait au champ par
+  `StateFlow` + `collectAsStateWithLifecycle`, c'est-à-dire au mieux une frame plus tard — et sur
+  la liste des conversations **après le `debounce(200 ms)`**, puisque `UiState.query` était
+  alimenté par la sortie du debounce. Un `OutlinedTextField` exige que la valeur remontée par
+  `onValueChange` lui revienne dans la **même recomposition** ; sinon il réapplique une valeur
+  périmée **et la position de curseur qui l'accompagne**. Le texte saisi vit désormais en état
+  Compose dans le ViewModel, lu directement par le champ, et les flux de filtrage en dérivent via
+  `snapshotFlow`. Le `debounce` est conservé : il ne pilote plus que le filtrage, sa seule raison
+  d'être (audit PERF-06). Corrigé sur les **trois** champs — liste des conversations, sélecteur de
+  contacts du nouveau message, feuille « Transférer » — qui partageaient le même défaut.
+  Mesuré sur Galaxy S9 avant et après, au clavier réel.
+
+### Interne
+- `ForwardPickerViewModel` : les résultats filtrés sont désormais un `StateFlow` dérivé calculé sur
+  le dispatcher IO, comme dans les deux autres écrans de recherche. Ils étaient recalculés dans le
+  lambda de `_state.update`, donc sur le thread appelant — celui de `onValueChange` — et ce lambda
+  est rejouable par la boucle CAS de `MutableStateFlow` si une émission Room arrive pendant la
+  frappe. La mémoïsation voulue en v1.3.11 est conservée ; le filtre ne peut plus non plus
+  désynchroniser d'avec le texte saisi, puisqu'il en dérive au lieu d'être stocké à côté.
+
 ## [1.27.8] — 2026-08-19
 
 ### Accessibilité

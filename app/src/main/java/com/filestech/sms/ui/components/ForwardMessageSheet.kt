@@ -66,7 +66,7 @@ fun ForwardMessageSheet(
     onPickNewContact: () -> Unit,
     viewModel: ForwardPickerViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val filtered by viewModel.filtered.collectAsStateWithLifecycle()
     // v1.3.11 (P1) — hand the source conversation id to the ViewModel so the filter
     // (and its mémoïsation) is owned end-to-end by the VM. Keyed on `currentConversationId`
     // so a configuration change that swaps the source id re-syncs the exclusion list.
@@ -82,6 +82,13 @@ fun ForwardMessageSheet(
         viewModel.setQuery("")
         onDismiss()
     }
+    // v1.27.9 — les deux chemins de SÉLECTION ([onPickConversation], [onPickNewContact]) ne
+    // passent pas par [dismissAndReset] : `ThreadScreen` referme la feuille en posant
+    // `forwardingMessage = null`, ce qui court-circuite `onDismissRequest`. Ils n'ont pourtant
+    // pas besoin de remettre la recherche à zéro : `AppRoot` fait un `popBackStack()` du thread
+    // source avant de naviguer dans les DEUX cas, donc l'entrée de back-stack qui porte ce
+    // ViewModel est détruite et la requête avec elle. Vérifié sur appareil le 2026-08-26.
+    // Ajouter un reset ici serait un garde-fou pour un chemin inatteignable.
     ModalBottomSheet(
         onDismissRequest = dismissAndReset,
         sheetState = sheetState,
@@ -99,7 +106,8 @@ fun ForwardMessageSheet(
             )
             Spacer(Modifier.size(12.dp))
             OutlinedTextField(
-                value = state.query,
+                // v1.27.9 — état Compose lu directement, cf. [ForwardPickerViewModel.searchInput].
+                value = viewModel.searchInput,
                 onValueChange = viewModel::setQuery,
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text(stringResource(R.string.forward_search_placeholder)) },
@@ -127,7 +135,6 @@ fun ForwardMessageSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
             )
-            val filtered = state.filtered
             if (filtered.isEmpty()) {
                 Text(
                     text = stringResource(R.string.forward_no_conversation),

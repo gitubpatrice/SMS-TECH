@@ -112,7 +112,9 @@ fun ComposeScreen(
                 Spacer(Modifier.size(8.dp))
             }
             OutlinedTextField(
-                value = state.query,
+                // v1.27.9 — lecture directe de l'état Compose du ViewModel : la valeur saisie
+                // doit revenir au champ dans la MÊME recomposition (cf. [ComposeViewModel.searchInput]).
+                value = viewModel.searchInput,
                 onValueChange = viewModel::setQuery,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 placeholder = { Text(stringResource(R.string.compose_search_contact)) },
@@ -149,10 +151,15 @@ fun ComposeScreen(
                 // it doesn't match any saved contact. Audit Q-BUG-1: previously the modifier ran
                 // `.let { mod -> mod.also { /* clickable */ } }` — a no-op that left the row
                 // visually clickable-looking but inert, breaking the whole new-conversation flow.
-                if (state.query.isNotBlank() && filtered.none { c -> c.firstPhone?.raw == state.query }) {
+                // v1.27.9 — la saisie est capturée UNE fois : la ligne affiche, teste et
+                // sélectionne la même valeur. À relire `viewModel.searchInput` dans le lambda
+                // `.clickable`, un tap arrivé après une frappe aurait envoyé un numéro autre
+                // que celui affiché sur la ligne.
+                val input = viewModel.searchInput
+                if (input.isNotBlank() && filtered.none { c -> c.firstPhone?.raw == input }) {
                     item {
                         ListItem(
-                            headlineContent = { Text(state.query) },
+                            headlineContent = { Text(input) },
                             // v1.3.11 (F2) — show "Use this number" / "Add to group" rather
                             // than the misleading "Continuer" subtitle: when the picker is
                             // empty the tap opens the thread directly; otherwise it appends
@@ -165,12 +172,12 @@ fun ComposeScreen(
                                     else R.string.compose_add_to_group
                                 ))
                             },
-                            leadingContent = { Avatar(label = state.query) },
+                            leadingContent = { Avatar(label = input) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp)
                                 .clickable {
-                                    viewModel.pickRecipient(state.query)
+                                    viewModel.pickRecipient(input)
                                     viewModel.setQuery("")
                                 },
                         )

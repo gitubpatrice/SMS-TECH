@@ -1,0 +1,3 @@
+Correctif de saisie.
+
+- La recherche etait inutilisable au clavier : taper « christine » ecrivait « hrrrttttc », et la touche effacer retirait des lettres au milieu du mot au lieu de la derniere. La valeur du champ lui revenait avec du retard — et, dans la liste des conversations, apres le delai de 200 ms du filtrage — si bien qu'une valeur perimee et sa position de curseur y etaient reappliquees. Corrige sur les trois champs de recherche. Mesure sur appareil avant et apres.

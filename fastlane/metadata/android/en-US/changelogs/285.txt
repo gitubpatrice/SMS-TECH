@@ -1,0 +1,3 @@
+Text input fix.
+
+- Search was unusable with the keyboard: typing "christine" produced "hrrrttttc", and backspace removed letters from the middle of the word instead of the last one. The field's value came back late — and, on the conversation list, after the 200 ms filtering delay — so a stale value, and the caret position that came with it, were reapplied. Fixed on all three search fields. Measured on a device before and after.

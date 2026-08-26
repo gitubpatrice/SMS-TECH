@@ -437,7 +437,10 @@ fun ConversationsScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             SearchField(
-                query = state.query,
+                // v1.27.9 — état Compose lu directement : la frappe doit revenir au champ dans
+                // la MÊME recomposition (cf. [ConversationsViewModel.searchInput]). `state.query`
+                // arrivait après le debounce de 200 ms et réécrivait le champ avec du périmé.
+                query = viewModel.searchInput,
                 onQueryChange = viewModel::setQuery,
                 onClear = viewModel::clearQuery,
             )

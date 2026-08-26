@@ -1,5 +1,9 @@
 package com.filestech.sms.ui.screens.compose
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -38,7 +42,6 @@ class ComposeViewModel @Inject constructor(
     // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
     @androidx.compose.runtime.Stable
     data class UiState(
-        val query: String = "",
         val results: List<Contact> = emptyList(),
         val recipients: List<PhoneAddress> = emptyList(),
         val initialLoaded: Boolean = false,
@@ -46,6 +49,22 @@ class ComposeViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+
+    /**
+     * v1.27.9 — **le texte saisi dans le champ de recherche est un état Compose (snapshot),
+     * plus un champ de [UiState].**
+     *
+     * `OutlinedTextField(value = …, onValueChange = …)` exige que la valeur remontée par
+     * `onValueChange` lui revienne **dans la même recomposition**. Elle transitait ici par
+     * `MutableStateFlow` → `collectAsStateWithLifecycle`, qui la rend au mieux une frame plus
+     * tard (dispatch `AndroidUiDispatcher`), et bien davantage quand la frappe déclenche en
+     * plus le re-filtrage de la liste de contacts. Le champ recevait alors une valeur périmée
+     * — **et la position de curseur qui l'accompagne** : lettres réinsérées dans le désordre
+     * (« christine » → « hchi… ») et touche « effacer » qui ne faisait que reculer le curseur
+     * sans rien supprimer. Un `mutableStateOf` est lu par le champ dans la frame courante.
+     */
+    var searchInput by mutableStateOf("")
+        private set
 
     val events = oneShotEvents<Event>()
 
@@ -63,7 +82,7 @@ class ComposeViewModel @Inject constructor(
     }
 
     fun setQuery(q: String) {
-        _state.update { it.copy(query = q) }
+        searchInput = q
     }
 
     fun addRecipient(rawNumber: String) {
@@ -130,7 +149,9 @@ class ComposeViewModel @Inject constructor(
      * « Maïté »), et par numéro si l'utilisateur tape des chiffres.
      */
     val filtered: StateFlow<List<Contact>> = combine(
-        _state.map { it.query.trim() }.distinctUntilChanged(),
+        // `snapshotFlow` fait le pont état Compose → Flow : le champ lit [searchInput] dans la frame
+        // courante, le filtrage se déclenche derrière, sur IO, sans jamais réécrire le champ.
+        snapshotFlow { searchInput.trim() }.distinctUntilChanged(),
         _state.map { it.results }.distinctUntilChanged().map { list ->
             list.map { c ->
                 IndexedContact(
