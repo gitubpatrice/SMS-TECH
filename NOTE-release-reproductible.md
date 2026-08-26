@@ -86,5 +86,14 @@ identique à Agenda Tech (`7713e1dc`, même changement, et sa v1.0.3 publie bien
 - [ ] Inscrire `--no-build-cache` dans la procédure de release (agent `android-release-orchestrator`
       et checklist `files-tech-release-checklist.md`), pour les **9** apps : le piège est dans
       `gradle.properties`, il n'a rien de spécifique à SMS Tech.
-- [ ] Vérifier si les autres apps du portefeuille avec `Binaries:` dans leur recette F-Droid
-      (Agenda Tech, Notes Tech) ont le même `org.gradle.caching=true`.
+- [x] **Vérifié le 2026-08-26** — les trois apps en cours de revue F-Droid sont Agenda Tech
+      (`!42991`), SMS Tech (`!38458`) et Notes Tech (`!37885`). Sur les deux autres :
+
+      | App | `org.gradle.caching` | Recette avec `Binaries:` | Exposée |
+      |---|---|---|---|
+      | **Agenda Tech** | **`=true`** | **oui** | **OUI — mêmes deux conditions** |
+      | Notes Tech | absent (donc désactivé) | non | non |
+
+      **Agenda Tech réunit les deux conditions.** Sa prochaine release construite sur une machine
+      au cache chaud échouera de la même façon. Notes Tech ne risque rien : cache désactivé, et sa
+      recette ne compare aucun binaire — F-Droid construit et signe lui-même.
