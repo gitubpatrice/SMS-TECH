@@ -1,4 +1,35 @@
 #!/bin/bash
+# ==============================================================================
+# NEUTRALISE LE 2026-09-02 — NE PAS EXECUTER. Rien n'a ete supprime en dessous.
+#
+# Ce script a ete ecrit pour la PREMIERE soumission (v1.2.5, versionCode 13).
+# Cette soumission a eu lieu : c'est la MR !38458, ouverte et en cours de revue.
+# Le relancer aujourd'hui detruirait cette MR, en deux gestes precis :
+#
+#   cp "$YAML_SRC" metadata/com.filestech.sms.yml
+#       -> ecrase la recette vivante (1.27.9 / 285) par la copie locale de ce
+#          dossier, restee en 1.18.2 / 105 : sans Binaries:, sans
+#          AllowedAPKSigningKeys, avec les prebuild: sed retires en aout 2026,
+#          un AutoUpdateMode: Version sans le motif v%v que les tags exigent,
+#          et un UpdateCheckData dont les deux regex sont INVERSEES (le
+#          versionName occupe la place du versionCode).
+#
+#   git push -u origin add-sms-tech --force
+#       -> reecrit l'historique d'une branche sous revue depuis des mois.
+#
+# La recette qui fait foi est : j:/applications/fdroiddata/metadata/com.filestech.sms.yml
+# Le clone fdroiddata qui fait foi est : j:/applications/fdroiddata
+# Pour publier une nouvelle version, editer cette recette-la, puis commit + push
+# NORMAL (jamais --force) sur la branche add-sms-tech.
+#
+# Le corps d'origine est conserve tel quel ci-dessous, comme trace de la
+# soumission initiale. Pour le relire sans risque : sed -n "/^set -e/,$p" submit.sh
+# ==============================================================================
+echo "submit.sh est neutralise : la soumission a deja eu lieu (MR !38458)." >&2
+echo "Le relancer ecraserait la recette 1.27.9 par une copie 1.18.2 et force-pusherait." >&2
+echo "Recette vivante : j:/applications/fdroiddata/metadata/com.filestech.sms.yml" >&2
+exit 1
+
 # F-Droid submission script for SMS Tech v1.2.5
 # Run from j:/applications/sms_tech/fdroid-submission/
 # Prerequisites: glab installed + authenticated as gitubpatrice (already done)
