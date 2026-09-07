@@ -3,6 +3,7 @@ package com.filestech.sms.ui.screens.settings
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.filestech.sms.core.crypto.wipe
 import com.filestech.sms.data.blocking.BlockedNumbersImporter
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.sms.DefaultSmsAppManager
@@ -10,6 +11,7 @@ import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.PanicService
+import com.filestech.sms.security.PinVerdict
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -69,6 +71,12 @@ class SettingsViewModel @Inject constructor(
          * issue, le code panique étant évalué avant le PIN.
          */
         data object PinRejectedSameAsPanicCode : Event
+
+        /**
+         * v1.27.10 — le coffre a ete vide par la porte de sortie « PIN oublie ».
+         * [count] conversations supprimees, message compris.
+         */
+        data class VaultPurged(val count: Int) : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -274,18 +282,61 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * v1.13.0 — set/change le PIN/pass coffre. [pin] est wipé par
+     * v1.13.0 — pose ou remplace le PIN/pass coffre. Les tableaux sont wipés par
      * [com.filestech.sms.security.VaultPinManager]. Le flag `vaultPinEnabled`
      * est posé `true` côté manager après hash réussi.
+     *
+     * v1.27.10 (revue externe GitLab !38458) — [current] est **obligatoire des lors qu'un PIN
+     * est deja en place** : le remplacer sans le connaitre annulait tout l'interet du second
+     * facteur. `null` n'est admis que pour la toute premiere configuration, et le manager le
+     * verifie de son cote — cette fonction n'est pas la seule garde.
+     *
+     * `suspend` et non `launch` : l'appelant est un dialogue qui doit RESTER ouvert et afficher
+     * le verdict en cas de refus.
      */
-    fun setVaultPin(pin: CharArray) = viewModelScope.launch {
-        vaultPin.setVaultPin(pin)
-    }
+    suspend fun submitVaultPin(current: CharArray?, newPin: CharArray): PinVerdict =
+        // Le `!isVaultPinConfigured()` traite l'incoherence documentee « flag ON, hash absent »
+        // (restauration partielle, cf. [VaultPinManager.isVaultPinConfigured]) : il n'y a alors
+        // aucun secret a prouver, et exiger un PIN qui n'existe pas enfermerait l'utilisateur
+        // dehors de son propre coffre. Ce n'est pas un assouplissement du garde — sans hash, il
+        // n'y a rien a garder.
+        if (current == null || !vaultPin.isVaultPinConfigured()) {
+            current?.wipe()
+            if (vaultPin.configureVaultPin(newPin)) PinVerdict.Ok else PinVerdict.Invalid
+        } else {
+            vaultPin.changeVaultPin(current, newPin)
+        }
 
     /**
-     * v1.13.0 — retire le PIN/pass coffre + flip le flag à `false`. Idempotent.
+     * v1.13.0 — retire le PIN/pass coffre + flip le flag à `false`.
+     *
+     * v1.27.10 — exige desormais le PIN en place. Le contenu du coffre n'est PAS touche : il
+     * redevient simplement atteignable derriere le seul verrou d'application.
      */
-    fun clearVaultPin() = viewModelScope.launch {
-        vaultPin.clearVaultPin()
+    suspend fun disableVaultPin(current: CharArray): PinVerdict =
+        if (!vaultPin.isVaultPinConfigured()) {
+            // Meme incoherence que dans [submitVaultPin] : pas de hash, donc rien a prouver.
+            current.wipe()
+            vaultPin.forgetVaultPin()
+            PinVerdict.Ok
+        } else {
+            vaultPin.disableVaultPin(current)
+        }
+
+    /** v1.27.10 — millisecondes de temporisation restantes, pour le compte a rebours. */
+    suspend fun vaultLockoutRemainingMs(): Long = vaultPin.vaultLockoutRemainingMs()
+
+    /**
+     * v1.27.10 — porte de sortie « PIN du coffre oublie ». **Detruit le contenu du coffre**,
+     * puis retire le PIN.
+     *
+     * L'ordre n'est pas negociable : purger d'abord, ouvrir ensuite. L'inverse laisserait, entre
+     * les deux ecritures, un coffre en clair et encore plein — precisement l'etat que le
+     * porteur du seul PIN d'application cherchait a obtenir.
+     */
+    fun forgetVaultPinAndPurge() = viewModelScope.launch {
+        val purged = conversationRepo.deleteAllInVault()
+        vaultPin.forgetVaultPin()
+        _events.send(Event.VaultPurged(purged))
     }
 }

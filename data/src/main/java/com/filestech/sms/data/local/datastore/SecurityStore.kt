@@ -172,8 +172,19 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
             p[K.vaultIters] = iterations
         }
     }
+
+    /**
+     * v1.27.10 (revue externe GitLab !38458) — efface AUSSI le compteur d'echecs et la
+     * temporisation du coffre. Sans ca, un blocage encore actif au moment ou l'utilisateur
+     * retire son PIN survivait a la reconfiguration suivante : il aurait retrouve un coffre
+     * neuf deja bloque, sans aucun echec a son actif.
+     */
     suspend fun clearVaultPin() = context.secStore.edit { p ->
         p.remove(K.vaultSalt); p.remove(K.vaultHash); p.remove(K.vaultIters)
+        p[K.vaultFail] = 0
+        p[K.vaultLockoutUntil] = 0L
+        p[K.vaultLockoutSetAtElapsed] = 0L
+        p[K.vaultLockoutDurationMs] = 0L
     }
     suspend fun vaultPinSnapshot(): PinSnapshot? {
         val p = context.secStore.data.first()
@@ -181,6 +192,50 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         val hash = p[K.vaultHash] ?: return null
         val iters = p[K.vaultIters] ?: return null
         return PinSnapshot(salt, hash, iters)
+    }
+
+    /**
+     * v1.27.10 (revue externe GitLab !38458) — compteur d'echecs et temporisation **dedies au
+     * PIN du coffre**, sur le meme schema que les cles `auth.*` du verrou d'application :
+     * horloge murale + baseline monotone + duree, relues par [LockoutSnapshot.isLockoutActive].
+     *
+     * **Pourquoi un jeu de cles distinct plutot que reutiliser `auth.*`.** Partager le compteur
+     * ferait qu'un echec sur le coffre bloque l'application entiere, et surtout qu'un
+     * deverrouillage reussi de l'application — qui appelle `setFailCount(0)` + `clearLockout()` —
+     * remette a zero la temporisation du coffre. L'attaquant vise par ce garde connait justement
+     * le PIN d'application : il lui aurait suffi de verrouiller puis deverrouiller entre deux
+     * essais pour effacer la temporisation a volonte. Deux compteurs, deux vies.
+     */
+    val vaultFailCount: Flow<Int> = context.secStore.data.map { it[K.vaultFail] ?: 0 }
+    suspend fun setVaultFailCount(n: Int) = context.secStore.edit {
+        it[K.vaultFail] = n.coerceIn(0, 1000)
+    }
+
+    /** Meme bornage a 24 h que [setLockout] — voir son KDoc (audit P1-1). */
+    suspend fun setVaultLockout(untilWall: Long, durationMs: Long, nowElapsed: Long) =
+        context.secStore.edit {
+            val now = System.currentTimeMillis()
+            val maxHorizon = now + 24L * 60L * 60L * 1_000L
+            it[K.vaultLockoutUntil] = untilWall.coerceIn(0L, maxHorizon)
+            it[K.vaultLockoutSetAtElapsed] = nowElapsed.coerceAtLeast(0L)
+            it[K.vaultLockoutDurationMs] = durationMs.coerceIn(0L, 24L * 60L * 60L * 1_000L)
+        }
+
+    suspend fun clearVaultLockout() = context.secStore.edit {
+        it[K.vaultFail] = 0
+        it[K.vaultLockoutUntil] = 0L
+        it[K.vaultLockoutSetAtElapsed] = 0L
+        it[K.vaultLockoutDurationMs] = 0L
+    }
+
+    /** Instantane des 3 champs de temporisation du coffre en une seule lecture DataStore. */
+    suspend fun vaultLockoutSnapshot(): LockoutSnapshot {
+        val p = context.secStore.data.first()
+        return LockoutSnapshot(
+            untilWall = p[K.vaultLockoutUntil] ?: 0L,
+            setAtElapsed = p[K.vaultLockoutSetAtElapsed] ?: 0L,
+            durationMs = p[K.vaultLockoutDurationMs] ?: 0L,
+        )
     }
 
     /** Last time the user successfully unlocked the app. Used by auto-lock. */
@@ -230,6 +285,12 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         val vaultSalt = byteArrayPreferencesKey("vault.salt")
         val vaultHash = byteArrayPreferencesKey("vault.hash")
         val vaultIters = intPreferencesKey("vault.iters")
+
+        // v1.27.10 — temporisation dediee au coffre, cf. [vaultFailCount].
+        val vaultFail = intPreferencesKey("vault.fail")
+        val vaultLockoutUntil = longPreferencesKey("vault.lockoutUntil")
+        val vaultLockoutSetAtElapsed = longPreferencesKey("vault.lockoutSetAtElapsed")
+        val vaultLockoutDurationMs = longPreferencesKey("vault.lockoutDurationMs")
         val failCount = intPreferencesKey("auth.fail")
         val lockoutUntil = longPreferencesKey("auth.lockoutUntil")
         // v1.14.8 R7 — anti-wallclock-manipulation : baseline mono + durée d'origine.

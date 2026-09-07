@@ -81,6 +81,44 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.27.10 — Le second facteur du coffre se remplaçait sans lui-même
+
+*Relecture externe d'Andrew Pozdnakov sur la MR F-Droid !38458, 2026-09-07. Suite directe de
+l'entrée v1.27.2 ci-dessous : celle-là avait montré que la garde du coffre tenait l'écran et
+non la donnée ; celle-ci montre que le secret lui-même n'était pas gardé.*
+
+Le PIN du coffre pouvait être **remplacé** (Réglages → « Changer le PIN du coffre ») ou
+**retiré** (bascule OFF) sans qu'on demande jamais celui en place. Le second facteur ne
+résistait donc pas à son adversaire déclaré : celui qui connaît le PIN d'application. Reproduit
+sur émulateur Android 14 par le relecteur.
+
+**Ce n'était pas un oubli, et c'est ce qui en fait une leçon.** La KDoc de `VaultPinManager`
+documentait cette désactivation comme la porte de sortie en cas de PIN oublié, vingt lignes
+sous le « threat model » qu'elle contredisait mot pour mot. Les deux paragraphes avaient été
+relus des dizaines de fois sans que la contradiction saute aux yeux, parce qu'ils étaient justes
+séparément. **Une porte de sortie qui n'exige rien de plus que le facteur dont on se protège
+n'est pas un compromis : c'est le contournement.**
+
+Depuis :
+
+- `changeVaultPin` et `disableVaultPin` exigent le PIN en place, vérifié par le même PBKDF2 et
+  sous la même temporisation que l'entrée dans le coffre ;
+- `configureVaultPin` refuse d'écraser un coffre réellement gardé (hash posé **et** drapeau ON) —
+  garde de dernier recours si un futur écran rebranchait le mauvais dialogue ;
+- la porte de sortie subsiste, parce qu'un secret irrécupérable sans issue est un piège, mais
+  elle est **destructive** : elle vide le coffre avant d'en retirer le PIN. Détruire est un
+  pouvoir que le porteur du PIN d'application avait déjà ; lire est celui qu'on lui refuse ;
+- `verifyVaultPin` porte enfin une temporisation exponentielle **dédiée**. Le raisonnement
+  d'origine — « le coffre n'est atteignable qu'après le verrou d'application, déjà borné » —
+  était vrai tant que le coffre n'était qu'une porte derrière une autre, et faux dès lors que
+  le second facteur doit résister à quelqu'un ayant **déjà** franchi la première : ses essais ne
+  produisent aucun échec côté application. Jeu de clés `vault.*` séparé d'`auth.*`, sans quoi un
+  simple verrouillage/déverrouillage aurait effacé la temporisation à volonté.
+
+Verrouillé par 12 tests dans `VaultPinGuardsTest`, posés sur `VaultPinManager` et non sur
+l'écran — la garde fautive vivait dans l'interface, c'est précisément pourquoi elle ne gardait
+rien.
+
 ### v1.27.2 — Le second facteur du coffre gardait l'écran, pas la donnée
 
 **Versions affectées : toutes, jusqu'à 1.27.1 incluse.**

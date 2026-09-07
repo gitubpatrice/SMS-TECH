@@ -53,9 +53,28 @@ import timber.log.Timber
  * - Arrêté par les mêmes call-sites quand le flag passe à `false`.
  *
  * **Compat Android 14+ (API 34+)** : `ServiceCompat.startForeground` est utilisé pour
- * passer explicitement `FOREGROUND_SERVICE_TYPE_DATA_SYNC` (permission déjà déclarée au
- * manifest). Sans ce type explicite, Android 14+ tuerait le service avec
- * `ForegroundServiceTypeNotAllowedException` au démarrage.
+ * passer explicitement le type déclaré au manifeste. Sans ce type explicite, Android 14+
+ * tuerait le service avec `ForegroundServiceTypeNotAllowedException` au démarrage.
+ *
+ * ## v1.27.10 — pourquoi le type est `specialUse` et non `dataSync`
+ *
+ * La revue externe GitLab !38458 a relevé deux règles d'Android 15 que ce service enfreignait
+ * sous `targetSdk = 35`, chacune le neutralisant **en silence** :
+ *  1. un service `dataSync` est borné à 6 h cumulées par tranche de 24 h ; passé ce délai la
+ *     plateforme appelle [onTimeout] et tue l'application si le service ne s'arrête pas. Un
+ *     service dont le seul rôle est de rester vivant en permanence ne peut pas être de ce
+ *     type : il mourait toutes les 6 h sans jamais revenir.
+ *  2. démarrer un service `dataSync` depuis `BOOT_COMPLETED` est interdit. L'appel venu de
+ *     [com.filestech.sms.system.receiver.BootReceiver] levait donc une exception, avalée par le
+ *     catch défensif ci-dessous : le mode résistant ne reprenait pas après un redémarrage.
+ *
+ * `specialUse` échappe aux deux, et surtout il **décrit ce que ce service fait vraiment** —
+ * rien, sinon exister. `dataSync` était une déclaration inexacte autant qu'un piège : ce
+ * service n'a jamais synchronisé la moindre donnée.
+ *
+ * [onTimeout] reste implémenté malgré tout : si une politique future ou une ROM appliquait
+ * malgré tout un minuteur, ne pas s'arrêter à temps vaut un plantage
+ * (`ForegroundServiceDidNotStopInTimeException`), pas une simple perte de fonction.
  */
 class KeepAliveService : Service() {
 
@@ -78,7 +97,7 @@ class KeepAliveService : Service() {
         //   3. **MissingForegroundServiceTypeException (Android 14+)** : si l'appel
         //      ServiceCompat.startForeground n'a pas le `foregroundServiceType` valide
         //      ou si la permission `FOREGROUND_SERVICE_<TYPE>` manque. Couvert ici par
-        //      le branchement `UPSIDE_DOWN_CAKE` + manifest `FOREGROUND_SERVICE_DATA_SYNC`.
+        //      le branchement `UPSIDE_DOWN_CAKE` + manifest `FOREGROUND_SERVICE_SPECIAL_USE`.
         //
         // Sur toutes ces exceptions, on log et on retourne `START_NOT_STICKY` : pas la
         // peine de re-tenter automatiquement un démarrage qui vient d'échouer pour
@@ -92,7 +111,7 @@ class KeepAliveService : Service() {
                 NOTIFICATION_ID,
                 notification,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
                 } else {
                     0
                 },
@@ -112,6 +131,25 @@ class KeepAliveService : Service() {
         // foreground), Android le redémarre automatiquement dès que possible. C'est ceinture +
         // bretelles pour les ROMs les plus agressives.
         return START_STICKY
+    }
+
+    /**
+     * v1.27.10 — filet de securite contre le minuteur de service au premier plan.
+     *
+     * Ce service est declare `specialUse`, type auquel Android 15 n'applique PAS le plafond de
+     * 6 h des services `dataSync`. Cette redefinition ne devrait donc jamais s'executer. Elle
+     * existe parce que la sanction, si elle s'executait sans nous, n'est pas une perte de
+     * fonction mais un plantage : la plateforme leve
+     * `ForegroundServiceDidNotStopInTimeException` quand un service notifie ne s'arrete pas
+     * dans les secondes qui suivent. On s'arrete donc proprement, et on le trace — le journal
+     * est le seul indice qu'aurait un utilisateur dont le mode resistant s'est tu.
+     *
+     * `stopSelf()` et non `stopForeground` : la notification persistante doit disparaitre avec
+     * le service, sinon elle promet une protection qui ne court plus.
+     */
+    override fun onTimeout(startId: Int) {
+        Timber.w("KeepAliveService: foreground-service timeout (startId=%d) — stopping", startId)
+        stopSelf(startId)
     }
 
     private fun buildPersistentNotification(): Notification {

@@ -124,8 +124,17 @@ class VaultViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
 
-    /** v1.13.0 — verify suspend pour le `PinEntryDialog`. */
-    suspend fun verifyVaultPin(candidate: CharArray): Boolean = vaultPin.verifyVaultPin(candidate)
+    /**
+     * v1.13.0 — verify suspend pour le `PinEntryDialog`.
+     *
+     * v1.27.10 — renvoie desormais un [com.filestech.sms.security.PinVerdict] : le dialogue
+     * doit distinguer « mauvais PIN » de « temporisation en cours ».
+     */
+    suspend fun verifyVaultPin(candidate: CharArray): com.filestech.sms.security.PinVerdict =
+        vaultPin.verifyVaultPin(candidate)
+
+    /** v1.27.10 — millisecondes de temporisation restantes, pour le compte a rebours du dialogue. */
+    suspend fun vaultLockoutRemainingMs(): Long = vaultPin.vaultLockoutRemainingMs()
 
     /**
      * v1.13.1 — `true` si l'user a déjà déverrouillé le coffre dans la session
@@ -760,6 +769,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
             description = stringResource(R.string.vault_pin_dialog_subtitle),
             confirmLabel = stringResource(R.string.vault_pin_dialog_unlock),
             onVerify = { candidate -> viewModel.verifyVaultPin(candidate) },
+            probeLockout = { viewModel.vaultLockoutRemainingMs() },
             onVerified = {
                 vaultPinPassed = true
                 viewModel.markUnlocked()

@@ -84,7 +84,12 @@
 
     <!-- Foreground service for long migration/backup tasks -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- dataSync : consomme par le SystemForegroundService de WorkManager (sauvegarde, migration),
+         travaux bornes qui se terminent d'eux-memes. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- v1.27.10 (revue externe GitLab !38458) — specialUse pour KeepAliveService : voir sa
+         declaration plus bas pour la raison, qui n'est pas cosmetique. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Boot completed for scheduled messages -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -351,14 +356,32 @@
              uniquement Google Messages / Mi Messages.
              android:exported="false" : aucune surface IPC publique, démarré uniquement
              en interne via [KeepAliveService.start].
-             android:foregroundServiceType="dataSync" : requis Android 14+ (API 34+).
              android:stopWithTask="false" : le service survit au swipe-out de l'app
-             depuis les récents — c'est tout le point pour résister à MIUI. -->
+             depuis les récents — c'est tout le point pour résister à MIUI.
+
+             v1.27.10 (revue externe GitLab !38458) — le type passe de "dataSync" a
+             "specialUse", et ce n'est pas une retouche de vocabulaire : sous targetSdk 35,
+             "dataSync" porte deux regles qui cassaient la fonctionnalite en silence.
+               1. Android 15 borne un service "dataSync" a 6 h cumulees par tranche de 24 h,
+                  puis appelle Service.onTimeout ; sans arret rapide, l'application est tuee.
+                  Un service dont le SEUL role est de rester vivant en permanence ne peut donc
+                  pas etre de ce type — il mourait toutes les 6 h sans jamais revenir.
+               2. Android 15 interdit de demarrer un service "dataSync" depuis BOOT_COMPLETED.
+                  Le demarrage depuis BootReceiver levait donc une exception, avalee par le
+                  catch defensif : le mode resistant ne reprenait pas apres un redemarrage,
+                  sans le moindre signe visible.
+             "specialUse" n'est soumis ni au minuteur ni a l'interdiction au demarrage, et
+             decrit honnetement ce que fait ce service : rien, sinon exister. Le sous-type est
+             requis par la plateforme des lors qu'on declare ce type. -->
         <service
             android:name=".system.service.KeepAliveService"
             android:exported="false"
-            android:foregroundServiceType="dataSync"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="keep_process_alive_on_oem_roms_that_kill_the_default_sms_app" />
+        </service>
 
         <!-- 8) WorkManager init — let Hilt take over -->
         <provider

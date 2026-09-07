@@ -1,0 +1,6 @@
+Correctifs de securite du coffre (revue externe).
+
+- Son PIN pouvait etre remplace ou retire sans demander celui en place : le PIN de l'application suffisait a ouvrir le coffre. Les deux l'exigent desormais, avec blocage apres cinq echecs. La sortie « PIN oublie » subsiste mais vide le coffre.
+- « Repondre par message » depuis un appel entrant ne faisait rien.
+- Le mode resistant ne reprenait pas apres un redemarrage (Android 15).
+- Liens « Code source » et « Confidentialite » en erreur 404.

@@ -70,6 +70,14 @@ class BootReceiver : BroadcastReceiver() {
                 // `KeepAliveService.start` est idempotent — un éventuel double-start côté
                 // Android est dédoublonné nativement par le système (`onStartCommand` ré-
                 // appelé sur la même instance).
+                //
+                // v1.27.10 (revue externe GitLab !38458) — ce démarrage était **inopérant sur
+                // Android 15**. Le service était alors déclaré `dataSync`, type qu'Android 15
+                // interdit de démarrer depuis `BOOT_COMPLETED` pour une app en targetSdk 35 :
+                // l'exception partait dans le catch défensif de `KeepAliveService.start`, et le
+                // mode résistant ne reprenait qu'à la prochaine ouverture de l'application —
+                // c'est-à-dire au moment où il sert le moins. Le service est passé en
+                // `specialUse`, non concerné par cette interdiction.
                 // v1.3.10 (P6) — `flow.first()` would block indefinitely if DataStore is
                 // corrupted or its file lock is held by another process (observed on MIUI
                 // multi-user). `goAsync()` only buys us ~10s before Android kills the

@@ -1,0 +1,6 @@
+Vault security fixes, from an external code review.
+
+- Its PIN could be replaced or removed without ever being asked for the one in place: knowing the app PIN was enough to open the vault. Both now require it, with a lockout after five failures. A "forgotten PIN" way out remains, but it empties the vault.
+- "Respond via message" from an incoming call did nothing.
+- Keep-alive mode did not resume after a reboot (Android 15).
+- The "Source code" and "Privacy" links returned 404.

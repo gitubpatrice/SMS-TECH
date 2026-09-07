@@ -3,6 +3,7 @@ package com.filestech.sms.system.service
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.telephony.TelephonyManager
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.usecase.SendSmsUseCase
@@ -48,9 +49,23 @@ class HeadlessSmsSendService : Service() {
         // Sur un véritable ACTION_SEND (avec EXTRA_TEXT au lieu de scheme), la liste
         // numbers serait vide → no-op silencieux. Cette branche morte ouvrait
         // inutilement une surface IPC au pattern `SEND_RESPOND_VIA_MESSAGE`.
+        // v1.27.10 (revue externe GitLab !38458) — ACTION_RESPOND_VIA_MESSAGE ajoute.
+        //
+        // Le manifeste declare ce service pour `android.intent.action.RESPOND_VIA_MESSAGE`
+        // depuis la v1.2.0, mais ce `when` ne l'a JAMAIS accepte : « repondre par message »
+        // depuis l'ecran d'appel entrant tombait donc dans le `else`, et le service s'arretait
+        // sans rien envoyer. Fonctionnalite annoncee au systeme, jamais rendue — verifie par
+        // `git log -S` sur ce fichier, le filtre du manifeste et le `when` n'ont jamais
+        // concorde.
+        //
+        // Le contenu de l'intention est celui qu'attend deja [handleSendTo] : destinataire dans
+        // l'URI `smsto:` / `sms:`, corps dans `EXTRA_TEXT`. Aucune surface IPC nouvelle — le
+        // service reste protege par `SEND_RESPOND_VIA_MESSAGE`, permission de niveau systeme,
+        // et repasse par les memes gardes (verrou, plafonds, forme du numero).
         when (intent.action) {
             Intent.ACTION_SENDTO,
-            Intent.ACTION_VIEW -> handleSendTo(intent, startId)
+            Intent.ACTION_VIEW,
+            TelephonyManager.ACTION_RESPOND_VIA_MESSAGE -> handleSendTo(intent, startId)
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY

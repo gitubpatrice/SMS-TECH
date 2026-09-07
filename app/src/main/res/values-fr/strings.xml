@@ -262,7 +262,19 @@
     <string name="settings_vault_pin_cleared">PIN du coffre retiré.</string>
     <!-- v1.25.3 (audit M24) — le dialogue de confirmation reprenait la description du réglage. -->
     <string name="settings_vault_pin_clear_confirm_title">Retirer le PIN du coffre ?</string>
-    <string name="settings_vault_pin_clear_confirm_body">Le coffre s\'ouvrira sans PIN ni mot de passe dédié, dès que l\'app elle-même est déverrouillée. Les conversations du coffre restent masquées de la liste principale.</string>
+    <string name="settings_vault_pin_clear_confirm_body">Saisissez le PIN du coffre pour le retirer. Le coffre s\'ouvrira ensuite dès que l\'app elle-même est déverrouillée. Ses conversations sont conservées et restent masquées de la liste principale.</string>
+    <!-- v1.27.10 (revue externe !38458) — remplacer le PIN du coffre demande celui en place. -->
+    <string name="settings_vault_pin_current_label">PIN actuel du coffre</string>
+    <string name="settings_vault_pin_new_label">Nouveau PIN ou mot de passe</string>
+    <!-- v1.27.10 — la porte de sortie quand le PIN du coffre est perdu. Elle détruit, et
+         c\'est voulu : une issue qui ne demanderait que le PIN d\'app serait le
+         contournement que l\'on vient de fermer. -->
+    <string name="settings_vault_pin_forgot_title">PIN du coffre oublié ?</string>
+    <string name="settings_vault_pin_forgot_desc">Vide le coffre et retire son PIN. La seule façon d\'y revenir sans le PIN — et elle détruit ce qu\'elle ouvre.</string>
+    <string name="settings_vault_pin_forgot_confirm_title">Vider le coffre et retirer son PIN ?</string>
+    <string name="settings_vault_pin_forgot_confirm_body">Toutes les conversations du coffre sont supprimées, messages compris, sur ce téléphone et dans le stockage SMS du système. Rien n\'est récupéré : c\'est le prix d\'un retour sans le PIN. Les conversations hors du coffre ne sont pas touchées. Action irréversible.</string>
+    <string name="settings_vault_pin_forgot_confirm_action">Vider et retirer</string>
+    <string name="settings_vault_pin_forgot_done">Coffre vidé : %1$d conversation(s) supprimée(s). Son PIN est retiré.</string>
     <!-- v1.25.3 (audit M23) — désactiver le verrou se faisait sur un simple tap. -->
     <string name="settings_lock_clear_confirm_title">Désactiver le verrouillage ?</string>
     <string name="settings_lock_clear_confirm_body">Votre PIN sera supprimé et SMS Tech s\'ouvrira sans rien demander. Le déverrouillage biométrique est désactivé aussi. Cette action est irréversible.</string>

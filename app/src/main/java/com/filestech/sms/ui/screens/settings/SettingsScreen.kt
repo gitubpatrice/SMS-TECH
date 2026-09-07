@@ -146,7 +146,11 @@ fun SettingsScreen(
     var showPurgeBlockedConfirm by remember { mutableStateOf(false) }
     // v1.13.0 — PIN/pass distinct coffre.
     var vaultPinSetupOpen by remember { mutableStateOf(false) }
-    var vaultPinClearConfirmOpen by remember { mutableStateOf(false) }
+    // v1.27.10 (revue externe GitLab !38458) — trois parcours distincts la ou il n'y en avait
+    // qu'un : poser/remplacer le PIN, le retirer (exige le PIN en place), et la porte de sortie
+    // destructive « PIN oublie ». L'ancien `vaultPinClearConfirmOpen` ne demandait rien.
+    var vaultPinDisableOpen by remember { mutableStateOf(false) }
+    var vaultPinForgetConfirmOpen by remember { mutableStateOf(false) }
     // v1.14.0 — Comportement boutons 112/17 (DIALER_ONLY vs HOLD_3S_DIRECT_CALL).
     // Retiré v1.14.1 : la page Mode urgence v1.14.1 utilise direct call avec
     // fallback automatique → picker Settings devenait orphelin (dead setting).
@@ -216,6 +220,13 @@ fun SettingsScreen(
                 // code panique. Voir [com.filestech.sms.security.AppLockManager.setPin].
                 SettingsViewModel.Event.PinRejectedSameAsPanicCode -> {
                     snackbarHost.showError(pinSameAsPanicMsg)
+                }
+                // v1.27.10 — porte de sortie « PIN du coffre oublie » : le compte rend le
+                // caractere destructif de l'operation constatable, pas seulement annonce.
+                is SettingsViewModel.Event.VaultPurged -> {
+                    snackbarHost.showSnackbar(
+                        ctx.getString(R.string.settings_vault_pin_forgot_done, e.count),
+                    )
                 }
             }
         }
@@ -430,7 +441,8 @@ fun SettingsScreen(
                 onOpenPanicCodeSetup = { panicCodeSetupOpen = true },
                 onOpenPanicCodeClearConfirm = { panicCodeClearConfirmOpen = true },
                 onOpenVaultPinSetup = { vaultPinSetupOpen = true },
-                onOpenVaultPinClearConfirm = { vaultPinClearConfirmOpen = true },
+                onOpenVaultPinDisable = { vaultPinDisableOpen = true },
+                onOpenVaultPinForgetConfirm = { vaultPinForgetConfirmOpen = true },
                 onOpenPurgeBlockedConfirm = { showPurgeBlockedConfirm = true },
                 onOpenAutoDeletePicker = { autoDeletePickerOpen = true },
             )
@@ -1032,12 +1044,17 @@ fun SettingsScreen(
     }
 
     // v1.13.0 — Dialog setup PIN/pass coffre : saisie + confirmation.
+    // v1.27.10 — le MEME dialogue sert au remplacement, avec un champ « PIN actuel » en tete
+    // des lors qu'un PIN est deja en place. Un seul aller-retour, donc aucune autorisation a
+    // faire vivre entre deux dialogues — c'est ce report d'etat qui aurait recree la faille.
     if (vaultPinSetupOpen) {
         VaultPinSetupDialog(
             appPinHint = state.security.lockMode == com.filestech.sms.domain.settings.LockMode.PIN ||
                 state.security.lockMode == com.filestech.sms.domain.settings.LockMode.BIOMETRIC,
-            onConfirm = { pin ->
-                viewModel.setVaultPin(pin)
+            requireCurrent = state.security.vaultPinEnabled,
+            onSubmit = { current, newPin -> viewModel.submitVaultPin(current, newPin) },
+            probeLockout = { viewModel.vaultLockoutRemainingMs() },
+            onSaved = {
                 vaultPinSetupOpen = false
                 rootScope.launch {
                     snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_saved))
@@ -1079,38 +1096,55 @@ fun SettingsScreen(
         )
     }
 
-    // v1.13.0 — Dialog confirmation retrait PIN/pass coffre (l'user désactive
-    // le toggle). Action non destructive (rien n'est effacé sauf le hash),
-    // mais on confirme pour éviter un toggle accidentel qui réduirait la
-    // sécurité. Pattern : confirm Button BrandDanger, Cancel autofocus.
-    if (vaultPinClearConfirmOpen) {
+    // v1.13.0 — retrait du PIN/pass coffre (l'utilisateur desactive le toggle).
+    //
+    // v1.27.10 (revue externe GitLab !38458) — c'etait une SIMPLE confirmation. Retirer le
+    // second facteur ne demandait donc que le premier, et quiconque connaissait le PIN
+    // d'application ouvrait le coffre en deux tapes. Le PIN en place est desormais exige, sous
+    // la meme temporisation que l'entree dans le coffre.
+    if (vaultPinDisableOpen) {
+        com.filestech.sms.ui.components.PinEntryDialog(
+            title = stringResource(R.string.settings_vault_pin_clear_confirm_title),
+            description = stringResource(R.string.settings_vault_pin_clear_confirm_body),
+            confirmLabel = stringResource(R.string.action_disable),
+            onVerify = { candidate -> viewModel.disableVaultPin(candidate) },
+            probeLockout = { viewModel.vaultLockoutRemainingMs() },
+            onVerified = {
+                vaultPinDisableOpen = false
+                rootScope.launch {
+                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_cleared))
+                }
+            },
+            onCancel = { vaultPinDisableOpen = false },
+        )
+    }
+
+    // v1.27.10 — porte de sortie « PIN du coffre oublie ». Elle EXISTE, parce qu'un secret
+    // irrecuperable sans issue est un piege ; elle est DESTRUCTIVE, parce qu'une issue gratuite
+    // serait le contournement qu'on vient de fermer. Le contenu du coffre part avec le PIN.
+    if (vaultPinForgetConfirmOpen) {
         val cancelFocus = remember { FocusRequester() }
-        // Même garde que les deux autres confirmations destructives de l'écran.
+        // Même garde que les autres confirmations destructives de l'écran.
         LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
         AlertDialog(
-            onDismissRequest = { vaultPinClearConfirmOpen = false },
-            // v1.25.3 (audit M24) — le corps reprenait `settings_vault_pin_desc`, qui décrit à
-            // quoi sert la fonctionnalité, pas ce que la confirmation va supprimer.
-            title = { Text(stringResource(R.string.settings_vault_pin_clear_confirm_title)) },
-            text = { Text(stringResource(R.string.settings_vault_pin_clear_confirm_body)) },
+            onDismissRequest = { vaultPinForgetConfirmOpen = false },
+            title = { Text(stringResource(R.string.settings_vault_pin_forgot_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_vault_pin_forgot_confirm_body)) },
             confirmButton = {
                 androidx.compose.material3.FilledTonalButton(
                     onClick = {
-                        viewModel.clearVaultPin()
-                        vaultPinClearConfirmOpen = false
-                        rootScope.launch {
-                            snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_cleared))
-                        }
+                        viewModel.forgetVaultPinAndPurge()
+                        vaultPinForgetConfirmOpen = false
                     },
                     colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
                         containerColor = com.filestech.sms.ui.theme.BrandDanger,
                         contentColor = androidx.compose.ui.graphics.Color.White,
                     ),
-                ) { Text(stringResource(R.string.action_disable)) }
+                ) { Text(stringResource(R.string.settings_vault_pin_forgot_confirm_action)) }
             },
             dismissButton = {
                 TextButton(
-                    onClick = { vaultPinClearConfirmOpen = false },
+                    onClick = { vaultPinForgetConfirmOpen = false },
                     modifier = Modifier.focusRequester(cancelFocus).focusable(),
                 ) { Text(stringResource(R.string.action_cancel)) }
             },
@@ -2852,12 +2886,21 @@ private fun EmergencyArmedRecap(
  * Bouton "Sauver" actif uniquement si :
  *  - PIN ≥ 4 caractères
  *  - confirmation == PIN
+ *  - v1.27.10 : le champ « PIN actuel » est rempli, quand [requireCurrent] l'exige
+ *
+ * ## v1.27.10 — pourquoi le remplacement se fait dans CE dialogue, en un seul aller-retour
+ *
+ * La revue externe GitLab !38458 a montre qu'on remplacait le PIN du coffre sans jamais
+ * demander celui en place. La correction evidente — un premier dialogue qui verifie, un second
+ * qui saisit — aurait recree le probleme sous une autre forme : entre les deux, il aurait fallu
+ * faire vivre une autorisation, et c'est precisement ce report d'etat qui se contourne. Un seul
+ * dialogue, un seul appel a [com.filestech.sms.security.VaultPinManager.changeVaultPin], qui
+ * verifie et remplace sans rien laisser entre les deux.
  *
  * **Sécurité** :
  *  - 2 champs `PasswordVisualTransformation` (jamais en clair).
- *  - 2 `String` locaux au composable, jamais persistés. Conversion en
- *    `CharArray` UNIQUEMENT à la validation, immédiatement passé à
- *    [VaultPinManager.setVaultPin] qui le wipe.
+ *  - 3 `String` locaux au composable, jamais persistés. Conversion en
+ *    `CharArray` UNIQUEMENT à la validation, immédiatement passé au manager qui les wipe.
  *  - Pas d'autofill, pas de prédictions (`KeyboardType.Password`).
  *  - [appPinHint] = true si l'user a un PIN d'app configuré → warning UX
  *    visible "choisis un PIN différent" (pas une validation crypto — l'user
@@ -2874,21 +2917,44 @@ private fun EmergencyArmedRecap(
 @Composable
 private fun VaultPinSetupDialog(
     appPinHint: Boolean,
-    onConfirm: (CharArray) -> Unit,
+    requireCurrent: Boolean,
+    onSubmit: suspend (current: CharArray?, newPin: CharArray) -> com.filestech.sms.security.PinVerdict,
+    probeLockout: suspend () -> Long,
+    onSaved: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var current by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
+    var submitting by remember { mutableStateOf(false) }
+    var currentWrong by remember { mutableStateOf(false) }
+    val lockout = com.filestech.sms.ui.components.rememberLockoutState(
+        if (requireCurrent) probeLockout else null,
+    )
+    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     val tooShort = pin.isNotEmpty() && pin.length < 4
     val mismatch = confirm.isNotEmpty() && confirm != pin
-    val canConfirm = pin.length >= 4 && confirm == pin
+    val lockedOut = lockout.active
+    val lockoutMessage = lockout.message()
+    val canConfirm = pin.length >= 4 && confirm == pin && !submitting && !lockedOut &&
+        (!requireCurrent || current.isNotEmpty())
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_vault_pin_set_title)) },
+        onDismissRequest = { if (!submitting) onDismiss() },
+        title = {
+            Text(
+                stringResource(
+                    if (requireCurrent) {
+                        R.string.settings_vault_pin_change
+                    } else {
+                        R.string.settings_vault_pin_set_title
+                    },
+                ),
+            )
+        },
         text = {
             // v1.27.1 (N3) — DANS le contenu du dialogue : PIN du coffre.
             ProtectSecretInput()
@@ -2905,11 +2971,42 @@ private fun VaultPinSetupDialog(
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                 }
+                // v1.27.10 (revue externe GitLab !38458) — champ « PIN actuel ». Sa presence
+                // est TOUTE la correction : sans lui, remplacer le PIN du coffre ne demandait
+                // que le PIN d'application, dont on cherche precisement a se proteger.
+                if (requireCurrent) {
+                    Spacer(Modifier.height(12.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = current,
+                        onValueChange = {
+                            current = it.take(64)
+                            currentWrong = false
+                        },
+                        label = { Text(stringResource(R.string.settings_vault_pin_current_label)) },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                        ),
+                        isError = currentWrong || lockedOut,
+                        supportingText = if (currentWrong) {
+                            { Text(stringResource(R.string.pin_error_invalid)) }
+                        } else null,
+                        enabled = !submitting && !lockedOut,
+                        modifier = Modifier.focusRequester(focusRequester),
+                    )
+                    // v1.27.10 — hors du champ, sinon Material 3 le rend en couleur
+                    // « desactive » : cf. [com.filestech.sms.ui.components.LockoutNotice].
+                    if (lockedOut) {
+                        com.filestech.sms.ui.components.LockoutNotice(lockoutMessage)
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 androidx.compose.material3.OutlinedTextField(
                     value = pin,
                     onValueChange = { pin = it.take(64) },
-                    label = { Text(stringResource(R.string.pin_entry_label)) },
+                    label = { Text(stringResource(R.string.settings_vault_pin_new_label)) },
                     singleLine = true,
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -2920,7 +3017,8 @@ private fun VaultPinSetupDialog(
                     supportingText = if (tooShort) {
                         { Text(stringResource(R.string.settings_vault_pin_too_short)) }
                     } else null,
-                    modifier = Modifier.focusRequester(focusRequester),
+                    enabled = !submitting && !lockedOut,
+                    modifier = if (requireCurrent) Modifier else Modifier.focusRequester(focusRequester),
                 )
                 Spacer(Modifier.height(12.dp))
                 androidx.compose.material3.OutlinedTextField(
@@ -2937,6 +3035,7 @@ private fun VaultPinSetupDialog(
                     supportingText = if (mismatch) {
                         { Text(stringResource(R.string.settings_vault_pin_mismatch)) }
                     } else null,
+                    enabled = !submitting && !lockedOut,
                 )
             }
         },
@@ -2944,15 +3043,30 @@ private fun VaultPinSetupDialog(
             Button(
                 enabled = canConfirm,
                 onClick = {
-                    val snapshot = pin.toCharArray()
+                    submitting = true
+                    // Meme hygiene qu'en v1.13.0 (audit SEC-1) : les `String` sont vides AVANT
+                    // le PBKDF2 (~100 ms), les `CharArray` portent le secret pendant l'appel
+                    // suspend et sont wipes par le manager.
+                    val currentSnapshot = if (requireCurrent) current.toCharArray() else null
+                    val newSnapshot = pin.toCharArray()
+                    current = ""
                     pin = ""
                     confirm = ""
-                    onConfirm(snapshot)
+                    scope.launch {
+                        val verdict = onSubmit(currentSnapshot, newSnapshot)
+                        submitting = false
+                        when (verdict) {
+                            is com.filestech.sms.security.PinVerdict.Ok -> onSaved()
+                            is com.filestech.sms.security.PinVerdict.Invalid -> currentWrong = true
+                            is com.filestech.sms.security.PinVerdict.LockedOut ->
+                                lockout.arm(verdict.untilWall)
+                        }
+                    }
                 },
             ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !submitting) {
                 Text(stringResource(R.string.action_cancel))
             }
         },
@@ -3053,7 +3167,7 @@ private fun NotificationsSection(
 /**
  * v1.15.0 — Section Sécurité. Extraite de [SettingsScreen] (lignes 402-491 v1.14.9).
  *
- * Pickers (`lockModePickerOpen`, `vaultPinSetupOpen`, `vaultPinClearConfirmOpen`,
+ * Pickers (`lockModePickerOpen`, `vaultPinSetupOpen`, `vaultPinDisableOpen`,
  * `showPurgeBlockedConfirm`, `autoDeletePickerOpen`) restent gérés par le parent —
  * la section ne reçoit que les callbacks d'ouverture. Cohérent avec [NotificationsSection].
  *
@@ -3074,7 +3188,8 @@ private fun SecuritySection(
     onOpenPanicCodeSetup: () -> Unit,
     onOpenPanicCodeClearConfirm: () -> Unit,
     onOpenVaultPinSetup: () -> Unit,
-    onOpenVaultPinClearConfirm: () -> Unit,
+    onOpenVaultPinDisable: () -> Unit,
+    onOpenVaultPinForgetConfirm: () -> Unit,
     onOpenPurgeBlockedConfirm: () -> Unit,
     onOpenAutoDeletePicker: () -> Unit,
 ) {
@@ -3197,14 +3312,25 @@ private fun SecuritySection(
                 description = stringResource(R.string.settings_vault_pin_desc),
                 value = security.vaultPinEnabled,
                 onChange = { v ->
-                    if (v) onOpenVaultPinSetup()
-                    else onOpenVaultPinClearConfirm()
+                    if (v) {
+                        onOpenVaultPinSetup()
+                    } else {
+                        onOpenVaultPinDisable()
+                    }
                 },
             )
             if (security.vaultPinEnabled) {
                 NavigationRow(
                     title = stringResource(R.string.settings_vault_pin_change),
                     onClick = onOpenVaultPinSetup,
+                )
+                // v1.27.10 — la porte de sortie « PIN oublie » a sa propre entree, visible, au
+                // lieu d'etre le fonctionnement par defaut de la bascule OFF. Elle annonce ce
+                // qu'elle detruit ; la bascule, elle, demande maintenant le PIN.
+                NavigationRow(
+                    title = stringResource(R.string.settings_vault_pin_forgot_title),
+                    description = stringResource(R.string.settings_vault_pin_forgot_desc),
+                    onClick = onOpenVaultPinForgetConfirm,
                 )
             }
         }

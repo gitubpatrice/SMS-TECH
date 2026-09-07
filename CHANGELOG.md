@@ -3,6 +3,63 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.27.10] — 2026-09-07
+
+Sept constats d'une relecture externe (Andrew Pozdnakov, MR F-Droid !38458), tous
+repris un par un et vérifiés avant correction. Aucun n'était à écarter.
+
+### Sécurité
+- **Le PIN du coffre pouvait être remplacé ou retiré sans qu'on demande jamais celui en
+  place.** Réglages → « Changer le PIN du coffre » rouvrait le dialogue de création ; la
+  bascule OFF ne demandait qu'une confirmation. Le porteur du seul PIN d'application —
+  exactement la personne contre laquelle ce second facteur existe — ouvrait donc le coffre en
+  deux tapes. Reproduit sur émulateur Android 14 par le relecteur, confirmé ligne à ligne.
+  Ce n'était pas un oubli : la KDoc de `VaultPinManager` documentait cette désactivation comme
+  la porte de sortie en cas de PIN oublié, **vingt lignes sous un « threat model » qu'elle
+  contredisait mot pour mot**. Une porte de sortie qui n'exige rien de plus que le facteur dont
+  on se protège n'est pas un compromis, c'est le contournement. Les deux opérations exigent
+  désormais le PIN du coffre.
+- **La porte de sortie subsiste, mais elle détruit.** Un secret irrécupérable sans issue est un
+  piège : « PIN du coffre oublié ? » **vide le coffre** avant d'en retirer le PIN, messages
+  compris, y compris dans le stockage SMS du système. Le porteur du PIN d'application peut donc
+  détruire — un pouvoir qu'il avait déjà, par désinstallation — mais plus lire.
+- **Aucune temporisation sur les essais de PIN du coffre.** Le raisonnement écrit dans le code
+  (« le coffre est derrière le verrou d'application, déjà borné ») ne vaut pas contre quelqu'un
+  qui a **déjà** franchi la première porte : ses essais ne produisent aucun échec côté
+  application. `verifyVaultPin` a désormais sa propre temporisation exponentielle, aux paliers
+  d'`AppLockManager` (réutilisés, pas recopiés), sur un jeu de clés `vault.*` **séparé** :
+  partager `auth.*` aurait laissé un simple verrouillage/déverrouillage l'effacer à volonté.
+  Elle couvre l'ouverture, le remplacement et le retrait — un seul garde, trois portes.
+
+### Corrigé
+- **Le « mode résistant » mourait toutes les 6 h et ne reprenait pas après un redémarrage, en
+  silence.** `KeepAliveService` était déclaré `dataSync`, type qu'Android 15 borne à 6 h
+  cumulées par 24 h **et** interdit de démarrer depuis `BOOT_COMPLETED` sous `targetSdk 35`.
+  L'exception de démarrage partait dans le catch défensif : rien n'était visible. Passé en
+  `specialUse`, soumis à aucune des deux règles, et qui décrit aussi honnêtement ce que fait ce
+  service — rien, sinon exister. `onTimeout` implémenté malgré tout : ne pas s'arrêter à temps
+  vaut un plantage, pas une simple perte de fonction.
+- **« Répondre par message » depuis un appel entrant n'a jamais fonctionné.** Le manifeste
+  déclare `RESPOND_VIA_MESSAGE` depuis la v1.2.0, mais le `when` de `HeadlessSmsSendService` ne
+  l'a **jamais** accepté : l'intention tombait dans le `else` et le service s'arrêtait sans rien
+  envoyer. Vérifié par `git log -S` — fonctionnalité annoncée au système, jamais rendue.
+- **Liens « Code source » et « Politique de confidentialité » de l'écran À propos en 404.**
+  `gitubpatrice/sms_tech` au lieu de `SMS-TECH` — le séparateur, pas la casse. Mesuré :
+  404 / 404 / 200. Seul le lien « Releases » était juste, ce qui masquait le défaut.
+- **Le compte à rebours de temporisation était illisible.** Il vivait dans le `supportingText`
+  du champ de saisie, que Material 3 grisè dès que le champ est désactivé — or le champ l'est
+  précisément pendant le blocage. Le seul message expliquant pourquoi l'interface ne répond
+  plus était donc le plus pâle de l'écran. Rendu hors du champ, en couleur d'erreur.
+  Constaté sur S9. *Un message d'état ne doit pas vivre dans le composant que cet état éteint.*
+
+### Interne
+- 12 tests dans `VaultPinGuardsTest`, posés sur `VaultPinManager` et **non sur l'écran** :
+  l'ancienne garde vivait dans l'interface, c'est bien pour ça qu'elle ne gardait rien.
+- L'étiquette `SMS Tech (debug)` n'existait que dans `src/debug/res/values/`. Sur un appareil en
+  français, `values-fr/` de `main` la recouvrait : la qualification de langue prime sur le source
+  set. Les deux applications portaient donc le même nom, et une session de test entière est
+  passée sur la release en croyant tester le correctif. Jumeau `values-fr/` ajouté.
+
 ## [1.27.9] — 2026-08-26
 
 ### Corrigé

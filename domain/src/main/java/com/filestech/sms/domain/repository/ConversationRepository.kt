@@ -69,6 +69,16 @@ interface ConversationRepository {
      */
     suspend fun markAllRead()
     suspend fun delete(id: Long)
+
+    /**
+     * v1.27.10 (revue externe GitLab !38458) — supprime TOUTES les conversations du coffre,
+     * messages compris, et propage au fournisseur SMS/MMS du systeme comme [delete]. Renvoie le
+     * nombre de conversations supprimees.
+     *
+     * Seul appelant legitime : la porte de sortie « PIN du coffre oublie » des Reglages, qui
+     * echange l'acces contre la destruction. Cf. `VaultPinManager.forgetVaultPin`.
+     */
+    suspend fun deleteAllInVault(): Int
     suspend fun deleteMessage(messageId: Long)
 
     /**

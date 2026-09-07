@@ -558,11 +558,16 @@ private fun safeStartActivity(context: android.content.Context, intent: android.
 // ─────────────────────────────────────────────────────────────────────────────
 
 private const val AUTHOR_NAME = "Patrice Haltaya"
-private const val REPO_URL = "https://github.com/gitubpatrice/sms_tech"
+
+// v1.27.10 (revue externe GitLab !38458) — le depot s'appelle `SMS-TECH`, pas `sms_tech` :
+// ces deux liens rendaient 404 depuis toujours. Ce n'est pas une affaire de casse (GitHub
+// l'ignore) mais de separateur, tiret contre soulignement. Seul RELEASES_URL etait juste, ce
+// qui a masque le defaut : une des trois surfaces marchait.
+private const val REPO_URL = "https://github.com/gitubpatrice/SMS-TECH"
 private const val RELEASES_URL = "https://github.com/gitubpatrice/SMS-TECH/releases/latest"
 private const val WEBSITE_URL = "https://files-tech.com"
 private const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
-private const val PRIVACY_URL = "https://github.com/gitubpatrice/sms_tech/blob/main/PRIVACY.md"
+private const val PRIVACY_URL = "https://github.com/gitubpatrice/SMS-TECH/blob/main/PRIVACY.md"
 
 private data class PrivacyBadge(val icon: ImageVector, val label: String, val color: Color)
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.27.10 — jumeau francais de `src/debug/res/values/strings.xml`.
+
+  Sans ce fichier, l'etiquette « SMS Tech (debug) » ne s'appliquait QU'EN ANGLAIS : sur un
+  appareil en francais, `src/main/res/values-fr/strings.xml` redefinit `app_name` et l'emporte
+  sur le `values/` du source set debug — la qualification de langue prime sur le source set.
+  Les deux applications portaient donc le meme nom et la meme icone, et rien ne permettait de
+  les distinguer sur l'ecran d'accueil.
+
+  Constate le 2026-09-07 : une session de test a ete menee entierement sur la release 1.27.8
+  en croyant tester le correctif. Toute surcharge de `app_name` cote debug doit exister dans
+  AUTANT de dossiers qualifies que `main` en declare.
+-->
+<resources>
+    <string name="app_name">SMS Tech (debug)</string>
+</resources>

@@ -559,6 +559,24 @@ class ConversationRepositoryImpl @Inject constructor(
         conversationDao.delete(id)
     }
 
+    /**
+     * v1.27.10 — voir [ConversationRepository.deleteAllInVault].
+     *
+     * Boucle sur [delete] plutot qu'un `DELETE` de masse : chaque conversation doit d'abord
+     * disparaitre du fournisseur du systeme, sinon la resynchronisation suivante la ressuscite
+     * hors du coffre. Une conversation qui echoue n'interrompt pas les autres — un coffre
+     * partiellement purge vaut mieux qu'un coffre intact dont l'utilisateur croit qu'il est vide.
+     */
+    override suspend fun deleteAllInVault(): Int = withContext(io) {
+        var deleted = 0
+        for (id in conversationDao.idsInVault()) {
+            runCatching { delete(id) }
+                .onSuccess { deleted++ }
+                .onFailure { Timber.w(it, "deleteAllInVault: conversation %d not deleted", id) }
+        }
+        deleted
+    }
+
     /** v1.26.1 (audit F2) — voir [ConversationRepository.setMessageStarred]. */
     override suspend fun setMessageStarred(messageId: Long, starred: Boolean) = withContext(io) {
         messageDao.setStarred(messageId, starred)

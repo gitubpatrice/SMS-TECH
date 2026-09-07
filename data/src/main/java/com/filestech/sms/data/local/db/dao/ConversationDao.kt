@@ -96,6 +96,18 @@ interface ConversationDao {
     @Query("SELECT COUNT(*) FROM conversations WHERE in_vault = 1")
     suspend fun countInVault(): Int
 
+    /**
+     * v1.27.10 — identifiants des conversations du coffre, pour la porte de sortie destructive
+     * « PIN du coffre oublie ». On rend des IDENTIFIANTS et non un `DELETE` de masse : la
+     * suppression doit passer par `ConversationRepository.delete`, qui propage d'abord au
+     * fournisseur SMS/MMS du systeme. Un `DELETE FROM conversations WHERE in_vault = 1` viderait
+     * la base locale en laissant les messages dans le fournisseur, ou la prochaine
+     * resynchronisation serait allee les rechercher — le coffre « detruit » serait reapparu en
+     * clair dans la liste principale, ce qui est exactement l'inverse du but.
+     */
+    @Query("SELECT id FROM conversations WHERE in_vault = 1")
+    suspend fun idsInVault(): List<Long>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ConversationEntity): Long
 

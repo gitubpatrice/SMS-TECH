@@ -270,8 +270,20 @@
     <string name="settings_vault_pin_saved">Vault PIN saved.</string>
     <string name="settings_vault_pin_cleared">Vault PIN removed.</string>
     <!-- v1.25.3 (audit M24) — the confirm dialog reused the feature description as its body. -->
+    <!-- v1.27.10 (external review !38458) — removing the vault PIN now requires the vault PIN. -->
     <string name="settings_vault_pin_clear_confirm_title">Remove the vault PIN?</string>
-    <string name="settings_vault_pin_clear_confirm_body">The vault will open without its own PIN or password, as soon as the app itself is unlocked. Vault conversations stay hidden from the main list.</string>
+    <string name="settings_vault_pin_clear_confirm_body">Enter the vault PIN to remove it. The vault will then open as soon as the app itself is unlocked. Its conversations are kept, and stay hidden from the main list.</string>
+    <!-- v1.27.10 — vault PIN replacement now asks for the one in place. -->
+    <string name="settings_vault_pin_current_label">Current vault PIN</string>
+    <string name="settings_vault_pin_new_label">New PIN or password</string>
+    <!-- v1.27.10 — the way out when the vault PIN is lost. It destroys, on purpose: a way out
+         that asked for nothing more than the app PIN would be the very bypass we closed. -->
+    <string name="settings_vault_pin_forgot_title">Forgotten vault PIN?</string>
+    <string name="settings_vault_pin_forgot_desc">Empties the vault and removes its PIN. The only way back in without the PIN — and it destroys what it opens.</string>
+    <string name="settings_vault_pin_forgot_confirm_title">Empty the vault and remove its PIN?</string>
+    <string name="settings_vault_pin_forgot_confirm_body">Every conversation in the vault is deleted, messages included, on this phone and from the system SMS store. Nothing is recovered — this is the price of getting back in without the PIN. Conversations outside the vault are untouched. This cannot be undone.</string>
+    <string name="settings_vault_pin_forgot_confirm_action">Empty and remove</string>
+    <string name="settings_vault_pin_forgot_done">Vault emptied: %1$d conversation(s) deleted. Its PIN is removed.</string>
     <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
     <string name="settings_lock_clear_confirm_title">Turn off app lock?</string>
     <string name="settings_lock_clear_confirm_body">Your PIN will be deleted and SMS Tech will open without asking for anything. Biometric unlock is turned off too. This cannot be undone.</string>
