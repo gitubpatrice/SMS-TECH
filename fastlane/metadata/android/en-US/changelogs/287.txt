@@ -1,0 +1,6 @@
+More from the external review: three adjacent paths still opened the vault.
+
+- "Reset all settings" put the lock and the vault PIN back to disabled without erasing anything. Fixed.
+- The "forgotten PIN" way out removed the PIN even when the purge had failed.
+- A backup restored on another phone reused message references from the original phone.
+- Deleting a message did not erase its system copy, and a full resync duplicated it.

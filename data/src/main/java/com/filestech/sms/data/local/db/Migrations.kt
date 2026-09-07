@@ -2,6 +2,7 @@ package com.filestech.sms.data.local.db
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.filestech.sms.data.sms.canonicalTelephonyUri
 
 /**
  * Room migrations for the SQLCipher-backed [AppDatabase].
@@ -135,6 +136,70 @@ object Migrations {
         }
     }
 
+    /**
+     * v7 → v8 (2026-09-07, v1.27.11) — **normalise `messages.telephony_uri`**, et supprime les
+     * doublons que sa divergence de forme a produits. Aucun changement de schema : c'est une
+     * migration de DONNEES.
+     *
+     * # Le defaut, reproduit avant d'etre corrige
+     *
+     * Selon la version d'Android, `ContentResolver.insert` rend `content://sms/sent/<id>`
+     * (mesure : Galaxy S9 / Android 10) ou `content://sms/<id>` (Galaxy S24 / Android 16).
+     * `TelephonyReader` enregistrait la forme rendue, telle quelle, pour tout message que
+     * SMS Tech ecrit lui-meme ; l'import depuis le systeme, lui, a toujours construit la forme
+     * canonique. L'index `UNIQUE(telephony_uri)` compare des CHAINES : les deux ecritures
+     * designant la meme ligne systeme ne se rencontraient jamais. Une resynchronisation
+     * complete — le bouton « Resynchroniser », qui remet le curseur a zero — reimportait donc
+     * chaque message ecrit par l'application **en double**.
+     *
+     * # Pourquoi supprimer, et laquelle des deux lignes
+     *
+     * Normaliser sans supprimer violerait l'index des la premiere collision, et la migration
+     * echouerait — la base resterait en v7 a chaque demarrage. On supprime donc d'abord.
+     *
+     * **La ligne conservee est celle que l'APPLICATION a ecrite**, celle qui porte le dossier,
+     * et jamais celle venue de l'import. Ce n'est pas arbitraire : elle seule porte la reaction
+     * emoji, la citation (`reply_to_message_id`), le favori, l'etat d'envoi et l'identifiant
+     * MMS. Elle appartient surtout a la conversation d'ORIGINE — qui peut etre dans le coffre,
+     * la ou son jumeau importe se serait pose en clair. Conserver l'import aurait donc pu sortir
+     * un message du coffre.
+     *
+     * # Pourquoi une boucle Kotlin plutot qu'un `UPDATE` unique
+     *
+     * La forme canonique se calcule par une regle — cf. [canonicalTelephonyUri] — qui s'ecrit
+     * mal en SQLite et se relit encore plus mal. La boucle porte sur les seules lignes au
+     * format `content://…/<dossier>/<id>`, qui sont peu nombreuses au regard de la table, et
+     * Room execute deja tout `migrate()` dans une transaction : soit l'ensemble passe, soit
+     * rien ne bouge et la migration sera rejouee au prochain demarrage.
+     */
+    val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val aNormaliser = mutableListOf<Pair<Long, String>>()
+            db.query(
+                "SELECT id, telephony_uri FROM messages " +
+                    "WHERE telephony_uri IS NOT NULL AND telephony_uri LIKE 'content://%/%/%'",
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val uri = cursor.getString(1) ?: continue
+                    val canonique = canonicalTelephonyUri(uri)
+                    if (canonique != uri) aNormaliser += id to canonique
+                }
+            }
+            for ((id, canonique) in aNormaliser) {
+                // Le jumeau importe s'efface AVANT la normalisation, sans quoi l'index refuse.
+                db.execSQL(
+                    "DELETE FROM messages WHERE telephony_uri = ? AND id <> ?",
+                    arrayOf<Any>(canonique, id),
+                )
+                db.execSQL(
+                    "UPDATE messages SET telephony_uri = ? WHERE id = ?",
+                    arrayOf<Any>(canonique, id),
+                )
+            }
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -143,5 +208,6 @@ object Migrations {
         MIGRATION_4_5,
         MIGRATION_5_6,
         MIGRATION_6_7,
+        MIGRATION_7_8,
     )
 }

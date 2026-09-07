@@ -13,7 +13,9 @@ import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.local.db.entity.ConversationEntity
+import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.local.db.mapper.toDomain
+import com.filestech.sms.data.sms.canonicalTelephonyUri
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Attachment
 import com.filestech.sms.domain.model.Conversation
@@ -26,6 +28,7 @@ import com.filestech.sms.domain.purge.purgeCutoffMs
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
+import com.filestech.sms.domain.repository.VaultPurgeResult
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -420,6 +423,18 @@ class ConversationRepositoryImpl @Inject constructor(
 
     companion object {
         /**
+         * v1.27.11 — colonne commune a `content://sms` et `content://mms`, servant de
+         * discriminant d'identite dans [matchesSystemRow]. Litteral et non
+         * `Telephony.Sms.DATE` : la meme constante vaut pour les deux tables, mais pas la
+         * meme unite.
+         */
+        private const val SYSTEM_DATE_COLUMN = "date"
+        private const val MMS_URI_PREFIX = "content://mms"
+
+        /** v1.27.11 — voir [matchesSystemRow] pour le choix d'une minute. */
+        private const val SYSTEM_DATE_TOLERANCE_MS = 60_000L
+
+        /**
          * Rapprochement d'une conversation 1-to-1 par la clé numérique canonique [blockKey]
          * (9 chiffres significatifs). Extrait ici en fonction pure (aucune dépendance Room)
          * pour être testable en JVM et appelé depuis [findOrCreate] : quand l'égalité stricte
@@ -549,32 +564,68 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun delete(id: Long) = withContext(io) {
-        // Propagate to the system SMS/MMS content provider before dropping the local rows.
-        // Otherwise a re-import (manual refresh, factory reset, panic + re-grant) would
-        // resurrect every message and the conversation would reappear out of nowhere.
+        deleteWithSystemCopy(id)
+        Unit
+    }
+
+    /**
+     * Supprime la conversation [id] localement ET sa copie dans le fournisseur SMS/MMS du
+     * systeme. Rend `true` si la copie systeme est demontrablement partie pour TOUS ses messages.
+     *
+     * La propagation precede le `DELETE` local : sans elle, une reimportation (rafraichissement
+     * manuel, retour du role SMS, restauration d'usine) ressusciterait chaque message et la
+     * conversation reapparaitrait de nulle part.
+     *
+     * v1.27.11 (revue externe GitLab !38458, constat 2) — la fonction **rend compte**. Elle
+     * gobait l'echec : le `runCatching` etait sans `onFailure`, et
+     * [deleteFromTelephonyProvider] jetait le nombre de lignes. [delete] n'a rien a en faire —
+     * l'utilisateur qui efface un fil voit la ligne disparaitre, c'est ce qu'il a demande — mais
+     * [deleteAllInVault] en a besoin : la, une copie systeme laissee derriere finit par revenir.
+     */
+    private suspend fun deleteWithSystemCopy(id: Long): Boolean {
+        var systemCopyGone = true
         runCatching {
             val msgs = messageDao.findByConversation(id)
-            for (m in msgs) deleteFromTelephonyProvider(m.telephonyUri)
+            for (m in msgs) if (!deleteFromTelephonyProvider(m)) systemCopyGone = false
+        }.onFailure {
+            systemCopyGone = false
+            Timber.w(it, "delete: system-provider sweep failed for conversation %d", id)
         }
         conversationDao.delete(id)
+        return systemCopyGone
     }
 
     /**
      * v1.27.10 — voir [ConversationRepository.deleteAllInVault].
      *
-     * Boucle sur [delete] plutot qu'un `DELETE` de masse : chaque conversation doit d'abord
-     * disparaitre du fournisseur du systeme, sinon la resynchronisation suivante la ressuscite
-     * hors du coffre. Une conversation qui echoue n'interrompt pas les autres — un coffre
-     * partiellement purge vaut mieux qu'un coffre intact dont l'utilisateur croit qu'il est vide.
+     * Boucle sur [deleteWithSystemCopy] plutot qu'un `DELETE` de masse : chaque conversation doit
+     * d'abord disparaitre du fournisseur du systeme, sinon la resynchronisation suivante la
+     * ressuscite hors du coffre. Une conversation qui echoue n'interrompt pas les autres — un
+     * coffre partiellement purge vaut mieux qu'un coffre intact dont l'utilisateur croit qu'il
+     * est vide.
+     *
+     * v1.27.11 (meme revue, constat 2) — ce qui a echoue est desormais COMPTE, et le coffre est
+     * RELU apres la boucle. L'appelant decide alors s'il retire le PIN ; il ne le retire plus sur
+     * un simple nombre de succes. Voir [VaultPurgeResult].
      */
-    override suspend fun deleteAllInVault(): Int = withContext(io) {
+    override suspend fun deleteAllInVault(): VaultPurgeResult = withContext(io) {
         var deleted = 0
+        var failed = 0
         for (id in conversationDao.idsInVault()) {
-            runCatching { delete(id) }
-                .onSuccess { deleted++ }
-                .onFailure { Timber.w(it, "deleteAllInVault: conversation %d not deleted", id) }
+            runCatching { deleteWithSystemCopy(id) }
+                .onSuccess { systemCopyGone -> if (systemCopyGone) deleted++ else failed++ }
+                .onFailure {
+                    failed++
+                    Timber.w(it, "deleteAllInVault: conversation %d not deleted", id)
+                }
         }
-        deleted
+        // Relu APRES la boucle, et non deduit d'elle : une conversation deplacee dans le coffre
+        // pendant la purge n'apparait dans aucun des deux compteurs ci-dessus.
+        VaultPurgeResult(
+            deleted = deleted,
+            failed = failed,
+            remaining = conversationDao.idsInVault().size,
+        )
     }
 
     /** v1.26.1 (audit F2) — voir [ConversationRepository.setMessageStarred]. */
@@ -586,7 +637,7 @@ class ConversationRepositoryImpl @Inject constructor(
         // Same rationale as [delete]: remove the row from the system content provider so the
         // next launch (or a future re-import) doesn't bring it back.
         val msg = messageDao.findById(messageId)
-        deleteFromTelephonyProvider(msg?.telephonyUri)
+        msg?.let { deleteFromTelephonyProvider(it) }
         // v1.24.0 (bug suppression) — atomique : effacer le message ET recalculer l'aperçu de la
         // conversation. Sans le refresh, supprimer le dernier message d'un fil laissait la liste
         // afficher le message supprimé indéfiniment (confirmé sur une vraie sauvegarde 2026-07-23).
@@ -656,18 +707,101 @@ class ConversationRepositoryImpl @Inject constructor(
 
     /**
      * Deletes a single SMS / MMS row from the system content provider, identified by the URI we
-     * captured at insert/import time. No-op when [telephonyUri] is null (e.g. drafts created
-     * before the row was mirrored) or when the OS refuses the delete (SecurityException — we are
-     * no longer the default SMS app). Failures are swallowed because the Room delete must still
-     * succeed: the user expects the message to disappear from the app even if the system row
-     * lingers and gets cleaned up the next time we are default.
+     * captured at insert/import time. No-op when the URI is null (e.g. drafts created before the
+     * row was mirrored) or when the OS refuses the delete (SecurityException — we are no longer
+     * the default SMS app). Failures do not propagate: the Room delete must still succeed, the
+     * user expects the message to disappear from the app even if the system row lingers and gets
+     * cleaned up the next time we are default.
+     *
+     * v1.27.11 (revue externe GitLab !38458, constats 2 et 3) — deux changements :
+     *
+     *  1. la fonction **rend** ce qui s'est passe. Elle jetait le nombre de lignes rendu par
+     *     `delete`, si bien qu'un refus du fournisseur ressemblait trait pour trait a une
+     *     suppression reussie. [deleteAllInVault] s'appuie sur cette valeur ;
+     *  2. elle **verifie l'identite de la ligne avant d'y toucher**, cf. [matchesSystemRow].
+     *
+     * `true` signifie « la copie systeme n'est plus la » : supprimee, ou deja absente, ou jamais
+     * miroir d'une ligne systeme. `false` signifie « quelque chose subsiste », y compris le cas
+     * ou l'on a deliberement refuse de supprimer.
      */
-    private fun deleteFromTelephonyProvider(telephonyUri: String?) {
-        if (telephonyUri.isNullOrBlank()) return
-        runCatching {
-            context.contentResolver.delete(Uri.parse(telephonyUri), null, null)
-        }.onFailure { Timber.w(it, "Failed to delete %s from system provider", telephonyUri) }
+    private fun deleteFromTelephonyProvider(message: MessageEntity): Boolean {
+        val telephonyUri = message.telephonyUri
+        if (telephonyUri.isNullOrBlank()) return true
+        val uri = canonicalUri(telephonyUri) ?: return false
+        return when (matchesSystemRow(uri, message)) {
+            // Rien a supprimer : l'utilisateur a deja efface la ligne depuis une autre app SMS.
+            SystemRowMatch.ABSENT -> true
+            // Ce n'est PAS ce message. On s'abstient — voir [matchesSystemRow].
+            SystemRowMatch.MISMATCH -> {
+                Timber.w("Refused to delete %s: system row is a different message", telephonyUri)
+                false
+            }
+            // MATCH, ou identite invérifiable (pas de role SMS) : on tente, comme avant.
+            SystemRowMatch.MATCH, SystemRowMatch.UNKNOWN -> runCatching {
+                context.contentResolver.delete(uri, null, null) > 0
+            }.onFailure {
+                Timber.w(it, "Failed to delete %s from system provider", telephonyUri)
+            }.getOrDefault(false)
+        }
     }
+
+    /**
+     * v1.27.11 — voir [canonicalTelephonyUri] pour la regle et la mesure qui la justifie.
+     *
+     * Normaliser ICI, en plus du chemin d'ecriture, n'est pas redondant : cela couvre les lignes
+     * **deja** enregistrees dans toutes les bases installees, que la migration `7 → 8` rattrape
+     * en base mais qu'un profil non migre porterait encore.
+     */
+    private fun canonicalUri(raw: String): Uri? =
+        runCatching { Uri.parse(canonicalTelephonyUri(raw)) }.getOrNull()
+
+    private enum class SystemRowMatch { MATCH, MISMATCH, ABSENT, UNKNOWN }
+
+    /**
+     * v1.27.11 (revue externe GitLab !38458, constat 3) — la ligne systeme designee par [uri]
+     * est-elle bien CE message ?
+     *
+     * La question ne se posait pas tant qu'un `telephony_uri` ne pouvait venir que de cet
+     * appareil. La restauration en a fait venir d'ailleurs : jusqu'a la v1.27.10 elle recopiait
+     * tels quels les identifiants du telephone SOURCE, et `content://sms/42` designe un message
+     * ici et un autre la-bas. [com.filestech.sms.data.backup.BackupService] ne cree plus de
+     * telles liaisons, mais les lignes deja restaurees par les versions anterieures en portent —
+     * et rien dans le schema ne permet de les reconnaitre apres coup. C'est donc le
+     * consommateur qu'on protege, pas la donnee qu'on repare.
+     *
+     * Le discriminant est la date, seule colonne commune, stable et lisible des deux tables.
+     * Attention aux unites : `content://mms` compte en SECONDES la ou `content://sms` compte en
+     * millisecondes — cf. `TelephonyReader`, qui stocke `dateSec * 1000L`.
+     *
+     * La tolerance d'une minute n'est pas de la prudence molle, elle est necessaire : les dates
+     * des MMS sortants sont posees par la pile du systeme, pas par nous. Elle ne coute rien au
+     * pouvoir discriminant recherche — deux messages sans rapport, portant le meme identifiant
+     * de fournisseur sur deux telephones differents, et emis a moins d'une minute d'intervalle,
+     * cela ne se rencontre pas. Le doute profite a la suppression ([UNKNOWN]) : sans role SMS on
+     * ne lit pas plus qu'on ne supprime, et refuser enfermerait l'utilisateur dehors de sa
+     * propre porte de sortie « PIN oublie ».
+     */
+    private fun matchesSystemRow(uri: Uri, message: MessageEntity): SystemRowMatch = runCatching {
+        val isMms = uri.toString().startsWith(MMS_URI_PREFIX)
+        context.contentResolver
+            .query(uri, arrayOf(SYSTEM_DATE_COLUMN), null, null, null)
+            .use { cursor ->
+                when {
+                    cursor == null -> SystemRowMatch.UNKNOWN
+                    !cursor.moveToFirst() -> SystemRowMatch.ABSENT
+                    else -> {
+                        val raw = cursor.getLong(0)
+                        val systemDateMs = if (isMms) raw * 1000L else raw
+                        val drift = kotlin.math.abs(systemDateMs - message.date)
+                        if (drift <= SYSTEM_DATE_TOLERANCE_MS) {
+                            SystemRowMatch.MATCH
+                        } else {
+                            SystemRowMatch.MISMATCH
+                        }
+                    }
+                }
+            }
+    }.getOrElse { SystemRowMatch.UNKNOWN }
     override suspend fun search(query: String): List<Message> = withContext(io) {
         val safe = escapeFtsQuery(query)
         if (safe.isBlank()) emptyList() else messageDao.search(safe).map { it.toDomain() }

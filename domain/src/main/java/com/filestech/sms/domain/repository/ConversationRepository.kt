@@ -72,13 +72,15 @@ interface ConversationRepository {
 
     /**
      * v1.27.10 (revue externe GitLab !38458) — supprime TOUTES les conversations du coffre,
-     * messages compris, et propage au fournisseur SMS/MMS du systeme comme [delete]. Renvoie le
-     * nombre de conversations supprimees.
+     * messages compris, et propage au fournisseur SMS/MMS du systeme comme [delete].
      *
      * Seul appelant legitime : la porte de sortie « PIN du coffre oublie » des Reglages, qui
      * echange l'acces contre la destruction. Cf. `VaultPinManager.forgetVaultPin`.
+     *
+     * v1.27.11 (meme revue, constat 2) — renvoie un [VaultPurgeResult] et non plus un simple
+     * compte. Voir ce type pour la raison : un nombre de succes ne dit pas si le coffre est vide.
      */
-    suspend fun deleteAllInVault(): Int
+    suspend fun deleteAllInVault(): VaultPurgeResult
     suspend fun deleteMessage(messageId: Long)
 
     /**

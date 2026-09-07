@@ -284,6 +284,7 @@
     <string name="settings_vault_pin_forgot_confirm_body">Every conversation in the vault is deleted, messages included, on this phone and from the system SMS store. Nothing is recovered — this is the price of getting back in without the PIN. Conversations outside the vault are untouched. This cannot be undone.</string>
     <string name="settings_vault_pin_forgot_confirm_action">Empty and remove</string>
     <string name="settings_vault_pin_forgot_done">Vault emptied: %1$d conversation(s) deleted. Its PIN is removed.</string>
+    <string name="settings_vault_pin_forgot_incomplete">Purge incomplete: %1$d conversation(s) deleted, %2$d left. The vault PIN was NOT removed. Make SMS Tech your default SMS app, then try again.</string>
     <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
     <string name="settings_lock_clear_confirm_title">Turn off app lock?</string>
     <string name="settings_lock_clear_confirm_body">Your PIN will be deleted and SMS Tech will open without asking for anything. Biometric unlock is turned off too. This cannot be undone.</string>
@@ -636,7 +637,7 @@
     <string name="settings_resync_confirm_title">Resync from phone?</string>
     <string name="settings_resync_confirm_body">Re-imports messages from the system SMS/MMS provider. Existing messages stay (deduped via unique ID); previously deleted messages may reappear if they still exist in the system database. Continue?</string>
     <string name="settings_reset_all_confirm_title">Reset all settings?</string>
-    <string name="settings_reset_all_confirm_body">All your preferences (theme, notifications, sending, etc.) will return to default. Your conversations and messages are NOT affected.</string>
+    <string name="settings_reset_all_confirm_body">All your preferences (theme, notifications, sending, etc.) will return to default. Your conversations, your messages and your security settings (lock, vault PIN, panic code) are NOT affected.</string>
     <string name="settings_purge_blocked_confirm_title">Purge blocked conversations?</string>
     <string name="settings_purge_blocked_confirm_body">Deletes every conversation whose participants are entirely in the blocklist. This also removes them from the system SMS provider. Irreversible.</string>
 
@@ -735,8 +736,8 @@
     <string name="channel_sent_desc">Status of messages you sent.</string>
     <string name="channel_failed_label">Failed messages</string>
     <string name="channel_failed_desc">Errors and retry suggestions.</string>
-    <string name="channel_background_label">Background tasks</string>
-    <string name="channel_background_desc">Imports, backups and scheduled sending.</string>
+    <string name="channel_keep_alive_label">Resilient mode</string>
+    <string name="channel_keep_alive_desc">Keeps SMS Tech running on phones whose manufacturer shuts down background apps.</string>
     <string name="channel_safety_call_warning_label">Safety call warning</string>
     <string name="channel_safety_call_warning_desc">Reminder before automatic SMS to your emergency contacts.</string>
     <string name="channel_safety_call_receipt_label">Safety call alert finished</string>

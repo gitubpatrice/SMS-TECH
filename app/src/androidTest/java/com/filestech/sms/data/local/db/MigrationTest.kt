@@ -182,4 +182,72 @@ class MigrationTest {
             assertThat(c.isNull(1)).isTrue()
         }
     }
+
+    /**
+     * v1.27.11 — la migration `7 → 8` normalise `messages.telephony_uri` et efface les doublons
+     * que sa divergence de forme a produits.
+     *
+     * La base de depart reproduit ce qu'un appareil affecte contient reellement :
+     *  - **id 1** : le message tel que l'APPLICATION l'a ecrit, sous `content://sms/sent/9164`,
+     *    avec ce que lui seul porte — ici une reaction et un favori ;
+     *  - **id 2** : le meme message tel que l'IMPORT l'a recree apres une resynchronisation,
+     *    sous `content://sms/9164`, nu ;
+     *  - **id 3** : un message sans rapport, deja canonique, qui ne doit pas bouger.
+     *
+     * Ce que le test exige va au-dela de « il ne reste qu'une ligne » : il exige que ce soit
+     * **la bonne**. Conserver l'import aurait perdu la reaction et le favori — et, sur un vrai
+     * appareil, aurait pu sortir le message du coffre, l'import l'ayant pose dans la
+     * conversation en clair.
+     */
+    @Test
+    fun migrate7To8_normaliseLUriEtSupprimeLeDoublonEnGardantLaLigneDeLApplication() {
+        helper.createDatabase(TEST_DB, 1).use { db -> seedV1Row(db) }
+        helper.runMigrationsAndValidate(
+            TEST_DB,
+            7,
+            true,
+            Migrations.MIGRATION_1_2,
+            Migrations.MIGRATION_2_3,
+            Migrations.MIGRATION_3_4,
+            Migrations.MIGRATION_4_5,
+            Migrations.MIGRATION_5_6,
+            Migrations.MIGRATION_6_7,
+        ).use { db ->
+            db.execSQL("DELETE FROM messages")
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction,
+                     date, date_sent, read, starred, status, error_code, sub_id,
+                     scheduled_at, attachments_count, reaction_emoji)
+                VALUES
+                    (1, 1, 'content://sms/sent/9164', '+33612345678', 'coucou',
+                     0, 1, 1700000000000, 1700000000000, 1, 1, 2, NULL, NULL, NULL, 0, '❤️'),
+                    (2, 1, 'content://sms/9164', '+33612345678', 'coucou',
+                     0, 1, 1700000000000, 1700000000000, 1, 0, 2, NULL, NULL, NULL, 0, NULL),
+                    (3, 1, 'content://sms/7000', '+33612345678', 'sans rapport',
+                     0, 0, 1700000001000, 1700000001000, 1, 0, 2, NULL, NULL, NULL, 0, NULL)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, Migrations.MIGRATION_7_8)
+
+        // Le doublon a disparu, et c'est bien la ligne de l'import qui est partie.
+        db.query("SELECT id, telephony_uri, starred, reaction_emoji FROM messages ORDER BY id")
+            .use { c ->
+                assertThat(c.count).isEqualTo(2)
+
+                assertThat(c.moveToNext()).isTrue()
+                assertThat(c.getLong(0)).isEqualTo(1L)
+                assertThat(c.getString(1)).isEqualTo("content://sms/9164")
+                assertThat(c.getInt(2)).isEqualTo(1)
+                assertThat(c.getString(3)).isEqualTo("❤️")
+
+                // Le message etranger n'a pas ete touche.
+                assertThat(c.moveToNext()).isTrue()
+                assertThat(c.getLong(0)).isEqualTo(3L)
+                assertThat(c.getString(1)).isEqualTo("content://sms/7000")
+            }
+    }
 }

@@ -63,6 +63,12 @@ abstract class AppDatabase : RoomDatabase() {
         //   `conversations.avatar_uri TEXT` (both nullable) for the per-contact appearance
         //   feature. Strictly additive — legacy rows project NULL = default bubble color
         //   + default contact avatar. Migration v6→v7 in `Migrations.kt`.
-        const val SCHEMA_VERSION = 7
+        // v8 (2026-09-07, v1.27.11): AUCUN changement de schema — migration de DONNEES.
+        //   `messages.telephony_uri` etait enregistre sous deux formes pour la meme ligne du
+        //   fournisseur systeme (`content://sms/sent/<id>` cote application selon la version
+        //   d'Android, `content://sms/<id>` cote import), que l'index UNIQUE ne rapprochait
+        //   pas : une resynchronisation complete dupliquait chaque message ecrit par l'app.
+        //   La migration normalise et supprime les doublons deja crees. Cf. `Migrations.kt`.
+        const val SCHEMA_VERSION = 8
     }
 }

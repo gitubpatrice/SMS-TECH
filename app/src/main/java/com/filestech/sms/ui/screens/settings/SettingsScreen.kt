@@ -228,6 +228,19 @@ fun SettingsScreen(
                         ctx.getString(R.string.settings_vault_pin_forgot_done, e.count),
                     )
                 }
+                // v1.27.11 (revue externe GitLab !38458, constat 2) — la purge a échoué, le PIN
+                // reste donc en place. `showError` et non `showSnackbar` : l'utilisateur croit
+                // avoir ouvert son coffre, il faut qu'il apprenne le contraire ici et pas
+                // devant un dialogue de PIN qu'il n'attendait plus.
+                is SettingsViewModel.Event.VaultPurgeIncomplete -> {
+                    snackbarHost.showError(
+                        ctx.getString(
+                            R.string.settings_vault_pin_forgot_incomplete,
+                            e.deleted,
+                            e.left,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -669,8 +682,17 @@ fun SettingsScreen(
                         viewModel.update { it.copy(advanced = it.advanced.copy(keepAliveService = v)) }
                     },
                 )
-                // v1.8.0 — dialog de confirmation (les préférences revient
+                // v1.8.0 — dialog de confirmation (les préférences reviennent
                 // aux defaults, mais les conversations restent intactes).
+                //
+                // v1.27.11 (revue externe GitLab !38458, constat 1) — cette rangée reste
+                // volontairement VISIBLE en session leurre, contrairement aux sections
+                // Sauvegarde / Safety call / Mode urgence : une app SMS ordinaire sait
+                // réinitialiser ses réglages, et la masquer signalerait qu'il y a quelque chose
+                // à cacher. Ce qui la rendait dangereuse ici n'était pas sa visibilité mais son
+                // effet — elle remettait `lockMode` et `vaultPinEnabled` à leurs défauts. C'est
+                // [SettingsViewModel.resetAll] qui préserve désormais le bloc sécurité, et c'est
+                // le bon endroit : un garde d'écran ne dit rien du prochain point d'entrée.
                 NavigationRow(
                     stringResource(R.string.settings_reset_all),
                     onClick = { showResetAllConfirm = true },
@@ -943,7 +965,9 @@ fun SettingsScreen(
     // un précédent dialog ne réinitialise pas par réflexe.
     // v1.10.0 — confirm BrandBlue + blanc (demande user 2026-05-21).
     // Action remet les réglages aux défauts mais NE touche PAS aux messages
-    // (donc non-destructive au sens contenu utilisateur).
+    // (donc non-destructive au sens contenu utilisateur), ni — depuis v1.27.11 — aux
+    // réglages de sécurité. Le corps du dialogue le dit maintenant explicitement : il
+    // annonçait « toutes vos préférences » alors que la portée réelle s'arrête au confort.
     if (showResetAllConfirm) {
         val cancelFocus = remember { FocusRequester() }
         LaunchedEffect(Unit) { cancelFocus.requestFocus() }

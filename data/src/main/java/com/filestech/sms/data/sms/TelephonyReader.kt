@@ -230,7 +230,13 @@ class TelephonyReader @Inject constructor(
             threadId?.let { put(Telephony.Sms.THREAD_ID, it) }
             subId?.let { put(Telephony.Sms.SUBSCRIPTION_ID, it) }
         }
-        return resolver.insert(Telephony.Sms.Sent.CONTENT_URI, cv)?.toString()
+        // v1.27.11 — on enregistre la forme CANONIQUE, pas celle que rend le fournisseur.
+        // Voir [canonicalTelephonyUri] : selon la version d'Android, `insert` rend ici
+        // `content://sms/sent/<id>` ou `content://sms/<id>`, et la premiere est a la fois
+        // refusee en suppression et invisible pour la deduplication de l'import.
+        return resolver.insert(Telephony.Sms.Sent.CONTENT_URI, cv)
+            ?.toString()
+            ?.let(::canonicalTelephonyUri)
     }
 
     /** Insert an incoming SMS into the system inbox. Required from SmsDeliverReceiver. */
@@ -250,7 +256,9 @@ class TelephonyReader @Inject constructor(
             put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
             subId?.let { put(Telephony.Sms.SUBSCRIPTION_ID, it) }
         }
+        // v1.27.11 — meme normalisation que pour l'envoi, et pour les memes deux raisons.
         return resolver.insert(Telephony.Sms.Inbox.CONTENT_URI, cv)
+            ?.let { Uri.parse(canonicalTelephonyUri(it.toString())) }
     }
 
     fun markMessageRead(uri: Uri) {

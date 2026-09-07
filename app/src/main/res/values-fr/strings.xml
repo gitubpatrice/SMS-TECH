@@ -275,6 +275,7 @@
     <string name="settings_vault_pin_forgot_confirm_body">Toutes les conversations du coffre sont supprimées, messages compris, sur ce téléphone et dans le stockage SMS du système. Rien n\'est récupéré : c\'est le prix d\'un retour sans le PIN. Les conversations hors du coffre ne sont pas touchées. Action irréversible.</string>
     <string name="settings_vault_pin_forgot_confirm_action">Vider et retirer</string>
     <string name="settings_vault_pin_forgot_done">Coffre vidé : %1$d conversation(s) supprimée(s). Son PIN est retiré.</string>
+    <string name="settings_vault_pin_forgot_incomplete">Purge incomplète : %1$d conversation(s) supprimée(s), %2$d restante(s). Le PIN du coffre n\'a PAS été retiré. Définissez SMS Tech comme application SMS par défaut, puis réessayez.</string>
     <!-- v1.25.3 (audit M23) — désactiver le verrou se faisait sur un simple tap. -->
     <string name="settings_lock_clear_confirm_title">Désactiver le verrouillage ?</string>
     <string name="settings_lock_clear_confirm_body">Votre PIN sera supprimé et SMS Tech s\'ouvrira sans rien demander. Le déverrouillage biométrique est désactivé aussi. Cette action est irréversible.</string>
@@ -626,7 +627,7 @@
     <string name="settings_resync_confirm_title">Resynchroniser depuis le téléphone ?</string>
     <string name="settings_resync_confirm_body">Réimporte les messages depuis le fournisseur SMS/MMS système. Les messages existants restent (dédup via ID unique) ; des messages précédemment supprimés peuvent réapparaître s\'ils existent encore dans la base système. Continuer ?</string>
     <string name="settings_reset_all_confirm_title">Réinitialiser tous les réglages ?</string>
-    <string name="settings_reset_all_confirm_body">Toutes vos préférences (thème, notifications, envoi, etc.) reviendront aux valeurs par défaut. Vos conversations et messages ne sont PAS affectés.</string>
+    <string name="settings_reset_all_confirm_body">Toutes vos préférences (thème, notifications, envoi, etc.) reviendront aux valeurs par défaut. Vos conversations, vos messages et vos réglages de sécurité (verrouillage, PIN du coffre, code panique) ne sont PAS affectés.</string>
     <string name="settings_purge_blocked_confirm_title">Purger les conversations bloquées ?</string>
     <string name="settings_purge_blocked_confirm_body">Supprime toute conversation dont les participants sont entièrement dans la liste de blocage. Les supprime aussi du fournisseur SMS système. Irréversible.</string>
 
@@ -723,8 +724,8 @@
     <string name="channel_sent_desc">État des messages envoyés.</string>
     <string name="channel_failed_label">Messages en échec</string>
     <string name="channel_failed_desc">Erreurs et suggestions de réessai.</string>
-    <string name="channel_background_label">Tâches en arrière-plan</string>
-    <string name="channel_background_desc">Imports, sauvegardes, envois programmés.</string>
+    <string name="channel_keep_alive_label">Mode résistant</string>
+    <string name="channel_keep_alive_desc">Maintient SMS Tech actif sur les téléphones dont le constructeur arrête les applications en arrière-plan.</string>
     <string name="channel_safety_call_warning_label">Avertissement Safety call</string>
     <string name="channel_safety_call_warning_desc">Rappel avant l\'envoi automatique de SMS à vos contacts d\'urgence.</string>
     <string name="channel_safety_call_receipt_label">Alerte Safety call terminée</string>

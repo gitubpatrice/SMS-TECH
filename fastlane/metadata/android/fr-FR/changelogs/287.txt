@@ -1,0 +1,6 @@
+Suite de la revue externe : trois chemins voisins ouvraient le coffre.
+
+- « Reinitialiser tous les reglages » remettait le verrou et le PIN du coffre a l'etat desactive sans rien effacer. C'est corrige.
+- La sortie « PIN oublie » retirait le PIN meme quand la purge avait echoue.
+- Une sauvegarde restauree sur un autre telephone y reutilisait des references du telephone d'origine.
+- Supprimer un message n'effacait pas sa copie systeme, et une resynchronisation complete le dupliquait.

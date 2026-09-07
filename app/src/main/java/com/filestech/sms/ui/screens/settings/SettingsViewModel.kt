@@ -74,9 +74,20 @@ class SettingsViewModel @Inject constructor(
 
         /**
          * v1.27.10 — le coffre a ete vide par la porte de sortie « PIN oublie ».
-         * [count] conversations supprimees, message compris.
+         * [count] conversations supprimees, message compris. Le PIN est retire.
          */
         data class VaultPurged(val count: Int) : Event
+
+        /**
+         * v1.27.11 (revue externe GitLab !38458, constat 2) — la purge n'a PAS abouti, donc le
+         * PIN du coffre **reste en place**. [deleted] conversations sont parties, [left] ne le
+         * sont pas : soit leur copie dans le fournisseur du systeme a survecu — elle reviendrait
+         * a la resynchronisation suivante, hors du coffre — soit elles sont encore la.
+         *
+         * Cause la plus courante, et la seule que l'utilisateur puisse corriger : SMS Tech n'est
+         * plus l'application SMS par defaut, donc le systeme lui refuse la suppression.
+         */
+        data class VaultPurgeIncomplete(val deleted: Int, val left: Int) : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -138,7 +149,33 @@ class SettingsViewModel @Inject constructor(
 
     fun update(transform: (AppSettings) -> AppSettings) = viewModelScope.launch { settings.update(transform) }
 
-    fun resetAll() = viewModelScope.launch { settings.update { AppSettings() } }
+    /**
+     * v1.27.11 (revue externe GitLab !38458, constat 1) — la reinitialisation des preferences
+     * **preserve desormais le bloc [AppSettings.security]**.
+     *
+     * Elle ecrivait `AppSettings()` nu. Les defauts de ce constructeur sont `lockMode = OFF` et
+     * `vaultPinEnabled = false`, or les empreintes des deux PIN ne vivent PAS dans les reglages
+     * mais dans le magasin securise. Reinitialiser ne les effacait donc pas : il cessait
+     * simplement de les consulter. Le coffre restait plein — l'operation ne touche a aucune
+     * conversation — et s'ouvrait sans rien demander, `VaultViewModel.entryGate` ne posant son
+     * `pinRequired` que sur le flag ; au demarrage suivant,
+     * [com.filestech.sms.security.AppLockManager.resolveInitialState] ne lit que `lockMode` et
+     * concluait `Disabled`.
+     *
+     * Le chemin le plus couteux etait le mode leurre : le bouton vit dans la section « Avance »
+     * de [SettingsScreen], hors du garde `!isPanicDecoy` qui protege les sections Sauvegarde,
+     * Safety call et Mode urgence. Un agresseur ayant obtenu le code panique sous contrainte
+     * sortait donc du leurre en trois tapes, avec les donnees intactes — c'est-a-dire tout ce
+     * que le deni plausible promet d'empecher.
+     *
+     * Preserver le bloc plutot que masquer le bouton : masquer est une enumeration d'ecrans, qui
+     * ne dit rien du prochain point d'entree. Retirer une protection reste une operation de la
+     * couche securite, et elle exige le secret en place ([disableVaultPin], [clearLock]) ; ce
+     * n'est pas l'effet de bord d'un bouton de confort.
+     */
+    fun resetAll() = viewModelScope.launch {
+        settings.update { AppSettings(security = it.security) }
+    }
 
     fun nukeData() = viewModelScope.launch { panic.nukeEverything() }
 
@@ -333,10 +370,22 @@ class SettingsViewModel @Inject constructor(
      * L'ordre n'est pas negociable : purger d'abord, ouvrir ensuite. L'inverse laisserait, entre
      * les deux ecritures, un coffre en clair et encore plein — precisement l'etat que le
      * porteur du seul PIN d'application cherchait a obtenir.
+     *
+     * v1.27.11 (revue externe GitLab !38458, constat 2) — l'ordre ne suffisait pas : le PIN
+     * partait **quel que soit** le sort de la purge, y compris quand elle n'avait rien efface du
+     * tout. Purger d'abord ne protege que si l'on regarde ensuite ce que la purge a fait. Le PIN
+     * n'est donc retire que sur un coffre demontrablement vide, cf. [VaultPurgeResult].
+     *
+     * Le refus doit se VOIR : c'est une porte de sortie, et un echec muet y laisserait
+     * l'utilisateur croire son coffre ouvert alors qu'il reste ferme — ou l'inverse.
      */
     fun forgetVaultPinAndPurge() = viewModelScope.launch {
-        val purged = conversationRepo.deleteAllInVault()
-        vaultPin.forgetVaultPin()
-        _events.send(Event.VaultPurged(purged))
+        val purge = conversationRepo.deleteAllInVault()
+        if (purge.isComplete) {
+            vaultPin.forgetVaultPin()
+            _events.send(Event.VaultPurged(purge.deleted))
+        } else {
+            _events.send(Event.VaultPurgeIncomplete(purge.deleted, purge.failed + purge.remaining))
+        }
     }
 }
