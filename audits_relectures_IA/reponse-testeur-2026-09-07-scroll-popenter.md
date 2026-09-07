@@ -2,7 +2,7 @@
 
 - **Reçu le** : 2026-09-07, sur l'e-mail SMS Tech
 - **Corrigé dans** : v1.28.0 (289)
-- **Statut** : prête à envoyer, telle quelle
+- **Statut** : **envoyée** par Patrice le 2026-09-07
 
 ---
 
