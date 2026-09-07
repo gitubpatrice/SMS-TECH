@@ -1,0 +1,6 @@
+Two interface defects, both seen on a real phone.
+
+- With enlarged fonts on a narrow screen, the "SMS Tech is not your default app" message rendered as a column a few characters wide, breaking words in half. Fixed on the list and in Settings.
+- The first swipe right after returning from a conversation was ignored. The list now responds straight away.
+
+Thanks to the tester who reported the second one, with exact steps.
