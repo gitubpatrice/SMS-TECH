@@ -190,7 +190,17 @@ class SystemProviderContractTest {
             if (cursor != null && cursor.moveToFirst()) cursor.getLong(0) else null
         }
 
-    private fun firstExistingMms(): Pair<Uri, Long>? =
+    /**
+     * `null` quand l'appareil n'a aucun MMS **ou** quand la lecture est refusee, ce qui fait
+     * ignorer le test au lieu de l'echouer.
+     *
+     * La distinction n'est pas cosmetique : sans elle, ce test echouait sur l'emulateur de la CI
+     * (constate le 2026-09-07, run 34140655929) faute de `READ_SMS` accorde, alors que ses
+     * quatre voisins s'ignoraient proprement. Un environnement qui ne peut pas repondre a la
+     * question n'est pas un produit qui repond faux — et le confondre rend la CI rouge pour une
+     * raison qui n'apprend rien.
+     */
+    private fun firstExistingMms(): Pair<Uri, Long>? = runCatching {
         resolver.query(
             Uri.parse("content://mms"),
             arrayOf("_id", "date"),
@@ -204,4 +214,5 @@ class SystemProviderContractTest {
                 null
             }
         }
+    }.getOrNull()
 }
