@@ -350,6 +350,10 @@
     <string name="backup_export_success">Sauvegarde enregistrée.</string>
     <string name="backup_export_failed">Échec de la sauvegarde.</string>
     <string name="backup_export_vault_locked">Coffre verrouillé — ouvrez d\'abord le coffre pour que la sauvegarde puisse l\'inclure.</string>
+    <string name="backup_vault_pin_title">PIN du coffre requis</string>
+    <string name="backup_vault_pin_body">Une sauvegarde inclut votre coffre : elle demande donc son PIN avant d\'être créée.</string>
+    <string name="backup_vault_biometric_title">PIN du coffre requis pour la sauvegarde</string>
+    <string name="backup_vault_biometric_body">Votre coffre est protégé par la seule biométrie, qui ne peut pas être demandée depuis cet écran. Définissez un PIN de coffre dans Réglages — Sécurité, et la sauvegarde vous le demandera ici.</string>
     <string name="backup_restore_coming_v11">La restauration depuis fichier chiffré arrive en v1.1 — l\'export actuel produit déjà un fichier autoportant.</string>
 
     <!-- Migration -->

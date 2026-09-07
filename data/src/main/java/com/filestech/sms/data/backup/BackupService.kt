@@ -17,6 +17,8 @@ import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.backup.BackupRestorer
 import com.filestech.sms.domain.backup.RestoreResult
+import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.security.VaultSecondFactor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -52,11 +54,45 @@ class BackupService @Inject constructor(
     // v1.27.2 (audit externe 2026-08-04 #4) — le second facteur du Coffre garde aussi l'export,
     // cf. [writeSmsbk].
     private val vaultSession: com.filestech.sms.security.VaultSessionState,
+    // v1.27.13 — « y a-t-il un second facteur a prouver ? », lu au meme endroit que la porte du
+    // coffre. Voir [com.filestech.sms.security.VaultSecondFactorPolicy] pour la raison.
+    private val vaultFactor: com.filestech.sms.security.VaultSecondFactorPolicy,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : BackupRestorer {
 
     override suspend fun restore(uriString: String, password: CharArray): Outcome<RestoreResult> =
         readSmsbk(Uri.parse(uriString), password)
+
+    /**
+     * v1.27.13 — `true` quand [writeSmsbk] refusera parce que le coffre n'est pas vide et que sa
+     * session n'est pas ouverte.
+     *
+     * Existe pour que l'ECRAN puisse poser la question AVANT de faire travailler l'utilisateur.
+     * Le refus arrivait apres le choix d'une destination et la saisie d'une passphrase — deux
+     * gestes rendus inutiles par une condition que l'application connaissait des le depart. Pire,
+     * `CreateDocument` cree le fichier au moment du choix : un `.smsbk` vide restait sur le
+     * stockage.
+     *
+     * La condition n'est ecrite qu'ICI et [writeSmsbk] l'appelle : deux copies finiraient par
+     * diverger, et l'ecran annoncerait alors autre chose que ce que le service applique.
+     *
+     * **Rend `false` en session leurre**, et ce n'est pas un oubli : la nommer y trahirait
+     * l'existence d'un coffre au porteur du code panique. Sur ce chemin [writeSmsbk] refuse de
+     * toute facon, un cran plus haut, avec un message generique.
+     */
+    suspend fun exportSecondFactor(): VaultSecondFactor = withContext(io) {
+        val enLeurre = appLock.state.value is AppLockManager.LockState.PanicDecoy
+        when {
+            // En session leurre, l'export est refuse un cran plus haut avec un message
+            // generique : nommer le coffre ici trahirait son existence.
+            enLeurre -> VaultSecondFactor.NONE
+            // Deja prouve pour cette session.
+            vaultSession.isUnlocked -> VaultSecondFactor.NONE
+            // Rien a proteger.
+            conversationDao.countInVault() == 0 -> VaultSecondFactor.NONE
+            else -> vaultFactor.current()
+        }
+    }
 
     /**
      * @property sourceDeviceId v1.27.11 (revue externe GitLab !38458, constat 3) — empreinte de
@@ -121,7 +157,7 @@ class BackupService @Inject constructor(
         // On REFUSE plutôt que d'amputer silencieusement la sauvegarde : un `.smsbk` sans le
         // coffre serait une perte de données à la restauration. Coffre vide = rien à
         // protéger, l'export reste sans friction.
-        if (!vaultSession.isUnlocked && conversationDao.countInVault() > 0) {
+        if (exportSecondFactor() != VaultSecondFactor.NONE) {
             password.wipe()
             return@withContext Outcome.Failure(AppError.Locked())
         }

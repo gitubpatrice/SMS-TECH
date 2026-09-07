@@ -359,6 +359,10 @@
     <string name="backup_export_success">Backup saved.</string>
     <string name="backup_export_failed">Backup failed.</string>
     <string name="backup_export_vault_locked">Vault locked — open the vault first so the backup can include it.</string>
+    <string name="backup_vault_pin_title">Vault PIN required</string>
+    <string name="backup_vault_pin_body">A backup includes your vault, so it asks for the vault PIN before it is created.</string>
+    <string name="backup_vault_biometric_title">Vault PIN required for backup</string>
+    <string name="backup_vault_biometric_body">Your vault is protected by biometrics only, which cannot be requested from this screen. Set a vault PIN in Settings — Security, then the backup will ask for it here.</string>
     <string name="backup_restore_coming_v11">Restore from encrypted file lands in v1.1 — current export already produces a fully self-contained file.</string>
 
     <!-- Migration -->
