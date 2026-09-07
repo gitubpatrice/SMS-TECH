@@ -1,0 +1,6 @@
+Encrypted backup had been impossible since 1.27.2 whenever the vault was not empty. It works again, and asks for the vault PIN before starting.
+
+Also fixed:
+- the About help described the vault even in decoy mode;
+- the "default app" message rendered as an unreadable column with enlarged fonts;
+- the first swipe after returning from a conversation was ignored.
