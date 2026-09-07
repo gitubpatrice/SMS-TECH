@@ -769,26 +769,38 @@ private fun DefaultAppBanner(onSetDefault: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Info,
-                contentDescription = null,
-                tint = cs.primary,
-                modifier = Modifier.size(22.dp),
-            )
-            androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
-            Text(
-                text = stringResource(R.string.error_not_default_app),
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+        // v1.27.12 — le bouton est passe SOUS le texte, au lieu d'etre a cote.
+        //
+        // Il etait dans un `Row` a cote d'un `Text` en `weight(1f)`. Or Compose mesure les
+        // enfants SANS poids en premier : le bouton prenait toute sa largeur intrinseque et le
+        // texte heritait de ce qui restait. Constate sur un Redmi 9C (720x1600 en densite 320,
+        // soit 360 dp de large) avec `font_scale` a 1,33 — un reglage d'accessibilite courant :
+        // le message s'affichait sur une colonne de sept caracteres, coupant « l'applica / tion »
+        // au milieu d'un mot. Reproduit a l'identique sur un S9 force aux memes dimensions.
+        //
+        // L'empilement vaut a toutes les tailles de police et toutes les largeurs, sans seuil a
+        // deviner. C'est aussi ce que prescrit Material pour un bandeau dont le texte depasse une
+        // ligne — et celui-ci la depasse deja en francais sur un ecran ordinaire.
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = cs.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+                androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
+                Text(
+                    text = stringResource(R.string.error_not_default_app),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.size(10.dp))
             androidx.compose.material3.FilledTonalButton(
                 onClick = onSetDefault,
+                modifier = Modifier.align(Alignment.End),
                 colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
                     containerColor = cs.primary,
                     contentColor = cs.onPrimary,

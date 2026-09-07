@@ -627,20 +627,30 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_section_advanced),
                 icon = Icons.Outlined.Tune,
             ) {
+                // v1.27.12 — le bouton passe SOUS la description au lieu d'occuper le
+                // `trailingContent`. Meme defaut que le bandeau de [ConversationsScreen] et meme
+                // cause : le bouton y prenait sa largeur intrinseque et laissait au texte une
+                // colonne de quelques caracteres. Visible des qu'on cumule un ecran etroit et une
+                // police agrandie — mesure sur un Redmi 9C a 360 dp et `font_scale` 1,33.
+                val estParDefaut = viewModel.defaultAppManager.isDefault()
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_default_sms_app)) },
                     supportingContent = {
-                        Text(
-                            text = if (viewModel.defaultAppManager.isDefault())
-                                stringResource(R.string.settings_is_default)
-                            else stringResource(R.string.error_not_default_app),
-                        )
-                    },
-                    trailingContent = {
-                        if (!viewModel.defaultAppManager.isDefault()) {
-                            Button(onClick = {
-                                viewModel.defaultAppManager.buildChangeDefaultIntent()?.let { defaultLauncher.launch(it) }
-                            }) { Text(stringResource(R.string.settings_set_default)) }
+                        Column {
+                            Text(
+                                text = if (estParDefaut) {
+                                    stringResource(R.string.settings_is_default)
+                                } else {
+                                    stringResource(R.string.error_not_default_app)
+                                },
+                            )
+                            if (!estParDefaut) {
+                                Spacer(Modifier.size(10.dp))
+                                Button(onClick = {
+                                    viewModel.defaultAppManager.buildChangeDefaultIntent()
+                                        ?.let { defaultLauncher.launch(it) }
+                                }) { Text(stringResource(R.string.settings_set_default)) }
+                            }
                         }
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
