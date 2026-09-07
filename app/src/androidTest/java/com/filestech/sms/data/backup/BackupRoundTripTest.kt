@@ -318,6 +318,20 @@ class BackupRoundTripTest {
             io = Dispatchers.IO,
         ),
         vaultSession = vault,
+        // v1.27.13 — la politique du second facteur, construite sur les MEMES reglages et le
+        // MEME magasin securise que le reste du test. Ces tests n'ont pas de PIN de coffre
+        // configure et un `lockMode` par defaut, donc elle rend `NONE` : c'est bien le garde du
+        // COFFRE (session ouverte ou non) qu'ils continuent d'exercer, pas celui du facteur.
+        vaultFactor = com.filestech.sms.security.VaultSecondFactorPolicy(
+            settings = SettingsRepository(context, scope),
+            vaultPin = com.filestech.sms.security.VaultPinManager(
+                securityStore = SecurityStore(context),
+                settings = SettingsRepository(context, scope),
+                kdf = PasswordKdf(),
+                io = Dispatchers.IO,
+            ),
+            io = Dispatchers.IO,
+        ),
         io = Dispatchers.IO,
     )
 

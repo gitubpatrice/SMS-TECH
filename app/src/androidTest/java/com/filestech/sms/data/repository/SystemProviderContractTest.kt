@@ -168,7 +168,20 @@ class SystemProviderContractTest {
 
     // ─────────────────────────────────── outillage ───────────────────────────────────
 
-    /** Meme regle que `ConversationRepositoryImpl.canonicalTelephonyUri`. */
+    /**
+     * Reduction SUFFISANTE ICI, et non la regle complete de `canonicalTelephonyUri`.
+     *
+     * `canonicalTelephonyUri` est `internal` au module `:data` et aucun `friend-path` n'est
+     * configure : ce test, qui vit dans `:app`, ne peut pas l'importer. La recopier serait pire
+     * — deux ecritures d'une meme regle finissent par diverger — donc on n'en reprend QUE ce
+     * dont ce test a besoin : les URI manipules ici viennent tous d'un `insert` de la sonde,
+     * donc identifiant numerique et dossier alphabetique.
+     *
+     * ⚠️ Cette reduction N'EST PAS equivalente sur les cas limites que couvre le test JVM de la
+     * vraie regle (`TelephonyUriTest`) : `content://sms/sent/abc` et `content://sms/12/34` y
+     * traversent INCHANGES, alors qu'elle les amputerait. Ne pas la reutiliser telle quelle sur
+     * des URI d'une autre provenance.
+     */
     private fun canonical(uri: Uri): Uri =
         Uri.parse("${uri.scheme}://${uri.authority}/${uri.lastPathSegment}")
 

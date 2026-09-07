@@ -144,7 +144,7 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_section_help))
             Spacer(Modifier.size(8.dp))
-            helpRecipes().forEach { h -> HelpCard(title = h.title, steps = h.steps) }
+            helpRecipes(isPanicDecoy).forEach { h -> HelpCard(title = h.title, steps = h.steps) }
 
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_security_title))
@@ -667,10 +667,27 @@ private fun permissions(): List<Permission> = listOf(
     Permission("FOREGROUND_SERVICE", stringResource(R.string.about_perm_foreground_service)),
 )
 
-private data class HelpRecipe(val title: String, val steps: List<String>)
+private data class HelpRecipe(
+    val title: String,
+    val steps: List<String>,
+    val sensitive: Boolean = false,
+)
 
+/**
+ * v1.27.13 (audit de coherence) — **meme filtre que [features]**, qui manquait ici.
+ *
+ * L'audit C4 de la v1.26.1 avait retire du bloc « Fonctionnalites » les entrees qui nomment le
+ * coffre et le mode urgence, parce que cet ecran etait le dernier a decrire en clair ce que tout
+ * le reste du mode leurre s'emploie a nier. Le bloc « Aide », vingt lignes plus bas dans le meme
+ * fichier, n'avait pas ete traite : en session leurre, il affichait encore une fiche intitulee
+ * « Mettre une conversation au coffre » avec son mode d'emploi complet, jusqu'a
+ * « Reglages -> Securite pour configurer le coffre ».
+ *
+ * Une correction qui ne traite qu'une des deux listes d'un meme ecran laisse le defaut entier :
+ * ce n'est pas la liste qui trahissait, c'est le sujet.
+ */
 @androidx.compose.runtime.Composable
-private fun helpRecipes(): List<HelpRecipe> = listOf(
+private fun helpRecipes(isPanicDecoy: Boolean): List<HelpRecipe> = listOf(
     HelpRecipe(
         title = stringResource(R.string.about_help_default_title),
         steps = listOf(
@@ -693,6 +710,7 @@ private fun helpRecipes(): List<HelpRecipe> = listOf(
             stringResource(R.string.about_help_vault_step2),
             stringResource(R.string.about_help_vault_step3),
         ),
+        sensitive = true,
     ),
     HelpRecipe(
         title = stringResource(R.string.about_help_block_title),
@@ -719,6 +737,7 @@ private fun helpRecipes(): List<HelpRecipe> = listOf(
             stringResource(R.string.about_help_emergency_step3),
             stringResource(R.string.about_help_emergency_step4),
         ),
+        sensitive = true,
     ),
     HelpRecipe(
         title = stringResource(R.string.about_help_update_title),
@@ -728,4 +747,4 @@ private fun helpRecipes(): List<HelpRecipe> = listOf(
             stringResource(R.string.about_help_update_step3),
         ),
     ),
-)
+).filterNot { isPanicDecoy && it.sensitive }

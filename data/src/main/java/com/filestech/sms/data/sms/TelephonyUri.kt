@@ -24,9 +24,14 @@ package com.filestech.sms.data.sms
  * # Pourquoi une chaine et non un `android.net.Uri`
  *
  * Pour que la regle soit verifiable par un test JVM ordinaire, sans appareil ni Robolectric. Elle
- * a deux appelants — le chemin d'ECRITURE, pour que plus aucune ligne divergente n'apparaisse, et
- * le chemin de SUPPRESSION, qui doit rattraper les lignes deja enregistrees dans toutes les bases
- * installees. Une regle appliquee a deux endroits doit etre ecrite une seule fois.
+ * a TROIS appelants :
+ *  - le chemin d'ECRITURE (`TelephonyReader`), pour qu'aucune ligne divergente n'apparaisse ;
+ *  - le chemin de SUPPRESSION (`ConversationRepositoryImpl`), qui rattrape les lignes deja
+ *    enregistrees dans les bases non encore migrees ;
+ *  - la migration Room `7 -> 8` (`Migrations.kt`), qui normalise l'existant en base.
+ *
+ * Une regle appliquee a trois endroits doit etre ecrite une seule fois. Ce KDoc en annoncait deux
+ * et oubliait la migration : qui evalue l'impact d'un changement d'ici doit relire les trois.
  *
  * La regle est structurelle plutot qu'une liste de dossiers : un segment de tete non numerique
  * suivi d'un identifiant numerique est un dossier (`sent`, `inbox`, `draft`, `outbox`, `queued`,
