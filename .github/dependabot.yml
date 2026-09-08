@@ -41,10 +41,29 @@ updates:
           - "org.junit*"
           - "*truth*"
           - "*mockito*"
+          - "*mockk*"
           - "*robolectric*"
         update-types:
           - "minor"
           - "patch"
+    # Mesure du 2026-09-08 : ces trois familles exigent toutes AGP >= 9.0 (et
+    # compileSdk 37), alors que le projet est en AGP 8.13.2. Le plafond est deja
+    # documente dans gradle/libs.versions.toml. Sans ces regles, Dependabot
+    # reproposait chaque semaine des PR condamnees a echouer — #12, #13 et #14
+    # ont ainsi vecu des mois en rouge sans que personne ne les regarde.
+    # A RETIRER le jour de la migration AGP 9 : ces regles la masqueraient.
+    ignore:
+      - dependency-name: "androidx.core:core-ktx"
+        versions: [">= 1.19"]
+      - dependency-name: "androidx.lifecycle:*"
+        versions: [">= 2.11"]
+      - dependency-name: "org.jetbrains.kotlin:*"
+        versions: [">= 2.4"]
+      - dependency-name: "com.google.dagger:*"
+        versions: [">= 2.59"]
+      # Nom releve sur la PR #14 elle-meme (trailer updated-dependencies), pas devine.
+      - dependency-name: "gradle-wrapper"
+        versions: [">= 9"]
     commit-message:
       prefix: "deps"
       include: "scope"
