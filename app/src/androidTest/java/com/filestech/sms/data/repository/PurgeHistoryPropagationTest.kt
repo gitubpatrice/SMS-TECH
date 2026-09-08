@@ -1,0 +1,209 @@
+package com.filestech.sms.data.repository
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.filestech.sms.data.local.db.AppDatabase
+import com.filestech.sms.data.local.db.entity.ConversationEntity
+import com.filestech.sms.data.local.db.entity.MessageEntity
+import com.filestech.sms.data.sms.SystemCopyEraser
+import com.filestech.sms.domain.model.MessageDirection
+import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.MessageType
+import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * v1.28.1 (audit de coherence du 2026-09-08) — **la purge de retention efface aussi la copie
+ * systeme**.
+ *
+ * # Le defaut
+ *
+ * `delete`, `deleteMessage` et `deleteAllInVault` propageaient au fournisseur du systeme depuis
+ * longtemps. La purge de retention, non : un `DELETE` SQL, et rien d'autre. Les messages que
+ * l'utilisateur croyait effaces restaient dans `content://sms` — lisibles par toute application
+ * ayant `READ_SMS` — et le bouton « Resynchroniser », qui remet le curseur d'import a zero, les
+ * ramenait tous. Pour un reglage vendu comme une mesure de confidentialite, c'est le defaut le
+ * plus couteux qu'on puisse avoir : il ne se voit pas.
+ *
+ * Rien ne le documentait : ni le code, ni le KDoc de `ConversationRepository.purgeHistoryNow`.
+ *
+ * # Ce que ces tests figent
+ *
+ * L'effaceur systeme est un espion : il enregistre ce qu'on lui presente. Un test qui verifierait
+ * seulement « la base est vide » resterait vert avec l'ancien code, puisque le `DELETE` SQL, lui,
+ * fonctionnait. **Ce qui doit etre prouve, c'est la PRESENTATION au fournisseur** — sans quoi le
+ * test ne mesure rien de ce qui manquait.
+ */
+@RunWith(AndroidJUnit4::class)
+class PurgeHistoryPropagationTest {
+
+    private lateinit var db: AppDatabase
+
+    private val context: Context
+        get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    /** Espion : retient chaque message presente au fournisseur, et laisse tout partir. */
+    private class Espion(private val refuse: Boolean = false) : SystemCopyEraser {
+        val presentes = mutableListOf<String?>()
+        override fun erase(message: MessageEntity): Boolean {
+            presentes += message.telephonyUri
+            return !refuse
+        }
+    }
+
+    @Before
+    fun setUp() {
+        db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        runBlocking {
+            db.conversationDao().upsert(
+                ConversationEntity(
+                    id = CONV_ID,
+                    threadId = CONV_ID,
+                    addressesCsv = ADRESSE,
+                    displayName = null,
+                    lastMessagePreview = "",
+                    lastMessageAt = 0L,
+                    unreadCount = 0,
+                ),
+            )
+        }
+    }
+
+    @After
+    fun tearDown() = db.close()
+
+    @Test
+    fun laPurgeDeRetentionPresenteAuFournisseurExactementLesMessagesQuElleEfface() =
+        runBlocking<Unit> {
+            insere(uri = "content://sms/1", date = VIEUX)
+            insere(uri = "content://sms/2", date = VIEUX)
+            insere(uri = "content://sms/3", date = RECENT) // hors du champ de la purge
+            val espion = Espion()
+
+            val efface = eraserAvec(espion).purgeHistory(CUTOFF)
+
+            assertThat(efface).isEqualTo(2)
+            // LE point du test : sans propagation, cette liste serait vide et la base tout aussi
+            // vide — le defaut etait exactement cet ecart-la.
+            assertThat(espion.presentes).containsExactly("content://sms/1", "content://sms/2")
+            assertThat(db.messageDao().findByConversation(CONV_ID).map { it.telephonyUri })
+                .containsExactly("content://sms/3")
+        }
+
+    /**
+     * Le filet de securite du DAO : un favori ne se purge pas. Il ne doit donc pas non plus etre
+     * presente au fournisseur — deux criteres de selection qui divergeraient feraient effacer du
+     * systeme un message qui reste en base.
+     */
+    @Test
+    fun unFavoriNEstNiEffaceNiPresenteAuFournisseur() = runBlocking<Unit> {
+        insere(uri = "content://sms/10", date = VIEUX, starred = true)
+        insere(uri = "content://sms/11", date = VIEUX)
+        val espion = Espion()
+
+        val efface = eraserAvec(espion).purgeHistory(CUTOFF)
+
+        assertThat(efface).isEqualTo(1)
+        assertThat(espion.presentes).containsExactly("content://sms/11")
+        assertThat(db.messageDao().findByConversation(CONV_ID).map { it.telephonyUri })
+            .containsExactly("content://sms/10")
+    }
+
+    /**
+     * Un message jamais miroite dans le systeme n'a rien a y faire disparaitre : il est ecarte
+     * **par la requete**, et non charge pour rien. Il doit malgre tout etre efface en base.
+     */
+    @Test
+    fun unMessageSansLiaisonSysteme_estEffaceSansEtrePresente() = runBlocking<Unit> {
+        insere(uri = null, date = VIEUX)
+        insere(uri = "content://sms/20", date = VIEUX)
+        val espion = Espion()
+
+        val efface = eraserAvec(espion).purgeHistory(CUTOFF)
+
+        assertThat(efface).isEqualTo(2)
+        assertThat(espion.presentes).containsExactly("content://sms/20")
+        assertThat(db.messageDao().findByConversation(CONV_ID)).isEmpty()
+    }
+
+    /**
+     * La pagination par cle doit couvrir **tout** le lot, pas seulement la premiere page. Avec
+     * une page de 200, 450 messages en font trois — dont une incomplete. Une boucle qui
+     * s'arreterait a la premiere laisserait 250 copies systeme derriere elle, en silence.
+     */
+    @Test
+    fun laPaginationCouvreToutLeLotEtPasSeulementLaPremierePage() = runBlocking<Unit> {
+        repeat(NOMBREUX) { insere(uri = "content://sms/${1000 + it}", date = VIEUX) }
+        val espion = Espion()
+
+        val efface = eraserAvec(espion).purgeHistory(CUTOFF)
+
+        assertThat(efface).isEqualTo(NOMBREUX)
+        assertThat(espion.presentes).hasSize(NOMBREUX)
+        assertThat(espion.presentes.toSet()).hasSize(NOMBREUX) // aucun doublon, aucun oubli
+        assertThat(db.messageDao().findByConversation(CONV_ID)).isEmpty()
+    }
+
+    /**
+     * Le contrat qui distingue cette purge de celle du coffre : **la ligne locale part quand meme**.
+     * La regle est *« la ligne locale ne survit a un echec de propagation que si une decision de
+     * SECURITE en depend »* — retirer le PIN du coffre en est une, une purge de retention n'en
+     * leve aucune. Sans ce test, un correctif zele alignerait les deux et enfermerait
+     * l'utilisateur dans un historique qu'il a demande a voir disparaitre.
+     */
+    @Test
+    fun unRefusDuFournisseurNEmpechePasLEffacementLocal() = runBlocking<Unit> {
+        insere(uri = "content://sms/30", date = VIEUX)
+        val espion = Espion(refuse = true)
+
+        val efface = eraserAvec(espion).purgeHistory(CUTOFF)
+
+        assertThat(efface).isEqualTo(1)
+        assertThat(espion.presentes).containsExactly("content://sms/30")
+        assertThat(db.messageDao().findByConversation(CONV_ID)).isEmpty()
+    }
+
+    private fun eraserAvec(systemCopy: SystemCopyEraser) =
+        ConversationEraser(db, db.conversationDao(), db.messageDao(), systemCopy)
+
+    private suspend fun insere(uri: String?, date: Long, starred: Boolean = false) {
+        db.messageDao().insert(
+            MessageEntity(
+                conversationId = CONV_ID,
+                telephonyUri = uri,
+                address = ADRESSE,
+                body = "message",
+                type = MessageType.SMS,
+                direction = MessageDirection.INCOMING,
+                date = date,
+                dateSent = date,
+                read = true,
+                starred = starred,
+                status = MessageStatus.RECEIVED,
+                errorCode = null,
+                subId = null,
+                scheduledAt = null,
+                attachmentsCount = 0,
+            ),
+        )
+    }
+
+    private companion object {
+        const val CONV_ID = 1L
+        const val ADRESSE = "+33612345678"
+        const val CUTOFF = 1_700_000_000_000L
+        const val VIEUX = 1_600_000_000_000L
+        const val RECENT = 1_800_000_000_000L
+
+        /** Plus de deux pages de 200 : la troisieme est volontairement incomplete. */
+        const val NOMBREUX = 450
+    }
+}

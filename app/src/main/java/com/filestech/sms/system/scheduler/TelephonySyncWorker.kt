@@ -3,7 +3,6 @@ package com.filestech.sms.system.scheduler
 import android.content.Context
 import android.os.Build
 import androidx.hilt.work.HiltWorker
-import androidx.room.withTransaction
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -57,8 +56,8 @@ class TelephonySyncWorker @AssistedInject constructor(
     private val blockedSystem: BlockedNumberSystem,
     private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
     private val mmsSystemWriteback: MmsSystemWriteback,
+    private val eraser: com.filestech.sms.data.repository.ConversationEraser,
     // v1.26.1 (audit H9) — nécessaire pour rendre la purge automatique atomique, cf. plus bas.
-    private val database: com.filestech.sms.data.local.db.AppDatabase,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -139,21 +138,15 @@ class TelephonySyncWorker @AssistedInject constructor(
                         // partagée avec [ConversationRepositoryImpl] ; les constantes
                         // SAFETY_NET_DAYS et MS_PER_DAY viennent de [PurgePolicy].
                         val cutoff = purgeCutoffMs(days, now)
-                        // v1.26.1 (audit H9) — atomique, comme le jumeau
-                        // [ConversationRepositoryImpl.purgeHistoryNow]. Une mort du processus
-                        // entre le DELETE et le refresh laissait sinon l'aperçu EN CLAIR du
-                        // message purgé sur la liste, définitivement (la passe de réparation
-                        // est gardée par un drapeau déjà posé partout depuis la v1.24.0).
-                        val purged = database.withTransaction {
-                            val n = messageDao.purgeOlderThan(cutoff)
-                            if (n > 0) {
-                                // v1.3.3 G1 audit fix — refresh preview/last_message_at après
-                                // purge auto pour éviter qu'une conv vidée garde l'ancien
-                                // preview en clair sur la liste (leak privacy).
-                                messageDao.refreshAllConversationPreviewsAfterPurge()
-                            }
-                            n
-                        }
+                        // v1.28.1 — ce bloc REECRIVAIT la recette de
+                        // [ConversationRepositoryImpl.purgeHistoryNow] : meme transaction, meme
+                        // `purgeOlderThan`, meme rafraichissement d'apercus. Son propre
+                        // commentaire disait « comme le jumeau ». Or le jumeau ne propageait pas
+                        // au fournisseur du systeme, et l'audit de coherence du 2026-09-08 l'a
+                        // trouve ; corriger l'un sans l'autre aurait laisse la purge AUTOMATIQUE
+                        // — celle qui tourne sans que personne ne regarde — avec le defaut.
+                        // Une seule recette, desormais : [ConversationEraser.purgeHistory].
+                        val purged = eraser.purgeHistory(cutoff)
                         settings.update {
                             it.copy(security = it.security.copy(lastAutoPurgeAt = now))
                         }

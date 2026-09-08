@@ -26,7 +26,7 @@ package com.filestech.sms.data.sms
  * Pour que la regle soit verifiable par un test JVM ordinaire, sans appareil ni Robolectric. Elle
  * a TROIS appelants :
  *  - le chemin d'ECRITURE (`TelephonyReader`), pour qu'aucune ligne divergente n'apparaisse ;
- *  - le chemin de SUPPRESSION (`ConversationRepositoryImpl`), qui rattrape les lignes deja
+ *  - le chemin de SUPPRESSION (`TelephonySystemCopyEraser`), qui rattrape les lignes deja
  *    enregistrees dans les bases non encore migrees ;
  *  - la migration Room `7 -> 8` (`Migrations.kt`), qui normalise l'existant en base.
  *

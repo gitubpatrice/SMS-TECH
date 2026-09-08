@@ -42,6 +42,17 @@ class MigrationTest {
     @Before
     fun setUp() {
         System.loadLibrary("sqlcipher")
+        // v1.28.1 — `MigrationTestHelper` pose son verrou `.lck` A COTE du fichier de base, sans
+        // creer le dossier `databases/`. Sur un appareil ou l'application vient d'etre installee
+        // et jamais lancee — l'etat exact que produit `connectedAndroidTest`, qui desinstalle
+        // apres chaque campagne — le dossier n'existe pas, et les DIX tests de ce fichier
+        // echouent sur `ENOENT` avant d'avoir rien mesure. La cause n'a rien a voir avec les
+        // migrations : elle les rendait toutes illisibles.
+        InstrumentationRegistry.getInstrumentation()
+            .targetContext
+            .getDatabasePath(TEST_DB)
+            .parentFile
+            ?.mkdirs()
     }
 
     /** Inserts one conversation and one message using only columns that exist in schema v1. */
@@ -249,5 +260,120 @@ class MigrationTest {
                 assertThat(c.getLong(0)).isEqualTo(3L)
                 assertThat(c.getString(1)).isEqualTo("content://sms/7000")
             }
+    }
+
+    /**
+     * v1.28.1 (revue externe !38458, 3e passe) — **une collision d'URI n'est pas une preuve de
+     * doublon**, et la v1.27.11 la prenait pour telle.
+     *
+     * Le cas est celui que decrit le testeur, et il n'a rien de theorique : la restauration
+     * d'avant la v1.27.10 recopiait les `telephony_uri` du telephone SOURCE. `content://sms/9164`
+     * peut donc designer, dans une meme base, un message d'ici et un message venu d'ailleurs. La
+     * migration supprimait le second sans comparer un seul champ.
+     *
+     * Ce que ce test exige tient en une phrase : **rien n'est touche**. Les deux messages sont
+     * la, chacun avec SA liaison.
+     *
+     * ⚠ Une premiere version de ce test exigeait que la ligne en collision passe a `telephony_uri
+     * = NULL`. C'etait un defaut, trouve en relecture externe le 2026-09-08 : dans cette base,
+     * `NULL` signifie « ce message n'a jamais eu de copie systeme », et `SystemCopyEraser.erase`
+     * en conclut « rien ne survit ». Effacer une liaison legitime aurait donc fait declarer partie
+     * une copie systeme bien vivante. Le test exigeait le mauvais comportement — et il aurait ete
+     * VERT dessus.
+     */
+    @Test
+    fun migrate7To8_deuxMessagesDIFFERENTSSousLaMemeUri_sontTousLesDeuxConserves() {
+        helper.createDatabase(TEST_DB, 1).use { db -> seedV1Row(db) }
+        helper.runMigrationsAndValidate(
+            TEST_DB,
+            7,
+            true,
+            Migrations.MIGRATION_1_2,
+            Migrations.MIGRATION_2_3,
+            Migrations.MIGRATION_3_4,
+            Migrations.MIGRATION_4_5,
+            Migrations.MIGRATION_5_6,
+            Migrations.MIGRATION_6_7,
+        ).use { db ->
+            db.execSQL("DELETE FROM messages")
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction,
+                     date, date_sent, read, starred, status, error_code, sub_id,
+                     scheduled_at, attachments_count, reaction_emoji)
+                VALUES
+                    (1, 1, 'content://sms/sent/9164', '+33612345678', 'ecrit ici',
+                     0, 1, 1700000000000, 1700000000000, 1, 1, 2, NULL, NULL, NULL, 0, NULL),
+                    (2, 1, 'content://sms/9164', '+33698765432', 'restaure d''un autre telephone',
+                     0, 0, 1500000000000, 1500000000000, 1, 0, 2, NULL, NULL, NULL, 0, NULL)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, Migrations.MIGRATION_7_8)
+
+        db.query("SELECT id, telephony_uri, body FROM messages ORDER BY id").use { c ->
+            // Le point du test : RIEN n'a ete supprime, et RIEN n'a change de main.
+            assertThat(c.count).isEqualTo(2)
+
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getLong(0)).isEqualTo(1L)
+            // Pas normalisee : la place canonique est occupee par une ligne non prouvee
+            // identique, et on ne la lui prend pas.
+            assertThat(c.getString(1)).isEqualTo("content://sms/sent/9164")
+
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getLong(0)).isEqualTo(2L)
+            assertThat(c.getString(1)).isEqualTo("content://sms/9164")
+            assertThat(c.getString(2)).isEqualTo("restaure d'un autre telephone")
+        }
+    }
+
+    /**
+     * v1.28.1 (relecture externe GPT, point 7) — deux copies identiques peuvent vivre dans DEUX
+     * conversations, l'une dans le coffre et l'autre en clair. Les fusionner reviendrait a
+     * choisir a l'aveugle laquelle des deux visibilites survit, et laisserait la conversation
+     * perdante avec un apercu et un compteur faux. La conversation fait donc partie de la preuve.
+     */
+    @Test
+    fun migrate7To8_deuxCopiesIdentiquesDansDeuxConversations_neSontPasFusionnees() {
+        helper.createDatabase(TEST_DB, 1).use { db -> seedV1Row(db) }
+        helper.runMigrationsAndValidate(
+            TEST_DB,
+            7,
+            true,
+            Migrations.MIGRATION_1_2,
+            Migrations.MIGRATION_2_3,
+            Migrations.MIGRATION_3_4,
+            Migrations.MIGRATION_4_5,
+            Migrations.MIGRATION_5_6,
+            Migrations.MIGRATION_6_7,
+        ).use { db ->
+            db.execSQL("DELETE FROM messages")
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction,
+                     date, date_sent, read, starred, status, error_code, sub_id,
+                     scheduled_at, attachments_count, reaction_emoji)
+                VALUES
+                    (1, 1, 'content://sms/sent/9164', '+33612345678', 'coucou',
+                     0, 1, 1700000000000, 1700000000000, 1, 0, 2, NULL, NULL, NULL, 0, NULL),
+                    (2, 2, 'content://sms/9164', '+33612345678', 'coucou',
+                     0, 1, 1700000000000, 1700000000000, 1, 0, 2, NULL, NULL, NULL, 0, NULL)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, Migrations.MIGRATION_7_8)
+
+        db.query("SELECT id, conversation_id, telephony_uri FROM messages ORDER BY id").use { c ->
+            assertThat(c.count).isEqualTo(2)
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getString(2)).isEqualTo("content://sms/sent/9164")
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getString(2)).isEqualTo("content://sms/9164")
+        }
     }
 }

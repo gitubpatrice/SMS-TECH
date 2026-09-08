@@ -366,14 +366,8 @@ class TelephonyReader @Inject constructor(
         val subIdIndex = getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
         val subId = if (subIdIndex >= 0 && !isNull(subIdIndex)) getInt(subIdIndex) else null
 
-        val direction = when (type) {
-            Telephony.Sms.MESSAGE_TYPE_SENT,
-            Telephony.Sms.MESSAGE_TYPE_OUTBOX,
-            Telephony.Sms.MESSAGE_TYPE_QUEUED,
-            Telephony.Sms.MESSAGE_TYPE_FAILED,
-            Telephony.Sms.MESSAGE_TYPE_DRAFT -> MessageDirection.OUTGOING
-            else -> MessageDirection.INCOMING
-        }
+        // v1.28.1 — regle partagee avec le verificateur d'identite, cf. [smsTypeToDirection].
+        val direction = smsTypeToDirection(type)
         val status = when (type) {
             Telephony.Sms.MESSAGE_TYPE_SENT -> MessageStatus.SENT
             Telephony.Sms.MESSAGE_TYPE_FAILED -> MessageStatus.FAILED
@@ -483,8 +477,7 @@ class TelephonyReader @Inject constructor(
                 val msgBox = c.getInt(4)
                 val subId = if (!c.isNull(5)) c.getInt(5) else null
 
-                val direction = if (msgBox == MMS_MSG_BOX_INBOX) MessageDirection.INCOMING
-                else MessageDirection.OUTGOING
+                val direction = mmsBoxToDirection(msgBox)
                 val status = when (msgBox) {
                     MMS_MSG_BOX_INBOX -> MessageStatus.RECEIVED
                     MMS_MSG_BOX_SENT -> MessageStatus.SENT
@@ -494,7 +487,7 @@ class TelephonyReader @Inject constructor(
                 }
 
                 // Adresse FROM/TO reste N+1 (URI `addr` non-batchable de façon fiable côté AOSP).
-                val resolvedAddress = readMmsAddress(mmsId, direction)
+                val resolvedAddress = readMmsAddress(resolver, mmsId, direction)
                 if (resolvedAddress == null) {
                     // v1.27.2 (audit Codex, C-05) — la requete d'adresse a ECHOUE. Ce n'est pas
                     // « un MMS sans adresse exploitable », c'est « on n'a pas pu lire ». La passe
@@ -650,58 +643,6 @@ class TelephonyReader @Inject constructor(
     )
 
     /**
-     * Picks the relevant address from `content://mms/{id}/addr`:
-     *  - FROM (type 137) for incoming
-     *  - the first TO (type 151) for outgoing
-     *  - fallback to "FROM-generic" (type 129) when neither 137 nor 151 yields
-     *    anything — observed on some OEM ROMs (older Samsung One UI, Xiaomi MIUI
-     *    legacy) that store the originator under the generic AOSP type 129
-     *    instead of the standard 137. Without this fallback, those MMS were
-     *    silently skipped at import time (v1.8.0 bug 1).
-     *
-     * Skips the AOSP placeholder `insert-address-token`.
-     */
-    // v1.16.0 — Param `direction` typé enum (était Int).
-    /** v1.27.2 (audit Codex, C-05) — `null` = la requete d'adresse a echoue, distinct de « vide ». */
-    private fun readMmsAddress(mmsId: Long, direction: MessageDirection): String? {
-        var from = ""
-        var firstTo = ""
-        var fallbackGeneric = ""
-        val cursor = resolver.query(
-            Uri.parse("content://mms/$mmsId/addr"),
-            arrayOf("address", "type"),
-            null,
-            null,
-            null,
-        ) ?: return null
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                val addr = c.getString(0) ?: continue
-                if (addr == "insert-address-token") continue
-                val type = c.getInt(1)
-                when (type) {
-                    137 -> if (from.isBlank()) from = addr
-                    151 -> if (firstTo.isBlank()) firstTo = addr
-                    // v1.8.0 (bug 1 fix) — type 129 = "FROM" générique AOSP
-                    // (constante non publique `PduHeaders.FROM` = 0x89 = 129).
-                    // Certains OEM (Samsung One UI < 5 sur S9 d'après le retour
-                    // user, MIUI legacy) y stockent l'originateur au lieu du
-                    // type 137. Capturé en fallback : utilisé uniquement si
-                    // ni 137 (FROM) ni 151 (TO) ne donnent rien.
-                    129 -> if (fallbackGeneric.isBlank()) fallbackGeneric = addr
-                }
-            }
-        }
-        // Pour l'incoming, ordre de préférence : 137 (FROM standard) → 129 (FROM générique OEM).
-        // Pour l'outgoing, ordre : 151 (TO premier) → 137 (FROM de l'utilisateur lui-même) → 129.
-        return if (direction == MessageDirection.INCOMING) {
-            from.ifBlank { fallbackGeneric }
-        } else {
-            firstTo.ifBlank { from.ifBlank { fallbackGeneric } }
-        }
-    }
-
-    /**
      * Reads every part of an MMS message and splits them into a plain-text body (joined text/
      * parts, SMIL filtered) and a list of binary attachments (audio / image / video / other).
      */
@@ -751,12 +692,5 @@ class TelephonyReader @Inject constructor(
             Telephony.Sms.STATUS,
             Telephony.Sms.SUBSCRIPTION_ID,
         )
-
-        // Telephony.Mms.MESSAGE_BOX_* — kept as integers to avoid the @hide API constants.
-        private const val MMS_MSG_BOX_INBOX = 1
-        private const val MMS_MSG_BOX_SENT = 2
-        private const val MMS_MSG_BOX_DRAFT = 3
-        private const val MMS_MSG_BOX_OUTBOX = 4
-        private const val MMS_MSG_BOX_FAILED = 5
     }
 }

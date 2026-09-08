@@ -393,11 +393,11 @@
     <string name="settings_auto_delete_purge_now_disabled">Choisissez une durée pour activer</string>
     <string name="settings_auto_delete_purge_confirm_title">Confirmer le nettoyage</string>
     <string name="settings_auto_delete_purge_confirm_zero">Aucun message à effacer pour cette durée.</string>
-    <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) plus vieux que %2$d jours vont être effacés. Les favoris sont conservés. Cette action est irréversible.</string>
+    <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) plus vieux que %2$d jours vont être effacés du téléphone, pas seulement de SMS Tech. Les favoris sont conservés. Cette action est irréversible.</string>
     <string name="settings_auto_delete_purge_done">%1$d message(s) effacé(s).</string>
     <string name="action_delete_now">Effacer</string>
     <string name="settings_resync_title">Resynchroniser depuis le téléphone</string>
-    <string name="settings_resync_desc">Réimporte tous les SMS depuis le système Android. Utile pour récupérer un historique effacé par erreur. Sans doublons.</string>
+    <string name="settings_resync_desc">Réimporte tous les SMS depuis le système Android. Utile si des messages présents sur le téléphone manquent dans l\'app. Ne récupère pas ce que vous avez effacé : la suppression retire aussi la copie du téléphone. Sans doublons.</string>
     <string name="settings_resync_started">Resynchronisation lancée en arrière-plan.</string>
     <string name="settings_send_reactions_title">Envoyer mes réactions au correspondant</string>
     <string name="settings_send_reactions_desc">Quand vous posez une réaction emoji (cœur, pouce…), un SMS contenant uniquement l\'emoji est envoyé au correspondant. Cela compte comme un SMS normal au tarif de votre forfait. Le retrait ou le changement d\'une réaction ne renvoie rien.</string>

@@ -13,7 +13,8 @@ import org.junit.runner.RunWith
 
 /**
  * v1.27.11 — fige, sur un VRAI fournisseur systeme, les hypotheses sur lesquelles repose
- * `ConversationRepositoryImpl.deleteFromTelephonyProvider` apres la revue externe GitLab !38458.
+ * `TelephonySystemCopyEraser.erase` apres la revue externe GitLab !38458 (la methode vivait
+ * alors en `private` sous le nom `ConversationRepositoryImpl.deleteFromTelephonyProvider`).
  *
  * # Pourquoi ce test existe
  *

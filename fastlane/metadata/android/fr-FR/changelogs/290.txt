@@ -1,0 +1,7 @@
+Suite de la relecture d'Andrew Pozdnakov sur la MR F-Droid !38458. Merci à lui.
+
+La sortie « PIN du coffre oublié » retirait le PIN au second essai alors que la purge avait échoué : le coffre s'ouvrait en laissant les messages dans le téléphone.
+
+Corrigé aussi :
+- l'effacement automatique de l'historique ne retirait pas les messages du téléphone, et « Resynchroniser » les ramenait ;
+- une suppression pouvait viser le message d'un autre correspondant reçu la même minute.

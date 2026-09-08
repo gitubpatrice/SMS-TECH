@@ -143,6 +143,12 @@ interface ConversationRepository {
      * appliquant le filet interne 5 jours et en épargnant les favoris. Ne touche pas au
      * cycle auto-mensuel (le `lastAutoPurgeAt` n'est pas mis à jour). Retourne le nombre
      * de rows effacées pour feedback UI.
+     *
+     * v1.28.1 — **la copie systeme part aussi**, ce qui n'etait pas le cas et n'etait ecrit
+     * nulle part. La retention est un reglage de confidentialite : laisser les messages dans
+     * `content://sms` les gardait lisibles par toute application ayant `READ_SMS`, et le bouton
+     * « Resynchroniser » les ramenait tous. La ligne locale part meme si la propagation echoue —
+     * voir `ConversationEraser.purgeHistory` pour la regle qui separe ce cas de celui du coffre.
      */
     suspend fun purgeHistoryNow(olderThanDays: Int): Int
 }
