@@ -117,13 +117,41 @@ contrôle négatif fait — les deux régressions remises en place font tomber l
 
 1. `version.properties` → **291 / 1.28.2** ; l'entrée de journal est rédigée dans l'historique de
    cette session, à réécrire si le numéro change.
-2. Changelogs fastlane 291 FR (454 c) et EN (402 c) — **rédigés et mis de côté**, pas dans le
-   dépôt : un `changelogs/291.txt` sans version 291 publiée annonce une version inexistante.
+2. Changelogs fastlane 291 — **rédigés ci-dessous**, à copier dans
+   `fastlane/metadata/android/{fr-FR,en-US}/changelogs/291.txt` au moment du bump. Ils ne sont pas
+   déjà en place parce qu'un `291.txt` sans version 291 publiée annonce une version inexistante.
+   Recompter les caractères si le texte change : le plafond F-Droid est de 500 **caractères**, et
+   `wc -c` compte des octets — l'accentuation fait mentir la mesure.
+
 3. **Vérifier que les mentions `v1.28.2` du code correspondent au numéro réellement publié.**
    Elles sont dans `AppSettings`, `ConversationEraser`, `SettingsViewModel`, `SettingsScreen` et
    les tests. Un `grep -rn "v1.28.2"` suffit.
 4. Ajouter l'entrée correspondante à l'historique d'audit de `SECURITY.md`, qui documente
    aujourd'hui l'impasse comme ouverte dans son entrée v1.28.1.
+
+Les deux textes, prêts à copier :
+
+<details><summary><code>fr-FR/changelogs/291.txt</code> — 454 caractères</summary>
+
+```
+La porte « PIN du coffre oublié » pouvait rester fermée pour toujours.
+
+Depuis la 1.28.1, le PIN n'est retiré que si le coffre est vraiment vidé — c'est la bonne règle, mais certaines conversations ne peuvent jamais l'être, et chaque essai échouait à l'identique.
+
+Au second échec, l'application propose maintenant de vider et de retirer le PIN quand même, en disant d'abord ce qui restera sur le téléphone. Le premier échec invite toujours à réessayer.
+```
+</details>
+
+<details><summary><code>en-US/changelogs/291.txt</code> — 402 caractères</summary>
+
+```
+The "forgotten vault PIN" exit could stay shut forever.
+
+Since 1.28.1 the PIN is only removed once the vault is genuinely emptied — the right rule, but some conversations can never be, and every attempt failed identically.
+
+On a second failure the app now offers to empty the vault and remove the PIN anyway, after stating what will remain on the phone. A first failure still invites you to try again.
+```
+</details>
 
 ---
 
