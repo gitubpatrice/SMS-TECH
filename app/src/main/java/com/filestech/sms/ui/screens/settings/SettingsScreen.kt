@@ -151,6 +151,9 @@ fun SettingsScreen(
     // destructive « PIN oublie ». L'ancien `vaultPinClearConfirmOpen` ne demandait rien.
     var vaultPinDisableOpen by remember { mutableStateOf(false) }
     var vaultPinForgetConfirmOpen by remember { mutableStateOf(false) }
+    // v1.28.2 — porte de sortie de la porte de sortie. `null` = fermee ; sinon, le nombre de
+    // conversations dont la copie systeme a resiste, qu'il faut annoncer avant de detruire.
+    var vaultPinForceConfirm by remember { mutableStateOf<Int?>(null) }
     // v1.14.0 — Comportement boutons 112/17 (DIALER_ONLY vs HOLD_3S_DIRECT_CALL).
     // Retiré v1.14.1 : la page Mode urgence v1.14.1 utilise direct call avec
     // fallback automatique → picker Settings devenait orphelin (dead setting).
@@ -236,6 +239,23 @@ fun SettingsScreen(
                     snackbarHost.showError(
                         ctx.getString(
                             R.string.settings_vault_pin_forgot_incomplete,
+                            e.deleted,
+                            e.left,
+                        ),
+                    )
+                }
+                // v1.28.2 — second echec : celui-la ne se levera pas tout seul. On ouvre la
+                // sortie assumee plutot que de laisser l'utilisateur enferme dehors de son
+                // propre coffre. Un dialogue, et non un message : il doit choisir, pas subir.
+                is SettingsViewModel.Event.VaultPurgeStuck -> {
+                    vaultPinForceConfirm = e.left
+                }
+                // Le coffre est ouvert, mais des copies systeme restent sur le telephone. C'est
+                // la contrepartie acceptee, et elle se dit — `showError` pour qu'elle se voie.
+                is SettingsViewModel.Event.VaultPurgedWithResidue -> {
+                    snackbarHost.showError(
+                        ctx.getString(
+                            R.string.settings_vault_pin_forgot_residue,
                             e.deleted,
                             e.left,
                         ),
@@ -1179,6 +1199,48 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(
                     onClick = { vaultPinForgetConfirmOpen = false },
+                    modifier = Modifier.focusRequester(cancelFocus).focusable(),
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
+    // v1.28.2 — la sortie de secours de la sortie de secours.
+    //
+    // Elle n'existe que parce que le refus prudent de la v1.28.1 pouvait devenir une IMPASSE :
+    // une liaison durablement fausse — un `telephony_uri` restaure d'un autre telephone — fait
+    // echouer le garde d'identite a chaque essai, a l'identique, et l'utilisateur qui a oublie
+    // son PIN n'avait plus d'issue. Une porte de sortie qui ne s'ouvre jamais n'en est pas une.
+    //
+    // Elle ne s'affiche qu'au SECOND echec, et elle dit ce qu'elle coute avant d'agir : le
+    // consentement doit etre eclaire, sinon ce n'est pas un consentement.
+    val resteAuTelephone = vaultPinForceConfirm
+    if (resteAuTelephone != null) {
+        val cancelFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
+        AlertDialog(
+            onDismissRequest = { vaultPinForceConfirm = null },
+            title = { Text(stringResource(R.string.settings_vault_pin_force_title)) },
+            text = {
+                Text(
+                    stringResource(R.string.settings_vault_pin_force_body, resteAuTelephone),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.forgetVaultPinAndPurge(force = true)
+                        vaultPinForceConfirm = null
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
+                ) { Text(stringResource(R.string.settings_vault_pin_force_action)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { vaultPinForceConfirm = null },
                     modifier = Modifier.focusRequester(cancelFocus).focusable(),
                 ) { Text(stringResource(R.string.action_cancel)) }
             },

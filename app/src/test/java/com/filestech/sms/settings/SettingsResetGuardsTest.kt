@@ -134,7 +134,7 @@ class SettingsResetGuardsTest {
         runTest(dispatcher) {
             // Une conversation effacee, une dont la copie systeme a survecu : elle reviendra a la
             // resynchronisation suivante, hors du coffre. Le PIN ne doit pas partir.
-            coEvery { conversationRepo.deleteAllInVault() } returns
+            coEvery { conversationRepo.deleteAllInVault(force = false) } returns
                 VaultPurgeResult(deleted = 1, failed = 1, remaining = 0)
 
             val vm = viewModel()
@@ -150,7 +150,7 @@ class SettingsResetGuardsTest {
         runTest(dispatcher) {
             // Rien n'a echoue, et pourtant le coffre n'est pas vide : c'est le cas que ni le
             // compte de succes ni celui d'echecs ne voit, et que `remaining` releve.
-            coEvery { conversationRepo.deleteAllInVault() } returns
+            coEvery { conversationRepo.deleteAllInVault(force = false) } returns
                 VaultPurgeResult(deleted = 3, failed = 0, remaining = 1)
 
             val vm = viewModel()
@@ -164,7 +164,7 @@ class SettingsResetGuardsTest {
         runTest(dispatcher) {
             // Le controle positif : sans lui, une garde qui refuserait TOUJOURS passerait les
             // deux tests ci-dessus tout en condamnant la seule issue de l'utilisateur.
-            coEvery { conversationRepo.deleteAllInVault() } returns
+            coEvery { conversationRepo.deleteAllInVault(force = false) } returns
                 VaultPurgeResult(deleted = 4, failed = 0, remaining = 0)
 
             val vm = viewModel()
@@ -173,5 +173,93 @@ class SettingsResetGuardsTest {
             coVerify(exactly = 1) { vaultPin.forgetVaultPin() }
             assertThat(vm.events.first())
                 .isInstanceOf(SettingsViewModel.Event.VaultPurged::class.java)
+            // Le drapeau d'echec ne doit pas survivre a une purge reussie : sinon le prochain PIN
+            // de coffre que l'utilisateur configurerait se verrait offrir la sortie degradee
+            // des son premier ennui.
+            assertThat(stored.security.vaultPurgeFailedOnce).isFalse()
         }
+
+    // ───────────── v1.28.2 : le refus prudent ne doit pas devenir une impasse definitive ─────────────
+
+    /**
+     * Premier echec : on retient qu'il a eu lieu, mais on ne propose RIEN d'autre que de
+     * reessayer. Une panne passagere — role SMS momentanement perdu — se leve d'elle-meme, et
+     * offrir tout de suite la sortie degradee pousserait a detruire plus que necessaire.
+     */
+    @Test
+    fun `the first failure only remembers it happened`() = runTest(dispatcher) {
+        coEvery { conversationRepo.deleteAllInVault(force = false) } returns
+            VaultPurgeResult(deleted = 0, failed = 1, remaining = 1)
+
+        val vm = viewModel()
+        vm.forgetVaultPinAndPurge()
+
+        coVerify(exactly = 0) { vaultPin.forgetVaultPin() }
+        assertThat(vm.events.first())
+            .isInstanceOf(SettingsViewModel.Event.VaultPurgeIncomplete::class.java)
+        assertThat(stored.security.vaultPurgeFailedOnce).isTrue()
+    }
+
+    /**
+     * Second echec : celui-la ne se levera pas tout seul — c'est en general une liaison restauree
+     * d'un autre telephone, que rien dans l'application ne repare. On ouvre la sortie, **sans
+     * rien retirer encore** : c'est une proposition, pas une action.
+     */
+    @Test
+    fun `the second failure offers the way out without taking it`() = runTest(dispatcher) {
+        stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
+        settingsFlow.value = stored
+        coEvery { conversationRepo.deleteAllInVault(force = false) } returns
+            VaultPurgeResult(deleted = 0, failed = 1, remaining = 1)
+
+        val vm = viewModel()
+        vm.forgetVaultPinAndPurge()
+
+        // LE point : le PIN reste, tant que l'utilisateur n'a pas dit oui.
+        coVerify(exactly = 0) { vaultPin.forgetVaultPin() }
+        assertThat(vm.events.first())
+            .isInstanceOf(SettingsViewModel.Event.VaultPurgeStuck::class.java)
+    }
+
+    /**
+     * La sortie assumee : l'utilisateur a dit oui apres qu'on lui a annonce ce qui subsisterait.
+     * Le PIN part, et **ce qui reste lui est redit** — c'est la contrepartie, elle ne se tait pas.
+     */
+    @Test
+    fun `the deliberate way out removes the PIN and states what survives`() = runTest(dispatcher) {
+        stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
+        settingsFlow.value = stored
+        coEvery { conversationRepo.deleteAllInVault(force = true) } returns
+            VaultPurgeResult(deleted = 2, failed = 1, remaining = 0)
+
+        val vm = viewModel()
+        vm.forgetVaultPinAndPurge(force = true)
+
+        coVerify(exactly = 1) { vaultPin.forgetVaultPin() }
+        val evenement = vm.events.first()
+        assertThat(evenement)
+            .isInstanceOf(SettingsViewModel.Event.VaultPurgedWithResidue::class.java)
+        // Le nombre annonce est celui qui SUBSISTE, pas celui qui est parti.
+        assertThat((evenement as SettingsViewModel.Event.VaultPurgedWithResidue).left).isEqualTo(1)
+        assertThat(stored.security.vaultPurgeFailedOnce).isFalse()
+    }
+
+    /**
+     * Controle negatif de la sortie assumee : elle ne doit pas devenir le chemin ordinaire. Sans
+     * `force`, une purge incomplete ne retire toujours rien — c'est la garde de la v1.28.1, et
+     * elle doit survivre a l'ajout de la sortie.
+     */
+    @Test
+    fun `the way out is never taken on the caller's behalf`() = runTest(dispatcher) {
+        coEvery { conversationRepo.deleteAllInVault(force = false) } returns
+            VaultPurgeResult(deleted = 0, failed = 2, remaining = 2)
+
+        val vm = viewModel()
+        vm.forgetVaultPinAndPurge()
+        vm.events.first()
+        vm.forgetVaultPinAndPurge()
+
+        coVerify(exactly = 0) { vaultPin.forgetVaultPin() }
+        coVerify(exactly = 0) { conversationRepo.deleteAllInVault(force = true) }
+    }
 }

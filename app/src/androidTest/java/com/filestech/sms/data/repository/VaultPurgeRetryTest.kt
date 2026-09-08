@@ -176,6 +176,39 @@ class VaultPurgeRetryTest {
         assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
     }
 
+    /**
+     * v1.28.2 — la SORTIE ASSUMEE. Le refus prudent de la v1.28.1 est juste tant que l'echec est
+     * passager ; il devient une impasse definitive quand la liaison est durablement fausse — un
+     * `telephony_uri` restaure d'un autre telephone. `force` rend son coffre a l'utilisateur, en
+     * lui disant ce qui subsiste.
+     */
+    @Test
+    fun laSortieAssumeeEffaceLaLigneLocaleMaisContinueDeCompterLEchec() = runBlocking<Unit> {
+        seedVaultConversation()
+
+        val resultat = eraserAvec(RefusSystematique).purgeVault(force = true)
+
+        // Le coffre est vide : l'utilisateur retrouve l'acces.
+        assertThat(db.conversationDao().idsInVault()).isEmpty()
+        // Mais l'echec n'est PAS efface du compte-rendu — l'appelant doit pouvoir le dire.
+        assertThat(resultat.failed).isEqualTo(1)
+        assertThat(resultat.deleted).isEqualTo(0)
+    }
+
+    /**
+     * Controle negatif : `force` est un choix de l'appelant, jamais un defaut. Sans lui, la garde
+     * de la v1.28.1 tient — c'est le meme appel, au drapeau pres.
+     */
+    @Test
+    fun sansLeDrapeauLaGardeDeLaVersionPrecedenteTientToujours() = runBlocking<Unit> {
+        seedVaultConversation()
+
+        val resultat = eraserAvec(RefusSystematique).purgeVault()
+
+        assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+        assertThat(resultat.isComplete).isFalse()
+    }
+
     /** Un seul point de construction : la signature a deja bouge une fois. */
     private fun eraserAvec(systemCopy: SystemCopyEraser) =
         ConversationEraser(db, db.conversationDao(), db.messageDao(), systemCopy)

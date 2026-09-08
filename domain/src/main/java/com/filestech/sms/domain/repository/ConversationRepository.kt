@@ -80,7 +80,7 @@ interface ConversationRepository {
      * v1.27.11 (meme revue, constat 2) — renvoie un [VaultPurgeResult] et non plus un simple
      * compte. Voir ce type pour la raison : un nombre de succes ne dit pas si le coffre est vide.
      */
-    suspend fun deleteAllInVault(): VaultPurgeResult
+    suspend fun deleteAllInVault(force: Boolean = false): VaultPurgeResult
     suspend fun deleteMessage(messageId: Long)
 
     /**

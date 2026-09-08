@@ -173,12 +173,24 @@ class ConversationEraser @Inject constructor(
      * v1.27.11 (meme revue, constat 2) — ce qui a echoue est desormais COMPTE, et le coffre est
      * RELU apres la boucle. L'appelant decide alors s'il retire le PIN ; il ne le retire plus sur
      * un simple nombre de succes. Voir [VaultPurgeResult].
+     *
+     * v1.28.2 — [force] est la SORTIE ASSUMEE, et elle n'existe que parce que le refus prudent
+     * pouvait devenir une impasse definitive. Une liaison durablement fausse — un
+     * `telephony_uri` restaure d'un autre telephone — fait echouer le garde d'identite a chaque
+     * essai, a l'identique : l'utilisateur qui a oublie son PIN n'avait alors plus d'issue.
+     *
+     * Sous [force], la ligne locale part meme si sa copie systeme resiste. Ce n'est PAS un
+     * assouplissement du garde : la copie systeme n'est toujours pas supprimee sans preuve
+     * d'identite — on refuse toujours de toucher au message d'autrui. Ce qui change est
+     * l'arbitrage LOCAL, et il appartient a l'utilisateur, qui l'a explicitement demande apres
+     * qu'on lui a dit ce qui subsisterait. Le resultat continue de rendre `failed` : l'appelant
+     * doit le lui montrer, pas le taire.
      */
-    suspend fun purgeVault(): VaultPurgeResult {
+    suspend fun purgeVault(force: Boolean = false): VaultPurgeResult {
         var deleted = 0
         var failed = 0
         for (id in conversationDao.idsInVault()) {
-            runCatching { erase(id, preserveOnSystemFailure = true) }
+            runCatching { erase(id, preserveOnSystemFailure = !force) }
                 .onSuccess { systemCopyGone -> if (systemCopyGone) deleted++ else failed++ }
                 .onFailure {
                     failed++

@@ -9,15 +9,22 @@
 | Suite | Où | Ce qu'elle prouve |
 |---|---|---|
 | `SystemRowMatchPolicyTest` | JVM, 5 tests | La table de décision avant suppression. **Seul endroit** où la politique `UNKNOWN` est falsifiable. |
-| `VaultPurgeRetryTest` | Room en mémoire, 5 tests | Le second essai de « PIN oublié », la reprise après redémarrage, la course d'un message arrivé pendant le balayage, et le contrat **opposé** de la suppression ordinaire. |
+| `VaultPurgeRetryTest` | Room en mémoire, 7 tests | Le second essai de « PIN oublié », la reprise après redémarrage, la course d'un message arrivé pendant le balayage, le contrat **opposé** de la suppression ordinaire, et la sortie assumée. |
 | `SystemRowIdentityTest` | Vrai `content://sms`, 7 tests | Date, corps, sens, adresse — et que la même adresse sous une autre notation ne bloque pas. |
 | `MmsRowIdentityTest` | Vrai `content://mms`, 3 tests | L'adresse d'un MMS, lue dans `addr`. A été **rouge avant le correctif**. |
+| `SettingsResetGuardsTest` | JVM, 9 tests | Ce que le ViewModel décide de la porte « PIN oublié » : premier échec, second échec, sortie assumée, et qu'elle n'est **jamais** prise à la place de l'utilisateur. |
 | `MigrationTest` | Room réel, 10 tests | La migration 7→8 : doublon prouvé, collision non prouvée, conversations différentes. |
 | `PurgeHistoryPropagationTest` | Room en mémoire, 5 tests | La purge de rétention propage au fournisseur **exactement** les messages qu'elle efface : favoris épargnés, lignes non miroitées écartées par la requête, pagination couvrant 450 lignes, et le contrat opposé à celui du coffre. |
 
 Mesures du 2026-09-08 : gate local vert (assembleDebug, tests unitaires 4 modules, detekt, lint) ;
 **90 tests instrumentés, 89 OK + 1 ignoré à raison** sur émulateur Android 11 ; les 15 tests
 dépendant du vrai fournisseur **tous verts sur Galaxy S9 / Android 10**, zéro ignoré.
+
+Après l'ajout non publié de la sortie assumée : **92 tests instrumentés, 91 OK + 1 ignoré**,
+émulateur Android 11. ⚠️ Une campagne a échoué en cours de route sur
+`WorkManager needs to be initialized`, à 35 tests sur 92 — état d'émulateur, levé par un
+`am force-stop` et non reproduit ensuite. Si cela revient, c'est l'environnement qu'il faut
+regarder, pas la migration que le message désigne.
 
 ---
 
@@ -64,23 +71,13 @@ garde les messages en clair : ce n'est donc pas une régression. Reste à décid
 individuelle d'un fil du coffre doit suivre la règle de la purge plutôt que celle de la
 suppression ordinaire. **Décision produit, pas correctif.**
 
-### 5. L'impasse permanente d'un `MISMATCH`
-
-Soulevée par la relecture GPT, et non résolue. Quand une liaison est durablement incohérente,
-chaque nouvel essai reproduit le même refus : la porte « PIN oublié » reste fermée, sans recours.
-Le refus est **visible** — l'utilisateur lit « purge incomplète, le PIN n'a PAS été retiré » — ce
-qui vaut mieux qu'une fuite silencieuse, mais ce n'est pas une sortie.
-
-Il manque un chemin de résolution explicite : reprise du rôle SMS, ou abandon confirmé par
-l'utilisateur qui accepte que des copies système survivent. **Décision produit.**
-
-### 6. Deux SMS identiques au même destinataire dans la même minute
+### 5. Deux SMS identiques au même destinataire dans la même minute
 
 Corps, adresse, sens et date égaux : indiscernables, et ils le resteront. Le fournisseur n'expose
 rien d'autre sur l'URI d'une ligne. Le cas est bénin — supprimer l'un ou l'autre revient au même —
 mais il vaut d'être écrit pour que personne ne croie l'identité plus forte qu'elle n'est.
 
-### 7. Interruption du processus **pendant** la purge
+### 6. Interruption du processus **pendant** la purge
 
 `purgeVault` n'est pas transactionnelle, à dessein : elle touche un fournisseur externe. Un
 `kill -9` au milieu laisse un coffre partiellement purgé. La reprise est censée s'en occuper —
@@ -89,6 +86,44 @@ c'est ce que teste `laReprisePasseParLaBaseEtNonParUnEtatEnMemoire` avec un obje
 
 *Comment* : `adb shell am force-stop` entre deux essais, dans un test qui survit à la mort de
 l'application — donc pas un test instrumenté ordinaire.
+
+---
+
+## ⏳ Écrit mais NON PUBLIÉ — la sortie assumée de la porte « PIN oublié »
+
+Décidé par Patrice le 2026-09-08, écrit et testé le jour même, **volontairement pas publié** : la
+v1.28.1 venait de sortir, et on n'enchaîne pas une release toutes les cinq minutes.
+
+Le point était listé ici comme « impasse permanente d'un `MISMATCH` » et signalé comme tel dans la
+réponse à la MR `!38458`. Quand une liaison est durablement fausse — un `telephony_uri` restauré
+d'un autre téléphone — le garde d'identité refuse à chaque essai, à l'identique, et l'utilisateur
+qui a oublié son PIN de coffre n'a plus d'issue. Une porte de sortie qui ne s'ouvre jamais n'en est
+pas une.
+
+**Au SECOND échec seulement**, l'application propose désormais de vider et de retirer le PIN quand
+même, après avoir dit ce qui restera sur le téléphone — et le redit une fois l'opération faite. Le
+premier échec continue d'inviter à réessayer : une panne passagère (rôle SMS momentanément perdu)
+se lève d'elle-même, et offrir tout de suite l'option dégradée pousserait à détruire plus que
+nécessaire. Le drapeau qui distingue les deux est **en base**, sinon fermer l'application entre
+deux essais ramènerait l'impasse.
+
+Ce n'est pas un assouplissement du garde : la copie système n'est toujours pas supprimée sans
+preuve d'identité. Ce qui change est l'arbitrage **local**, et il appartient à l'utilisateur.
+
+Couvert par 5 tests JVM (`SettingsResetGuardsTest`) et 2 instrumentés (`VaultPurgeRetryTest`),
+contrôle négatif fait — les deux régressions remises en place font tomber les tests qui les visent.
+
+### À faire au moment du bump
+
+1. `version.properties` → **291 / 1.28.2** ; l'entrée de journal est rédigée dans l'historique de
+   cette session, à réécrire si le numéro change.
+2. Changelogs fastlane 291 FR (454 c) et EN (402 c) — **rédigés et mis de côté**, pas dans le
+   dépôt : un `changelogs/291.txt` sans version 291 publiée annonce une version inexistante.
+3. **Vérifier que les mentions `v1.28.2` du code correspondent au numéro réellement publié.**
+   Elles sont dans `AppSettings`, `ConversationEraser`, `SettingsViewModel`, `SettingsScreen` et
+   les tests. Un `grep -rn "v1.28.2"` suffit.
+4. Ajouter l'entrée correspondante à l'historique d'audit de `SECURITY.md`, qui documente
+   aujourd'hui l'impasse comme ouverte dans son entrée v1.28.1.
 
 ---
 

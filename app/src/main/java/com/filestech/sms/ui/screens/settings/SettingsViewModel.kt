@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -88,6 +89,26 @@ class SettingsViewModel @Inject constructor(
          * plus l'application SMS par defaut, donc le systeme lui refuse la suppression.
          */
         data class VaultPurgeIncomplete(val deleted: Int, val left: Int) : Event
+
+        /**
+         * v1.28.2 — la purge a echoue **une seconde fois**. Le PIN reste en place, mais on
+         * propose desormais la sortie assumee : vider quand meme, en sachant que [left]
+         * copie(s) systeme subsisteront.
+         *
+         * Le second echec, et pas le premier : une panne passagere — role SMS momentanement
+         * perdu — se leve par un simple nouvel essai, et offrir l'option degradee tout de suite
+         * pousserait a detruire plus que necessaire. Un echec qui se REPETE, lui, ne se levera
+         * pas : c'est en general une liaison restauree d'un autre telephone, que rien dans
+         * l'application ne peut reparer.
+         */
+        data class VaultPurgeStuck(val deleted: Int, val left: Int) : Event
+
+        /**
+         * v1.28.2 — l'utilisateur a choisi la sortie assumee. Le coffre est vide et le PIN
+         * retire, mais [left] copie(s) systeme ont resiste et **restent sur le telephone**.
+         * Cela se dit, cela ne se tait pas : c'est la contrepartie qu'il a acceptee.
+         */
+        data class VaultPurgedWithResidue(val deleted: Int, val left: Int) : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -379,13 +400,40 @@ class SettingsViewModel @Inject constructor(
      * Le refus doit se VOIR : c'est une porte de sortie, et un echec muet y laisserait
      * l'utilisateur croire son coffre ouvert alors qu'il reste ferme — ou l'inverse.
      */
-    fun forgetVaultPinAndPurge() = viewModelScope.launch {
-        val purge = conversationRepo.deleteAllInVault()
-        if (purge.isComplete) {
-            vaultPin.forgetVaultPin()
-            _events.send(Event.VaultPurged(purge.deleted))
-        } else {
-            _events.send(Event.VaultPurgeIncomplete(purge.deleted, purge.failed + purge.remaining))
+    fun forgetVaultPinAndPurge(force: Boolean = false) = viewModelScope.launch {
+        val dejaEchoue = settings.flow.first().security.vaultPurgeFailedOnce
+        val purge = conversationRepo.deleteAllInVault(force)
+        val reste = purge.failed + purge.remaining
+        when {
+            purge.isComplete -> {
+                vaultPin.forgetVaultPin()
+                oublierLEchecPasse()
+                _events.send(Event.VaultPurged(purge.deleted))
+            }
+            // v1.28.2 — sortie assumee : l'utilisateur a demande qu'on vide quand meme, apres
+            // qu'on lui a dit ce qui subsisterait. Ce qui subsiste lui est redit ici.
+            force -> {
+                vaultPin.forgetVaultPin()
+                oublierLEchecPasse()
+                _events.send(Event.VaultPurgedWithResidue(purge.deleted, reste))
+            }
+            // Second echec : celui-la ne se levera pas tout seul, on ouvre la sortie.
+            dejaEchoue -> _events.send(Event.VaultPurgeStuck(purge.deleted, reste))
+            else -> {
+                settings.update {
+                    it.copy(security = it.security.copy(vaultPurgeFailedOnce = true))
+                }
+                _events.send(Event.VaultPurgeIncomplete(purge.deleted, reste))
+            }
         }
+    }
+
+    /**
+     * Le drapeau ne doit survivre ni a une purge reussie ni a une sortie assumee : dans les deux
+     * cas le coffre est ouvert, et le laisser poserait la sortie degradee d'emblee au prochain
+     * PIN de coffre que l'utilisateur configurerait.
+     */
+    private suspend fun oublierLEchecPasse() {
+        settings.update { it.copy(security = it.security.copy(vaultPurgeFailedOnce = false)) }
     }
 }

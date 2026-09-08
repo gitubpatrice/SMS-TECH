@@ -557,8 +557,8 @@ class ConversationRepositoryImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun deleteAllInVault(): VaultPurgeResult = withContext(io) {
-        eraser.purgeVault()
+    override suspend fun deleteAllInVault(force: Boolean): VaultPurgeResult = withContext(io) {
+        eraser.purgeVault(force)
     }
 
     /** v1.26.1 (audit F2) — voir [ConversationRepository.setMessageStarred]. */
