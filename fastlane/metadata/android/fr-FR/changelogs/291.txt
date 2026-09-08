@@ -1,0 +1,5 @@
+La porte « PIN du coffre oublié » pouvait rester fermée pour toujours.
+
+Depuis la 1.28.1, le PIN n'est retiré que si le coffre est vraiment vidé — c'est la bonne règle, mais certaines conversations ne peuvent jamais l'être, et chaque essai échouait à l'identique.
+
+Au second échec, l'application propose maintenant de vider et de retirer le PIN quand même, en disant d'abord ce qui restera sur le téléphone. Le premier échec invite toujours à réessayer.

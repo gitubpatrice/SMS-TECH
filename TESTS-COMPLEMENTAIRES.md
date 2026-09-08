@@ -89,10 +89,10 @@ l'application — donc pas un test instrumenté ordinaire.
 
 ---
 
-## ⏳ Écrit mais NON PUBLIÉ — la sortie assumée de la porte « PIN oublié »
+## ✅ Publié en v1.28.2 (291) — la sortie assumée de la porte « PIN oublié »
 
-Décidé par Patrice le 2026-09-08, écrit et testé le jour même, **volontairement pas publié** : la
-v1.28.1 venait de sortir, et on n'enchaîne pas une release toutes les cinq minutes.
+Décidé par Patrice le 2026-09-08, écrit et testé le jour même, gardé une journée sur `main` sans
+être publié — la v1.28.1 venait de sortir — puis **publié en v1.28.2 le 2026-09-08**.
 
 Le point était listé ici comme « impasse permanente d'un `MISMATCH` » et signalé comme tel dans la
 réponse à la MR `!38458`. Quand une liaison est durablement fausse — un `telephony_uri` restauré
@@ -113,45 +113,11 @@ preuve d'identité. Ce qui change est l'arbitrage **local**, et il appartient à
 Couvert par 5 tests JVM (`SettingsResetGuardsTest`) et 2 instrumentés (`VaultPurgeRetryTest`),
 contrôle négatif fait — les deux régressions remises en place font tomber les tests qui les visent.
 
-### À faire au moment du bump
-
-1. `version.properties` → **291 / 1.28.2** ; l'entrée de journal est rédigée dans l'historique de
-   cette session, à réécrire si le numéro change.
-2. Changelogs fastlane 291 — **rédigés ci-dessous**, à copier dans
-   `fastlane/metadata/android/{fr-FR,en-US}/changelogs/291.txt` au moment du bump. Ils ne sont pas
-   déjà en place parce qu'un `291.txt` sans version 291 publiée annonce une version inexistante.
-   Recompter les caractères si le texte change : le plafond F-Droid est de 500 **caractères**, et
-   `wc -c` compte des octets — l'accentuation fait mentir la mesure.
-
-3. **Vérifier que les mentions `v1.28.2` du code correspondent au numéro réellement publié.**
-   Elles sont dans `AppSettings`, `ConversationEraser`, `SettingsViewModel`, `SettingsScreen` et
-   les tests. Un `grep -rn "v1.28.2"` suffit.
-4. Ajouter l'entrée correspondante à l'historique d'audit de `SECURITY.md`, qui documente
-   aujourd'hui l'impasse comme ouverte dans son entrée v1.28.1.
-
-Les deux textes, prêts à copier :
-
-<details><summary><code>fr-FR/changelogs/291.txt</code> — 454 caractères</summary>
-
-```
-La porte « PIN du coffre oublié » pouvait rester fermée pour toujours.
-
-Depuis la 1.28.1, le PIN n'est retiré que si le coffre est vraiment vidé — c'est la bonne règle, mais certaines conversations ne peuvent jamais l'être, et chaque essai échouait à l'identique.
-
-Au second échec, l'application propose maintenant de vider et de retirer le PIN quand même, en disant d'abord ce qui restera sur le téléphone. Le premier échec invite toujours à réessayer.
-```
-</details>
-
-<details><summary><code>en-US/changelogs/291.txt</code> — 402 caractères</summary>
-
-```
-The "forgotten vault PIN" exit could stay shut forever.
-
-Since 1.28.1 the PIN is only removed once the vault is genuinely emptied — the right rule, but some conversations can never be, and every attempt failed identically.
-
-On a second failure the app now offers to empty the vault and remove the PIN anyway, after stating what will remain on the phone. A first failure still invites you to try again.
-```
-</details>
+Les changelogs fastlane 291 sont en place (`fr-FR` 454 caractères, `en-US` 402, plafond F-Droid
+500 **caractères** — `wc -c` compte des octets et fait mentir la mesure sur du texte accentué).
+Les dix mentions `v1.28.2` du code désignent bien la version réellement publiée. `SECURITY.md`
+porte son entrée d'audit, et le `CHANGELOG.md` — que la recette F-Droid publie par son champ
+`Changelog:` — a été **rattrapé de cinq versions** au passage : il s'était arrêté à la 1.27.10.
 
 ---
 

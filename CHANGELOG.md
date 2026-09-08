@@ -3,6 +3,139 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.2] — 2026-09-08
+
+### Sécurité
+- **La porte « PIN du coffre oublié » pouvait rester fermée pour toujours.** La v1.28.1 a eu raison
+  de conserver la conversation du coffre quand sa copie système résiste — c'est ce qui rend la purge
+  reprenable — mais elle supposait l'échec **passager**. Il ne l'est pas toujours : une sauvegarde
+  restaurée d'avant la v1.27.10 recopiait les `telephony_uri` du téléphone **source**, si bien qu'un
+  message peut porter durablement une liaison qui désigne ici un **autre** message. Le garde
+  d'identité refuse alors à chaque essai, à l'identique, et l'utilisateur qui a oublié son PIN n'a
+  plus aucune issue. Une porte de sortie qui ne s'ouvre jamais n'en est pas une.
+  Au **second** échec seulement, l'application propose désormais de vider le coffre et de retirer le
+  PIN quand même, après avoir énoncé ce qui **restera** sur le téléphone — et le redit une fois
+  l'opération faite. Le premier échec continue d'inviter à réessayer.
+  Ce n'est **pas** un assouplissement du garde : `SystemCopyEraser` ne bouge pas d'une ligne, la
+  copie système n'est toujours pas supprimée sans preuve d'identité. Ce qui change est l'arbitrage
+  **local**, et il appartient à l'utilisateur. Le drapeau qui distingue les deux échecs est **en
+  base** — en mémoire, fermer l'application entre deux essais ramènerait l'impasse.
+
+## [1.28.1] — 2026-09-08
+
+*Troisième passe de la relecture d'Andrew Pozdnakov sur la MR F-Droid !38458, plus deux défauts
+trouvés en cherchant autour des siens.*
+
+### Sécurité
+- **La porte « PIN du coffre oublié » s'ouvrait au second essai.** La v1.27.11 avait rendu la purge
+  honnête sans la rendre **reprenable** : la ligne Room partait même quand la copie système
+  résistait. Premier essai, le PIN était donc correctement conservé mais la conversation déjà
+  effacée ; second essai, `idsInVault()` rendait une liste vide, `VaultPurgeResult` valait `0/0/0` et
+  `isComplete` était vrai **par vacuité**. Le PIN partait, la copie système survivait, et la
+  resynchronisation suivante la ressuscitait **en clair**. La ligne du coffre est désormais
+  conservée : elle **est** le journal de purge, elle survit au redémarrage parce qu'elle est en base,
+  et la suppression système est retentée.
+- **La migration 7 → 8 supprimait sans preuve.** Elle tenait une collision d'URI pour un doublon sans
+  comparer un seul champ. La suppression exige désormais l'égalité de l'adresse, du corps, de la
+  date, du sens, du type **et** de la conversation ; ce qui ne se prouve pas n'est plus touché.
+- **L'identité d'une ligne système ne tenait qu'à la date**, à une minute près — c'est-à-dire à rien.
+  On compare désormais date, corps, sens et adresse côté `content://sms`, et une identité
+  invérifiable échoue du côté sûr au lieu de déclencher la suppression. Côté `content://mms`, la
+  table désignée par l'URI ne porte ni corps ni adresse : l'identité s'y réduisait à date + sens, et
+  le test écrit pour le vérifier a **supprimé le MMS d'un autre correspondant** sur un Galaxy S9
+  avant que le correctif n'existe. L'adresse y est maintenant relue dans `content://mms/<id>/addr`.
+
+### Corrigé
+- ⚠ **L'effacement automatique de l'historique ne retirait rien du téléphone**, contrairement aux
+  trois autres chemins de suppression, et rien ne le documentait. Les messages que l'utilisateur
+  croyait effacés restaient dans `content://sms`, lisibles par toute application ayant `READ_SMS`, et
+  « Resynchroniser » les ramenait tous — alors que la confirmation promettait « Cette action est
+  irréversible ». La recette était de surcroît **écrite deux fois**, le cycle mensuel de
+  `TelephonySyncWorker` la réécrivant à l'identique. **Changement de comportement destructeur** : sur
+  un appareil où la rétention automatique est activée, la prochaine purge supprime les messages **du
+  téléphone**. La confirmation le dit désormais, et la description de « Resynchroniser » ne promet
+  plus de récupérer un historique effacé.
+
+### Interne
+- Le chemin destructeur a quitté `ConversationRepositoryImpl`, où il vivait en `private` au milieu de
+  onze dépendances : c'est parce qu'il n'était pas testable que trois défauts y sont passés en trois
+  versions. Il est désormais en propre (`SystemCopyEraser`, `ConversationEraser`), la politique de
+  suppression est une table testée pour elle-même, et chaque correctif a fait l'objet d'un contrôle
+  négatif.
+
+## [1.28.0] — 2026-09-07
+
+*Palier mineur et non un treizième correctif : la sauvegarde chiffrée passe d'impossible à
+fonctionnelle, et un chemin de sécurité change de comportement visible.*
+
+### Corrigé
+- **La sauvegarde chiffrée était impossible depuis la v1.27.2** pour tout coffre non vide. La garde
+  exigeait une session coffre ouverte ; or cette session n'est ouverte que par l'écran du coffre, et
+  `lockedOnBack` la referme à chaque sortie, inconditionnellement. L'écran de sauvegarde n'étant
+  atteignable qu'après avoir quitté le coffre, **aucun chemin de navigation ne satisfaisait la
+  condition**. La question posée était mauvaise : « la session est-elle ouverte ? » devient « y
+  a-t-il un second facteur, et l'a-t-on prouvé ? ». `VaultSecondFactorPolicy` porte cette réponse en
+  un seul endroit ; l'écran demande le PIN du coffre sur place et emprunte la session le temps de
+  l'écriture, la refermant dans un `finally`. Les utilisateurs **sans** second facteur, bloqués eux
+  aussi alors que rien ne protégeait leur coffre, ne le sont plus.
+
+### Sécurité
+- **Fuite du mode leurre.** « À propos → Aide » donnait le mode d'emploi complet du coffre et du mode
+  urgence. Le même écran filtrait déjà sa liste « Fonctionnalités » depuis l'audit C4 de la v1.26.1 ;
+  sa liste « Aide », vingt lignes plus bas, ne l'était pas.
+
+### Interne
+- 42 chaînes orphelines retirées, 4 gardées à dessein (fonctionnalités non écrites).
+
+## [1.27.12] — 2026-09-07
+
+### Corrigé
+- **Un bouton écrasait son propre texte sur écran étroit à police agrandie.** Dans un `Row`, Compose
+  mesure les enfants **sans poids en premier** : « Définir par défaut » prenait toute sa largeur
+  intrinsèque et le texte, pourtant en `weight(1f)`, héritait des miettes. Sur un Redmi 9C (360 dp) à
+  `font_scale` 1,33, le message s'affichait sur une colonne de sept caractères. Corrigé aux **deux**
+  endroits qui portaient le motif : le bandeau de la liste et la rangée « App SMS par défaut » des
+  réglages. Empilement plutôt qu'un seuil de largeur à deviner, comme le prescrit Material.
+- **Le premier glissement après un retour vers la liste était ignoré.** Le `NavHost` ne déclarait
+  aucune transition, il héritait donc du fondu par défaut, et l'écran qui **revient** n'accepte pas
+  les gestes tant qu'elle court. Atténuation assumée et documentée comme telle : la bibliothèque
+  n'expose rien pour rendre l'écran entrant interactif, on **raccourcit** la fenêtre à 80 ms, sous le
+  seuil du perceptible.
+
+## [1.27.11] — 2026-09-07
+
+*Suite de la relecture d'Andrew Pozdnakov, qui a suivi les chemins **voisins** de ceux fermés en
+1.27.10 et en a trouvé trois.*
+
+### Sécurité
+- **« Réinitialiser tous les réglages » rouvrait le coffre.** Le bouton écrivait `AppSettings()` nu,
+  dont les défauts sont `lockMode = OFF` et `vaultPinEnabled = false`. Les empreintes des deux PIN
+  vivant dans le magasin sécurisé et non dans les réglages, elles **survivaient** : plus personne ne
+  les consultait, et le coffre restait plein. Le bouton étant hors du garde `!isPanicDecoy`, une
+  session leurre en sortait en trois tapes, données intactes. La réinitialisation préserve désormais
+  le bloc sécurité.
+- **La sortie « PIN oublié » retirait le PIN quel que soit le sort de la purge**, y compris quand
+  celle-ci n'avait rien effacé — deux étages avalaient l'échec en silence. Elle exige désormais un
+  coffre démontrablement vide.
+- **La restauration recopiait les identifiants du téléphone source** (`telephonyUri`, `mmsSystemId`,
+  `subId`), si bien qu'un `content://sms/42` étranger entrait en collision sur l'index `UNIQUE` — le
+  message restauré était écarté en silence — puis repartait tel quel au fournisseur du système à la
+  suppression. La sauvegarde porte désormais l'empreinte de son appareil d'origine.
+
+### Corrigé
+- **La suppression système des messages écrits par l'application n'avait jamais fonctionné.** Trouvé
+  en mesurant sur appareil, et prévu par personne : `resolver.insert` rend `content://sms/sent/<id>`
+  sous Android 10 — forme que le fournisseur **refuse** en suppression — alors que c'est celle que
+  SMS Tech enregistrait. L'exception était avalée. Sous Android 16, le même appel rend déjà la forme
+  canonique.
+- **Chaque message écrit par l'application était réimporté en double** après une resynchronisation
+  complète. Même divergence : l'import construisait la forme canonique, l'application enregistrait
+  celle avec dossier, et l'index `UNIQUE` compare des **chaînes**. La règle de normalisation est
+  désormais unique (`canonicalTelephonyUri`) et appliquée aux trois endroits — à l'écriture, à la
+  suppression, et en base par la migration 7 → 8, qui conserve **la ligne de l'application** : elle
+  seule porte la réaction, la citation, le favori, et surtout la conversation d'origine, qui peut
+  être le coffre.
+
 ## [1.27.10] — 2026-09-07
 
 Sept constats d'une relecture externe (Andrew Pozdnakov, MR F-Droid !38458), tous

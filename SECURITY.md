@@ -81,6 +81,50 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.2 — Un garde qui refuse toujours de la même façon n'est plus une protection
+
+*Suite directe de la v1.28.1, décidée après elle et non signalée par la relecture externe : c'est
+le correctif de la v1.28.1 lui-même qui a créé le cas.*
+
+La v1.28.1 a eu raison de **conserver** la conversation du coffre quand sa copie système résiste.
+C'est ce qui rend la purge reprenable, et c'est ce qui a fermé la fuite du second essai. Mais elle
+supposait l'échec **passager** — un rôle SMS momentanément perdu, un fournisseur indisponible —
+et cette hypothèse est fausse dans un cas précis et durable.
+
+Une sauvegarde restaurée d'**avant la v1.27.10** recopiait les `telephony_uri` du téléphone
+**source**. Un message peut donc porter, définitivement, une liaison qui désigne ici un **autre**
+message. Le garde d'identité posé en v1.28.1 fait alors exactement ce qu'on lui demande : il
+refuse de supprimer la ligne système, parce qu'elle n'est pas prouvée être celle-là. Il refuse au
+premier essai, au deuxième, au centième — à l'identique. Et l'utilisateur qui a oublié son PIN de
+coffre n'a plus **aucune** issue.
+
+**Une porte de sortie qui ne s'ouvre jamais n'en est pas une.** Le garde finissait par protéger
+l'application contre son propriétaire.
+
+**Ce qui change, et ce qui ne change pas.** Au **second** échec seulement, l'application propose
+de vider le coffre et de retirer le PIN quand même, après avoir énoncé ce qui **restera** sur le
+téléphone — et le redit une fois l'opération faite. Le premier échec continue d'inviter à
+réessayer : une panne passagère se lève d'elle-même, et offrir tout de suite l'option dégradée
+pousserait à détruire plus que nécessaire.
+
+`SystemCopyEraser` ne bouge **pas d'une ligne** : la copie système n'est toujours pas supprimée
+sans preuve d'identité, et ce n'est donc pas un assouplissement du garde. Ce qui change est
+l'arbitrage **local** — conserver ou non la ligne Room quand la propagation a échoué — et il
+appartient désormais à l'utilisateur, informé, au second échec.
+
+**Le drapeau qui distingue les deux échecs est en base** (`vaultPurgeFailedOnce`), pas en mémoire.
+Un compteur en mémoire ne survit pas à ce qu'on lui demande de survivre : fermer l'application
+entre deux essais ramènerait l'impasse, et c'est précisément ce que ferait quelqu'un de bloqué.
+
+**La règle générale, à appliquer aux prochains gardes.** Distinguer l'échec **passager** de
+l'échec **répété**. Le premier invite à réessayer. Le second ouvre une sortie assumée, à trois
+conditions : le garde lui-même ne bouge pas, l'utilisateur décide après avoir lu ce qui
+subsistera, et l'état qui distingue les deux échecs est persistant.
+
+Couvert par 5 tests JVM (`SettingsResetGuardsTest`) et 2 instrumentés (`VaultPurgeRetryTest`),
+contrôle négatif effectué : les deux régressions remises en place font tomber les tests qui les
+visent.
+
 ### v1.28.1 — La porte de sortie du coffre s'ouvrait au second essai
 
 *Troisième passe de la relecture d'Andrew Pozdnakov sur la MR F-Droid !38458, 2026-09-08, qu'il

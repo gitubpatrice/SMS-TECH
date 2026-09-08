@@ -1,0 +1,5 @@
+The "forgotten vault PIN" exit could stay shut forever.
+
+Since 1.28.1 the PIN is only removed once the vault is genuinely emptied — the right rule, but some conversations can never be, and every attempt failed identically.
+
+On a second failure the app now offers to empty the vault and remove the PIN anyway, after stating what will remain on the phone. A first failure still invites you to try again.
