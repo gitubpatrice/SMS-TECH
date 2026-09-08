@@ -17,7 +17,7 @@ datastore = "1.2.1"
 room = "2.8.4"
 work = "2.11.2"
 biometric = "1.1.0"
-splashscreen = "1.0.1"
+splashscreen = "1.2.0"
 documentfile = "1.0.1"
 # v1.14.8 audit SEC-M4 — `androidx.security:security-crypto:1.1.0-alpha06` retiré
 # (alpha 2021, 0 usage confirmé). Lib + alias [androidx-security-crypto] désormais inertes.
