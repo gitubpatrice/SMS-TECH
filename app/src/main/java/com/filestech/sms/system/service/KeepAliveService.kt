@@ -37,8 +37,8 @@ import timber.log.Timber
  *
  * **Opt-in strict** : ce service n'est PAS démarré par défaut. L'utilisateur doit activer
  * explicitement le toggle "Mode résistant Xiaomi/Huawei" dans Réglages → Avancé. La notif
- * persistante (canal [NotificationChannelInitializer.CHANNEL_BACKGROUND], importance MIN
- * = discrète, masquable depuis les réglages OS) reste visible tant que le mode est ON ;
+ * persistante (canal [NotificationChannelInitializer.CHANNEL_KEEP_ALIVE], importance LOW
+ * = silencieuse, masquable depuis les réglages OS) reste visible tant que le mode est ON ;
  * désactiver le toggle stoppe le service et la notif disparaît immédiatement.
  *
  * **Coût** : ~5-10 Mo RAM permanents (le processus est gardé en heap), batterie négligeable
@@ -163,11 +163,15 @@ class KeepAliveService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, NotificationChannelInitializer.CHANNEL_BACKGROUND)
+        // v1.27.11 (revue externe GitLab !38458, constat 4) — canal dedie en `IMPORTANCE_LOW`,
+        // et `PRIORITY_LOW` pour l'accompagner. Android demande au moins `LOW` pour la
+        // notification d'un service au premier plan ; on postait en `MIN` sur `MIN`. Le canal a
+        // du changer d'identifiant : l'importance d'un canal existant ne se releve pas.
+        return NotificationCompat.Builder(this, NotificationChannelInitializer.CHANNEL_KEEP_ALIVE)
             .setSmallIcon(R.drawable.ic_notification_message)
             .setContentTitle(getString(R.string.keep_alive_notification_title))
             .setContentText(getString(R.string.keep_alive_notification_text))
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .setShowWhen(false)

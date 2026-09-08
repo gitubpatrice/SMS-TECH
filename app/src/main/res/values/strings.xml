@@ -50,8 +50,6 @@
     <string name="forward_new_contact">New recipient</string>
     <string name="forward_existing_conversation">Existing conversations</string>
     <string name="forward_no_conversation">No other conversation to forward to.</string>
-    <string name="thread_reply_to">Replying to %1$s</string>
-    <string name="thread_reply_to_you">Replying to yourself</string>
     <string name="thread_reply_deleted">Original message deleted</string>
     <string name="action_cancel_reply">Cancel reply</string>
     <!-- v1.7.1 — translation feature delegated to the system app via
@@ -98,25 +96,19 @@
     <string name="sort_date">Most recent first</string>
     <string name="sort_unread">Unread first</string>
     <string name="sort_pinned">Pinned first</string>
-    <string name="action_search">Search</string>
     <string name="action_back">Back</string>
-    <string name="action_share">Share</string>
     <string name="action_copy">Copy</string>
     <string name="action_forward">Forward</string>
     <string name="action_retry">Retry</string>
-    <string name="action_select_all">Select all</string>
-    <string name="action_open">Open</string>
     <string name="action_close">Close</string>
     <string name="action_continue">Continue</string>
     <string name="action_export_pdf">Export to PDF</string>
-    <string name="action_voice_input">Voice input</string>
     <string name="action_attach">Attach</string>
     <string name="action_schedule">Schedule</string>
     <string name="action_new_message">New message</string>
     <string name="action_call">Call</string>
     <string name="conversations_search_hint">Search a number, a contact, a message…</string>
     <string name="conversations_no_match">No matching conversation.</string>
-    <string name="action_add_contact">Save contact</string>
     <string name="thread_create_contact">Create a contact</string>
     <string name="thread_update_contact">Update a contact</string>
     <string name="action_create_contact">Create contact</string>
@@ -129,10 +121,8 @@
     <string name="thread_details_number">Number: %1$s</string>
 
     <!-- Tabs / sections -->
-    <string name="tab_conversations">Conversations</string>
     <string name="tab_archived">Archived</string>
     <string name="tab_vault">Vault</string>
-    <string name="tab_blocked">Blocked</string>
 
 
     <!-- Conversations list -->
@@ -156,10 +146,7 @@
     <string name="thread_status_failed">Failed — tap to retry</string>
     <string name="date_today">Today</string>
     <string name="date_yesterday">Yesterday</string>
-    <string name="thread_status_received">Received</string>
-    <string name="thread_long_press_options">Message options</string>
     <string name="thread_confirm_delete_message">Delete this message? This cannot be undone.</string>
-    <string name="thread_export_in_progress">Generating PDF…</string>
     <string name="thread_export_success">PDF saved (%1$d pages)</string>
 
     <!-- Voice MMS composer -->
@@ -170,12 +157,7 @@
     <string name="voice_action_send">Send voice message</string>
     <string name="voice_action_play">Play</string>
     <string name="voice_action_pause">Pause</string>
-    <string name="voice_recording_label">Recording…</string>
-    <string name="voice_max_duration_reached">60 s limit reached</string>
-    <string name="voice_permission_rationale">Microphone access is needed to record voice messages.</string>
     <string name="voice_permission_denied">Microphone permission denied. Open Settings to enable it.</string>
-    <string name="voice_sending">Sending…</string>
-    <string name="voice_duration_format">%1$d:%2$02d</string>
 
     <!-- Compose -->
     <string name="compose_to_label">To:</string>
@@ -191,9 +173,6 @@
     <!-- Vault -->
     <string name="vault_title">Secure vault</string>
     <string name="vault_empty">The vault is empty.</string>
-    <string name="vault_unlock_required">Unlock the app to access the vault.</string>
-    <string name="vault_explanation_title">What is the vault?</string>
-    <string name="vault_explanation_body">Conversations you place here are hidden from the main list. They remain stored on your device (encrypted with SQLCipher). Note: SMS is unencrypted on the carrier network. For end-to-end encryption use Signal or Matrix.</string>
     <string name="vault_move_in">Move to vault</string>
     <string name="vault_move_out">Move out of vault</string>
     <!-- v1.11.0 — feedback snackbar (Vault polish) -->
@@ -208,16 +187,8 @@
     <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
     <string name="bulk_select_multiple">Select multiple</string>
     <!-- v1.14.0 — emergency call behavior + outcomes -->
-    <string name="emergency_call_behavior_title">Behavior of 112 / 17 buttons</string>
-    <string name="emergency_call_behavior_desc">Choose how the emergency call buttons act when tapped.</string>
-    <string name="emergency_call_behavior_dialer_only">Open dialer (you confirm)</string>
-    <string name="emergency_call_behavior_dialer_only_desc">Tap opens the phone app with the number pre-filled. You tap the green button to actually call. No special permission. Default.</string>
-    <string name="emergency_call_behavior_hold_3s">Hold 3s → direct call</string>
-    <string name="emergency_call_behavior_hold_3s_desc">Hold the button 3 seconds → immediate call to 112 or 17 without confirmation. Requires the CALL_PHONE permission. Anti-pocket-dial via mandatory hold-3s.</string>
     <string name="emergency_call_permission_denied">Call permission denied. Falling back to dialer.</string>
     <string name="emergency_call_os_error">Unable to place the call.</string>
-    <string name="emergency_call_permission_request_title">Allow direct calling?</string>
-    <string name="emergency_call_permission_request_body">To enable hold-3s direct call, SMS Tech needs the CALL_PHONE permission. If you refuse, the buttons will keep their default behavior (open dialer).</string>
     <!-- v1.14.0 — kill-switch "Je vais bien" (false-alarm reset) -->
     <string name="emergency_i_am_ok_body">False alert. I am OK. Please do not worry, no action needed.</string>
     <string name="emergency_i_am_ok_chip_title">Emergency triggered recently</string>
@@ -247,8 +218,6 @@
     <string name="emergency_disable_confirm_title">Disable emergency mode?</string>
     <string name="emergency_disable_confirm_body">The big URGENCE button and the lock-screen shortcut will stop working until you reactivate them in Settings. You can always come back to this page later.</string>
     <string name="emergency_disable_done">Emergency mode disabled.</string>
-    <string name="emergency_call_phone_permission_request">Allow direct calling</string>
-    <string name="emergency_call_phone_permission_body">To call 112 / 15 / 17 / 18 directly without going through the dialer, SMS Tech needs the CALL_PHONE permission. If you refuse, taps will fall back to the dialer (you confirm).</string>
     <string name="emergency_call_close_label">Call a relative</string>
     <string name="emergency_call_close_picker_title">Which relative do you want to call?</string>
     <!-- v1.13.0 — distinct vault PIN/pass (second-factor) -->
@@ -284,6 +253,11 @@
     <string name="settings_vault_pin_forgot_confirm_body">Every conversation in the vault is deleted, messages included, on this phone and from the system SMS store. Nothing is recovered — this is the price of getting back in without the PIN. Conversations outside the vault are untouched. This cannot be undone.</string>
     <string name="settings_vault_pin_forgot_confirm_action">Empty and remove</string>
     <string name="settings_vault_pin_forgot_done">Vault emptied: %1$d conversation(s) deleted. Its PIN is removed.</string>
+    <string name="settings_vault_pin_forgot_incomplete">Purge incomplete: %1$d conversation(s) deleted, %2$d left. The vault PIN was NOT removed. Make SMS Tech your default SMS app, then try again.</string>
+    <string name="settings_vault_pin_forgot_residue">Vault emptied and PIN removed. But %2$d conversation(s) left their copy in the phone’s SMS store: they stay readable by another messaging app. %1$d conversation(s) were deleted in full.</string>
+    <string name="settings_vault_pin_force_title">Empty it anyway?</string>
+    <string name="settings_vault_pin_force_body">The copy of %1$d conversation(s) could not be removed from the phone’s SMS store, and trying again will give the same result. SMS Tech can empty the vault and remove the PIN regardless: you get access back, but those copies stay on the phone and remain readable by another messaging app. This cannot be undone.</string>
+    <string name="settings_vault_pin_force_action">Empty and remove the PIN</string>
     <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
     <string name="settings_lock_clear_confirm_title">Turn off app lock?</string>
     <string name="settings_lock_clear_confirm_body">Your PIN will be deleted and SMS Tech will open without asking for anything. Biometric unlock is turned off too. This cannot be undone.</string>
@@ -358,7 +332,10 @@
     <string name="backup_export_success">Backup saved.</string>
     <string name="backup_export_failed">Backup failed.</string>
     <string name="backup_export_vault_locked">Vault locked — open the vault first so the backup can include it.</string>
-    <string name="backup_restore_coming_v11">Restore from encrypted file lands in v1.1 — current export already produces a fully self-contained file.</string>
+    <string name="backup_vault_pin_title">Vault PIN required</string>
+    <string name="backup_vault_pin_body">A backup includes your vault, so it asks for the vault PIN before it is created.</string>
+    <string name="backup_vault_biometric_title">Vault PIN required for backup</string>
+    <string name="backup_vault_biometric_body">Your vault is protected by biometrics only, which cannot be requested from this screen. Set a vault PIN in Settings — Security, then the backup will ask for it here.</string>
 
     <!-- Migration -->
     <string name="migration_title">Import existing SMS</string>
@@ -431,18 +408,17 @@
     <string name="settings_auto_delete_purge_now_disabled">Pick a duration to enable</string>
     <string name="settings_auto_delete_purge_confirm_title">Confirm cleanup</string>
     <string name="settings_auto_delete_purge_confirm_zero">No messages to delete for this duration.</string>
-    <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) older than %2$d days will be deleted. Starred messages are kept. This cannot be undone.</string>
+    <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) older than %2$d days will be deleted from the phone, not just from SMS Tech. Starred messages are kept. This cannot be undone.</string>
     <string name="settings_auto_delete_purge_done">%1$d message(s) deleted.</string>
     <string name="action_delete_now">Delete</string>
     <string name="settings_resync_title">Resync from phone</string>
-    <string name="settings_resync_desc">Re-imports all SMS from the Android system. Useful to recover history deleted by mistake. No duplicates.</string>
+    <string name="settings_resync_desc">Re-imports all SMS from the Android system. Useful when messages present on the phone are missing from the app. It does not bring back what you deleted: deleting also removes the phone\'s copy. No duplicates.</string>
     <string name="settings_resync_started">Resync started in background.</string>
     <string name="settings_send_reactions_title">Send my reactions to recipient</string>
     <string name="settings_send_reactions_desc">When you post an emoji reaction (heart, thumbs-up…), a SMS containing only the emoji is sent to the recipient. Counts as a normal SMS at your plan\'s rate. Removing or changing a reaction does not resend anything.</string>
     <!-- v1.8.0 — bug 5 fix : 3 options at a glance.
          Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
     <string name="settings_reaction_format_title">Reaction format</string>
-    <string name="settings_reaction_format_desc">Choose how reactions are sent over SMS to recipients who don\'t use SMS Tech.</string>
     <string name="settings_reaction_format_fr">Readable French</string>
     <string name="settings_reaction_format_fr_hint">"J\'ai réagi par ❤️ à : «preview»". Natural and understandable for any French-speaking Android recipient. Decoded by SMS Tech as a native reaction badge.</string>
     <string name="settings_reaction_format_en">Tapback (iMessage compat)</string>
@@ -464,8 +440,6 @@
     <string name="settings_safety_call_desc">Send an automatic SMS to your emergency contacts if you don\'t open SMS Tech for a configured duration. Designed for solo travel, isolated living, professions at risk.</string>
     <string name="settings_safety_call_disabled">Disabled</string>
     <string name="settings_safety_call_disabled_after_alert">Disabled — an alert was triggered</string>
-    <string name="settings_safety_call_enabled">Enabled · resets in %1$s</string>
-    <string name="settings_safety_call_im_ok">I\'m OK — reset timer</string>
     <string name="settings_safety_call_im_ok_snack">Timer reset.</string>
     <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
     <string name="settings_safety_call_armed_chip">Enabled</string>
@@ -552,8 +526,6 @@
     <string name="settings_emergency_title">Emergency mode</string>
     <string name="settings_emergency_desc">A hold-3s button sends an SMS to your emergency contacts with your current location. Distinct from Safety call (which is automatic on inactivity). Disabled by default.</string>
     <string name="settings_emergency_disabled">Disabled</string>
-    <string name="settings_emergency_enabled">Enabled</string>
-    <string name="settings_emergency_open">Open emergency</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Enabled</string>
     <string name="settings_emergency_armed_template">Template: %1$s</string>
@@ -636,7 +608,7 @@
     <string name="settings_resync_confirm_title">Resync from phone?</string>
     <string name="settings_resync_confirm_body">Re-imports messages from the system SMS/MMS provider. Existing messages stay (deduped via unique ID); previously deleted messages may reappear if they still exist in the system database. Continue?</string>
     <string name="settings_reset_all_confirm_title">Reset all settings?</string>
-    <string name="settings_reset_all_confirm_body">All your preferences (theme, notifications, sending, etc.) will return to default. Your conversations and messages are NOT affected.</string>
+    <string name="settings_reset_all_confirm_body">All your preferences (theme, notifications, sending, etc.) will return to default. Your conversations, your messages and your security settings (lock, vault PIN, panic code) are NOT affected.</string>
     <string name="settings_purge_blocked_confirm_title">Purge blocked conversations?</string>
     <string name="settings_purge_blocked_confirm_body">Deletes every conversation whose participants are entirely in the blocklist. This also removes them from the system SMS provider. Irreversible.</string>
 
@@ -647,7 +619,6 @@
 
     <!-- v1.8.0 — bug 3 fix: exposes PreviewMode + NotificationStyle in the UI. -->
     <string name="settings_notif_preview">Lock-screen preview</string>
-    <string name="settings_notif_preview_desc">Controls what shows up on the lock screen and in heads-up notifications.</string>
     <string name="settings_notif_preview_always">Always show name and content</string>
     <string name="settings_notif_preview_unlocked">Only after unlock</string>
     <string name="settings_notif_preview_unlocked_hint">Sender name and a redacted body show on the lock screen; the full content appears once unlocked.</string>
@@ -663,7 +634,6 @@
     <string name="settings_notif_style_silent_hint">Routed to a low-importance channel. The system masks sound and the heads-up pop-up.</string>
     <string name="settings_notif_open_system">Open system notification settings</string>
     <string name="settings_notif_open_system_desc">Check or fix permissions, channels, and sound at the OS level.</string>
-    <string name="settings_notif_channel_disabled_warn">Notifications are disabled for SMS Tech in the system settings. Tap below to fix.</string>
 
     <string name="settings_section_security">Security &amp; privacy</string>
     <string name="settings_flag_secure">Hide preview in Recents</string>
@@ -671,7 +641,6 @@
     <string name="settings_lock_vault_on_leave">Lock vault on leave</string>
     <string name="settings_lock_vault_on_leave_desc">Automatically locks the encrypted vault as soon as the app goes to the background. You will need to unlock again on return.</string>
     <string name="settings_panic_code">Decoy PIN (panic mode)</string>
-    <string name="settings_privacy_policy">Privacy policy</string>
 
     <string name="settings_section_blocking">Blocking</string>
     <string name="settings_block_unknown">Block unknown numbers</string>
@@ -723,7 +692,6 @@
     <string name="about_website">Website</string>
     <string name="about_license">License</string>
     <string name="about_privacy">Privacy policy</string>
-    <string name="about_version">Version %1$s (%2$d)</string>
 
     <!-- Notification channels -->
     <string name="channel_incoming_label">Incoming messages</string>
@@ -735,8 +703,8 @@
     <string name="channel_sent_desc">Status of messages you sent.</string>
     <string name="channel_failed_label">Failed messages</string>
     <string name="channel_failed_desc">Errors and retry suggestions.</string>
-    <string name="channel_background_label">Background tasks</string>
-    <string name="channel_background_desc">Imports, backups and scheduled sending.</string>
+    <string name="channel_keep_alive_label">Resilient mode</string>
+    <string name="channel_keep_alive_desc">Keeps SMS Tech running on phones whose manufacturer shuts down background apps.</string>
     <string name="channel_safety_call_warning_label">Safety call warning</string>
     <string name="channel_safety_call_warning_desc">Reminder before automatic SMS to your emergency contacts.</string>
     <string name="channel_safety_call_receipt_label">Safety call alert finished</string>
@@ -923,7 +891,6 @@
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Load older messages</string>
     <string name="thread_load_older_remaining">Load older messages (%1$d)</string>
-    <string name="thread_loading_older">Loading…</string>
     <!-- v1.24.0 : ecran de recuperation quand la base ne peut pas etre ouverte -->
     <string name="db_recovery_title">SMS Tech cannot open its database</string>
     <string name="db_recovery_body">Your messages are still on this device — Android keeps its own copy, and SMS Tech has not deleted anything. Only SMS Tech’s own encrypted database is unreadable right now.</string>

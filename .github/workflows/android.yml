@@ -132,7 +132,29 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon
+          # v1.27.11 — le role SMS est accorde AVANT les tests, sinon
+          # `SystemProviderContractTest` s'ignore en entier et ne garde rien ici.
+          #
+          # Ces cinq tests figent le comportement du vrai fournisseur systeme : la forme d'URI
+          # que rend `insert`, le refus de la forme avec dossier en suppression, l'unite de la
+          # colonne `date`. Ils exigent donc d'ecrire dans `content://sms`, ce qui exige le role.
+          # Sans lui, leur precondition fonctionnelle les fait sauter proprement — et une CI qui
+          # les compte « verts » sans les executer est exactement le piege qu'ils existent pour
+          # empecher.
+          #
+          # Trois faits mesures le 2026-09-07 qui rendent ces trois lignes suffisantes :
+          #   - `cmd role add-role-holder` fonctionne par adb (verifie sur Android 10 et 16) ;
+          #   - le role SURVIT a `install -r`, donc le reinstall que fait
+          #     `connectedDebugAndroidTest` juste apres ne l'annule pas ;
+          #   - `READ_SMS` en decoule (`GRANTED_BY_ROLE`), aucun `pm grant` n'est necessaire.
+          #
+          # Si l'image d'emulateur refusait la commande, les tests retomberaient sur leur saut
+          # propre : l'echec possible est le retour a l'etat anterieur, pas une CI cassee.
+          script: |
+            ./gradlew :app:installDebug --no-daemon
+            adb shell cmd role add-role-holder android.app.role.SMS com.filestech.sms.debug
+            adb shell dumpsys role | grep -A2 "android.app.role.SMS"
+            ./gradlew :app:connectedDebugAndroidTest --no-daemon
 
       - name: Upload instrumentation report
         if: always()

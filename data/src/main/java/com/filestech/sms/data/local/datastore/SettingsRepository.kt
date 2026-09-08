@@ -258,6 +258,7 @@ class SettingsRepository @Inject constructor(
                 panicCodeEnabled = p[K.panicCode] ?: false,
                 autoDeleteOlderThanDays = p[K.autoDeleteDays],
                 lastAutoPurgeAt = p[K.lastAutoPurgeAt],
+                vaultPurgeFailedOnce = p[K.vaultPurgeFailedOnce] ?: false,
                 safetyCall = com.filestech.sms.domain.safetycall.SafetyCallConfig(
                     enabled = p[K.safetyCallEnabled] ?: false,
                     timeoutMs = p[K.safetyCallTimeoutMs]
@@ -396,6 +397,7 @@ class SettingsRepository @Inject constructor(
         this[K.panicCode] = s.security.panicCodeEnabled
         s.security.autoDeleteOlderThanDays?.let { this[K.autoDeleteDays] = it } ?: remove(K.autoDeleteDays)
         s.security.lastAutoPurgeAt?.let { this[K.lastAutoPurgeAt] = it } ?: remove(K.lastAutoPurgeAt)
+        this[K.vaultPurgeFailedOnce] = s.security.vaultPurgeFailedOnce
         // v1.9.0 — Safety call. La config est éclatée en 5 clés flat (cf.
         // doc [SecuritySettings.safetyCall]). Seuls [contacts] passent par un
         // codec pipe-separated, le reste est trivialement scalaire.
@@ -572,6 +574,7 @@ class SettingsRepository @Inject constructor(
         val panicCode = booleanPreferencesKey("security.panic")
         val autoDeleteDays = intPreferencesKey("security.autoDeleteDays")
         val lastAutoPurgeAt = longPreferencesKey("security.lastAutoPurgeAt")
+        val vaultPurgeFailedOnce = booleanPreferencesKey("security.vaultPurgeFailedOnce")
         val blockUnknown = booleanPreferencesKey("block.unknown")
         val blockShort = booleanPreferencesKey("block.short")
 

@@ -1,0 +1,6 @@
+La sauvegarde chiffrée était impossible depuis la 1.27.2 dès que le coffre n'était pas vide. Elle fonctionne à nouveau, et demande le PIN du coffre avant de se lancer.
+
+Corrigé aussi :
+- l'aide d'À propos décrivait le coffre même en mode leurre ;
+- le message « application par défaut » s'affichait sur une colonne illisible avec une police agrandie ;
+- le premier glissement au retour d'une conversation était ignoré.

@@ -32,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -69,6 +70,9 @@ class BackupViewModel @Inject constructor(
     // du refus « session leurre » : les deux reviennent en AppError.Locked, mais seul le
     // premier peut être nommé à l'écran. Cf. [exportEncrypted].
     private val appLock: com.filestech.sms.security.AppLockManager,
+    // v1.27.13 — le second facteur du coffre se prouve DANS ce flux, cf. [exportSecondFactor].
+    private val vaultPin: com.filestech.sms.security.VaultPinManager,
+    private val vaultSession: com.filestech.sms.security.VaultSessionState,
 ) : ViewModel() {
 
     sealed interface Event {
@@ -100,13 +104,55 @@ class BackupViewModel @Inject constructor(
     val isRestoring: StateFlow<Boolean> = _isRestoring
 
     /**
+     * v1.27.13 — ce que l'utilisateur doit prouver avant que l'export puisse aboutir.
+     *
+     * Consulte AVANT d'ouvrir le selecteur de fichier : le refus arrivait jusqu'ici apres le
+     * choix d'une destination et la saisie d'une passphrase, sur une condition connue des le
+     * depart — et `CreateDocument` ayant deja cree le fichier, un `.smsbk` vide restait sur le
+     * stockage.
+     */
+    suspend fun exportSecondFactor(): com.filestech.sms.security.VaultSecondFactor =
+        backupService.exportSecondFactor()
+
+    /** v1.27.13 — meme verification que la porte du coffre, temporisation comprise. */
+    suspend fun verifyVaultPin(candidate: CharArray): com.filestech.sms.security.PinVerdict =
+        vaultPin.verifyVaultPin(candidate)
+
+    /** v1.27.13 — millisecondes de temporisation restantes, pour le compte a rebours. */
+    suspend fun vaultLockoutRemainingMs(): Long = vaultPin.vaultLockoutRemainingMs()
+
+    /**
+     * v1.27.13 — le second facteur vient d'etre prouve pour CET export.
+     *
+     * La preuve n'ouvre pas le coffre pour la suite : [exportEncrypted] ouvre la session juste
+     * avant d'ecrire et la referme aussitot apres, y compris en cas d'echec. Un export ne doit
+     * pas laisser derriere lui un coffre consultable — l'utilisateur a prouve son facteur pour
+     * sauvegarder, pas pour ouvrir.
+     */
+    private var vaultProofGranted = false
+
+    fun grantVaultProof() { vaultProofGranted = true }
+
+    /**
      * Triggers an encrypted `.smsbk` export. The [passphrase] CharArray is consumed (wiped) by
      * [BackupService.writeSmsbk]. The UI is responsible for asking the user the passphrase and
      * passing a fresh CharArray every time.
      */
     fun exportEncrypted(uri: android.net.Uri, passphrase: CharArray) {
         viewModelScope.launch {
-            val r = backupService.writeSmsbk(uri, passphrase)
+            // v1.27.13 — la session n'est ouverte que le temps de l'ecriture. Le `finally`
+            // la referme meme si `writeSmsbk` echoue ou leve : sans lui, un export rate
+            // laisserait le coffre ouvert, ce que l'utilisateur n'a pas demande.
+            val borrowed = vaultProofGranted
+            if (borrowed) vaultSession.markUnlocked()
+            val r = try {
+                backupService.writeSmsbk(uri, passphrase)
+            } finally {
+                if (borrowed) {
+                    vaultSession.lock()
+                    vaultProofGranted = false
+                }
+            }
             _events.tryEmit(
                 when {
                     r is Outcome.Success -> Event.ExportDone(uri)
@@ -180,6 +226,11 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
 
     var pendingUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var askingPassphrase by remember { mutableStateOf(false) }
+    // v1.27.13 — la sauvegarde ne peut pas aboutir tant que le coffre est ferme ; on le dit
+    // avant d'ouvrir le selecteur de fichier, pas apres la saisie de la passphrase.
+    var askingVaultPin by remember { mutableStateOf(false) }
+    var vaultBiometricOnlyDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream"),
@@ -273,7 +324,28 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.size(12.dp))
-            Button(onClick = { launcher.launch("smstech_${System.currentTimeMillis()}.smsbk") }) {
+            Button(onClick = {
+                // v1.27.13 — on demande AVANT de faire travailler l'utilisateur. Le selecteur
+                // n'est meme pas ouvert si la sauvegarde ne peut pas aboutir : il aurait cree
+                // un fichier vide qu'on aurait ensuite refuse de remplir.
+                scope.launch {
+                    when (viewModel.exportSecondFactor()) {
+                        com.filestech.sms.security.VaultSecondFactor.NONE ->
+                            launcher.launch("smstech_${System.currentTimeMillis()}.smsbk")
+                        // Le facteur se prouve ICI, pas dans un ecran qu'il faudrait quitter
+                        // pour revenir — le quitter refermerait justement la session.
+                        com.filestech.sms.security.VaultSecondFactor.PIN ->
+                            askingVaultPin = true
+                        // Seul cas non couvert : coffre garde par la biometrie SEULE. La porte
+                        // biometrique est adossee au Keystore et vit dans l'ecran du coffre ; la
+                        // recopier ici creerait deux implementations d'une meme garde, et c'est
+                        // ce motif qui a produit les vrais defauts de ce depot. On le dit
+                        // franchement, avec la seule action qui debloque.
+                        com.filestech.sms.security.VaultSecondFactor.BIOMETRIC ->
+                            vaultBiometricOnlyDialog = true
+                    }
+                }
+            }) {
                 Text(stringResource(R.string.settings_backup_now))
             }
             Spacer(Modifier.size(24.dp))
@@ -324,6 +396,38 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 viewModel.restoreFromUri(safeUri, passphrase)
             },
             onDismiss = { restoreUri = null },
+        )
+    }
+
+    // v1.27.13 — le second facteur se prouve ici meme, avec le composant et la temporisation
+    // de la porte du coffre. Le prouver dans l'ecran du coffre ne servait a rien : en sortir
+    // referme la session, donc la condition redevenait fausse avant qu'on puisse l'utiliser.
+    if (askingVaultPin) {
+        com.filestech.sms.ui.components.PinEntryDialog(
+            title = stringResource(R.string.backup_vault_pin_title),
+            description = stringResource(R.string.backup_vault_pin_body),
+            confirmLabel = stringResource(R.string.action_confirm),
+            onVerify = { candidate -> viewModel.verifyVaultPin(candidate) },
+            probeLockout = { viewModel.vaultLockoutRemainingMs() },
+            onVerified = {
+                askingVaultPin = false
+                viewModel.grantVaultProof()
+                launcher.launch("smstech_${System.currentTimeMillis()}.smsbk")
+            },
+            onCancel = { askingVaultPin = false },
+        )
+    }
+
+    if (vaultBiometricOnlyDialog) {
+        AlertDialog(
+            onDismissRequest = { vaultBiometricOnlyDialog = false },
+            title = { Text(stringResource(R.string.backup_vault_biometric_title)) },
+            text = { Text(stringResource(R.string.backup_vault_biometric_body)) },
+            confirmButton = {
+                TextButton(onClick = { vaultBiometricOnlyDialog = false }) {
+                    Text(stringResource(R.string.action_confirm))
+                }
+            },
         )
     }
 

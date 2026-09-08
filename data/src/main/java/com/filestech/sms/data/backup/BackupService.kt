@@ -17,6 +17,8 @@ import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.backup.BackupRestorer
 import com.filestech.sms.domain.backup.RestoreResult
+import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.security.VaultSecondFactor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -52,14 +54,62 @@ class BackupService @Inject constructor(
     // v1.27.2 (audit externe 2026-08-04 #4) — le second facteur du Coffre garde aussi l'export,
     // cf. [writeSmsbk].
     private val vaultSession: com.filestech.sms.security.VaultSessionState,
+    // v1.27.13 — « y a-t-il un second facteur a prouver ? », lu au meme endroit que la porte du
+    // coffre. Voir [com.filestech.sms.security.VaultSecondFactorPolicy] pour la raison.
+    private val vaultFactor: com.filestech.sms.security.VaultSecondFactorPolicy,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : BackupRestorer {
 
     override suspend fun restore(uriString: String, password: CharArray): Outcome<RestoreResult> =
         readSmsbk(Uri.parse(uriString), password)
 
+    /**
+     * v1.27.13 — `true` quand [writeSmsbk] refusera parce que le coffre n'est pas vide et que sa
+     * session n'est pas ouverte.
+     *
+     * Existe pour que l'ECRAN puisse poser la question AVANT de faire travailler l'utilisateur.
+     * Le refus arrivait apres le choix d'une destination et la saisie d'une passphrase — deux
+     * gestes rendus inutiles par une condition que l'application connaissait des le depart. Pire,
+     * `CreateDocument` cree le fichier au moment du choix : un `.smsbk` vide restait sur le
+     * stockage.
+     *
+     * La condition n'est ecrite qu'ICI et [writeSmsbk] l'appelle : deux copies finiraient par
+     * diverger, et l'ecran annoncerait alors autre chose que ce que le service applique.
+     *
+     * **Rend `false` en session leurre**, et ce n'est pas un oubli : la nommer y trahirait
+     * l'existence d'un coffre au porteur du code panique. Sur ce chemin [writeSmsbk] refuse de
+     * toute facon, un cran plus haut, avec un message generique.
+     */
+    suspend fun exportSecondFactor(): VaultSecondFactor = withContext(io) {
+        val enLeurre = appLock.state.value is AppLockManager.LockState.PanicDecoy
+        when {
+            // En session leurre, l'export est refuse un cran plus haut avec un message
+            // generique : nommer le coffre ici trahirait son existence.
+            enLeurre -> VaultSecondFactor.NONE
+            // Deja prouve pour cette session.
+            vaultSession.isUnlocked -> VaultSecondFactor.NONE
+            // Rien a proteger.
+            conversationDao.countInVault() == 0 -> VaultSecondFactor.NONE
+            else -> vaultFactor.current()
+        }
+    }
+
+    /**
+     * @property sourceDeviceId v1.27.11 (revue externe GitLab !38458, constat 3) — empreinte de
+     *   l'installation qui a ecrit la sauvegarde, cf. [currentDeviceId]. `null` sur toute
+     *   sauvegarde anterieure a la v1.27.11 : provenance inconnue, donc traitee comme etrangere.
+     *
+     *   Le champ a une valeur par defaut, donc les anciennes sauvegardes se relisent malgre le
+     *   parseur strict (`ignoreUnknownKeys = false` refuse les cles INCONNUES, pas les cles
+     *   absentes). L'inverse n'est pas vrai : une v1.27.10 ne relira pas un `.smsbk` ecrit ici.
+     */
     @Serializable
-    data class BackupHeader(val createdAt: Long, val app: String, val version: Int)
+    data class BackupHeader(
+        val createdAt: Long,
+        val app: String,
+        val version: Int,
+        val sourceDeviceId: String? = null,
+    )
 
     @Serializable
     data class BackupPayload(
@@ -107,7 +157,7 @@ class BackupService @Inject constructor(
         // On REFUSE plutôt que d'amputer silencieusement la sauvegarde : un `.smsbk` sans le
         // coffre serait une perte de données à la restauration. Coffre vide = rien à
         // protéger, l'export reste sans friction.
-        if (!vaultSession.isUnlocked && conversationDao.countInVault() > 0) {
+        if (exportSecondFactor() != VaultSecondFactor.NONE) {
             password.wipe()
             return@withContext Outcome.Failure(AppError.Locked())
         }
@@ -164,11 +214,45 @@ class BackupService @Inject constructor(
     private suspend fun buildPayload(): BackupPayload {
         val (convs, msgs) = listSync()
         return BackupPayload(
-            header = BackupHeader(System.currentTimeMillis(), APP_TAG, VERSION),
+            header = BackupHeader(
+                createdAt = System.currentTimeMillis(),
+                app = APP_TAG,
+                version = VERSION,
+                sourceDeviceId = currentDeviceId(),
+            ),
             conversations = convs,
             messages = msgs,
         )
     }
+
+    /**
+     * v1.27.11 (revue externe GitLab !38458, constat 3) — empreinte stable de « cet appareil,
+     * cette installation », ou `null` si le systeme ne la donne pas.
+     *
+     * Elle sert a une seule question, posee a la restauration : les identifiants de fournisseur
+     * que porte cette sauvegarde designent-ils des lignes de CE telephone ? `ANDROID_ID` a
+     * exactement la semantique voulue — il survit a une reinstallation de l'application (c'est
+     * le cas d'usage meme de la restauration) et change d'un appareil a l'autre comme apres une
+     * remise a zero d'usine, deux situations ou les identifiants deviennent effectivement
+     * caducs.
+     *
+     * On stocke son **empreinte SHA-256**, jamais sa valeur : la comparaison d'egalite n'a pas
+     * besoin de plus, et un `.smsbk` n'a aucune raison de transporter un identifiant d'appareil
+     * en clair. Rien n'en sort de l'appareil — SMS Tech ne parle a aucun serveur.
+     */
+    private fun currentDeviceId(): String? = runCatching {
+        val raw = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID,
+        )
+        if (raw.isNullOrBlank()) {
+            null
+        } else {
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(raw.toByteArray(Charsets.UTF_8))
+                .joinToString(separator = "") { byte -> "%02x".format(byte) }
+        }
+    }.getOrNull()
 
     /**
      * Single-shot, transactional read of all conversations + all messages.
@@ -400,6 +484,11 @@ class BackupService @Inject constructor(
                     created++
                 }
             }
+            // v1.27.11 (revue externe GitLab !38458, constat 3) — la sauvegarde vient-elle de
+            // CET appareil ? Cf. [currentDeviceId] et le `copy` ci-dessous. Calcule une seule
+            // fois : `ANDROID_ID` ne change pas en cours de restauration.
+            val sameDevice = payload.header.sourceDeviceId != null &&
+                payload.header.sourceDeviceId == currentDeviceId()
             var imported = 0
             var skipped = 0
             // Audit SECU-M4 v1.15.2 — Remapping en 2 passes pour préserver les `replyToMessageId`
@@ -426,12 +515,29 @@ class BackupService @Inject constructor(
                 // bien qu'après restauration les bulles annonçaient N pièces jointes
                 // introuvables et s'affichaient vides. Mieux vaut une donnée honnête — le
                 // message reste lisible, il n'annonce simplement plus ce qu'il n'a pas.
-                val toInsert = backupMsg.copy(
-                    id = 0L,
-                    conversationId = newConvId,
-                    replyToMessageId = null,
-                    attachmentsCount = 0,
-                )
+                // v1.27.11 (revue externe GitLab !38458, constat 3) — LES LIAISONS LOCALES A
+                // L'APPAREIL NE TRAVERSENT PLUS.
+                //
+                // Le `copy` remappait les identifiants Room et laissait passer `telephonyUri`,
+                // `mmsSystemId` et `subId` — des references au telephone SOURCE, qui devenaient
+                // des liaisons vivantes sur celui de DESTINATION. `content://sms/42` designe un
+                // message ici et un tout autre la-bas, d'ou deux consequences :
+                //
+                //   - a la restauration, l'index UNIQUE sur `telephony_uri` et le
+                //     `OnConflictStrategy.IGNORE` faisaient entrer en collision deux messages
+                //     sans rapport : celui de la sauvegarde etait ecarte en silence, expediteur
+                //     et contenu differents compris ;
+                //   - a la suppression, cet URI partait tel quel au fournisseur du systeme de la
+                //     destination, qui pouvait effacer la ligne de quelqu'un d'autre.
+                //
+                // Quand la sauvegarde vient du meme appareil, ces references sont exactes et on
+                // les garde : c'est le cas d'usage courant (reinstallation), et les priver de
+                // `telephonyUri` ferait re-importer chaque message en double a la
+                // resynchronisation suivante, `ConversationMirror` ne dedoublonnant que par cet
+                // index. Provenance etrangere ou inconnue : on coupe. Les lignes ainsi privees
+                // d'URI sont dedoublonnees par [MessageDao.findRestoreDuplicate] juste en
+                // dessous, chemin qui existait deja pour les MMS sortants.
+                val toInsert = toLocalRow(backupMsg, newConvId, sameDevice)
                 // v1.26.1 (audit M6) — repli de déduplication pour les lignes SANS
                 // `telephony_uri` : l'index UNIQUE ne les dédoublonne pas, SQLite traitant deux
                 // NULL comme distincts. Sans ce contrôle, restaurer deux fois la même sauvegarde
@@ -485,6 +591,48 @@ class BackupService @Inject constructor(
     }
 
     companion object {
+        /**
+         * Transforme une ligne de sauvegarde en ligne locale prete a inserer.
+         *
+         * Extraite du corps de la restauration parce que c'est **la** decision de la
+         * restauration, et qu'elle doit pouvoir etre verifiee sans Room, sans SQLCipher et sans
+         * appareil : ce qui suit est le resultat de deux revues successives, et rien ici n'est
+         * arbitraire.
+         *
+         * - `id` repart a zero, `conversationId` est remappe : les identifiants Room de la
+         *   source ne veulent rien dire ici.
+         * - `replyToMessageId` est mis a null puis reecrit par la seconde passe, une fois la
+         *   table de correspondance des messages connue (audit SECU-M4 v1.15.2).
+         * - `attachmentsCount` repart a zero : la sauvegarde ne transporte ni la table des
+         *   pieces jointes ni les fichiers, et le compteur restaure tel quel faisait annoncer
+         *   aux bulles des pieces jointes introuvables (audit M7 v1.26.1).
+         * - **v1.27.11 (revue externe GitLab !38458, constat 3)** — `telephonyUri`,
+         *   `mmsSystemId` et `subId` ne traversent que si la sauvegarde vient de CET appareil.
+         *   Ce sont des references au telephone source ; ailleurs, `content://sms/42` designe un
+         *   autre message. Elles entraient en collision sur l'index UNIQUE a la restauration —
+         *   le message de la sauvegarde etait ecarte en silence — et repartaient telles quelles
+         *   au fournisseur du systeme a la suppression.
+         *
+         * Pourquoi ne pas couper TOUJOURS, ce qui serait plus simple : sur le meme appareil ces
+         * references sont exactes, et les couper ferait re-importer chaque message en double a
+         * la resynchronisation suivante, `ConversationMirror` ne dedoublonnant que par cet
+         * index. La reinstallation suivie d'une restauration est le cas d'usage courant ; on ne
+         * repare pas le cas rare en cassant le frequent.
+         */
+        internal fun toLocalRow(
+            backupMsg: MessageEntity,
+            conversationId: Long,
+            sameDevice: Boolean,
+        ): MessageEntity = backupMsg.copy(
+            id = 0L,
+            conversationId = conversationId,
+            replyToMessageId = null,
+            attachmentsCount = 0,
+            telephonyUri = if (sameDevice) backupMsg.telephonyUri else null,
+            mmsSystemId = if (sameDevice) backupMsg.mmsSystemId else null,
+            subId = if (sameDevice) backupMsg.subId else null,
+        )
+
         const val MAGIC = "SMBK"
         const val VERSION = 1
         private const val APP_TAG = "SMS Tech"

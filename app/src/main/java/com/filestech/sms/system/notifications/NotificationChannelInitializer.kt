@@ -62,11 +62,28 @@ class NotificationChannelInitializer @Inject constructor(
             enableLights(true)
             enableVibration(true)
         }
-        val background = NotificationChannel(
-            CHANNEL_BACKGROUND,
-            context.getString(LABEL_BACKGROUND_RES),
-            NotificationManager.IMPORTANCE_MIN,
-        ).apply { description = context.getString(DESC_BACKGROUND_RES) }
+        // v1.27.11 (revue externe GitLab !38458, constat 4) — canal DEDIE au mode resistant,
+        // en IMPORTANCE_LOW.
+        //
+        // La notification de [com.filestech.sms.system.service.KeepAliveService] vivait sur
+        // `background_tasks`, cree en `IMPORTANCE_MIN`. Android demande au moins `LOW` pour la
+        // notification d'un service au premier plan, et l'importance d'un canal existant ne se
+        // releve pas en le recreant : il faut un identifiant neuf, d'ou celui-ci.
+        //
+        // L'ancien canal disparait ci-dessous plutot que de rester en place : il n'avait qu'un
+        // seul utilisateur, celui-la meme qui demenage. Son libelle etait d'ailleurs faux —
+        // « Taches en arriere-plan : imports, sauvegardes, envois programmes » alors que ce
+        // service ne fait rien de tout cela, et ne fait rien du tout par construction.
+        val keepAlive = NotificationChannel(
+            CHANNEL_KEEP_ALIVE,
+            context.getString(LABEL_KEEP_ALIVE_RES),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(DESC_KEEP_ALIVE_RES)
+            setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
+        }
         // v1.9.0 audit fix C3 — canal dédié au warning Safety Call. Sans ça,
         // le warning partageait `CHANNEL_INCOMING` avec les SMS reçus →
         // l'user ne pouvait pas régler son/vibration séparément.
@@ -126,12 +143,17 @@ class NotificationChannelInitializer @Inject constructor(
                 incomingSilent,
                 sent,
                 failed,
-                background,
+                keepAlive,
                 safetyCallWarning,
                 safetyCallReceipt,
                 emergencyShortcut,
             ),
         )
+        // v1.27.11 — retrait de `background_tasks`, remplace par [CHANNEL_KEEP_ALIVE]. No-op sur
+        // une installation neuve. Sur une mise a jour, cela retire des reglages du systeme une
+        // entree orpheline et, avec elle, la notification MIN encore posee dessus — le service
+        // la repose aussitot sur le nouveau canal.
+        nm.deleteNotificationChannel(CHANNEL_BACKGROUND)
     }
 
     companion object {
@@ -139,7 +161,16 @@ class NotificationChannelInitializer @Inject constructor(
         const val CHANNEL_INCOMING_SILENT = "incoming_messages_silent"
         const val CHANNEL_SENT = "sent_messages"
         const val CHANNEL_FAILED = "failed_messages"
+
+        /**
+         * v1.27.11 — **obsolete**, conserve pour la seule suppression au demarrage. Ne plus
+         * poster dessus : son importance `MIN` est sous le minimum exige pour un service au
+         * premier plan. Voir [CHANNEL_KEEP_ALIVE].
+         */
         const val CHANNEL_BACKGROUND = "background_tasks"
+
+        /** v1.27.11 (revue externe GitLab !38458, constat 4) — canal du mode resistant. */
+        const val CHANNEL_KEEP_ALIVE = "keep_alive_service"
 
         /** v1.9.0 — canal dédié au warning Safety Call (avant trigger). */
         const val CHANNEL_SAFETY_CALL_WARNING = "safety_call_warning"
@@ -163,8 +194,8 @@ class NotificationChannelInitializer @Inject constructor(
         private val DESC_SENT_RES = com.filestech.sms.R.string.channel_sent_desc
         private val LABEL_FAILED_RES = com.filestech.sms.R.string.channel_failed_label
         private val DESC_FAILED_RES = com.filestech.sms.R.string.channel_failed_desc
-        private val LABEL_BACKGROUND_RES = com.filestech.sms.R.string.channel_background_label
-        private val DESC_BACKGROUND_RES = com.filestech.sms.R.string.channel_background_desc
+        private val LABEL_KEEP_ALIVE_RES = com.filestech.sms.R.string.channel_keep_alive_label
+        private val DESC_KEEP_ALIVE_RES = com.filestech.sms.R.string.channel_keep_alive_desc
         private val LABEL_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_label
         private val DESC_SAFETY_CALL_WARNING_RES = com.filestech.sms.R.string.channel_safety_call_warning_desc
         private val LABEL_SAFETY_CALL_RECEIPT_RES = com.filestech.sms.R.string.channel_safety_call_receipt_label

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -74,9 +75,40 @@ class SettingsViewModel @Inject constructor(
 
         /**
          * v1.27.10 — le coffre a ete vide par la porte de sortie « PIN oublie ».
-         * [count] conversations supprimees, message compris.
+         * [count] conversations supprimees, message compris. Le PIN est retire.
          */
         data class VaultPurged(val count: Int) : Event
+
+        /**
+         * v1.27.11 (revue externe GitLab !38458, constat 2) — la purge n'a PAS abouti, donc le
+         * PIN du coffre **reste en place**. [deleted] conversations sont parties, [left] ne le
+         * sont pas : soit leur copie dans le fournisseur du systeme a survecu — elle reviendrait
+         * a la resynchronisation suivante, hors du coffre — soit elles sont encore la.
+         *
+         * Cause la plus courante, et la seule que l'utilisateur puisse corriger : SMS Tech n'est
+         * plus l'application SMS par defaut, donc le systeme lui refuse la suppression.
+         */
+        data class VaultPurgeIncomplete(val deleted: Int, val left: Int) : Event
+
+        /**
+         * v1.28.2 — la purge a echoue **une seconde fois**. Le PIN reste en place, mais on
+         * propose desormais la sortie assumee : vider quand meme, en sachant que [left]
+         * copie(s) systeme subsisteront.
+         *
+         * Le second echec, et pas le premier : une panne passagere — role SMS momentanement
+         * perdu — se leve par un simple nouvel essai, et offrir l'option degradee tout de suite
+         * pousserait a detruire plus que necessaire. Un echec qui se REPETE, lui, ne se levera
+         * pas : c'est en general une liaison restauree d'un autre telephone, que rien dans
+         * l'application ne peut reparer.
+         */
+        data class VaultPurgeStuck(val deleted: Int, val left: Int) : Event
+
+        /**
+         * v1.28.2 — l'utilisateur a choisi la sortie assumee. Le coffre est vide et le PIN
+         * retire, mais [left] copie(s) systeme ont resiste et **restent sur le telephone**.
+         * Cela se dit, cela ne se tait pas : c'est la contrepartie qu'il a acceptee.
+         */
+        data class VaultPurgedWithResidue(val deleted: Int, val left: Int) : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -138,7 +170,33 @@ class SettingsViewModel @Inject constructor(
 
     fun update(transform: (AppSettings) -> AppSettings) = viewModelScope.launch { settings.update(transform) }
 
-    fun resetAll() = viewModelScope.launch { settings.update { AppSettings() } }
+    /**
+     * v1.27.11 (revue externe GitLab !38458, constat 1) — la reinitialisation des preferences
+     * **preserve desormais le bloc [AppSettings.security]**.
+     *
+     * Elle ecrivait `AppSettings()` nu. Les defauts de ce constructeur sont `lockMode = OFF` et
+     * `vaultPinEnabled = false`, or les empreintes des deux PIN ne vivent PAS dans les reglages
+     * mais dans le magasin securise. Reinitialiser ne les effacait donc pas : il cessait
+     * simplement de les consulter. Le coffre restait plein — l'operation ne touche a aucune
+     * conversation — et s'ouvrait sans rien demander, `VaultViewModel.entryGate` ne posant son
+     * `pinRequired` que sur le flag ; au demarrage suivant,
+     * [com.filestech.sms.security.AppLockManager.resolveInitialState] ne lit que `lockMode` et
+     * concluait `Disabled`.
+     *
+     * Le chemin le plus couteux etait le mode leurre : le bouton vit dans la section « Avance »
+     * de [SettingsScreen], hors du garde `!isPanicDecoy` qui protege les sections Sauvegarde,
+     * Safety call et Mode urgence. Un agresseur ayant obtenu le code panique sous contrainte
+     * sortait donc du leurre en trois tapes, avec les donnees intactes — c'est-a-dire tout ce
+     * que le deni plausible promet d'empecher.
+     *
+     * Preserver le bloc plutot que masquer le bouton : masquer est une enumeration d'ecrans, qui
+     * ne dit rien du prochain point d'entree. Retirer une protection reste une operation de la
+     * couche securite, et elle exige le secret en place ([disableVaultPin], [clearLock]) ; ce
+     * n'est pas l'effet de bord d'un bouton de confort.
+     */
+    fun resetAll() = viewModelScope.launch {
+        settings.update { AppSettings(security = it.security) }
+    }
 
     fun nukeData() = viewModelScope.launch { panic.nukeEverything() }
 
@@ -333,10 +391,49 @@ class SettingsViewModel @Inject constructor(
      * L'ordre n'est pas negociable : purger d'abord, ouvrir ensuite. L'inverse laisserait, entre
      * les deux ecritures, un coffre en clair et encore plein — precisement l'etat que le
      * porteur du seul PIN d'application cherchait a obtenir.
+     *
+     * v1.27.11 (revue externe GitLab !38458, constat 2) — l'ordre ne suffisait pas : le PIN
+     * partait **quel que soit** le sort de la purge, y compris quand elle n'avait rien efface du
+     * tout. Purger d'abord ne protege que si l'on regarde ensuite ce que la purge a fait. Le PIN
+     * n'est donc retire que sur un coffre demontrablement vide, cf. [VaultPurgeResult].
+     *
+     * Le refus doit se VOIR : c'est une porte de sortie, et un echec muet y laisserait
+     * l'utilisateur croire son coffre ouvert alors qu'il reste ferme — ou l'inverse.
      */
-    fun forgetVaultPinAndPurge() = viewModelScope.launch {
-        val purged = conversationRepo.deleteAllInVault()
-        vaultPin.forgetVaultPin()
-        _events.send(Event.VaultPurged(purged))
+    fun forgetVaultPinAndPurge(force: Boolean = false) = viewModelScope.launch {
+        val dejaEchoue = settings.flow.first().security.vaultPurgeFailedOnce
+        val purge = conversationRepo.deleteAllInVault(force)
+        val reste = purge.failed + purge.remaining
+        when {
+            purge.isComplete -> {
+                vaultPin.forgetVaultPin()
+                oublierLEchecPasse()
+                _events.send(Event.VaultPurged(purge.deleted))
+            }
+            // v1.28.2 — sortie assumee : l'utilisateur a demande qu'on vide quand meme, apres
+            // qu'on lui a dit ce qui subsisterait. Ce qui subsiste lui est redit ici.
+            force -> {
+                vaultPin.forgetVaultPin()
+                oublierLEchecPasse()
+                _events.send(Event.VaultPurgedWithResidue(purge.deleted, reste))
+            }
+            // Second echec : celui-la ne se levera pas tout seul, on ouvre la sortie.
+            dejaEchoue -> _events.send(Event.VaultPurgeStuck(purge.deleted, reste))
+            else -> {
+                settings.update {
+                    it.copy(security = it.security.copy(vaultPurgeFailedOnce = true))
+                }
+                _events.send(Event.VaultPurgeIncomplete(purge.deleted, reste))
+            }
+        }
+    }
+
+    /**
+     * Le drapeau ne doit survivre ni a une purge reussie ni a une sortie assumee : dans les deux
+     * cas le coffre est ouvert, et le laisser poserait la sortie degradee d'emblee au prochain
+     * PIN de coffre que l'utilisateur configurerait.
+     */
+    private suspend fun oublierLEchecPasse() {
+        settings.update { it.copy(security = it.security.copy(vaultPurgeFailedOnce = false)) }
     }
 }

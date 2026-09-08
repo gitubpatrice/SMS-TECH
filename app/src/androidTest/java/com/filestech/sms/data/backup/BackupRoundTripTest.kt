@@ -237,28 +237,79 @@ class BackupRoundTripTest {
     }
 
     /**
-     * v1.27.2 (audit externe 2026-08-04 #4) — le second facteur du Coffre garde aussi l'EXPORT.
+     * v1.27.2 (audit externe 2026-08-04 #4), reformule en v1.28.0 — le second facteur du Coffre
+     * garde aussi l'EXPORT, **quand il en existe un**.
      *
-     * Sans ce garde, quiconque passait le verrou principal repartait avec l'intégralité du coffre
-     * dans un fichier déchiffrable **hors de l'appareil**, avec la passphrase de son choix : le
-     * second facteur était contourné, et définitivement une fois le fichier copié.
+     * Sans ce garde, quiconque passait le verrou principal repartait avec l'integralite du coffre
+     * dans un fichier dechiffrable **hors de l'appareil**, avec la passphrase de son choix : le
+     * second facteur etait contourne, et definitivement une fois le fichier copie.
      *
-     * Le test vérifie les deux moitiés — le refus, ET l'absence de fichier exploitable. Un refus
-     * qui aurait quand même écrit les octets ne protégerait rien.
+     * Le test verifie les deux moities — le refus, ET l'absence de fichier exploitable. Un refus
+     * qui aurait quand meme ecrit les octets ne protegerait rien.
+     *
+     * ⚠️ Il POSE le PIN de coffre lui-meme, et le retire dans un `finally`. La version anterieure
+     * de ce test ne le faisait pas : elle dependait des reglages reels de l'application de test,
+     * et passait ou echouait selon l'etat laisse par une session precedente. Sur un appareil ou
+     * un PIN avait ete configure a la main, elle passait ; sur une installation neuve, elle
+     * echouait. Un test de securite ne doit pas dependre de ce qu'on a bricole avant lui.
      */
     @Test
-    fun coffreVerrouille_refuseLExport_etNEcritAucunFichierExploitable() {
+    fun coffreAvecSecondFacteur_refuseLExport_etNEcritAucunFichierExploitable() {
         runBlocking {
             seedSource()
             // vaultSource reste VERROUILLE, et la base source contient une conv du coffre.
             assertThat(dbSource.conversationDao().countInVault()).isEqualTo(1)
 
+            val pinManager = vaultPinManager()
+            assertThat(pinManager.configureVaultPin("246810".toCharArray())).isTrue()
+            try {
+                // Premisse EXPLICITE : sans elle, ce test affirmerait le refus sur une
+                // configuration ou il n'y a rien a prouver, et passerait pour une mauvaise raison.
+                assertThat(vaultFactorPolicy().current())
+                    .isEqualTo(com.filestech.sms.security.VaultSecondFactor.PIN)
+
+                val written =
+                    serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+
+                assertThat(written).isInstanceOf(Outcome.Failure::class.java)
+                assertThat((written as Outcome.Failure).error)
+                    .isInstanceOf(AppError.Locked::class.java)
+                // Rien d'exploitable : soit aucun fichier, soit un fichier vide.
+                assertThat(backupFile.exists() && backupFile.length() > 0L).isFalse()
+            } finally {
+                pinManager.forgetVaultPin()
+            }
+        }
+    }
+
+    /**
+     * v1.28.0 — **la decision**, et non un simple constat : un coffre SANS second facteur
+     * n'empeche pas l'export.
+     *
+     * La garde de la v1.27.2 refusait des que le coffre n'etait pas vide, quelle que soit la
+     * configuration. Elle exigeait donc de prouver un facteur que ces utilisateurs n'ont jamais
+     * pose — ce qui ne les protegeait pas, et cassait leur sauvegarde. Sans PIN de coffre,
+     * ouvrir le coffre ne demande rien : le coffre est de la DISSIMULATION, pas du controle
+     * d'acces, et l'export herite du niveau que l'utilisateur a choisi.
+     *
+     * Objection connue, tranchee sciemment : lire n'est pas exfiltrer, et un fichier chiffre
+     * emporte vaut plus qu'une lecture sur place. C'est le prix assume de ne pas reclamer la
+     * preuve d'un facteur inexistant. Qui veut cette protection pose un PIN de coffre, et le
+     * test ci-dessus verifie qu'elle s'applique alors.
+     */
+    @Test
+    fun coffreSansSecondFacteur_exporteSansFriction() {
+        runBlocking {
+            seedSource()
+            assertThat(dbSource.conversationDao().countInVault()).isEqualTo(1)
+            // Premisse EXPLICITE, pour la meme raison que ci-dessus, en sens inverse.
+            assertThat(vaultFactorPolicy().current())
+                .isEqualTo(com.filestech.sms.security.VaultSecondFactor.NONE)
+
             val written = serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
 
-            assertThat(written).isInstanceOf(Outcome.Failure::class.java)
-            assertThat((written as Outcome.Failure).error).isInstanceOf(AppError.Locked::class.java)
-            // Rien d'exploitable : soit aucun fichier, soit un fichier vide.
-            assertThat(backupFile.exists() && backupFile.length() > 0L).isFalse()
+            assertThat(written).isInstanceOf(Outcome.Success::class.java)
+            assertThat(backupFile.length()).isGreaterThan(0L)
         }
     }
 
@@ -318,6 +369,27 @@ class BackupRoundTripTest {
             io = Dispatchers.IO,
         ),
         vaultSession = vault,
+        vaultFactor = vaultFactorPolicy(),
+        io = Dispatchers.IO,
+    )
+
+    /**
+     * v1.28.0 — construite sur les MEMES reglages et le MEME magasin securise que le service.
+     *
+     * Les tests qui dependent de sa reponse la verifient explicitement avant d'affirmer quoi que
+     * ce soit : elle lit l'etat REEL de l'application de test, donc une session precedente peut
+     * l'avoir changee.
+     */
+    private fun vaultFactorPolicy() = com.filestech.sms.security.VaultSecondFactorPolicy(
+        settings = SettingsRepository(context, scope),
+        vaultPin = vaultPinManager(),
+        io = Dispatchers.IO,
+    )
+
+    private fun vaultPinManager() = com.filestech.sms.security.VaultPinManager(
+        securityStore = SecurityStore(context),
+        settings = SettingsRepository(context, scope),
+        kdf = PasswordKdf(),
         io = Dispatchers.IO,
     )
 

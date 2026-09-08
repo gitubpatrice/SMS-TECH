@@ -1,0 +1,6 @@
+Deux defauts d'interface, tous deux vus sur un vrai telephone.
+
+- Avec une police agrandie sur un ecran etroit, le message « SMS Tech n'est pas votre application par defaut » s'affichait sur une colonne de quelques caracteres, coupant les mots en deux. Corrige sur la liste et dans les Reglages.
+- Le premier glissement juste apres etre revenu d'une conversation etait ignore. La liste repond desormais tout de suite.
+
+Merci au testeur qui a signale le second, avec les etapes exactes.

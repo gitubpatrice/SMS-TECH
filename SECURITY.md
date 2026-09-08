@@ -81,6 +81,61 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.1 — La porte de sortie du coffre s'ouvrait au second essai
+
+*Troisième passe de la relecture d'Andrew Pozdnakov sur la MR F-Droid !38458, 2026-09-08, qu'il
+a reproduite sur émulateur Android 14. Suite directe de la v1.27.11, qui avait corrigé le même
+chemin sans le fermer.*
+
+La v1.27.11 avait rendu la purge du coffre **honnête** : elle disait ce qui avait échoué, et le
+PIN n'était retiré que sur un coffre démontrablement vide. Elle ne l'avait pas rendue
+**reprenable**, et c'est ce qui manquait : la ligne Room partait quand même, y compris quand la
+copie système résistait.
+
+L'enchaînement est plus grave que le constat isolé. Premier essai : le PIN est correctement
+conservé, mais la conversation est déjà effacée. Second essai : `idsInVault()` rend une liste
+vide, `VaultPurgeResult` vaut `0/0/0`, et `isComplete` est vrai **par vacuité**. Le PIN part, la
+copie système survit, et la resynchronisation suivante la ressuscite **en clair** — précisément
+l'état que la v1.27.11 prétendait empêcher.
+
+**La leçon, plus utile que le défaut.** Rendre compte d'un échec ne sert à rien si l'on détruit au
+passage l'état dont la reprise a besoin. Le correctif n'ajoute aucun journal de purge : **la ligne
+du coffre EST le journal**. Conservée, elle est relue au prochain essai comme après un
+redémarrage, elle compte dans `remaining`, et la suppression système est retentée.
+
+**Deux gardes renforcés dans la foulée.** L'identité d'une ligne du fournisseur ne tenait qu'à sa
+date, à une minute près — c'est-à-dire à rien, une minute étant la durée ordinaire d'un échange.
+Elle compare désormais date, corps, sens et adresse côté `content://sms`, et une identité
+invérifiable échoue du côté sûr au lieu de déclencher la suppression. Côté `content://mms`, la
+table désignée par l'URI ne porte ni corps ni adresse : l'identité s'y réduisait à date + sens, et
+le test écrit pour le vérifier a **supprimé le MMS d'un autre correspondant** sur un Galaxy S9
+avant que le correctif n'existe. L'adresse y est maintenant relue dans `content://mms/<id>/addr`.
+
+**L'effacement automatique de l'historique ne propageait pas au fournisseur du système**,
+contrairement aux trois autres chemins de suppression, et rien ne le documentait. Pour un réglage
+de confidentialité, le défaut est le plus coûteux possible : il ne se voit pas. Les messages que
+l'utilisateur croyait effacés restaient dans `content://sms`, lisibles par toute application ayant
+`READ_SMS`, et « Resynchroniser » les ramenait tous — alors que la confirmation promettait déjà
+« Cette action est irréversible ». Trouvé en audit de cohérence, pas par la relecture externe.
+
+⚠ **Changement de comportement destructeur.** Sur un appareil où la rétention automatique est
+activée, la prochaine purge supprime les messages **du téléphone** et non plus seulement de
+l'application. La confirmation le dit désormais explicitement, et la description de
+« Resynchroniser » ne promet plus de récupérer un historique effacé.
+
+**La règle qui unifie les quatre chemins destructeurs**, et qui manquait : *la ligne locale ne
+survit à un échec de propagation que si une décision de **sécurité** dépend de cette propagation.*
+Retirer le PIN du coffre en est une — on exige la preuve. Une suppression ordinaire ou une purge
+de rétention n'en lèvent aucune : y conserver la ligne enfermerait l'utilisateur dans un
+historique qu'il a demandé à voir disparaître, sans rien protéger de plus.
+
+**Pourquoi trois défauts sont passés sur le même chemin en trois versions.** Il vivait en
+`private` dans `ConversationRepositoryImpl`, au milieu de onze dépendances dont neuf ne le
+concernaient pas : aucun test ne pouvait l'atteindre sans construire tout le repository, et
+personne ne l'a fait. Il est désormais en propre (`SystemCopyEraser`, `ConversationEraser`), la
+politique de suppression est une table testée pour elle-même, et chaque correctif a fait l'objet
+d'un contrôle négatif — le défaut remis en place fait tomber les tests qui le visent.
+
 ### v1.27.10 — Le second facteur du coffre se remplaçait sans lui-même
 
 *Relecture externe d'Andrew Pozdnakov sur la MR F-Droid !38458, 2026-09-07. Suite directe de

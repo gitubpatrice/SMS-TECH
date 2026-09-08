@@ -529,6 +529,40 @@ interface MessageDao {
     suspend fun purgeOlderThan(olderThan: Long): Int
 
     /**
+     * v1.28.1 — les messages que [purgeOlderThan] va effacer **et qui ont une copie dans le
+     * fournisseur du systeme**, page par page.
+     *
+     * # Pourquoi cette requete existe
+     *
+     * La purge de retention n'effacait qu'en local : les messages que l'utilisateur croyait
+     * supprimes restaient dans `content://sms`, lisibles par toute application ayant `READ_SMS`,
+     * et une resynchronisation complete — le bouton qui remet le curseur a zero — les ramenait.
+     * `delete`, `deleteMessage` et `deleteAllInVault` propageaient depuis longtemps ; la
+     * retention, non, sans que rien ne le documente.
+     *
+     * # Pourquoi paginer, et pourquoi filtrer sur `telephony_uri`
+     *
+     * La premiere purge d'un historique ancien peut porter sur des dizaines de milliers de
+     * lignes. Les charger d'un bloc mettrait leurs corps entiers en memoire ; la pagination par
+     * cle (`id > :apresId`, jamais `OFFSET`) garde une empreinte constante. Le filtre
+     * `telephony_uri IS NOT NULL` ecarte d'emblee les lignes qui n'ont rien a propager — brouillons,
+     * messages jamais miroites — au lieu de les charger pour ne rien en faire.
+     *
+     * Le critere de selection est **exactement** celui de [purgeOlderThan], au filtre de liaison
+     * pres : deux criteres qui divergeraient feraient propager la suppression de lignes qui
+     * resteraient en base, ou l'inverse.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+         WHERE date < :olderThan AND starred = 0 AND telephony_uri IS NOT NULL AND id > :apresId
+         ORDER BY id
+         LIMIT :limite
+        """,
+    )
+    suspend fun findMirroredOlderThan(olderThan: Long, apresId: Long, limite: Int): List<MessageEntity>
+
+    /**
      * v1.3.3 G1 audit fix — après une purge, refresh `last_message_at` +
      * `last_message_preview` de TOUTES les conversations (post-purge sur 1 transaction).
      * Sans ça, les conv dont tous les messages ont été purgés gardent l'ancien preview en

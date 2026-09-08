@@ -1,0 +1,7 @@
+Follow-up to Andrew Pozdnakov's review on F-Droid MR !38458. Thank you.
+
+The "forgotten vault PIN" exit removed the PIN on a second attempt even though the purge had failed: the vault opened while the messages stayed on the phone.
+
+Also fixed:
+- automatic history cleanup did not remove messages from the phone, and "Resync" brought them back;
+- a deletion could target another contact's message received within the same minute.

@@ -2,6 +2,7 @@ package com.filestech.sms.data.local.db
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.filestech.sms.data.sms.canonicalTelephonyUri
 
 /**
  * Room migrations for the SQLCipher-backed [AppDatabase].
@@ -135,6 +136,125 @@ object Migrations {
         }
     }
 
+    /**
+     * v7 → v8 (2026-09-07, v1.27.11) — **normalise `messages.telephony_uri`**, et supprime les
+     * doublons que sa divergence de forme a produits. Aucun changement de schema : c'est une
+     * migration de DONNEES.
+     *
+     * # Le defaut, reproduit avant d'etre corrige
+     *
+     * Selon la version d'Android, `ContentResolver.insert` rend `content://sms/sent/<id>`
+     * (mesure : Galaxy S9 / Android 10) ou `content://sms/<id>` (Galaxy S24 / Android 16).
+     * `TelephonyReader` enregistrait la forme rendue, telle quelle, pour tout message que
+     * SMS Tech ecrit lui-meme ; l'import depuis le systeme, lui, a toujours construit la forme
+     * canonique. L'index `UNIQUE(telephony_uri)` compare des CHAINES : les deux ecritures
+     * designant la meme ligne systeme ne se rencontraient jamais. Une resynchronisation
+     * complete — le bouton « Resynchroniser », qui remet le curseur a zero — reimportait donc
+     * chaque message ecrit par l'application **en double**.
+     *
+     * # Pourquoi supprimer, et laquelle des deux lignes
+     *
+     * Normaliser sans supprimer violerait l'index des la premiere collision, et la migration
+     * echouerait — la base resterait en v7 a chaque demarrage. On supprime donc d'abord.
+     *
+     * **La ligne conservee est celle que l'APPLICATION a ecrite**, celle qui porte le dossier,
+     * et jamais celle venue de l'import. Ce n'est pas arbitraire : elle seule porte la reaction
+     * emoji, la citation (`reply_to_message_id`), le favori, l'etat d'envoi et l'identifiant
+     * MMS. Elle appartient surtout a la conversation d'ORIGINE — qui peut etre dans le coffre,
+     * la ou son jumeau importe se serait pose en clair. Conserver l'import aurait donc pu sortir
+     * un message du coffre.
+     *
+     * # v1.28.1 (revue externe !38458, 3e passe) — on ne supprime plus sans preuve
+     *
+     * La v1.27.11 supprimait TOUTE ligne portant l'URI canonique, sans comparer un seul champ.
+     * Elle tenait pour acquis qu'une collision est un doublon. Elle ne l'est pas toujours : la
+     * restauration d'avant la v1.27.10 recopiait les `telephony_uri` du telephone SOURCE, et
+     * `content://sms/42` designe un message ici et un autre la-bas. Une base pouvait donc porter
+     * legitimement, sous cette URI, un message n'ayant rien a voir avec celui qu'on normalise —
+     * et la migration l'effacait, definitivement.
+     *
+     * La suppression est desormais conditionnee a l'egalite de l'adresse, du corps, de la date,
+     * du sens, du type **et de la conversation**. Ce qui ne se prouve pas **n'est pas touche du
+     * tout** : ni supprime, ni normalise. La ligne garde sa forme a dossier, que
+     * `SystemCopyEraser.canonicalUri` sait de toute facon normaliser a la lecture ; le seul cout
+     * est un doublon possible a la resynchronisation, jamais une donnee perdue.
+     *
+     * ⚠ **Une premiere version de ce correctif mettait la liaison en collision a `NULL`. C'etait
+     * un defaut, trouve en relecture externe le 2026-09-08.** `NULL` ne veut pas dire « liaison
+     * incertaine » dans cette base : il veut dire « ce message n'a jamais eu de copie systeme »,
+     * et `SystemCopyEraser.erase` en conclut `true`, c'est-a-dire « rien ne survit ». Effacer une
+     * liaison LEGITIME aurait donc fait declarer partie une copie systeme bien vivante — et
+     * rouvert, par la migration, exactement la fuite que la v1.28.1 corrige par ailleurs.
+     *
+     * La conversation entre dans la preuve pour une raison distincte : deux copies identiques
+     * peuvent vivre l'une dans le coffre et l'autre en clair. Les fusionner reviendrait a choisir
+     * a l'aveugle laquelle des deux visibilites survit, et laisserait la conversation perdante
+     * avec un apercu et un compteur faux.
+     *
+     * ⚠ Cette correction ne repare que les bases encore en v7 ou anterieures. Une base deja
+     * passee en v8 par la v1.27.11 ou la v1.28.0 a subi l'ancienne regle ; rien dans le schema
+     * ne permet de savoir ce qui a ete efface, ni de le rendre.
+     *
+     * # Pourquoi une boucle Kotlin plutot qu'un `UPDATE` unique
+     *
+     * La forme canonique se calcule par une regle — cf. [canonicalTelephonyUri] — qui s'ecrit
+     * mal en SQLite et se relit encore plus mal. La boucle porte sur les seules lignes au
+     * format `content://…/<dossier>/<id>`, qui sont peu nombreuses au regard de la table, et
+     * Room execute deja tout `migrate()` dans une transaction : soit l'ensemble passe, soit
+     * rien ne bouge et la migration sera rejouee au prochain demarrage.
+     */
+    val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val aNormaliser = mutableListOf<Pair<Long, String>>()
+            db.query(
+                "SELECT id, telephony_uri FROM messages " +
+                    "WHERE telephony_uri IS NOT NULL AND telephony_uri LIKE 'content://%/%/%'",
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val uri = cursor.getString(1) ?: continue
+                    val canonique = canonicalTelephonyUri(uri)
+                    if (canonique != uri) aNormaliser += id to canonique
+                }
+            }
+            for ((id, canonique) in aNormaliser) {
+                // 1. Le vrai jumeau — meme adresse, meme corps, meme date, meme sens, meme type —
+                //    s'efface AVANT la normalisation, sans quoi l'index UNIQUE refuse. `IS`
+                //    plutot que `=` : comparaison sure meme sur une colonne nulle.
+                db.execSQL(
+                    """
+                    DELETE FROM messages
+                     WHERE telephony_uri = ? AND id <> ?
+                       AND EXISTS (
+                           SELECT 1 FROM messages src
+                            WHERE src.id = ?
+                              AND src.address   IS messages.address
+                              AND src.body      IS messages.body
+                              AND src.date      IS messages.date
+                              AND src.direction IS messages.direction
+                              AND src.type      IS messages.type
+                              AND src.conversation_id IS messages.conversation_id)
+                    """.trimIndent(),
+                    arrayOf<Any>(canonique, id, id),
+                )
+                // 2. La normalisation n'a lieu que si la place est LIBRE. Si une ligne porte
+                //    encore l'URI canonique, c'est qu'elle n'a pas ete prouvee identique : on ne
+                //    lui prend pas sa liaison et on ne la detruit pas. Cette ligne-ci gardera sa
+                //    forme a dossier, que la lecture normalise de toute facon.
+                db.execSQL(
+                    """
+                    UPDATE messages SET telephony_uri = ?
+                     WHERE id = ?
+                       AND NOT EXISTS (
+                           SELECT 1 FROM messages autre
+                            WHERE autre.telephony_uri = ? AND autre.id <> ?)
+                    """.trimIndent(),
+                    arrayOf<Any>(canonique, id, canonique, id),
+                )
+            }
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -143,5 +263,6 @@ object Migrations {
         MIGRATION_4_5,
         MIGRATION_5_6,
         MIGRATION_6_7,
+        MIGRATION_7_8,
     )
 }

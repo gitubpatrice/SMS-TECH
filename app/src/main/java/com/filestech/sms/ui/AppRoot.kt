@@ -1,5 +1,8 @@
 package com.filestech.sms.ui
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHostState
@@ -288,7 +291,34 @@ fun AppRoot() {
     // dépilable car Splash était retiré via popUpTo inclusive), l'activité se terminait et le
     // process était tué (« remove task ») puis relancé. Le splash de 1ʳᵉ ouverture est désormais un
     // OVERLAY rendu APRÈS le NavHost (voir plus bas), plus une destination de navigation.
-    NavHost(navController = nav, startDestination = Conversations()) {
+    // v1.27.12 (rapport d'un testeur, 2026-09-07) — TRANSITIONS EXPLICITES ET COURTES.
+    //
+    // Le `NavHost` n'en declarait aucune, il heritait donc du fondu par defaut de
+    // navigation-compose. Or l'ecran qui REVIENT ne recoit pas les gestes tant que la
+    // transition court : en sortant d'une conversation, la liste s'affichait mais ignorait le
+    // premier glissement. Le testeur l'a decrit precisement — le defaut ne touche que le
+    // `popEnter`, l'ouverture d'une conversation restant interactive pendant son animation.
+    // Reproduit ici : un glissement envoye juste apres le retour ne deplace pas la liste,
+    // le meme glissement une seconde plus tard la deplace.
+    //
+    // Ce que ce correctif fait, et ce qu'il ne fait pas : il ne rend pas l'ecran entrant
+    // interactif pendant l'animation — `NavHost` n'expose rien pour cela, le blocage est dans
+    // la bibliotheque. Il RACCOURCIT la fenetre, de plusieurs centaines de millisecondes a
+    // moins de cent, ce qui la fait passer sous le seuil du perceptible. C'est une attenuation
+    // assumee, pas une correction de la cause.
+    //
+    // Un fondu tres bref plutot que `EnterTransition.None` : la continuite visuelle entre les
+    // deux ecrans se perd completement sans animation, et 80 ms suffisent a la preserver.
+    val fonduEntrant = fadeIn(animationSpec = tween(NAV_TRANSITION_MS))
+    val fonduSortant = fadeOut(animationSpec = tween(NAV_TRANSITION_MS))
+    NavHost(
+        navController = nav,
+        startDestination = Conversations(),
+        enterTransition = { fonduEntrant },
+        exitTransition = { fonduSortant },
+        popEnterTransition = { fonduEntrant },
+        popExitTransition = { fonduSortant },
+    ) {
         composable<Conversations> { entry ->
             val args = entry.toRoute<Conversations>()
             ConversationsScreen(
@@ -557,3 +587,17 @@ private fun SafetyCallAckOverlay(
         SmsTechSnackbarHost(host)
     }
 }
+
+/**
+ * v1.27.12 — duree des transitions du [NavHost], en millisecondes.
+ *
+ * L'ecran qui entre n'accepte pas les gestes tant que la transition court (limite de
+ * navigation-compose, cf. le commentaire au-dessus du `NavHost`). Cette duree est donc AUSSI la
+ * fenetre pendant laquelle l'application parait figee au retour d'une conversation : la garder
+ * courte n'est pas un choix esthetique, c'est ce qui rend le blocage imperceptible.
+ *
+ * 80 ms preserve la continuite visuelle entre deux ecrans tout en restant sous le seuil ou un
+ * geste ignore se remarque. Ne pas l'allonger sans reverifier le glissement immediat apres un
+ * retour, sur un appareil reel.
+ */
+private const val NAV_TRANSITION_MS = 80

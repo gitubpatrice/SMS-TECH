@@ -14,7 +14,9 @@ import com.filestech.sms.data.repository.ScheduledMessageRepositoryImpl
 import com.filestech.sms.data.sender.SenderNameProviderImpl
 import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sms.SmsSenderImpl
+import com.filestech.sms.data.sms.SystemCopyEraser
 import com.filestech.sms.data.sms.TelephonyReader
+import com.filestech.sms.data.sms.TelephonySystemCopyEraser
 import com.filestech.sms.domain.backup.BackupRestorer
 import com.filestech.sms.domain.emergency.IAmOkMessageProvider
 import com.filestech.sms.domain.location.LocationProvider
@@ -54,6 +56,13 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindConversationRepository(impl: ConversationRepositoryImpl): ConversationRepository
+
+    /**
+     * v1.28.1 — l'effacement de la copie systeme d'un message. Interface pour que le contrat
+     * destructeur soit falsifiable en test, cf. [com.filestech.sms.data.sms.SystemCopyEraser].
+     */
+    @Binds @Singleton
+    abstract fun bindSystemCopyEraser(impl: TelephonySystemCopyEraser): SystemCopyEraser
 
     @Binds @Singleton
     abstract fun bindBlockedNumberRepository(impl: BlockedNumberRepositoryImpl): BlockedNumberRepository

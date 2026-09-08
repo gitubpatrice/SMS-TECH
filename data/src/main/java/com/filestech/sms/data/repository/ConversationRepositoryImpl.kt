@@ -1,6 +1,5 @@
 package com.filestech.sms.data.repository
 
-import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.filestech.sms.core.ext.blockKey
@@ -26,8 +25,8 @@ import com.filestech.sms.domain.purge.purgeCutoffMs
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
+import com.filestech.sms.domain.repository.VaultPurgeResult
 import com.filestech.sms.security.AppLockManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -68,7 +67,10 @@ class ConversationRepositoryImpl @Inject constructor(
     private val telephonyReader: com.filestech.sms.data.sms.TelephonyReader,
     // v1.27.2 (audit Codex, C-07) — voir [com.filestech.sms.data.sms.PhoneIdentity].
     private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
-    @ApplicationContext private val context: Context,
+    // v1.28.1 — le chemin destructeur a quitte cette classe pour devenir testable, cf.
+    // [ConversationEraser] et [com.filestech.sms.data.sms.SystemCopyEraser].
+    private val eraser: ConversationEraser,
+    private val systemCopy: com.filestech.sms.data.sms.SystemCopyEraser,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ConversationRepository {
 
@@ -549,32 +551,14 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun delete(id: Long) = withContext(io) {
-        // Propagate to the system SMS/MMS content provider before dropping the local rows.
-        // Otherwise a re-import (manual refresh, factory reset, panic + re-grant) would
-        // resurrect every message and the conversation would reappear out of nowhere.
-        runCatching {
-            val msgs = messageDao.findByConversation(id)
-            for (m in msgs) deleteFromTelephonyProvider(m.telephonyUri)
-        }
-        conversationDao.delete(id)
+        // Suppression ordinaire : la ligne locale part meme si la copie systeme resiste — voir
+        // [ConversationEraser.erase] pour la raison, et pour ce qui differe cote coffre.
+        eraser.erase(id)
+        Unit
     }
 
-    /**
-     * v1.27.10 — voir [ConversationRepository.deleteAllInVault].
-     *
-     * Boucle sur [delete] plutot qu'un `DELETE` de masse : chaque conversation doit d'abord
-     * disparaitre du fournisseur du systeme, sinon la resynchronisation suivante la ressuscite
-     * hors du coffre. Une conversation qui echoue n'interrompt pas les autres — un coffre
-     * partiellement purge vaut mieux qu'un coffre intact dont l'utilisateur croit qu'il est vide.
-     */
-    override suspend fun deleteAllInVault(): Int = withContext(io) {
-        var deleted = 0
-        for (id in conversationDao.idsInVault()) {
-            runCatching { delete(id) }
-                .onSuccess { deleted++ }
-                .onFailure { Timber.w(it, "deleteAllInVault: conversation %d not deleted", id) }
-        }
-        deleted
+    override suspend fun deleteAllInVault(force: Boolean): VaultPurgeResult = withContext(io) {
+        eraser.purgeVault(force)
     }
 
     /** v1.26.1 (audit F2) — voir [ConversationRepository.setMessageStarred]. */
@@ -586,7 +570,7 @@ class ConversationRepositoryImpl @Inject constructor(
         // Same rationale as [delete]: remove the row from the system content provider so the
         // next launch (or a future re-import) doesn't bring it back.
         val msg = messageDao.findById(messageId)
-        deleteFromTelephonyProvider(msg?.telephonyUri)
+        msg?.let { systemCopy.erase(it) }
         // v1.24.0 (bug suppression) — atomique : effacer le message ET recalculer l'aperçu de la
         // conversation. Sans le refresh, supprimer le dernier message d'un fil laissait la liste
         // afficher le message supprimé indéfiniment (confirmé sur une vraie sauvegarde 2026-07-23).
@@ -631,43 +615,15 @@ class ConversationRepositoryImpl @Inject constructor(
 
     override suspend fun purgeHistoryNow(olderThanDays: Int): Int = withContext(io) {
         if (olderThanDays <= 0) return@withContext 0
-        val cutoff = purgeCutoffMs(olderThanDays)
-        // v1.26.1 (audit H9) — les deux écritures sont ATOMIQUES, comme `deleteMessage` l'est
-        // depuis la v1.24.0. Sans transaction, il suffisait que le processus meure entre le
-        // DELETE et le refresh pour que `conversations.last_message_preview` conserve LE CORPS
-        // EN CLAIR du message purgé — la fuite même que le correctif G1 de la v1.3.3 visait.
-        // Aggravant : rien ne réparait cet état, `repairStaleConversationPreviews` étant gardée
-        // par un drapeau déjà posé sur toute installation post-1.24.0. L'aperçu périmé était
-        // donc PERMANENT. Le correctif de `deleteMessage` n'avait pas été porté ici.
-        val purged = database.withTransaction {
-            val n = messageDao.purgeOlderThan(cutoff)
-            if (n > 0) {
-                // v1.3.3 G1 audit fix — refresh preview/last_message_at après purge pour
-                // éviter qu'une conv vidée garde l'ancien preview en clair (leak privacy).
-                messageDao.refreshAllConversationPreviewsAfterPurge()
-            }
-            n
-        }
-        purged
+        // v1.28.1 — la recette vit desormais en UN seul endroit, partage avec le cycle mensuel de
+        // `TelephonySyncWorker` qui la reecrivait a l'identique. Elle propage aussi au fournisseur
+        // du systeme, ce qu'elle ne faisait pas : voir [ConversationEraser.purgeHistory].
+        eraser.purgeHistory(purgeCutoffMs(olderThanDays))
     }
 
     // v1.6.1 (audit QUAL-01) — `purgeCutoffMs` et `SAFETY_NET_DAYS` centralisés dans
     // [com.filestech.sms.domain.purge.PurgePolicy]. Tous les call sites passent par là.
 
-    /**
-     * Deletes a single SMS / MMS row from the system content provider, identified by the URI we
-     * captured at insert/import time. No-op when [telephonyUri] is null (e.g. drafts created
-     * before the row was mirrored) or when the OS refuses the delete (SecurityException — we are
-     * no longer the default SMS app). Failures are swallowed because the Room delete must still
-     * succeed: the user expects the message to disappear from the app even if the system row
-     * lingers and gets cleaned up the next time we are default.
-     */
-    private fun deleteFromTelephonyProvider(telephonyUri: String?) {
-        if (telephonyUri.isNullOrBlank()) return
-        runCatching {
-            context.contentResolver.delete(Uri.parse(telephonyUri), null, null)
-        }.onFailure { Timber.w(it, "Failed to delete %s from system provider", telephonyUri) }
-    }
     override suspend fun search(query: String): List<Message> = withContext(io) {
         val safe = escapeFtsQuery(query)
         if (safe.isBlank()) emptyList() else messageDao.search(safe).map { it.toDomain() }

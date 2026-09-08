@@ -151,6 +151,9 @@ fun SettingsScreen(
     // destructive « PIN oublie ». L'ancien `vaultPinClearConfirmOpen` ne demandait rien.
     var vaultPinDisableOpen by remember { mutableStateOf(false) }
     var vaultPinForgetConfirmOpen by remember { mutableStateOf(false) }
+    // v1.28.2 — porte de sortie de la porte de sortie. `null` = fermee ; sinon, le nombre de
+    // conversations dont la copie systeme a resiste, qu'il faut annoncer avant de detruire.
+    var vaultPinForceConfirm by remember { mutableStateOf<Int?>(null) }
     // v1.14.0 — Comportement boutons 112/17 (DIALER_ONLY vs HOLD_3S_DIRECT_CALL).
     // Retiré v1.14.1 : la page Mode urgence v1.14.1 utilise direct call avec
     // fallback automatique → picker Settings devenait orphelin (dead setting).
@@ -226,6 +229,36 @@ fun SettingsScreen(
                 is SettingsViewModel.Event.VaultPurged -> {
                     snackbarHost.showSnackbar(
                         ctx.getString(R.string.settings_vault_pin_forgot_done, e.count),
+                    )
+                }
+                // v1.27.11 (revue externe GitLab !38458, constat 2) — la purge a échoué, le PIN
+                // reste donc en place. `showError` et non `showSnackbar` : l'utilisateur croit
+                // avoir ouvert son coffre, il faut qu'il apprenne le contraire ici et pas
+                // devant un dialogue de PIN qu'il n'attendait plus.
+                is SettingsViewModel.Event.VaultPurgeIncomplete -> {
+                    snackbarHost.showError(
+                        ctx.getString(
+                            R.string.settings_vault_pin_forgot_incomplete,
+                            e.deleted,
+                            e.left,
+                        ),
+                    )
+                }
+                // v1.28.2 — second echec : celui-la ne se levera pas tout seul. On ouvre la
+                // sortie assumee plutot que de laisser l'utilisateur enferme dehors de son
+                // propre coffre. Un dialogue, et non un message : il doit choisir, pas subir.
+                is SettingsViewModel.Event.VaultPurgeStuck -> {
+                    vaultPinForceConfirm = e.left
+                }
+                // Le coffre est ouvert, mais des copies systeme restent sur le telephone. C'est
+                // la contrepartie acceptee, et elle se dit — `showError` pour qu'elle se voie.
+                is SettingsViewModel.Event.VaultPurgedWithResidue -> {
+                    snackbarHost.showError(
+                        ctx.getString(
+                            R.string.settings_vault_pin_forgot_residue,
+                            e.deleted,
+                            e.left,
+                        ),
                     )
                 }
             }
@@ -614,20 +647,30 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_section_advanced),
                 icon = Icons.Outlined.Tune,
             ) {
+                // v1.27.12 — le bouton passe SOUS la description au lieu d'occuper le
+                // `trailingContent`. Meme defaut que le bandeau de [ConversationsScreen] et meme
+                // cause : le bouton y prenait sa largeur intrinseque et laissait au texte une
+                // colonne de quelques caracteres. Visible des qu'on cumule un ecran etroit et une
+                // police agrandie — mesure sur un Redmi 9C a 360 dp et `font_scale` 1,33.
+                val estParDefaut = viewModel.defaultAppManager.isDefault()
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_default_sms_app)) },
                     supportingContent = {
-                        Text(
-                            text = if (viewModel.defaultAppManager.isDefault())
-                                stringResource(R.string.settings_is_default)
-                            else stringResource(R.string.error_not_default_app),
-                        )
-                    },
-                    trailingContent = {
-                        if (!viewModel.defaultAppManager.isDefault()) {
-                            Button(onClick = {
-                                viewModel.defaultAppManager.buildChangeDefaultIntent()?.let { defaultLauncher.launch(it) }
-                            }) { Text(stringResource(R.string.settings_set_default)) }
+                        Column {
+                            Text(
+                                text = if (estParDefaut) {
+                                    stringResource(R.string.settings_is_default)
+                                } else {
+                                    stringResource(R.string.error_not_default_app)
+                                },
+                            )
+                            if (!estParDefaut) {
+                                Spacer(Modifier.size(10.dp))
+                                Button(onClick = {
+                                    viewModel.defaultAppManager.buildChangeDefaultIntent()
+                                        ?.let { defaultLauncher.launch(it) }
+                                }) { Text(stringResource(R.string.settings_set_default)) }
+                            }
                         }
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -669,8 +712,17 @@ fun SettingsScreen(
                         viewModel.update { it.copy(advanced = it.advanced.copy(keepAliveService = v)) }
                     },
                 )
-                // v1.8.0 — dialog de confirmation (les préférences revient
+                // v1.8.0 — dialog de confirmation (les préférences reviennent
                 // aux defaults, mais les conversations restent intactes).
+                //
+                // v1.27.11 (revue externe GitLab !38458, constat 1) — cette rangée reste
+                // volontairement VISIBLE en session leurre, contrairement aux sections
+                // Sauvegarde / Safety call / Mode urgence : une app SMS ordinaire sait
+                // réinitialiser ses réglages, et la masquer signalerait qu'il y a quelque chose
+                // à cacher. Ce qui la rendait dangereuse ici n'était pas sa visibilité mais son
+                // effet — elle remettait `lockMode` et `vaultPinEnabled` à leurs défauts. C'est
+                // [SettingsViewModel.resetAll] qui préserve désormais le bloc sécurité, et c'est
+                // le bon endroit : un garde d'écran ne dit rien du prochain point d'entrée.
                 NavigationRow(
                     stringResource(R.string.settings_reset_all),
                     onClick = { showResetAllConfirm = true },
@@ -943,7 +995,9 @@ fun SettingsScreen(
     // un précédent dialog ne réinitialise pas par réflexe.
     // v1.10.0 — confirm BrandBlue + blanc (demande user 2026-05-21).
     // Action remet les réglages aux défauts mais NE touche PAS aux messages
-    // (donc non-destructive au sens contenu utilisateur).
+    // (donc non-destructive au sens contenu utilisateur), ni — depuis v1.27.11 — aux
+    // réglages de sécurité. Le corps du dialogue le dit maintenant explicitement : il
+    // annonçait « toutes vos préférences » alors que la portée réelle s'arrête au confort.
     if (showResetAllConfirm) {
         val cancelFocus = remember { FocusRequester() }
         LaunchedEffect(Unit) { cancelFocus.requestFocus() }
@@ -1145,6 +1199,48 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(
                     onClick = { vaultPinForgetConfirmOpen = false },
+                    modifier = Modifier.focusRequester(cancelFocus).focusable(),
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
+    // v1.28.2 — la sortie de secours de la sortie de secours.
+    //
+    // Elle n'existe que parce que le refus prudent de la v1.28.1 pouvait devenir une IMPASSE :
+    // une liaison durablement fausse — un `telephony_uri` restaure d'un autre telephone — fait
+    // echouer le garde d'identite a chaque essai, a l'identique, et l'utilisateur qui a oublie
+    // son PIN n'avait plus d'issue. Une porte de sortie qui ne s'ouvre jamais n'en est pas une.
+    //
+    // Elle ne s'affiche qu'au SECOND echec, et elle dit ce qu'elle coute avant d'agir : le
+    // consentement doit etre eclaire, sinon ce n'est pas un consentement.
+    val resteAuTelephone = vaultPinForceConfirm
+    if (resteAuTelephone != null) {
+        val cancelFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
+        AlertDialog(
+            onDismissRequest = { vaultPinForceConfirm = null },
+            title = { Text(stringResource(R.string.settings_vault_pin_force_title)) },
+            text = {
+                Text(
+                    stringResource(R.string.settings_vault_pin_force_body, resteAuTelephone),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        viewModel.forgetVaultPinAndPurge(force = true)
+                        vaultPinForceConfirm = null
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = com.filestech.sms.ui.theme.BrandDanger,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
+                ) { Text(stringResource(R.string.settings_vault_pin_force_action)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { vaultPinForceConfirm = null },
                     modifier = Modifier.focusRequester(cancelFocus).focusable(),
                 ) { Text(stringResource(R.string.action_cancel)) }
             },

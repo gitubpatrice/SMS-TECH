@@ -270,6 +270,30 @@ data class SecuritySettings(
      * (30 jours) avant de re-purger, pour éviter le spam toutes les 12 h.
      */
     val lastAutoPurgeAt: Long? = null,
+    /**
+     * v1.28.2 — une purge du coffre lancée par la porte « PIN oublié » a déjà échoué.
+     *
+     * # Pourquoi cet état existe, et pourquoi il est PERSISTANT
+     *
+     * Depuis la v1.28.1, le PIN n'est retiré que sur un coffre démontrablement vide, et la
+     * conversation dont la copie système a résisté est CONSERVÉE. C'est la bonne règle tant que
+     * l'échec est passager. Il ne l'est pas toujours : une sauvegarde restaurée d'avant la
+     * v1.27.10 recopiait les `telephony_uri` du téléphone SOURCE, si bien qu'un message peut
+     * porter durablement une liaison qui désigne, ici, un AUTRE message. Le garde d'identité
+     * refuse alors d'y toucher — correctement — et chaque nouvel essai reproduit le même refus.
+     * L'utilisateur qui a oublié son PIN n'a plus aucune issue : une porte de sortie qui ne
+     * s'ouvre jamais n'en est pas une.
+     *
+     * Ce drapeau ouvre, **au second échec seulement**, une sortie assumée : vider quand même et
+     * retirer le PIN, en disant ce qui subsistera. Le premier échec ne la propose pas, pour ne
+     * pas offrir l'option dégradée sur une panne passagère — rôle SMS momentanément perdu, par
+     * exemple — qu'un simple nouvel essai suffirait à lever.
+     *
+     * Il est **en base et non en mémoire** : sans cela, fermer l'application entre deux essais
+     * ramènerait l'impasse, exactement comme la v1.28.1 a montré qu'un compteur en mémoire ne
+     * survit pas à ce qu'on lui demande de survivre.
+     */
+    val vaultPurgeFailedOnce: Boolean = false,
 )
 
 enum class LockMode { OFF, PIN, PATTERN, BIOMETRIC }
