@@ -330,6 +330,25 @@ class ConversationRepositoryImpl @Inject constructor(
     override fun observeUnreadConversationCount(): Flow<Int> =
         conversationDao.observeUnreadConversationCount().flowOn(io)
 
+    /** Nom de contact d'une adresse, assaini (Bidi/invisibles) ; `null` si inconnu ou illisible. */
+    private suspend fun nomDuContact(adresse: PhoneAddress): String? =
+        runCatching { contactRepo.lookupByPhone(adresse.raw)?.displayName }
+            .getOrNull()
+            ?.stripInvisibleChars()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+    /**
+     * v1.28.3 (audit global, X-08) — titre d'un groupe : les noms de ses membres, un numéro brut
+     * pour chaque inconnu ; `null` si aucun n'est un contact, l'écran retombe alors sur les numéros.
+     * Même règle que `ConversationMirror.nomDeGroupe`, pour les groupes créés à la réception.
+     */
+    private suspend fun nomDeGroupe(addresses: List<PhoneAddress>): String? {
+        var unNomTrouve = false
+        val membres = addresses.map { a -> nomDuContact(a)?.also { unNomTrouve = true } ?: a.raw }
+        return if (unNomTrouve) membres.joinToString(", ") else null
+    }
+
     /**
      * Audit A10: wraps the read-modify-write in a single Room transaction so two concurrent
      * `findOrCreate` calls for the same canonical CSV cannot create two separate rows.
@@ -338,10 +357,13 @@ class ConversationRepositoryImpl @Inject constructor(
         if (addresses.isEmpty()) return@withContext Outcome.Failure(AppError.Validation("empty addresses"))
         val csv = canonicalCsv(addresses)
         // v1.12.0 — resolve le displayName AVANT la transaction Room pour le
-        // cas single-recipient (parcours classique ComposeScreen). En groupe
-        // (≥ 2 recipients), on garde null : le rendu UI joint les numéros / les
-        // noms côté présentation (cf. `ConversationRow`), poser un seul
-        // displayName tronqué serait trompeur.
+        // cas single-recipient (parcours classique ComposeScreen).
+        //
+        // v1.28.3 (audit global, X-08 — mesuré sur le S9) — et pour un GROUPE aussi, désormais :
+        // la version précédente gardait `null` en affirmant que « le rendu UI joint les noms
+        // côté présentation ». Il joignait les NUMÉROS (`addresses.joinToString { it.raw }`),
+        // et un groupe s'affichait comme une suite de chiffres. Le titre est la liste des noms
+        // des membres, numéro brut pour un inconnu — cf. [nomDeGroupe].
         //
         // Lookup hors-transaction pour ne pas tenir le verrou Room pendant
         // l'appel `ContentResolver` (qui peut bloquer ~5-30 ms si la base
@@ -356,12 +378,10 @@ class ConversationRepositoryImpl @Inject constructor(
         // nom de contact vCard importé. Sans ça, un nom avec U+202E pourrait
         // inverser le rendu du TopAppBar ThreadScreen.
         val resolvedDisplayName: String? = if (addresses.size == 1) {
-            runCatching { contactRepo.lookupByPhone(addresses[0].raw)?.displayName }
-                .getOrNull()
-                ?.stripInvisibleChars()
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-        } else null
+            nomDuContact(addresses[0])
+        } else {
+            nomDeGroupe(addresses)
+        }
 
         val id = database.withTransaction {
             val existing = conversationDao.findByAddressesCsv(csv)

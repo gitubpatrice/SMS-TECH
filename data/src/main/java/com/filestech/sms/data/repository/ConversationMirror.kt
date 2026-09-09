@@ -83,6 +83,19 @@ class ConversationMirror @Inject constructor(
         return name
     }
 
+    /**
+     * v1.28.3 (audit global, X-08 — mesuré sur le S9) — **le titre d'un GROUPE est la liste des
+     * noms de ses membres**, pas de ses numéros. `findOrCreate` laissait `displayName` à `null`
+     * pour un groupe en affirmant que « le rendu UI joint les noms côté présentation » ; il
+     * joignait les numéros bruts. Ici comme là, un membre inconnu garde son numéro ; `null` si
+     * aucun membre n'est un contact — l'écran retombe alors sur les numéros, comme avant.
+     */
+    private suspend fun nomDeGroupe(addresses: List<PhoneAddress>): String? {
+        var unNomTrouve = false
+        val membres = addresses.map { a -> resolveDisplayName(a.raw)?.also { unNomTrouve = true } ?: a.raw }
+        return if (unNomTrouve) membres.joinToString(", ") else null
+    }
+
     suspend fun upsertIncomingSms(
         address: String,
         body: String,
@@ -814,7 +827,7 @@ class ConversationMirror @Inject constructor(
         systemThreadId: Long,
         addresses: List<PhoneAddress>,
     ): Long {
-        val resolved = resolveDisplayName(addresses.first().raw)
+        val resolved = if (addresses.size == 1) resolveDisplayName(addresses.first().raw) else nomDeGroupe(addresses)
         if (systemThreadId > 0L) {
             conversationDao.findByThreadId(systemThreadId)?.let { existing ->
                 if (existing.displayName == null && resolved != null) {
@@ -911,7 +924,7 @@ class ConversationMirror @Inject constructor(
 
     private suspend fun ensureConversation(addresses: List<PhoneAddress>): Long {
         val csv = addresses.sortedBy { it.normalized }.toCsv()
-        val resolved = resolveDisplayName(addresses.first().raw)
+        val resolved = if (addresses.size == 1) resolveDisplayName(addresses.first().raw) else nomDeGroupe(addresses)
 
         // 1) Exact-CSV match — chemin rapide, couvre la majorité des cas (même format
         //    d'adresse stocké et présenté).
