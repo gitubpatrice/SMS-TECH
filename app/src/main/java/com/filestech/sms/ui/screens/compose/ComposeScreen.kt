@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -89,7 +90,14 @@ fun ComposeScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        // v1.28.3 (audit global, X-07 — mesuré sur le S9) — la liste RÉSERVE la place du clavier.
+        //
+        // Sans `imePadding`, la colonne gardait la hauteur de l'écran entier et le clavier en
+        // recouvrait le bas ; quand les résultats tenaient dans cette hauteur, rien ne défilait,
+        // et les contacts sous le clavier — le plus souvent celui qu'on cherchait, en bas de la
+        // liste courte — étaient inatteignables. Le fil et la feuille de transfert le faisaient
+        // déjà ; cet écran, non.
+        Column(modifier = Modifier.fillMaxSize().padding(padding).imePadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
