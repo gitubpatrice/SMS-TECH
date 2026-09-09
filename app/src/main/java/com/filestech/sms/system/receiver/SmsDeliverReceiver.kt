@@ -243,7 +243,15 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 // [IncomingMessageNotifier.cancelAllForConversation] (appelée à l'ouverture
                 // du thread) puisse l'effacer en utilisant le groupe. Lookup O(1) sur PK,
                 // négligeable face au I/O télémetrie déjà fait juste avant.
-                val convId = conversationRepo.findMessageById(msgId)?.conversationId
+                //
+                // v1.28.3 (audit global, X-09 — mesure sur le S9) — relecture SANS le masque du
+                // coffre. `findMessageById` rend `null` pour un message dont la conversation est
+                // au coffre (SEC-V1) : chaque SMS recu dans une conversation du coffre tombait
+                // donc dans la branche « bug de coherence » ci-dessous, avec son avertissement —
+                // et n'etait pas notifie par ACCIDENT, alors que c'est au notificateur de decider
+                // de se taire (il le fait, sur `conv.inVault`). Vu en direct des que X-01 a mis
+                // les 1-a-1 des membres d'un groupe au coffre.
+                val convId = conversationRepo.findMessageForResend(msgId)?.conversationId
                 if (convId != null) {
                     notifier.notifyIncoming(
                         address = address,
