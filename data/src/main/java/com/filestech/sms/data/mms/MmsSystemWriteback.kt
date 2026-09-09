@@ -295,23 +295,56 @@ class MmsSystemWriteback @Inject constructor(
     }
 
     /**
-     * Watchdog: deletes any MMS row stuck in `msg_box = OUTBOX` past [olderThanMs]. Used by
-     * [TelephonySyncWorker] to clean up after a [MmsSentReceiver] that never fired (process
-     * killed mid-dispatch, force-stop, Doze + reboot). Returns the number of rows deleted, or
-     * 0 if we are not default SMS app (provider returns 0 silently).
+     * Watchdog: deletes MMS rows **written by SMS Tech** that are stuck in `msg_box = OUTBOX`
+     * past [olderThanMs]. Used by [TelephonySyncWorker] to clean up after a [MmsSentReceiver]
+     * that never fired (process killed mid-dispatch, force-stop, Doze + reboot). Returns the
+     * number of rows deleted, or 0 if we are not default SMS app (provider returns 0 silently).
+     *
+     * # v1.28.3 (F18) — la suppression exige desormais une PREUVE DE PROPRIETE
+     *
+     * Le selecteur ne portait que sur `msg_box = OUTBOX` et sur l'age. Il ne demandait jamais
+     * qui avait cree la ligne, et supprimait donc **toute** ligne du fournisseur systeme en
+     * OUTBOX vieille de plus de quinze minutes — y compris celles d'une autre application :
+     * une application constructeur cohabitante, ou celle utilisee avant SMS Tech, dont un MMS
+     * avait echoue. Le chien de garde tournait toutes les douze heures.
+     *
+     * C'est le seul defaut de la relecture externe qui detruise la donnee d'un TIERS, et
+     * l'identifiant qui manquait existait deja : `messages.mms_system_id`, que
+     * [MmsSentReceiver] consulte precisement pour refuser d'agir sur une ligne qui n'est pas la
+     * sienne. La purge etait le seul chemin destructeur du depot a ne pas faire ce controle,
+     * alors qu'elle est le plus large.
+     *
+     * [ownedIds] vient de `MessageDao.ownedMmsSystemIds`. Vide, on ne supprime RIEN : une liste
+     * vide signifie « aucune ligne prouvee a nous », pas « tout est a nous ». C'est le sens
+     * d'echec qui compte ici — un repli sur l'ancien comportement redonnerait au chien de garde
+     * le pouvoir qu'on lui retire.
+     *
+     * Le decoupage en lots de [SQLITE_MAX_VARIABLES] respecte la limite de parametres de
+     * SQLite : un utilisateur ancien peut porter des milliers de MMS, et un `IN (…)` trop long
+     * ferait echouer la requete entiere — donc ne purgerait plus rien, en silence.
      */
-    suspend fun purgeStaleOutbox(olderThanMs: Long): Int = withContext(io) {
+    suspend fun purgeStaleOutbox(olderThanMs: Long, ownedIds: List<Long>): Int = withContext(io) {
+        if (ownedIds.isEmpty()) return@withContext 0
         val cutoffSec = (System.currentTimeMillis() - olderThanMs) / 1000L
-        safe("purgeStaleOutbox") {
-            resolver.delete(
-                Telephony.Mms.CONTENT_URI,
-                "${Telephony.Mms.MESSAGE_BOX}=? AND ${Telephony.Mms.DATE}<?",
-                arrayOf(Telephony.Mms.MESSAGE_BOX_OUTBOX.toString(), cutoffSec.toString()),
-            )
-        } ?: 0
+        var supprimees = 0
+        for (lot in ownedIds.chunked(SQLITE_MAX_VARIABLES)) {
+            val (selection, args) = selecteurOutboxPossedee(cutoffSec, lot)
+            supprimees += safe("purgeStaleOutbox") {
+                resolver.delete(Telephony.Mms.CONTENT_URI, selection, args)
+            } ?: 0
+        }
+        supprimees
     }
 
     private companion object {
+        /**
+         * v1.28.3 (F18) — plafond de parametres d'une requete SQLite. La valeur reelle est 999
+         * avant SQLite 3.32 et 32766 ensuite ; on s'aligne sur la plus basse, la version
+         * embarquee variant selon l'appareil. Depasser ferait echouer la requete ENTIERE, donc
+         * ne purgerait plus rien — en silence, le `safe` avalant l'exception.
+         */
+        const val SQLITE_MAX_VARIABLES: Int = 900
+
         // PduHeaders constants — kept inline (hidden in the framework, can't import).
         const val MSG_TYPE_SEND_REQ: Int = 128
         const val MMS_VERSION_1_0: Int = 16
@@ -320,4 +353,31 @@ class MmsSystemWriteback @Inject constructor(
         const val ADDR_TYPE_TO: Int = 151
         const val CHARSET_UTF8: Int = 106
     }
+}
+
+/**
+ * v1.28.3 (F18) — construit le sélecteur du chien de garde de l'OUTBOX système.
+ *
+ * Extrait de [MmsSystemWriteback.purgeStaleOutbox] pour être **testable sans appareil**. Le
+ * défaut que la relecture externe a trouvé était entièrement dans ce sélecteur : il ne portait
+ * que sur `msg_box` et sur la date, donc SMS Tech détruisait les MMS en échec laissés par
+ * d'autres applications. La classe, elle, dépend d'un `Context` et exigerait d'être application
+ * SMS par défaut pour être exercée — ce qui aurait laissé le défaut sans garde-fou.
+ *
+ * Le troisième critère, `_id IN (…)`, est celui qui porte la preuve de propriété. Un correctif
+ * qui le retirerait ferait tomber `MmsOutboxPurgeSelectorTest`.
+ */
+internal fun selecteurOutboxPossedee(
+    cutoffSec: Long,
+    lot: List<Long>,
+): Pair<String, Array<String>> {
+    require(lot.isNotEmpty()) { "un lot vide ne doit jamais atteindre le selecteur" }
+    val placeholders = lot.joinToString(",") { "?" }
+    val selection = "${Telephony.Mms.MESSAGE_BOX}=? AND ${Telephony.Mms.DATE}<? AND " +
+        "${Telephony.Mms._ID} IN ($placeholders)"
+    val args = arrayOf(
+        Telephony.Mms.MESSAGE_BOX_OUTBOX.toString(),
+        cutoffSec.toString(),
+    ) + lot.map { it.toString() }
+    return selection to args
 }

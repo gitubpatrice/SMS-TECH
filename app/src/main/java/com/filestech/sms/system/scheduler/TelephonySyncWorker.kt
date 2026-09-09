@@ -107,7 +107,12 @@ class TelephonySyncWorker @AssistedInject constructor(
             // the conversation in other SMS apps AND coming back as a phantom MMS at the next
             // reimport. Same 15 min threshold for symmetry.
             runCatching {
-                val deleted = mmsSystemWriteback.purgeStaleOutbox(PENDING_TIMEOUT_MS)
+                // v1.28.3 (F18) — la purge ne porte plus que sur les lignes DONT NOUS AVONS LA
+                // PREUVE qu'elles sont les notres. Sans cette liste, le selecteur ne connaissait
+                // que l'etat et l'age, et detruisait aussi les MMS en echec d'autres
+                // applications SMS installees sur l'appareil.
+                val owned = messageDao.ownedMmsSystemIds()
+                val deleted = mmsSystemWriteback.purgeStaleOutbox(PENDING_TIMEOUT_MS, owned)
                 if (deleted > 0) Timber.i("Watchdog: %d stale system OUTBOX rows purged", deleted)
             }.onFailure { Timber.w(it, "OUTBOX system watchdog failed") }
             // v1.3.0 — auto-nettoyage de l'historique, cadence mensuelle. Le worker

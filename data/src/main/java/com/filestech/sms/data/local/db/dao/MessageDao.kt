@@ -270,6 +270,30 @@ interface MessageDao {
     suspend fun findMmsSystemId(id: Long): Long?
 
     /**
+     * v1.28.3 (F18) — **journal de propriété** : tous les identifiants de lignes
+     * `content://mms` que SMS Tech a écrites lui-même.
+     *
+     * Sert au chien de garde de l'OUTBOX système
+     * ([com.filestech.sms.data.mms.MmsSystemWriteback.purgeStaleOutbox]), qui supprimait
+     * jusqu'ici **toute** ligne du fournisseur en `msg_box = OUTBOX` plus vieille que quinze
+     * minutes, sans se demander qui l'avait créée. Une application tierce ayant laissé un MMS
+     * en échec — une application constructeur cohabitante, ou celle utilisée avant SMS Tech —
+     * voyait sa ligne détruite par un chien de garde qui n'avait rien à y faire.
+     *
+     * La colonne existait déjà et servait déjà de preuve de propriété ailleurs :
+     * `MmsSentReceiver` s'en sert précisément pour refuser d'agir sur une ligne qui n'est pas
+     * la sienne. La purge était le seul chemin destructeur du dépôt à ne pas faire ce contrôle,
+     * alors qu'elle est de loin le plus large.
+     *
+     * Conséquence assumée : une ligne dont SMS Tech a perdu la trace en Room — message
+     * supprimé localement, base réinitialisée — n'est plus purgée. C'est le bon sens de
+     * l'échec : mieux vaut laisser une ligne orpheline qu'en détruire une qui ne nous
+     * appartient pas.
+     */
+    @Query("SELECT mms_system_id FROM messages WHERE mms_system_id IS NOT NULL")
+    suspend fun ownedMmsSystemIds(): List<Long>
+
+    /**
      * v1.3.0 — set / clear la réaction emoji posée par l'utilisateur sur un message. `null`
      * = retire la réaction. Aucun écho côté SMS/MMS (réactions non standardisées en SMS).
      */
