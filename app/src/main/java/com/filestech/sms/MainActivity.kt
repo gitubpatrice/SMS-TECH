@@ -513,6 +513,31 @@ class MainActivity : FragmentActivity() {
                     return
                 }
                 lifecycleScope.launch {
+                    // 🔴 v1.28.3 (F06) — L'AUTHENTIFICATION D'ABORD, L'ÉCRITURE ENSUITE.
+                    //
+                    // Le nonce prouve que l'intention vient bien de NOTRE notification ; il ne
+                    // prouve pas QUI tient le téléphone. Or ce chemin ne remet pas seulement un
+                    // minuteur à zéro : `disarmIfTriggered = true` **désarme l'homme mort**. Il
+                    // s'exécutait pourtant sans jamais consulter `appLock`.
+                    //
+                    // L'asymétrie était nette et c'est elle qui trahit le défaut : le chemin
+                    // VOISIN, `observeRealOpenForSafetyCallReset`, qui ne fait que remettre le
+                    // minuteur à zéro — donc bien moins grave — attend depuis la v1.27.2 un état
+                    // réellement ouvert, et son KDoc explique pourquoi `PanicDecoy` n'est pas
+                    // dans la liste. Le chemin le plus dangereux des deux n'avait pas ce garde.
+                    //
+                    // Concrètement : téléphone déverrouillé mais application verrouillée, ou
+                    // session leurre, un seul tap sur « Confirme que tu vas bien » suffisait à
+                    // éteindre la protection. Sous contrainte, c'est exactement le geste qu'un
+                    // agresseur ferait.
+                    //
+                    // L'attente est bornée par le cycle de vie de l'activité : si l'utilisateur
+                    // n'ouvre jamais réellement l'application, rien n'est écrit et le deadman
+                    // continue de courir — le bon sens de l'échec.
+                    appLock.state.first { st ->
+                        st is AppLockManager.LockState.Unlocked ||
+                            st is AppLockManager.LockState.Disabled
+                    }
                     // v1.27.4 — l'état AVANT l'écriture décide de la phrase à confirmer, et il doit
                     // être relevé dans la transaction : le lire après, c'est le lire déjà remis à
                     // zéro par `withActivityReset`. Même relevé que celui du bouton des Réglages,

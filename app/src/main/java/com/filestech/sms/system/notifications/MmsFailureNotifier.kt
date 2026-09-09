@@ -12,7 +12,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
+import com.filestech.sms.core.ext.blockKey
+import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.absoluteValue
@@ -39,10 +42,38 @@ import kotlin.math.absoluteValue
 @Singleton
 class MmsFailureNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
+    // v1.28.3 (F08) — les trois collaborateurs qu'il fallait pour tenir la MEME politique de
+    // confidentialite que [IncomingMessageNotifier]. Cf. [notifyFailure].
+    private val settings: com.filestech.sms.data.local.datastore.SettingsRepository,
+    private val appLock: com.filestech.sms.security.AppLockManager,
+    private val conversationDao: com.filestech.sms.data.local.db.dao.ConversationDao,
 ) {
 
     enum class Reason { TOO_LARGE, DOWNLOAD_FAILED }
 
+    /**
+     * v1.28.3 (F08) — **applique enfin la politique de confidentialite des notifications.**
+     *
+     * Cette notification construisait son texte avec l'adresse BRUTE de l'expediteur et la
+     * posait sans consulter quoi que ce soit : ni `previewMode`, ni `in_vault`, ni la session
+     * leurre. Son jumeau entrant, [IncomingMessageNotifier], applique les trois depuis des
+     * versions. Ce qui fuitait n'est pas le corps — le MMS n'a justement pas ete telecharge —
+     * mais l'IDENTITE du correspondant, sur l'ecran de verrouillage, pour quelqu'un qui avait
+     * explicitement demande que les apercus n'y figurent pas.
+     *
+     * Les trois gardes, dans l'ordre ou ils comptent :
+     *
+     *  - **session leurre** : rien du tout. Une notification nommant un correspondant du coffre
+     *    trahirait devant l'agresseur ce que le mode leurre existe pour cacher ;
+     *  - **conversation du coffre** : rien non plus. On ne connait ici qu'une adresse, alors le
+     *    rapprochement se fait par elle ; en cas d'ECHEC de lecture on ne notifie pas — meme
+     *    repli sur que l'audit H16 a pose sur le jumeau entrant, pour la meme raison : le cout
+     *    du repli sur est une notification manquee, celui du repli permissif est le nom d'un
+     *    correspondant protege sur un ecran verrouille ;
+     *  - **`previewMode`** : l'expediteur devient generique des que l'utilisateur a demande que
+     *    les apercus soient masques. Le motif de l'echec, lui, reste visible — c'est
+     *    l'information utile, et elle ne designe personne.
+     */
     fun notifyFailure(reason: Reason, senderAddress: String?, sizeBytes: Long? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -50,8 +81,19 @@ class MmsFailureNotifier @Inject constructor(
                 ) != PackageManager.PERMISSION_GRANTED
             ) return
         }
-        val sender = senderAddress?.takeIf { it.isNotBlank() }
-            ?: context.getString(R.string.mms_failure_notification_body_unknown_sender)
+        if (appLock.state.value is com.filestech.sms.security.AppLockManager.LockState.PanicDecoy) return
+
+        val adresse = senderAddress?.takeIf { it.isNotBlank() }
+        val anonyme = context.getString(R.string.mms_failure_notification_body_unknown_sender)
+        val sender = if (adresse == null) {
+            anonyme
+        } else {
+            when (politiqueExpediteur(adresse)) {
+                Expediteur.MASQUER_TOUT -> return
+                Expediteur.ANONYMISER -> anonyme
+                Expediteur.AFFICHER -> adresse
+            }
+        }
         val body = when (reason) {
             Reason.TOO_LARGE -> context.getString(
                 R.string.mms_failure_notification_body_too_large,
@@ -91,6 +133,50 @@ class MmsFailureNotifier @Inject constructor(
                 notif,
             )
         }
+    }
+
+    /** v1.28.3 (F08) — ce qu'il advient de l'identite de l'expediteur dans la notification. */
+    private enum class Expediteur { AFFICHER, ANONYMISER, MASQUER_TOUT }
+
+    /**
+     * v1.28.3 (F08) — decide du sort de l'identite de [adresse].
+     *
+     * Le rapprochement avec le coffre se fait par cle numerique et non par egalite de chaine :
+     * l'adresse d'un PDU arrive sous des formes qui varient d'un chemin a l'autre, et une
+     * comparaison stricte rendrait la garde inoperante exactement la ou elle sert.
+     *
+     * `runBlocking` est assume ici : la fonction appelante est synchrone et appelee depuis des
+     * receivers de diffusion qui detiennent deja leur `goAsync`. La lecture porte sur les seules
+     * conversations du coffre en tete-a-tete — quelques lignes au plus.
+     */
+    private fun politiqueExpediteur(adresse: String): Expediteur {
+        val dansLeCoffre = runCatching {
+            kotlinx.coroutines.runBlocking {
+                val cle = adresse.stripMmsAddressSuffix().blockKey()
+                conversationDao.snapshotVaultOneToOne().any { conv ->
+                    com.filestech.sms.domain.model.PhoneAddress.list(conv.addressesCsv)
+                        .firstOrNull()
+                        ?.raw
+                        ?.stripMmsAddressSuffix()
+                        ?.blockKey() == cle
+                }
+            }
+        }.getOrElse {
+            // Repli SUR, jumeau de l'audit H16 sur les notifications entrantes : une base
+            // illisible ne doit pas faire afficher le nom d'un correspondant protege.
+            Timber.w(it, "MmsFailureNotifier: lecture coffre impossible — notification supprimee")
+            true
+        }
+        if (dansLeCoffre) return Expediteur.MASQUER_TOUT
+
+        val apercusMasques = runCatching {
+            kotlinx.coroutines.runBlocking { settings.hydratedOrNull() }
+                ?.notifications
+                ?.previewMode
+                ?.let { it != com.filestech.sms.domain.settings.PreviewMode.ALWAYS }
+                ?: true
+        }.getOrDefault(true)
+        return if (apercusMasques) Expediteur.ANONYMISER else Expediteur.AFFICHER
     }
 
     companion object {

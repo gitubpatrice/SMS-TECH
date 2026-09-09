@@ -108,6 +108,20 @@ interface ConversationDao {
     suspend fun idsInVault(): List<Long>
 
     /**
+     * v1.28.3 (F08) — conversations **du coffre** en tête-à-tête, pour savoir si une adresse dont
+     * on ne connaît rien d'autre appartient à un correspondant protégé.
+     *
+     * Sert à [com.filestech.sms.system.notifications.MmsFailureNotifier] : quand le
+     * téléchargement d'un MMS échoue, la ligne n'existe nulle part — ni en Room, ni côté
+     * fournisseur — et l'expéditeur est la seule chose connue. Le rapprochement se fait donc en
+     * mémoire par clé numérique, comme partout ailleurs dans le dépôt, et non par égalité de
+     * chaîne : les formats diffèrent d'un chemin à l'autre (`0612…` reçu, `+33612…` importé), et
+     * une comparaison stricte laisserait la garde inopérante précisément là où elle sert.
+     */
+    @Query("SELECT * FROM conversations WHERE in_vault = 1 AND addresses_csv NOT LIKE '%;%'")
+    suspend fun snapshotVaultOneToOne(): List<ConversationEntity>
+
+    /**
      * Insère une conversation **nouvelle**. Pour modifier une conversation existante, passer
      * par [update] ou par l'un des `set*` ciblés — jamais par ici.
      *

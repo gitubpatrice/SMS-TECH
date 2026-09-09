@@ -254,13 +254,40 @@ class IncomingMessageNotifier @Inject constructor(
 
     /**
      * Maps a Room message id to a unique notification id.
-     * Fixes audit F38 (the previous `msgId.toInt().or(1)` collided every two messages).
-     * Uses XOR to spread bits then OR with [BASE_TAG] to never return 0 (which would be discarded).
+     *
+     * Audit F38 avait corrigé un `msgId.toInt().or(1)` qui collisionnait un message sur deux —
+     * mais le remède, `hash or BASE_TAG`, **collisionnait à son tour**, et c'est ce qu'a relevé
+     * la relecture externe (F19).
+     *
+     * `or 0x10000` force le bit 16 : `1` et `65537` rendaient tous deux `65537`, et plus
+     * généralement toute paire `(n, n xor 0x10000)` se confondait. Le `or` détruisait de
+     * l'information pour une raison — ne jamais rendre `0`, que le système écarterait — qu'un
+     * simple remplacement du seul cas `0` traite sans rien perdre.
+     *
+     * v1.28.3 — la collision d'AFFICHAGE était bornée (la notification porte un tag de
+     * conversation), mais l'identifiant sert aussi de `requestCode` aux `PendingIntent` des
+     * actions, où la conséquence était tout autre. Cf. [buildReplyAction].
      */
-    private fun stableNotificationId(messageId: Long): Int {
-        val hash = (messageId xor (messageId ushr 32)).toInt() and 0x7FFFFFFF
-        return hash or BASE_TAG
-    }
+    private fun stableNotificationId(messageId: Long): Int = notificationIdFor(messageId)
+
+    /**
+     * v1.28.3 (F19) — donne à chaque action de notification une IDENTITÉ propre.
+     *
+     * `PendingIntent.filterEquals` **ignore les extras**. Deux actions dont l'`Intent` ne diffère
+     * que par ses `putExtra` sont donc le même `PendingIntent` aux yeux du système, et
+     * `FLAG_UPDATE_CURRENT` réécrit les extras du premier avec ceux du second. L'identité ne
+     * tenait ici qu'au `requestCode`, dérivé de [stableNotificationId] — qui collisionnait.
+     *
+     * Conséquence concrète, et c'est la seule qui compte : `NotificationActionReceiver` lit
+     * l'adresse du destinataire dans ces extras. Une réponse tapée depuis l'ancienne
+     * notification pouvait donc **partir à quelqu'un d'autre**.
+     *
+     * Un `data` distinct par (action, message) fait porter l'identité par `filterEquals`
+     * lui-même, sans dépendre du `requestCode`. L'`Intent` est explicite (composant posé, aucun
+     * `intent-filter` au manifeste) : ce `data` ne change que l'identité, jamais le routage.
+     */
+    private fun identiteAction(action: String, messageId: Long): android.net.Uri =
+        android.net.Uri.parse("smstech://notification/$action/$messageId")
 
     private fun buildReplyAction(
         address: String,
@@ -276,6 +303,8 @@ class IncomingMessageNotifier @Inject constructor(
             component = ComponentName(context, NotificationActionReceiver::class.java)
             action = NotificationActionReceiver.ACTION_REPLY
             `package` = context.packageName
+            // v1.28.3 (F19) — l'identite du PendingIntent, que les extras ne portent PAS.
+            data = identiteAction("reply", messageId)
             putExtra(NotificationActionReceiver.EXTRA_ADDRESS, address)
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
@@ -302,6 +331,8 @@ class IncomingMessageNotifier @Inject constructor(
             component = ComponentName(context, NotificationActionReceiver::class.java)
             action = NotificationActionReceiver.ACTION_MARK_READ
             `package` = context.packageName
+            // v1.28.3 (F19) — cf. [identiteAction] : distincte de celle de la reponse.
+            data = identiteAction("read", messageId)
             putExtra(NotificationActionReceiver.EXTRA_ADDRESS, address)
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
@@ -426,7 +457,6 @@ class IncomingMessageNotifier @Inject constructor(
             inlineReply = false,
         )
 
-        private const val BASE_TAG = 0x10000 // ensures non-zero notif ids
         private const val REPLY_REQUEST_SALT = 0x52455050 // 'REPL'
         private const val MARK_READ_REQUEST_SALT = 0x4D524541 // 'MREA'
 
@@ -440,3 +470,31 @@ class IncomingMessageNotifier @Inject constructor(
         private const val ACTIVE_CONV_TIMEOUT_MS: Long = 1500L
     }
 }
+
+/**
+ * v1.28.3 (F19) — identifiant de notification stable pour un identifiant de message Room.
+ *
+ * Extrait de [IncomingMessageNotifier] pour être **testable sans échafaudage** : le défaut relevé
+ * par la relecture externe était purement arithmétique, et le notifier compte sept dépendances
+ * dont un `Context`. Le tester là où il vit aurait voulu dire ne pas le tester.
+ *
+ * # Le défaut, et le correctif qu'il a fallu corriger à son tour
+ *
+ * L'audit F38 avait remplacé `msgId.toInt().or(1)`, qui collisionnait un message sur deux, par
+ * `hash or BASE_TAG`. Le remède collisionnait aussi : `or 0x10000` force le bit 16, donc `1` et
+ * `65537` rendaient tous deux `65537`, et plus généralement toute paire `(n, n xor 0x10000)`.
+ *
+ * Le `or` détruisait de l'information pour une raison légitime — ne jamais rendre `0`, que le
+ * système écarterait — qu'un simple remplacement du seul cas `0` traite sans rien perdre.
+ *
+ * L'enjeu n'est pas l'affichage, borné par le tag de conversation : c'est que cet identifiant
+ * sert de `requestCode` aux `PendingIntent` des actions, où une collision pouvait faire partir
+ * une réponse au mauvais destinataire.
+ */
+internal fun notificationIdFor(messageId: Long): Int {
+    val hash = (messageId xor (messageId ushr 32)).toInt() and 0x7FFFFFFF
+    return if (hash == 0) NOTIFICATION_ID_FALLBACK else hash
+}
+
+/** Seule valeur de repli, pour l'unique identifiant dont le hachage vaut `0`. */
+internal const val NOTIFICATION_ID_FALLBACK = 0x10000
