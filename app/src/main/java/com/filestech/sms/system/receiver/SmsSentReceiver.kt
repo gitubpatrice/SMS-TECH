@@ -74,9 +74,8 @@ class SmsSentReceiver : BroadcastReceiver() {
                         attempt = attempt,
                     )
                     if (ecrit) {
-                        val destinataire = runCatching { messageDaoLazy.get().findById(localId)?.address }
-                            .getOrNull()
-                        echecNotifierLazy.get().notifierEchec(localId, destinataire)
+                        val ligne = runCatching { messageDaoLazy.get().findById(localId) }.getOrNull()
+                        echecNotifierLazy.get().notifierEchec(localId, ligne?.address, ligne?.conversationId)
                     }
                 }
             } finally {

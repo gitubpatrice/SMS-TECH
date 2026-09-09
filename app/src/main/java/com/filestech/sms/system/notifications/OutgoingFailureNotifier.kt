@@ -42,7 +42,9 @@ import javax.inject.Singleton
  *   n'écrit rien non plus.
  * - **La politique de confidentialité est celle des autres notificateurs**, pas une quatrième
  *   copie : cf. [CorrespondentVisibilityPolicy]. Session leurre et conversation du coffre ne
- *   produisent rien ; aperçus masqués anonymisent le destinataire.
+ *   produisent rien ; aperçus masqués anonymisent le destinataire — et, depuis l'audit global
+ *   du 2026-09-09 (D-02), décident aussi de ce qui paraît sur l'écran verrouillé, ce que le
+ *   premier jet avait laissé au défaut du framework.
  * - **L'action « Renvoyer » n'est jamais proposée pour un échec incertain.** Elle ne l'est que
  *   depuis ce chemin-ci, c'est-à-dire un refus de la pile téléphonie, où le message n'est
  *   certainement pas parti. Les échecs du chien de garde — `WATCHDOG_TIMEOUT`, où le message a
@@ -59,8 +61,10 @@ class OutgoingFailureNotifier @Inject constructor(
     /**
      * @param messageId id Room du message en échec — porté par l'action « Renvoyer ».
      * @param destinataire adresse brute, soumise à [CorrespondentVisibilityPolicy].
+     * @param conversationId conversation à laquelle la ligne est rattachée, quand on la connaît :
+     *   elle fait foi avant l'adresse (audit global A-01).
      */
-    suspend fun notifierEchec(messageId: Long, destinataire: String?) {
+    suspend fun notifierEchec(messageId: Long, destinataire: String?, conversationId: Long? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     context,
@@ -72,7 +76,7 @@ class OutgoingFailureNotifier @Inject constructor(
         }
 
         val anonyme = context.getString(R.string.send_failure_notification_unknown_recipient)
-        val cible = when (visibilite.verdictPour(destinataire)) {
+        val cible = when (visibilite.verdictPour(destinataire, conversationId)) {
             CorrespondentVisibilityPolicy.Verdict.TAIRE -> return
             CorrespondentVisibilityPolicy.Verdict.ANONYMISER -> anonyme
             CorrespondentVisibilityPolicy.Verdict.NOMMER -> destinataire.orEmpty()
@@ -119,6 +123,7 @@ class OutgoingFailureNotifier @Inject constructor(
             .addAction(actionRenvoyer)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setVisibility(visibilite.ecranVerrouille().versNotificationCompat())
             .build()
 
         runCatching { NotificationManagerCompat.from(context).notify(idNotification, notif) }

@@ -116,6 +116,9 @@ class MmsFailureNotifier @Inject constructor(
             .setContentIntent(pi)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_ERROR)
+            // v1.28.3 (audit global D-02) — le jumeau entrant suivait `previewMode` sur l'écran
+            // verrouillé depuis SEC-01 ; celui-ci laissait le défaut du framework.
+            .setVisibility(visibilite.ecranVerrouille().versNotificationCompat())
             .build()
         runCatching {
             NotificationManagerCompat.from(context).notify(

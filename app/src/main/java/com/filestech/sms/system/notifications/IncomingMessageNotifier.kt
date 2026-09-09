@@ -207,13 +207,9 @@ class IncomingMessageNotifier @Inject constructor(
                     ),
                 ),
             )
-            .setVisibility(
-                when (notifSettings.previewMode) {
-                    PreviewMode.WHEN_UNLOCKED -> NotificationCompat.VISIBILITY_PRIVATE
-                    PreviewMode.NEVER -> NotificationCompat.VISIBILITY_SECRET
-                    PreviewMode.ALWAYS -> NotificationCompat.VISIBILITY_PUBLIC
-                },
-            )
+            // v1.28.3 (audit global D-02) — la table vit dans la politique commune, les deux
+            // notificateurs d'échec la lisent aussi.
+            .setVisibility(notifSettings.previewMode.ecranVerrouille().versNotificationCompat())
             .setAutoCancel(true)
             .setContentIntent(openIntent)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)

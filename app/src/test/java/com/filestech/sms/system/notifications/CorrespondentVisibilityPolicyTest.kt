@@ -152,4 +152,82 @@ class CorrespondentVisibilityPolicyTest {
         assertThat(politique().verdictPour(null))
             .isEqualTo(CorrespondentVisibilityPolicy.Verdict.ANONYMISER)
     }
+
+    // ── v1.28.3, audit global A-01 : la conversation connue fait foi avant l'adresse ──────
+
+    private fun conversation(id: Long, inVault: Boolean, adresses: String) {
+        coEvery { conversationDao.findById(id) } returns ConversationEntity(
+            id = id,
+            threadId = null,
+            addressesCsv = adresses,
+            displayName = null,
+            lastMessageAt = 0L,
+            lastMessagePreview = null,
+            inVault = inVault,
+        )
+    }
+
+    /**
+     * Le rapprochement par adresse ne regarde que les 1-à-1 : une ligne rattachée à un GROUPE du
+     * coffre lui échapperait. Ici l'adresse ne correspond à aucune 1-à-1 du coffre ; seul l'id
+     * de conversation sait qu'il faut se taire.
+     */
+    @Test
+    fun `une conversation du coffre connue par son id fait taire meme si l'adresse ne dit rien`() = runTest {
+        etatVerrou(AppLockManager.LockState.Unlocked)
+        coffre()
+        reglages(PreviewMode.ALWAYS)
+        conversation(7L, inVault = true, adresses = "+33611111111;+33622222222")
+
+        assertThat(politique().verdictPour("+33611111111", conversationId = 7L))
+            .isEqualTo(CorrespondentVisibilityPolicy.Verdict.TAIRE)
+    }
+
+    /** Contrôle positif : une conversation connue HORS coffre ne change rien au verdict. */
+    @Test
+    fun `une conversation hors coffre connue par son id laisse nommer`() = runTest {
+        etatVerrou(AppLockManager.LockState.Unlocked)
+        coffre()
+        reglages(PreviewMode.ALWAYS)
+        conversation(7L, inVault = false, adresses = "+33611111111")
+
+        assertThat(politique().verdictPour("+33611111111", conversationId = 7L))
+            .isEqualTo(CorrespondentVisibilityPolicy.Verdict.NOMMER)
+    }
+
+    @Test
+    fun `une conversation illisible fait taire`() = runTest {
+        etatVerrou(AppLockManager.LockState.Unlocked)
+        coEvery { conversationDao.findById(7L) } throws IllegalStateException("base illisible")
+
+        assertThat(politique().verdictPour("+33611111111", conversationId = 7L))
+            .isEqualTo(CorrespondentVisibilityPolicy.Verdict.TAIRE)
+    }
+
+    // ── v1.28.3, audit global D-02 : ce qui paraît sur l'écran verrouillé ─────────────────
+
+    @Test
+    fun `l'ecran verrouille suit le reglage d'apercu`() = runTest {
+        etatVerrou(AppLockManager.LockState.Unlocked)
+
+        reglages(PreviewMode.ALWAYS)
+        assertThat(politique().ecranVerrouille())
+            .isEqualTo(CorrespondentVisibilityPolicy.EcranVerrouille.PUBLIC)
+        reglages(PreviewMode.WHEN_UNLOCKED)
+        assertThat(politique().ecranVerrouille())
+            .isEqualTo(CorrespondentVisibilityPolicy.EcranVerrouille.PRIVE)
+        reglages(PreviewMode.NEVER)
+        assertThat(politique().ecranVerrouille())
+            .isEqualTo(CorrespondentVisibilityPolicy.EcranVerrouille.SECRET)
+    }
+
+    /** Le repli va dans le même sens que tout le reste : illisible = rien ne paraît. */
+    @Test
+    fun `des reglages illisibles rendent l'ecran secret`() = runTest {
+        etatVerrou(AppLockManager.LockState.Unlocked)
+        coEvery { settings.hydratedOrNull() } throws IllegalStateException("reglages illisibles")
+
+        assertThat(politique().ecranVerrouille())
+            .isEqualTo(CorrespondentVisibilityPolicy.EcranVerrouille.SECRET)
+    }
 }
