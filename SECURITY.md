@@ -1644,6 +1644,12 @@ no state, no network access, no persistence).
 - `RetrySendUseCase` should learn to re-dispatch MMS (voice / multi-attach) via the
   appropriate use case, not always through `SmsSender.send()` (which silently
   ignores attachments). The "tap to retry" affordance is currently dead for MMS.
+  → **v1.28.3 (audit global du 2026-09-09, B-1)** : worse than dead, it *did* something — it
+  re-sent the caption as a plain SMS and the row could flip to SENT under a thumbnail that
+  never left the device. `RetrySendUseCase` now refuses MMS rows with a typed
+  `AppError.MmsRetryUnsupported` **before** `resetOutgoingForRetry`, and the thread shows a
+  message. A real MMS re-dispatch (via `MmsDispatcher`, with an attempt-bearing `requestCode`
+  as F23 did for SMS) is still deferred — it needs two phones to verify.
 - Consider tightening the AOSP PDU keep rule from `** { *; }` to per-method `-keep
   class … { method-name; }` once we have an exhaustive list of reflected methods —
   saves ~20-50 KB in the APK but requires audit-trail discipline.
