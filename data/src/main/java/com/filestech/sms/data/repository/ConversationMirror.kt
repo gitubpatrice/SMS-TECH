@@ -394,11 +394,19 @@ class ConversationMirror @Inject constructor(
     }
 
     // v1.16.0 — Paramètre `status` typé MessageStatus (était Int) — propagation depuis le DAO.
-    override suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int?) = withContext(io) {
+    override suspend fun updateOutgoingStatus(
+        localId: Long,
+        status: MessageStatus,
+        errorCode: Int?,
+        attempt: Int?,
+    ) = withContext(io) {
         // v1.26.1 (audit M8) — promotion monotone : le statut d'un envoi ne peut que progresser.
         // Voir [MessageDao.promoteStatusMonotonic] : c'est ce qui empêche l'accusé positif d'une
         // partie d'écraser l'échec d'une autre sur un SMS multi-parties.
-        messageDao.promoteStatusMonotonic(localId, status, status.rawValue, errorCode)
+        //
+        // v1.28.3 (F23) — et `attempt` empêche l'accusé d'une tentative PRÉCÉDENTE de s'appliquer
+        // à la ligne relancée, que la rétrogradation vient de ramener au bas de cette échelle.
+        messageDao.promoteStatusMonotonic(localId, status, status.rawValue, errorCode, attempt)
     }
 
     /** v1.28.3 (F05) — voir [OutgoingMessageMirror.outgoingStatus]. */
@@ -406,9 +414,10 @@ class ConversationMirror @Inject constructor(
         messageDao.findById(localId)?.status
     }
 
-    /** v1.26.1 (audit M8) — voir [OutgoingMessageMirror.resetOutgoingForRetry]. */
-    override suspend fun resetOutgoingForRetry(localId: Long) = withContext(io) {
-        messageDao.updateStatus(localId, MessageStatus.PENDING, errorCode = null)
+    /** v1.26.1 (audit M8), v1.28.3 (F23) — voir [OutgoingMessageMirror.resetOutgoingForRetry]. */
+    override suspend fun resetOutgoingForRetry(localId: Long): Int? = withContext(io) {
+        messageDao.openNextSendAttempt(localId)
+        messageDao.sendAttemptOf(localId)
     }
 
     /**

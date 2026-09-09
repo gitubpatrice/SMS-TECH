@@ -381,6 +381,20 @@ object Migrations {
         }
     }
 
+    /**
+     * v10 → v11 (2026-09-09, F23) — `messages.send_attempt`.
+     *
+     * Additive, `NOT NULL DEFAULT 0` : les lignes existantes sont toutes « tentative 0 », ce qui
+     * est exactement leur état — aucune n'a été relancée sous une version qui comptait. Le
+     * `defaultValue` est répété sur le `@ColumnInfo` de l'entité, sans quoi
+     * `runMigrationsAndValidate` refuserait l'écart entre le schéma exporté et la table réelle.
+     */
+    val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `messages` ADD COLUMN `send_attempt` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -392,5 +406,6 @@ object Migrations {
         MIGRATION_7_8,
         MIGRATION_8_9,
         MIGRATION_9_10,
+        MIGRATION_10_11,
     )
 }

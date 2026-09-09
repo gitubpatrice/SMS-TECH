@@ -45,6 +45,7 @@ internal class RecordingSender(
         text: String,
         subId: Int?,
         requestDeliveryReport: Boolean,
+        attempt: Int,
     ): Outcome<Unit> {
         sentTexts += text
         lastSubId = subId
@@ -84,6 +85,7 @@ internal class NoopMirror : OutgoingMessageMirror {
         localId: Long,
         status: MessageStatus,
         errorCode: Int?,
+        attempt: Int?,
     ) = Unit
 
     /**
@@ -93,7 +95,7 @@ internal class NoopMirror : OutgoingMessageMirror {
     override suspend fun outgoingStatus(localId: Long): MessageStatus = MessageStatus.SENT
 
     // Non exercees par SendSmsUseCase, mais l'interface les impose.
-    override suspend fun resetOutgoingForRetry(localId: Long) = Unit
+    override suspend fun resetOutgoingForRetry(localId: Long): Int = 1
 
     override suspend fun upsertOutgoingMms(
         address: String,

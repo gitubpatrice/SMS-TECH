@@ -57,11 +57,27 @@ class RetrySendUseCase @Inject constructor(
         }
         // v1.26.1 (audit M8) — rétrogradation DÉLIBÉRÉE : `updateOutgoingStatus` est désormais
         // monotone et refuserait ce retour en arrière depuis `FAILED`.
-        mirror.resetOutgoingForRetry(messageId)
-        return when (val r = sender.send(messageId, msg.address, msg.body, msg.subId)) {
+        //
+        // v1.28.3 (F23) — et c'est précisément cette rétrogradation qui rouvrait la porte. En
+        // ramenant la ligne au bas de l'échelle monotone, elle rendait de nouveau applicable
+        // l'accusé TARDIF de la tentative précédente : un `FAILED` en retard d'une minute
+        // écrivait `3`, sommet de l'échelle, que le succès réel de cette nouvelle tentative ne
+        // pouvait plus jamais promouvoir — bulle rouge définitive sur un message reçu. La
+        // rétrogradation ouvre donc désormais une TENTATIVE numérotée, et c'est ce numéro que
+        // l'on transmet à la pile téléphonie pour que ses accusés soient reconnaissables.
+        val attempt = mirror.resetOutgoingForRetry(messageId)
+            ?: return Outcome.Failure(AppError.NotFound("message"))
+        return when (val r = sender.send(messageId, msg.address, msg.body, msg.subId, attempt = attempt)) {
             is Outcome.Success -> Outcome.Success(Unit)
             is Outcome.Failure -> {
-                mirror.updateOutgoingStatus(messageId, MessageStatus.FAILED, errorCode = SendErrorCode.SYNCHRONOUS)
+                // `attempt` explicite : cet échec-ci est bien celui de la tentative qu'on vient
+                // d'ouvrir, et il ne doit pas s'appliquer si une relance l'a déjà remplacée.
+                mirror.updateOutgoingStatus(
+                    messageId,
+                    MessageStatus.FAILED,
+                    errorCode = SendErrorCode.SYNCHRONOUS,
+                    attempt = attempt,
+                )
                 r
             }
         }

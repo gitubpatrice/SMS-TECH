@@ -27,16 +27,20 @@ class SmsSentReceiver : BroadcastReceiver() {
         if (intent.action != SmsSenderImpl.ACTION_SMS_SENT) return
         val localId = intent.getLongExtra(SmsSenderImpl.EXTRA_LOCAL_ID, -1L)
         if (localId < 0) return
+        // v1.28.3 (F23) — la tentative dont provient cet accuse. Absente des `PendingIntent`
+        // crees par une version anterieure et encore en vol : `0` est alors le bon repli, c'est
+        // le numero que porte toute ligne existante apres la migration 10 -> 11.
+        val attempt = intent.getIntExtra(SmsSenderImpl.EXTRA_ATTEMPT, 0)
         val rc = resultCode
         val pending = goAsync()
         scope.launch {
             try {
                 val mirror = mirrorLazy.get()
                 if (rc == Activity.RESULT_OK) {
-                    mirror.updateOutgoingStatus(localId, MessageStatus.SENT)
+                    mirror.updateOutgoingStatus(localId, MessageStatus.SENT, attempt = attempt)
                 } else {
-                    Timber.w("SMS sent failed for id=%d resultCode=%d", localId, rc)
-                    mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc)
+                    Timber.w("SMS sent failed for id=%d attempt=%d resultCode=%d", localId, attempt, rc)
+                    mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc, attempt = attempt)
                 }
             } finally {
                 pending.finish()

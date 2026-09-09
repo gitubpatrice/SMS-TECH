@@ -227,14 +227,56 @@ interface MessageDao {
      *
      * [statusRaw] double [status] parce que SQLite compare la colonne à un entier ; les deux
      * doivent décrire le MÊME statut.
+     *
+     * # v1.28.3 (F23) — la monotonie ne suffisait pas après une RELANCE
+     *
+     * La règle ci-dessus protège les parties d'un même envoi les unes des autres. Elle ne
+     * protégeait rien entre deux TENTATIVES, parce que la relance rétrograde délibérément la
+     * ligne en `PENDING` ([com.filestech.sms.domain.repository.OutgoingMessageMirror
+     * .resetOutgoingForRetry]) : l'accusé tardif de la tentative précédente retrouvait alors une
+     * ligne au bas de l'échelle et s'y appliquait comme s'il était le sien. Un `FAILED` en
+     * retard d'une minute écrivait `3`, sommet de l'échelle, que le succès réel de la nouvelle
+     * tentative ne pouvait **plus jamais** promouvoir : bulle rouge définitive sur un message
+     * bel et bien reçu.
+     *
+     * [attempt] identifie la tentative dont provient l'accusé. `NULL` signifie « quelle que soit
+     * la tentative en cours » et reste le bon choix pour ce qui n'est pas un accusé : l'échec
+     * synchrone écrit juste après la remise, la sentinelle du chien de garde, le suivi MMS.
      */
-    @Query("UPDATE messages SET status = :status, error_code = :errorCode WHERE id = :id AND status < :statusRaw")
+    @Query(
+        """
+        UPDATE messages
+           SET status = :status, error_code = :errorCode
+         WHERE id = :id
+           AND status < :statusRaw
+           AND (:attempt IS NULL OR send_attempt = :attempt)
+        """,
+    )
     suspend fun promoteStatusMonotonic(
         id: Long,
         status: com.filestech.sms.domain.model.MessageStatus,
         statusRaw: Int,
         errorCode: Int? = null,
+        attempt: Int? = null,
     )
+
+    /**
+     * v1.28.3 (F23) — ouvre une NOUVELLE tentative d'envoi : statut ramené à `PENDING`, erreur
+     * effacée, compteur incrémenté.
+     *
+     * Les trois écritures dans le même UPDATE, et c'est la raison d'être de cette requête : si
+     * l'incrément était séparé de la rétrogradation, il existerait un instant où la ligne est
+     * `PENDING` sous l'ancien numéro de tentative — exactement la fenêtre dans laquelle un
+     * accusé tardif s'appliquerait à tort.
+     */
+    @Query(
+        "UPDATE messages SET status = 0, error_code = NULL, send_attempt = send_attempt + 1 WHERE id = :id",
+    )
+    suspend fun openNextSendAttempt(id: Long)
+
+    /** v1.28.3 (F23) — numéro de la tentative en cours, ou `null` si la ligne n'existe plus. */
+    @Query("SELECT send_attempt FROM messages WHERE id = :id")
+    suspend fun sendAttemptOf(id: Long): Int?
 
     /**
      * v1.15.2 — Remapping post-restore du `reply_to_message_id`. Utilisé par

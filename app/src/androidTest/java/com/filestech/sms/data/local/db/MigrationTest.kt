@@ -571,4 +571,65 @@ class MigrationTest {
             assertThat(c.getInt(1)).isEqualTo(5)
         }
     }
+
+    /**
+     * v1.28.3 (F23) — 10 → 11, additive : `messages.send_attempt INTEGER NOT NULL DEFAULT 0`.
+     *
+     * `NOT NULL` sans valeur par défaut serait refusé par SQLite sur une table déjà peuplée ; le
+     * `DEFAULT 0` est donc obligatoire ici, et il doit être **répété sur le `@ColumnInfo`** de
+     * l'entité, faute de quoi `runMigrationsAndValidate` — qui compare la table réelle au schéma
+     * exporté — rejetterait l'écart. C'est ce que cet appel vérifie au passage.
+     *
+     * Sur le fond : toute ligne existante devient « tentative 0 », ce qui est exactement son
+     * état, aucune n'ayant été relancée sous une version qui comptait. Un `PendingIntent` créé
+     * avant la mise à jour et encore en vol ne porte pas l'extra ; les receveurs lisent alors
+     * `0`, et son accusé s'applique donc normalement.
+     */
+    @Test
+    fun migrate10To11_ajouteLeCompteurDeTentative_aZeroSurLesLignesExistantes() {
+        helper.createDatabase(TEST_DB, 10).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (1, 7, '+33600000001', 'Alice', 1700000000000, 'a', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction, date,
+                     date_sent, read, starred, status, attachments_count)
+                VALUES (1, 1, 'content://sms/1', '+33600000001', 'Bonjour', 0, 1, 1700000000000,
+                        NULL, 1, 0, 0, 0)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 11, true, Migrations.MIGRATION_10_11)
+
+        db.query("SELECT id, body, status, send_attempt FROM messages").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getString(1)).isEqualTo("Bonjour")
+            assertThat(c.getInt(2)).isEqualTo(0)
+            assertThat(c.getInt(3)).isEqualTo(0)
+        }
+
+        // La conséquence utile, celle qui justifie le `DEFAULT 0` : l'accusé d'un `PendingIntent`
+        // créé AVANT la mise à jour ne porte pas d'extra, les receveurs lisent `0` — et cet
+        // accusé-là doit encore s'appliquer à la ligne migrée.
+        db.execSQL("UPDATE messages SET status = 1 WHERE id = 1 AND status < 1 AND send_attempt = 0")
+        db.query("SELECT status FROM messages WHERE id = 1").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getInt(0)).isEqualTo(1)
+        }
+
+        // Contrôle inverse : l'accusé d'une tentative qui n'a jamais eu lieu ne passe pas.
+        db.execSQL("UPDATE messages SET status = 2 WHERE id = 1 AND status < 2 AND send_attempt = 5")
+        db.query("SELECT status FROM messages WHERE id = 1").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getInt(0)).isEqualTo(1)
+        }
+    }
 }

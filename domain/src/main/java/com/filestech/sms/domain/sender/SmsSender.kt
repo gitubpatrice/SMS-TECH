@@ -22,6 +22,11 @@ interface SmsSender {
      * @param destination numéro brut du destinataire (l'impl le normalise en E.164 pour le fil).
      * @param subId `subscriptionId` de la SIM à utiliser (multi-SIM) ; `null` = SIM par défaut.
      * @param requestDeliveryReport demande un accusé de réception si `true`.
+     * @param attempt v1.28.3 (F23) — numéro de la tentative, `0` pour un premier envoi, incrémenté
+     *   par chaque relance explicite. Il est encodé dans les `PendingIntent` **et dans leur
+     *   `requestCode`** : sans lui, deux tentatives du même message partageaient un seul
+     *   `PendingIntent` (`filterEquals` ignore les extras, et `FLAG_UPDATE_CURRENT` réécrivait
+     *   ceux du premier), et leurs accusés étaient indiscernables.
      * @return [Outcome.Success] si la remise à `SmsManager` a réussi, [Outcome.Failure] sinon.
      */
     fun send(
@@ -30,5 +35,6 @@ interface SmsSender {
         text: String,
         subId: Int? = null,
         requestDeliveryReport: Boolean = false,
+        attempt: Int = 0,
     ): Outcome<Unit>
 }

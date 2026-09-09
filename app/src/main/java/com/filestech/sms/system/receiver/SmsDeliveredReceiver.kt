@@ -26,12 +26,14 @@ class SmsDeliveredReceiver : BroadcastReceiver() {
         if (intent.action != SmsSenderImpl.ACTION_SMS_DELIVERED) return
         val localId = intent.getLongExtra(SmsSenderImpl.EXTRA_LOCAL_ID, -1L)
         if (localId < 0) return
+        // v1.28.3 (F23) — cf. `SmsSentReceiver` : un accuse tardif appartient a SA tentative.
+        val attempt = intent.getIntExtra(SmsSenderImpl.EXTRA_ATTEMPT, 0)
         if (resultCode != Activity.RESULT_OK) return
         val pending = goAsync()
         scope.launch {
             try {
                 val mirror = mirrorLazy.get()
-                mirror.updateOutgoingStatus(localId, MessageStatus.DELIVERED)
+                mirror.updateOutgoingStatus(localId, MessageStatus.DELIVERED, attempt = attempt)
             } finally {
                 pending.finish()
             }

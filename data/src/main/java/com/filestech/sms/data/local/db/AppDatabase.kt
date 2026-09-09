@@ -87,6 +87,13 @@ abstract class AppDatabase : RoomDatabase() {
         //   d'atteinte de son propre bouton « Annuler », qui ne matche que `PENDING`. Avec la
         //   date, un bail expire se conclut en `INTERRUPTED` : issue inconnue, mais ATTEIGNABLE.
         //   Les lignes existantes projettent NULL = bail expire, ce qui debloque le parc. F20.
-        const val SCHEMA_VERSION = 10
+        // v11 (2026-09-09, v1.28.3): ajoute `messages.send_attempt INTEGER NOT NULL DEFAULT 0`.
+        //   Strictement additive. Les `PendingIntent` de suivi ne portaient que l'id Room : une
+        //   relance reutilisant le meme id, l'accuse TARDIF de la tentative precedente etait
+        //   indiscernable de celui de la tentative courante. Or la relance venait de retrograder
+        //   la ligne en `PENDING`, donc la regle monotone ne le filtrait plus : un `FAILED` en
+        //   retard ecrivait 3, sommet de l'echelle, que le succes reel de la nouvelle tentative
+        //   ne pouvait PLUS JAMAIS promouvoir. Bulle rouge definitive sur un message recu. F23.
+        const val SCHEMA_VERSION = 11
     }
 }

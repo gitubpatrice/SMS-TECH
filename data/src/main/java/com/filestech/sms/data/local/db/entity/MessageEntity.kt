@@ -96,4 +96,24 @@ data class MessageEntity(
      * par SMS — c'est purement local côté Room, pas standardisé en SMS/MMS.
      */
     @ColumnInfo(name = "reaction_emoji") val reactionEmoji: String? = null,
+    /**
+     * Schema v11 (v1.28.3, F23) — numéro de la **tentative d'envoi** en cours pour ce message.
+     *
+     * `0` à la création, incrémenté par chaque relance explicite
+     * ([com.filestech.sms.domain.repository.OutgoingMessageMirror.resetOutgoingForRetry]).
+     *
+     * # Ce que ce compteur répare
+     *
+     * Les `PendingIntent` de suivi ne portaient que l'id Room. Une relance réutilisant le même
+     * id, l'accusé **tardif** de la tentative précédente était indiscernable de celui de la
+     * tentative courante — et la relance venant de rétrograder la ligne en `PENDING`, la règle
+     * monotone ne le filtrait plus. Un `FAILED` en retard d'une minute écrivait donc `3`, sommet
+     * de l'échelle, que le succès réel de la nouvelle tentative ne pouvait **plus jamais**
+     * promouvoir : bulle rouge définitive sur un message bel et bien reçu.
+     *
+     * Un accusé porte désormais le numéro de sa tentative, et n'est appliqué que si la ligne en
+     * est toujours là. Les `PendingIntent` sont distincts d'une tentative à l'autre (le numéro
+     * entre dans leur `requestCode`), donc `FLAG_UPDATE_CURRENT` ne les fait plus se confondre.
+     */
+    @ColumnInfo(name = "send_attempt", defaultValue = "0") val sendAttempt: Int = 0,
 )

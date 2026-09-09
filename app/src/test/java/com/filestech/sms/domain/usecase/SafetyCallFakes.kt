@@ -71,6 +71,7 @@ internal class CountingSender(var succeed: Boolean) : SmsSender {
         text: String,
         subId: Int?,
         requestDeliveryReport: Boolean,
+        attempt: Int,
     ): Outcome<Unit> {
         calls++
         bodies += text
@@ -180,11 +181,12 @@ internal class NoopMirror(
         localId: Long,
         status: MessageStatus,
         errorCode: Int?,
+        attempt: Int?,
     ) = Unit
 
     override suspend fun outgoingStatus(localId: Long): MessageStatus = statutRendu
 
-    override suspend fun resetOutgoingForRetry(localId: Long) = Unit
+    override suspend fun resetOutgoingForRetry(localId: Long): Int = 1
 
     override suspend fun upsertOutgoingMms(
         address: String,
@@ -252,6 +254,7 @@ internal class ObservingSender(
         text: String,
         subId: Int?,
         requestDeliveryReport: Boolean,
+        attempt: Int,
     ): Outcome<Unit> {
         calls++
         onSend(store.safetyCall)
@@ -282,6 +285,7 @@ internal class BlockingFirstSender : SmsSender {
         text: String,
         subId: Int?,
         requestDeliveryReport: Boolean,
+        attempt: Int,
     ): Outcome<Unit> {
         calls++
         if (first.compareAndSet(true, false)) {

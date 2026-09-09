@@ -33,7 +33,22 @@ interface OutgoingMessageMirror {
      * `MessageDao.promoteStatusMonotonic`. Destiné aux accusés d'envoi / de réception et aux
      * échecs — c'est-à-dire à tout ce qui est subi, pas décidé.
      */
-    suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int? = null)
+    /**
+     * @param attempt v1.28.3 (F23) — numéro de la tentative dont provient cet accusé. `null`
+     *   signifie « quelle que soit la tentative en cours », et reste le bon choix pour tout ce
+     *   qui n'est pas un accusé différé : l'échec synchrone écrit juste après la remise à la
+     *   pile téléphonie, la sentinelle du chien de garde, le suivi MMS.
+     *
+     *   Un accusé, lui, doit porter sa tentative : la relance rétrograde délibérément la ligne
+     *   en `PENDING`, si bien que l'accusé tardif de la tentative précédente y retrouvait le bas
+     *   de l'échelle et s'y appliquait comme s'il était le sien.
+     */
+    suspend fun updateOutgoingStatus(
+        localId: Long,
+        status: MessageStatus,
+        errorCode: Int? = null,
+        attempt: Int? = null,
+    )
 
     /**
      * Statut courant d'un message sortant, ou `null` si la ligne n'existe plus.
@@ -55,8 +70,16 @@ interface OutgoingMessageMirror {
      * Distinct de [updateOutgoingStatus] parce que l'intention est l'inverse : c'est une
      * RÉTROGRADATION délibérée, que la règle monotone bloquerait. Séparer les deux évite qu'un
      * futur appelant obtienne l'une en croyant demander l'autre.
+     *
+     * v1.28.3 (F23) — ouvre du même coup une nouvelle **tentative**, dont le numéro est rendu.
+     * L'appelant doit le transmettre à `SmsSender.send` : c'est ce qui rend les `PendingIntent`
+     * de suivi distincts d'une tentative à l'autre, et ce qui permet d'écarter l'accusé tardif
+     * de la précédente. Rétrograder sans compter, c'était rouvrir la porte que la monotonie
+     * venait de fermer.
+     *
+     * @return le numéro de la tentative qui commence, ou `null` si la ligne n'existe plus.
      */
-    suspend fun resetOutgoingForRetry(localId: Long)
+    suspend fun resetOutgoingForRetry(localId: Long): Int?
 
     /** Miroite un MMS vocal sortant. Renvoie l'id Room local. */
     suspend fun upsertOutgoingMms(
