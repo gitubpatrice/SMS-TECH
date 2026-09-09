@@ -155,6 +155,35 @@ Trois défauts trouvés **en corrigeant**, dont deux étaient de moi :
    en écrivant les tests de F25 : le remède propre demande une colonne `hidden` et une migration,
    qui rendrait aussi le correctif F14 plus robuste que sa reconnaissance par forme.
 
+### Les trois audits de fin de chantier
+
+Trois audits lancés sur le delta complet — sécurité/données, cohérence transversale,
+qualité/performance. **Sept constats retenus, tous vérifiés par lecture avant correction** : un
+audit est une piste, pas une autorité.
+
+Le plus important : **la troisième occurrence du motif dominant, encore de moi.**
+`ScheduledSendAttempt` jetait le `SendReport`. F21 avait été posé sur les trois chemins d'envoi,
+pas sur leur appelant de fond — qui invoque pourtant exactement les mêmes use cases. Un envoi
+programmé vers un destinataire bloqué était en outre **retenté cinq fois**, alors qu'un blocage ne
+se résorbe jamais seul, pour finir sur « échec après plusieurs tentatives » — la mauvaise cause.
+
+Et **la sortie de secours du coffre était redevenue une impasse** sur un échec local : boucle sur
+un dialogue dont le texte affirmait que ce qui reste est « dans le stockage SMS », faux dans ce
+cas. Le KDoc de mon propre test de F09 **décrivait déjà ce trou** sans le fermer — une observation
+juste, écrite, et non tirée.
+
+**Deux de mes KDoc affirmaient une garantie que le code ne tenait pas** — le second motif du
+registre, reproduit par moi : la fusion des drapeaux ne distingue pas « jamais réagi » de « a
+retiré sa réaction » ; et l'adresse ne discrimine qu'entre conversations, pas à l'intérieur de
+l'une d'elles. Les deux sont désormais écrits comme des compromis, avec ce qu'il faudrait pour les
+lever.
+
+Non retenu, et argumenté : **factoriser la boucle d'envoi** entre les trois use cases. L'argument
+est juste — cette triplication a produit le même défaut deux fois. Mais les trois chemins sont
+aujourd'hui alignés *et* couverts par des tests qui verraient une divergence, et refactorer trois
+chemins d'envoi critiques en fin de chantier, sans pouvoir mesurer un vrai MMS, coûte plus que la
+duplication qu'on retire. **À programmer à froid.**
+
 ### Ce que le contrôle négatif a appris
 
 En remettant **les deux défauts de F12 et F14 à la fois**, un seul test tombait. Celui de F12
