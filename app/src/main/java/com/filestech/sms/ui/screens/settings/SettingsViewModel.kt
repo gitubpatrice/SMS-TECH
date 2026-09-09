@@ -61,6 +61,17 @@ class SettingsViewModel @Inject constructor(
         data object PanicCodeCleared : Event
 
         /**
+         * v1.28.3 (F07) — refus d'abaisser le verrouillage : la biométrie est actuellement le
+         * SEUL second facteur du Coffre, et il n'est pas vide.
+         *
+         * L'abaisser laisserait le Coffre ouvert à quiconque tient le téléphone déverrouillé.
+         * Même règle que le refus d'ouvrir posé en v1.27.2 quand la biométrie devient
+         * indisponible : le second facteur du Coffre doit rester un secret DISTINCT, et il se
+         * configure juste au-dessus, dans cet écran.
+         */
+        data object LockDowngradeRefusedVault : Event
+
+        /**
          * v1.26.0 — refus : le code proposé est le PIN principal, ou aucun PIN n'est configuré.
          * Les deux enfermeraient l'utilisateur en mode leurre sans issue.
          */
@@ -221,7 +232,8 @@ class SettingsViewModel @Inject constructor(
         // v1.26.0 — `clearPin` retire aussi le code panique : sans PIN principal, celui-ci
         // deviendrait le seul secret connu et ouvrirait l'application en leurre définitif. On
         // reflète donc l'état ici, sans relire le magasin (on sait ce qui vient de s'y passer).
-        appLock.clearPin()
+        // v1.28.3 (F07) — le refus remonte : cf. [AppLockManager.refusDAbaissement].
+        signalerRefus(appLock.clearPin())
         // v1.26.1 (audit C1) — on RELIT l'état au lieu de le supposer : `clearPin()` refuse
         // désormais en session leurre, donc « on sait ce qui vient de s'y passer » n'est plus
         // vrai sur tous les chemins. Relire coûte une lecture DataStore et ne peut pas dériver.
@@ -279,7 +291,14 @@ class SettingsViewModel @Inject constructor(
     suspend fun enableBiometricOverPin(): Boolean = appLock.enableBiometric()
 
     /** Reverts to PIN-only mode. */
-    fun disableBiometric() = viewModelScope.launch { appLock.disableBiometric() }
+    fun disableBiometric() = viewModelScope.launch { signalerRefus(appLock.disableBiometric()) }
+
+    /** v1.28.3 (F07) — un refus silencieux ferait recommencer l'utilisateur indéfiniment. */
+    private suspend fun signalerRefus(outcome: AppLockManager.LockDowngradeOutcome) {
+        if (outcome is AppLockManager.LockDowngradeOutcome.VaultWouldLoseItsFactor) {
+            _events.send(Event.LockDowngradeRefusedVault)
+        }
+    }
 
     /**
      * v1.3.0 — compte combien de messages seraient effacés par un nettoyage manuel à la

@@ -1140,6 +1140,24 @@ class ThreadViewModel @Inject constructor(
         current.forEach { runCatching { it.file.delete() } }
     }
 
+    /**
+     * v1.28.3 (F27) — facteur de sous-echantillonnage a appliquer au decodage.
+     *
+     * Puissance de deux, seule valeur que `BitmapFactory` honore reellement. On s'arrete des que
+     * la dimension decodee passe sous [maxDim] : le redimensionnement fin qui suit fait le reste,
+     * mais sur un bitmap deja petit. `1` quand les bornes sont inconnues (`outWidth <= 0`), ce
+     * qui reproduit le comportement d'avant plutot que de deviner.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun echantillonnagePour(largeur: Int, hauteur: Int, maxDim: Int): Int {
+        if (largeur <= 0 || hauteur <= 0 || maxDim <= 0) return 1
+        var echantillon = 1
+        while (maxOf(largeur, hauteur) / (echantillon * 2) >= maxDim) {
+            echantillon *= 2
+        }
+        return echantillon
+    }
+
     /** Resolves OpenableColumns.DISPLAY_NAME for a content URI. */
     private suspend fun resolveDisplayName(uri: android.net.Uri): String? =
         kotlinx.coroutines.withContext(io) {
@@ -1157,11 +1175,23 @@ class ThreadViewModel @Inject constructor(
      */
     private suspend fun compressImage(src: java.io.File): java.io.File? =
         kotlinx.coroutines.withContext(io) {
+            val maxDim = 1600
+            // v1.28.3 (F27) — decodage en DEUX PASSES, et non plus a pleine resolution.
+            //
+            // `decodeFile` en `ARGB_8888` alloue largeur x hauteur x 4 octets AVANT le
+            // redimensionnement : une photo de 12 Mpx demandait ~48 Mo d'un seul tenant, sur le
+            // tas d'une application qui en a rarement autant. L'`OutOfMemoryError` qui suit n'est
+            // pas rattrape par le `runCatching` d'origine — il n'attrape que les `Exception` —
+            // et le decodage se faisait pour rien, puisque l'image etait ensuite reduite a
+            // 1600 px. La premiere passe ne lit que l'en-tete (`inJustDecodeBounds`), la seconde
+            // decode directement pres de la taille voulue.
+            val bornes = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, bornes) }
             val opts = android.graphics.BitmapFactory.Options()
             opts.inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+            opts.inSampleSize = echantillonnagePour(bornes.outWidth, bornes.outHeight, maxDim)
             val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, opts) }
                 .getOrNull() ?: return@withContext null
-            val maxDim = 1600
             val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
                 val ratio = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
                 android.graphics.Bitmap.createScaledBitmap(
@@ -1207,11 +1237,49 @@ class ThreadViewModel @Inject constructor(
                 dir,
                 "${System.currentTimeMillis()}-${java.util.UUID.randomUUID().toString().take(8)}.${ext.ifBlank { "bin" }}",
             )
+            // v1.28.3 (F27) — la copie est BORNEE, et le refus precede l'ecriture quand il peut.
+            //
+            // `input.copyTo(it)` recopiait l'integralite de ce que le selecteur rendait, sans
+            // aucune limite, AVANT tout controle de taille — celui-ci n'arrive qu'apres la
+            // compression, plusieurs dizaines de lignes plus loin. Choisir une video de deux
+            // gigaoctets remplissait donc le cache de l'application, et potentiellement
+            // l'appareil, pour un fichier qu'on allait refuser de toute facon.
+            //
+            // Deux gardes plutot qu'un : la taille DECLAREE par le fournisseur evite la copie
+            // dans le cas courant, et la borne au fil de l'eau rattrape les fournisseurs qui ne
+            // la declarent pas — ou qui mentent.
+            val tailleDeclaree = tailleDeclareeDe(uri)
+            if (tailleDeclaree != null && tailleDeclaree > PLAFOND_COPIE_BYTES) return@withContext null
             runCatching {
+                var recopie = 0L
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    target.outputStream().use { input.copyTo(it) }
+                    target.outputStream().use { os ->
+                        val tampon = ByteArray(COPIE_TAMPON_BYTES)
+                        while (true) {
+                            val lus = input.read(tampon)
+                            if (lus <= 0) break
+                            recopie += lus
+                            if (recopie > PLAFOND_COPIE_BYTES) return@use
+                            os.write(tampon, 0, lus)
+                        }
+                    }
                 } ?: return@runCatching null
+                if (recopie > PLAFOND_COPIE_BYTES) {
+                    runCatching { target.delete() }
+                    return@runCatching null
+                }
                 target.takeIf { it.exists() && it.length() > 0L }
+            }.getOrNull()
+        }
+
+    /** v1.28.3 (F27) — taille annoncee par le fournisseur, ou `null` s'il ne la donne pas. */
+    private suspend fun tailleDeclareeDe(uri: android.net.Uri): Long? =
+        kotlinx.coroutines.withContext(io) {
+            runCatching {
+                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
+                    ?.use { c ->
+                        if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+                    }
             }.getOrNull()
         }
 
@@ -1715,6 +1783,18 @@ class ThreadViewModel @Inject constructor(
         // Audit C3 (v1.14.8) — Alias local pointant vers la SOURCE UNIQUE [MmsConstants].
         // Avant : `280L * 1024L` dupliqué ici ET dans `VoiceRecorder.MAX_SIZE_BYTES`.
         const val CARRIER_PAYLOAD_CAP_BYTES: Long = com.filestech.sms.core.mms.MmsConstants.CARRIER_PAYLOAD_CAP_BYTES
+
+        /**
+         * v1.28.3 (F27) — plafond de ce qu'on accepte de RECOPIER depuis le selecteur.
+         *
+         * Tres au-dessus du plafond operateur de 280 Ko, et c'est voulu : une photo de 4 Mo est
+         * une entree parfaitement legitime, que la compression ramenera sous le plafond reel.
+         * Ce qu'on refuse ici, c'est ce qui n'a aucune chance d'etre un MMS — une video de
+         * plusieurs gigaoctets — et qu'on recopiait integralement avant de le refuser.
+         */
+        const val PLAFOND_COPIE_BYTES: Long = 25L * 1024 * 1024
+
+        private const val COPIE_TAMPON_BYTES = 64 * 1024
 
         /**
          * X2 audit v1.3.1 — fenêtre de dédup pour les envois SMS de réaction. Un user qui

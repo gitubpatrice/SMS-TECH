@@ -36,8 +36,72 @@ class AppLockManager @Inject constructor(
      * dépendance propre, donc aucun cycle avec [VaultManager].
      */
     private val vaultSession: VaultSessionState,
+    /**
+     * v1.28.3 (F07) — de quoi savoir si le Coffre s'appuie sur le mode de verrouillage.
+     *
+     * `Lazy` des deux cotes, et ce n'est pas du zele : cette classe est resolue par
+     * `MainActivity` au demarrage a froid, et `ConversationDao` ouvre SQLCipher. Une injection
+     * eager reconstruirait la base sur le fil principal, sous le delai d'ANR — c'est le defaut
+     * SEC-CRIT repare en v1.24.0, et le meme piege pour les receivers.
+     */
+    private val vaultFactor: dagger.Lazy<VaultSecondFactorPolicy>,
+    private val conversationDao: dagger.Lazy<com.filestech.sms.data.local.db.dao.ConversationDao>,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : PanicStateProvider {
+
+    /**
+     * v1.28.3 (F07) — issue d'une demande d'ABAISSEMENT du verrouillage.
+     *
+     * Une valeur de retour plutot qu'un refus muet : un utilisateur qui touche « Aucun » et ne
+     * voit rien changer recommence, puis conclut que l'application est cassee.
+     */
+    sealed interface LockDowngradeOutcome {
+        data object Ok : LockDowngradeOutcome
+
+        /**
+         * Refuse : la biometrie est actuellement le SEUL second facteur du Coffre, et il n'est
+         * pas vide. L'abaisser le laisserait ouvert a quiconque tient le telephone deverrouille.
+         */
+        data object VaultWouldLoseItsFactor : LockDowngradeOutcome
+
+        /** Refuse : session leurre. Meme garde que [clearPin], meme raison. */
+        data object PanicDecoy : LockDowngradeOutcome
+    }
+
+    /**
+     * v1.28.3 (F07) — **abaisser le mode de verrouillage retirait le second facteur du Coffre
+     * sans rien demander.**
+     *
+     * Le Coffre n'a que deux gardes possibles, et `VaultSecondFactorPolicy` les enumere : un code
+     * coffre distinct, ou — a defaut — le mode de verrouillage biometrique. Quand c'est le
+     * second, `VaultScreen` retombe sur sa branche « entree directe » des que `lockMode` n'est
+     * plus `BIOMETRIC`.
+     *
+     * Or les deux chemins qui l'abaissent ne demandaient RIEN : `disableBiometric` pas meme une
+     * confirmation, et « Aucun » une simple boite de dialogue sans secret. Le retrait du code
+     * coffre, lui, exige le code en place (`requireCurrent`) — l'asymetrie vivait dans le meme
+     * ecran, a vingt lignes d'ecart.
+     *
+     * La v1.27.2 avait deja tranche ce cas de figure, pour l'autre porte : quand la biometrie
+     * devient indisponible et qu'aucun code coffre n'est configure, on N'OUVRE PLUS, et l'on
+     * renvoie l'utilisateur configurer un code coffre depuis les Reglages. Meme regle ici, et
+     * pour la meme raison : le second facteur du Coffre doit rester un secret distinct.
+     *
+     * **Coffre vide : aucune friction.** C'est le mot pour mot du garde d'export
+     * (`BackupService.exportSecondFactor`) — il n'y a rien a proteger, et refuser enfermerait
+     * l'utilisateur pour rien.
+     */
+    private suspend fun refusDAbaissement(): LockDowngradeOutcome = withContext(io) {
+        if (_state.value is LockState.PanicDecoy) return@withContext LockDowngradeOutcome.PanicDecoy
+        val coffreNonVide = runCatching { conversationDao.get().countInVault() }.getOrDefault(0) > 0
+        if (!coffreNonVide) return@withContext LockDowngradeOutcome.Ok
+        val facteur = runCatching { vaultFactor.get().current() }.getOrNull()
+        if (facteur == VaultSecondFactor.BIOMETRIC) {
+            LockDowngradeOutcome.VaultWouldLoseItsFactor
+        } else {
+            LockDowngradeOutcome.Ok
+        }
+    }
 
     /**
      * Initial state is [LockState.Locked] (fail-closed). Any subsequent observer must wait for
@@ -199,7 +263,16 @@ class AppLockManager @Inject constructor(
         vaultSession.lock()
     }
 
-    suspend fun clearPin() = withContext(io) {
+    suspend fun clearPin(): LockDowngradeOutcome {
+        // v1.28.3 (F07) — cf. [refusDAbaissement]. Le garde precede toute ecriture : refuser
+        // apres avoir efface le PIN ne protegerait rien.
+        val refus = refusDAbaissement()
+        if (refus != LockDowngradeOutcome.Ok) return refus
+        clearPinInterne()
+        return LockDowngradeOutcome.Ok
+    }
+
+    private suspend fun clearPinInterne() = withContext(io) {
         // v1.26.1 (audit C1) — refus en session leurre, garde côté ACCÈS.
         //
         // La ligne « Verrouillage de l'app » est désormais masquée en `PanicDecoy`, mais masquer
@@ -328,7 +401,17 @@ class AppLockManager @Inject constructor(
      * initiale. Bénin (transform idempotent) mais anti-idiomatique pour DataStore
      * qui garantit l'atomicité read-modify-write avec `update`.
      */
-    suspend fun disableBiometric() = withContext(io) {
+    suspend fun disableBiometric(): LockDowngradeOutcome {
+        // v1.28.3 (F07) — c'est LE chemin qui ne demandait rien du tout, pas meme une
+        // confirmation : un tap sur « Code PIN » depuis « Biometrie » retirait le second facteur
+        // du Coffre en silence.
+        val refus = refusDAbaissement()
+        if (refus != LockDowngradeOutcome.Ok) return refus
+        disableBiometricInterne()
+        return LockDowngradeOutcome.Ok
+    }
+
+    private suspend fun disableBiometricInterne() = withContext(io) {
         settings.update { current ->
             if (current.security.lockMode == LockMode.BIOMETRIC) {
                 current.copy(security = current.security.copy(lockMode = LockMode.PIN))

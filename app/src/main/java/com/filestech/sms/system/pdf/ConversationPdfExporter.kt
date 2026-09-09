@@ -52,17 +52,34 @@ class ConversationPdfExporter @Inject constructor(
             )
         }
 
+    /**
+     * v1.28.3 (F33) — **le document est ferme quoi qu'il arrive, et un fichier a moitie ecrit ne
+     * survit pas a l'echec qui l'a produit.**
+     *
+     * `doc.close()` suivait `writeTo` sans `finally` : la moindre exception du rendu ou de
+     * l'ecriture — disque plein, message aberrant, `OutOfMemoryError` sur une conversation
+     * enorme — laissait le `PdfDocument` ouvert, donc ses pages natives non liberees, pour toute
+     * la duree du processus. Et le `File` deja cree restait sur le disque, tronque, pret a etre
+     * partage par un utilisateur qui n'a vu qu'un message d'erreur passer.
+     */
     private fun renderToFile(conversation: Conversation, messages: List<Message>): PdfExportResult {
         val doc = PdfDocument()
-        val pages = renderPages(doc, conversation, messages)
         val dir = File(context.filesDir, "exports").apply { if (!exists()) mkdirs() }
-        val safeName = (conversation.displayName ?: conversation.addresses.toCsv()).replace(Regex("[^A-Za-z0-9_-]+"), "_").take(48)
+        val safeName = (conversation.displayName ?: conversation.addresses.toCsv())
+            .replace(Regex("[^A-Za-z0-9_-]+"), "_").take(48)
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val out = File(dir, "smstech_conversation_${safeName}_$ts.pdf")
-        out.outputStream().use { doc.writeTo(it) }
-        doc.close()
-        val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", out)
-        return PdfExportResult(shareUri = uri.toString(), pages = pages)
+        var abouti = false
+        try {
+            val pages = renderPages(doc, conversation, messages)
+            out.outputStream().use { doc.writeTo(it) }
+            abouti = true
+            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", out)
+            return PdfExportResult(shareUri = uri.toString(), pages = pages)
+        } finally {
+            doc.close()
+            if (!abouti) out.delete()
+        }
     }
 
     private fun renderPages(doc: PdfDocument, conversation: Conversation, messages: List<Message>): Int {
@@ -97,26 +114,26 @@ class ConversationPdfExporter @Inject constructor(
         val dateFormatter = SimpleDateFormat("EEEE d MMMM yyyy", Locale.getDefault())
         val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
 
-        var pageNumber = 1
-        var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
-        var page = doc.startPage(pageInfo)
-        var canvas = page.canvas
-        var cursorY = drawHeader(canvas, conversation, titlePaint, subtitlePaint, margin)
+        // v1.28.3 (F33) — la pagination est un objet, et non six variables mutables recopiees a
+        // chaque saut de page. Les trois sauts d'origine dupliquaient la meme sequence, et AUCUN
+        // n'appelait `drawFooter` : le numero de page n'apparaissait donc que sur la DERNIERE.
+        val pagination = Pagination(doc, pageWidth, pageHeight, margin) { c, n ->
+            drawFooter(c, n, pageWidth, pageHeight, margin)
+        }
+        pagination.cursorY = drawHeader(pagination.canvas, conversation, titlePaint, subtitlePaint, margin)
 
         var lastDayKey: String? = null
         for (msg in messages) {
             val dayKey = dateFormatter.format(Date(msg.date))
             if (dayKey != lastDayKey) {
-                if (cursorY + DAY_DIVIDER_HEIGHT > pageHeight - margin) {
-                    doc.finishPage(page)
-                    pageNumber++
-                    pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
-                    page = doc.startPage(pageInfo)
-                    canvas = page.canvas
-                    cursorY = margin.toFloat()
-                }
-                canvas.drawText(dayKey, (pageWidth / 2).toFloat(), cursorY + 12f, datePaint)
-                cursorY += DAY_DIVIDER_HEIGHT
+                if (pagination.cursorY + DAY_DIVIDER_HEIGHT > pagination.bas) pagination.pageSuivante()
+                pagination.canvas.drawText(
+                    dayKey,
+                    (pageWidth / 2).toFloat(),
+                    pagination.cursorY + 12f,
+                    datePaint,
+                )
+                pagination.cursorY += DAY_DIVIDER_HEIGHT
                 lastDayKey = dayKey
             }
 
@@ -127,39 +144,145 @@ class ConversationPdfExporter @Inject constructor(
                 .setLineSpacing(2f, 1f)
                 .setIncludePad(false)
                 .build()
-            val bubbleHeight = layout.height + PAD * 2 + 16
             val bubbleWidth = (layout.width + PAD * 2).coerceAtMost(bubbleMaxWidth)
-            if (cursorY + bubbleHeight > pageHeight - margin) {
-                doc.finishPage(page)
-                pageNumber++
-                pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
-                page = doc.startPage(pageInfo)
-                canvas = page.canvas
-                cursorY = margin.toFloat()
-            }
-            val left = if (msg.isOutgoing) (pageWidth - margin - bubbleWidth).toFloat() else margin.toFloat()
-            val rect = RectF(left, cursorY, left + bubbleWidth, cursorY + bubbleHeight - 14)
-            if (msg.isOutgoing) {
-                canvas.drawRoundRect(rect, 12f, 12f, outgoingBg)
-            } else {
-                canvas.drawRoundRect(rect, 12f, 12f, incomingBg)
-                canvas.drawRoundRect(rect, 12f, 12f, incomingStroke)
-            }
-            canvas.save()
-            canvas.translate(rect.left + PAD, rect.top + PAD)
-            layout.draw(canvas)
-            canvas.restore()
-            val timeText = timeFormatter.format(Date(msg.date))
-            val timeWidth = timestampPaint.measureText(timeText)
-            val timeX = if (msg.isOutgoing) rect.right - timeWidth else rect.left
-            canvas.drawText(timeText, timeX, rect.bottom + 10, timestampPaint)
-
-            cursorY += bubbleHeight + 6
+            dessinerBulle(
+                pagination = pagination,
+                layout = layout,
+                largeur = bubbleWidth,
+                sortant = msg.isOutgoing,
+                fond = if (msg.isOutgoing) outgoingBg else incomingBg,
+                contour = if (msg.isOutgoing) null else incomingStroke,
+                horodatage = timeFormatter.format(Date(msg.date)),
+                horodatagePaint = timestampPaint,
+                pageWidth = pageWidth,
+                margin = margin,
+            )
+            pagination.cursorY += 6
         }
 
-        drawFooter(canvas, pageNumber, pageWidth, pageHeight, margin)
-        doc.finishPage(page)
-        return pageNumber
+        pagination.terminer()
+        return pagination.pageNumber
+    }
+
+    /**
+     * v1.28.3 (F33) — **une bulle plus haute qu'une page etait TRONQUEE, en silence.**
+     *
+     * L'ancien code sautait une page quand la bulle ne tenait pas dans ce qui reste, puis la
+     * dessinait telle quelle. Si elle ne tenait pas non plus sur une page VIERGE — un long
+     * message colle, un MMS bavard — elle debordait, et le PDF coupe simplement ce qui depasse.
+     * L'export annoncait un succes et un nombre de pages ; le texte manquant, lui, ne se voyait
+     * qu'en relisant le document. Pour une fonction dont le seul but est de conserver une
+     * conversation, perdre du texte sans le dire est le pire mode d'echec possible.
+     *
+     * La bulle se decoupe donc par LIGNES, aux frontieres que `StaticLayout` a deja calculees :
+     * on remplit ce qui reste de la page, on continue sur la suivante. Le decoupage se fait sur
+     * les lignes et non sur les pixels, pour ne jamais couper un glyphe en deux.
+     */
+    @Suppress("LongParameterList")
+    private fun dessinerBulle(
+        pagination: Pagination,
+        layout: StaticLayout,
+        largeur: Int,
+        sortant: Boolean,
+        fond: Paint,
+        contour: Paint?,
+        horodatage: String,
+        horodatagePaint: TextPaint,
+        pageWidth: Int,
+        margin: Int,
+    ) {
+        val gauche = if (sortant) (pageWidth - margin - largeur).toFloat() else margin.toFloat()
+        var ligne = 0
+        while (ligne < layout.lineCount) {
+            // Place restante pour du TEXTE : la marge basse, moins les rembourrages de la bulle
+            // et la ligne d'horodatage qui la suit.
+            var dispo = pagination.bas - pagination.cursorY - PAD * 2 - HAUTEUR_HORODATAGE
+            val hautLigne = layout.getLineTop(ligne)
+            val hauteurPremiere = layout.getLineBottom(ligne) - hautLigne
+            if (dispo < hauteurPremiere) {
+                pagination.pageSuivante()
+                dispo = pagination.bas - pagination.cursorY - PAD * 2 - HAUTEUR_HORODATAGE
+                // Une page vierge qui ne peut pas contenir UNE ligne : la geometrie est absurde
+                // (marges plus hautes que la page). On sort plutot que de boucler sans fin.
+                if (dispo < hauteurPremiere) return
+            }
+            var derniere = ligne
+            while (derniere + 1 < layout.lineCount &&
+                layout.getLineBottom(derniere + 1) - hautLigne <= dispo
+            ) {
+                derniere++
+            }
+            val hauteurTexte = (layout.getLineBottom(derniere) - hautLigne).toFloat()
+            val rect = RectF(
+                gauche,
+                pagination.cursorY,
+                gauche + largeur,
+                pagination.cursorY + hauteurTexte + PAD * 2,
+            )
+            pagination.canvas.drawRoundRect(rect, 12f, 12f, fond)
+            contour?.let { pagination.canvas.drawRoundRect(rect, 12f, 12f, it) }
+            pagination.canvas.save()
+            // Le clip borne la tranche a la bulle : sans lui, `layout.draw` peindrait le texte
+            // ENTIER a chaque passage, et les tranches se superposeraient.
+            pagination.canvas.clipRect(rect)
+            pagination.canvas.translate(rect.left + PAD, rect.top + PAD - hautLigne)
+            layout.draw(pagination.canvas)
+            pagination.canvas.restore()
+            pagination.cursorY = rect.bottom
+            // L'horodatage n'accompagne que la DERNIERE tranche : le repeter donnerait a un long
+            // message l'apparence de plusieurs messages envoyes a la meme heure.
+            if (derniere == layout.lineCount - 1) {
+                val largeurTexte = horodatagePaint.measureText(horodatage)
+                val x = if (sortant) rect.right - largeurTexte else rect.left
+                pagination.canvas.drawText(horodatage, x, rect.bottom + 10, horodatagePaint)
+                pagination.cursorY += HAUTEUR_HORODATAGE
+            }
+            ligne = derniere + 1
+        }
+    }
+
+    /**
+     * v1.28.3 (F33) — l'etat d'une page en cours, et le seul endroit qui sache en commencer une.
+     *
+     * Les trois sauts de page d'origine recopiaient la meme sequence de cinq lignes, et aucun
+     * n'appelait `drawFooter` — appele une seule fois, apres la boucle, donc sur la derniere page
+     * uniquement. Toutes les autres sortaient sans numero. Centraliser le saut fait disparaitre
+     * la question.
+     */
+    private class Pagination(
+        private val doc: PdfDocument,
+        private val pageWidth: Int,
+        private val pageHeight: Int,
+        private val margin: Int,
+        private val piedDePage: (android.graphics.Canvas, Int) -> Unit,
+    ) {
+        var pageNumber = 1
+            private set
+        private var page = doc.startPage(
+            PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create(),
+        )
+        var canvas: android.graphics.Canvas = page.canvas
+            private set
+        var cursorY: Float = margin.toFloat()
+
+        /** Ordonnee au-dela de laquelle plus rien ne doit etre dessine. */
+        val bas: Float get() = (pageHeight - margin).toFloat()
+
+        fun pageSuivante() {
+            piedDePage(canvas, pageNumber)
+            doc.finishPage(page)
+            pageNumber++
+            page = doc.startPage(
+                PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create(),
+            )
+            canvas = page.canvas
+            cursorY = margin.toFloat()
+        }
+
+        fun terminer() {
+            piedDePage(canvas, pageNumber)
+            doc.finishPage(page)
+        }
     }
 
     private fun drawHeader(
@@ -201,6 +324,9 @@ class ConversationPdfExporter @Inject constructor(
     }
 
     private companion object {
+        /** v1.28.3 (F33) — place reservee sous une bulle pour son horodatage. */
+        const val HAUTEUR_HORODATAGE = 16
+
         const val PAGE_WIDTH = 595 // A4 portrait, 72 dpi
         const val PAGE_HEIGHT = 842
         const val MARGIN = 36

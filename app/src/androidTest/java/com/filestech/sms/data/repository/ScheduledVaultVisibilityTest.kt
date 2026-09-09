@@ -62,6 +62,21 @@ class ScheduledVaultVisibilityTest {
             SettingsRepository(context, scope),
             PasswordKdf(),
             vaultSession,
+            // v1.28.3 (F07) — cf. `BackupRoundTripTest` : ces tests n'abaissent pas le
+            // verrouillage, mais le constructeur exige desormais de quoi le garder.
+            {
+                com.filestech.sms.security.VaultSecondFactorPolicy(
+                    SettingsRepository(context, scope),
+                    com.filestech.sms.security.VaultPinManager(
+                        SecurityStore(context),
+                        SettingsRepository(context, scope),
+                        PasswordKdf(),
+                        Dispatchers.IO,
+                    ),
+                    Dispatchers.IO,
+                )
+            },
+            { db.conversationDao() },
             Dispatchers.IO,
         )
         repo = ScheduledMessageRepositoryImpl(

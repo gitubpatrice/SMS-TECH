@@ -170,6 +170,21 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     pduConsumed = true
                     return@launch
                 }
+                // v1.28.3 (F27) — la lecture du PDU est BORNEE.
+                //
+                // `readBytes()` allouait le fichier entier sans aucune limite. Le chemin est
+                // atteint depuis un broadcast systeme, sur un fichier ecrit par la pile
+                // telephonie : sa taille ne depend pas de nous, et un MMS reel ne depasse pas
+                // quelques centaines de kilooctets. Un fichier aberrant — anomalie de ROM,
+                // stockage partage abime — faisait donc tomber le processus sur un
+                // `OutOfMemoryError`, que le `runCatching` n'attrape meme pas : il ne couvre
+                // que les `Exception`.
+                if (pduFile.length() > PDU_MAX_BYTES) {
+                    Timber.w("MMS PDU too large (%d B): %s", pduFile.length(), pduPath)
+                    // Definitivement inexploitable : le conserver n'ouvrirait aucune reprise.
+                    pduConsumed = true
+                    return@launch
+                }
                 val bytes = runCatching { pduFile.readBytes() }.getOrNull()
                 if (bytes == null) {
                     Timber.w("Cannot read MMS PDU bytes: %s", pduPath)
@@ -546,6 +561,16 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
     }
 
     private companion object {
+        /**
+         * v1.28.3 (F27) — plafond de lecture d'un PDU entrant.
+         *
+         * Genereux au regard du reel : les MMSC francais plafonnent l'utile a 300 Ko, et
+         * l'en-tete plus l'encodage n'en ajoutent qu'une fraction. Quatre megaoctets laissent
+         * donc passer tout MMS legitime, y compris venu d'un operateur plus permissif, tout en
+         * bornant ce qu'un fichier aberrant peut faire allouer.
+         */
+        const val PDU_MAX_BYTES = 4L * 1024 * 1024
+
         /**
          * Legacy cacheDir subdirectory for incoming MMS attachments (v1.3.10 → v1.14.6).
          * Conservé comme constante pour la migration MainApplication qui rapatrie les fichiers

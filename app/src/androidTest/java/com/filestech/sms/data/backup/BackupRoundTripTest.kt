@@ -606,6 +606,11 @@ class BackupRoundTripTest {
             // pas `forceLock`, mais le constructeur l'exige : on passe la MÊME session que celle
             // du service, sans quoi le test exercerait deux états distincts.
             vaultSession = vault,
+            // v1.28.3 (F07) — le garde d'abaissement du verrouillage a besoin de savoir si le
+            // Coffre s'appuie sur la biometrie. Ces tests n'abaissent rien ; on cable la MEME
+            // base et la MEME politique que le service, pour ne pas exercer deux etats.
+            vaultFactor = { vaultFactorPolicy() },
+            conversationDao = { db.conversationDao() },
             io = Dispatchers.IO,
         ),
         vaultSession = vault,

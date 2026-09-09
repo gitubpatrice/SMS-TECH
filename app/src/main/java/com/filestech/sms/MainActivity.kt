@@ -224,7 +224,22 @@ class MainActivity : FragmentActivity() {
         // `initialSettings` flips to a non-null value (see `setKeepOnScreenCondition` above), so
         // there is no visual flash to default theme / accent during the read.
         lifecycleScope.launch {
-            initialSettings.value = settings.flow.first()
+            // v1.28.3 (F31a) — `first()` sur un flux qui se TERMINE SANS EMETTRE leve une
+            // `NoSuchElementException`, et rien ne l'attrapait : le lancement se soldait par un
+            // crash. Le cas n'est pas theorique — `SettingsRepository` absorbe une lecture
+            // DataStore en echec (fichier corrompu, stockage chiffre pas encore disponible,
+            // quota) SANS reemettre, et le flux se termine alors vide.
+            //
+            // Le repli sur les valeurs par defaut est SUR ici, et il faut le dire parce que
+            // l'inverse serait grave : cette valeur ne sert qu'a amorcer le theme sous l'ecran
+            // de demarrage (`seed`, plus bas), qui applique DEJA `?: AppSettings()` pendant que
+            // la lecture est en vol. Elle ne decide d'aucun verrouillage — `AppLockManager` a sa
+            // propre resolution, qui part de `Locked`. Se rabattre sur les defauts de
+            // `AppSettings()` pour une decision de securite serait le defaut ferme en v1.27.11.
+            initialSettings.value = runCatching { settings.flow.first() }
+                .onFailure { timber.log.Timber.w(it, "Reglages illisibles au lancement — theme par defaut") }
+                .getOrNull()
+                ?: AppSettings()
         }
 
         // The actual lock-state resolution still happens lazily — receivers / services call

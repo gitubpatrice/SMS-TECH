@@ -174,6 +174,9 @@ fun SettingsScreen(
     // `ctx.getString` dans le collecteur d'événements déclencherait
     // `LocalContextGetResourceValueCall`.
     val pinSameAsPanicMsg = stringResource(R.string.settings_pin_same_as_panic_code)
+    // v1.28.3 (F07) — resolue au niveau COMPOSABLE, comme sa voisine ci-dessus : un `Context`
+    // capture dans une lambda non composable ne suit pas les changements de configuration.
+    val lockDowngradeRefusedMsg = stringResource(R.string.settings_lock_downgrade_vault_refused)
     // v1.9.0 — scope partagé pour les actions instantanées qui doivent émettre
     // un snack depuis un onClick callback (ex. bouton "Je vais bien" Safety call).
     val rootScope = rememberCoroutineScope()
@@ -185,6 +188,12 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collect { e ->
             when (e) {
+                // v1.28.3 (F07) — refus d'abaisser le verrouillage : la biometrie est le seul
+                // second facteur du Coffre, qui n'est pas vide. En rouge, parce que c'est un
+                // refus et non une confirmation, et nomme, parce qu'un geste sans effet ni
+                // explication se repete.
+                is SettingsViewModel.Event.LockDowngradeRefusedVault ->
+                    snackbarHost.showError(lockDowngradeRefusedMsg)
                 is SettingsViewModel.Event.BlockedPurged -> {
                     val msg = if (e.count > 0) {
                         ctx.getString(R.string.settings_purge_blocked_result, e.count)
