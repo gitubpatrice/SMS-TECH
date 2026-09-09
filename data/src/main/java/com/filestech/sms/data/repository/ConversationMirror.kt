@@ -401,6 +401,11 @@ class ConversationMirror @Inject constructor(
         messageDao.promoteStatusMonotonic(localId, status, status.rawValue, errorCode)
     }
 
+    /** v1.28.3 (F05) — voir [OutgoingMessageMirror.outgoingStatus]. */
+    override suspend fun outgoingStatus(localId: Long): MessageStatus? = withContext(io) {
+        messageDao.findById(localId)?.status
+    }
+
     /** v1.26.1 (audit M8) — voir [OutgoingMessageMirror.resetOutgoingForRetry]. */
     override suspend fun resetOutgoingForRetry(localId: Long) = withContext(io) {
         messageDao.updateStatus(localId, MessageStatus.PENDING, errorCode = null)

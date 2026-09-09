@@ -86,6 +86,12 @@ internal class NoopMirror : OutgoingMessageMirror {
         errorCode: Int?,
     ) = Unit
 
+    /**
+     * v1.28.3 (F05) — le radio a toujours confirme, c'est-a-dire le cas nominal. Les tests qui
+     * veulent mesurer un envoi NON confirme fournissent leur propre doublure.
+     */
+    override suspend fun outgoingStatus(localId: Long): MessageStatus = MessageStatus.SENT
+
     // Non exercees par SendSmsUseCase, mais l'interface les impose.
     override suspend fun resetOutgoingForRetry(localId: Long) = Unit
 

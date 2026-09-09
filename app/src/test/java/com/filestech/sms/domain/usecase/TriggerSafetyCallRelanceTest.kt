@@ -1,39 +1,16 @@
 package com.filestech.sms.domain.usecase
 
-import com.filestech.sms.core.result.AppError
-import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.domain.mms.MediaAttachmentSpec
-import com.filestech.sms.domain.model.BlockedNumber
 import com.filestech.sms.domain.model.MessageStatus
-import com.filestech.sms.domain.repository.BlockedNumberRepository
-import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact
-import com.filestech.sms.domain.security.PanicStateProvider
-import com.filestech.sms.domain.sender.DefaultSmsAppChecker
-import com.filestech.sms.domain.sender.SentSmsRecorder
-import com.filestech.sms.domain.sender.SmsSender
-import com.filestech.sms.domain.settings.AppSettings
-import com.filestech.sms.domain.settings.AppSettingsSource
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
-import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * v1.27.2 — **séquence de relances du Safety call**, décidée par Patrice le 2026-08-05 : le
@@ -55,279 +32,6 @@ import java.util.concurrent.atomic.AtomicInteger
  * Faux écrits à la main : `:domain` n'a ni mockk ni Robolectric.
  */
 class TriggerSafetyCallRelanceTest {
-
-    private companion object {
-        const val CONTACT = "+33611111111"
-        const val TIMEOUT_MS = 3_600_000L
-    }
-
-    // ──────────────────────────── Faux ────────────────────────────
-
-    /** Réglages en mémoire, avec un `update` réellement atomique — c'est ce qu'on teste. */
-    private class FakeSettings(initial: AppSettings) : AppSettingsSource {
-        private val _state = MutableStateFlow(initial)
-        private val lock = Mutex()
-        override val flow: Flow<AppSettings> = _state.asStateFlow()
-        override val state: StateFlow<AppSettings> = _state.asStateFlow()
-        override suspend fun hydratedOrNull(): AppSettings = _state.value
-        override suspend fun update(transform: (AppSettings) -> AppSettings) {
-            lock.withLock { _state.value = transform(_state.value) }
-        }
-
-        val safetyCall get() = _state.value.security.safetyCall
-    }
-
-    /**
-     * [succeed] est **mutable** : c'est ce qui permet de faire échouer une relance APRÈS un premier
-     * envoi réussi, donc de tester le chemin d'échec de la séquence — celui où `triggeredAt` ne
-     * doit surtout pas être effacé.
-     */
-    private class CountingSender(var succeed: Boolean) : SmsSender {
-        var calls = 0
-        val bodies = mutableListOf<String>()
-        override fun send(
-            localMessageId: Long,
-            destination: String,
-            text: String,
-            subId: Int?,
-            requestDeliveryReport: Boolean,
-        ): Outcome<Unit> {
-            calls++
-            bodies += text
-            return if (succeed) {
-                Outcome.Success(Unit)
-            } else {
-                Outcome.Failure(AppError.Telephony("réseau indisponible"))
-            }
-        }
-    }
-
-    /** Force deux appels à atteindre leur première transaction avant d'en laisser passer un. */
-    private class ClaimBarrierSettings(
-        private val store: FakeSettings,
-        private val parties: Int = 2,
-    ) : AppSettingsSource {
-        private val arrivals = AtomicInteger(0)
-        private val barrier = CompletableDeferred<Unit>()
-
-        override val flow: Flow<AppSettings> = store.flow
-        override val state: StateFlow<AppSettings> = store.state
-        override suspend fun hydratedOrNull(): AppSettings = store.hydratedOrNull()
-
-        override suspend fun update(transform: (AppSettings) -> AppSettings) {
-            val position = arrivals.incrementAndGet()
-            if (position <= parties) {
-                if (position == parties) barrier.complete(Unit)
-                barrier.await()
-            }
-            store.update(transform)
-        }
-    }
-
-    /** Suspend la première transaction après la lecture du snapshot, avant la réservation. */
-    private class BeforeReservationSettings(private val store: FakeSettings) : AppSettingsSource {
-        private val firstUpdate = AtomicBoolean(true)
-        val reservationReached = CompletableDeferred<Unit>()
-        val continueReservation = CompletableDeferred<Unit>()
-
-        override val flow: Flow<AppSettings> = store.flow
-        override val state: StateFlow<AppSettings> = store.state
-        override suspend fun hydratedOrNull(): AppSettings = store.hydratedOrNull()
-
-        override suspend fun update(transform: (AppSettings) -> AppSettings) {
-            if (firstUpdate.compareAndSet(true, false)) {
-                reservationReached.complete(Unit)
-                continueReservation.await()
-            }
-            store.update(transform)
-        }
-    }
-
-    /** Bloque le premier passage dans l'envoi, nécessairement après la réservation persistée. */
-    private class CancelAfterClaimSettings(private val store: FakeSettings) : AppSettingsSource {
-        private val blockFirstSend = AtomicBoolean(true)
-        val afterClaim = CompletableDeferred<Unit>()
-
-        override val flow: Flow<AppSettings> = store.flow
-        override val state: StateFlow<AppSettings> = store.state
-
-        override suspend fun hydratedOrNull(): AppSettings {
-            if (blockFirstSend.compareAndSet(true, false)) {
-                afterClaim.complete(Unit)
-                awaitCancellation()
-            }
-            return store.hydratedOrNull()
-        }
-
-        override suspend fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
-    }
-
-    private class NoopRecorder : SentSmsRecorder {
-        override fun insertSentSms(
-            address: String,
-            body: String,
-            date: Long,
-            threadId: Long?,
-            subId: Int?,
-        ): String = "content://sms/1"
-    }
-
-    private class NoopMirror : OutgoingMessageMirror {
-        override suspend fun upsertOutgoingSms(
-            address: String,
-            body: String,
-            date: Long,
-            telephonyUri: String?,
-            subId: Int?,
-            initialStatus: MessageStatus,
-            replyToMessageId: Long?,
-            localMirrorBody: String?,
-        ): Long = 1L
-
-        override suspend fun updateOutgoingStatus(
-            localId: Long,
-            status: MessageStatus,
-            errorCode: Int?,
-        ) = Unit
-
-        override suspend fun resetOutgoingForRetry(localId: Long) = Unit
-
-        override suspend fun upsertOutgoingMms(
-            address: String,
-            audioFile: File,
-            mimeType: String,
-            durationMs: Long,
-            date: Long,
-            subId: Int?,
-        ): Long = error("non utilise")
-
-        override suspend fun upsertOutgoingMediaMms(
-            address: String,
-            attachments: List<MediaAttachmentSpec>,
-            textBody: String,
-            date: Long,
-            subId: Int?,
-        ): Long = error("non utilise")
-    }
-
-    private class NeverBlocked : BlockedNumberRepository {
-        override fun observe(): Flow<List<BlockedNumber>> = MutableStateFlow(emptyList())
-        override suspend fun isBlocked(rawNumber: String): Boolean = false
-        override suspend fun block(rawNumber: String, label: String?): Outcome<Unit> =
-            Outcome.Success(Unit)
-        override suspend fun unblock(rawNumber: String): Outcome<Unit> = Outcome.Success(Unit)
-        override suspend fun mirrorFromSystem(rawNumber: String): Outcome<Unit> =
-            Outcome.Success(Unit)
-        override suspend fun blockedNormalizedSnapshot(): Set<String> = emptySet()
-        override suspend fun blockedRawSnapshot(): List<String> = emptyList()
-    }
-
-    // ──────────────────────────── Montage ────────────────────────────
-
-    /** Config armée et **déjà expirée** : le prochain appel doit déclencher. */
-    private fun expiredSettings() = FakeSettings(
-        AppSettings().let { base ->
-            base.copy(
-                security = base.security.copy(
-                    safetyCall = SafetyCallConfig(
-                        enabled = true,
-                        timeoutMs = TIMEOUT_MS,
-                        lastActivityAt = System.currentTimeMillis() - TIMEOUT_MS * 2,
-                        monotonicLastActivityAt = 1L,
-                        monotonicAccumulatedMs = TIMEOUT_MS * 2,
-                        contacts = listOf(SafetyCallContact(phoneNumber = CONTACT)),
-                    ),
-                ),
-            )
-        },
-    )
-
-    /**
-     * Expéditeur qui **observe l'état persisté au moment exact de l'envoi**. C'est le seul point
-     * d'observation qui permette de tester C-01 sans monter WorkManager : la question est de
-     * savoir ce que l'observateur de `MainApplication` aurait vu pendant que le SMS partait.
-     */
-    private class ObservingSender(
-        private val store: FakeSettings,
-        private val onSend: (SafetyCallConfig) -> Unit,
-    ) : SmsSender {
-        var calls = 0
-        override fun send(
-            localMessageId: Long,
-            destination: String,
-            text: String,
-            subId: Int?,
-            requestDeliveryReport: Boolean,
-        ): Outcome<Unit> {
-            calls++
-            onSend(store.safetyCall)
-            return Outcome.Success(Unit)
-        }
-    }
-
-    /**
-     * Suspend le **premier** envoi une fois la réservation déjà persistée. C'est le seul état où
-     * le défaut C-03 existe : un bail posé, et son propriétaire toujours vivant.
-     */
-    private class BlockingFirstSender : SmsSender {
-        val reachedSend = CompletableDeferred<Unit>()
-
-        /**
-         * ⚠️ **À libérer dans un `finally`.** L'attente vit dans un `runBlocking` imbriqué, sur un
-         * fil de `Dispatchers.Default` : l'annulation du `runBlocking` extérieur ne la traverse
-         * pas. Une assertion qui échoue avant la libération ne fait donc PAS échouer le test — elle
-         * le fait **rester bloqué**, et avec lui toute la suite. Constaté le 2026-08-05 en tentant
-         * de prouver la non-vacuité de P-01 : la preuve n'a jamais rendu la main.
-         */
-        val release = CompletableDeferred<Unit>()
-        private val first = AtomicBoolean(true)
-        var calls = 0
-        override fun send(
-            localMessageId: Long,
-            destination: String,
-            text: String,
-            subId: Int?,
-            requestDeliveryReport: Boolean,
-        ): Outcome<Unit> {
-            calls++
-            if (first.compareAndSet(true, false)) {
-                reachedSend.complete(Unit)
-                runBlocking { release.await() }
-            }
-            return Outcome.Success(Unit)
-        }
-    }
-
-    private fun useCase(settings: AppSettingsSource, sender: SmsSender) = TriggerSafetyCallUseCase(
-        sendSms = SendSmsUseCase(
-            defaultAppManager = object : DefaultSmsAppChecker { override fun isDefault() = true },
-            sentSmsRecorder = NoopRecorder(),
-            sender = sender,
-            mirror = NoopMirror(),
-            blockedRepo = NeverBlocked(),
-            settings = settings,
-        ),
-        settings = settings,
-        panicState = object : PanicStateProvider { override val isPanicDecoyActive = false },
-        io = Dispatchers.Unconfined,
-    )
-
-    /**
-     * Fait comme si quinze minutes venaient de s'écouler, en reculant `triggeredAt` d'un
-     * intervalle : la relance suivante devient due sans qu'aucun test n'ait à attendre.
-     */
-    private suspend fun rewindTriggeredAt(settings: FakeSettings) {
-        settings.update { s ->
-            s.copy(
-                security = s.security.copy(
-                    safetyCall = s.security.safetyCall.copy(
-                        triggeredAt = s.security.safetyCall.triggeredAt -
-                            SafetyCallConfig.RELANCE_INTERVAL_MS,
-                    ),
-                ),
-            )
-        }
-    }
 
     // ──────────────────────────── Les tests ────────────────────────────
 
@@ -379,6 +83,99 @@ class TriggerSafetyCallRelanceTest {
         assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
         assertThat(settings.safetyCall.claimedAt).isEqualTo(0L)
     }
+
+    // ──────────────────── F05 : remis au radio n'est pas parti ────────────────────
+
+    /**
+     * v1.28.3 (F05) — **le défaut que ce test ferme**, signalé par la relecture externe sur la MR
+     * F-Droid !38458.
+     *
+     * Le test juste au-dessus couvre l'échec SYNCHRONE : `SmsManager` lève, `sender.succeed` est
+     * faux, le créneau est rendu. Ce que personne ne couvrait, c'est le cas bien plus fréquent où
+     * `SmsManager` **accepte** la demande sans rien promettre. `sendMultipartTextMessage` ne rend
+     * rien : le sort du message arrive plus tard par le `PendingIntent` `SENT`. En mode avion,
+     * sans SIM ou hors couverture, `RESULT_ERROR_NO_SERVICE` remonte de façon ASYNCHRONE — aucune
+     * exception n'est levée, et l'ancienne version comptait donc un succès.
+     *
+     * La conséquence était la pire possible pour un homme mort : la séquence se déroulait
+     * entièrement et, au dernier message, écrivait `enabled = false`. **La protection se
+     * désarmait sans qu'un seul SMS ait atteint le réseau.**
+     *
+     * Ici le sender réussit — la demande part bien vers `SmsManager`, `calls` le prouve — mais le
+     * radio ne rend jamais son verdict : le statut reste `PENDING`. Rien ne doit avancer.
+     */
+    @Test
+    fun `un envoi accepte par SmsManager mais jamais confirme par le radio ne desarme pas`() =
+        kotlinx.coroutines.test.runTest {
+            val settings = expiredSettings()
+            val sender = CountingSender(succeed = true)
+            val mirror = NoopMirror(statutRendu = MessageStatus.PENDING)
+
+            val result = useCase(
+                settings,
+                sender,
+                mirror,
+                kotlinx.coroutines.test.StandardTestDispatcher(testScheduler),
+            ).invoke()
+
+            // La demande a bien ete remise a `SmsManager` — ce n'est pas un echec synchrone.
+            assertThat(sender.calls).isEqualTo(1)
+            // Mais elle n'est pas confirmee, donc elle ne compte pas.
+            assertThat(result).isInstanceOf(TriggerSafetyCallUseCase.Result.SendFailed::class.java)
+            assertThat(settings.safetyCall.enabled).isTrue()
+            assertThat(settings.safetyCall.isTriggered).isFalse()
+            assertThat(settings.safetyCall.messagesSent).isEqualTo(0)
+            // Le creneau est rendu : le tick suivant retentera.
+            assertThat(settings.safetyCall.claimedAt).isEqualTo(0L)
+            assertThat(settings.safetyCall.isExpired()).isTrue()
+        }
+
+    /**
+     * v1.28.3 (F05) — le pendant du précédent : quand le radio répond, et répond NON. Même
+     * conclusion, par un chemin différent — ici le verdict est acquis, on ne l'attend pas.
+     */
+    @Test
+    fun `un envoi refuse par le radio apres acceptation ne desarme pas`() =
+        kotlinx.coroutines.test.runTest {
+            val settings = expiredSettings()
+            val sender = CountingSender(succeed = true)
+            val mirror = NoopMirror(statutRendu = MessageStatus.FAILED)
+
+            val result = useCase(
+                settings,
+                sender,
+                mirror,
+                kotlinx.coroutines.test.StandardTestDispatcher(testScheduler),
+            ).invoke()
+
+            assertThat(sender.calls).isEqualTo(1)
+            assertThat(result).isInstanceOf(TriggerSafetyCallUseCase.Result.SendFailed::class.java)
+            assertThat(settings.safetyCall.enabled).isTrue()
+            assertThat(settings.safetyCall.messagesSent).isEqualTo(0)
+        }
+
+    /**
+     * Contrôle positif des deux tests ci-dessus : avec un radio qui confirme, la séquence avance
+     * comme avant. Sans lui, un correctif qui refuserait TOUS les envois passerait pour bon.
+     */
+    @Test
+    fun `un envoi confirme par le radio fait avancer la sequence`() =
+        kotlinx.coroutines.test.runTest {
+            val settings = expiredSettings()
+            val sender = CountingSender(succeed = true)
+            val mirror = NoopMirror(statutRendu = MessageStatus.SENT)
+
+            val result = useCase(
+                settings,
+                sender,
+                mirror,
+                kotlinx.coroutines.test.StandardTestDispatcher(testScheduler),
+            ).invoke()
+
+            assertThat(result).isInstanceOf(TriggerSafetyCallUseCase.Result.Triggered::class.java)
+            assertThat(settings.safetyCall.messagesSent).isEqualTo(1)
+            assertThat(settings.safetyCall.isTriggered).isTrue()
+        }
 
     @Test
     fun `deux ticks qui se croisent n envoient qu un seul message`() {

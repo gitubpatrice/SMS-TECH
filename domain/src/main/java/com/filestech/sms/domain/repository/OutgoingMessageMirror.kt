@@ -36,6 +36,19 @@ interface OutgoingMessageMirror {
     suspend fun updateOutgoingStatus(localId: Long, status: MessageStatus, errorCode: Int? = null)
 
     /**
+     * Statut courant d'un message sortant, ou `null` si la ligne n'existe plus.
+     *
+     * v1.28.3 (F05) — ajouté pour que l'appel de sécurité puisse distinguer « remis à
+     * `SmsManager` » de « réellement parti ». `SmsManager.sendMultipartTextMessage` ne rend rien
+     * d'utile : elle n'a fait qu'accepter la demande, et le sort du message arrive plus tard par
+     * le `PendingIntent` `SENT`, que [updateOutgoingStatus] écrit ici. Sans cette lecture, le
+     * seul signal disponible en amont était l'absence d'exception synchrone — ce qui reste vrai
+     * en mode avion, sans SIM et hors couverture, c'est-à-dire précisément quand l'alerte
+     * échoue.
+     */
+    suspend fun outgoingStatus(localId: Long): MessageStatus?
+
+    /**
      * v1.26.1 (audit M8) — REMET un envoi en attente, sur action explicite de l'utilisateur
      * (relance d'un message en échec).
      *

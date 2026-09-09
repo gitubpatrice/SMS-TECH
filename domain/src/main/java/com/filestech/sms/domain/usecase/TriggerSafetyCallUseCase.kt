@@ -2,15 +2,19 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -63,6 +67,9 @@ class TriggerSafetyCallUseCase @Inject constructor(
     private val sendSms: SendSmsUseCase,
     private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
+    // v1.28.3 (F05) — lecture seule du statut d'un envoi, pour attendre l'accuse du radio au
+    // lieu de tenir l'acceptation par `SmsManager` pour un envoi reussi.
+    private val mirror: OutgoingMessageMirror,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -240,8 +247,12 @@ class TriggerSafetyCallUseCase @Inject constructor(
         )
 
         val tally = sendToContacts(current.contacts, body, myClaimId, myGeneration)
-        val sent = tally.sent
-        val failed = tally.failed
+        // v1.28.3 (F05) — le compteur d'envois vient desormais du VERDICT DU RADIO, pas de
+        // l'acceptation par `SmsManager`. Cf. [confirmerAupresDuRadio] : sans ca, la sequence se
+        // deroulait entierement et se desarmait alors qu'aucun SMS n'avait atteint le reseau.
+        val confirmes = confirmerAupresDuRadio(tally.remisAuRadio)
+        val sent = confirmes
+        val failed = tally.failed + (tally.remisAuRadio.size - confirmes)
         val superseded = tally.superseded
 
         // v1.27.2 - ANNULATION DE LA RESERVATION si RIEN n est parti.
@@ -332,7 +343,16 @@ class TriggerSafetyCallUseCase @Inject constructor(
     }
 
     /** Bilan d'une passe d'envoi. [superseded] = le creneau nous a ete retire en cours de route. */
-    private data class SendTally(val sent: Int, val failed: Int, val superseded: Boolean)
+    /**
+     * @param remisAuRadio identifiants Room des messages que `SmsManager` a **acceptés**. Leur
+     *   sort est encore inconnu : il arrivera par le `PendingIntent` `SENT`. Ne jamais les
+     *   compter comme envoyés sans être passé par [confirmerAupresDuRadio].
+     */
+    private data class SendTally(
+        val remisAuRadio: List<Long>,
+        val failed: Int,
+        val superseded: Boolean,
+    )
 
     /**
      * Envoie [body] a chaque contact, en verifiant AVANT CHAQUE ENVOI que le creneau nous
@@ -355,12 +375,12 @@ class TriggerSafetyCallUseCase @Inject constructor(
         claimId: Long,
         generation: Long,
     ): SendTally {
-        var sent = 0
+        val remisAuRadio = mutableListOf<Long>()
         var failed = 0
         for ((index, contact) in contacts.withIndex()) {
             if (!renewClaim(claimId, generation, System.currentTimeMillis())) {
                 Timber.i("TriggerSafetyCallUseCase: creneau perdu en cours d envoi, arret")
-                return SendTally(sent, failed, superseded = true)
+                return SendTally(remisAuRadio, failed, superseded = true)
             }
             val target = contact.takeIf { it.isValid() }?.let { PhoneAddress.of(it.phoneNumber) }
             if (target == null || target.normalized.isEmpty()) {
@@ -368,15 +388,80 @@ class TriggerSafetyCallUseCase @Inject constructor(
                 failed++
                 continue
             }
-            when (sendSms(recipients = listOf(target), body = body, appendSignature = false)) {
-                is Outcome.Success -> sent++
+            when (val res = sendSms(recipients = listOf(target), body = body, appendSignature = false)) {
+                // v1.28.3 (F05) — on ne compte PLUS un envoi ici. Un `Outcome.Success` ne dit que
+                // ceci : `SmsManager` a accepte la demande sans lever. On retient les
+                // identifiants Room pour aller chercher le verdict du radio apres la boucle.
+                is Outcome.Success -> remisAuRadio += res.value
                 is Outcome.Failure -> {
                     Timber.w("TriggerSafetyCallUseCase: send failed for contact #%d", index)
                     failed++
                 }
             }
         }
-        return SendTally(sent, failed, superseded = false)
+        return SendTally(remisAuRadio, failed, superseded = false)
+    }
+
+    /**
+     * v1.28.3 (F05) — attend le verdict du radio pour les messages remis a `SmsManager`, et rend
+     * le nombre de ceux qui sont REELLEMENT partis.
+     *
+     * # Pourquoi cette attente existe
+     *
+     * `SmsManager.sendMultipartTextMessage` ne rend rien : elle accepte la demande, et le sort du
+     * message arrive plus tard par le `PendingIntent` `SENT`, que `SmsSentReceiver` ecrit en base.
+     * Jusqu'ici l'appel de securite comptait un succes des l'acceptation. En mode avion, sans SIM
+     * ou hors couverture — c'est-a-dire exactement quand l'alerte echoue — aucune exception n'est
+     * levee : `RESULT_ERROR_NO_SERVICE` remonte de facon ASYNCHRONE. La sequence se deroulait donc
+     * entierement et, au dernier message, ecrivait `enabled = false` : **l'homme mort se
+     * desarmait sans qu'un seul SMS ait atteint le reseau.**
+     *
+     * # Ce qui est compte
+     *
+     * `SENT` et `DELIVERED` seulement. Un `FAILED` est acquis, on cesse d'attendre. Un `PENDING`
+     * encore la a l'echeance reste NON compte : le tick suivant retentera, et le compteur de
+     * sequence n'aura pas avance. C'est le meme arbitrage que la restitution de creneau quelques
+     * lignes plus haut — au pire UN message en double, ce qui est sans commune mesure avec une
+     * protection eteinte en silence.
+     *
+     * L'attente est bornee et courte au regard du budget d'un worker (10 min), et elle ne court
+     * qu'une fois, apres la boucle, pas par contact.
+     */
+    private suspend fun confirmerAupresDuRadio(ids: List<Long>): Int {
+        if (ids.isEmpty()) return 0
+        val enAttente = ids.toMutableSet()
+        var confirmes = 0
+        // `withTimeoutOrNull` et non une comparaison sur `System.currentTimeMillis()` : la borne
+        // doit suivre l'horloge des coroutines. Avec le temps mural, un test du cas « le radio ne
+        // repond jamais » durerait quarante-cinq secondes reelles, et personne n'ecrirait ce test.
+        withTimeoutOrNull(CONFIRMATION_TIMEOUT_MS) {
+            while (enAttente.isNotEmpty()) {
+                val iterateur = enAttente.iterator()
+                while (iterateur.hasNext()) {
+                    val id = iterateur.next()
+                    when (mirror.outgoingStatus(id)) {
+                        MessageStatus.SENT, MessageStatus.DELIVERED -> {
+                            confirmes++
+                            iterateur.remove()
+                        }
+                        // Verdict negatif acquis : inutile d'attendre davantage pour celui-ci.
+                        MessageStatus.FAILED -> iterateur.remove()
+                        // La ligne a disparu (purge, suppression manuelle) : rien a confirmer.
+                        null -> iterateur.remove()
+                        else -> Unit
+                    }
+                }
+                if (enAttente.isNotEmpty()) delay(CONFIRMATION_POLL_MS)
+            }
+        }
+        if (enAttente.isNotEmpty()) {
+            Timber.w(
+                "TriggerSafetyCallUseCase: %d message(s) sans verdict du radio apres %d ms — non comptes",
+                enAttente.size,
+                CONFIRMATION_TIMEOUT_MS,
+            )
+        }
+        return confirmes
     }
 
     /**
@@ -563,5 +648,22 @@ class TriggerSafetyCallUseCase @Inject constructor(
          * tick suivant retentera. Ne JAMAIS desarmer sur ce chemin.
          */
         data class SendFailed(val failed: Int) : Result
+    }
+
+    private companion object {
+        /**
+         * v1.28.3 (F05) — combien de temps attendre le `PendingIntent` `SENT` avant de tenir un
+         * envoi pour non confirme.
+         *
+         * Un accus positif revient en quelques secondes. C'est l'ECHEC qui est lent :
+         * `RESULT_ERROR_NO_SERVICE` peut demander plusieurs dizaines de secondes, le temps que la
+         * pile radio renonce. Trop court, on ne compterait presque jamais un envoi reussi et la
+         * sequence tournerait en rond ; trop long, le worker s'immobilise. Quarante-cinq secondes
+         * couvrent le cas normal avec de la marge, pour un budget de worker de dix minutes.
+         */
+        const val CONFIRMATION_TIMEOUT_MS = 45_000L
+
+        /** Intervalle de sondage du statut. Une lecture par seconde sur au plus quelques lignes. */
+        const val CONFIRMATION_POLL_MS = 1_000L
     }
 }
