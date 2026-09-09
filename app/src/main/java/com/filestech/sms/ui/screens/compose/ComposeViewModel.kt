@@ -179,4 +179,24 @@ class ComposeViewModel @Inject constructor(
         // `flowOn(io)` déplace le fold + le filtrage sur IO — parité avec ConversationsViewModel.
         .flowOn(io)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+    companion object {
+        /**
+         * v1.28.3 (audit global, X-06 — mesuré sur le S9) — **une saisie n'est proposée comme
+         * destinataire que si elle se compose.**
+         *
+         * La ligne de saisie libre offrait n'importe quel texte comme adresse : taper « Pat »
+         * puis l'ajouter envoyait un SMS au destinataire « Pat », que la pile refusait avec
+         * `RESULT_ERROR_NULL_PDU`, bulle rouge et notification d'échec à la clé — pour un nom
+         * qui figurait dans les contacts juste au-dessus. `PhoneAddress.of` garde à dessein les
+         * adresses alphanumériques (« Free », « INFO ») : elles servent en RÉCEPTION, jamais en
+         * destination. Chiffres, `+`, espaces, parenthèses, tirets et points ; au moins deux
+         * chiffres pour couvrir les numéros courts.
+         */
+        fun estComposable(saisie: String): Boolean {
+            val propre = saisie.trim()
+            if (propre.count { it.isDigit() } < 2) return false
+            return propre.all { it.isDigit() || it in "+ ()-." }
+        }
+    }
 }

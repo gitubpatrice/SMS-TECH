@@ -156,7 +156,9 @@ fun ComposeScreen(
                 // `.clickable`, un tap arrivé après une frappe aurait envoyé un numéro autre
                 // que celui affiché sur la ligne.
                 val input = viewModel.searchInput
-                if (input.isNotBlank() && filtered.none { c -> c.firstPhone?.raw == input }) {
+                // X-06 — un nom tapé n'est pas une adresse : la ligne n'apparaît que pour un
+                // numéro composable, cf. [ComposeViewModel.estComposable].
+                if (ComposeViewModel.estComposable(input) && filtered.none { c -> c.firstPhone?.raw == input }) {
                     item {
                         ListItem(
                             headlineContent = { Text(input) },
