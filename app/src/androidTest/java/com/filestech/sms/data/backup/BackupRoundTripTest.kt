@@ -72,6 +72,18 @@ class BackupRoundTripTest {
         const val BODY_2 = "Deuxieme message"
         const val BODY_VAULT = "Message du coffre"
         val PASSWORD get() = "correct horse battery staple".toCharArray()
+
+        /** v1.28.3 (F24) — deux reactions distinctes, pour prouver que la fusion n'ecrase pas. */
+        const val REACTION_COEUR = "❤️"
+        const val REACTION_POUCE = "👍"
+
+        /**
+         * v1.28.3 (F32) — le plafond de conversations qu'impose le LECTEUR
+         * (`BackupService.MAX_RESTORE_CONVERSATIONS`, prive). Ecrit en dur ici a dessein : le
+         * relire depuis la constante ferait passer le test quelle que soit sa valeur, y compris
+         * si quelqu'un la portait a l'infini.
+         */
+        const val CAP_CONVERSATIONS = 10_000L
     }
 
     @Before
@@ -338,6 +350,222 @@ class BackupRoundTripTest {
             val written = serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
 
             assertThat(written).isInstanceOf(Outcome.Success::class.java)
+            assertThat(backupFile.length()).isGreaterThan(0L)
+        }
+    }
+
+    // ────────────── v1.28.3 — F24, F25 et F32 ──────────────
+
+    /**
+     * v1.28.3 (F24) — **le scenario NOMINAL d'une restauration, et il ne rendait rien.**
+     *
+     * Apres reinstallation, la resynchronisation reimporte tout l'historique depuis
+     * `content://sms` AVANT que l'utilisateur ne restaure. Chaque message de la sauvegarde entre
+     * alors en collision sur l'index `UNIQUE(telephony_uri)`, `insert` rend `-1`, et le code se
+     * contentait de compter un « ignore ». `msgIdMap` restait vide, la passe 2 sortait sur
+     * `?: continue` pour chaque citation, et TOUTES les reponses citees affichaient « Message
+     * supprime ». Les favoris et les reactions — que le fournisseur du systeme ne connait pas et
+     * que la sauvegarde seule transporte — etaient perdus du meme coup.
+     *
+     * La sauvegarde ne rendait donc rien de ce qui lui etait propre, tout en s'annoncant reussie.
+     */
+    @Test
+    fun uneRestaurationSurUnHistoriqueDejaResynchronise_rendCitationsFavorisEtReactions() {
+        runBlocking {
+            dbSource.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+            dbSource.messageDao().insert(message(1L, 1L, "content://sms/1", BODY_1))
+            dbSource.messageDao().insert(
+                message(2L, 1L, "content://sms/2", BODY_2)
+                    .copy(replyToMessageId = 1L, starred = true, reactionEmoji = REACTION_COEUR),
+            )
+            val ecrit = serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+            assertThat(ecrit).isInstanceOf(Outcome.Success::class.java)
+
+            // Cible : la resynchronisation a DEJA tout reimporte — memes URI, sans les drapeaux
+            // ni la citation, que `content://sms` ne connait pas.
+            dbTarget.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+            dbTarget.messageDao().insert(message(1L, 1L, "content://sms/1", BODY_1))
+            dbTarget.messageDao().insert(message(2L, 1L, "content://sms/2", BODY_2))
+
+            val lu = serviceFor(dbTarget, VaultSessionState())
+                .readSmsbk(uriOf(backupFile), PASSWORD)
+            assertThat(lu).isInstanceOf(Outcome.Success::class.java)
+
+            val restaure = dbTarget.messageDao().findByTelephonyUri("content://sms/2")!!
+            val cible = dbTarget.messageDao().findByTelephonyUri("content://sms/1")!!
+            assertThat(restaure.replyToMessageId).isEqualTo(cible.id)
+            assertThat(restaure.starred).isTrue()
+            assertThat(restaure.reactionEmoji).isEqualTo(REACTION_COEUR)
+        }
+    }
+
+    /**
+     * Controle POSITIF : la fusion ne doit pas ECRASER ce que l'utilisateur a fait depuis. Une
+     * reaction posee apres la sauvegarde est plus recente que celle du fichier, et la restauration
+     * n'est pas censee remonter le temps. Sans ce test, « fusionner » pourrait vouloir dire
+     * « imposer », ce qui serait une perte deguisee en restauration.
+     */
+    @Test
+    fun laFusionNEcrasePasUneReactionPosterieureALaSauvegarde() {
+        runBlocking {
+            dbSource.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+            dbSource.messageDao().insert(
+                message(1L, 1L, "content://sms/1", BODY_1).copy(reactionEmoji = REACTION_COEUR),
+            )
+            serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+
+            dbTarget.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+            dbTarget.messageDao().insert(
+                message(1L, 1L, "content://sms/1", BODY_1).copy(reactionEmoji = REACTION_POUCE),
+            )
+
+            serviceFor(dbTarget, VaultSessionState()).readSmsbk(uriOf(backupFile), PASSWORD)
+
+            assertThat(dbTarget.messageDao().findByTelephonyUri("content://sms/1")!!.reactionEmoji)
+                .isEqualTo(REACTION_POUCE)
+        }
+    }
+
+    /**
+     * v1.28.3 (F25) — **deux messages distincts confondus, et l'un PERDU en silence.**
+     *
+     * La sauvegarde ne transporte ni la table `attachments` ni les fichiers : un MMS restaure est
+     * une ligne au corps souvent VIDE et sans `telephony_uri`. La cle de repli — conversation,
+     * date, sens, corps — se reduisait alors a « meme conversation, meme milliseconde, meme
+     * sens », ce a quoi deux photos envoyees dans la meme seconde repondent identiquement. La
+     * seconde etait comptee « ignoree » et perdue, sans trace, par la fonction meme que
+     * l'utilisateur avait lancee pour la retrouver.
+     */
+    @Test
+    fun deuxMmsSansCorpsNiUri_dansLaMemeConversation_surviventTousLesDeux() {
+        runBlocking {
+            dbSource.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+            // Deux MMS distincts : meme corps vide, meme sens — seule la SIM les separe.
+            dbSource.messageDao().insert(
+                message(1L, 1L, "content://sms/x", "")
+                    .copy(telephonyUri = null, type = MessageType.MMS, subId = 1, attachmentsCount = 1),
+            )
+            dbSource.messageDao().insert(
+                message(2L, 1L, "content://sms/y", "")
+                    .copy(telephonyUri = null, type = MessageType.MMS, subId = 2, date = 1_000L, attachmentsCount = 1),
+            )
+            serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+            dbTarget.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+
+            serviceFor(dbTarget, VaultSessionState()).readSmsbk(uriOf(backupFile), PASSWORD)
+
+            assertThat(dbTarget.messageDao().findByConversation(1L)).hasSize(2)
+        }
+    }
+
+    /**
+     * Controle POSITIF de F25 : resserrer la cle ne doit pas rouvrir la duplication que la
+     * v1.26.1 avait fermee. Restaurer DEUX FOIS la meme sauvegarde produit des lignes identiques
+     * sur les sept criteres, qui doivent donc toujours se rencontrer.
+     */
+    @Test
+    fun restaurerDeuxFoisLaMemeSauvegarde_neDupliquePas() {
+        runBlocking {
+            dbSource.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+            dbSource.messageDao().insert(
+                message(1L, 1L, "content://sms/z", "")
+                    .copy(telephonyUri = null, type = MessageType.MMS, attachmentsCount = 1),
+            )
+            serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+            dbTarget.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+
+            val service = serviceFor(dbTarget, VaultSessionState())
+            service.readSmsbk(uriOf(backupFile), PASSWORD)
+            service.readSmsbk(uriOf(backupFile), PASSWORD)
+
+            assertThat(dbTarget.messageDao().findByConversation(1L)).hasSize(1)
+        }
+    }
+
+    /**
+     * v1.28.3 (F32) — **un fichier tronque passait la validation d'en-tete.**
+     *
+     * MAGIC, version, sel et iterations sont ecrits en PREMIER : un fichier coupe en cours
+     * d'ecriture — disque plein, processus tue — les porte tous. L'echec ne se manifestait donc
+     * qu'a l'ouverture de l'AEAD, que l'utilisateur lit comme « mauvais mot de passe ». Il
+     * cherchait un mot de passe pour un fichier incomplet, sur une sauvegarde qui venait
+     * d'ecraser la precedente.
+     *
+     * On ne peut pas interrompre l'ecriture depuis un test ; on peut en revanche verifier que le
+     * LECTEUR refuse un tel fichier, et que son refus ne se confond jamais avec un succes.
+     */
+    @Test
+    fun unFichierTronqueEstRefuse_etNEcritRienEnBase() {
+        runBlocking {
+            seedSource()
+            serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+            val entier = backupFile.readBytes()
+            assertThat(entier.size).isGreaterThan(64)
+            // Coupe au milieu du corps chiffre : l'en-tete, lui, reste intact.
+            backupFile.writeBytes(entier.copyOfRange(0, entier.size / 2))
+
+            val lu = serviceFor(dbTarget, VaultSessionState())
+                .readSmsbk(uriOf(backupFile), PASSWORD)
+
+            assertThat(lu).isInstanceOf(Outcome.Failure::class.java)
+            assertThat(dbTarget.messageDao().findByConversation(1L)).isEmpty()
+        }
+    }
+
+    /**
+     * v1.28.3 (F32) — **l'ecrivain produisait un fichier que son propre lecteur refuse.**
+     *
+     * `importPayload` refuse au-dela de 10 000 conversations ; l'export n'en verifiait aucune. Un
+     * historique volumineux produisait donc un `.smsbk` que l'application refusait ensuite de
+     * relire — et ce refus n'arrivait qu'a la RESTAURATION, c'est-a-dire au pire moment, apres
+     * une reinstallation, quand la sauvegarde est la seule chose qui reste.
+     *
+     * Le second point du test compte autant que le premier : ouvrir en « w » TRONQUE le fichier
+     * existant. Echouer APRES l'ouverture detruirait la sauvegarde precedente pour la remplacer
+     * par une inutilisable. Le refus doit donc laisser le fichier d'avant INTACT.
+     */
+    @Test
+    fun unExportTropVolumineuxEstRefuse_etLaisseLaSauvegardePrecedenteIntacte() {
+        runBlocking {
+            // Une premiere sauvegarde valide, qui doit survivre au refus qui suit.
+            seedSource()
+            vaultSource.markUnlocked()
+            assertThat(serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD))
+                .isInstanceOf(Outcome.Success::class.java)
+            val avant = backupFile.readBytes()
+            assertThat(avant.size).isGreaterThan(0)
+
+            // Puis on depasse la borne que le LECTEUR impose.
+            for (i in 3L..(CAP_CONVERSATIONS + 2L)) {
+                dbSource.conversationDao().insert(conversation(i, "+3360000$i", inVault = false))
+            }
+
+            val refus = serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+
+            assertThat(refus).isInstanceOf(Outcome.Failure::class.java)
+            // Et surtout : le fichier d'avant est toujours la, octet pour octet.
+            assertThat(backupFile.readBytes()).isEqualTo(avant)
+        }
+    }
+
+    /**
+     * Controle POSITIF de la borne : juste EN DESSOUS du plafond, l'export doit passer. Sans lui,
+     * un garde qui refuserait tout export passerait le test precedent et casserait la
+     * fonctionnalite entiere.
+     */
+    @Test
+    fun unExportJusteSousLaBorneEstAccepte() {
+        runBlocking {
+            seedSource()
+            vaultSource.markUnlocked()
+            // 2 conversations existent deja ; on complete jusqu'a exactement le plafond.
+            for (i in 3L..CAP_CONVERSATIONS) {
+                dbSource.conversationDao().insert(conversation(i, "+3360000$i", inVault = false))
+            }
+
+            val ecrit = serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+
+            assertThat(ecrit).isInstanceOf(Outcome.Success::class.java)
             assertThat(backupFile.length()).isGreaterThan(0L)
         }
     }

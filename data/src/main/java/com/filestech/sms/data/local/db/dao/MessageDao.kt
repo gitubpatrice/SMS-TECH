@@ -187,12 +187,36 @@ interface MessageDao {
      * affirme « les messages existants sont conservés (pas de doublons) ».
      *
      * Clé de repli : même conversation, même horodatage, même sens, même corps.
+     *
+     * # v1.28.3 (F25) — quatre criteres ne suffisaient pas, et l'erreur etait SILENCIEUSE
+     *
+     * La sauvegarde ne transporte ni la table `attachments` ni les fichiers : un MMS restaure est
+     * une ligne au corps souvent VIDE. La cle se reduisait alors a « meme conversation, meme
+     * milliseconde, meme sens » — et deux photos distinctes envoyees dans la meme seconde y
+     * repondaient de la meme facon. La seconde etait comptee « ignoree » et PERDUE, sans trace,
+     * alors que l'utilisateur venait de restaurer pour la retrouver.
+     *
+     * Trois criteres de plus, tous deja presents dans la sauvegarde et tous NULL-safe la ou il le
+     * faut (`IS` et non `=`, sans quoi une colonne nulle ne s'egale jamais elle-meme) :
+     *
+     *  - **`type`** — un SMS et un MMS ne se confondent plus ;
+     *  - **`date_sent`** — pose par le reseau, il separe deux envois que `date` rapproche ;
+     *  - **`sub_id`** — deux SIM, deux lignes distinctes.
+     *
+     * Le resserrement ne peut RIEN dupliquer de ce qui etait dedoublonne : restaurer deux fois la
+     * meme sauvegarde produit des lignes identiques sur les sept criteres, qui se rencontrent
+     * donc toujours. Il ne fait qu'ecarter des rapprochements que rien ne prouvait — et entre
+     * perdre un message en silence et en montrer un en double, seul le second se voit et se
+     * corrige.
      */
     @Query(
         """
         SELECT id FROM messages
         WHERE conversation_id = :conversationId AND date = :date
           AND direction = :direction AND body = :body
+          AND type = :type
+          AND date_sent IS :dateSent
+          AND sub_id IS :subId
         LIMIT 1
         """,
     )
@@ -201,6 +225,9 @@ interface MessageDao {
         date: Long,
         direction: com.filestech.sms.domain.model.MessageDirection,
         body: String,
+        type: com.filestech.sms.domain.model.MessageType,
+        dateSent: Long?,
+        subId: Int?,
     ): Long?
 
     @Query("UPDATE messages SET status = :status, error_code = :errorCode WHERE id = :id")

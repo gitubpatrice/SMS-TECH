@@ -165,6 +165,19 @@ class BackupService @Inject constructor(
             block = {
                 require(password.isNotEmpty()) { "password is required" }
                 val payload = buildPayload()
+                // v1.28.3 (F32) — l'ECRIVAIN applique enfin les bornes de son propre LECTEUR.
+                //
+                // `readAllBytesBounded` refuse au-dela de MAX_RESTORE_BYTES, et `importPayload`
+                // au-dela de MAX_RESTORE_CONVERSATIONS / MAX_RESTORE_MESSAGES. L'export, lui,
+                // n'en verifiait aucune : un historique volumineux produisait un `.smsbk` que
+                // l'application refusait ensuite de relire. Le refus n'arrivait qu'a la
+                // RESTAURATION, c'est-a-dire au pire moment — apres une reinstallation, quand la
+                // sauvegarde est la seule chose qui reste.
+                //
+                // Le controle a lieu AVANT `openOutputStream`, et ce n'est pas un detail :
+                // ouvrir en « w » TRONQUE le fichier existant. Echouer apres l'ouverture
+                // detruirait la sauvegarde precedente pour la remplacer par une inutilisable.
+                verifierBornesDuLecteur(payload)
                 val plainBytes = json.encodeToString(BackupPayload.serializer(), payload)
                     .toByteArray(Charsets.UTF_8)
                 val out = ByteArrayOutputStream()
@@ -199,16 +212,73 @@ class BackupService @Inject constructor(
                 // retourne null (URI révoqué, disque plein, provider crashé). Avant le
                 // `!!` produisait un NPE générique enveloppé dans AppError.Storage sans
                 // message métier — debugging à l'aveugle.
+                val octets = out.toByteArray()
+                if (octets.size > MAX_RESTORE_BYTES) {
+                    error(
+                        "backup would be ${octets.size} B, above the ${MAX_RESTORE_BYTES} B cap " +
+                            "its own reader enforces",
+                    )
+                }
                 val os = context.contentResolver.openOutputStream(uri, "w")
                     ?: error("openOutputStream returned null for backup URI")
                 os.use {
-                    it.write(out.toByteArray())
+                    it.write(octets)
                     it.flush()
+                }
+                // v1.28.3 (F32) — on RELIT ce qui a ete ecrit.
+                //
+                // Un fichier tronque — disque plein, processus tue, fournisseur de document qui
+                // abandonne — passe la validation d'en-tete : MAGIC, version, sel et iterations
+                // sont ecrits en PREMIER. L'echec ne se manifestait donc qu'a l'ouverture de
+                // l'AEAD, que l'utilisateur lit comme « mauvais mot de passe ». Il cherchait un
+                // mot de passe pour un fichier incomplet, sur une sauvegarde qui venait
+                // d'ecraser la precedente.
+                //
+                // La taille suffit a le detecter et ne coute rien ; verifier par dechiffrement
+                // demanderait une seconde derivation de cle, calibree pour etre lente, et le mot
+                // de passe est deja efface a ce stade.
+                val ecrits = runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { flux ->
+                        var total = 0L
+                        val tampon = ByteArray(READ_CHUNK_BYTES)
+                        while (true) {
+                            val lus = flux.read(tampon)
+                            if (lus <= 0) break
+                            total += lus
+                        }
+                        total
+                    }
+                }.getOrNull()
+                if (ecrits != null && ecrits != octets.size.toLong()) {
+                    error("backup written incompletely: $ecrits B on disk, ${octets.size} B expected")
                 }
                 uri
             },
             errorMapper = { AppError.Storage(it) },
         )
+    }
+
+    /**
+     * v1.28.3 (F32) — refuse d'ecrire ce que la restauration refuserait de lire.
+     *
+     * Les deux bornes sont celles de `importPayload`, litteralement les memes constantes : deux
+     * seuils qui divergeraient reproduiraient le defaut sous une autre forme. Le message nomme le
+     * depassement plutot que d'echouer « au stockage », parce que c'est la seule chose qui
+     * permette a l'utilisateur d'agir — reduire sa retention, purger, exporter par morceaux.
+     */
+    private fun verifierBornesDuLecteur(payload: BackupPayload) {
+        if (payload.conversations.size > MAX_RESTORE_CONVERSATIONS) {
+            error(
+                "backup holds ${payload.conversations.size} conversations, above the " +
+                    "$MAX_RESTORE_CONVERSATIONS its own reader accepts",
+            )
+        }
+        if (payload.messages.size > MAX_RESTORE_MESSAGES) {
+            error(
+                "backup holds ${payload.messages.size} messages, above the " +
+                    "$MAX_RESTORE_MESSAGES its own reader accepts",
+            )
+        }
     }
 
     private suspend fun buildPayload(): BackupPayload {
@@ -444,6 +514,36 @@ class BackupService @Inject constructor(
      * [MessageDao.insert] (OnConflictStrategy.IGNORE skip les dupes via index unique
      * `telephony_uri`).
      */
+    /**
+     * v1.28.3 (F24) — reverse sur la ligne DEJA PRESENTE ce que la sauvegarde seule transporte.
+     *
+     * Ces deux champs sont purement locaux : le fournisseur du systeme ne les connait pas, donc
+     * une ligne venue de la resynchronisation ne peut pas les avoir. Les laisser tomber revenait
+     * a perdre a la restauration precisement ce que l'utilisateur avait sauvegarde.
+     *
+     *  - **favori** : fusionne par OU. Un favori ne se retire jamais tout seul, et retirer par
+     *    restauration un favori pose depuis la sauvegarde serait une perte, pas une remise a
+     *    l'etat anterieur.
+     *  - **reaction** : posee seulement si la ligne existante n'en a pas. La reaction courante
+     *    de l'utilisateur, s'il en a mis une depuis, est plus recente que celle du fichier.
+     *
+     * Ce qui n'est volontairement PAS fusionne : l'etat « lu ». Il change des deux cotes pour des
+     * raisons legitimes, et le reecrire depuis un instantane ancien ferait reapparaitre des
+     * pastilles de non-lu — ou effacerait celles qui comptent. Ni l'un ni l'autre ne serait une
+     * restauration.
+     */
+    private suspend fun fusionnerDrapeauxLocaux(
+        existant: com.filestech.sms.data.local.db.entity.MessageEntity,
+        sauvegarde: com.filestech.sms.data.local.db.entity.MessageEntity,
+    ) {
+        if (sauvegarde.starred && !existant.starred) {
+            runCatching { messageDao.setStarred(existant.id, true) }
+        }
+        if (existant.reactionEmoji == null && sauvegarde.reactionEmoji != null) {
+            runCatching { messageDao.setReaction(existant.id, sauvegarde.reactionEmoji) }
+        }
+    }
+
     private suspend fun importPayload(payload: BackupPayload): RestoreResult {
         return database.withTransaction {
             var reused = 0
@@ -554,6 +654,12 @@ class BackupService @Inject constructor(
                         date = toInsert.date,
                         direction = toInsert.direction,
                         body = toInsert.body,
+                        // v1.28.3 (F25) — trois discriminants de plus. Voir le KDoc de la requete :
+                        // un MMS restaure a souvent un corps VIDE, et la cle d'origine confondait
+                        // alors deux messages distincts de la meme seconde.
+                        type = toInsert.type,
+                        dateSent = toInsert.dateSent,
+                        subId = toInsert.subId,
                     )
                 } else {
                     null
@@ -566,6 +672,28 @@ class BackupService @Inject constructor(
                 val rowId = messageDao.insert(toInsert)
                 if (rowId == -1L) {
                     skipped++
+                    // v1.28.3 (F24) — UNE COLLISION N'EST PAS UN ECHEC, c'est une RENCONTRE.
+                    //
+                    // `insert` est en `OnConflictStrategy.IGNORE` : il rend `-1` quand l'index
+                    // UNIQUE sur `telephony_uri` designe deja cette ligne. On se contentait de
+                    // compter un « ignore » et de passer, sans rien inscrire dans `msgIdMap`.
+                    //
+                    // Or c'est le scenario NOMINAL, pas un cas limite : apres reinstallation, la
+                    // resynchronisation reimporte tout l'historique depuis `content://sms` AVANT
+                    // que l'utilisateur ne restaure. Chaque message de la sauvegarde entrait donc
+                    // en collision, `imported` valait 0, la carte restait vide — et la passe 2,
+                    // qui recolle les citations, sortait sur `?: continue` pour chacune d'elles.
+                    // Toutes les reponses citees affichaient « Message supprime ».
+                    //
+                    // La sauvegarde ne rendait alors RIEN de ce qu'elle seule transporte : ni les
+                    // citations, ni les favoris, ni les reactions — le fournisseur du systeme
+                    // n'en connait aucun. Elle devenait une operation sans effet, qui s'annoncait
+                    // reussie.
+                    val existant = toInsert.telephonyUri?.let { messageDao.findByTelephonyUri(it) }
+                    if (existant != null) {
+                        msgIdMap[backupMsg.id] = existant.id
+                        fusionnerDrapeauxLocaux(existant, toInsert)
+                    }
                 } else {
                     imported++
                     msgIdMap[backupMsg.id] = rowId
