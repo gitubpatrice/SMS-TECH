@@ -5,6 +5,8 @@
 `fix/relecture-externe-38458`
 
 > Note d'origine : <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/38458#note_3806954310>
+> Réponse publiée le 2026-09-10, après pipeline F-Droid vert (`fdroid build` + `check apk`) :
+> <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/38458#note_3811895340> — SMS Tech 1.28.3 (292).
 
 ---
 
