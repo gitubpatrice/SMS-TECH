@@ -1016,31 +1016,58 @@ class ThreadViewModel @Inject constructor(
                 _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))
                 return@launch
             }
-            // Auto-compress images bigger than the carrier cap. Most photos pickers hand back
-            // a 2-4 MB JPEG; we don't want to reject every photo, so we re-encode quality 75 →
-            // 50 → 30 + downscale until it fits.
-            val finalFile = if (mime.startsWith("image/") && file.length() > IMAGE_COMPRESS_THRESHOLD_BYTES) {
-                compressImage(file) ?: file
-            } else file
-
-            // v1.3.4 — la PJ est AJOUTÉE à la liste `pendingAttachments` (vs setter unique
-            // v1.2.1 derrière dialog modal). L'utilisateur visualise tout dans la bande
-            // staging du composer et tap Envoyer quand il a fini d'empiler.
+            // v1.28.3 (audit global, X-03 — mesure sur le S9) — le plafond se PARTAGE entre
+            // les images.
             //
-            // Cap dynamique 280 KB (carrier MMSC FR le plus strict, cf. VoiceRecorder.kt).
-            // Si l'ajout ferait dépasser le cap : on refuse + snack + delete fichier
-            // temporaire pour ne pas leaker en cache.
-            val currentTotal = _state.value.pendingAttachments.sumOf { it.sizeBytes }
+            // Chaque image etait compressee pour tenir SEULE sous les 280 Ko, puis l'ajout de la
+            // seconde faisait depasser le total : « Limite MMS atteinte » des la deuxieme photo,
+            // quelle qu'elle soit. Envoyer deux photos etait impossible. Le plafond est desormais
+            // divise entre les images du message, texte et pieces non compressibles deduits
+            // d'abord ; celles deja en attente sont recompressees a leur nouvelle part, et le
+            // refus ne vient que lorsque la part de chacune tomberait sous le seuil de
+            // lisibilite — cf. [MmsAttachmentBudget].
+            //
+            // v1.3.4 — la PJ est AJOUTEE a la liste `pendingAttachments` ; l'utilisateur
+            // visualise tout dans la bande du composeur et touche Envoyer quand il a fini.
+            val estImage = mime.startsWith("image/")
+            val enAttente = _state.value.pendingAttachments
             val draftLen = _state.value.draft.length.toLong()
-            val projected = currentTotal + finalFile.length() + draftLen
+            val autres = enAttente.filterNot { it.mimeType.startsWith("image/") }.sumOf { it.sizeBytes } +
+                (if (estImage) 0L else file.length())
+            val nombreImages = enAttente.count { it.mimeType.startsWith("image/") } + (if (estImage) 1 else 0)
+            val part = if (nombreImages == 0) {
+                CARRIER_PAYLOAD_CAP_BYTES
+            } else {
+                MmsAttachmentBudget.partParImage(CARRIER_PAYLOAD_CAP_BYTES, draftLen, autres, nombreImages)
+            }
+            if (part == null) {
+                runCatching { file.delete() }
+                _events.tryEmit(Event.ShowSnackbar(snackAttachCapReached()))
+                return@launch
+            }
+            val finalFile = if (estImage && file.length() > part) compressImage(file, part) ?: file else file
+            // Les images deja en attente prennent leur nouvelle part. Une recompression qui
+            // echoue laisse le fichier tel quel : la projection ci-dessous tranchera.
+            val reequilibrees = enAttente.map { pj ->
+                if (pj.mimeType.startsWith("image/") && pj.sizeBytes > part) {
+                    val reduite = compressImage(pj.file, part) ?: pj.file
+                    pj.copy(file = reduite, sizeBytes = reduite.length())
+                } else {
+                    pj
+                }
+            }
+            val projected = reequilibrees.sumOf { it.sizeBytes } + finalFile.length() + draftLen
             if (projected > CARRIER_PAYLOAD_CAP_BYTES) {
                 runCatching { finalFile.delete() }
+                // Les images reequilibrees, elles, restent : leurs nouveaux fichiers sont valables
+                // et les anciens ont ete supprimes par la compression.
+                _state.update { it.copy(pendingAttachments = reequilibrees) }
                 _events.tryEmit(Event.ShowSnackbar(snackAttachCapReached()))
                 return@launch
             }
             _state.update {
                 it.copy(
-                    pendingAttachments = it.pendingAttachments + PendingAttachment(
+                    pendingAttachments = reequilibrees + PendingAttachment(
                         file = finalFile,
                         mimeType = mime,
                         displayName = displayName,
@@ -1186,76 +1213,80 @@ class ThreadViewModel @Inject constructor(
         }
 
     /**
-     * Re-encodes the picked image as JPEG until it fits under [CARRIER_PAYLOAD_CAP_BYTES],
-     * trying decreasing quality and downscaling once if needed. Returns the re-encoded file
-     * (new file in the same dir) or null if everything failed.
+     * Ré-encode l'image en JPEG jusqu'à tenir sous [budget] : quatre qualités décroissantes à
+     * 1600 px, puis à 1024 px, puis à 800 px. Rend le fichier ré-encodé (même dossier) ou `null`
+     * si rien n'y fait ; la source n'est supprimée que sur succès.
+     *
+     * v1.28.3 (audit global, X-03) — le budget est un PARAMÈTRE : la part de cette image dans le
+     * plafond du message, et non plus le plafond entier. Les deux paliers de réduction
+     * supplémentaires existent pour les petites parts — trois photos se partagent 280 Ko.
      */
-    private suspend fun compressImage(src: java.io.File): java.io.File? =
+    private suspend fun compressImage(src: java.io.File, budget: Long): java.io.File? =
         kotlinx.coroutines.withContext(io) {
-            val maxDim = 1600
-            // v1.28.3 (F27) — decodage en DEUX PASSES, et non plus a pleine resolution.
-            //
-            // `decodeFile` en `ARGB_8888` alloue largeur x hauteur x 4 octets AVANT le
-            // redimensionnement : une photo de 12 Mpx demandait ~48 Mo d'un seul tenant, sur le
-            // tas d'une application qui en a rarement autant. L'`OutOfMemoryError` qui suit n'est
-            // pas rattrape par le `runCatching` d'origine — il n'attrape que les `Exception` —
-            // et le decodage se faisait pour rien, puisque l'image etait ensuite reduite a
-            // 1600 px. La premiere passe ne lit que l'en-tete (`inJustDecodeBounds`), la seconde
-            // decode directement pres de la taille voulue.
-            val bornes = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, bornes) }
-            val opts = android.graphics.BitmapFactory.Options()
-            opts.inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-            opts.inSampleSize = echantillonnagePour(bornes.outWidth, bornes.outHeight, maxDim)
-            val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, opts) }
-                .getOrNull() ?: return@withContext null
-            // v1.28.3 (audit du 2026-09-09) — la SECONDE allocation etait la seule non protegee.
-            //
-            // Le decodage ci-dessus est enveloppe d'un `runCatching`, qui attrape `Throwable` donc
-            // aussi `OutOfMemoryError`. `createScaledBitmap`, elle, ne l'etait pas — alors qu'elle
-            // alloue un second bitmap alors que le premier occupe deja la memoire, c'est-a-dire au
-            // pire moment. Elle laissait donc fuir le bitmap source ET remontait jusqu'a
-            // `viewModelScope.launch`, qui n'a pas de gestionnaire : plantage de l'application,
-            // precisement quand la memoire est sous tension.
-            //
-            // Tous les autres chemins de cette fonction recyclent deja ; c'etait une omission
-            // ponctuelle, pas un choix.
-            val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
-                val ratio = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
-                runCatching {
-                    android.graphics.Bitmap.createScaledBitmap(
-                        bitmap,
-                        (bitmap.width * ratio).toInt(),
-                        (bitmap.height * ratio).toInt(),
-                        true,
-                    )
-                }.getOrElse {
-                    bitmap.recycle()
-                    return@withContext null
-                }.also { if (it != bitmap) bitmap.recycle() }
-            } else bitmap
-
             val out = java.io.File(src.parentFile, src.nameWithoutExtension + "-compressed.jpg")
-            for (quality in intArrayOf(75, 60, 45, 30)) {
+            for (maxDim in intArrayOf(1600, 1024, 800)) {
+                val scaled = decoderReduite(src, maxDim) ?: continue
                 try {
-                    out.outputStream().use { os ->
-                        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, os)
+                    for (quality in intArrayOf(75, 60, 45, 30)) {
+                        try {
+                            out.outputStream().use { os ->
+                                scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, os)
+                            }
+                            if (out.length() in 1..budget) {
+                                // Drop the source — we only keep the compressed copy from here on.
+                                runCatching { src.delete() }
+                                return@withContext out
+                            }
+                        } catch (t: Throwable) {
+                            timber.log.Timber.w(t, "JPEG compress dim=%d quality=%d failed", maxDim, quality)
+                        }
                     }
-                    if (out.length() in 1..CARRIER_PAYLOAD_CAP_BYTES) {
-                        scaled.recycle()
-                        // Drop the source — we only keep the compressed copy from here on.
-                        runCatching { src.delete() }
-                        return@withContext out
-                    }
-                } catch (t: Throwable) {
-                    timber.log.Timber.w(t, "JPEG compress quality=%d failed", quality)
+                } finally {
+                    scaled.recycle()
                 }
             }
-            scaled.recycle()
+            runCatching { out.delete() }
             // Last-resort: hand the original back, the use-case will fail the size check and
             // the user sees an explicit "trop volumineux" snackbar instead of a silent black hole.
             null
         }
+
+    /**
+     * Décode [src] réduite à [maxDim] au plus.
+     *
+     * v1.28.3 (F27) — en DEUX PASSES : `decodeFile` en `ARGB_8888` alloue largeur × hauteur × 4
+     * octets AVANT tout redimensionnement — ~48 Mo pour 12 Mpx, sur le tas d'une application qui
+     * en a rarement autant. La première passe ne lit que l'en-tête, la seconde décode près de la
+     * taille voulue.
+     *
+     * v1.28.3 (audit du 2026-09-09) — CHAQUE allocation est sous `runCatching`, qui attrape
+     * `Throwable` donc aussi `OutOfMemoryError`. `createScaledBitmap` ne l'était pas, alors
+     * qu'elle alloue un second bitmap pendant que le premier occupe déjà la mémoire — au pire
+     * moment ; elle remontait jusqu'à `viewModelScope.launch`, sans gestionnaire : plantage
+     * précisément quand la mémoire est sous tension.
+     */
+    private fun decoderReduite(src: java.io.File, maxDim: Int): android.graphics.Bitmap? {
+        val bornes = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, bornes) }
+        val opts = android.graphics.BitmapFactory.Options()
+        opts.inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+        opts.inSampleSize = echantillonnagePour(bornes.outWidth, bornes.outHeight, maxDim)
+        val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, opts) }
+            .getOrNull() ?: return null
+        if (bitmap.width <= maxDim && bitmap.height <= maxDim) return bitmap
+        val ratio = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
+        return runCatching {
+            android.graphics.Bitmap.createScaledBitmap(
+                bitmap,
+                (bitmap.width * ratio).toInt(),
+                (bitmap.height * ratio).toInt(),
+                true,
+            )
+        }.getOrElse {
+            bitmap.recycle()
+            return null
+        }.also { if (it !== bitmap) bitmap.recycle() }
+    }
 
     /**
      * Copies the content-URI handed back by the system picker into our private cache so the
@@ -1810,9 +1841,6 @@ class ThreadViewModel @Inject constructor(
          */
         const val PAGE_SIZE: Int = 200
 
-        // Image compression knobs. The first threshold says "do nothing for tiny images";
-        // the second is the hard target used by the quality loop.
-        const val IMAGE_COMPRESS_THRESHOLD_BYTES: Long = 250L * 1024L
         // Audit C3 (v1.14.8) — Alias local pointant vers la SOURCE UNIQUE [MmsConstants].
         // Avant : `280L * 1024L` dupliqué ici ET dans `VoiceRecorder.MAX_SIZE_BYTES`.
         const val CARRIER_PAYLOAD_CAP_BYTES: Long = com.filestech.sms.core.mms.MmsConstants.CARRIER_PAYLOAD_CAP_BYTES
