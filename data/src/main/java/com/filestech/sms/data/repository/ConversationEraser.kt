@@ -2,6 +2,7 @@ package com.filestech.sms.data.repository
 
 import androidx.room.withTransaction
 import com.filestech.sms.data.local.db.AppDatabase
+import com.filestech.sms.data.local.db.ScheduledAttachmentCodec
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.sms.SystemCopyEraser
@@ -18,12 +19,15 @@ import javax.inject.Singleton
  *
  * Il y etait `private`, entoure de onze dependances dont neuf ne le concernent pas. Le tester
  * demandait de construire tout le repository ; personne ne l'a fait, et le meme chemin a laisse
- * passer trois defauts en trois versions. Ici, trois dependances suffisent, dont une interface —
- * un test peut donner un [SystemCopyEraser] qui refuse toujours et verifier ce qu'il advient de
- * la conversation, sans appareil et sans role SMS.
+ * passer trois defauts en trois versions. Ici les dependances sont peu nombreuses et toutes
+ * concernees, dont deux interfaces — un test peut donner un [SystemCopyEraser] qui refuse
+ * toujours et verifier ce qu'il advient de la conversation, sans appareil et sans role SMS.
  *
- * Le comportement est celui du repository, a l'identique. Cette classe ne decide rien de plus :
- * elle rend seulement visible ce qui etait cache.
+ * v1.28.3 — elles sont passees de trois a sept, et le KDoc disait encore « trois ». La hausse
+ * est assumee : la suppression d'une conversation a un cycle de vie plus large qu'on ne le
+ * croyait, et c'est precisement ce que la relecture externe a montre (F03, F04). Ce qui restait
+ * dehors ne disparaissait pas — les envois programmes et les fichiers de pieces jointes lui
+ * survivaient.
  */
 @Singleton
 class ConversationEraser @Inject constructor(
@@ -31,6 +35,15 @@ class ConversationEraser @Inject constructor(
     private val conversationDao: ConversationDao,
     private val messageDao: MessageDao,
     private val systemCopy: SystemCopyEraser,
+    // v1.28.3 (F03) — les envois programmés d'une conversation doivent partir avec elle. Sans
+    // cela, une purge du coffre laissait un envoi futur porteur du contenu qu'elle prétendait
+    // détruire. `conversation_id` n'étant pas une clé étrangère, aucune cascade ne s'en chargeait.
+    private val scheduledDao: com.filestech.sms.data.local.db.dao.ScheduledMessageDao,
+    private val scheduler: com.filestech.sms.domain.scheduler.ScheduledMessageScheduler,
+    // v1.28.3 (F04) — les lignes `attachments` partaient en cascade, jamais leurs FICHIERS.
+    private val attachmentDao: com.filestech.sms.data.local.db.dao.AttachmentDao,
+    @dagger.hilt.android.qualifiers.ApplicationContext
+    private val context: android.content.Context,
 ) {
 
     private companion object {
@@ -93,11 +106,104 @@ class ConversationEraser @Inject constructor(
             Timber.w(it, "delete: system-provider sweep failed for conversation %d", id)
         }
         if (systemCopyGone || !preserveOnSystemFailure) {
+            // v1.28.3 (F03/F04) — ce que la cascade Room ne fait pas, et que personne ne faisait.
+            //
+            // L'ordre compte : les deux opérations ci-dessous doivent précéder la suppression de
+            // la conversation. Après, `attachments` a déjà disparu par `ForeignKey.CASCADE` et
+            // plus rien ne référence les fichiers — ils deviendraient irrécupérables ET
+            // ineffaçables. Un processus tué entre les deux laisse au pire une conversation dont
+            // les fichiers sont déjà partis : l'inverse laisserait des orphelins définitifs.
+            annulerEnvoisProgrammes(id)
+            supprimerFichiersPossedes(id)
             conversationDao.delete(id)
         } else {
             Timber.w("delete: conversation %d kept locally, its system copy survives", id)
         }
         return systemCopyGone
+    }
+
+    /**
+     * v1.28.3 (F03) — annule et efface les envois programmés d'une conversation qui disparaît.
+     *
+     * `scheduled_messages.conversation_id` n'est pas une clé étrangère — c'est délibéré, un envoi
+     * programmé pouvant survivre à une fusion de doublons — mais rien n'exigeait en retour que la
+     * conversation parente survive. Une purge du coffre laissait donc partir, plus tard, un
+     * message porteur du contenu qu'elle venait d'annoncer détruit, PIN retiré.
+     *
+     * Appliqué aussi à la suppression ordinaire, et non au seul coffre : un envoi programmé vers
+     * un fil que l'utilisateur a effacé n'a pas plus de raison de partir. Poser le garde sur le
+     * seul chemin qui l'a motivé est précisément ce qui a produit la moitié des défauts de cette
+     * relecture.
+     *
+     * L'annulation `WorkManager` passe avant l'effacement de la ligne, comme dans
+     * `CancelScheduledMessageUseCase` : l'ordre inverse laisserait un worker se réveiller sur une
+     * ligne absente. Chaque envoi est isolé — un échec ne doit pas empêcher les suivants ni la
+     * suppression de la conversation.
+     */
+    private suspend fun annulerEnvoisProgrammes(conversationId: Long) {
+        val programmes = runCatching { scheduledDao.findForConversation(conversationId) }
+            .onFailure { Timber.w(it, "delete: lecture des envois programmes de %d echouee", conversationId) }
+            .getOrDefault(emptyList())
+        for (envoi in programmes) {
+            runCatching {
+                scheduler.cancel(envoi.id)
+                for (piece in ScheduledAttachmentCodec.decode(envoi.attachmentsJson)) {
+                    runCatching { piece.file.delete() }
+                        .onFailure { Timber.w(it, "delete: piece jointe programmee non effacee") }
+                }
+                scheduledDao.delete(envoi.id)
+            }.onFailure { Timber.w(it, "delete: envoi programme %d non annule", envoi.id) }
+        }
+        if (programmes.isNotEmpty()) {
+            Timber.i(
+                "delete: %d envoi(s) programme(s) annule(s) avec la conversation %d",
+                programmes.size,
+                conversationId,
+            )
+        }
+    }
+
+    /**
+     * v1.28.3 (F04) — efface les FICHIERS des pièces jointes, que la cascade Room laissait
+     * derrière elle.
+     *
+     * `AttachmentEntity` est en `ForeignKey.CASCADE` : ses lignes partaient bien, mais
+     * `local_uri` désigne un fichier de `filesDir`, et plus rien ne le référençait ensuite. Le
+     * contenu d'une conversation purgée du coffre — images, audio — restait donc en clair sur
+     * l'appareil jusqu'à une désinstallation ou un effacement d'urgence. `AutoLockObserver`
+     * documente d'ailleurs que ce dossier n'est volontairement pas purgé par le verrouillage,
+     * en renvoyant au nettoyage d'urgence : personne n'avait vu que la purge du coffre, elle,
+     * aurait dû s'en charger.
+     *
+     * Deux garde-fous :
+     *
+     *  - les `content://` sont ignorés. Ce sont les parties du fournisseur système d'un MMS
+     *    importé, pas nos fichiers ; leur sort relève de [SystemCopyEraser].
+     *  - un chemin hors du bac à sable de l'application est refusé et journalisé. Une sauvegarde
+     *    restaurée d'un AUTRE appareil peut porter des `local_uri` étrangers — c'est le défaut
+     *    exact que la v1.27.11 a fermé sur `telephony_uri`, et un chemin de suppression ne doit
+     *    pas le rouvrir sous une autre forme.
+     */
+    private suspend fun supprimerFichiersPossedes(conversationId: Long) {
+        val pieces = runCatching { attachmentDao.findForConversation(conversationId) }
+            .onFailure { Timber.w(it, "delete: lecture des pieces jointes de %d echouee", conversationId) }
+            .getOrDefault(emptyList())
+        val racines = listOfNotNull(context.filesDir, context.cacheDir)
+            .map { it.canonicalPath + java.io.File.separator }
+        for (piece in pieces) {
+            if (piece.localUri.startsWith("content://")) continue
+            runCatching {
+                val fichier = java.io.File(piece.localUri)
+                val chemin = fichier.canonicalPath
+                if (racines.none { chemin.startsWith(it) }) {
+                    Timber.w("delete: piece jointe hors du bac a sable ignoree (conversation %d)", conversationId)
+                    return@runCatching
+                }
+                if (fichier.exists() && !fichier.delete()) {
+                    Timber.w("delete: piece jointe non effacee (conversation %d)", conversationId)
+                }
+            }.onFailure { Timber.w(it, "delete: effacement de piece jointe echoue") }
+        }
     }
 
     /**
@@ -188,20 +294,27 @@ class ConversationEraser @Inject constructor(
      */
     suspend fun purgeVault(force: Boolean = false): VaultPurgeResult {
         var deleted = 0
-        var failed = 0
+        var systemResidue = 0
+        var localFailures = 0
         for (id in conversationDao.idsInVault()) {
+            // v1.28.3 (F09) — les deux natures d'echec sont desormais comptees separement.
+            // `erase` attrape lui-meme tout ce qui touche au fournisseur du systeme : ce qui
+            // remonte jusqu'ici ne peut donc venir que de `conversationDao.delete`, c'est-a-dire
+            // d'un echec LOCAL. La distinction n'est pas cosmetique — elle decide si la sortie
+            // forcee a le droit de retirer le PIN. Cf. [VaultPurgeResult].
             runCatching { erase(id, preserveOnSystemFailure = !force) }
-                .onSuccess { systemCopyGone -> if (systemCopyGone) deleted++ else failed++ }
+                .onSuccess { systemCopyGone -> if (systemCopyGone) deleted++ else systemResidue++ }
                 .onFailure {
-                    failed++
+                    localFailures++
                     Timber.w(it, "deleteAllInVault: conversation %d not deleted", id)
                 }
         }
         // Relu APRES la boucle, et non deduit d'elle : une conversation deplacee dans le coffre
-        // pendant la purge n'apparait dans aucun des deux compteurs ci-dessus.
+        // pendant la purge n'apparait dans aucun des compteurs ci-dessus.
         return VaultPurgeResult(
             deleted = deleted,
-            failed = failed,
+            systemResidue = systemResidue,
+            localFailures = localFailures,
             remaining = conversationDao.idsInVault().size,
         )
     }

@@ -403,7 +403,7 @@ class SettingsViewModel @Inject constructor(
     fun forgetVaultPinAndPurge(force: Boolean = false) = viewModelScope.launch {
         val dejaEchoue = settings.flow.first().security.vaultPurgeFailedOnce
         val purge = conversationRepo.deleteAllInVault(force)
-        val reste = purge.failed + purge.remaining
+        val reste = purge.reste
         when {
             purge.isComplete -> {
                 vaultPin.forgetVaultPin()
@@ -412,7 +412,15 @@ class SettingsViewModel @Inject constructor(
             }
             // v1.28.2 — sortie assumee : l'utilisateur a demande qu'on vide quand meme, apres
             // qu'on lui a dit ce qui subsisterait. Ce qui subsiste lui est redit ici.
-            force -> {
+            //
+            // v1.28.3 (F09) — la sortie n'est plus accordee sur le seul fait que `force` a ete
+            // demande, mais sur la NATURE de ce qui subsiste. `residuSystemeSeul` veut dire que
+            // plus rien n'est protege sur cet appareil : le PIN qu'on retire ne garde plus rien.
+            // Un echec de suppression LOCALE tombe desormais dans la branche `dejaEchoue`
+            // ci-dessous, qui ne retire pas le PIN — sans quoi on ouvrirait un coffre encore
+            // plein, alors que le texte de consentement promet a l'utilisateur que ce qui reste
+            // est « dans le stockage SMS du telephone ».
+            force && purge.residuSystemeSeul -> {
                 vaultPin.forgetVaultPin()
                 oublierLEchecPasse()
                 _events.send(Event.VaultPurgedWithResidue(purge.deleted, reste))

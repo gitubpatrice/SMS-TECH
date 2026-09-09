@@ -135,7 +135,7 @@ class SettingsResetGuardsTest {
             // Une conversation effacee, une dont la copie systeme a survecu : elle reviendra a la
             // resynchronisation suivante, hors du coffre. Le PIN ne doit pas partir.
             coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-                VaultPurgeResult(deleted = 1, failed = 1, remaining = 0)
+                VaultPurgeResult(deleted = 1, systemResidue = 1, localFailures = 0, remaining = 0)
 
             val vm = viewModel()
             vm.forgetVaultPinAndPurge()
@@ -151,7 +151,7 @@ class SettingsResetGuardsTest {
             // Rien n'a echoue, et pourtant le coffre n'est pas vide : c'est le cas que ni le
             // compte de succes ni celui d'echecs ne voit, et que `remaining` releve.
             coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-                VaultPurgeResult(deleted = 3, failed = 0, remaining = 1)
+                VaultPurgeResult(deleted = 3, systemResidue = 0, localFailures = 0, remaining = 1)
 
             val vm = viewModel()
             vm.forgetVaultPinAndPurge()
@@ -165,7 +165,7 @@ class SettingsResetGuardsTest {
             // Le controle positif : sans lui, une garde qui refuserait TOUJOURS passerait les
             // deux tests ci-dessus tout en condamnant la seule issue de l'utilisateur.
             coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-                VaultPurgeResult(deleted = 4, failed = 0, remaining = 0)
+                VaultPurgeResult(deleted = 4, systemResidue = 0, localFailures = 0, remaining = 0)
 
             val vm = viewModel()
             vm.forgetVaultPinAndPurge()
@@ -189,7 +189,7 @@ class SettingsResetGuardsTest {
     @Test
     fun `the first failure only remembers it happened`() = runTest(dispatcher) {
         coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-            VaultPurgeResult(deleted = 0, failed = 1, remaining = 1)
+            VaultPurgeResult(deleted = 0, systemResidue = 1, localFailures = 0, remaining = 1)
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge()
@@ -210,7 +210,7 @@ class SettingsResetGuardsTest {
         stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
         settingsFlow.value = stored
         coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-            VaultPurgeResult(deleted = 0, failed = 1, remaining = 1)
+            VaultPurgeResult(deleted = 0, systemResidue = 1, localFailures = 0, remaining = 1)
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge()
@@ -230,7 +230,7 @@ class SettingsResetGuardsTest {
         stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
         settingsFlow.value = stored
         coEvery { conversationRepo.deleteAllInVault(force = true) } returns
-            VaultPurgeResult(deleted = 2, failed = 1, remaining = 0)
+            VaultPurgeResult(deleted = 2, systemResidue = 1, localFailures = 0, remaining = 0)
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge(force = true)
@@ -245,6 +245,37 @@ class SettingsResetGuardsTest {
     }
 
     /**
+     * v1.28.3 (F09) — **la sortie assumee n'accepte que le residu SYSTEME.**
+     *
+     * `VaultPurgeResult.failed` melangeait deux natures d'echec opposees : « la copie systeme
+     * resiste » et « la ligne Room n'a pas pu etre supprimee ». La branche `force` retirait le
+     * PIN sans regarder ni l'une ni l'autre.
+     *
+     * Or l'echange propose a l'utilisateur ne porte que sur la premiere. Le texte de consentement
+     * lui promet que ce qui subsistera est « dans le stockage SMS du telephone » — un echec
+     * LOCAL veut dire l'inverse : la conversation est encore dans le coffre, chiffree, et retirer
+     * le PIN l'ouvrirait. Aucun echange ne justifie cela, et on ne le lui a meme pas propose.
+     *
+     * Ici la copie systeme est partie partout (`systemResidue = 0`), mais une suppression locale
+     * a leve. Le PIN doit rester, meme sous `force`.
+     */
+    @Test
+    fun `the deliberate way out refuses when local data survives`() = runTest(dispatcher) {
+        stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
+        settingsFlow.value = stored
+        coEvery { conversationRepo.deleteAllInVault(force = true) } returns
+            VaultPurgeResult(deleted = 2, systemResidue = 0, localFailures = 1, remaining = 1)
+
+        val vm = viewModel()
+        vm.forgetVaultPinAndPurge(force = true)
+
+        // LE point : `force` ne suffit plus, c'est la NATURE de ce qui reste qui decide.
+        coVerify(exactly = 0) { vaultPin.forgetVaultPin() }
+        assertThat(vm.events.first())
+            .isInstanceOf(SettingsViewModel.Event.VaultPurgeStuck::class.java)
+    }
+
+    /**
      * Controle negatif de la sortie assumee : elle ne doit pas devenir le chemin ordinaire. Sans
      * `force`, une purge incomplete ne retire toujours rien — c'est la garde de la v1.28.1, et
      * elle doit survivre a l'ajout de la sortie.
@@ -252,7 +283,7 @@ class SettingsResetGuardsTest {
     @Test
     fun `the way out is never taken on the caller's behalf`() = runTest(dispatcher) {
         coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-            VaultPurgeResult(deleted = 0, failed = 2, remaining = 2)
+            VaultPurgeResult(deleted = 0, systemResidue = 2, localFailures = 0, remaining = 2)
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge()

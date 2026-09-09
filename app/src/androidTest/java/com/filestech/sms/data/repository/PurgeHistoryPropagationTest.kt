@@ -172,7 +172,22 @@ class PurgeHistoryPropagationTest {
     }
 
     private fun eraserAvec(systemCopy: SystemCopyEraser) =
-        ConversationEraser(db, db.conversationDao(), db.messageDao(), systemCopy)
+        ConversationEraser(
+            db,
+            db.conversationDao(),
+            db.messageDao(),
+            systemCopy,
+            // v1.28.3 (F03/F04) — la suppression emporte desormais les envois programmes et les
+            // FICHIERS des pieces jointes. Ces tests-ci ne les exercent pas : les DAO reels de la
+            // base en memoire rendent des listes vides, et l'ordonnanceur factice ne fait rien.
+            db.scheduledMessageDao(),
+            object : com.filestech.sms.domain.scheduler.ScheduledMessageScheduler {
+                override fun scheduleAt(scheduledMessageId: Long, epochMillis: Long) = Unit
+                override fun cancel(scheduledMessageId: Long) = Unit
+            },
+            db.attachmentDao(),
+            InstrumentationRegistry.getInstrumentation().targetContext,
+        )
 
     private suspend fun insere(uri: String?, date: Long, starred: Boolean = false) {
         db.messageDao().insert(

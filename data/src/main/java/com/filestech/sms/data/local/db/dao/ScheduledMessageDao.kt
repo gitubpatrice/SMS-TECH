@@ -99,4 +99,19 @@ interface ScheduledMessageDao {
 
     @Query("SELECT * FROM scheduled_messages WHERE state = 0")
     suspend fun allPending(): List<ScheduledMessageEntity>
+
+    /**
+     * v1.28.3 (F03) — envois programmés rattachés à une conversation, **quel que soit leur
+     * état**.
+     *
+     * `conversation_id` n'est pas une clé étrangère (cf. le KDoc de [reparentConversationId]),
+     * et rien n'exigeait donc que la conversation parente survive. Une purge du coffre pouvait
+     * ainsi laisser derrière elle un envoi programmé qui partait plus tard, avec son corps et
+     * ses destinataires — après que l'application eut annoncé le coffre vide et retiré le PIN.
+     *
+     * Tous les états, et pas seulement `PENDING` : une ligne `SENDING` ou `FAILED` porte le même
+     * contenu, et c'est le contenu qu'il s'agit de faire disparaître.
+     */
+    @Query("SELECT * FROM scheduled_messages WHERE conversation_id = :conversationId")
+    suspend fun findForConversation(conversationId: Long): List<ScheduledMessageEntity>
 }

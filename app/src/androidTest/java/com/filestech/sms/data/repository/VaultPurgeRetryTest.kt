@@ -80,7 +80,7 @@ class VaultPurgeRetryTest {
         val premier = eraser.purgeVault()
 
         assertThat(premier.deleted).isEqualTo(0)
-        assertThat(premier.failed).isEqualTo(1)
+        assertThat(premier.systemResidue).isEqualTo(1)
         assertThat(premier.isComplete).isFalse()
         // Le coeur du correctif : la conversation est CONSERVEE. C'est elle, et rien d'autre, qui
         // fait office de journal de purge en attente — elle survit au redemarrage parce qu'elle
@@ -91,7 +91,7 @@ class VaultPurgeRetryTest {
 
         // La regression exacte du rapport : ici, avant le correctif, `0/0/0` et `isComplete` vrai.
         assertThat(second.isComplete).isFalse()
-        assertThat(second.failed).isEqualTo(1)
+        assertThat(second.systemResidue).isEqualTo(1)
         assertThat(second.remaining).isEqualTo(1)
         assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
     }
@@ -124,7 +124,7 @@ class VaultPurgeRetryTest {
         val resultat = eraser.purgeVault()
 
         assertThat(resultat.deleted).isEqualTo(1)
-        assertThat(resultat.failed).isEqualTo(0)
+        assertThat(resultat.systemResidue).isEqualTo(0)
         assertThat(resultat.isComplete).isTrue()
         assertThat(db.conversationDao().idsInVault()).isEmpty()
     }
@@ -172,7 +172,7 @@ class VaultPurgeRetryTest {
         val resultat = eraserAvec(intrus).purgeVault()
 
         assertThat(resultat.isComplete).isFalse()
-        assertThat(resultat.failed).isEqualTo(1)
+        assertThat(resultat.systemResidue).isEqualTo(1)
         assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
     }
 
@@ -191,7 +191,7 @@ class VaultPurgeRetryTest {
         // Le coffre est vide : l'utilisateur retrouve l'acces.
         assertThat(db.conversationDao().idsInVault()).isEmpty()
         // Mais l'echec n'est PAS efface du compte-rendu — l'appelant doit pouvoir le dire.
-        assertThat(resultat.failed).isEqualTo(1)
+        assertThat(resultat.systemResidue).isEqualTo(1)
         assertThat(resultat.deleted).isEqualTo(0)
     }
 
@@ -209,9 +209,144 @@ class VaultPurgeRetryTest {
         assertThat(resultat.isComplete).isFalse()
     }
 
+    // ──────── F03 / F04 : ce qui survivait a la purge sans etre dans `conversations` ────────
+
+    /**
+     * v1.28.3 (F03) — **un envoi programme depuis une conversation du coffre partait apres la
+     * purge**, avec son corps et ses destinataires, alors que l'application venait d'annoncer le
+     * coffre vide et de retirer le PIN.
+     *
+     * `scheduled_messages.conversation_id` n'est pas une cle etrangere : aucune cascade ne
+     * l'emportait, et rien dans le chemin de purge ne le regardait. Ce test verifie les deux
+     * moities du correctif — la ligne part, ET le travail `WorkManager` est annule, sans quoi un
+     * worker se reveillerait sur une ligne absente.
+     */
+    @Test
+    fun laPurgeAnnuleLesEnvoisProgrammesDuCoffre(): Unit = runBlocking {
+        seedVaultConversation()
+        val programme = db.scheduledMessageDao().upsert(
+            com.filestech.sms.data.local.db.entity.ScheduledMessageEntity(
+                conversationId = VAULT_ID,
+                addressesCsv = "+33600000009",
+                body = "contenu du coffre, programme",
+                scheduledAt = System.currentTimeMillis() + 3_600_000L,
+                subId = null,
+                attachmentsJson = null,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+        val ordonnanceur = OrdonnanceurEspion()
+
+        eraserAvec(ToutSEfface, ordonnanceur).purgeVault()
+
+        assertThat(db.scheduledMessageDao().findById(programme)).isNull()
+        assertThat(ordonnanceur.annules).containsExactly(programme)
+    }
+
+    /**
+     * v1.28.3 (F04) — **les FICHIERS des pieces jointes survivaient a la purge.**
+     *
+     * `AttachmentEntity` est en `ForeignKey.CASCADE` : ses lignes partaient bien, mais
+     * `local_uri` designe un fichier de `filesDir` que plus rien ne referencait ensuite. Les
+     * images et l'audio d'une conversation purgee du coffre restaient en clair sur l'appareil.
+     *
+     * Le fichier est REELLEMENT cree sur disque : verifier la seule disparition de la ligne
+     * Room reproduirait exactement l'erreur qui a produit le defaut.
+     */
+    @Test
+    fun laPurgeEffaceLesFichiersDesPiecesJointes(): Unit = runBlocking {
+        seedVaultConversation()
+        val fichier = java.io.File(context.filesDir, "mms_attachments").let { dossier ->
+            dossier.mkdirs()
+            java.io.File(dossier, "secret-${System.nanoTime()}.jpg").apply { writeBytes(ByteArray(16)) }
+        }
+        val messageId = db.messageDao().insert(messageDuCoffre())
+        db.attachmentDao().insert(
+            com.filestech.sms.data.local.db.entity.AttachmentEntity(
+                messageId = messageId,
+                mimeType = "image/jpeg",
+                fileName = fichier.name,
+                sizeBytes = fichier.length(),
+                localUri = fichier.absolutePath,
+            ),
+        )
+        assertThat(fichier.exists()).isTrue()
+
+        eraserAvec(ToutSEfface).purgeVault()
+
+        assertThat(fichier.exists()).isFalse()
+    }
+
+    /**
+     * **Controle negatif du test ci-dessus.** Une partie de MMS du fournisseur systeme porte un
+     * `local_uri` en `content://` : ce n'est pas notre fichier, et son sort releve de
+     * `SystemCopyEraser`. Un correctif qui effacerait sans distinguer passerait le test
+     * precedent tout en tentant des suppressions qui n'ont pas de sens.
+     */
+    @Test
+    fun laPurgeNeTouchePasAuxPartiesDuFournisseur(): Unit = runBlocking {
+        seedVaultConversation()
+        val messageId = db.messageDao().insert(messageDuCoffre())
+        db.attachmentDao().insert(
+            com.filestech.sms.data.local.db.entity.AttachmentEntity(
+                messageId = messageId,
+                mimeType = "image/jpeg",
+                fileName = "part.jpg",
+                sizeBytes = 16L,
+                localUri = "content://mms/part/42",
+            ),
+        )
+
+        // Ne doit ni lever ni tenter d'ouvrir un fichier : la purge aboutit normalement.
+        val resultat = eraserAvec(ToutSEfface).purgeVault()
+
+        assertThat(resultat.isComplete).isTrue()
+    }
+
+    private fun messageDuCoffre() = MessageEntity(
+        conversationId = VAULT_ID,
+        telephonyUri = null,
+        address = "+33600000009",
+        body = "avec piece jointe",
+        type = MessageType.MMS,
+        direction = MessageDirection.INCOMING,
+        date = 1_700_000_000_000L,
+        dateSent = null,
+        read = true,
+        starred = false,
+        status = MessageStatus.RECEIVED,
+        errorCode = null,
+        subId = null,
+        scheduledAt = null,
+        attachmentsCount = 1,
+    )
+
+    /** Retient ce qu'on lui demande d'annuler — F03 porte sur l'annulation autant que sur la ligne. */
+    private class OrdonnanceurEspion : com.filestech.sms.domain.scheduler.ScheduledMessageScheduler {
+        val annules = mutableListOf<Long>()
+        override fun scheduleAt(scheduledMessageId: Long, epochMillis: Long) = Unit
+        override fun cancel(scheduledMessageId: Long) { annules += scheduledMessageId }
+    }
+
     /** Un seul point de construction : la signature a deja bouge une fois. */
-    private fun eraserAvec(systemCopy: SystemCopyEraser) =
-        ConversationEraser(db, db.conversationDao(), db.messageDao(), systemCopy)
+    private fun eraserAvec(
+        systemCopy: SystemCopyEraser,
+        ordonnanceur: com.filestech.sms.domain.scheduler.ScheduledMessageScheduler =
+            OrdonnanceurEspion(),
+    ) =
+        ConversationEraser(
+            db,
+            db.conversationDao(),
+            db.messageDao(),
+            systemCopy,
+            // v1.28.3 (F03/F04) — la suppression emporte desormais les envois programmes et les
+            // FICHIERS des pieces jointes. Ces tests-ci ne les exercent pas : les DAO reels de la
+            // base en memoire rendent des listes vides, et l'ordonnanceur factice ne fait rien.
+            db.scheduledMessageDao(),
+            ordonnanceur,
+            db.attachmentDao(),
+            InstrumentationRegistry.getInstrumentation().targetContext,
+        )
 
     private suspend fun seedVaultConversation() {
         db.conversationDao().insert(
