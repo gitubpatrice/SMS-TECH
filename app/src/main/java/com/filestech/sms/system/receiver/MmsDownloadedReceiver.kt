@@ -10,6 +10,7 @@ import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.data.repository.ConversationMirror
+import com.filestech.sms.data.repository.IncomingAttachment
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.pdu.CharacterSets
 import com.filestech.sms.pdu.PduBody
@@ -26,6 +27,15 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
+/**
+ * v1.28.3 (F17) — etat d'une transaction MMS en cours de traitement.
+ *
+ * @property vu horodatage d'entree, pour la purge par age.
+ * @property consigne `true` seulement quand le message a REELLEMENT ete ecrit en base. C'est la
+ *   seule condition sous laquelle le PDU d'un rejeu peut etre supprime : tant qu'elle est fausse,
+ *   le PDU reste la seule copie du media et doit survivre.
+ */
+private data class EtatTransaction(val vu: Long, val consigne: Boolean)
 
 /**
  * Receives the result of [MmsDownloader.download]. The OS has written the binary RetrieveConf
@@ -102,6 +112,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // contenu inexploitable. Tant que ce drapeau est faux, le fichier est la SEULE copie du
         // MMS et de sa pièce jointe — on ne le supprime pas.
         var pduConsumed = false
+        // v1.28.3 (F17) — retenu hors du `try` pour que le `catch` puisse RETIRER la marque de
+        // transaction. Sans quoi un echec de persistance laissait le txId marque, et le rejeu
+        // qui aurait pu rattraper le message etait ecarte comme un doublon.
+        var txIdPourReprise: String? = null
         scope.launch {
             try {
                 val mirror = entry.mirror()
@@ -178,15 +192,31 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val txId = parsed.transactionId?.toString(Charsets.UTF_8)
                 if (!txId.isNullOrEmpty()) {
                     val now = System.currentTimeMillis()
+                    // v1.28.3 (F17) — deux etats, et non plus un seul horodatage.
+                    //
+                    // Le txId etait marque ICI, donc AVANT `upsertIncomingMms`. Si l'insertion
+                    // echouait — base indisponible, exactement la situation que le repli ouvert
+                    // de la liste noire laisse passer — le `catch` avalait l'erreur, le PDU
+                    // survivait, mais le txId restait marque. Un rejeu porteur du meme txId dans
+                    // les cinq minutes etait alors declare doublon, et LUI voyait son PDU
+                    // supprime : la seule occasion de rattraper le message partait avec.
+                    //
+                    // `EN_COURS` protege du traitement concurrent de deux exemplaires ; seul
+                    // `CONSIGNE`, pose apres persistance reussie, autorise a supprimer le PDU
+                    // d'un rejeu. Sur echec, la marque est RETIREE (cf. le `catch` plus bas) pour
+                    // qu'un rejeu reparte de zero.
                     synchronized(processedTransactions) {
-                        processedTransactions.entries.removeAll { now - it.value > DEDUP_TTL_MS }
-                        if (processedTransactions.containsKey(txId)) {
-                            Timber.i("MMS replay suppressed: txId=%s", txId)
-                            // Doublon : l'exemplaire précédent a déjà réglé le sort du message.
-                            pduConsumed = true
+                        processedTransactions.entries.removeAll { now - it.value.vu > DEDUP_TTL_MS }
+                        val deja = processedTransactions[txId]
+                        if (deja != null) {
+                            Timber.i("MMS replay suppressed: txId=%s consigne=%b", txId, deja.consigne)
+                            // Le PDU du rejeu ne part QUE si l'exemplaire precedent a reellement
+                            // abouti. Sinon on le conserve : il est la seule copie du media.
+                            pduConsumed = deja.consigne
                             return@launch
                         }
-                        processedTransactions[txId] = now
+                        processedTransactions[txId] = EtatTransaction(vu = now, consigne = false)
+                        txIdPourReprise = txId
                     }
                 }
 
@@ -229,9 +259,27 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val subject = parsed.subject?.string?.stripInvisibleChars()?.takeIf { it.isNotBlank() }
 
                 val body = parsed.body
-                val media = body?.let(::extractFirstMediaPart)
-                val mediaFile = media?.let { persistAttachment(appContext, it.first, it.second) }
-                val mime = media?.second
+                val parties = body?.let(::extractMediaParts).orEmpty()
+                val pieces = parties.mapNotNull { (octets, mime) ->
+                    persistAttachment(appContext, octets, mime)
+                        ?.let { IncomingAttachment(file = it, mimeType = mime) }
+                }
+                val mime = parties.firstOrNull()?.second
+                // v1.28.3 (F15) — LE MEDIA EXISTAIT ET N'A PAS PU ETRE ECRIT.
+                //
+                // `persistAttachment` rend `null` sur disque plein, sur `renameTo` refuse ou sur
+                // n'importe quel `Throwable`. Le flot continuait sans le voir : la ligne partait
+                // en base avec `attachmentsCount = 0`, puis `pduConsumed = true` supprimait le
+                // PDU — c'est-a-dire la SEULE copie du media, aucun MMS entrant n'etant ecrit
+                // cote fournisseur systeme. L'utilisateur voyait une bulle vide, et rien n'a
+                // jamais dit qu'une image avait ete perdue.
+                //
+                // On ecrit quand meme la ligne : la legende et la trace du message valent mieux
+                // que rien. Mais le PDU est CONSERVE et l'echec est DIT.
+                val mediaPerdu = pieces.size < parties.size
+                if (mediaPerdu) {
+                    Timber.w("MMS: piece jointe non persistee — PDU conserve, utilisateur averti")
+                }
                 val caption = body?.let(::extractFirstTextCaption)?.stripInvisibleChars()
                 // `previewLabel` is the conversation-list line + notification text. It falls back
                 // to the Subject header, then to a mime-derived placeholder, so the user always
@@ -241,9 +289,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
 
                 val msgId = mirror.upsertIncomingMms(
                     address = sender,
-                    attachmentFile = mediaFile,
-                    mimeType = mime,
-                    durationMs = null,
+                    pieces = pieces,
                     caption = caption,
                     previewLabel = previewLabel,
                     date = date,
@@ -252,7 +298,25 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // v1.27.2 (relecture Codex 2026-08-04) — le message est en base : le PDU a
                 // rempli son office et peut être supprimé. Tout ce qui suit (lecture du
                 // conversationId, notification) n'est plus de la persistance.
-                pduConsumed = true
+                //
+                // v1.28.3 (F15) — sauf si le media n'a pas pu etre ecrit : le PDU le porte
+                // encore, et le supprimer le perdrait definitivement.
+                pduConsumed = !mediaPerdu
+                if (mediaPerdu) {
+                    entry.mmsFailureNotifier().notifyFailure(
+                        MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+                        senderAddress = sender,
+                    )
+                }
+                // v1.28.3 (F17) — la transaction n'est CONSIGNEE qu'ici, une fois la ligne
+                // reellement ecrite. Marquee plus haut, elle faisait passer un rejeu pour un
+                // doublon abouti alors que rien n'avait ete persiste.
+                if (!txId.isNullOrEmpty()) {
+                    synchronized(processedTransactions) {
+                        processedTransactions[txId] =
+                            EtatTransaction(vu = System.currentTimeMillis(), consigne = true)
+                    }
+                }
                 // Symmetric with [SmsDeliverReceiver]: re-fetch the row to get the conversationId
                 // so [IncomingMessageNotifier.cancelAllForConversation] can later clear the
                 // notification by tag when the user opens the thread.
@@ -276,6 +340,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 throw ce
             } catch (t: Throwable) {
                 Timber.w(t, "MMS download handling failed")
+                // v1.28.3 (F17) — l'echec RETIRE la marque, pour qu'un rejeu reparte de zero au
+                // lieu d'etre pris pour un doublon deja traite.
+                if (!txIdPourReprise.isNullOrEmpty()) {
+                    synchronized(processedTransactions) { processedTransactions.remove(txIdPourReprise) }
+                }
             } finally {
                 // v1.27.2 (audit externe Gemini 2026-08-04) — on supprime le fichier VALIDÉ par
                 // la garde sandbox, et uniquement lui.
@@ -337,16 +406,34 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
      * [extractFirstTextCaption]). SMS Tech v1 only renders one attachment per MMS — any extras
      * are ignored.
      */
-    private fun extractFirstMediaPart(body: PduBody): Pair<ByteArray, String>? {
+    /**
+     * v1.28.3 (F16) — rend **toutes** les parties porteuses de contenu, et non plus la premiere.
+     *
+     * Deux defauts en un, tous deux relevees par la relecture externe :
+     *
+     *  - la fonction s'arretait a la premiere partie utile (`return data to ct`). Un MMS a
+     *    plusieurs photos n'en gardait qu'une, et le PDU — seule copie, aucun MMS entrant
+     *    n'etant ecrit cote fournisseur systeme — etait ensuite supprime ;
+     *  - `ct.startsWith("text/")` ecartait `text/x-vcard` et `text/vcard`, qui ne sont pas du
+     *    texte a afficher mais une PIECE JOINTE. Un MMS ne portant qu'une carte de visite
+     *    produisait donc `media = null`, `caption = null`, et une bulle vide etiquetee
+     *    « [MMS] ». Le chemin SORTANT savait pourtant deja etiqueter `text/x-vcard` (👤) —
+     *    encore un jumeau asymetrique.
+     *
+     * Seuls `text/plain` (la legende, extraite par [extractFirstTextCaption]) et
+     * `application/smil` (la mise en page, pas du contenu) restent ecartes.
+     */
+    private fun extractMediaParts(body: PduBody): List<Pair<ByteArray, String>> {
+        val trouvees = mutableListOf<Pair<ByteArray, String>>()
         val n = body.partsNum
         for (i in 0 until n) {
             val part = body.getPart(i) ?: continue
             val ct = decodeMime(part.contentType) ?: continue
-            if (ct.startsWith("text/") || ct == "application/smil") continue
+            if (ct == "text/plain" || ct == "application/smil") continue
             val data = part.data ?: continue
-            if (data.isNotEmpty()) return data to ct
+            if (data.isNotEmpty()) trouvees += data to ct
         }
-        return null
+        return trouvees
     }
 
     /**
@@ -487,9 +574,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
          * on every new insert.
          */
         @JvmStatic
-        private val processedTransactions = object : LinkedHashMap<String, Long>(64, 0.75f, false) {
-            override fun removeEldestEntry(eldest: Map.Entry<String, Long>): Boolean =
-                size > DEDUP_MAX_ENTRIES
-        }
+        private val processedTransactions =
+            object : LinkedHashMap<String, EtatTransaction>(64, 0.75f, false) {
+                override fun removeEldestEntry(eldest: Map.Entry<String, EtatTransaction>): Boolean =
+                    size > DEDUP_MAX_ENTRIES
+            }
     }
 }

@@ -550,11 +550,21 @@ class ConversationMirror @Inject constructor(
      * the two avoids rendering a placeholder emoji as a fake text caption under the attachment
      * bubble.
      */
+    /**
+     * v1.28.3 (F16) — accepte **plusieurs** pieces jointes.
+     *
+     * Le parametre etait un unique `attachmentFile`, et le selecteur du receveur s'appelait
+     * `extractFirstMediaPart` : d'un MMS a trois photos, une seule etait conservee, et le PDU —
+     * seule copie, aucun MMS entrant n'etant ecrit cote fournisseur systeme — etait ensuite
+     * supprime. Les autres parties etaient perdues definitivement.
+     *
+     * La table `attachments` savait deja porter plusieurs lignes par message : c'est le chemin
+     * SORTANT qui en profitait (`upsertOutgoingMediaMms`), le chemin entrant non. Encore un
+     * jumeau asymetrique.
+     */
     suspend fun upsertIncomingMms(
         address: String,
-        attachmentFile: File?,
-        mimeType: String?,
-        durationMs: Long?,
+        pieces: List<IncomingAttachment>,
         caption: String?,
         previewLabel: String,
         date: Long,
@@ -579,21 +589,23 @@ class ConversationMirror @Inject constructor(
                 errorCode = null,
                 subId = subId,
                 scheduledAt = null,
-                attachmentsCount = if (attachmentFile != null && mimeType != null) 1 else 0,
+                attachmentsCount = pieces.size,
             )
             val msgId = messageDao.insert(msg)
-            if (attachmentFile != null && mimeType != null) {
-                attachmentDao.insert(
-                    AttachmentEntity(
-                        messageId = msgId,
-                        mimeType = mimeType,
-                        fileName = attachmentFile.name,
-                        sizeBytes = attachmentFile.length(),
-                        localUri = attachmentFile.absolutePath,
-                        width = null,
-                        height = null,
-                        durationMs = durationMs,
-                    ),
+            if (pieces.isNotEmpty()) {
+                attachmentDao.insertAll(
+                    pieces.map { piece ->
+                        AttachmentEntity(
+                            messageId = msgId,
+                            mimeType = piece.mimeType,
+                            fileName = piece.file.name,
+                            sizeBytes = piece.file.length(),
+                            localUri = piece.file.absolutePath,
+                            width = null,
+                            height = null,
+                            durationMs = piece.durationMs,
+                        )
+                    },
                 )
             }
             touchConversation(convId, date, previewLabel, deltaUnread = +1)
