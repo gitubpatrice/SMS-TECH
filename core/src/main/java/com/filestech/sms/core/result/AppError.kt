@@ -25,6 +25,15 @@ sealed class AppError(open val cause: Throwable? = null) {
      * réessayer indéfiniment. Le chemin de relance rendait jusqu'ici cette issue sans un mot.
      */
     data object RecipientBlocked : AppError()
+
+    /**
+     * v1.28.3 (audit global B-1) — le renvoi demandé porte sur un MMS, et le chemin de relance
+     * ne connaît que la pile SMS. Il renvoyait la LÉGENDE en texte, sans la pièce jointe, et la
+     * ligne pouvait passer « envoyé » sous une vignette qui n'était jamais partie — documenté
+     * dans `SECURITY.md` depuis la v1.3.9, jamais fermé. Typé pour que l'écran puisse le dire,
+     * au lieu d'un « Échec de l'envoi » qui invite à recommencer.
+     */
+    data object MmsRetryUnsupported : AppError()
     data class Locked(val unlockRequired: Boolean = true) : AppError()
     data class NotFound(val what: String) : AppError()
     data class Cancelled(val reason: String? = null) : AppError()

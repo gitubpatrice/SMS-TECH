@@ -398,10 +398,12 @@ fun ThreadScreen(
                 // tant que l'utilisateur n'aura pas débloqué le numéro qu'il a lui-même bloqué.
                 is ThreadViewModel.Event.SendError -> snackbarHost.showError(
                     context.getString(
-                        if (e.error is AppError.RecipientBlocked) {
-                            R.string.error_send_recipient_blocked
-                        } else {
-                            R.string.error_send_failed
+                        when (e.error) {
+                            is AppError.RecipientBlocked -> R.string.error_send_recipient_blocked
+                            // v1.28.3 (audit global B-1) — la bulle rouge d'un MMS ne se relance
+                            // pas d'ici ; le dire vaut mieux qu'un « Échec » qui fait recommencer.
+                            is AppError.MmsRetryUnsupported -> R.string.error_retry_mms_unsupported
+                            else -> R.string.error_send_failed
                         },
                     ),
                 )

@@ -2,6 +2,7 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.BlockedNumberRepository
@@ -31,28 +32,7 @@ class RetrySendUseCase @Inject constructor(
     suspend operator fun invoke(messageId: Long): Outcome<Unit> {
         val msg = conversationRepo.findMessageForResend(messageId)
             ?: return Outcome.Failure(AppError.NotFound("message"))
-        // v1.27.2 (audit de cohérence 2026-08-04) — la liste noire garde aussi le RENVOI.
-        //
-        // Les trois chemins d'envoi la consultent ([SendSmsUseCase], [SendMediaMmsUseCase],
-        // [SendVoiceMmsUseCase]) ; ce quatrième, non. Or un message en échec reste affiché dans
-        // le fil, et le bloquer n'efface pas sa bulle : bloquer un correspondant puis toucher
-        // une bulle rouge antérieure ré-émettait vers le numéro tout juste bloqué, sans le
-        // moindre message. Le blocage promis ne tenait pas sur ce chemin.
-        //
-        // La garde est posée AVANT `resetOutgoingForRetry` : rétrograder le statut puis refuser
-        // laisserait la ligne bloquée en `PENDING`, donc un message ni envoyé ni marqué en
-        // échec.
-        //
-        // Inconditionnelle, comme l'est en pratique celle des trois jumeaux :
-        // `respectBlocklistOnIncoming` vaut `true` par défaut et aucun appelant ne la surcharge.
-        if (blockedRepo.isBlocked(msg.address)) {
-            Timber.i("Retry refused: recipient is blocked")
-            // v1.28.3 (F21) — erreur TYPEE, et non un `Validation` porteur d'un message anglais.
-            // La bulle rouge d'un destinataire bloque est desormais visible dans le fil, donc
-            // elle SERA touchee ; l'ecran doit pouvoir dire pourquoi rien ne repart, au lieu
-            // d'avaler l'issue en silence comme il le faisait.
-            return Outcome.Failure(AppError.RecipientBlocked)
-        }
+        refusPrealable(msg)?.let { return Outcome.Failure(it) }
         if (msg.errorCode == SendErrorCode.WATCHDOG_TIMEOUT) {
             Timber.w(
                 "Retry of watchdog-timed-out message %d: previous attempt may have reached the recipient",
@@ -71,6 +51,42 @@ class RetrySendUseCase @Inject constructor(
         // l'on transmet à la pile téléphonie pour que ses accusés soient reconnaissables.
         val attempt = mirror.resetOutgoingForRetry(messageId)
             ?: return Outcome.Failure(AppError.NotFound("message"))
+        return dispatcher(msg, messageId, attempt)
+    }
+
+    /**
+     * Les deux refus qui précèdent toute écriture, regroupés en une décision — comme
+     * `refusPrealable` dans les trois use cases d'envoi. Tous deux sont posés AVANT
+     * `resetOutgoingForRetry` : rétrograder puis refuser laisserait la ligne en `PENDING`, ni
+     * envoyée ni en échec.
+     *
+     * 1. **v1.28.3 (audit global B-1) — ce chemin ne sait renvoyer qu'un SMS**, et rien ne l'en
+     *    avertissait. La bulle rouge d'un MMS arrivait ici comme n'importe quelle autre :
+     *    `sender.send` repartait avec `msg.body` — la légende, souvent vide — par `SmsManager`,
+     *    sans la pièce jointe. Avec une légende, elle partait en SMS et la ligne passait `SENT`
+     *    sous une vignette jamais envoyée ; sans légende, `divideMessage("")` échouait sans un
+     *    mot. `SECURITY.md` le documentait depuis la v1.3.9 (« tap to retry is dead for MMS »).
+     *    Le vrai renvoi MMS demande `MmsDispatcher` et un `requestCode` porteur du numéro de
+     *    tentative comme F23 l'a fait côté SMS — un chantier à vérifier sur appareil.
+     * 2. **v1.27.2 (audit de cohérence 2026-08-04) — la liste noire garde aussi le RENVOI.** Les
+     *    trois chemins d'envoi la consultent ; ce quatrième ne le faisait pas : bloquer un
+     *    correspondant puis toucher une bulle rouge antérieure ré-émettait vers le numéro tout
+     *    juste bloqué. Inconditionnelle, comme l'est en pratique celle des trois jumeaux.
+     *    v1.28.3 (F21) — erreur TYPÉE, pour que l'écran puisse dire pourquoi rien ne repart.
+     */
+    private suspend fun refusPrealable(msg: Message): AppError? {
+        if (msg.type == Message.Type.MMS) {
+            Timber.i("Retry refused: message %d is an MMS, this path only re-dispatches SMS", msg.id)
+            return AppError.MmsRetryUnsupported
+        }
+        if (blockedRepo.isBlocked(msg.address)) {
+            Timber.i("Retry refused: recipient is blocked")
+            return AppError.RecipientBlocked
+        }
+        return null
+    }
+
+    private suspend fun dispatcher(msg: Message, messageId: Long, attempt: Int): Outcome<Unit> {
         return when (val r = sender.send(messageId, msg.address, msg.body, msg.subId, attempt = attempt)) {
             is Outcome.Success -> Outcome.Success(Unit)
             is Outcome.Failure -> {

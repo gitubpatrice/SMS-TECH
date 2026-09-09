@@ -735,6 +735,7 @@
     <string name="backup_restore_without_attachments">%1$d of them came back without their attachment, which backups do not carry.</string>
     <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
     <string name="settings_lock_downgrade_vault_refused">Biometrics is currently the only second factor protecting your vault. Set a vault code first, then you can change this.</string>
+    <string name="error_retry_mms_unsupported">This MMS can\'t be resent from here. Send it again from the composer.</string>
     <string name="error_send_recipient_blocked">Not sent: you have blocked this number. Unblock it to send again.</string>
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
     <string name="send_partial">Sent to %1$d recipient(s); %2$d could not be reached.</string>

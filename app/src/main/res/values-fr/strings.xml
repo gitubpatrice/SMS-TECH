@@ -712,6 +712,7 @@
 
     <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
     <string name="error_send_failed">Échec de l\'envoi du message.</string>
+    <string name="error_retry_mms_unsupported">Ce MMS ne peut pas être renvoyé d\'ici. Refaites l\'envoi depuis le composeur.</string>
     <string name="error_send_recipient_blocked">Non envoyé : vous avez bloqué ce numéro. Débloquez-le pour pouvoir écrire.</string>
     <!-- v1.28.3 — un SMS sortant qui echoue le disait a personne. -->
     <string name="send_failure_notification_title">Message non envoyé</string>
