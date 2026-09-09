@@ -100,6 +100,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -1068,7 +1069,15 @@ fun ThreadScreen(
     // v1.2.1: the "Confirm before broadcast" setting (Réglages → Envoi) drives every
     // outgoing path — SMS text, MMS voice, and MMS attachments. Toggle OFF → instant send
     // everywhere. Toggle ON → this dialog (for text), the voice confirm below, and the
-    // attachment confirm at the bottom of the file. Three dialogs, one setting, consistent.
+    // attachment confirm below it. Three dialogs, one setting, consistent.
+    //
+    // ⚠️ v1.28.3 (F30) — ce commentaire a ÉTÉ FAUX de la v1.3.4 à la v1.28.2. Il renvoyait à un
+    // « attachment confirm at the bottom of the file » qui n'existait plus : la v1.3.4 avait
+    // retiré le dialogue de confirmation des pièces jointes au profit de la bande de staging du
+    // composeur. Le remplacement était juste pour ce que faisait ce dialogue-là — valider un
+    // fichier au moment du choix — mais il a emporté avec lui la confirmation d'ENVOI, sans que
+    // personne le remarque, ce commentaire continuant d'affirmer le contraire. Le chemin média
+    // est de nouveau couvert, par le dialogue ajouté plus bas.
     state.pendingSend?.let { body ->
         // v1.2.3 audit U10: Send is the positive primary action — autofocus + Button (heavier
         // weight) instead of two ambiguous TextButtons. Material 3 confirm-flow guideline.
@@ -1115,6 +1124,42 @@ fun ThreadScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelPendingVoice() }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    // v1.28.3 (F30) — troisième dialogue, celui que le commentaire du haut promettait déjà.
+    // Annuler ne supprime AUCUN fichier : les pièces jointes restent dans la bande de staging,
+    // exactement comme après un échec d'envoi, pour que refuser ne coûte pas de les rechoisir.
+    if (state.pendingAttachmentSend) {
+        val sendFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            runCatching { sendFocus.requestFocus() }
+        }
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelPendingAttachmentSend() },
+            title = { Text(stringResource(R.string.settings_confirm_send_title)) },
+            text = {
+                Text(
+                    pluralStringResource(
+                        R.plurals.thread_confirm_attachments_body,
+                        state.pendingAttachments.size,
+                        state.pendingAttachments.size,
+                    ),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = { viewModel.confirmPendingAttachmentSend() },
+                    modifier = Modifier.focusRequester(sendFocus),
+                ) {
+                    Text(stringResource(R.string.action_send))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelPendingAttachmentSend() }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },

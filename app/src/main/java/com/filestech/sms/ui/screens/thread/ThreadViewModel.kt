@@ -208,6 +208,17 @@ class ThreadViewModel @Inject constructor(
          */
         val pendingSend: String? = null,
         /**
+         * v1.28.3 (F30) — vrai quand l'utilisateur a tapé Envoyer avec des pièces jointes en
+         * attente et que [SendingSettings.confirmBeforeBroadcast] est actif.
+         *
+         * Le réglage promettait de couvrir « tous les chemins d'envoi », et le commentaire de
+         * `ThreadScreen` l'affirmait encore — mais le dialogue de confirmation des pièces
+         * jointes avait été retiré en v1.3.4 au profit de la bande de staging. Or la bande
+         * MONTRE ce qui est joint, elle ne demande pas s'il faut l'envoyer : l'envoi le plus
+         * coûteux était devenu le seul à partir sans confirmation.
+         */
+        val pendingAttachmentSend: Boolean = false,
+        /**
          * Active contextual-reply target (#8). Set by [startReply] when the user picks
          * "Répondre" from a bubble's overflow menu; the composer paints a cartouche with the
          * quoted excerpt and the next [send] call tags the outgoing row with this message's id.
@@ -466,9 +477,40 @@ class ThreadViewModel @Inject constructor(
         voiceRecorder.pruneOld()
     }
 
+    /**
+     * v1.28.3 (F22) — numéro de révision du brouillon, incrémenté à chaque frappe.
+     *
+     * Un envoi n'est pas instantané : `SendSmsUseCase` écrit côté système, miroite en Room puis
+     * appelle `SmsManager`, et le champ de saisie reste actif pendant tout ce temps (seul le
+     * bouton d'envoi est gardé par `isSending`). L'utilisateur peut donc commencer un NOUVEAU
+     * message avant que le précédent ne se conclue — d'autant plus sur le chemin MMS, où le
+     * commentaire M2 ci-dessous chiffre lui-même la fenêtre à 1-5 s.
+     *
+     * On efface donc le brouillon seulement si personne n'y a touché depuis le dispatch. Cf.
+     * [effacerBrouillonSiIntact]. Une révision plutôt qu'une comparaison de texte : ce qu'on
+     * veut savoir est « l'utilisateur a-t-il repris la main ? », pas « le texte se trouve-t-il
+     * être le même ? ».
+     */
+    private var draftRevision = 0L
+
     fun updateDraft(text: String) {
+        draftRevision++
         _state.update { it.copy(draft = text, segments = segCounter.count(text), draftSeeded = true) }
         viewModelScope.launch { repo.setDraft(conversationId, text.ifBlank { null }) }
+    }
+
+    /**
+     * v1.28.3 (F22) — efface le brouillon UNIQUEMENT s'il est encore celui qui a été envoyé.
+     *
+     * Le chemin des pièces jointes prenait déjà cette précaution pour elles (« filter, not
+     * wipe », audit M2 v1.3.4) — mais la même mise à jour écrivait `draft = ""` sans condition,
+     * juste à côté. Le texte n'avait pas eu le traitement que la pièce jointe avait reçu, et un
+     * message commencé pendant l'envoi précédent disparaissait, de l'écran ET de la base.
+     */
+    private suspend fun effacerBrouillonSiIntact(revisionEnvoyee: Long) {
+        if (draftRevision != revisionEnvoyee) return
+        _state.update { it.copy(draft = "", segments = segCounter.count("")) }
+        repo.setDraft(conversationId, null)
     }
 
     fun send() {
@@ -483,17 +525,46 @@ class ThreadViewModel @Inject constructor(
         // double appui rapide produisait deux SMS (ou deux MMS) réellement envoyés et facturés.
         if (_state.value.isSending) return
         viewModelScope.launch {
+            // v1.28.3 (F30) — la confirmation se lit AVANT de router, pour les deux chemins.
+            //
+            // Le réglage s'appelle `confirmBeforeBroadcast` en interne mais s'affiche
+            // « Confirmer avant l'envoi » (`settings_confirm_broadcast`), il vaut `true` par
+            // défaut, et le texte comme le vocal le respectent. Le média, lui, sortait de la
+            // fonction avant même que le réglage soit lu : l'envoi le plus coûteux et le plus
+            // difficile à rattraper était le seul à partir sans être confirmé.
+            val confirm = cachedSettings.value.sending.confirmBeforeBroadcast
             if (hasAttachments) {
-                dispatchPendingAttachments()
+                if (confirm) {
+                    _state.update { it.copy(pendingAttachmentSend = true) }
+                } else {
+                    dispatchPendingAttachments()
+                }
                 return@launch
             }
-            val confirm = cachedSettings.value.sending.confirmBeforeBroadcast
             if (confirm) {
                 _state.update { it.copy(pendingSend = body) }
             } else {
                 doSend(body)
             }
         }
+    }
+
+    /**
+     * v1.28.3 (F30) — l'utilisateur accepte l'envoi des pièces jointes en attente.
+     *
+     * Jumeau de [confirmPendingSend] pour le chemin média. L'instantané confirmé est la liste
+     * `pendingAttachments` telle qu'elle est au moment du dispatch, que
+     * [dispatchPendingAttachments] capture déjà (audit M2 v1.3.4).
+     */
+    fun confirmPendingAttachmentSend() {
+        _state.update { it.copy(pendingAttachmentSend = false) }
+        if (_state.value.isSending) return
+        viewModelScope.launch { dispatchPendingAttachments() }
+    }
+
+    /** v1.28.3 (F30) — l'utilisateur refuse : rien ne part, les pièces jointes restent stagées. */
+    fun cancelPendingAttachmentSend() {
+        _state.update { it.copy(pendingAttachmentSend = false) }
     }
 
     /** Called from the UI when the user accepts the "Send this message?" confirmation. */
@@ -518,7 +589,17 @@ class ThreadViewModel @Inject constructor(
      */
     fun scheduleSend(epochMillis: Long) {
         val body = _state.value.draft.trim()
-        if (body.isEmpty()) {
+        // v1.28.3 (F29) — un MMS programmé sans légende est LÉGITIME, et trois couches sur
+        // quatre le savaient déjà.
+        //
+        // L'écran active « Programmer » dès qu'il y a du texte OU une pièce jointe
+        // (`ThreadScreen.canSchedule`), `ScheduledMessageRepositoryImpl` applique exactement la
+        // même règle, et `ScheduleMessageUseCase` ne contrôle pas le corps du tout. Seul ce
+        // garde-ci exigeait encore du texte — vestige d'un planificateur qui ne savait envoyer
+        // que du texte, comme le dit le commentaire du repository. L'utilisateur qui joignait une
+        // photo sans légende parcourait donc le sélecteur de date PUIS celui d'heure avant de se
+        // voir refuser « Écrivez un message avant de programmer ».
+        if (body.isEmpty() && _state.value.pendingAttachments.isEmpty()) {
             _events.tryEmit(Event.ShowSnackbar(
                 context.getString(com.filestech.sms.R.string.thread_schedule_empty_body),
                 isError = true,
@@ -556,6 +637,7 @@ class ThreadViewModel @Inject constructor(
             val payloads = pending.map { p ->
                 SendMediaMmsUseCase.AttachmentPayload(file = p.file, mimeType = p.mimeType)
             }
+            val revisionEnvoyee = draftRevision
             val r = scheduleMessage(
                 conversationId = conversationId,
                 addresses = recipients,
@@ -570,8 +652,11 @@ class ThreadViewModel @Inject constructor(
                     // desormais a l'envoi programme. Les laisser dans le composeur ferait croire
                     // qu'elles sont encore a envoyer, et un envoi immediat les expedierait une
                     // seconde fois.
-                    _state.update { it.copy(draft = "", pendingAttachments = it.pendingAttachments - pending.toSet()) }
-                    repo.setDraft(conversationId, null)
+                    _state.update { it.copy(pendingAttachments = it.pendingAttachments - pending.toSet()) }
+                    // v1.28.3 (F22) — même garde que sur les deux chemins d'envoi : la fenêtre
+                    // est plus étroite ici (aucune attente radio), mais le motif est le même et
+                    // il ne doit pas rester un chemin qui efface sans regarder.
+                    effacerBrouillonSiIntact(revisionEnvoyee)
                     _events.tryEmit(Event.ShowSnackbar(
                         context.getString(com.filestech.sms.R.string.thread_schedule_success),
                     ))
@@ -589,6 +674,9 @@ class ThreadViewModel @Inject constructor(
     private suspend fun doSend(body: String) {
         val conv = _state.value.conversation ?: return
         val replyTargetId = _state.value.replyingTo?.id
+        // v1.28.3 (F22) — capturée AVANT l'envoi : c'est elle qui dira, au retour, si le
+        // brouillon affiché est encore celui qu'on vient d'expédier.
+        val revisionEnvoyee = draftRevision
         _state.update { it.copy(isSending = true) }
         try {
             // v1.26.1 (audit H8) — l'envoi ne doit PLUS pouvoir être annulé à mi-parcours.
@@ -607,14 +695,10 @@ class ThreadViewModel @Inject constructor(
             }
             when (res) {
                 is Outcome.Success -> {
-                    _state.update {
-                        it.copy(
-                            draft = "",
-                            segments = segCounter.count(""),
-                            replyingTo = null,
-                        )
-                    }
-                    repo.setDraft(conversationId, null)
+                    // La cible de réponse, elle, se referme toujours : elle appartient au
+                    // message qui vient de partir, pas à celui que l'utilisateur commence.
+                    _state.update { it.copy(replyingTo = null) }
+                    effacerBrouillonSiIntact(revisionEnvoyee)
                 }
                 is Outcome.Failure -> _events.tryEmit(Event.SendError(res.error))
             }
@@ -937,6 +1021,9 @@ class ThreadViewModel @Inject constructor(
         if (pending.isEmpty()) return
         val conv = _state.value.conversation ?: return
         val textBody = _state.value.draft
+        // v1.28.3 (F22) — cf. [effacerBrouillonSiIntact]. La fenêtre est ici la plus large du
+        // fichier : le commentaire M2 juste au-dessus la chiffre lui-même à 1-5 s.
+        val revisionEnvoyee = draftRevision
 
         // v1.3.4 M3 audit fix — re-check cap au moment du send (le check à
         // `onAttachmentPicked` ne couvre PAS le cas où l'user ajoute du texte APRÈS
@@ -971,13 +1058,11 @@ class ThreadViewModel @Inject constructor(
                 // pendant le dispatch async.
                 val dispatchedSet = pending.toSet()
                 _state.update {
-                    it.copy(
-                        draft = "",
-                        segments = segCounter.count(""),
-                        pendingAttachments = it.pendingAttachments.filterNot { p -> p in dispatchedSet },
-                    )
+                    it.copy(pendingAttachments = it.pendingAttachments.filterNot { p -> p in dispatchedSet })
                 }
-                repo.setDraft(conversationId, null)
+                // v1.28.3 (F22) — le texte reçoit enfin le même traitement que les pièces
+                // jointes ci-dessus, qui l'avaient depuis la v1.3.4.
+                effacerBrouillonSiIntact(revisionEnvoyee)
                 _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
             }
             is Outcome.Failure -> {

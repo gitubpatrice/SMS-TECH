@@ -65,6 +65,10 @@
     <string name="attach_sheet_subtitle">Sent as an MMS</string>
     <string name="voice_confirm_title">Send this voice message?</string>
     <string name="voice_confirm_body">Recorded clip will be sent as an MMS to the recipient.</string>
+    <plurals name="thread_confirm_attachments_body">
+        <item quantity="one">%1$d attachment will be sent as an MMS.</item>
+        <item quantity="other">%1$d attachments will be sent as a single MMS.</item>
+    </plurals>
     <string name="settings_app_lock">App lock</string>
     <string name="lock_mode_off">None</string>
     <string name="lock_mode_pin">PIN</string>

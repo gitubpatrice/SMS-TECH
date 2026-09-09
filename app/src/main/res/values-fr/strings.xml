@@ -62,6 +62,10 @@
     <string name="attach_sheet_subtitle">Envoyé comme MMS</string>
     <string name="voice_confirm_title">Envoyer ce message vocal ?</string>
     <string name="voice_confirm_body">L\'enregistrement sera envoyé en MMS au destinataire.</string>
+    <plurals name="thread_confirm_attachments_body">
+        <item quantity="one">%1$d pièce jointe sera envoyée en MMS.</item>
+        <item quantity="other">%1$d pièces jointes seront envoyées en un seul MMS.</item>
+    </plurals>
     <string name="settings_app_lock">Verrouillage de l\'app</string>
     <string name="lock_mode_off">Aucun</string>
     <string name="lock_mode_pin">Code PIN</string>
