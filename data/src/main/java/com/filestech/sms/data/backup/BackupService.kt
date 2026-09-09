@@ -380,6 +380,18 @@ class BackupService @Inject constructor(
      * Le [password] CharArray est consommé (wipé) sur retour, succès ou échec.
      */
     suspend fun readSmsbk(uri: Uri, password: CharArray): Outcome<RestoreResult> = withContext(io) {
+        // v1.28.3 (audit global A-03) — la garde de [writeSmsbk], posée sur son jumeau.
+        //
+        // L'export refusait en session leurre depuis l'audit C2 ; la restauration, non. Rien ne
+        // l'atteignait — l'entrée est masquée dans les Réglages et `AppRoot` vide la pile au
+        // verrouillage — mais la règle de ce dépôt est que l'UI masque et que le SERVICE refuse :
+        // c'est ce garde-ci qui couvre un futur point d'entrée. Et un `.smsbk` forgé restauré en
+        // leurre rendrait un `RestoreResult` dont les comptes disent si une conversation existait
+        // déjà au coffre — un oracle, sans en lire une ligne.
+        if (appLock.state.value is com.filestech.sms.security.AppLockManager.LockState.PanicDecoy) {
+            password.wipe()
+            return@withContext Outcome.Failure(AppError.Locked())
+        }
         runCatchingOutcome(
             block = {
                 require(password.isNotEmpty()) { "password is required" }
