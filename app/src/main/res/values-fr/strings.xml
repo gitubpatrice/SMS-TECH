@@ -610,7 +610,6 @@
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Activer les notifications</string>
     <string name="settings_inline_reply">Répondre depuis la notification</string>
-    <string name="settings_vibrate">Vibration</string>
 
     <!-- v1.8.0 — bug 3 fix : expose PreviewMode + NotificationStyle dans l\'UI. -->
     <string name="settings_notif_preview">Aperçu sur l\'écran de verrouillage</string>
@@ -712,8 +711,8 @@
 
     <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
     <string name="error_send_failed">Échec de l\'envoi du message.</string>
-    <string name="error_retry_mms_unsupported">Ce MMS ne peut pas être renvoyé d\'ici. Refaites l\'envoi depuis le composeur.</string>
     <string name="error_send_recipient_blocked">Non envoyé : vous avez bloqué ce numéro. Débloquez-le pour pouvoir écrire.</string>
+    <string name="error_retry_mms_unsupported">Ce MMS ne peut pas être renvoyé d\'ici. Refaites l\'envoi depuis le composeur.</string>
     <!-- v1.28.3 — un SMS sortant qui echoue le disait a personne. -->
     <string name="send_failure_notification_title">Message non envoyé</string>
     <string name="send_failure_notification_body">Votre message à %1$s n\'a pas pu être envoyé.</string>

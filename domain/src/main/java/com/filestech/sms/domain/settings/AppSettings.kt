@@ -40,7 +40,6 @@ data class ConversationSettings(
     val sortMode: SortMode = SortMode.DATE,
     val previewLines: Int = 1,
     val showAvatars: Boolean = true,
-    val groupArchived: Boolean = true,
     val signature: String? = null,
 )
 
@@ -158,24 +157,24 @@ data class SendingSettings(
 
 enum class MmsImageQuality { HIGH, BALANCED, ECONOMY }
 
+/**
+ * v1.28.3 (audit global D-01, D-03) — cinq champs retirés : `vibrate`, `vibratePattern`,
+ * `defaultSoundUri`, `ledColorArgb`, `bubbles`. Aucun code ne les lisait : sur Android 8+, le
+ * son, la vibration et la LED appartiennent au CANAL, figés à sa création, et l'utilisateur les
+ * règle dans les paramètres système. Le toggle « Vibrer » était le plus grave des cinq — exposé
+ * dans les Réglages, accepté, persisté, sans le moindre effet (le motif de F26). Les quatre
+ * autres n'avaient même pas d'écran. `ConversationSettings.groupArchived` et
+ * `AdvancedSettings.mmsRoamingAutoDownload` sont partis pour la même raison.
+ */
 data class NotificationSettings(
     val enabled: Boolean = true,
     val style: NotificationStyle = NotificationStyle.HEADS_UP,
     val previewMode: PreviewMode = PreviewMode.ALWAYS,
     val inlineReply: Boolean = true,
-    val defaultSoundUri: String? = null,
-    // Default to false: most users on Samsung One UI already get a system-level haptic for the
-    // notification sound itself, and a second buzz on top is intrusive. The user can re-enable
-    // it in Settings → Notifications.
-    val vibrate: Boolean = false,
-    val vibratePattern: VibratePattern = VibratePattern.DEFAULT,
-    val ledColorArgb: Int? = 0xFF2460AB.toInt(),
-    val bubbles: Boolean = false,
 )
 
 enum class NotificationStyle { BANNER, HEADS_UP, SILENT }
 enum class PreviewMode { ALWAYS, WHEN_UNLOCKED, NEVER }
-enum class VibratePattern { DEFAULT, SHORT, LONG, NONE }
 
 data class SecuritySettings(
     val lockMode: LockMode = LockMode.OFF,
@@ -346,7 +345,6 @@ data class BackupSettings(
 
 data class AdvancedSettings(
     val isDefaultSmsApp: Boolean = false,
-    val mmsRoamingAutoDownload: Boolean = false,
     /**
      * Highest `Telephony.Sms._ID` we have already mirrored into our Room DB. Maintained by the
      * [com.filestech.sms.data.sync.TelephonySyncManager] — it queries `content://sms` with

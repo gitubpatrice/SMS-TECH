@@ -3234,11 +3234,8 @@ private fun NotificationsSection(
             value = notifications.inlineReply,
             onChange = { v -> onUpdate { it.copy(notifications = it.notifications.copy(inlineReply = v)) } },
         )
-        ToggleRow(
-            title = stringResource(R.string.settings_vibrate),
-            value = notifications.vibrate,
-            onChange = { v -> onUpdate { it.copy(notifications = it.notifications.copy(vibrate = v)) } },
-        )
+        // v1.28.3 (audit global D-01) — le toggle « Vibrer » est retiré : aucun code ne le
+        // lisait, la vibration appartient au canal et se règle dans les paramètres système.
         // v1.8.0 (bug 3 fix HIGH 3a) — expose PreviewMode dans l'UI.
         // L'option existait en DataStore mais aucun toggle ne l'exposait.
         // Sous-titre = libellé localisé de la valeur actuelle pour que

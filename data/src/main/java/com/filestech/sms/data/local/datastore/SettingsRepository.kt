@@ -32,7 +32,6 @@ import com.filestech.sms.domain.settings.SendingSettings
 import com.filestech.sms.domain.settings.SortMode
 import com.filestech.sms.domain.settings.TextScale
 import com.filestech.sms.domain.settings.ThemeMode
-import com.filestech.sms.domain.settings.VibratePattern
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -208,7 +207,6 @@ class SettingsRepository @Inject constructor(
                 sortMode = enumOr(p, K.sortMode, SortMode.DATE, SortMode::valueOf),
                 previewLines = p[K.previewLines] ?: 1,
                 showAvatars = p[K.showAvatars] ?: true,
-                groupArchived = p[K.groupArchived] ?: true,
                 signature = p[K.signature],
             ),
             sending = SendingSettings(
@@ -243,11 +241,6 @@ class SettingsRepository @Inject constructor(
                 style = enumOr(p, K.notifStyle, NotificationStyle.HEADS_UP, NotificationStyle::valueOf),
                 previewMode = enumOr(p, K.notifPreview, PreviewMode.ALWAYS, PreviewMode::valueOf),
                 inlineReply = p[K.inlineReply] ?: true,
-                defaultSoundUri = p[K.notifSoundUri],
-                vibrate = p[K.notifVibrate] ?: false,
-                vibratePattern = enumOr(p, K.notifVibPattern, VibratePattern.DEFAULT, VibratePattern::valueOf),
-                ledColorArgb = p[K.notifLed],
-                bubbles = p[K.notifBubbles] ?: false,
             ),
             security = SecuritySettings(
                 lockMode = enumOr(p, K.lockMode, LockMode.OFF, LockMode::valueOf),
@@ -327,7 +320,6 @@ class SettingsRepository @Inject constructor(
             ),
             advanced = AdvancedSettings(
                 isDefaultSmsApp = p[K.isDefault] ?: false,
-                mmsRoamingAutoDownload = p[K.mmsRoaming] ?: false,
                 lastSyncedSmsId = p[K.lastSyncedSmsId] ?: 0L,
                 mmsImportCompleted = p[K.mmsImportCompleted] ?: false,
                 splashShown = p[K.splashShown] ?: false,
@@ -357,7 +349,6 @@ class SettingsRepository @Inject constructor(
         this[K.sortMode] = s.conversations.sortMode.name
         this[K.previewLines] = s.conversations.previewLines
         this[K.showAvatars] = s.conversations.showAvatars
-        this[K.groupArchived] = s.conversations.groupArchived
         s.conversations.signature?.let { this[K.signature] = it } ?: remove(K.signature)
 
         this[K.confirmBroadcast] = s.sending.confirmBeforeBroadcast
@@ -382,11 +373,6 @@ class SettingsRepository @Inject constructor(
         this[K.notifStyle] = s.notifications.style.name
         this[K.notifPreview] = s.notifications.previewMode.name
         this[K.inlineReply] = s.notifications.inlineReply
-        s.notifications.defaultSoundUri?.let { this[K.notifSoundUri] = it } ?: remove(K.notifSoundUri)
-        this[K.notifVibrate] = s.notifications.vibrate
-        this[K.notifVibPattern] = s.notifications.vibratePattern.name
-        s.notifications.ledColorArgb?.let { this[K.notifLed] = it } ?: remove(K.notifLed)
-        this[K.notifBubbles] = s.notifications.bubbles
 
         this[K.lockMode] = s.security.lockMode.name
         this[K.autoLockDelay] = s.security.autoLockDelay.name
@@ -450,7 +436,6 @@ class SettingsRepository @Inject constructor(
         this[K.backupEncrypt] = s.backup.encrypt
 
         this[K.isDefault] = s.advanced.isDefaultSmsApp
-        this[K.mmsRoaming] = s.advanced.mmsRoamingAutoDownload
         this[K.lastSyncedSmsId] = s.advanced.lastSyncedSmsId
         this[K.mmsImportCompleted] = s.advanced.mmsImportCompleted
         this[K.splashShown] = s.advanced.splashShown
@@ -479,7 +464,6 @@ class SettingsRepository @Inject constructor(
         val sortMode = stringPreferencesKey("conv.sort")
         val previewLines = intPreferencesKey("conv.previewLines")
         val showAvatars = booleanPreferencesKey("conv.avatars")
-        val groupArchived = booleanPreferencesKey("conv.groupArchived")
         val signature = stringPreferencesKey("conv.signature")
         val confirmBroadcast = booleanPreferencesKey("send.confirmBroadcast")
         val convertMmsAfter = intPreferencesKey("send.convertMmsAfter")
@@ -559,11 +543,10 @@ class SettingsRepository @Inject constructor(
         val notifStyle = stringPreferencesKey("notif.style")
         val notifPreview = stringPreferencesKey("notif.preview")
         val inlineReply = booleanPreferencesKey("notif.inline")
-        val notifSoundUri = stringPreferencesKey("notif.sound")
-        val notifVibrate = booleanPreferencesKey("notif.vibrate")
-        val notifVibPattern = stringPreferencesKey("notif.vibPattern")
-        val notifLed = intPreferencesKey("notif.led")
-        val notifBubbles = booleanPreferencesKey("notif.bubbles")
+
+        // v1.28.3 (audit global D-01, D-03) — `notif.sound`, `notif.vibrate`, `notif.vibPattern`,
+        // `notif.led`, `notif.bubbles`, `conv.groupArchived`, `adv.mmsRoaming` ne sont plus lus
+        // ni écrits ; les valeurs éventuellement présentes restent inertes dans le DataStore.
         val lockMode = stringPreferencesKey("security.lockMode")
         val autoLockDelay = stringPreferencesKey("security.autoLock")
         val flagSecure = booleanPreferencesKey("security.flagSecure")

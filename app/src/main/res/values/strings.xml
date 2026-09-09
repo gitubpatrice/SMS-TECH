@@ -620,7 +620,6 @@
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notifications_enabled">Enable notifications</string>
     <string name="settings_inline_reply">Reply from notification</string>
-    <string name="settings_vibrate">Vibrate</string>
 
     <!-- v1.8.0 — bug 3 fix: exposes PreviewMode + NotificationStyle in the UI. -->
     <string name="settings_notif_preview">Lock-screen preview</string>
@@ -735,8 +734,8 @@
     <string name="backup_restore_without_attachments">%1$d of them came back without their attachment, which backups do not carry.</string>
     <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
     <string name="settings_lock_downgrade_vault_refused">Biometrics is currently the only second factor protecting your vault. Set a vault code first, then you can change this.</string>
-    <string name="error_retry_mms_unsupported">This MMS can\'t be resent from here. Send it again from the composer.</string>
     <string name="error_send_recipient_blocked">Not sent: you have blocked this number. Unblock it to send again.</string>
+    <string name="error_retry_mms_unsupported">This MMS can\'t be resent from here. Send it again from the composer.</string>
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
     <string name="send_partial">Sent to %1$d recipient(s); %2$d could not be reached.</string>
     <string name="send_partial_blocked">Sent to %1$d recipient(s); %2$d skipped because you blocked them.</string>
