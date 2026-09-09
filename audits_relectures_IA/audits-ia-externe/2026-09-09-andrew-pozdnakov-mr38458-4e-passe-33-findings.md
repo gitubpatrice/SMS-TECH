@@ -252,6 +252,42 @@ moitié importante du contrôle.
 
 ## 6. Ce qui reste à vérifier avant publication
 
+### État au 2026-09-09, fin de chantier
+
+**32 findings sur 33 traités, 23 commits** sur `fix/relecture-externe-38458` — branche **non
+poussée, non taguée**, arbre propre. Gate : detekt, lint, **579 tests unitaires**, **131
+instrumentés sur S9 (Android 10) — 0 échec, 0 ignoré**, parité FR/EN vérifiée (756 clés de chaque
+côté, aucun argument de format divergent, aucune apostrophe nue).
+
+### Les trois vérifications qui demandent un appareil
+
+1. **MMS réels entre deux téléphones** — simple, multi-photos, vCard. Le lot F15/F16/F17 change un
+   chemin critique sans test automatique, et F21 y a ajouté la trace du destinataire bloqué.
+2. **Export PDF d'une conversation contenant un message très long** — F33 découpe désormais une
+   bulle plus haute qu'une page. Cela se relit, cela ne se teste pas.
+3. **Une purge du coffre** — F10 change la preuve sur laquelle repose le retrait du PIN.
+
+### Les deux décisions produit qui appartiennent à Patrice
+
+1. **`retryFailedAutomatically`**, retiré et non câblé : le câbler, c'est écrire un renvoi
+   automatique, avec ses doublons facturés.
+2. **Le MMS sans légende restauré devient invisible** — le remède propre demande une colonne
+   `hidden` et une migration 12, qui rendrait aussi le correctif F14 plus robuste que sa
+   reconnaissance par forme.
+
+### ⚠️ Le piège de méthode à ne pas réapprendre
+
+Le gate instrumenté **ment** tant que le rôle SMS n'est pas reposé avant chaque campagne —
+`connectedAndroidTest` désinstalle l'application en fin de course. Huit tests échouent alors pour
+une raison sans rapport avec le code :
+
+```
+./gradlew :app:installDebug
+adb shell cmd role add-role-holder android.app.role.SMS com.filestech.sms.debug
+```
+
+
+
 - ⚠️ **Le lot MMS entrant (F15, F16, F17) n'a aucun test automatique** et modifie un chemin
   critique. **Envoyer de vrais MMS entre deux appareils** : un simple, un multi-photos, un vCard.
 - ⚠️ **F06, F08, F22, F29, F30 non couverts** : `MainActivity` et `ThreadViewModel`
