@@ -155,3 +155,17 @@ en arrière-plan, dialogue en coroutine IO), mais la durée est inconnue.
    déverrouillé depuis son démarrage n'a pas de stockage chiffré par identifiant : `MigrationTest`
    y échouait sur `ENOENT` avant d'avoir rien mesuré. Les deux causes sont invisibles dans le
    rapport de test, qui parle de base de données.
+
+---
+
+## Mesures du 2026-09-09 (v1.28.3)
+
+- **Galaxy S9 / Android 10, campagne complète : 131 cas, 0 échec, 0 ignoré** — le test MMS
+  qu'un émulateur sans MMS ignorait s'est exécuté. Rôle SMS reposé avant, réinstallé après.
+- **Émulateur Android 11 : 131 cas, 0 échec, 1 ignoré à raison** (aucun MMS sur l'appareil).
+- **`MigrationTest` 11 → 12** exécuté sur le S9 après l'ajout de `custom_name` (15/15).
+- Ce que la campagne **ne mesure pas** et que seul un humain a vu ce soir : neuf défauts de
+  fonctions annoncées (X-02 à X-09, plus X-01), tous trouvés en manipulant l'application sur
+  deux téléphones, aucun signalé par un test. Les tests écrits ensuite tombent chacun sur le
+  défaut qu'ils visent (contrôle négatif), mais ils n'auraient pas trouvé le défaut.
+

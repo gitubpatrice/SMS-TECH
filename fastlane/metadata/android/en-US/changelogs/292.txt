@@ -1,0 +1,5 @@
+Fourth external review pass: 32 of 33 findings fixed — conversation identity, vault purge, scheduled sends, delivery acknowledgements, notifications, backup.
+
+Plus nine defects found by testing on a phone: attaching a contact, sending several photos, seeing every attachment of an MMS, creating and naming a group, moving a group into the vault together with its members.
+
+New: named groups, with an avatar and a copy of each send kept in the group thread.

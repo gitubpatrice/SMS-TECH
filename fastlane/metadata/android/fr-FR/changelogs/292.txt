@@ -1,0 +1,5 @@
+Quatrième passe de relecture externe : 32 des 33 constats corrigés — identité des conversations, purge du coffre, envois programmés, accusés d'envoi, notifications, sauvegarde.
+
+Et neuf défauts trouvés en testant sur téléphone : joindre un contact, envoyer plusieurs photos, voir toutes les pièces jointes d'un MMS, créer et nommer un groupe, mettre un groupe au coffre avec ses membres.
+
+Nouveau : groupes nommés, avec avatar et copie des envois dans le fil du groupe.

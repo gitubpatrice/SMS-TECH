@@ -235,6 +235,34 @@ adb shell cmd role add-role-holder android.app.role.SMS com.filestech.sms.debug
 Après quoi la campagne complète rend **114 cas, 0 échec, 0 ignoré** — et ce « 0 ignoré » est la
 moitié importante du contrôle.
 
+### Après la relecture : l'audit global et la mesure sur appareil
+
+La branche a ensuite reçu un audit global en quatre passes (registre :
+`audits_relectures_IA/audits-ia-interne/2026-09-09-audit-global-quatre-passes.md`) — 9 constats
+retenus, 2 réfutés, 7 corrigés ici (`897d2cf` D-02/A-01, `e00a08a` B-1, `2908c41` D-01/D-03,
+`15cc067` A-03, `4c40679` C-03) — puis une session de mesure sur Galaxy S9 (Android 10) et S24
+(Android 16), qui a trouvé **neuf défauts invisibles à la lecture** :
+
+| Commit | Défaut mesuré |
+|---|---|
+| `b7471a6` | X-02 — joindre un contact n'a **jamais** fonctionné : la fiche n'est pas un fichier. |
+| `3a32a7d` | X-03 — deux photos ne pouvaient pas partir : le plafond se partage entre les images. |
+| `7dc39d4` | X-04 — la bulle n'affichait que la première pièce jointe (F16 sans son jumeau d'affichage). |
+| `583e3fb` | X-05 — créer un groupe était introuvable : le raccourci « toucher = ouvrir » avait tué le chemin. |
+| `6e769d2` | X-06 — un nom tapé devenait un destinataire (`RESULT_ERROR_NULL_PDU`). |
+| `9e429b1` | X-07 — le clavier masquait la liste des contacts. |
+| `0075ad1`, `715a4e0` | X-08 — un groupe s'intitulait par des numéros, le dépôt affirmant que l'écran « joignait les noms ». |
+| `59b35e7` | **X-01** — mettre un groupe au coffre met ses membres au coffre, et l'en sortir les en sort. |
+| `a5ffca8` | X-09 — un SMS reçu dans une conversation du coffre était « introuvable après insertion » (relecture masquée). |
+| `49db3cb`, `56ac06f` | Groupes nommés (schéma 12) et copie des envois dans le fil du groupe, qui restait vide. |
+
+Le motif dominant s'est encore vérifié deux fois : X-04 (correctif de données sans son jumeau
+d'affichage) et X-09 (une lecture masquée pour l'écran utilisée par un receveur). Et **quatre
+fonctions annoncées n'avaient jamais fonctionné** sans qu'aucun test ne le dise.
+
+Campagne finale : **131 cas sur S9, 0 échec, 0 ignoré** ; 557 tests unitaires ; migration
+11 → 12 exécutée sur appareil.
+
 ## 5. Décisions prises, et pourquoi
 
 1. **`retryFailedAutomatically` retiré plutôt que câblé.** Le câbler reviendrait à écrire une

@@ -81,6 +81,61 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.3 — Un correctif posé sur un seul des chemins qui en avaient besoin
+
+*Quatrième passe de la relecture externe d'Andrew Pozdnakov sur la MR F-Droid !38458 — 33
+constats, tous vérifiés dans le source avant correction, 32 corrigés — suivie d'un audit global
+et d'une session de mesure sur deux téléphones. Registre :
+`audits_relectures_IA/audits-ia-externe/2026-09-09-andrew-pozdnakov-mr38458-4e-passe-33-findings.md`.*
+
+**Le motif dominant, qui vaut plus que la liste.** La grande majorité de ces défauts étaient des
+correctifs **déjà écrits**, mais posés sur un seul des chemins qui en avaient besoin. Le dépôt
+savait, et le disait souvent en commentaire : la sauvegarde décrivait mot pour mot le mécanisme de
+F01 et le contournait pour elle seule ; le notificateur des messages entrants appliquait les trois
+gardes de rédaction que celui des échecs n'avait pas (F08) ; le chemin sortant gérait plusieurs
+pièces jointes quand le chemin entrant n'en gardait qu'une (F16). Et le motif s'est reproduit
+**pendant la correction** : F21 posé sur la voie SMS seule alors que le même `continue` muet
+vivait sur les deux voies MMS ; puis sur leur appelant de fond, l'envoi programmé.
+
+**Deuxième motif : les affirmations d'exhaustivité vieillissent mal.** « La SEULE voie de lecture
+non gardée », « three dialogs, one setting, consistent », « toute migration est additive » — trois
+commentaires faux, dont un a masqué F02 pendant deux versions.
+
+**Ce qui touche la sécurité, en substance.**
+- **F01** — deux conversations locales sans fil système partageaient la sentinelle `thread_id = 0`
+  sous un index UNIQUE : la seconde effaçait la première, avec ses favoris, réactions et son
+  appartenance au coffre. `thread_id` est nullable (migration 8 → 9), l'insertion ne remplace
+  plus.
+- **F02, F03, F04, F09, F10, F11** — le coffre : ses messages programmés se lisaient sans le PIN,
+  sa purge laissait des envois programmés, des fichiers, et croyait avoir supprimé des lignes
+  système qu'elle n'atteignait pas (aucun MMS sortant n'a jamais eu de `telephony_uri`).
+- **F06, F07** — désarmer le verrou n'exigeait pas de s'authentifier ; abaisser le mode retirait
+  le second facteur du coffre.
+- **F26** — « Bloquer les numéros inconnus » était une promesse affichée que zéro ligne tenait.
+  Câblé, avec la règle qui compte : une permission contacts refusée **ne bloque rien**, parce
+  qu'une ignorance n'est pas une connaissance.
+- **X-01** (trouvé en vérifiant un constat de l'audit global qui était faux) — répondre depuis un
+  groupe du coffre écrivait hors du coffre, et la réponse d'un membre y arrivait de même. Le SMS
+  n'a pas de groupe : mettre un groupe au coffre y met désormais ses membres, et l'en sortir les
+  en sort.
+- **A-03** — la restauration ne refusait pas en session leurre, contrairement à l'export.
+
+**Ce que la mesure sur appareil a appris, et que la lecture ne pouvait pas donner.** Neuf défauts
+trouvés en une soirée sur un Galaxy S9 et un S24, dont quatre sur des fonctions annoncées qui
+n'avaient **jamais** fonctionné : joindre un contact (la fiche n'est pas un fichier), envoyer deux
+photos (chaque image tenait seule sous le plafond, jamais ensemble), créer un groupe (le raccourci
+« toucher = ouvrir » avait tué le chemin), voir toutes les pièces jointes d'un MMS (le correctif
+de données F16 n'avait pas son jumeau d'affichage). Un test unitaire vert ne dit rien d'un chemin
+que personne n'emprunte.
+
+**Ce que le contrôle négatif a appris.** Deux correctifs remis ensemble peuvent se masquer : F12
+restait vert pour la mauvaise raison tant que F14 était neutralisé avec lui. Et un contrôle
+négatif dont le rapport est périmé n'a rien mesuré — vu deux fois dans la session, une fois sur
+une compilation refusée, une fois sur un verrou de fichier Windows.
+
+Campagne instrumentée : **131 cas sur Galaxy S9 / Android 10, 0 échec, 0 ignoré** ; 557 tests
+unitaires ; migration 11 → 12 exécutée sur appareil.
+
 ### v1.28.2 — Un garde qui refuse toujours de la même façon n'est plus une protection
 
 *Suite directe de la v1.28.1, décidée après elle et non signalée par la relecture externe : c'est

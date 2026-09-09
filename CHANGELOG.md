@@ -3,6 +3,75 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.3] — 2026-09-09
+
+*Quatrième passe de la relecture d'Andrew Pozdnakov sur la MR F-Droid !38458 (33 constats), un
+audit global en quatre passes, et neuf défauts trouvés en testant sur téléphone — invisibles à la
+lecture. Registre complet : `audits_relectures_IA/audits-ia-externe/2026-09-09-…-33-findings.md`.*
+
+### Sécurité
+- **Deux conversations locales sans fil système s'entre-détruisaient** (F01, critique) : la
+  sentinelle `thread_id = 0` sous un index UNIQUE. `thread_id` nullable, migration Room 8 → 9,
+  `insert(ABORT)` au lieu d'`upsert(REPLACE)`. Touchait aussi la réception.
+- **Le Safety call n'avance que sur l'accusé du radio** (F05, critique), plus sur l'acceptation
+  par `SmsManager`.
+- **Les messages programmés du coffre** appliquent la visibilité du coffre (F02) ; la carte des
+  Réglages passe sous le garde du mode leurre.
+- **La purge du coffre** annule les envois programmés, efface les fichiers de pièces jointes,
+  distingue résidu système et échec local, et n'entre plus dans la rétention (F03, F04, F09, F10,
+  F11).
+- **La purge de l'OUTBOX système exige une preuve de propriété** (F18).
+- **Ce qui compte comme preuve avant de supprimer** une ligne système (F12, F14).
+- **« Bloquer les numéros inconnus » est câblé** (F26) — le réglage était affiché et ne faisait
+  rien. Une permission contacts refusée ne bloque rien.
+- **Désarmer le verrou exige de s'authentifier** (F06) ; abaisser le mode ne retire plus le seul
+  second facteur du coffre (F07).
+- **Les notifications** : identité des `PendingIntent` (F19), rédaction des échecs MMS (F08), et
+  l'écran verrouillé suit le réglage d'aperçu sur les trois notificateurs (audit D-02). La
+  conversation connue fait foi pour taire une notification du coffre (A-01).
+- **La restauration refuse en session leurre**, comme l'export (audit A-03).
+- **Mettre un groupe au coffre met ses membres au coffre**, et l'en sortir les en sort (X-01,
+  mesuré) : le SMS n'a pas de groupe, le contenu vit dans les 1-à-1, réponses comprises.
+
+### Corrigé
+- **Un accusé tardif ne condamne plus la tentative suivante** (F23) : chaque envoi porte un
+  numéro de tentative (migration 10 → 11). **Un envoi revendiqué n'est plus bloqué à vie** (F20) :
+  le verrou reçoit un bail (migration 9 → 10), l'issue inconnue se dit `INTERRUPTED`.
+- **Un destinataire bloqué laisse une trace sur les trois voies d'envoi** et l'envoi programmé
+  (F21) ; un envoi partiel se dit.
+- **Une pièce jointe entrante n'est plus perdue en silence** ; toutes les parties d'un MMS sont
+  gardées, vCard comprise (F15, F16, F17).
+- **La restauration** rend ce qu'elle seule transporte : citations, favoris, réactions (F24, F25,
+  F32).
+- **Emoji composés et persan** ne sont plus altérés à la réception (F28).
+- **Les trois chemins d'envoi du composeur** suivent les mêmes règles (F22, F29, F30).
+- **Plus de crash au lancement** sur des réglages illisibles (F31a) ; PDF non tronqué (F33) ;
+  trois allocations bornées (F27).
+- **Mesuré sur téléphone** : joindre un contact n'avait jamais fonctionné — la fiche n'est pas un
+  fichier (X-02) ; deux photos ne pouvaient pas partir — le plafond de 280 Ko se partage entre
+  les images (X-03) ; la bulle n'affichait que la première pièce jointe (X-04) ; créer un groupe
+  était introuvable (X-05) ; un nom tapé devenait un destinataire (X-06) ; le clavier masquait la
+  liste des contacts (X-07) ; un groupe s'intitulait par des numéros (X-08) ; un SMS reçu dans une
+  conversation du coffre était « introuvable après insertion » (X-09).
+- **La bulle rouge d'un MMS ne se relance plus par le chemin SMS** (audit B-1).
+
+### Ajouté
+- **Groupes nommés** : « Nouveau groupe » dans le menu de la liste, nom choisi (local, 40
+  caractères) depuis le fil ou l'appui long, avatar « groupe », compte de membres (migration
+  Room 11 → 12). Un envoi fait depuis un groupe laisse sa copie dans le fil du groupe.
+- **Un envoi qui échoue le dit** par une notification ; la restauration compte ce qu'elle ne rend
+  pas.
+
+### Retiré
+- Le toggle « Vibrer » et six réglages que rien ne lisait (audit D-01, D-03) ;
+  `retryFailedAutomatically`, retiré plutôt que câblé.
+
+### Non corrigé, et pourquoi
+- **F13** (purge non atomique) : la conséquence dangereuse est fermée par F09, le reste est
+  inhérent à la suppression de fichiers. Argumenté dans le registre.
+- **Un MMS sans légende restauré devient invisible** (trouvé en écrivant les tests de F25) : le
+  remède demande une colonne `hidden` et une migration.
+
 ## [1.28.2] — 2026-09-08
 
 ### Sécurité
