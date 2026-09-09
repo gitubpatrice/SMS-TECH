@@ -1093,7 +1093,21 @@ class ThreadViewModel @Inject constructor(
                 // v1.28.3 (F22) — le texte reçoit enfin le même traitement que les pièces
                 // jointes ci-dessus, qui l'avaient depuis la v1.3.4.
                 effacerBrouillonSiIntact(revisionEnvoyee)
-                _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
+                // v1.28.3 (F21) — l'envoi partiel se dit ici AUSSI. Le succes annonce et le
+                // brouillon efface pendant qu'un destinataire n'a rien recu, c'est le meme
+                // silence que sur la voie SMS ; le corriger d'un seul cote serait reproduire le
+                // motif que cette relecture entiere combat.
+                if (res.value.isComplete) {
+                    _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
+                } else {
+                    _events.tryEmit(
+                        Event.PartialSend(
+                            sent = res.value.dispatched.size,
+                            failed = res.value.failed.size,
+                            blocked = res.value.blocked.size,
+                        ),
+                    )
+                }
             }
             is Outcome.Failure -> {
                 // Garde les PJ stagées pour retry, ne supprime pas les fichiers cache.
@@ -1435,7 +1449,18 @@ class ThreadViewModel @Inject constructor(
         )) {
             is Outcome.Success -> {
                 _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }
-                _events.tryEmit(Event.ShowSnackbar(snackVoiceSent()))
+                // v1.28.3 (F21) — idem sur la voie vocale, troisieme chemin d'envoi.
+                if (res.value.isComplete) {
+                    _events.tryEmit(Event.ShowSnackbar(snackVoiceSent()))
+                } else {
+                    _events.tryEmit(
+                        Event.PartialSend(
+                            sent = res.value.dispatched.size,
+                            failed = res.value.failed.size,
+                            blocked = res.value.blocked.size,
+                        ),
+                    )
+                }
             }
             is Outcome.Failure -> {
                 _state.update { it.copy(isSendingVoice = false) }

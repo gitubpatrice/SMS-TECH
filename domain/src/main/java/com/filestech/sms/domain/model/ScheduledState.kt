@@ -29,8 +29,13 @@ enum class ScheduledState(val rawValue: Int) {
      * doit RESTER VISIBLE. C'est exactement le piège des lignes `CANCELLED`, qu'aucune liste
      * n'affiche et qui étaient donc devenues inatteignables — on ne le reproduit pas ici.
      *
-     * Rétro-compatible : un downgrade lit `4` via [fromRaw], qui retombe sur `PENDING` — l'envoi
-     * redevient simplement éligible.
+     * ⚠️ v1.28.3 — ce KDoc affirmait une « rétro-compatibilité : un downgrade lit `4` via
+     * [fromRaw] et retombe sur `PENDING` ». **C'est faux, et dans le sens rassurant.**
+     * `DatabaseFactory` n'appelle aucun `fallbackToDestructiveMigrationOnDowngrade` — la ligne a
+     * été retirée délibérément, son KDoc l'explique — si bien qu'un downgrade réel fait lever
+     * `IllegalStateException` à Room **avant la moindre requête** : [fromRaw] n'est jamais
+     * atteint sur ce chemin. Le repli sur `PENDING` protège d'une valeur corrompue, pas d'un
+     * downgrade. Signalé par la revue de qualité du 2026-09-09.
      */
     SENDING(4),
 
@@ -56,8 +61,9 @@ enum class ScheduledState(val rawValue: Int) {
      * fois. L'issue est réellement inconnue, et c'est ce que cet état dit. L'utilisateur, seul,
      * tranche : relancer (en acceptant le doublon) ou retirer.
      *
-     * Rétro-compatible comme [SENDING] : un downgrade lit `5` via [fromRaw] et retombe sur
-     * `PENDING`.
+     * Même remarque que pour [SENDING] : le repli de [fromRaw] vaut pour une valeur corrompue,
+     * **pas** pour un downgrade — celui-ci fait crasher Room en amont, et c'est la politique
+     * assumée du projet (cf. `DatabaseFactory`).
      */
     INTERRUPTED(5);
     companion object {

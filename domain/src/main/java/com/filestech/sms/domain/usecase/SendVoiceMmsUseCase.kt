@@ -7,6 +7,7 @@ import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
+import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
@@ -39,12 +40,8 @@ class SendVoiceMmsUseCase @Inject constructor(
         mimeType: String,
         durationMs: Long,
         subId: Int? = null,
-    ): Outcome<List<Long>> {
-        if (!defaultAppManager.isDefault()) return Outcome.Failure(AppError.NotDefaultSmsApp)
-        if (recipients.isEmpty()) return Outcome.Failure(AppError.Validation("no recipients"))
-        if (!audioFile.exists() || audioFile.length() == 0L) {
-            return Outcome.Failure(AppError.Validation("audio file missing or empty"))
-        }
+    ): Outcome<SendReport> {
+        refusPrealable(recipients, audioFile)?.let { return Outcome.Failure(it) }
 
         // Audit H3 (v1.14.8) — on évite `flow.first()` (ouverture DataStore) sur chaque envoi.
         //
@@ -62,9 +59,34 @@ class SendVoiceMmsUseCase @Inject constructor(
         val durableAudio = attachmentStore.promoteToDurable(audioFile)
 
         val ids = ArrayList<Long>(recipients.size)
+        val failed = ArrayList<PhoneAddress>()
+        val blocked = ArrayList<PhoneAddress>()
         val now = System.currentTimeMillis()
         for (r in recipients) {
-            if (blockedRepo.isBlocked(r.raw)) continue
+            // v1.28.3 (F21, second passage) — troisieme occurrence du meme `continue` muet.
+            //
+            // Le correctif n'avait ete pose que sur `SendSmsUseCase`, et la revue de qualite n'a
+            // signale que la voie media : celle-ci, la voie VOCALE, portait le meme defaut sans
+            // que personne ne la cite. Un message vocal vers un contact bloque disparaissait donc
+            // lui aussi sans trace. Les trois chemins d'envoi appliquent maintenant la meme regle,
+            // ce qui est tout l'objet de cette relecture.
+            if (blockedRepo.isBlocked(r.raw)) {
+                blocked += r
+                val blockedId = mirror.upsertOutgoingMms(
+                    address = r.raw,
+                    audioFile = durableAudio,
+                    mimeType = mimeType,
+                    durationMs = durationMs,
+                    date = now,
+                    subId = effectiveSubId,
+                )
+                mirror.updateOutgoingStatus(
+                    blockedId,
+                    MessageStatus.FAILED,
+                    errorCode = SendErrorCode.RECIPIENT_BLOCKED,
+                )
+                continue
+            }
             val localId = mirror.upsertOutgoingMms(
                 address = r.raw,
                 audioFile = durableAudio,
@@ -73,7 +95,7 @@ class SendVoiceMmsUseCase @Inject constructor(
                 date = now,
                 subId = effectiveSubId,
             )
-            when (val res = sender.sendVoiceMms(
+            when (sender.sendVoiceMms(
                 localMessageId = localId,
                 recipients = listOf(r.raw),
                 audioFile = durableAudio,
@@ -82,14 +104,32 @@ class SendVoiceMmsUseCase @Inject constructor(
                 requestDeliveryReport = deliveryReports,
             )) {
                 is Outcome.Success -> ids += localId
-                is Outcome.Failure -> mirror.updateOutgoingStatus(
-                    localId,
-                    MessageStatus.FAILED,
-                    errorCode = SendErrorCode.SYNCHRONOUS,
-                )
+                is Outcome.Failure -> {
+                    failed += r
+                    mirror.updateOutgoingStatus(
+                        localId,
+                        MessageStatus.FAILED,
+                        errorCode = SendErrorCode.SYNCHRONOUS,
+                    )
+                }
             }
         }
-        return if (ids.isEmpty()) Outcome.Failure(AppError.Telephony("no MMS dispatched"))
-        else Outcome.Success(ids)
+        if (ids.isEmpty()) {
+            return if (blocked.size == recipients.size) {
+                Outcome.Failure(AppError.RecipientBlocked)
+            } else {
+                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
+            }
+        }
+        return Outcome.Success(SendReport(dispatched = ids, failed = failed, blocked = blocked))
+    }
+
+    /** v1.28.3 (F21, second passage) — cf. le jumeau de [SendMediaMmsUseCase]. */
+    private fun refusPrealable(recipients: List<PhoneAddress>, audioFile: File): AppError? = when {
+        !defaultAppManager.isDefault() -> AppError.NotDefaultSmsApp
+        recipients.isEmpty() -> AppError.Validation("no recipients")
+        !audioFile.exists() || audioFile.length() == 0L ->
+            AppError.Validation("audio file missing or empty")
+        else -> null
     }
 }

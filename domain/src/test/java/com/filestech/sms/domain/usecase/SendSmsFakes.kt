@@ -117,6 +117,15 @@ internal class NoopMirror : OutgoingMessageMirror {
     // Non exercees par SendSmsUseCase, mais l'interface les impose.
     override suspend fun resetOutgoingForRetry(localId: Long): Int = 1
 
+    /**
+     * v1.28.3 (F21, second passage) — les deux voies MMS ecrivent ici, elles aussi. Elles
+     * jetaient `error("non utilise")` : c'etait vrai tant que seuls les tests de la voie SMS
+     * existaient, et cette affirmation-la a vieilli comme les autres.
+     */
+    data class LigneMms(val adresse: String, val piecesJointes: Int)
+
+    val lignesMms = mutableListOf<LigneMms>()
+
     override suspend fun upsertOutgoingMms(
         address: String,
         audioFile: File,
@@ -124,7 +133,10 @@ internal class NoopMirror : OutgoingMessageMirror {
         durationMs: Long,
         date: Long,
         subId: Int?,
-    ): Long = error("non utilise")
+    ): Long {
+        lignesMms += LigneMms(address, 1)
+        return prochainId++
+    }
 
     override suspend fun upsertOutgoingMediaMms(
         address: String,
@@ -132,7 +144,11 @@ internal class NoopMirror : OutgoingMessageMirror {
         textBody: String,
         date: Long,
         subId: Int?,
-    ): Long = error("non utilise")
+    ): Long {
+        lignes += LigneEcrite(address, telephonyUri = null, statut = MessageStatus.PENDING)
+        lignesMms += LigneMms(address, attachments.size)
+        return prochainId++
+    }
 }
 
 internal class NeverBlocked : BlockedNumberRepository {

@@ -9,6 +9,7 @@ import com.filestech.sms.domain.mms.OutgoingAttachmentStore
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
+import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
@@ -41,21 +42,8 @@ class SendMediaMmsUseCase @Inject constructor(
         attachments: List<AttachmentPayload>,
         textBody: String = "",
         subId: Int? = null,
-    ): Outcome<List<Long>> {
-        if (!defaultAppManager.isDefault()) return Outcome.Failure(AppError.NotDefaultSmsApp)
-        if (recipients.isEmpty()) return Outcome.Failure(AppError.Validation("no recipients"))
-        if (attachments.isEmpty() && textBody.isBlank()) {
-            return Outcome.Failure(AppError.Validation("no payload"))
-        }
-        for (a in attachments) {
-            if (!a.file.exists() || a.file.length() == 0L) {
-                return Outcome.Failure(AppError.Validation("attachment file missing or empty"))
-            }
-        }
-        val totalBytes = attachments.sumOf { it.file.length() }
-        if (totalBytes > MAX_PAYLOAD_BYTES) {
-            return Outcome.Failure(AppError.Validation("payload exceeds 300 KB cap ($totalBytes B)"))
-        }
+    ): Outcome<SendReport> {
+        refusPrealable(recipients, attachments, textBody)?.let { return Outcome.Failure(it) }
 
         // Promote the UI-staged cache files into durable storage BEFORE mirroring/dispatch so the
         // `AttachmentEntity.localUri` we persist survives the outbound-cache pruners (otherwise the
@@ -75,19 +63,59 @@ class SendMediaMmsUseCase @Inject constructor(
         val deliveryReports = s.sending.deliveryReports
         val now = System.currentTimeMillis()
 
-        val ids = ArrayList<Long>(recipients.size)
-        for (r in recipients) {
-            if (blockedRepo.isBlocked(r.raw)) continue
+        // Hisses hors de la boucle : ni l'un ni l'autre ne depend du destinataire, et la voie
+        // du destinataire bloque a besoin des specs avant le reste.
+        val mirrorSpecs = durableAttachments.map {
+            MediaAttachmentSpec(
+                file = it.file,
+                mimeType = it.mimeType,
+                width = it.width,
+                height = it.height,
+                durationMs = it.durationMs,
+            )
+        }
+        val pduAttachments = durableAttachments.map {
+            MmsAttachment(
+                file = it.file,
+                mimeType = it.mimeType,
+                kind = when {
+                    it.mimeType.startsWith("image/", ignoreCase = true) -> MmsAttachment.Kind.IMAGE
+                    it.mimeType.startsWith("video/", ignoreCase = true) -> MmsAttachment.Kind.VIDEO
+                    it.mimeType.startsWith("audio/", ignoreCase = true) -> MmsAttachment.Kind.AUDIO
+                    else -> MmsAttachment.Kind.OTHER
+                },
+            )
+        }
 
-            val mirrorSpecs = durableAttachments.map {
-                MediaAttachmentSpec(
-                    file = it.file,
-                    mimeType = it.mimeType,
-                    width = it.width,
-                    height = it.height,
-                    durationMs = it.durationMs,
+        val ids = ArrayList<Long>(recipients.size)
+        val failed = ArrayList<PhoneAddress>()
+        val blocked = ArrayList<PhoneAddress>()
+        for (r in recipients) {
+            // v1.28.3 (F21, second passage) — le `continue` muet etait ici AUSSI.
+            //
+            // Le correctif F21 n'avait ete pose que sur `SendSmsUseCase` : un MMS vers un contact
+            // bloque disparaissait donc toujours sans ligne, sans message et sans compte — y
+            // compris pour un envoi PROGRAMME porteur d'une piece jointe, que
+            // `ScheduledSendAttempt` aiguille vers ce chemin-ci. C'est exactement le motif du
+            // correctif asymetrique que cette relecture entiere a mis au jour, et je venais de le
+            // reproduire. Trouve par la revue de qualite lancee sur mon propre delta.
+            if (blockedRepo.isBlocked(r.raw)) {
+                blocked += r
+                val blockedId = mirror.upsertOutgoingMediaMms(
+                    address = r.raw,
+                    attachments = mirrorSpecs,
+                    textBody = textBody,
+                    date = now,
+                    subId = effectiveSubId,
                 )
+                mirror.updateOutgoingStatus(
+                    blockedId,
+                    MessageStatus.FAILED,
+                    errorCode = SendErrorCode.RECIPIENT_BLOCKED,
+                )
+                continue
             }
+
             val localId = mirror.upsertOutgoingMediaMms(
                 address = r.raw,
                 attachments = mirrorSpecs,
@@ -96,20 +124,7 @@ class SendMediaMmsUseCase @Inject constructor(
                 subId = effectiveSubId,
             )
 
-            val pduAttachments = durableAttachments.map {
-                MmsAttachment(
-                    file = it.file,
-                    mimeType = it.mimeType,
-                    kind = when {
-                        it.mimeType.startsWith("image/", ignoreCase = true) -> MmsAttachment.Kind.IMAGE
-                        it.mimeType.startsWith("video/", ignoreCase = true) -> MmsAttachment.Kind.VIDEO
-                        it.mimeType.startsWith("audio/", ignoreCase = true) -> MmsAttachment.Kind.AUDIO
-                        else -> MmsAttachment.Kind.OTHER
-                    },
-                )
-            }
-
-            when (val res = sender.sendMediaMms(
+            when (sender.sendMediaMms(
                 localMessageId = localId,
                 recipients = listOf(r.raw),
                 attachments = pduAttachments,
@@ -118,16 +133,49 @@ class SendMediaMmsUseCase @Inject constructor(
                 requestDeliveryReport = deliveryReports,
             )) {
                 is Outcome.Success -> ids += localId
-                is Outcome.Failure -> mirror.updateOutgoingStatus(
-                    localId,
-                    MessageStatus.FAILED,
-                    errorCode = SendErrorCode.SYNCHRONOUS,
-                )
+                is Outcome.Failure -> {
+                    failed += r
+                    mirror.updateOutgoingStatus(
+                        localId,
+                        MessageStatus.FAILED,
+                        errorCode = SendErrorCode.SYNCHRONOUS,
+                    )
+                }
             }
         }
 
-        return if (ids.isEmpty()) Outcome.Failure(AppError.Telephony("no MMS dispatched"))
-        else Outcome.Success(ids)
+        if (ids.isEmpty()) {
+            return if (blocked.size == recipients.size) {
+                Outcome.Failure(AppError.RecipientBlocked)
+            } else {
+                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
+            }
+        }
+        return Outcome.Success(SendReport(dispatched = ids, failed = failed, blocked = blocked))
+    }
+
+    /**
+     * v1.28.3 (F21, second passage) — les cinq gardes prealables en une seule decision.
+     *
+     * Meme raison que dans [SendSmsUseCase] : elles repondent toutes a « a-t-on le droit
+     * d'envoyer », et les regrouper vaut mieux que d'excuser leur nombre dans la baseline.
+     */
+    private fun refusPrealable(
+        recipients: List<PhoneAddress>,
+        attachments: List<AttachmentPayload>,
+        textBody: String,
+    ): AppError? {
+        val totalBytes = attachments.sumOf { it.file.length() }
+        return when {
+            !defaultAppManager.isDefault() -> AppError.NotDefaultSmsApp
+            recipients.isEmpty() -> AppError.Validation("no recipients")
+            attachments.isEmpty() && textBody.isBlank() -> AppError.Validation("no payload")
+            attachments.any { !it.file.exists() || it.file.length() == 0L } ->
+                AppError.Validation("attachment file missing or empty")
+            totalBytes > MAX_PAYLOAD_BYTES ->
+                AppError.Validation("payload exceeds 300 KB cap ($totalBytes B)")
+            else -> null
+        }
     }
 
     /** Payload describing one attachment, normalised + cached to disk by the UI before send. */
