@@ -591,7 +591,28 @@ interface MessageDao {
      * `date < olderThan` dès que `retentionDays >= SAFETY_NET_DAYS` — c'était un faux filet de
      * sécurité côté DB. La logique reste centralisée côté worker, observable et testable.
      */
-    @Query("DELETE FROM messages WHERE date < :olderThan AND starred = 0")
+    /*
+     * v1.28.3 (F11) — le Coffre est EXCLU, comme il l'est deja de `markAllIncomingAsRead`, de
+     * `search`, de `listMirroredTelephonyUris` et de trois autres requetes de ce fichier. La
+     * retention etait la seule ecriture destructrice a ne pas le faire.
+     *
+     * Ce que cela produisait, et qui est pire que la suppression elle-meme : la ligne locale
+     * partait `quoi qu'il arrive` (contrat assume de `ConversationEraser.purgeHistory`), y compris
+     * quand sa copie systeme avait resiste. Le lien disparaissait donc avec elle, et la
+     * resynchronisation suivante reimportait le message HORS du coffre, dans une conversation
+     * ordinaire. Un contenu protege ressuscitait en clair, sans que personne ne l'ait demande —
+     * l'utilisateur n'ayant regle qu'une duree de conservation pour son historique courant.
+     *
+     * Le coffre a sa propre purge, explicite et authentifiee (`purgeVault`), dont le contrat est
+     * l'inverse : la ligne locale ne part que si la preuve de suppression systeme est faite.
+     */
+    @Query(
+        """
+        DELETE FROM messages
+         WHERE date < :olderThan AND starred = 0
+           AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
     suspend fun purgeOlderThan(olderThan: Long): Int
 
     /**
@@ -614,6 +635,14 @@ interface MessageDao {
      * `telephony_uri IS NOT NULL` ecarte d'emblee les lignes qui n'ont rien a propager — brouillons,
      * messages jamais miroites — au lieu de les charger pour ne rien en faire.
      *
+     * v1.28.3 (F10) — `OR mms_system_id IS NOT NULL`. Ce filtre-la EXCLUAIT tous les MMS
+     * SORTANTS : `ConversationMirror` les ecrit avec `telephonyUri = null`, leur seul lien vers le
+     * fournisseur etant `mms_system_id`. La retention ne propageait donc jamais leur suppression,
+     * et ils restaient indefiniment dans `content://mms`.
+     *
+     * v1.28.3 (F11) — et le Coffre en est desormais exclu, comme il l'est de la suppression qui
+     * suit ; voir le KDoc de [purgeOlderThan] pour ce que l'absence de ce filtre produisait.
+     *
      * Le critere de selection est **exactement** celui de [purgeOlderThan], au filtre de liaison
      * pres : deux criteres qui divergeraient feraient propager la suppression de lignes qui
      * resteraient en base, ou l'inverse.
@@ -621,7 +650,9 @@ interface MessageDao {
     @Query(
         """
         SELECT * FROM messages
-         WHERE date < :olderThan AND starred = 0 AND telephony_uri IS NOT NULL AND id > :apresId
+         WHERE date < :olderThan AND starred = 0 AND id > :apresId
+           AND (telephony_uri IS NOT NULL OR mms_system_id IS NOT NULL)
+           AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
          ORDER BY id
          LIMIT :limite
         """,
@@ -745,7 +776,18 @@ interface MessageDao {
      * affiche d'abord à l'utilisateur "X messages vont être effacés, continuer ?" pour
      * éviter un wipe massif accidentel. Utilise le même filtre `starred = 0` pour la
      * cohérence parfaite avec la purge réelle.
+     *
+     * v1.28.3 (F11) — et la MEME exclusion du Coffre. Ce nombre est montré à l'utilisateur juste
+     * avant qu'il confirme : le laisser diverger du `DELETE` qu'il annonce ferait promettre
+     * l'effacement de messages que la purge ne touche plus. « Le même filtre pour la cohérence
+     * parfaite » était déjà l'intention écrite ici ; elle vaut aussi pour ce filtre-ci.
      */
-    @Query("SELECT COUNT(*) FROM messages WHERE date < :olderThan AND starred = 0")
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+         WHERE date < :olderThan AND starred = 0
+           AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
     suspend fun countOlderThan(olderThan: Long): Int
 }

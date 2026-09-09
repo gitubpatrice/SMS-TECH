@@ -107,6 +107,62 @@ class MmsRowIdentityTest {
         assertThat(ligneSystemePresente(uri)).isTrue()
     }
 
+    /**
+     * v1.28.3 (F10) — **la ligne est atteinte par `mms_system_id`, pas seulement par
+     * `telephony_uri`.**
+     *
+     * `ConversationMirror.upsertOutgoingMms` et `upsertOutgoingMediaMms` ecrivent tous deux
+     * `telephonyUri = null` : AUCUN MMS sortant n'en a jamais eu. `erase` sortait donc sur `true`
+     * — « la copie systeme n'est plus la » — sans rien toucher, pour tout MMS envoye par
+     * l'application. Ce `true` etait rendu a `ConversationEraser.purgeVault`, qui s'en sert comme
+     * PREUVE avant de retirer le PIN : le coffre s'annoncait purge alors que ses MMS etaient
+     * toujours dans `content://mms`.
+     *
+     * Le test se fait sur le vrai fournisseur : c'est la seule facon de prouver que la suppression
+     * a lieu, un faux repondrait ce qu'on veut bien lui faire dire.
+     */
+    @Test
+    fun unMmsLieParSonSeulIdentifiantSysteme_estBienSupprime() {
+        val dateSec = System.currentTimeMillis() / 1000L
+        val uri = insertProbeMmsOrSkip(dateSec, EXPEDITEUR)
+        val idSysteme = uri.lastPathSegment!!.toLong()
+
+        // Exactement ce que Room detient d'un MMS sortant : pas d'URI, un identifiant systeme.
+        val sansUri = message(uri, dateSec).copy(telephonyUri = null, mmsSystemId = idSysteme)
+
+        assertThat(eraser.erase(sansUri)).isTrue()
+        assertThat(ligneSystemePresente(uri)).isFalse()
+    }
+
+    /**
+     * Controle : le garde d'identite s'applique AUSSI par ce chemin. Sans lui, on aurait remplace
+     * un silence par une suppression aveugle — ce qui serait pire que le defaut d'origine.
+     */
+    @Test
+    fun unMmsLieParIdentifiantSysteme_maisDAdresseDifferente_nEstPasSupprime() {
+        val dateSec = System.currentTimeMillis() / 1000L
+        val uri = insertProbeMmsOrSkip(dateSec, EXPEDITEUR)
+        val idSysteme = uri.lastPathSegment!!.toLong()
+
+        val autre = message(uri, dateSec)
+            .copy(telephonyUri = null, mmsSystemId = idSysteme, address = "+33699999999")
+
+        assertThat(eraser.erase(autre)).isFalse()
+        assertThat(ligneSystemePresente(uri)).isTrue()
+    }
+
+    /**
+     * Controle : une ligne sans AUCUN lien n'a rien a faire disparaitre, et doit toujours rendre
+     * `true`. C'est le seul cas ou ce `true` est honnete, et il ne doit pas se perdre.
+     */
+    @Test
+    fun unMessageSansAucunLienSysteme_rendVrai() {
+        val sansLien = message(Uri.parse("content://mms/1"), 0L)
+            .copy(telephonyUri = null, mmsSystemId = null)
+
+        assertThat(eraser.erase(sansLien)).isTrue()
+    }
+
     private fun insertProbeMmsOrSkip(dateSec: Long, expediteur: String): Uri {
         val cv = ContentValues().apply {
             put(Telephony.Mms.DATE, dateSec)

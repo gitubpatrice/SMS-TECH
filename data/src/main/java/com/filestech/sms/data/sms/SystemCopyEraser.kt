@@ -65,8 +65,7 @@ class TelephonySystemCopyEraser @Inject constructor(
      * ou l'on a deliberement refuse de supprimer.
      */
     override fun erase(message: MessageEntity): Boolean {
-        val telephonyUri = message.telephonyUri
-        if (telephonyUri.isNullOrBlank()) return true
+        val telephonyUri = lienSysteme(message) ?: return true
         val uri = canonicalUri(telephonyUri) ?: return false
         val identite = matchesSystemRow(uri, message)
         // La POLITIQUE est une table, ecrite une seule fois et testee pour elle-meme, cf.
@@ -84,6 +83,31 @@ class TelephonySystemCopyEraser @Inject constructor(
         }.onFailure {
             Timber.w(it, "Failed to delete %s from system provider", telephonyUri)
         }.getOrDefault(false)
+    }
+
+    /**
+     * v1.28.3 (F10) — **le lien vers la ligne systeme, qui n'est pas toujours `telephony_uri`.**
+     *
+     * `erase` sortait sur `true` — « la copie systeme n'est plus la » — des que `telephony_uri`
+     * etait vide. Or `ConversationMirror.upsertOutgoingMms` et `upsertOutgoingMediaMms` ecrivent
+     * tous deux `telephonyUri = null` : **aucun MMS sortant n'a jamais eu de `telephony_uri`**.
+     * Leur seul lien vers le fournisseur est `mms_system_id`, que `MmsSender` enregistre apres
+     * l'ecriture dans `content://mms`.
+     *
+     * Consequence, et ce n'est pas un cas limite : tout MMS envoye par l'application restait dans
+     * `content://mms` apres suppression de sa conversation, lisible par toute application ayant
+     * `READ_SMS`, et une resynchronisation complete le ramenait. Pire, ce `true` etait rendu a
+     * `ConversationEraser.purgeVault`, qui s'en sert comme **preuve** avant de retirer le PIN du
+     * coffre : le coffre s'annoncait purge alors que ses MMS etaient toujours la.
+     *
+     * `null` ne signifie donc plus « pas de `telephony_uri` » mais « aucun lien d'aucune sorte »,
+     * ce qui est le seul cas ou l'on peut honnetement repondre qu'il n'y a rien a supprimer.
+     * L'identite est verifiee ensuite comme pour n'importe quelle autre ligne : `matchesSystemRow`
+     * sait deja lire `content://mms` — date en secondes, boite, adresse via `…/addr`.
+     */
+    private fun lienSysteme(message: MessageEntity): String? {
+        message.telephonyUri?.takeIf { it.isNotBlank() }?.let { return it }
+        return message.mmsSystemId?.takeIf { it > 0L }?.let { "$MMS_URI_PREFIX/$it" }
     }
 
     /**

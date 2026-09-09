@@ -48,11 +48,17 @@ class PurgeHistoryPropagationTest {
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
-    /** Espion : retient chaque message presente au fournisseur, et laisse tout partir. */
+    /**
+     * Espion : retient chaque message presente au fournisseur, et laisse tout partir.
+     *
+     * v1.28.3 (F10) — il retient desormais le LIEN reel, `telephony_uri` **ou** `mms_system_id`.
+     * N'observer que le premier revenait a ne pas voir les MMS sortants, qui n'en ont jamais :
+     * l'espion aurait enregistre `null` pour eux et le defaut serait passe sous les yeux du test.
+     */
     private class Espion(private val refuse: Boolean = false) : SystemCopyEraser {
         val presentes = mutableListOf<String?>()
         override fun erase(message: MessageEntity): Boolean {
-            presentes += message.telephonyUri
+            presentes += message.telephonyUri ?: message.mmsSystemId?.let { "content://mms/$it" }
             return !refuse
         }
     }
@@ -171,6 +177,76 @@ class PurgeHistoryPropagationTest {
         assertThat(db.messageDao().findByConversation(CONV_ID)).isEmpty()
     }
 
+    // ─────────────────────── v1.28.3 — F10 et F11 ───────────────────────
+
+    /**
+     * v1.28.3 (F10) — **un MMS sortant n'a jamais de `telephony_uri`.**
+     *
+     * `ConversationMirror.upsertOutgoingMms` et `upsertOutgoingMediaMms` ecrivent tous deux
+     * `telephonyUri = null` ; le seul lien vers le fournisseur est `mms_system_id`. La requete de
+     * propagation filtrait sur `telephony_uri IS NOT NULL` : **aucun MMS envoye par
+     * l'application n'a jamais ete presente au fournisseur par la retention**. Ils restaient dans
+     * `content://mms`, et une resynchronisation complete les ramenait.
+     */
+    @Test
+    fun unMmsSortantEstPresenteAuFournisseurMalgreLAbsenceDeTelephonyUri() = runBlocking<Unit> {
+        insere(uri = null, date = VIEUX, mmsSystemId = 77L)
+        insere(uri = "content://sms/40", date = VIEUX)
+        val espion = Espion()
+
+        val efface = eraserAvec(espion).purgeHistory(CUTOFF)
+
+        assertThat(efface).isEqualTo(2)
+        assertThat(espion.presentes)
+            .containsExactly("content://mms/77", "content://sms/40")
+        assertThat(db.messageDao().findByConversation(CONV_ID)).isEmpty()
+    }
+
+    /**
+     * v1.28.3 (F11) — **la retention n'entre plus dans le coffre.**
+     *
+     * Elle etait la seule ecriture destructrice de ce fichier a ne pas l'exclure, alors que six
+     * autres requetes le font. Et le contrat de cette purge — la ligne locale part quoi qu'il
+     * arrive — rendait la chose pire que la suppression elle-meme : quand la copie systeme
+     * resistait, le lien disparaissait avec la ligne, et la resynchronisation suivante
+     * reimportait le message HORS du coffre, dans une conversation ordinaire. Un contenu protege
+     * ressuscite en clair.
+     */
+    @Test
+    fun laRetentionNEffacePasLesMessagesDuCoffre() = runBlocking<Unit> {
+        creeConversationDuCoffre()
+        insere(uri = "content://sms/50", date = VIEUX, conversationId = CONV_COFFRE)
+        insere(uri = "content://sms/51", date = VIEUX)
+        val espion = Espion()
+
+        val efface = eraserAvec(espion).purgeHistory(CUTOFF)
+
+        assertThat(efface).isEqualTo(1)
+        // Ni efface, ni meme PRESENTE au fournisseur : les deux criteres doivent concorder.
+        assertThat(espion.presentes).containsExactly("content://sms/51")
+        assertThat(db.messageDao().findByConversation(CONV_COFFRE)).hasSize(1)
+        assertThat(db.messageDao().findByConversation(CONV_ID)).isEmpty()
+    }
+
+    /**
+     * Le nombre montre a l'utilisateur avant qu'il confirme doit decrire EXACTEMENT ce que la
+     * purge effacera. Sans ce test, le compteur promettrait l'effacement de messages du coffre
+     * que la purge ne touche plus — une divergence invisible entre une promesse et un acte.
+     */
+    @Test
+    fun leCompteurAnnonceExactementCeQueLaPurgeEfface() = runBlocking<Unit> {
+        creeConversationDuCoffre()
+        insere(uri = "content://sms/60", date = VIEUX, conversationId = CONV_COFFRE)
+        insere(uri = "content://sms/61", date = VIEUX)
+        insere(uri = "content://sms/62", date = VIEUX, starred = true)
+
+        val annonce = db.messageDao().countOlderThan(CUTOFF)
+        val efface = eraserAvec(Espion()).purgeHistory(CUTOFF)
+
+        assertThat(annonce).isEqualTo(1)
+        assertThat(efface).isEqualTo(annonce)
+    }
+
     private fun eraserAvec(systemCopy: SystemCopyEraser) =
         ConversationEraser(
             db,
@@ -189,10 +265,16 @@ class PurgeHistoryPropagationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
         )
 
-    private suspend fun insere(uri: String?, date: Long, starred: Boolean = false) {
+    private suspend fun insere(
+        uri: String?,
+        date: Long,
+        starred: Boolean = false,
+        conversationId: Long = CONV_ID,
+        mmsSystemId: Long? = null,
+    ) {
         db.messageDao().insert(
             MessageEntity(
-                conversationId = CONV_ID,
+                conversationId = conversationId,
                 telephonyUri = uri,
                 address = ADRESSE,
                 body = "message",
@@ -207,6 +289,23 @@ class PurgeHistoryPropagationTest {
                 subId = null,
                 scheduledAt = null,
                 attachmentsCount = 0,
+                mmsSystemId = mmsSystemId,
+            ),
+        )
+    }
+
+    /** Conversation du coffre, creee a la demande par les tests F11. */
+    private suspend fun creeConversationDuCoffre() {
+        db.conversationDao().insert(
+            ConversationEntity(
+                id = CONV_COFFRE,
+                threadId = CONV_COFFRE,
+                addressesCsv = "+33699999999",
+                displayName = null,
+                lastMessagePreview = "",
+                lastMessageAt = 0L,
+                unreadCount = 0,
+                inVault = true,
             ),
         )
     }
@@ -217,6 +316,8 @@ class PurgeHistoryPropagationTest {
         const val CUTOFF = 1_700_000_000_000L
         const val VIEUX = 1_600_000_000_000L
         const val RECENT = 1_800_000_000_000L
+
+        const val CONV_COFFRE = 2L
 
         /** Plus de deux pages de 200 : la troisieme est volontairement incomplete. */
         const val NOMBREUX = 450
