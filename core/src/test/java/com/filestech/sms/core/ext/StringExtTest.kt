@@ -32,6 +32,51 @@ class StringExtTest {
         assertThat(sneaky.stripInvisibleChars()).isEqualTo("helloworld")
     }
 
+    // ──────────── F28 : ZWJ et ZWNJ construisent le texte, ils ne le masquent pas ────────────
+
+    /**
+     * v1.28.3 (F28) — relecture externe sur la MR F-Droid !38458.
+     *
+     * La plage d'origine `​-‏` englobait U+200D ZWJ. Tout emoji composé reçu était
+     * donc DÉCOMPOSÉ avant d'être stocké, des deux côtés — `content://sms` et Room — sans
+     * qu'aucune copie du transport ne subsiste. Irréversible, et à chaque message.
+     */
+    @Test fun `stripInvisibleChars garde le ZWJ qui compose un emoji`() {
+        // 👨‍👩‍👧 = 👨 ZWJ 👩 ZWJ 👧. Sans le ZWJ, trois personnes cote a cote au lieu d'une famille.
+        val famille = "👨‍👩‍👧"
+        assertThat(famille.stripInvisibleChars()).isEqualTo(famille)
+
+        // 🏳️‍🌈 = 🏳 VS16 ZWJ 🌈. Meme mecanisme, resultat visuellement tout autre.
+        val drapeau = "🏳️‍🌈"
+        assertThat(drapeau.stripInvisibleChars()).isEqualTo(drapeau)
+    }
+
+    /**
+     * v1.28.3 (F28) — le ZWNJ n'est pas décoratif dans les écritures qui l'emploient : il
+     * change le mot, pas son style. En persan `می‌روم` (« je vais ») devenait `میروم`.
+     */
+    @Test fun `stripInvisibleChars garde le ZWNJ des ecritures qui en dependent`() {
+        val persan = "می‌روم"
+        assertThat(persan.stripInvisibleChars()).isEqualTo(persan)
+    }
+
+    /**
+     * **Contrôle négatif du test ci-dessus.** Conserver ZWJ et ZWNJ ne doit rien relâcher
+     * d'autre : le motif SEC-02 v1.4.1 visait le SOFT HYPHEN, et tous les contrôles bidi —
+     * ceux qui permettent d'usurper l'origine visuelle d'un message — restent retirés.
+     *
+     * Sans ce test, un correctif qui viderait la regex entière passerait pour bon.
+     */
+    @Test fun `stripInvisibleChars retire toujours le soft hyphen et les controles bidi`() {
+        // Le contournement exact que SEC-02 a ferme : soft hyphen + coeur passant pour un
+        // corps purement emoji.
+        assertThat("­❤".stripInvisibleChars()).isEqualTo("❤")
+
+        // Bidi : LRM, RLM, les cinq formatages explicites, les isolats, le BOM.
+        val bidi = "a‎b‏c‪d‮e⁦f⁩g﻿h؜i᠎j͏k​l"
+        assertThat(bidi.stripInvisibleChars()).isEqualTo("abcdefghijkl")
+    }
+
     @Test fun `deterministicHue is stable`() {
         val a = "alice".deterministicHue()
         val b = "alice".deterministicHue()

@@ -285,19 +285,50 @@ fun String.extractOtp(): String? = OTP_REGEX.find(this)?.value
  *   - `͏`       — COMBINING GRAPHEME JOINER
  *   - `؜`       — ARABIC LETTER MARK (bidi)
  *   - `᠎`       — MONGOLIAN VOWEL SEPARATOR (formerly whitespace, now zero-width)
- *   - `​-‏` — zero-width space / non-joiner / joiner / LRM / RLM
+ *   - `​`       — ZERO WIDTH SPACE
+ *   - `‎`, `‏` — LRM / RLM (bidi)
  *   - `‪-‮` — bidi explicit formatting (LRE/RLE/PDF/LRO/RLO)
  *   - `⁠-⁤` — word joiner + invisible operators
  *   - `⁦-⁩` — bidi isolates (LRI/RLI/FSI/PDI)
  *   - `﻿`       — ZWNBSP / BOM
  *   - `￼-�` — object replacement + replacement character
+ *
+ * # v1.28.3 (F28) — ZWJ et ZWNJ ne sont PLUS retirés
+ *
+ * La plage d'origine s'écrivait `​-‏`, qui englobe **U+200C ZERO WIDTH NON-JOINER**
+ * et **U+200D ZERO WIDTH JOINER**. Ce ne sont pas des invisibles trompeurs : ce sont les
+ * liants qui CONSTRUISENT le texte. Les retirer avant stockage altérait irréversiblement des
+ * messages parfaitement légitimes, à chaque réception :
+ *
+ *  - `👨‍👩‍👧` (deux ZWJ) était stocké comme trois emoji séparés, `🏳️‍🌈` comme `🏳️🌈` ;
+ *  - en persan, `می‌روم` devenait `میروم` ; même effet en hindi et dans plusieurs écritures
+ *    indiennes, où le ZWNJ change le mot et non son style.
+ *
+ * Irréversible parce que le corps nettoyé était écrit AUX DEUX endroits — `content://sms` et
+ * Room — sans qu'aucune copie du transport ne subsiste. Le fichier se contredisait d'ailleurs
+ * lui-même : [splitGraphemeClusters], vingt lignes plus bas, traite U+200D comme le liant
+ * atomique d'un cluster emoji. L'application savait que ZWJ construit un emoji, et le
+ * supprimait à l'entrée.
+ *
+ * **Le motif SEC-02 est préservé.** Le contournement qu'il fermait reposait sur le SOFT HYPHEN
+ * (`U+00AD`), toujours retiré, comme tous les bidi. Conserver ZWJ/ZWNJ ne donne rien de neuf à
+ * un attaquant : `looksLikeEmojiOnly` accepte déjà `❤` seul, donc un corps `ZWJ❤` ne lui ouvre
+ * aucun pouvoir qu'un `❤` ne lui donnait pas. Et un emoji ZWJ légitime est un emoji : le
+ * laisser reconnaître comme tel est le comportement juste, pas un relâchement.
  */
 fun String.stripInvisibleChars(): String =
     this.replace(INVISIBLE_CHARS_REGEX, "")
 
-/** Compiled once at class-load — never re-allocated per call. */
+/**
+ * Compiled once at class-load — never re-allocated per call.
+ *
+ * ⚠️ `​‎‏` énumérés un par un, et NON `​-‏` : la plage engloberait
+ * ZWNJ (`‌`) et ZWJ (`‍`), qui doivent être conservés. Cf. le KDoc ci-dessus — c'est
+ * une plage qui a coûté tous les emoji composés reçus depuis la v1.4.1.
+ */
 private val INVISIBLE_CHARS_REGEX = Regex(
-    "[\\u00AD\\u034F\\u061C\\u180E\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\uFFFC\\uFFFD]"
+    "[\\u00AD\\u034F\\u061C\\u180E\\u200B\\u200E\\u200F\\u202A-\\u202E" +
+        "\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\uFFFC\\uFFFD]"
 )
 
 /**
