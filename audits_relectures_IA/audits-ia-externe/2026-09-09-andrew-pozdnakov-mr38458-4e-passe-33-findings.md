@@ -254,7 +254,8 @@ moitié importante du contrôle.
 
 ### État au 2026-09-09, fin de chantier
 
-**32 findings sur 33 traités, 23 commits** sur `fix/relecture-externe-38458` — branche **non
+**32 findings sur 33 traités, plus deux ajouts, 25 commits** sur `fix/relecture-externe-38458` —
+branche **non
 poussée, non taguée**, arbre propre. Gate : detekt, lint, **579 tests unitaires**, **131
 instrumentés sur S9 (Android 10) — 0 échec, 0 ignoré**, parité FR/EN vérifiée (756 clés de chaque
 côté, aucun argument de format divergent, aucune apostrophe nue).
@@ -267,13 +268,37 @@ côté, aucun argument de format divergent, aucune apostrophe nue).
    bulle plus haute qu'une page. Cela se relit, cela ne se teste pas.
 3. **Une purge du coffre** — F10 change la preuve sur laquelle repose le retrait du PIN.
 
-### Les deux décisions produit qui appartiennent à Patrice
+### Les deux décisions produit — tranchées le 2026-09-09
 
-1. **`retryFailedAutomatically`**, retiré et non câblé : le câbler, c'est écrire un renvoi
-   automatique, avec ses doublons facturés.
-2. **Le MMS sans légende restauré devient invisible** — le remède propre demande une colonne
-   `hidden` et une migration 12, qui rendrait aussi le correctif F14 plus robuste que sa
-   reconnaissance par forme.
+1. **`retryFailedAutomatically` : la question est close, il ne sera pas câblé.** Le câbler
+   contredirait F20, qui refuse de renvoyer un envoi dont le bail a expiré parce que le processus
+   a pu mourir *après* que `SmsManager` a accepté. Et le besoin qu'il portait est servi autrement
+   depuis ce soir : une **notification d'échec d'envoi avec action « Renvoyer »**. L'utilisateur
+   obtient ce que le réglage promettait — ne pas perdre un message — sans que rien ne parte sans
+   qu'il le demande.
+
+2. **La colonne `hidden` : à faire, sur sa propre branche, et pas pour la raison annoncée.**
+   Correction d'enjeu : la sauvegarde ne transporte aucune pièce jointe, donc un MMS sans légende
+   restauré est une ligne sans contenu récupérable — ce n'était pas une perte de contenu mais de
+   *trace*, et cette trace est désormais **comptée et annoncée** à l'utilisateur. Ce qui reste, et
+   qui tient seul, c'est la fragilité : reconnaître une sentinelle de réaction **par sa forme**
+   dans cinq requêtes et dans l'effaceur. À faire comme un travail de robustesse, pas comme un
+   correctif de données — et pas sur cette branche, où toucher `observeForConversation` ferait
+   disparaître des messages des fils en cas d'erreur.
+
+### Le travail à froid, et sa priorité a changé
+
+**Factoriser la boucle d'envoi entre les trois use cases — à faire EN PREMIER**, avant la colonne
+`hidden`. Quand je l'ai écarté, j'avais deux occurrences du défaut ; il y en a **trois** : le
+dernier audit a montré que `ScheduledSendAttempt` jetait le `SendReport`. Trois fois le même
+défaut, sur le même code, en une session — ce n'est plus une duplication esthétique, c'est un
+générateur de bugs mesuré.
+
+La raison de ne pas l'avoir fait en fin de chantier reste bonne : cela demande de pouvoir envoyer
+un vrai MMS pour vérifier. **Une précision qui change la façon de le faire** : factoriser la
+boucle *et son appelant*. Ne factoriser que les trois use cases laisserait
+`ScheduledSendAttempt` comme quatrième chemin capable de diverger — c'est précisément celui qui a
+divergé.
 
 ### ⚠️ Le piège de méthode à ne pas réapprendre
 
