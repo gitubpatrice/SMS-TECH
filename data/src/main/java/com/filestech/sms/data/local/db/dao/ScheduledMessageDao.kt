@@ -18,8 +18,16 @@ interface ScheduledMessageDao {
      * VISIBLE dans « Programmés » : la sortir de cette liste reproduirait exactement le défaut
      * des lignes `CANCELLED`, qu'aucune liste n'affiche et qui étaient donc inatteignables.
      */
-    @Query("SELECT * FROM scheduled_messages WHERE state IN (0, 4) ORDER BY scheduled_at ASC")
-    fun observePending(): Flow<List<ScheduledMessageEntity>>
+    @Query(
+        """
+        SELECT s.*, COALESCE(c.in_vault, 0) AS in_vault
+          FROM scheduled_messages s
+          LEFT JOIN conversations c ON c.id = s.conversation_id
+         WHERE s.state IN (0, 4)
+         ORDER BY s.scheduled_at ASC
+        """,
+    )
+    fun observePending(): Flow<List<ScheduledWithVaultFlag>>
 
     /**
      * v1.25.3 (audit H6) — les envois abandonnés après épuisement des tentatives
@@ -31,8 +39,16 @@ interface ScheduledMessageDao {
      * paramètres, pas les constantes, et l'enum est convertie par
      * [com.filestech.sms.data.local.db.MessageEnumConverters].
      */
-    @Query("SELECT * FROM scheduled_messages WHERE state = 2 ORDER BY scheduled_at DESC")
-    fun observeFailed(): Flow<List<ScheduledMessageEntity>>
+    @Query(
+        """
+        SELECT s.*, COALESCE(c.in_vault, 0) AS in_vault
+          FROM scheduled_messages s
+          LEFT JOIN conversations c ON c.id = s.conversation_id
+         WHERE s.state = 2
+         ORDER BY s.scheduled_at DESC
+        """,
+    )
+    fun observeFailed(): Flow<List<ScheduledWithVaultFlag>>
 
     @Query("SELECT * FROM scheduled_messages WHERE id = :id")
     suspend fun findById(id: Long): ScheduledMessageEntity?

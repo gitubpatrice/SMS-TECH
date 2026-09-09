@@ -616,6 +616,18 @@ fun SettingsScreen(
             // v1.15.1 — Section dédiée Messages programmés. Avant : noyée dans "Blocage" →
             // confusion conceptuelle (un message différé n'a rien à voir avec un blocage).
             // Section autonome plus visible et cohérente avec la nature de la feature.
+            //
+            // v1.28.3 (F02) — cette carte reste VISIBLE en session leurre, et c'est un choix,
+            // pas un oubli. Ses quatre voisines gardées (Coffre, Verrouillage, Appel de
+            // sécurité, Sauvegarde) le sont parce que leur existence même trahirait qu'il y a
+            // quelque chose à cacher. Un message programmé est une commodité ordinaire : la
+            // masquer appauvrirait le leurre sans rien protéger.
+            //
+            // Ce qui devait être corrigé, et l'a été, c'est le CONTENU : `observePending` et
+            // `observeFailed` rendaient le corps et les destinataires des messages programmés
+            // depuis une conversation du coffre, sans jamais demander le second facteur.
+            // `ScheduledMessageRepositoryImpl` applique désormais la même règle de visibilité
+            // que les conversations — en leurre comme coffre fermé, la liste est vide.
             SectionCard(
                 title = stringResource(R.string.settings_section_scheduled),
                 icon = Icons.Outlined.Schedule,
@@ -628,8 +640,15 @@ fun SettingsScreen(
             }
 
             // v1.26.1 (audit C2) — masquée en leurre, comme les sections Safety call et Mode
-            // urgence. La sauvegarde exporte les conversations du coffre : c'était la seule
-            // voie de lecture du coffre qui n'était pas gardée. Le vrai verrou est côté accès
+            // urgence. La sauvegarde exporte les conversations du coffre.
+            //
+            // ⚠️ v1.28.3 — ce commentaire disait « c'était la SEULE voie de lecture du coffre qui
+            // n'était pas gardée ». C'était faux, et la relecture externe (F02) l'a montré :
+            // l'écran « Messages programmés » en était une autre, et il rendait le corps et les
+            // destinataires en clair. Une affirmation d'exhaustivité vieillit mal — celle-ci a
+            // masqué le trou voisin pendant deux versions.
+            //
+            // Le vrai verrou est côté accès
             // (`BackupService.writeSmsbk` refuse en `PanicDecoy`) ; ceci évite en plus de
             // proposer une action vouée au refus.
             if (!isPanicDecoy) {

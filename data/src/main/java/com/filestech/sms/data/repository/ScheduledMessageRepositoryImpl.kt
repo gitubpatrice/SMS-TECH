@@ -24,14 +24,47 @@ import javax.inject.Singleton
 @Singleton
 class ScheduledMessageRepositoryImpl @Inject constructor(
     private val dao: ScheduledMessageDao,
+    // v1.28.3 (F02) — la visibilité du coffre s'applique enfin ici aussi. Les deux mêmes
+    // collaborateurs que `ConversationRepositoryImpl`, pour la même règle : ce qui est protégé
+    // ne doit pas se lire par une autre porte que celle qui demande le second facteur.
+    private val appLock: com.filestech.sms.security.AppLockManager,
+    private val vaultSession: com.filestech.sms.security.VaultSessionState,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ScheduledMessageRepository {
 
     override fun observePending(): Flow<List<ScheduledMessage>> =
-        dao.observePending().map { list -> list.map { it.toDomain() } }.flowOn(io)
+        masquerLeCoffre(dao.observePending())
 
     override fun observeFailed(): Flow<List<ScheduledMessage>> =
-        dao.observeFailed().map { list -> list.map { it.toDomain() } }.flowOn(io)
+        masquerLeCoffre(dao.observeFailed())
+
+    /**
+     * v1.28.3 (F02) — applique au flux des envois programmés la politique de visibilité du
+     * coffre, mot pour mot celle de `ConversationRepositoryImpl.observeOne`.
+     *
+     * Un message programmé porte son corps et ses destinataires en clair. L'écran « Messages
+     * programmés » les affichait sans jamais demander le second facteur, et sans distinguer la
+     * session leurre — alors que la conversation d'où ils viennent, elle, reste masquée. Le
+     * contenu protégé se lisait donc par une porte dérobée.
+     *
+     * La règle est celle des conversations, et elle doit le rester : masqué tant que le coffre
+     * n'a pas été ouvert DANS CETTE SESSION, et masqué en session leurre quoi qu'il arrive.
+     * `vaultSession.unlocked` est un `StateFlow` pour que la liste se révèle au moment même où
+     * l'utilisateur ouvre son coffre, et se referme quand `AutoLockObserver` le referme.
+     */
+    private fun masquerLeCoffre(
+        source: Flow<List<com.filestech.sms.data.local.db.dao.ScheduledWithVaultFlag>>,
+    ): Flow<List<ScheduledMessage>> =
+        kotlinx.coroutines.flow.combine(
+            source,
+            appLock.state,
+            vaultSession.unlocked,
+        ) { lignes, lockState, coffreOuvert ->
+            val leurre = lockState is com.filestech.sms.security.AppLockManager.LockState.PanicDecoy
+            lignes
+                .filterNot { it.inVault && (leurre || !coffreOuvert) }
+                .map { it.message.toDomain() }
+        }.flowOn(io)
 
     override suspend fun schedule(
         conversationId: Long?,
