@@ -64,6 +64,28 @@ class ScheduledMessageWorker @AssistedInject constructor(
                 Result.failure()
             }
 
+            // v1.28.3 (F20) — un envoi revendiqué dont le bail court encore n'est PAS terminé.
+            //
+            // Il tombait auparavant dans `ALREADY_SETTLED`, donc dans `Result.success()` : le
+            // travail s'arrêtait là et plus rien ne revenait jamais sur cette ligne. On revient,
+            // par le backoff exponentiel — d'abord parce que l'envoi en cours peut encore aboutir
+            // et écrire `SENT` lui-même, ensuite parce que si son exécution est morte, c'est ce
+            // retour qui constatera l'expiration du bail et conclura `INTERRUPTED`. Le backoff
+            // dépassant [ScheduledSendAttempt.SEND_LEASE_MS] au bout de quelques réveils, la
+            // boucle est bornée : elle se termine par un verdict, jamais par un silence.
+            ScheduledSendAttempt.Verdict.IN_FLIGHT -> {
+                Timber.i("ScheduledMessageWorker: id=%d still claimed — lease not expired", id)
+                Result.retry()
+            }
+
+            ScheduledSendAttempt.Verdict.INTERRUPTED -> {
+                Timber.w(
+                    "ScheduledMessageWorker: id=%d claimed then abandoned — outcome unknown",
+                    id,
+                )
+                Result.failure()
+            }
+
             ScheduledSendAttempt.Verdict.UNKNOWN_ID -> Result.failure()
         }
     }

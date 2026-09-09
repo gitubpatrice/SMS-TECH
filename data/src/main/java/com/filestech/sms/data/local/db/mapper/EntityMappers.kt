@@ -137,10 +137,17 @@ fun ScheduledMessageEntity.toDomain(): ScheduledMessage = ScheduledMessage(
         // « une exécution a revendiqué cet envoi », pas « l'envoi a changé de nature » pour
         // l'utilisateur. Côté domaine il reste donc PENDING, ce qui garde la ligne dans
         // « Programmés » avec son libellé habituel, y compris si le processus meurt en vol.
+        //
+        // ⚠️ v1.28.3 (F20) — cette projection restait vraie tant que `SENDING` était réellement
+        // transitoire. Elle ne l'était pas : rien ne terminait cet état, et la ligne restait
+        // « en attente » à vie. La projection ne change pas — un envoi en vol EST en attente —
+        // mais le verrou a désormais un bail, et son expiration produit `INTERRUPTED`, qui n'est
+        // plus « en attente » de rien.
         ScheduledState.SENDING -> ScheduledMessage.State.PENDING
         ScheduledState.SENT -> ScheduledMessage.State.SENT
         ScheduledState.FAILED -> ScheduledMessage.State.FAILED
         ScheduledState.CANCELLED -> ScheduledMessage.State.CANCELLED
+        ScheduledState.INTERRUPTED -> ScheduledMessage.State.INTERRUPTED
     },
     // v1.26.0 — la colonne existait depuis toujours sans jamais etre lue ni ecrite.
     attachments = com.filestech.sms.data.local.db.ScheduledAttachmentCodec.decode(attachmentsJson),

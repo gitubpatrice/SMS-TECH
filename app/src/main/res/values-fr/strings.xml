@@ -764,6 +764,11 @@
     <string name="scheduled_delete_confirm_title">Retirer ce message ?</string>
     <string name="scheduled_delete_confirm_body">Il sera retiré de cette liste et ne sera pas envoyé. Cette action est irréversible.</string>
     <string name="scheduled_retried">Nouvel envoi en cours…</string>
+    <!-- v1.28.3 (F20) — un envoi revendiqué puis abandonné : issue réellement inconnue. -->
+    <string name="scheduled_section_failed_or_interrupted">Échecs et envois interrompus</string>
+    <string name="scheduled_interrupted_explainer">Un envoi interrompu a peut-être été envoyé, personne ne peut le savoir. Le relancer risque de le faire recevoir deux fois.</string>
+    <string name="scheduled_interrupted_when">Envoi interrompu, était prévu : %1$s</string>
+    <string name="scheduled_cancel_too_late">Trop tard pour annuler : ce message est déjà en cours d\'envoi.</string>
     <string name="settings_scheduled_messages">Messages programmés</string>
     <string name="settings_scheduled_messages_desc">Voir et gérer les SMS programmés</string>
     <string name="thread_schedule_action">Programmer…</string>

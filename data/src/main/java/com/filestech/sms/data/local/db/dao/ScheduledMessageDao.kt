@@ -38,13 +38,18 @@ interface ScheduledMessageDao {
      * `state = 2` littéral pour la même raison que le `state = 0` ci-dessus : Room lie les
      * paramètres, pas les constantes, et l'enum est convertie par
      * [com.filestech.sms.data.local.db.MessageEnumConverters].
+     *
+     * v1.28.3 (F20) — inclut désormais `5` = `INTERRUPTED`. Un envoi revendiqué dont l'exécution
+     * est morte n'apparaissait NULLE PART où on puisse agir sur lui : `observePending` le
+     * montrait derrière un bouton « Annuler » incapable de le toucher, et cette liste-ci ne le
+     * voyait pas. Les deux actions dont il a besoin — relancer, retirer — vivent ici.
      */
     @Query(
         """
         SELECT s.*, COALESCE(c.in_vault, 0) AS in_vault
           FROM scheduled_messages s
           LEFT JOIN conversations c ON c.id = s.conversation_id
-         WHERE s.state = 2
+         WHERE s.state IN (2, 5)
          ORDER BY s.scheduled_at DESC
         """,
     )
@@ -80,9 +85,38 @@ interface ScheduledMessageDao {
      * facturés, deux bulles.
      *
      * Les états sont sérialisés en Int par [ScheduledState] : 0 = PENDING, 4 = SENDING.
+     *
+     * v1.28.3 (F20) — la revendication **horodate** désormais son bail (`claimed_at`). La
+     * condition, elle, ne bouge pas d'un iota : toujours `state = 0`, jamais de reprise d'une
+     * ligne déjà revendiquée. Le bail ne sert pas à re-revendiquer — ce serait rouvrir le double
+     * envoi que ce verrou a fermé — mais à savoir, plus tard, que l'exécution qui l'avait pris
+     * n'existe plus. Cf. [markInterruptedIfStale].
      */
-    @Query("UPDATE scheduled_messages SET state = 4 WHERE id = :id AND state = 0")
-    suspend fun claimForSending(id: Long): Int
+    @Query("UPDATE scheduled_messages SET state = 4, claimed_at = :now WHERE id = :id AND state = 0")
+    suspend fun claimForSending(id: Long, now: Long): Int
+
+    /**
+     * v1.28.3 (F20) — conclut un envoi revendiqué dont le bail a expiré : `SENDING → INTERRUPTED`.
+     *
+     * Conditionnelle sur les deux critères à la fois, et c'est essentiel :
+     *  - `state = 4` — on ne touche jamais un envoi déjà réglé ;
+     *  - `claimed_at IS NULL OR claimed_at <= :cutoff` — on ne conclut pas un envoi que quelqu'un
+     *    est peut-être en train de faire. `NULL` compte comme expiré : c'est le cas des lignes
+     *    revendiquées par une version antérieure à la colonne, dont l'exécution est forcément
+     *    morte puisque la base a été rouverte depuis.
+     *
+     * Rend le nombre de lignes modifiées, pour que l'appelant sache s'il a conclu ou non.
+     */
+    @Query(
+        """
+        UPDATE scheduled_messages
+           SET state = 5
+         WHERE id = :id
+           AND state = 4
+           AND (claimed_at IS NULL OR claimed_at <= :cutoff)
+        """,
+    )
+    suspend fun markInterruptedIfStale(id: Long, cutoff: Long): Int
 
     /**
      * v1.26.1 (audit B2) — annulation CONDITIONNELLE, symétrique de [claimForSending].
@@ -106,15 +140,35 @@ interface ScheduledMessageDao {
      * nouvelle échéance. Les deux writes dans le même UPDATE, sinon un envoi peut redevenir
      * éligible avec une échéance encore dans le passé, que [observePending] trierait en tête
      * avec une date périmée à l'écran.
+     *
+     * v1.28.3 (F20) — efface aussi le bail. Un envoi qui redevient `PENDING` n'est revendiqué par
+     * personne ; y laisser la date de l'ancienne revendication ferait mentir la colonne, et un
+     * `claimed_at` déjà expiré à l'instant même où la ligne serait re-revendiquée rendrait la
+     * conclusion `INTERRUPTED` possible avant même le premier envoi.
      */
-    @Query("UPDATE scheduled_messages SET state = 0, scheduled_at = :scheduledAt WHERE id = :id")
+    @Query("UPDATE scheduled_messages SET state = 0, scheduled_at = :scheduledAt, claimed_at = NULL WHERE id = :id")
     suspend fun rearmPending(id: Long, scheduledAt: Long)
 
     @Query("DELETE FROM scheduled_messages WHERE id = :id")
     suspend fun delete(id: Long)
 
-    @Query("SELECT * FROM scheduled_messages WHERE state = 0")
-    suspend fun allPending(): List<ScheduledMessageEntity>
+    /**
+     * v1.28.3 (F20) — tous les envois non réglés, **sans le filtre de visibilité du coffre**.
+     *
+     * Existait sous le nom `allPending` sans un seul appelant. Le filet de replanification du
+     * démarrage ([com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl.rescheduleAllPending])
+     * lisait à sa place `observePending()`, c'est-à-dire le flux **destiné à l'écran** — et
+     * depuis que celui-ci masque les envois du coffre tant que le second facteur n'a pas été
+     * donné (v1.28.3, F02), un envoi programmé depuis une conversation protégée devenait
+     * invisible au boot : si WorkManager avait perdu son job, plus rien ne le rattrapait. Une
+     * règle d'affichage n'a pas à décider de ce qui part.
+     *
+     * `state IN (0, 4)` — `SENDING` compris : c'est justement la ligne revendiquée puis
+     * abandonnée qu'il faut réveiller pour que le worker constate l'expiration de son bail et la
+     * conclue.
+     */
+    @Query("SELECT * FROM scheduled_messages WHERE state IN (0, 4)")
+    suspend fun allUnsettled(): List<ScheduledMessageEntity>
 
     /**
      * v1.28.3 (F03) — envois programmés rattachés à une conversation, **quel que soit leur

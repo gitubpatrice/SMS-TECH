@@ -77,8 +77,15 @@ class ScheduledMessageSchedulerImpl @Inject constructor(
         // Chemin de boot : chaque lecture est plafonnée, `goAsync()` n'achète qu'une dizaine de
         // secondes avant un ANR partiel (cf. le même parti pris dans
         // [com.filestech.sms.system.receiver.BootReceiver]).
+        // v1.28.3 (F20) — lecture NON masquée (`allUnsettled`), et non plus `observePending`.
+        //
+        // Ce flux-là applique la visibilité du coffre depuis la v1.28.3 (F02) : un envoi
+        // programmé depuis une conversation protégée en sort tant que le second facteur n'a pas
+        // été donné, ce qui, au démarrage, est toujours le cas. Il n'était donc plus jamais
+        // rattrapé quand WorkManager avait perdu son job. Une règle d'AFFICHAGE s'était mise à
+        // décider de ce qui part.
         val pending = withTimeoutOrNull(READ_TIMEOUT_MS) {
-            runCatching { repo.observePending().first() }.getOrDefault(emptyList())
+            runCatching { repo.allUnsettled() }.getOrDefault(emptyList())
         } ?: emptyList()
         if (pending.isEmpty()) return@withContext
 

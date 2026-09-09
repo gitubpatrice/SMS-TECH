@@ -39,6 +39,18 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
         masquerLeCoffre(dao.observeFailed())
 
     /**
+     * v1.28.3 (F20) — délibérément **non masqué**, contrairement aux deux flux ci-dessus.
+     *
+     * Rien de ce que rend cette fonction n'est affiché : elle sert au filet de replanification
+     * du démarrage, qui a besoin de savoir ce qui doit partir, pas de ce que l'utilisateur a le
+     * droit de lire. Masquer ici reviendrait à ne plus jamais rattraper un envoi programmé
+     * depuis le coffre — le second facteur n'ayant, au boot, évidemment pas été donné.
+     */
+    override suspend fun allUnsettled(): List<ScheduledMessage> = withContext(io) {
+        dao.allUnsettled().map { it.toDomain() }
+    }
+
+    /**
      * v1.28.3 (F02) — applique au flux des envois programmés la politique de visibilité du
      * coffre, mot pour mot celle de `ConversationRepositoryImpl.observeOne`.
      *

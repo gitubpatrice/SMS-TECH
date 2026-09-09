@@ -36,7 +36,10 @@ class ScheduledSendAttemptTest {
     private val sendMediaMms = mockk<com.filestech.sms.domain.usecase.SendMediaMmsUseCase>()
     private val attempt = ScheduledSendAttempt(dao, sendSms, sendMediaMms)
 
-    private fun entity(state: ScheduledState = ScheduledState.PENDING) = ScheduledMessageEntity(
+    private fun entity(
+        state: ScheduledState = ScheduledState.PENDING,
+        claimedAt: Long? = null,
+    ) = ScheduledMessageEntity(
         id = ID,
         conversationId = null,
         addressesCsv = "+33600000000",
@@ -44,6 +47,7 @@ class ScheduledSendAttemptTest {
         scheduledAt = 1_000L,
         state = state,
         createdAt = 0L,
+        claimedAt = claimedAt,
     )
 
     /**
@@ -63,7 +67,7 @@ class ScheduledSendAttemptTest {
      */
     @org.junit.jupiter.api.BeforeEach
     fun claimSucceedsByDefault() {
-        coEvery { dao.claimForSending(ID) } returns 1
+        coEvery { dao.claimForSending(ID, any()) } returns 1
     }
 
     @Test
@@ -146,6 +150,98 @@ class ScheduledSendAttemptTest {
 
         assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.UNKNOWN_ID)
         coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // v1.28.3 (F20) — l'état `SENDING` n'est plus une impasse.
+    //
+    // Il tombait dans `ALREADY_SETTLED`, que le worker traduit en `Result.success()` : une
+    // exécution morte en vol laissait la ligne `SENDING` **définitivement**. Elle restait
+    // affichée en attente avec une échéance passée, son bouton « Annuler » ne pouvait rien
+    // contre elle, et « Échecs » ne la voyait pas.
+    //
+    // Les deux moitiés du contrat à verrouiller : **on conclut** quand le bail a expiré, et **on
+    // ne renvoie JAMAIS** — ni dans un cas, ni dans l'autre, l'issue étant inconnue.
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    fun `un envoi revendique dont le bail court encore est laisse tranquille`() = runTest {
+        val now = 1_000_000_000L
+        coEvery { dao.findById(ID) } returns
+            entity(ScheduledState.SENDING, claimedAt = now - ScheduledSendAttempt.SEND_LEASE_MS + 1)
+        coEvery { dao.markInterruptedIfStale(ID, any()) } returns 0
+
+        assertThat(attempt(ID, runAttemptCount = 0, now = now))
+            .isEqualTo(ScheduledSendAttempt.Verdict.IN_FLIGHT)
+        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { dao.setState(any(), any()) }
+    }
+
+    @Test
+    fun `un envoi revendique dont le bail a expire est conclu INTERRUPTED`() = runTest {
+        val now = 1_000_000_000L
+        coEvery { dao.findById(ID) } returns
+            entity(ScheduledState.SENDING, claimedAt = now - ScheduledSendAttempt.SEND_LEASE_MS - 1)
+        coEvery { dao.markInterruptedIfStale(ID, any()) } returns 1
+
+        assertThat(attempt(ID, runAttemptCount = 0, now = now))
+            .isEqualTo(ScheduledSendAttempt.Verdict.INTERRUPTED)
+        coVerify(exactly = 1) { dao.markInterruptedIfStale(ID, now - ScheduledSendAttempt.SEND_LEASE_MS) }
+    }
+
+    /**
+     * Le point sur lequel tout repose : conclure `INTERRUPTED` ne doit **jamais** valoir renvoi.
+     *
+     * Le processus a pu mourir après que `SmsManager` a accepté le message. Un renvoi
+     * automatique coûterait un second SMS facturé et reçu deux fois — le défaut même que
+     * l'état `SENDING` avait été introduit pour fermer en v1.26.1. On conclut sur l'incertitude,
+     * on ne la tranche pas à la place de l'utilisateur.
+     */
+    @Test
+    fun `conclure un envoi interrompu ne renvoie rien et ne le remet pas en attente`() = runTest {
+        coEvery { dao.findById(ID) } returns entity(ScheduledState.SENDING, claimedAt = null)
+        coEvery { dao.markInterruptedIfStale(ID, any()) } returns 1
+
+        attempt(ID, runAttemptCount = 0, now = 1_000_000_000L)
+
+        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { dao.claimForSending(any(), any()) }
+        coVerify(exactly = 0) { dao.setState(ID, ScheduledState.PENDING) }
+    }
+
+    /**
+     * Contrôle POSITIF de la borne : sans lui, un correctif qui conclurait `INTERRUPTED` sur
+     * TOUTE ligne `SENDING` — donc y compris sur un envoi réellement en cours — passerait les
+     * deux tests ci-dessus. C'est le DAO qui arbitre le bail ; ce qu'on vérifie ici est que la
+     * date qu'on lui passe est bien `now - bail`, et non `now` (tout conclure) ni `0` (ne rien
+     * conclure jamais).
+     */
+    @Test
+    fun `la date limite passee au DAO est exactement le bail`() = runTest {
+        val now = 1_723_456_789_000L
+        coEvery { dao.findById(ID) } returns entity(ScheduledState.SENDING, claimedAt = 1L)
+        coEvery { dao.markInterruptedIfStale(ID, any()) } returns 1
+
+        attempt(ID, runAttemptCount = 0, now = now)
+
+        // 900 000 ms = un quart d'heure, écrit en dur : réécrire la constante ici ferait passer
+        // le test quelle que soit sa valeur, y compris zéro.
+        coVerify(exactly = 1) { dao.markInterruptedIfStale(ID, now - 900_000L) }
+    }
+
+    /**
+     * La revendication horodate son bail. Sans cette date, `markInterruptedIfStale` ne pourrait
+     * jamais distinguer un envoi en cours d'un envoi abandonné — c'est toute la mécanique.
+     */
+    @Test
+    fun `la revendication horodate le bail`() = runTest {
+        val now = 999_000L
+        stubSend(Outcome.Success(listOf(42L)))
+        coEvery { dao.findById(ID) } returns entity()
+
+        attempt(ID, runAttemptCount = 0, now = now)
+
+        coVerify(exactly = 1) { dao.claimForSending(ID, now) }
     }
 
     private companion object {

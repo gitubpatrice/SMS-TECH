@@ -366,6 +366,21 @@ object Migrations {
         }
     }
 
+    /**
+     * v9 → v10 (2026-09-09, F20) — `scheduled_messages.claimed_at`.
+     *
+     * Retour à une migration **additive** : une seule colonne nullable, aucune recréation de
+     * table, aucun index touché. Les lignes existantes projettent `NULL`, ce qui est exactement
+     * la valeur voulue — cf. le KDoc du champ dans `ScheduledMessageEntity` : sur une ligne déjà
+     * `SENDING`, `NULL` signifie « bail expiré », et c'est ce qui débloque les envois coincés en
+     * vol par les versions précédentes plutôt que de les y laisser.
+     */
+    val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `scheduled_messages` ADD COLUMN `claimed_at` INTEGER")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -376,5 +391,6 @@ object Migrations {
         MIGRATION_6_7,
         MIGRATION_7_8,
         MIGRATION_8_9,
+        MIGRATION_9_10,
     )
 }

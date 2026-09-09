@@ -779,6 +779,11 @@
     <string name="scheduled_delete_confirm_title">Remove this message?</string>
     <string name="scheduled_delete_confirm_body">It will be removed from this list and will not be sent. This action cannot be undone.</string>
     <string name="scheduled_retried">Sending again…</string>
+    <!-- v1.28.3 (F20) — un envoi revendiqué puis abandonné : issue réellement inconnue. -->
+    <string name="scheduled_section_failed_or_interrupted">Failed or interrupted</string>
+    <string name="scheduled_interrupted_explainer">An interrupted message may or may not have been sent — there is no way to know. Sending it again could deliver it twice.</string>
+    <string name="scheduled_interrupted_when">Sending interrupted, was due: %1$s</string>
+    <string name="scheduled_cancel_too_late">Too late to cancel: this message is already being sent.</string>
     <string name="settings_scheduled_messages">Scheduled messages</string>
     <string name="settings_scheduled_messages_desc">View and manage scheduled SMS</string>
     <string name="thread_schedule_action">Schedule…</string>

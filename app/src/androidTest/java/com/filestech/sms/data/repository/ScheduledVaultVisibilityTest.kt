@@ -128,6 +128,68 @@ class ScheduledVaultVisibilityTest {
         assertThat(repo.observePending().first()).hasSize(1)
     }
 
+    /**
+     * v1.28.3 (F20) — **la règle d'affichage ne doit pas décider de ce qui part.**
+     *
+     * Le filet de replanification du démarrage
+     * (`ScheduledMessageSchedulerImpl.rescheduleAllPending`) lisait `observePending()`, c'est-à-dire
+     * le flux destiné à l'écran. Depuis le correctif F02 ci-dessus, celui-ci masque les envois du
+     * coffre tant que le second facteur n'a pas été donné — ce qui, au démarrage, est toujours le
+     * cas. Un envoi programmé depuis une conversation protégée cessait donc d'être rattrapé quand
+     * WorkManager avait perdu son job : le message ne partait jamais, sans un mot.
+     *
+     * Une correction de confidentialité venait de créer une perte de données silencieuse, sur le
+     * chemin voisin. `allUnsettled` est la lecture non masquée que ce filet-là exige.
+     */
+    @Test
+    fun leFiletDeReplanificationVoitLesEnvoisDuCoffreCoffreFerme(): Unit = runBlocking {
+        seed(conversationId = COFFRE, inVault = true, corps = "rendez-vous secret")
+        seed(conversationId = ORDINAIRE, inVault = false, corps = "courses de demain")
+
+        // Coffre fermé — c'est l'état du démarrage.
+        assertThat(repo.observePending().first().map { it.body })
+            .containsExactly("courses de demain")
+        assertThat(repo.allUnsettled().map { it.body })
+            .containsExactly("rendez-vous secret", "courses de demain")
+    }
+
+    /**
+     * Le même filet doit réveiller une ligne **revendiquée puis abandonnée** (`SENDING`), sans
+     * quoi personne ne constaterait l'expiration de son bail et elle resterait bloquée à vie.
+     * C'est la moitié « boot » de F20 ; l'autre vit dans `ScheduledSendAttemptTest`.
+     */
+    @Test
+    fun leFiletDeReplanificationVoitAussiUnEnvoiRevendique(): Unit = runBlocking {
+        seed(conversationId = ORDINAIRE, inVault = false, corps = "interrompu")
+        val id = repo.allUnsettled().single().id
+        assertThat(db.scheduledMessageDao().claimForSending(id, now = 1_000L)).isEqualTo(1)
+
+        assertThat(repo.allUnsettled().map { it.body }).containsExactly("interrompu")
+    }
+
+    /**
+     * Contrôle positif du bail, côté SQL. Sans lui, une requête qui conclurait tout — ou rien —
+     * passerait le test précédent. Les deux conditions sont vérifiées dans le même mouvement :
+     * un bail encore valide protège la ligne, un bail expiré la conclut.
+     */
+    @Test
+    fun seuleUneRevendicationExpireeEstConclue(): Unit = runBlocking {
+        seed(conversationId = ORDINAIRE, inVault = false, corps = "en vol")
+        val dao = db.scheduledMessageDao()
+        val id = repo.allUnsettled().single().id
+        dao.claimForSending(id, now = 10_000L)
+
+        // Bail encore valide : rien ne bouge, et la ligne n'apparaît pas dans « Échecs ».
+        assertThat(dao.markInterruptedIfStale(id, cutoff = 9_999L)).isEqualTo(0)
+        assertThat(dao.observeFailed().first()).isEmpty()
+
+        // Bail expiré : conclue, et enfin atteignable.
+        assertThat(dao.markInterruptedIfStale(id, cutoff = 10_000L)).isEqualTo(1)
+        assertThat(dao.observeFailed().first()).hasSize(1)
+        // Et une seconde fois ne rejoue rien : la transition est terminale.
+        assertThat(dao.markInterruptedIfStale(id, cutoff = 999_999L)).isEqualTo(0)
+    }
+
     private suspend fun seed(conversationId: Long, inVault: Boolean, corps: String) {
         db.conversationDao().insert(
             ConversationEntity(

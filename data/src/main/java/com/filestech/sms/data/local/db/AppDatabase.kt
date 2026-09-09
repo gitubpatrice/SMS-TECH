@@ -80,6 +80,13 @@ abstract class AppDatabase : RoomDatabase() {
         //   deux `NULL` pour distincts sous un index UNIQUE. La migration convertit en `NULL`
         //   tout `thread_id <= 0`, ce qui absorbe aussi les placeholders negatifs que
         //   `BackupService` fabriquait depuis la v1.15.2 pour contourner le meme piege.
-        const val SCHEMA_VERSION = 9
+        // v10 (2026-09-09, v1.28.3): ajoute `scheduled_messages.claimed_at INTEGER` (nullable).
+        //   Strictement additive. C'est le bail du verrou d'envoi : l'etat `SENDING` disait
+        //   « une execution a revendique cet envoi » sans dire QUAND, si bien qu'une execution
+        //   morte en vol laissait la ligne `SENDING` a vie — invisible des « Echecs », et hors
+        //   d'atteinte de son propre bouton « Annuler », qui ne matche que `PENDING`. Avec la
+        //   date, un bail expire se conclut en `INTERRUPTED` : issue inconnue, mais ATTEIGNABLE.
+        //   Les lignes existantes projettent NULL = bail expire, ce qui debloque le parc. F20.
+        const val SCHEMA_VERSION = 10
     }
 }

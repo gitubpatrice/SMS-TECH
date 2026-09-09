@@ -521,4 +521,54 @@ class MigrationTest {
         }
         assertThat(doublon.isFailure).isTrue()
     }
+
+    /**
+     * v1.28.3 (F20) — 9 → 10, retour à une migration additive : `scheduled_messages.claimed_at`.
+     *
+     * Ce qui compte n'est pas que la colonne apparaisse — `runMigrationsAndValidate` le vérifie
+     * seul — mais **la valeur qu'y prennent les lignes déjà là**. Une ligne déjà `SENDING` (4)
+     * au moment de la mise à jour est un envoi revendiqué par une exécution qui n'existe plus,
+     * puisque la base vient d'être rouverte. Son `claimed_at` doit valoir `NULL`, que
+     * `markInterruptedIfStale` lit comme un bail expiré : c'est ce qui débloque les envois
+     * restés coincés en vol par les versions précédentes, au lieu de les y laisser à vie.
+     */
+    @Test
+    fun migrate9To10_ajouteLeBail_etLesLignesDejaEnVolLeTrouventExpire() {
+        helper.createDatabase(TEST_DB, 9).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO scheduled_messages
+                    (id, conversation_id, addresses_csv, body, scheduled_at, state, created_at)
+                VALUES
+                    (1, NULL, '+33600000001', 'En attente', 1700000000000, 0, 1700000000000),
+                    (2, NULL, '+33600000002', 'Revendique', 1700000000000, 4, 1700000000000)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 10, true, Migrations.MIGRATION_9_10)
+
+        db.query("SELECT id, state, claimed_at FROM scheduled_messages ORDER BY id").use { c ->
+            assertThat(c.count).isEqualTo(2)
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getInt(1)).isEqualTo(0)
+            assertThat(c.isNull(2)).isTrue()
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getInt(1)).isEqualTo(4)
+            assertThat(c.isNull(2)).isTrue()
+        }
+
+        // La requête qui conclut : `NULL` compte comme expiré, donc la ligne revendiquée passe
+        // en `INTERRUPTED` (5) — et celle qui est simplement en attente n'est pas touchée.
+        db.execSQL(
+            "UPDATE scheduled_messages SET state = 5 " +
+                "WHERE state = 4 AND (claimed_at IS NULL OR claimed_at <= 0)",
+        )
+        db.query("SELECT id, state FROM scheduled_messages ORDER BY id").use { c ->
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getInt(1)).isEqualTo(0)
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getInt(1)).isEqualTo(5)
+        }
+    }
 }

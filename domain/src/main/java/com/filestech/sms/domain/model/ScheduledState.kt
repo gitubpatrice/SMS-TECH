@@ -32,7 +32,34 @@ enum class ScheduledState(val rawValue: Int) {
      * Rétro-compatible : un downgrade lit `4` via [fromRaw], qui retombe sur `PENDING` — l'envoi
      * redevient simplement éligible.
      */
-    SENDING(4);
+    SENDING(4),
+
+    /**
+     * v1.28.3 (F20) — l'envoi a été revendiqué, puis l'exécution est morte sans le régler :
+     * **on ne sait pas s'il est parti**.
+     *
+     * # Pourquoi un état de plus
+     *
+     * [SENDING] devait être transitoire ; rien ne le terminait. Une mort de processus en vol —
+     * tueur OEM, OOM, force-stop, la raison même d'être du verrou — laissait la ligne `SENDING`
+     * pour toujours : le replay WorkManager la relisait, la voyait non-`PENDING`, rendait
+     * `Result.success()` et s'arrêtait là. Elle restait affichée dans « Programmés » avec une
+     * échéance passée, son bouton « Annuler » ne pouvait rien contre elle
+     * ([ScheduledMessageDao.cancelIfPending] ne matche que `PENDING`) et aucune autre liste ne
+     * l'atteignait. Un garde sans issue, exactement le motif relevé en v1.28.2.
+     *
+     * # Pourquoi ne PAS renvoyer
+     *
+     * La tentation est de rendre la ligne à `PENDING` après expiration du bail. Ce serait
+     * rouvrir le défaut que [SENDING] a fermé : le processus a pu mourir **après** que
+     * `SmsManager` a accepté le message, et le renvoyer coûte un second SMS facturé, reçu deux
+     * fois. L'issue est réellement inconnue, et c'est ce que cet état dit. L'utilisateur, seul,
+     * tranche : relancer (en acceptant le doublon) ou retirer.
+     *
+     * Rétro-compatible comme [SENDING] : un downgrade lit `5` via [fromRaw] et retombe sur
+     * `PENDING`.
+     */
+    INTERRUPTED(5);
     companion object {
         fun fromRaw(rawValue: Int): ScheduledState = entries.firstOrNull { it.rawValue == rawValue }
             ?: PENDING.also { timber.log.Timber.w("Unknown ScheduledState int %d — defaulting to PENDING", rawValue) }

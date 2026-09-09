@@ -52,6 +52,7 @@ import com.filestech.sms.domain.usecase.RetryScheduledMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -87,8 +88,25 @@ class ScheduledMessagesViewModel @Inject constructor(
     val failed: StateFlow<List<ScheduledMessage>> = repo.observeFailed()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
+    /**
+     * v1.28.3 (F20) — émet `false` quand l'annulation n'a PAS pu prendre.
+     *
+     * L'envoi était alors déjà revendiqué par le worker : le message part, et rien ne l'arrête
+     * plus. L'écran affichait pourtant le même bouton et la même boîte de confirmation, puis ne
+     * disait rien. Un canal plutôt qu'un `StateFlow` : c'est un événement, il ne doit pas se
+     * rejouer à la rotation de l'écran.
+     */
+    private val _cancelRefused = kotlinx.coroutines.channels.Channel<Unit>(
+        kotlinx.coroutines.channels.Channel.BUFFERED,
+    )
+    val cancelRefused = _cancelRefused.receiveAsFlow()
+
     fun cancelMessage(id: Long) {
-        viewModelScope.launch { cancel(id) }
+        viewModelScope.launch {
+            val outcome = cancel(id)
+            val pris = (outcome as? com.filestech.sms.core.result.Outcome.Success)?.value == true
+            if (!pris) _cancelRefused.send(Unit)
+        }
     }
 
     fun retryMessage(id: Long) {
@@ -117,6 +135,12 @@ fun ScheduledMessagesScreen(
     // `Context` capturé dans une lambda non-composable ne suit pas les changements de
     // configuration (`LocalContextGetResourceValueCall`).
     val retriedMessage = stringResource(R.string.scheduled_retried)
+
+    // v1.28.3 (F20) — l'annulation refusée se dit. Voir `ScheduledMessagesViewModel.cancelMessage`.
+    val cancelRefusedMessage = stringResource(R.string.scheduled_cancel_too_late)
+    androidx.compose.runtime.LaunchedEffect(viewModel) {
+        viewModel.cancelRefused.collect { snackbarHost.showSnackbar(cancelRefusedMessage) }
+    }
 
     Scaffold(
         topBar = {
@@ -191,17 +215,43 @@ fun ScheduledMessagesScreen(
                     )
                 }
                 if (failed.isNotEmpty()) {
+                    // v1.28.3 (F20) — la section accueille désormais deux natures de lignes.
+                    // Tant qu'elle n'en contient qu'une, elle s'annonce comme avant ; dès qu'un
+                    // envoi interrompu s'y trouve, le titre et l'explication le disent, sans
+                    // quoi l'utilisateur lirait « Échecs » au-dessus d'un message peut-être
+                    // parti — l'erreur exactement dans le mauvais sens.
+                    val interrompus = failed.any { it.state == ScheduledMessage.State.INTERRUPTED }
                     item(key = "header-failed") {
                         SectionHeader(
-                            title = stringResource(R.string.scheduled_section_failed),
-                            explainer = stringResource(R.string.scheduled_failed_explainer),
+                            title = stringResource(
+                                if (interrompus) {
+                                    R.string.scheduled_section_failed_or_interrupted
+                                } else {
+                                    R.string.scheduled_section_failed
+                                },
+                            ),
+                            explainer = stringResource(R.string.scheduled_failed_explainer) +
+                                if (interrompus) {
+                                    "\n" + stringResource(R.string.scheduled_interrupted_explainer)
+                                } else {
+                                    ""
+                                },
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
                     items(failed, key = { "failed-${it.id}" }) { msg ->
                         ScheduledRow(
                             message = msg,
-                            whenLabelRes = R.string.scheduled_failed_when,
+                            // v1.28.3 (F20) — un envoi interrompu n'est pas un envoi échoué, et
+                            // le lui faire dire serait mentir dans le sens dangereux : il est
+                            // peut-être parti. Il partage la section parce qu'il y trouve les
+                            // deux seules actions qui lui conviennent — relancer, retirer — mais
+                            // il porte son propre libellé.
+                            whenLabelRes = if (msg.state == ScheduledMessage.State.INTERRUPTED) {
+                                R.string.scheduled_interrupted_when
+                            } else {
+                                R.string.scheduled_failed_when
+                            },
                             whenColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             trailing = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {

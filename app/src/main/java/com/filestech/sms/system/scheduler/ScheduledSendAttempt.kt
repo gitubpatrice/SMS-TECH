@@ -47,15 +47,36 @@ class ScheduledSendAttempt @Inject constructor(
 
         /** Déjà envoyé, annulé ou échoué — rien à faire, le replay ne doit pas ré-envoyer. */
         ALREADY_SETTLED,
+
+        /**
+         * v1.28.3 (F20) — la ligne est revendiquée et son bail court encore : une exécution est
+         * peut-être en train d'envoyer. On ne touche à rien et on **revient plus tard** — c'est
+         * la différence avec [ALREADY_SETTLED], qui, lui, termine le travail.
+         */
+        IN_FLIGHT,
+
+        /**
+         * v1.28.3 (F20) — la ligne était revendiquée, son bail a expiré : l'exécution qui l'avait
+         * prise est morte sans la régler. Passée en `INTERRUPTED`, elle devient enfin
+         * **atteignable** depuis l'écran. On ne renvoie pas : l'issue est inconnue, et c'est à
+         * l'utilisateur d'en décider.
+         */
+        INTERRUPTED,
     }
 
     /**
      * @param runAttemptCount compteur WorkManager, `0` à la première exécution. Le nombre de
      *   tentatives consommées en incluant celle-ci vaut donc `runAttemptCount + 1`.
+     * @param now horloge injectable — le bail de [SEND_LEASE_MS] se mesure dessus, et un test ne
+     *   peut pas attendre un quart d'heure.
      */
-    suspend operator fun invoke(id: Long, runAttemptCount: Int): Verdict {
+    suspend operator fun invoke(
+        id: Long,
+        runAttemptCount: Int,
+        now: Long = System.currentTimeMillis(),
+    ): Verdict {
         val entity = dao.findById(id) ?: return Verdict.UNKNOWN_ID
-        if (entity.state != ScheduledState.PENDING) return Verdict.ALREADY_SETTLED
+        if (entity.state != ScheduledState.PENDING) return verdictSurLigneDejaPrise(id, entity.state, now)
         // v1.26.1 (audit H6) — revendication ATOMIQUE avant tout appel réseau.
         //
         // Le test d'état ci-dessus ne suffisait pas : il était évalué AVANT l'envoi, et l'état
@@ -65,7 +86,7 @@ class ScheduledSendAttempt @Inject constructor(
         //
         // `claimForSending` rend le nombre de lignes modifiées : 0 signifie qu'une autre
         // exécution a déjà pris cet envoi, on abandonne sans rien envoyer.
-        if (dao.claimForSending(id) != 1) return Verdict.ALREADY_SETTLED
+        if (dao.claimForSending(id, now) != 1) return Verdict.ALREADY_SETTLED
         val recipients = PhoneAddress.list(entity.addressesCsv)
         // v1.26.0 — aiguillage SMS / MMS.
         //
@@ -106,6 +127,28 @@ class ScheduledSendAttempt @Inject constructor(
         }
     }
 
+    /**
+     * v1.28.3 (F20) — verdict sur une ligne qui n'est plus `PENDING`. **L'état `SENDING` n'est
+     * plus une impasse.**
+     *
+     * Il tombait avec les autres dans [Verdict.ALREADY_SETTLED], que le worker traduit en
+     * `Result.success()` : une exécution morte en vol laissait donc la ligne `SENDING` POUR
+     * TOUJOURS. Elle restait affichée en « attente » avec une échéance dépassée, son bouton
+     * « Annuler » ne pouvait rien contre elle (`cancelIfPending` ne matche que `PENDING`), et la
+     * section « Échecs » ne la voyait pas. Aucune sortie — le motif exact relevé en v1.28.2 sous
+     * « un garde sans issue est une impasse ».
+     *
+     * Le bail tranche, et c'est la seule chose qu'il tranche : envoi peut-être en cours, ou
+     * exécution disparue. Dans les deux cas on s'interdit de ré-envoyer — le processus a pu
+     * mourir APRÈS que `SmsManager` a accepté le message, et un renvoi automatique rouvrirait le
+     * double envoi que la revendication a fermé en v1.26.1.
+     */
+    private suspend fun verdictSurLigneDejaPrise(id: Long, etat: ScheduledState, now: Long): Verdict {
+        if (etat != ScheduledState.SENDING) return Verdict.ALREADY_SETTLED
+        val conclue = dao.markInterruptedIfStale(id, cutoff = now - SEND_LEASE_MS) == 1
+        return if (conclue) Verdict.INTERRUPTED else Verdict.IN_FLIGHT
+    }
+
     companion object {
         /**
          * Tentatives totales avant abandon. Avec le backoff exponentiel de 30 s de
@@ -120,5 +163,21 @@ class ScheduledSendAttempt @Inject constructor(
          * chaque tentative recrée une ligne d'envoi dans le fil.
          */
         const val MAX_ATTEMPTS = 5
+
+        /**
+         * v1.28.3 (F20) — durée de vie d'une revendication d'envoi.
+         *
+         * Bornée par WorkManager lui-même : un `CoroutineWorker` dispose de **dix minutes**
+         * d'exécution, au-delà desquelles le système l'arrête. Passé ce délai, aucune exécution
+         * légitime ne peut donc encore tenir la ligne, et une marge de moitié couvre l'écart
+         * entre l'horloge du téléphone au moment de la revendication et celle d'aujourd'hui
+         * (changement de fuseau, correction NTP).
+         *
+         * Trop court ferait conclure `INTERRUPTED` un envoi qui aboutit — l'utilisateur lirait
+         * « issue inconnue » sur un message bel et bien parti. Trop long laisserait la ligne
+         * coincée d'autant. Un quart d'heure est le compromis, et l'erreur qu'il commet est du
+         * bon côté : elle retarde une information, elle n'en invente pas.
+         */
+        const val SEND_LEASE_MS = 15 * 60 * 1000L
     }
 }

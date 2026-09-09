@@ -24,4 +24,18 @@ data class ScheduledMessageEntity(
     @ColumnInfo(name = "state") val state: ScheduledState = ScheduledState.PENDING,
     @ColumnInfo(name = "work_id") val workId: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    /**
+     * v1.28.3 (F20) — instant où l'envoi a été revendiqué (`PENDING → SENDING`), en millisecondes
+     * epoch, `null` tant qu'il ne l'a pas été.
+     *
+     * C'est le **bail** du verrou. Sans lui, l'état `SENDING` ne portait aucune date et rien ne
+     * permettait de distinguer « une exécution est en train d'envoyer » de « l'exécution qui
+     * avait revendiqué cet envoi est morte il y a trois jours ». Les deux se lisaient `4`, et le
+     * second cas restait donc bloqué à vie.
+     *
+     * `null` sur une ligne déjà `SENDING` au moment de la migration 9 → 10 vaut **bail expiré** :
+     * la revendication est forcément antérieure au redémarrage qui a ouvert la base, donc son
+     * exécution n'existe plus. C'est ce qui débloque le parc déjà coincé.
+     */
+    @ColumnInfo(name = "claimed_at") val claimedAt: Long? = null,
 )

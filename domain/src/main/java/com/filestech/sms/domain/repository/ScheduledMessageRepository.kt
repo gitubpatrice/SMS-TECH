@@ -12,6 +12,16 @@ interface ScheduledMessageRepository {
     fun observeFailed(): Flow<List<ScheduledMessage>>
 
     /**
+     * v1.28.3 (F20) — envois non réglés, **hors de toute règle d'affichage**.
+     *
+     * Réservé au filet de replanification du démarrage. [observePending] ne convient pas : il
+     * applique la visibilité du coffre, et un envoi programmé depuis une conversation protégée
+     * en disparaît tant que le second facteur n'a pas été donné — c'est-à-dire précisément au
+     * moment où ce filet tourne. Ce qui doit partir ne se décide pas à l'écran.
+     */
+    suspend fun allUnsettled(): List<ScheduledMessage>
+
+    /**
      * v1.26.0 — [attachments] non vide programme un **MMS**. Les fichiers doivent deja etre
      * durables : c'est [com.filestech.sms.domain.usecase.ScheduleMessageUseCase] qui les promeut.
      */
