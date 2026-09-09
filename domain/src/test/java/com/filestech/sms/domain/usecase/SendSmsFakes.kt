@@ -150,6 +150,24 @@ internal class NoopMirror : OutgoingMessageMirror {
         lignesMms += LigneMms(address, attachments.size)
         return prochainId++
     }
+
+    /** v1.28.3 (groupes) — l'écho écrit dans le fil du groupe, retenu pour être mesuré. */
+    data class Echo(val adresses: List<String>, val corps: String, val statut: MessageStatus, val piecesJointes: Int)
+
+    val echos = mutableListOf<Echo>()
+
+    override suspend fun upsertGroupEcho(
+        addresses: List<com.filestech.sms.domain.model.PhoneAddress>,
+        body: String,
+        date: Long,
+        subId: Int?,
+        status: MessageStatus,
+        replyToMessageId: Long?,
+        attachments: List<MediaAttachmentSpec>,
+    ): Long {
+        echos += Echo(addresses.map { it.raw }, body, status, attachments.size)
+        return prochainId++
+    }
 }
 
 internal class NeverBlocked : BlockedNumberRepository {

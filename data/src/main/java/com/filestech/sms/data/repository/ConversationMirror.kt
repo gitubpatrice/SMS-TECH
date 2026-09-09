@@ -550,6 +550,59 @@ class ConversationMirror @Inject constructor(
         }
     }
 
+    /** v1.28.3 (groupes) — voir [OutgoingMessageMirror.upsertGroupEcho]. */
+    override suspend fun upsertGroupEcho(
+        addresses: List<PhoneAddress>,
+        body: String,
+        date: Long,
+        subId: Int?,
+        status: MessageStatus,
+        replyToMessageId: Long?,
+        attachments: List<MediaAttachmentSpec>,
+    ): Long = withContext(io) {
+        val corps = body.trim()
+        val preview = corps.ifBlank { attachments.firstOrNull()?.let { mediaPreviewLabel(it) }.orEmpty() }
+        database.withTransaction {
+            val convId = ensureConversation(addresses)
+            val msgId = messageDao.insert(
+                MessageEntity(
+                    conversationId = convId,
+                    telephonyUri = null,
+                    address = addresses.joinToString(";") { it.raw },
+                    body = corps,
+                    type = if (attachments.isEmpty()) MessageType.SMS else MessageType.MMS,
+                    direction = MessageDirection.OUTGOING,
+                    date = date,
+                    dateSent = null,
+                    read = true,
+                    starred = false,
+                    status = status,
+                    errorCode = null,
+                    subId = subId,
+                    scheduledAt = null,
+                    attachmentsCount = attachments.size,
+                    replyToMessageId = replyToMessageId,
+                ),
+            )
+            for (a in attachments) {
+                attachmentDao.insert(
+                    AttachmentEntity(
+                        messageId = msgId,
+                        mimeType = a.mimeType,
+                        fileName = a.file.name,
+                        sizeBytes = a.file.length(),
+                        localUri = a.file.absolutePath,
+                        width = a.width,
+                        height = a.height,
+                        durationMs = a.durationMs,
+                    ),
+                )
+            }
+            if (preview.isNotEmpty()) touchConversation(convId, date, preview, deltaUnread = 0)
+            msgId
+        }
+    }
+
     private fun mediaPreviewLabel(a: MediaAttachmentSpec): String = when {
         a.mimeType.startsWith("image/") -> "🖼️ " + a.file.name
         a.mimeType.startsWith("video/") -> "🎞️ " + a.file.name

@@ -40,6 +40,8 @@ class SendVoiceMmsUseCase @Inject constructor(
         mimeType: String,
         durationMs: Long,
         subId: Int? = null,
+        /** v1.28.3 (groupes) — cf. [SendSmsUseCase.invoke]. */
+        echoInGroup: Boolean = false,
     ): Outcome<SendReport> {
         refusPrealable(recipients, audioFile)?.let { return Outcome.Failure(it) }
 
@@ -113,6 +115,19 @@ class SendVoiceMmsUseCase @Inject constructor(
                     )
                 }
             }
+        }
+        // v1.28.3 (groupes) — la copie dans le fil du groupe, cf. [SendSmsUseCase].
+        if (echoInGroup && recipients.size > 1) {
+            mirror.upsertGroupEcho(
+                addresses = recipients,
+                body = "",
+                date = now,
+                subId = effectiveSubId,
+                status = if (ids.size == recipients.size) MessageStatus.SENT else MessageStatus.FAILED,
+                attachments = listOf(
+                    com.filestech.sms.domain.mms.MediaAttachmentSpec(durableAudio, mimeType, durationMs = durationMs),
+                ),
+            )
         }
         if (ids.isEmpty()) {
             return if (blocked.size == recipients.size) {

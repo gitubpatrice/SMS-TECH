@@ -80,6 +80,13 @@ class SendSmsUseCase @Inject constructor(
          * body as-is (regular text SMS).
          */
         localMirrorBody: String? = null,
+        /**
+         * v1.28.3 (groupes) — `true` quand l'envoi est fait DEPUIS un fil de groupe : une copie
+         * locale est alors écrite dans ce fil, cf. [OutgoingMessageMirror.upsertGroupEcho].
+         * Volontairement opt-in : le Safety call et le mode urgence envoient aussi à plusieurs,
+         * sans qu'un « groupe » doive apparaître dans la liste.
+         */
+        echoInGroup: Boolean = false,
     ): Outcome<SendReport> {
         refusPrealable(recipients, body)?.let { return Outcome.Failure(it) }
 
@@ -172,6 +179,18 @@ class SendSmsUseCase @Inject constructor(
                     )
                 }
             }
+        }
+        // v1.28.3 (groupes) — la copie dans le fil du groupe. Pas pour une réaction (corps local
+        // vide, filtré à l'affichage) ni pour un seul destinataire, qui n'a pas de « groupe ».
+        if (echoInGroup && recipients.size > 1 && localMirrorBody != "") {
+            mirror.upsertGroupEcho(
+                addresses = recipients,
+                body = localMirrorBody ?: finalBody,
+                date = now,
+                subId = effectiveSubId,
+                status = if (ids.size == recipients.size) MessageStatus.SENT else MessageStatus.FAILED,
+                replyToMessageId = replyToMessageId,
+            )
         }
         // v1.28.3 (F21) — l'échec total dit enfin POURQUOI.
         //

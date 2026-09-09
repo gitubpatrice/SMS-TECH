@@ -204,6 +204,16 @@ internal class NoopMirror(
         date: Long,
         subId: Int?,
     ): Long = error("non utilise")
+
+    override suspend fun upsertGroupEcho(
+        addresses: List<com.filestech.sms.domain.model.PhoneAddress>,
+        body: String,
+        date: Long,
+        subId: Int?,
+        status: MessageStatus,
+        replyToMessageId: Long?,
+        attachments: List<MediaAttachmentSpec>,
+    ): Long = error("non utilise")
 }
 
 internal class NeverBlocked : BlockedNumberRepository {

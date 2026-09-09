@@ -704,7 +704,7 @@ class ThreadViewModel @Inject constructor(
             // chez nous, et AUCUN SMS parti — que le chien de garde basculait en échec quinze
             // minutes plus tard, sans cause visible.
             val res = withContext(NonCancellable) {
-                sendSms.invoke(conv.addresses, body, replyToMessageId = replyTargetId)
+                sendSms.invoke(conv.addresses, body, replyToMessageId = replyTargetId, echoInGroup = conv.isGroup)
             }
             when (res) {
                 is Outcome.Success -> {
@@ -1121,6 +1121,7 @@ class ThreadViewModel @Inject constructor(
                     recipients = conv.addresses,
                     attachments = payloads,
                     textBody = textBody,
+                    echoInGroup = conv.isGroup,
                 )
             }
         } finally {
@@ -1583,6 +1584,7 @@ class ThreadViewModel @Inject constructor(
         playbackController.stop()
         when (val res = sendVoiceMms.invoke(
             recipients = conv.addresses,
+            echoInGroup = conv.isGroup,
             audioFile = reviewing.file,
             mimeType = reviewing.mimeType,
             durationMs = reviewing.durationMs,

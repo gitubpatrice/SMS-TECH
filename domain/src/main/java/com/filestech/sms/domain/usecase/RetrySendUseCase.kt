@@ -75,6 +75,12 @@ class RetrySendUseCase @Inject constructor(
      *    v1.28.3 (F21) — erreur TYPÉE, pour que l'écran puisse dire pourquoi rien ne repart.
      */
     private suspend fun refusPrealable(msg: Message): AppError? {
+        // v1.28.3 (groupes) — l'écho d'un groupe porte la liste des membres pour adresse : rien
+        // n'a jamais été envoyé à « a;b », et rien ne doit l'être.
+        if (';' in msg.address) {
+            Timber.i("Retry refused: message %d is the local copy kept in a group thread", msg.id)
+            return AppError.GroupEchoRetryUnsupported
+        }
         if (msg.type == Message.Type.MMS) {
             Timber.i("Retry refused: message %d is an MMS, this path only re-dispatches SMS", msg.id)
             return AppError.MmsRetryUnsupported

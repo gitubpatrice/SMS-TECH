@@ -34,6 +34,13 @@ sealed class AppError(open val cause: Throwable? = null) {
      * au lieu d'un « Échec de l'envoi » qui invite à recommencer.
      */
     data object MmsRetryUnsupported : AppError()
+
+    /**
+     * v1.28.3 (groupes) — la ligne touchée est la COPIE gardée dans le fil d'un groupe : elle
+     * n'a pas de ligne système et son adresse est la liste des membres. Le renvoi se fait depuis
+     * la conversation de chaque membre, où vivent les vraies lignes et leurs accusés.
+     */
+    data object GroupEchoRetryUnsupported : AppError()
     data class Locked(val unlockRequired: Boolean = true) : AppError()
     data class NotFound(val what: String) : AppError()
     data class Cancelled(val reason: String? = null) : AppError()

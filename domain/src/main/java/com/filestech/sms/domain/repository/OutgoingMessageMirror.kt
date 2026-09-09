@@ -2,6 +2,7 @@ package com.filestech.sms.domain.repository
 
 import com.filestech.sms.domain.mms.MediaAttachmentSpec
 import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.PhoneAddress
 import java.io.File
 
 /**
@@ -102,5 +103,31 @@ interface OutgoingMessageMirror {
         textBody: String,
         date: Long,
         subId: Int? = null,
+    ): Long
+
+    /**
+     * v1.28.3 (groupes — **mesuré sur le S9**) — **l'écho, dans le fil du groupe, d'un envoi fait
+     * depuis ce groupe.**
+     *
+     * Le SMS n'a pas de groupe : chaque destinataire reçoit son propre message, et chaque ligne
+     * d'envoi vit dans la conversation 1-à-1 du destinataire — c'est là que le radio rend ses
+     * accusés, c'est là que les réponses arrivent. Le fil du groupe, lui, n'avait donc AUCUNE
+     * ligne : on y tapait un message, il partait, et le fil restait vide — mesuré.
+     *
+     * Cette ligne est une copie LOCALE, sans ligne système (`telephonyUri = null`, comme la trace
+     * d'un destinataire bloqué, F21) : le fournisseur système a déjà une ligne par destinataire,
+     * en écrire une de plus mentirait aux autres applications. Son adresse est la liste des
+     * membres ; son statut est celui de l'envoi dans son ensemble, figé — les accusés fins
+     * (remis, échoué) restent sur les lignes 1-à-1. Les pièces jointes référencent les mêmes
+     * fichiers que les lignes 1-à-1, comme ces lignes le font déjà entre elles.
+     */
+    suspend fun upsertGroupEcho(
+        addresses: List<PhoneAddress>,
+        body: String,
+        date: Long,
+        subId: Int?,
+        status: MessageStatus,
+        replyToMessageId: Long? = null,
+        attachments: List<MediaAttachmentSpec> = emptyList(),
     ): Long
 }

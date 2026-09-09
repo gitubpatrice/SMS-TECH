@@ -42,6 +42,8 @@ class SendMediaMmsUseCase @Inject constructor(
         attachments: List<AttachmentPayload>,
         textBody: String = "",
         subId: Int? = null,
+        /** v1.28.3 (groupes) — cf. [SendSmsUseCase.invoke]. */
+        echoInGroup: Boolean = false,
     ): Outcome<SendReport> {
         refusPrealable(recipients, attachments, textBody)?.let { return Outcome.Failure(it) }
 
@@ -144,6 +146,17 @@ class SendMediaMmsUseCase @Inject constructor(
             }
         }
 
+        // v1.28.3 (groupes) — la copie dans le fil du groupe, cf. [SendSmsUseCase].
+        if (echoInGroup && recipients.size > 1) {
+            mirror.upsertGroupEcho(
+                addresses = recipients,
+                body = textBody,
+                date = now,
+                subId = effectiveSubId,
+                status = if (ids.size == recipients.size) MessageStatus.SENT else MessageStatus.FAILED,
+                attachments = mirrorSpecs,
+            )
+        }
         if (ids.isEmpty()) {
             return if (blocked.size == recipients.size) {
                 Outcome.Failure(AppError.RecipientBlocked)

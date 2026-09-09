@@ -106,9 +106,9 @@ class ScheduledSendAttempt @Inject constructor(
         // des envois programmes. Le codec lui-meme reste interne au module `data`.
         val attachments = entity.toDomain().attachments
         val outcome = if (attachments.isEmpty()) {
-            sendSms.invoke(recipients, entity.body, entity.subId)
+            sendSms.invoke(recipients, entity.body, entity.subId, echoInGroup = recipients.size > 1)
         } else {
-            sendMediaMms.invoke(recipients, attachments, entity.body, entity.subId)
+            sendMediaMms.invoke(recipients, attachments, entity.body, entity.subId, echoInGroup = recipients.size > 1)
         }
         return when (outcome) {
             is Outcome.Success -> {
