@@ -90,11 +90,8 @@ class ConversationMirror @Inject constructor(
      * joignait les numéros bruts. Ici comme là, un membre inconnu garde son numéro ; `null` si
      * aucun membre n'est un contact — l'écran retombe alors sur les numéros, comme avant.
      */
-    private suspend fun nomDeGroupe(addresses: List<PhoneAddress>): String? {
-        var unNomTrouve = false
-        val membres = addresses.map { a -> resolveDisplayName(a.raw)?.also { unNomTrouve = true } ?: a.raw }
-        return if (unNomTrouve) membres.joinToString(", ") else null
-    }
+    private suspend fun nomDeGroupe(addresses: List<PhoneAddress>): String? =
+        com.filestech.sms.domain.model.GroupTitle.of(addresses.map { a -> a.raw to resolveDisplayName(a.raw) })
 
     suspend fun upsertIncomingSms(
         address: String,

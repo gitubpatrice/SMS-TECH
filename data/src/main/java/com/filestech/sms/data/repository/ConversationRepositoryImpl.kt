@@ -343,11 +343,8 @@ class ConversationRepositoryImpl @Inject constructor(
      * pour chaque inconnu ; `null` si aucun n'est un contact, l'écran retombe alors sur les numéros.
      * Même règle que `ConversationMirror.nomDeGroupe`, pour les groupes créés à la réception.
      */
-    private suspend fun nomDeGroupe(addresses: List<PhoneAddress>): String? {
-        var unNomTrouve = false
-        val membres = addresses.map { a -> nomDuContact(a)?.also { unNomTrouve = true } ?: a.raw }
-        return if (unNomTrouve) membres.joinToString(", ") else null
-    }
+    private suspend fun nomDeGroupe(addresses: List<PhoneAddress>): String? =
+        com.filestech.sms.domain.model.GroupTitle.of(addresses.map { a -> a.raw to nomDuContact(a) })
 
     /**
      * Audit A10: wraps the read-modify-write in a single Room transaction so two concurrent
