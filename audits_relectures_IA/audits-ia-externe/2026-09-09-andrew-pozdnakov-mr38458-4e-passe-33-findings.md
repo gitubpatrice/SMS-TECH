@@ -98,7 +98,7 @@ paire séparée par le bit 16.
 
 ## 4. État du chantier de correction
 
-### Corrigés et commités (21 / 32)
+### Corrigés et commités (31 / 32)
 
 | Commit | Findings | Substance |
 |---|---|---|
@@ -115,21 +115,58 @@ paire séparée par le bit 16.
 | `025b13c` | **F20** | Le verrou d'envoi reçoit un **bail** (migration 9 → 10). Un envoi revendiqué puis abandonné se conclut `INTERRUPTED` — issue inconnue, mais **atteignable** — au lieu de rester `SENDING` à vie. L'annulation dit enfin qu'elle n'a pas pris. |
 | `88c0e5c` | **F23** | Chaque message porte un numéro de **tentative** (migration 10 → 11), présent dans les extras du `PendingIntent` **et dans son `requestCode`**. L'accusé tardif d'une tentative périmée ne s'applique plus. |
 | `00c54fa` | **F21** | Un destinataire bloqué laisse une ligne locale en échec ; `SendReport` compte les trois issues et le fil dit qu'un envoi n'a pas atteint tout le monde. |
+| `f63e618` | **F21** (suite) | Le même `continue` muet vivait sur les **deux voies MMS**. Les trois chemins d'envoi appliquent enfin la même règle. |
+| `1f7ace8` | **F10, F11** | `erase` atteint la ligne système par `mms_system_id` — **aucun MMS sortant n'a jamais eu de `telephony_uri`** ; la rétention n'entre plus dans le coffre, et son compteur suit. |
+| `3adb3bb` | **F12, F14** | Le corps n'est comparé que lorsqu'il décrit le message (sentinelle de réaction), et l'identité exige au moins un discriminant fort réellement confronté. |
+| `128de93` | **F24, F25, F32** | Une collision de restauration est une **rencontre** : citations recollées, favoris et réactions reversés. Clé de dédup resserrée. L'écrivain refuse ce que son lecteur refuserait, et relit ce qu'il a écrit. |
+| `51b1c88` | **F07, F27, F31a, F33** | Abaisser le verrouillage ne retire plus le seul second facteur du coffre ; trois allocations sans borne bornées ; plus de crash au lancement ; PDF non tronqué, document fermé, pieds de page présents. |
 
-### Restants (11)
+### Le seul non corrigé, et pourquoi — F13
 
-- **Propriété et identité des lignes système** — F10 (MMS sans `telephony_uri` échappe au
-  nettoyage), F11 (la rétention détruit la preuve de purge ; `purgeOlderThan` n'exclut pas
-  `in_vault`), F12 (identité destructrice sur preuve faible), F14 (sentinelle de réaction : le
-  corps local diffère du transport).
-- **Sauvegarde / restauration** — F24 (`msgIdMap` non alimenté sur conflit → citations perdues ;
-  drapeaux non fusionnés), F25 (dédup de restauration sans preuve au niveau des parties), F32
-  (l'écrivain peut produire un fichier que son lecteur refuse ; export interrompu d'apparence
-  valide).
-- **Isolés** — F07 (changer le mode de verrouillage retire le second facteur du coffre sans
-  l'authentifier), F13 (purge non atomique), F27 (copie avant contrôle de taille ; décodage
-  d'image intégral ; PDU sans borne), F31a (crash au lancement si DataStore ne peut pas émettre),
-  F33 (message plus haut qu'une page tronqué en PDF ; `PdfDocument` hors `finally`).
+**F13 (purge non atomique) est le seul des 33 que je n'ai pas changé**, et c'est une décision
+argumentée, pas un oubli :
+
+- sa conséquence dangereuse — retirer le PIN du coffre sur une purge partielle — a été fermée par
+  **F09** : `VaultPurgeResult` relit le coffre APRÈS la boucle et distingue résidu système et
+  échec local, si bien qu'une purge interrompue ne peut plus lever la protection ;
+- le reste de la non-atomicité est **inhérent** : la suppression de FICHIERS ne peut pas
+  participer à une transaction SQLite. Rendre atomiques les deux seules écritures en base
+  tiendrait de la mise en scène ;
+- l'ordre en place est **choisi** pour que le résidu soit rattrapable — une conversation dont les
+  fichiers sont partis, plutôt que des fichiers orphelins définitifs — et c'est écrit dans le code
+  depuis F03/F04.
+
+### Ce que les correctifs eux-mêmes ont révélé
+
+Trois défauts trouvés **en corrigeant**, dont deux étaient de moi :
+
+1. **Mon correctif F02 a créé une perte de données silencieuse sur le chemin voisin.** Le filet de
+   replanification du démarrage lisait `observePending()`, le flux destiné à l'ÉCRAN, que F02
+   masque tant que le second facteur du coffre n'a pas été donné — ce qui, au boot, est toujours
+   le cas. Corrigé avec F20 (`allUnsettled`).
+2. **Mon correctif F21 n'a été posé que sur la voie SMS**, alors que le `continue` muet vivait à
+   l'identique sur les deux voies MMS. C'est le motif dominant de cette relecture, reproduit sur
+   le finding qui le décrit. Trouvé par la revue de qualité lancée sur mon propre delta — qui n'a
+   cité que la voie média ; la voie vocale, je l'ai trouvée en vérifiant l'autre.
+3. **Un MMS sans légende restauré devient INVISIBLE.** `toLocalRow` remet `attachments_count` à
+   zéro (v1.26.1, M7) ; la ligne prend alors exactement la forme d'une sentinelle de réaction —
+   corps vide, aucune pièce jointe, aucune réaction — que cinq requêtes de `MessageDao` excluent.
+   Elle est importée, comptée comme importée, et n'apparaît nulle part. **Non corrigé**, découvert
+   en écrivant les tests de F25 : le remède propre demande une colonne `hidden` et une migration,
+   qui rendrait aussi le correctif F14 plus robuste que sa reconnaissance par forme.
+
+### Ce que le contrôle négatif a appris
+
+En remettant **les deux défauts de F12 et F14 à la fois**, un seul test tombait. Celui de F12
+restait vert — mais POUR LA MAUVAISE RAISON : le défaut de F14 refusait déjà la suppression, donc
+l'assertion « n'est pas supprimée » était satisfaite par un autre chemin. Il a fallu neutraliser
+F12 **seul** pour le voir tomber.
+
+*Deux correctifs posés ensemble peuvent se masquer l'un l'autre ; un contrôle négatif groupé ne
+prouve pas ce qu'il semble prouver.*
+
+Et un test de F32 ne pouvait pas échouer : vérifier qu'un fichier tronqué est refusé mesure le
+LECTEUR, qui le refusait déjà. Remplacé par un test des bornes de l'ÉCRIVAIN.
 
 ---
 
