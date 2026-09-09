@@ -112,6 +112,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.withResumed
 import com.filestech.sms.R
 import com.filestech.sms.core.ext.splitGraphemeClusters
+import com.filestech.sms.core.result.AppError
 import com.filestech.sms.data.voice.VoicePlaybackController
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.SendErrorCode
@@ -365,6 +366,13 @@ fun ThreadScreen(
         }
     }
 
+    // v1.28.3 (F21) — gabarits resolus au niveau COMPOSABLE, et non via `LocalContext` dans le
+    // collecteur : un `Context` capture dans une lambda non composable ne suit pas les changements
+    // de configuration. Meme parti pris que `ScheduledMessagesScreen`, ou le commentaire d'origine
+    // de cette regle est ecrit.
+    val partialFmt = stringResource(R.string.send_partial)
+    val partialBlockedFmt = stringResource(R.string.send_partial_blocked)
+
     LaunchedEffect(Unit) {
         viewModel.onConversationOpened()
         viewModel.events.collect { e ->
@@ -384,8 +392,29 @@ fun ThreadScreen(
                     snackbarHost.showSnackbar(context.getString(R.string.thread_export_success, e.pages))
                 }
                 // v1.3.7 — un échec d'envoi est par définition une erreur → rouge.
+                //
+                // v1.28.3 (F21) — le refus pour cause de blocage se dit à part. « Échec de
+                // l'envoi » laisserait croire à une panne passagère, alors que rien ne repartira
+                // tant que l'utilisateur n'aura pas débloqué le numéro qu'il a lui-même bloqué.
                 is ThreadViewModel.Event.SendError -> snackbarHost.showError(
-                    context.getString(R.string.error_send_failed),
+                    context.getString(
+                        if (e.error is AppError.RecipientBlocked) {
+                            R.string.error_send_recipient_blocked
+                        } else {
+                            R.string.error_send_failed
+                        },
+                    ),
+                )
+                // v1.28.3 (F21) — envoi partiel. Rouge aussi : quelque chose n'est pas arrivé,
+                // et le message est d'autant plus nécessaire que le brouillon, lui, a bien été
+                // effacé. Le motif « bloqué » est dit à part, parce qu'il n'appelle pas la même
+                // action — attendre le réseau ne débloquera personne.
+                is ThreadViewModel.Event.PartialSend -> snackbarHost.showError(
+                    if (e.blocked > 0 && e.failed == 0) {
+                        partialBlockedFmt.format(e.sent, e.blocked)
+                    } else {
+                        partialFmt.format(e.sent, e.failed + e.blocked)
+                    },
                 )
                 is ThreadViewModel.Event.OpenAddContact -> {
                     val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {

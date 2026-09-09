@@ -4,6 +4,7 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.ReactionFormat
+import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.sender.SenderNameProvider
 import javax.inject.Inject
@@ -74,7 +75,7 @@ class SendReactionUseCase @Inject constructor(
         messageId: Long,
         emoji: String,
         format: ReactionFormat = ReactionFormat.READABLE_FR,
-    ): Outcome<List<Long>> {
+    ): Outcome<SendReport> {
         if (emoji.isBlank()) return Outcome.Failure(AppError.Validation("empty reaction emoji"))
 
         val message = conversationRepo.findMessageById(messageId)

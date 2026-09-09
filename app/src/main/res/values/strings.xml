@@ -725,6 +725,10 @@
     <!-- Errors -->
     <string name="error_not_default_app">SMS Tech is not the default SMS app yet.</string>
     <string name="error_send_failed">Failed to send the message.</string>
+    <string name="error_send_recipient_blocked">Not sent: you have blocked this number. Unblock it to send again.</string>
+    <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
+    <string name="send_partial">Sent to %1$d recipient(s); %2$d could not be reached.</string>
+    <string name="send_partial_blocked">Sent to %1$d recipient(s); %2$d skipped because you blocked them.</string>
 
     <!-- v1.14.8 ARCH-M2 — thread snackbars (i18n) — extracted from hardcoded VM strings. -->
     <string name="snack_thread_max_duration">Limit reached: %1$d s</string>

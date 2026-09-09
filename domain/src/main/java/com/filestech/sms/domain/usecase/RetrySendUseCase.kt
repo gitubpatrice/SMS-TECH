@@ -47,7 +47,11 @@ class RetrySendUseCase @Inject constructor(
         // `respectBlocklistOnIncoming` vaut `true` par défaut et aucun appelant ne la surcharge.
         if (blockedRepo.isBlocked(msg.address)) {
             Timber.i("Retry refused: recipient is blocked")
-            return Outcome.Failure(AppError.Validation("recipient is blocked"))
+            // v1.28.3 (F21) — erreur TYPEE, et non un `Validation` porteur d'un message anglais.
+            // La bulle rouge d'un destinataire bloque est desormais visible dans le fil, donc
+            // elle SERA touchee ; l'ecran doit pouvoir dire pourquoi rien ne repart, au lieu
+            // d'avaler l'issue en silence comme il le faisait.
+            return Outcome.Failure(AppError.RecipientBlocked)
         }
         if (msg.errorCode == SendErrorCode.WATCHDOG_TIMEOUT) {
             Timber.w(

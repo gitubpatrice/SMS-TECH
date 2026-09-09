@@ -90,4 +90,19 @@ object SendErrorCode {
     /** [com.filestech.sms.system.scheduler.TelephonySyncWorker] timed out a stale PENDING row.
      *  The message *may* have reached the recipient — UI should warn on retry. */
     const val WATCHDOG_TIMEOUT: Int = -2
+
+    /**
+     * v1.28.3 (F21) — l'application a refusé d'envoyer : le destinataire figure dans la liste de
+     * blocage de l'utilisateur.
+     *
+     * Rien n'est parti sur le réseau, et **rien n'a été écrit chez le fournisseur système** — la
+     * ligne n'existe que dans le miroir local, précisément pour que l'utilisateur voie qu'il a
+     * écrit à quelqu'un qu'il avait bloqué. La boucle d'envoi se contentait auparavant d'un
+     * `continue` muet : ni ligne, ni message, ni compte, et le message disparaissait entre le
+     * moment où on tapait « Envoyer » et rien du tout.
+     *
+     * Distinct de [SYNCHRONOUS] : ce n'est pas une panne, et `RetrySendUseCase` refusera de
+     * relancer tant que le blocage tient — ce qui est le comportement voulu, pas un défaut.
+     */
+    const val RECIPIENT_BLOCKED: Int = -3
 }

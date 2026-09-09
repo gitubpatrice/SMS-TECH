@@ -30,7 +30,7 @@
     <ID>NoUnusedImports:ToggleConversationStateUseCase.kt$com.filestech.sms.domain.usecase.ToggleConversationStateUseCase.kt</ID>
     <ID>ReturnCount:IncomingReactionDecoder.kt$IncomingReactionDecoder$fun decode(body: String): DecodedReaction?</ID>
     <ID>ReturnCount:SendMediaMmsUseCase.kt$SendMediaMmsUseCase$suspend operator fun invoke( recipients: List&lt;PhoneAddress&gt;, attachments: List&lt;AttachmentPayload&gt;, textBody: String = "", subId: Int? = null, ): Outcome&lt;List&lt;Long&gt;&gt;</ID>
-    <ID>ReturnCount:SendReactionUseCase.kt$SendReactionUseCase$suspend operator fun invoke( messageId: Long, emoji: String, format: ReactionFormat = ReactionFormat.READABLE_FR, ): Outcome&lt;List&lt;Long&gt;&gt;</ID>
+    <ID>ReturnCount:SendReactionUseCase.kt$SendReactionUseCase$suspend operator fun invoke( messageId: Long, emoji: String, format: ReactionFormat = ReactionFormat.READABLE_FR, ): Outcome&lt;SendReport&gt;</ID>
     <ID>ReturnCount:SmishingDetector.kt$SmishingDetector$fun levenshteinAtMost(a: String, b: String, maxDistance: Int): Boolean</ID>
     <ID>SpacingBetweenDeclarationsWithComments:ConversationRepository.kt$ConversationRepository$/** * v1.11.0 — apparence personnalisée par conversation (Sujet 5). `null` sur * un argument = reset à la valeur par défaut (bleu marque pour la bulle, * avatar contact natif). Voir [com.filestech.sms.data.local.db.dao.ConversationDao.setAppearance]. */</ID>
     <ID>TooManyFunctions:ConversationRepository.kt$ConversationRepository</ID>

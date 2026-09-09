@@ -5,6 +5,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendErrorCode
+import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
@@ -34,6 +35,20 @@ class SendSmsUseCase @Inject constructor(
     private val blockedRepo: BlockedNumberRepository,
     private val settings: AppSettingsSource,
 ) {
+    /**
+     * Les trois gardes qui precedent toute ecriture, regroupes en une seule decision.
+     *
+     * Factorises en v1.28.3 (F21) : l'ajout d'une issue distinguant « tous bloques » d'une panne
+     * de telephonie portait `invoke` a cinq sorties. Les regrouper vaut mieux que d'excuser le
+     * compte — ces trois refus repondent tous a la meme question, « a-t-on le droit d'envoyer ».
+     */
+    private fun refusPrealable(recipients: List<PhoneAddress>, body: String): AppError? = when {
+        !defaultAppManager.isDefault() -> AppError.NotDefaultSmsApp
+        recipients.isEmpty() -> AppError.Validation("no recipients")
+        body.isBlank() -> AppError.Validation("body is blank")
+        else -> null
+    }
+
     suspend operator fun invoke(
         recipients: List<PhoneAddress>,
         body: String,
@@ -65,10 +80,8 @@ class SendSmsUseCase @Inject constructor(
          * body as-is (regular text SMS).
          */
         localMirrorBody: String? = null,
-    ): Outcome<List<Long>> {
-        if (!defaultAppManager.isDefault()) return Outcome.Failure(AppError.NotDefaultSmsApp)
-        if (recipients.isEmpty()) return Outcome.Failure(AppError.Validation("no recipients"))
-        if (body.isBlank()) return Outcome.Failure(AppError.Validation("body is blank"))
+    ): Outcome<SendReport> {
+        refusPrealable(recipients, body)?.let { return Outcome.Failure(it) }
 
         // Audit H3 (v1.14.8) — on évite `flow.first()` sur CHAQUE envoi (ouverture DataStore +
         // désérialisation, 5-15 ms).
@@ -93,9 +106,45 @@ class SendSmsUseCase @Inject constructor(
         val effectiveSubId = subId ?: s.sending.defaultSubId
 
         val ids = ArrayList<Long>(recipients.size)
+        val failed = ArrayList<PhoneAddress>()
+        val blocked = ArrayList<PhoneAddress>()
         val now = System.currentTimeMillis()
         for (r in recipients) {
-            if (respectBlocklistOnIncoming && blockedRepo.isBlocked(r.raw)) continue
+            // v1.28.3 (F21) — un destinataire bloqué laisse désormais une TRACE.
+            //
+            // La boucle se contentait d'un `continue` muet : ni ligne, ni message, ni compte. On
+            // tapait « Envoyer », et le message disparaissait — sans erreur, sans bulle, sans
+            // rien. Sur un envoi à plusieurs, personne ne pouvait même s'apercevoir qu'un
+            // destinataire manquait à l'appel.
+            //
+            // La ligne est écrite dans le miroir local UNIQUEMENT : rien n'est parti sur le
+            // réseau, et écrire chez le fournisseur système une ligne « envoyée » qui ne l'est
+            // pas mentirait à toutes les autres applications SMS de l'appareil. Le
+            // `telephonyUri` reste donc `null`, et le statut est posé en échec dès l'insertion —
+            // il n'existe aucune tentative dont un accusé pourrait le faire progresser.
+            if (respectBlocklistOnIncoming && blockedRepo.isBlocked(r.raw)) {
+                blocked += r
+                val blockedId = mirror.upsertOutgoingSms(
+                    address = r.raw,
+                    body = finalBody,
+                    date = now,
+                    telephonyUri = null,
+                    subId = effectiveSubId,
+                    initialStatus = MessageStatus.PENDING,
+                    replyToMessageId = replyToMessageId,
+                    localMirrorBody = localMirrorBody,
+                )
+                // En deux temps, et non `initialStatus = FAILED` : `upsertOutgoingSms` n'écrit
+                // pas de code d'erreur, et la promotion monotone refuserait ensuite d'en poser
+                // un sur une ligne déjà au sommet de l'échelle. Le motif de l'échec doit
+                // pourtant être lisible — c'est lui qui distingue « bloqué » de « en panne ».
+                mirror.updateOutgoingStatus(
+                    blockedId,
+                    MessageStatus.FAILED,
+                    errorCode = SendErrorCode.RECIPIENT_BLOCKED,
+                )
+                continue
+            }
             val systemUri = sentSmsRecorder.insertSentSms(
                 address = r.raw,
                 body = finalBody,
@@ -112,16 +161,31 @@ class SendSmsUseCase @Inject constructor(
                 replyToMessageId = replyToMessageId,
                 localMirrorBody = localMirrorBody,
             )
-            when (val res = sender.send(localId, r.raw, finalBody, effectiveSubId, deliveryReports)) {
+            when (sender.send(localId, r.raw, finalBody, effectiveSubId, deliveryReports)) {
                 is Outcome.Success -> ids += localId
-                is Outcome.Failure -> mirror.updateOutgoingStatus(
-                    localId,
-                    MessageStatus.FAILED,
-                    errorCode = SendErrorCode.SYNCHRONOUS,
-                )
+                is Outcome.Failure -> {
+                    failed += r
+                    mirror.updateOutgoingStatus(
+                        localId,
+                        MessageStatus.FAILED,
+                        errorCode = SendErrorCode.SYNCHRONOUS,
+                    )
+                }
             }
         }
-        return if (ids.isEmpty()) Outcome.Failure(AppError.Telephony("no message dispatched"))
-        else Outcome.Success(ids)
+        // v1.28.3 (F21) — l'échec total dit enfin POURQUOI.
+        //
+        // « Aucun message remis » était rendu comme une erreur de téléphonie, y compris quand
+        // aucune pile n'avait été sollicitée parce que tous les destinataires étaient bloqués.
+        // L'utilisateur lisait un problème de réseau là où il n'y avait qu'une règle qu'il avait
+        // lui-même posée, et attendait donc que « ça repasse ».
+        if (ids.isEmpty()) {
+            return if (blocked.size == recipients.size) {
+                Outcome.Failure(AppError.RecipientBlocked)
+            } else {
+                Outcome.Failure(AppError.Telephony("no message dispatched"))
+            }
+        }
+        return Outcome.Success(SendReport(dispatched = ids, failed = failed, blocked = blocked))
     }
 }

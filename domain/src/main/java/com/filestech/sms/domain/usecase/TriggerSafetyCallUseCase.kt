@@ -392,7 +392,10 @@ class TriggerSafetyCallUseCase @Inject constructor(
                 // v1.28.3 (F05) — on ne compte PLUS un envoi ici. Un `Outcome.Success` ne dit que
                 // ceci : `SmsManager` a accepte la demande sans lever. On retient les
                 // identifiants Room pour aller chercher le verdict du radio apres la boucle.
-                is Outcome.Success -> remisAuRadio += res.value
+                // v1.28.3 (F21) — `dispatched` et non plus la valeur entière : le rapport
+                // distingue désormais ce qui est parti de ce qui a été refusé, et seul le
+                // premier a un accusé à attendre.
+                is Outcome.Success -> remisAuRadio += res.value.dispatched
                 is Outcome.Failure -> {
                     Timber.w("TriggerSafetyCallUseCase: send failed for contact #%d", index)
                     failed++

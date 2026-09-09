@@ -280,6 +280,19 @@ class ThreadViewModel @Inject constructor(
         data class SendError(val error: AppError) : Event
 
         /**
+         * v1.28.3 (F21) — l'envoi a abouti pour une partie seulement des destinataires.
+         *
+         * Distinct de [SendError], qui dit « rien n'est parti ». Ici quelque chose est parti, le
+         * brouillon a donc été effacé à juste titre, et c'est précisément ce qui rendait le
+         * silence trompeur : l'écran se comportait exactement comme après un envoi complet.
+         *
+         * [blocked] est compté à part de [failed] parce que ce n'est pas une panne : l'envoi a
+         * été refusé par une règle que l'utilisateur a lui-même posée, et attendre « que ça
+         * repasse » ne servirait à rien.
+         */
+        data class PartialSend(val sent: Int, val failed: Int, val blocked: Int) : Event
+
+        /**
          * "Mettre à jour un contact" — ouvre l'éditeur système en mode `ACTION_INSERT_OR_EDIT`
          * (sélecteur : rattacher le numéro à un contact existant, ou en créer un).
          */
@@ -699,6 +712,23 @@ class ThreadViewModel @Inject constructor(
                     // message qui vient de partir, pas à celui que l'utilisateur commence.
                     _state.update { it.copy(replyingTo = null) }
                     effacerBrouillonSiIntact(revisionEnvoyee)
+                    // v1.28.3 (F21) — un envoi PARTIEL ne peut plus passer pour un envoi réussi.
+                    //
+                    // `Outcome.Success` était rendu dès qu'UN destinataire avait été remis à la
+                    // pile. Sur un envoi à plusieurs, le brouillon s'effaçait et l'écran ne
+                    // disait rien — alors que les bulles en échec, SMS n'ayant pas de vrai
+                    // groupe, vivent chacune dans la conversation individuelle de son
+                    // destinataire, c'est-à-dire là où l'expéditeur n'allait pas regarder.
+                    val rapport = res.value
+                    if (!rapport.isComplete) {
+                        _events.tryEmit(
+                            Event.PartialSend(
+                                sent = rapport.dispatched.size,
+                                failed = rapport.failed.size,
+                                blocked = rapport.blocked.size,
+                            ),
+                        )
+                    }
                 }
                 is Outcome.Failure -> _events.tryEmit(Event.SendError(res.error))
             }
@@ -1191,7 +1221,11 @@ class ThreadViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isSending = true) }
             try {
-                withContext(NonCancellable) { retrySend.invoke(messageId) }
+                // v1.28.3 (F21) — l'issue de la relance remonte enfin a l'ecran. Elle etait
+                // avalee : toucher la bulle rouge d'un destinataire bloque ne produisait
+                // strictement RIEN, ni envoi ni message, et l'utilisateur recommencait.
+                val res = withContext(NonCancellable) { retrySend.invoke(messageId) }
+                if (res is Outcome.Failure) _events.tryEmit(Event.SendError(res.error))
             } finally {
                 _state.update { it.copy(isSending = false) }
             }

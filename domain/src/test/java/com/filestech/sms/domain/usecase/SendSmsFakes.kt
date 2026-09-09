@@ -57,6 +57,10 @@ internal class RecordingSender(
 
 internal class RecordingRecorder : SentSmsRecorder {
     var lastSubId: Int? = null
+
+    /** v1.28.3 (F21) — rien ne doit etre ecrit chez le fournisseur systeme pour un bloque. */
+    val adressesEcrites = mutableListOf<String>()
+
     override fun insertSentSms(
         address: String,
         body: String,
@@ -65,11 +69,22 @@ internal class RecordingRecorder : SentSmsRecorder {
         subId: Int?,
     ): String? {
         lastSubId = subId
+        adressesEcrites += address
         return "content://sms/1"
     }
 }
 
 internal class NoopMirror : OutgoingMessageMirror {
+    /**
+     * v1.28.3 (F21) — les lignes ecrites sont desormais RETENUES : c'est la trace qu'un
+     * destinataire bloque ne laissait pas, et il faut donc pouvoir la mesurer.
+     */
+    data class LigneEcrite(val adresse: String, val telephonyUri: String?, val statut: MessageStatus)
+
+    val lignes = mutableListOf<LigneEcrite>()
+    val statuts = mutableListOf<Triple<Long, MessageStatus, Int?>>()
+    private var prochainId = 1L
+
     override suspend fun upsertOutgoingSms(
         address: String,
         body: String,
@@ -79,14 +94,19 @@ internal class NoopMirror : OutgoingMessageMirror {
         initialStatus: MessageStatus,
         replyToMessageId: Long?,
         localMirrorBody: String?,
-    ): Long = 1L
+    ): Long {
+        lignes += LigneEcrite(address, telephonyUri, initialStatus)
+        return prochainId++
+    }
 
     override suspend fun updateOutgoingStatus(
         localId: Long,
         status: MessageStatus,
         errorCode: Int?,
         attempt: Int?,
-    ) = Unit
+    ) {
+        statuts += Triple(localId, status, errorCode)
+    }
 
     /**
      * v1.28.3 (F05) — le radio a toujours confirme, c'est-a-dire le cas nominal. Les tests qui
@@ -133,16 +153,29 @@ internal fun sendSmsUseCase(
     sender: SmsSender,
     recorder: SentSmsRecorder = RecordingRecorder(),
     isDefaultSmsApp: Boolean = true,
+    mirror: OutgoingMessageMirror = NoopMirror(),
+    blocked: BlockedNumberRepository = NeverBlocked(),
 ) = SendSmsUseCase(
     defaultAppManager = object : DefaultSmsAppChecker {
         override fun isDefault() = isDefaultSmsApp
     },
     sentSmsRecorder = recorder,
     sender = sender,
-    mirror = NoopMirror(),
-    blockedRepo = NeverBlocked(),
+    mirror = mirror,
+    blockedRepo = blocked,
     settings = settings,
 )
+
+/** v1.28.3 (F21) — bloque les numeros dont la forme brute figure dans [numeros]. */
+internal class BlockedList(private val numeros: Set<String>) : BlockedNumberRepository {
+    override fun observe(): Flow<List<BlockedNumber>> = flowOf(emptyList())
+    override suspend fun isBlocked(rawNumber: String): Boolean = rawNumber in numeros
+    override suspend fun block(rawNumber: String, label: String?): Outcome<Unit> = Outcome.Success(Unit)
+    override suspend fun unblock(rawNumber: String): Outcome<Unit> = Outcome.Success(Unit)
+    override suspend fun mirrorFromSystem(rawNumber: String): Outcome<Unit> = Outcome.Success(Unit)
+    override suspend fun blockedNormalizedSnapshot(): Set<String> = emptySet()
+    override suspend fun blockedRawSnapshot(): List<String> = numeros.toList()
+}
 
 /** Échec d'envoi côté radio — SIM absente, mode avion, pas de réseau. */
 internal fun radioFailure(): Outcome<Unit> = Outcome.Failure(AppError.Telephony("no radio"))

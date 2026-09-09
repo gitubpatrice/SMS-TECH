@@ -710,6 +710,10 @@
 
     <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
     <string name="error_send_failed">Échec de l\'envoi du message.</string>
+    <string name="error_send_recipient_blocked">Non envoyé : vous avez bloqué ce numéro. Débloquez-le pour pouvoir écrire.</string>
+    <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
+    <string name="send_partial">Envoyé à %1$d destinataire(s) ; %2$d n\'ont pas pu être joints.</string>
+    <string name="send_partial_blocked">Envoyé à %1$d destinataire(s) ; %2$d écarté(s) car vous les avez bloqués.</string>
 
     <!-- v1.14.8 ARCH-M2 — snackbars thread (i18n) — extraites des chaînes hardcodées du VM. -->
     <string name="snack_thread_max_duration">Limite de %1$d s atteinte</string>

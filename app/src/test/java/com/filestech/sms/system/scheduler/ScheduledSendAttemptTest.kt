@@ -55,11 +55,18 @@ class ScheduledSendAttemptTest {
      * trois : les quatre autres arrivent par le pont statique `invoke$default`, que mockk ne
      * court-circuite pas et qui délègue donc à la surcharge complète, seule interceptée.
      */
-    private fun stubSend(result: Outcome<List<Long>>) {
+    private fun stubSend(result: Outcome<com.filestech.sms.domain.model.SendReport>) {
         coEvery { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) } returns result
     }
 
     private fun failure() = Outcome.Failure(AppError.Telephony("no SIM"))
+
+    /** v1.28.3 (F21) — un envoi qui atteint son unique destinataire. */
+    private fun rapportComplet() = com.filestech.sms.domain.model.SendReport(
+        dispatched = listOf(42L),
+        failed = emptyList(),
+        blocked = emptyList(),
+    )
 
     /**
      * v1.26.1 (audit H6) — la revendication atomique `PENDING -> SENDING` precede desormais tout
@@ -72,7 +79,7 @@ class ScheduledSendAttemptTest {
 
     @Test
     fun `envoi reussi marque SENT`() = runTest {
-        stubSend(Outcome.Success(listOf(42L)))
+        stubSend(Outcome.Success(rapportComplet()))
         coEvery { dao.findById(ID) } returns entity()
 
         assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.SENT)
@@ -236,7 +243,7 @@ class ScheduledSendAttemptTest {
     @Test
     fun `la revendication horodate le bail`() = runTest {
         val now = 999_000L
-        stubSend(Outcome.Success(listOf(42L)))
+        stubSend(Outcome.Success(rapportComplet()))
         coEvery { dao.findById(ID) } returns entity()
 
         attempt(ID, runAttemptCount = 0, now = now)
