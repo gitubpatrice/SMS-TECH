@@ -104,8 +104,9 @@ internal class NoopMirror : OutgoingMessageMirror {
         status: MessageStatus,
         errorCode: Int?,
         attempt: Int?,
-    ) {
+    ): Boolean {
         statuts += Triple(localId, status, errorCode)
+        return true
     }
 
     /**

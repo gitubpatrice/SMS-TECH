@@ -609,6 +609,8 @@ class BackupService @Inject constructor(
                 payload.header.sourceDeviceId == currentDeviceId()
             var imported = 0
             var skipped = 0
+            // v1.28.3 — cf. [RestoreResult.messagesWithoutAttachments].
+            var sansPiecesJointes = 0
             // Audit SECU-M4 v1.15.2 — Remapping en 2 passes pour préserver les `replyToMessageId`
             // (citations contextuelles). PASSE 1 : insert tous les messages, build map
             // <backupMsgId → newMsgId>. PASSE 2 : UPDATE replyToMessageId pour les messages
@@ -708,6 +710,10 @@ class BackupService @Inject constructor(
                     }
                 } else {
                     imported++
+                    // Compte sur la ligne de la SAUVEGARDE, pas sur celle qu'on insere :
+                    // `toLocalRow` a deja remis le compteur a zero, et c'est precisement ce
+                    // qu'on veut signaler.
+                    if (backupMsg.attachmentsCount > 0) sansPiecesJointes++
                     msgIdMap[backupMsg.id] = rowId
                 }
             }
@@ -724,6 +730,7 @@ class BackupService @Inject constructor(
                 conversationsCreated = created,
                 messagesImported = imported,
                 messagesSkipped = skipped,
+                messagesWithoutAttachments = sansPiecesJointes,
             )
         }
     }

@@ -285,7 +285,7 @@ interface MessageDao {
         statusRaw: Int,
         errorCode: Int? = null,
         attempt: Int? = null,
-    )
+    ): Int
 
     /**
      * v1.28.3 (F23) — ouvre une NOUVELLE tentative d'envoi : statut ramené à `PENDING`, erreur

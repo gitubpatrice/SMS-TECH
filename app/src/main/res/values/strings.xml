@@ -727,6 +727,12 @@
     <!-- Errors -->
     <string name="error_not_default_app">SMS Tech is not the default SMS app yet.</string>
     <string name="error_send_failed">Failed to send the message.</string>
+    <!-- v1.28.3 — un SMS sortant qui echoue le disait a personne. -->
+    <string name="send_failure_notification_title">Message not sent</string>
+    <string name="send_failure_notification_body">Your message to %1$s could not be sent.</string>
+    <string name="send_failure_notification_unknown_recipient">a contact</string>
+    <!-- v1.28.3 — la sauvegarde ne transporte aucune piece jointe ; on le dit au lieu de le taire. -->
+    <string name="backup_restore_without_attachments">%1$d of them came back without their attachment, which backups do not carry.</string>
     <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
     <string name="settings_lock_downgrade_vault_refused">Biometrics is currently the only second factor protecting your vault. Set a vault code first, then you can change this.</string>
     <string name="error_send_recipient_blocked">Not sent: you have blocked this number. Unblock it to send again.</string>

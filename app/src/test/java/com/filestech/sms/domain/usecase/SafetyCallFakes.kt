@@ -182,7 +182,7 @@ internal class NoopMirror(
         status: MessageStatus,
         errorCode: Int?,
         attempt: Int?,
-    ) = Unit
+    ) = true
 
     override suspend fun outgoingStatus(localId: Long): MessageStatus = statutRendu
 

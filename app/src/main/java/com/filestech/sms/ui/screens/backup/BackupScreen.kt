@@ -258,6 +258,9 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
     // un `context.getString` DANS le collect ajouterait une instance de
     // LocalContextGetResourceValueCall au-delà de la baseline lint (on n'enterre rien dedans).
     val vaultLockedMsg = stringResource(R.string.backup_export_vault_locked)
+    // v1.28.3 — gabarit resolu au niveau composable, formate a l'emission : un `Context` capture
+    // dans une lambda non composable ne suit pas les changements de configuration.
+    val sansPiecesJointesFmt = stringResource(R.string.backup_restore_without_attachments)
     LaunchedEffect(Unit) {
         viewModel.events.collect { ev ->
             when (ev) {
@@ -272,14 +275,26 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 BackupViewModel.Event.ExportVaultLocked -> snackbarHost.showError(vaultLockedMsg)
                 // v1.15.2 — Événements restore : snackbar avec récap chiffré succès, OU
                 // erreur typée mappée vers la bonne string localisée.
+                // v1.28.3 — le bilan dit desormais combien de messages sont revenus SANS leurs
+                // pieces jointes. Le format `.smsbk` n'en transporte aucune, et rien ne le disait :
+                // un MMS sans legende restaure n'apparait meme dans aucun fil. Une perte enoncee
+                // vaut infiniment mieux qu'une perte muette.
                 is BackupViewModel.Event.RestoreDone -> snackbarHost.showSnackbar(
-                    context.getString(
-                        R.string.backup_restore_success,
-                        ev.result.totalConversationsInBackup,
-                        ev.result.conversationsCreated,
-                        ev.result.messagesImported,
-                        ev.result.messagesSkipped,
-                    ),
+                    buildString {
+                        append(
+                            context.getString(
+                                R.string.backup_restore_success,
+                                ev.result.totalConversationsInBackup,
+                                ev.result.conversationsCreated,
+                                ev.result.messagesImported,
+                                ev.result.messagesSkipped,
+                            ),
+                        )
+                        if (ev.result.messagesWithoutAttachments > 0) {
+                            append(' ')
+                            append(sansPiecesJointesFmt.format(ev.result.messagesWithoutAttachments))
+                        }
+                    },
                 )
                 is BackupViewModel.Event.RestoreFailed -> {
                     val msg = when (ev.kind) {

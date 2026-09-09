@@ -36,12 +36,18 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     @Inject lateinit var conversationRepoLazy: dagger.Lazy<ConversationRepository>
 
+    /** v1.28.3 — action « Renvoyer » de la notification d'echec d'envoi. `Lazy` : cf. ci-dessus. */
+    @Inject lateinit var retrySendLazy: dagger.Lazy<com.filestech.sms.domain.usecase.RetrySendUseCase>
+
     @Inject lateinit var appLock: AppLockManager
 
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
-        val address = intent.getStringExtra(EXTRA_ADDRESS) ?: return
+        // v1.28.3 — l'adresse n'est exigee que des actions qui en ont besoin. `ACTION_RETRY_SEND`
+        // ne connait qu'un id de message : la sortir en tete l'aurait rendue inatteignable.
+        val address = intent.getStringExtra(EXTRA_ADDRESS)
+        if (address == null && intent.action != ACTION_RETRY_SEND) return
         val pending = goAsync()
         scope.launch {
             try {
@@ -62,18 +68,51 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 // Pas de cancel manuel ici → cohérence avec le pattern ouverture-depuis-app.
                 when (intent.action) {
                     ACTION_REPLY -> {
+                        // `address` est nullable depuis que `ACTION_RETRY_SEND`, qui n'en a pas
+                        // besoin, partage ce receveur. Les deux actions qui l'exigent la lient ici.
+                        val adresse = address ?: return@launch
                         val text = RemoteInput.getResultsFromIntent(intent)
                             ?.getCharSequence(IncomingMessageNotifier.KEY_REPLY)
                             ?.toString()
                             ?.takeIf { it.isNotBlank() }
                             ?: return@launch
-                        sendSmsLazy.get().invoke(listOf(PhoneAddress.of(address)), text)
+                        sendSmsLazy.get().invoke(listOf(PhoneAddress.of(adresse)), text)
                         // Marquer comme lu (et donc clear notifs via le notifier câblé
                         // dans markRead). Cohérent : répondre = avoir vu le message.
-                        markReadAndCancelNotifs(address)
+                        markReadAndCancelNotifs(adresse)
                     }
                     ACTION_MARK_READ -> {
-                        markReadAndCancelNotifs(address)
+                        markReadAndCancelNotifs(address ?: return@launch)
+                    }
+                    // v1.28.3 — « Renvoyer » depuis la notification d'echec d'envoi.
+                    //
+                    // Le geste est celui de la bulle rouge dans le fil, et il passe par le MEME
+                    // use case : liste noire respectee, nouvelle tentative ouverte et numerotee
+                    // (F23), issue remontee. Rien n'est renvoye automatiquement — c'est tout
+                    // l'objet de cette action, et la raison pour laquelle
+                    // `retryFailedAutomatically` a ete retire plutot que cable.
+                    //
+                    // Elle n'est proposee que sur un refus de la pile telephonie, ou le message
+                    // n'est CERTAINEMENT pas parti. Les echecs du chien de garde, eux, peuvent
+                    // avoir atteint leur destinataire : l'ecran continue d'exiger une
+                    // confirmation pour ceux-la, et une action a une tape ne doit jamais
+                    // court-circuiter un avertissement de doublon.
+                    ACTION_RETRY_SEND -> {
+                        val messageId = intent.getLongExtra(EXTRA_MESSAGE_ID, -1L)
+                        if (messageId <= 0L) return@launch
+                        when (val issue = retrySendLazy.get().invoke(messageId)) {
+                            is Outcome.Success ->
+                                Timber.i("Renvoi demande depuis la notification : message %d", messageId)
+                            is Outcome.Failure ->
+                                Timber.w("Renvoi refuse pour le message %d : %s", messageId, issue.error)
+                        }
+                        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+                        if (notificationId > 0) {
+                            runCatching {
+                                androidx.core.app.NotificationManagerCompat.from(context)
+                                    .cancel(notificationId)
+                            }
+                        }
                     }
                 }
             } finally {
@@ -92,6 +131,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_REPLY = "com.filestech.sms.action.NOTIF_REPLY"
         const val ACTION_MARK_READ = "com.filestech.sms.action.NOTIF_MARK_READ"
+
+        /** v1.28.3 — relance d'un envoi en echec, depuis sa notification. */
+        const val ACTION_RETRY_SEND = "com.filestech.sms.action.NOTIF_RETRY_SEND"
         const val EXTRA_ADDRESS = "extra_address"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"

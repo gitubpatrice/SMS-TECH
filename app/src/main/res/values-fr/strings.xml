@@ -713,6 +713,12 @@
     <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
     <string name="error_send_failed">Échec de l\'envoi du message.</string>
     <string name="error_send_recipient_blocked">Non envoyé : vous avez bloqué ce numéro. Débloquez-le pour pouvoir écrire.</string>
+    <!-- v1.28.3 — un SMS sortant qui echoue le disait a personne. -->
+    <string name="send_failure_notification_title">Message non envoyé</string>
+    <string name="send_failure_notification_body">Votre message à %1$s n\'a pas pu être envoyé.</string>
+    <string name="send_failure_notification_unknown_recipient">un contact</string>
+    <!-- v1.28.3 — la sauvegarde ne transporte aucune piece jointe ; on le dit au lieu de le taire. -->
+    <string name="backup_restore_without_attachments">Dont %1$d sans leur pièce jointe, que les sauvegardes ne transportent pas.</string>
     <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
     <string name="settings_lock_downgrade_vault_refused">La biométrie est aujourd\'hui le seul second facteur qui protège votre coffre. Définissez d\'abord un code coffre, vous pourrez ensuite modifier ceci.</string>
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->

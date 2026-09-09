@@ -12,10 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
-import com.filestech.sms.core.ext.blockKey
-import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import dagger.hilt.android.qualifiers.ApplicationContext
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.absoluteValue
@@ -42,11 +39,11 @@ import kotlin.math.absoluteValue
 @Singleton
 class MmsFailureNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
-    // v1.28.3 (F08) — les trois collaborateurs qu'il fallait pour tenir la MEME politique de
-    // confidentialite que [IncomingMessageNotifier]. Cf. [notifyFailure].
-    private val settings: com.filestech.sms.data.local.datastore.SettingsRepository,
-    private val appLock: com.filestech.sms.security.AppLockManager,
-    private val conversationDao: com.filestech.sms.data.local.db.dao.ConversationDao,
+    // v1.28.3 (F08) — la politique de confidentialite des notifications, celle-la meme que
+    // [IncomingMessageNotifier]. Elle vivait ici en copie privee ; elle est desormais UNE, parce
+    // qu'un troisieme notificateur allait en demander une troisieme. Cf.
+    // [CorrespondentVisibilityPolicy].
+    private val visibilite: CorrespondentVisibilityPolicy,
 ) {
 
     enum class Reason { TOO_LARGE, DOWNLOAD_FAILED }
@@ -81,18 +78,11 @@ class MmsFailureNotifier @Inject constructor(
                 ) != PackageManager.PERMISSION_GRANTED
             ) return
         }
-        if (appLock.state.value is com.filestech.sms.security.AppLockManager.LockState.PanicDecoy) return
-
-        val adresse = senderAddress?.takeIf { it.isNotBlank() }
         val anonyme = context.getString(R.string.mms_failure_notification_body_unknown_sender)
-        val sender = if (adresse == null) {
-            anonyme
-        } else {
-            when (politiqueExpediteur(adresse)) {
-                Expediteur.MASQUER_TOUT -> return
-                Expediteur.ANONYMISER -> anonyme
-                Expediteur.AFFICHER -> adresse
-            }
+        val sender = when (visibilite.verdictPour(senderAddress)) {
+            CorrespondentVisibilityPolicy.Verdict.TAIRE -> return
+            CorrespondentVisibilityPolicy.Verdict.ANONYMISER -> anonyme
+            CorrespondentVisibilityPolicy.Verdict.NOMMER -> senderAddress.orEmpty()
         }
         val body = when (reason) {
             Reason.TOO_LARGE -> context.getString(
@@ -133,57 +123,6 @@ class MmsFailureNotifier @Inject constructor(
                 notif,
             )
         }
-    }
-
-    /** v1.28.3 (F08) — ce qu'il advient de l'identite de l'expediteur dans la notification. */
-    private enum class Expediteur { AFFICHER, ANONYMISER, MASQUER_TOUT }
-
-    /**
-     * v1.28.3 (F08) — decide du sort de l'identite de [adresse].
-     *
-     * Le rapprochement avec le coffre se fait par cle numerique et non par egalite de chaine :
-     * l'adresse d'un PDU arrive sous des formes qui varient d'un chemin a l'autre, et une
-     * comparaison stricte rendrait la garde inoperante exactement la ou elle sert.
-     *
-     * ⚠️ v1.28.3 (audit du 2026-09-09) — **la justification ecrite ici ne tenait pas.** Elle
-     * disait « la fonction appelante est synchrone », ce qui est vrai de `notifyFailure`
-     * elle-meme mais FAUX de ses trois appelants, tous a l'interieur d'un `scope.launch`
-     * (`MmsDownloadedReceiver` deux fois, `MmsWapPushReceiver` une fois — le `return@launch` qui
-     * suit le premier le prouve). Les deux `runBlocking` parquaient donc un thread du pool
-     * `Default` — deux a huit threads sur un telephone — le temps de deux requetes Room, pour
-     * rien. Sous une rafale de MMS en echec, plusieurs receivers reveilles en parallele
-     * pouvaient l'epuiser.
-     *
-     * La fonction est `suspend`, et les deux lectures se font directement. Ce qui reste vrai du
-     * raisonnement d'origine : les receivers detiennent deja leur `goAsync`, et la lecture porte
-     * sur les seules conversations du coffre en tete-a-tete — quelques lignes au plus.
-     */
-    private suspend fun politiqueExpediteur(adresse: String): Expediteur {
-        val dansLeCoffre = runCatching {
-            val cle = adresse.stripMmsAddressSuffix().blockKey()
-            conversationDao.snapshotVaultOneToOne().any { conv ->
-                com.filestech.sms.domain.model.PhoneAddress.list(conv.addressesCsv)
-                    .firstOrNull()
-                    ?.raw
-                    ?.stripMmsAddressSuffix()
-                    ?.blockKey() == cle
-            }
-        }.getOrElse {
-            // Repli SUR, jumeau de l'audit H16 sur les notifications entrantes : une base
-            // illisible ne doit pas faire afficher le nom d'un correspondant protege.
-            Timber.w(it, "MmsFailureNotifier: lecture coffre impossible — notification supprimee")
-            true
-        }
-        if (dansLeCoffre) return Expediteur.MASQUER_TOUT
-
-        val apercusMasques = runCatching {
-            settings.hydratedOrNull()
-                ?.notifications
-                ?.previewMode
-                ?.let { it != com.filestech.sms.domain.settings.PreviewMode.ALWAYS }
-                ?: true
-        }.getOrDefault(true)
-        return if (apercusMasques) Expediteur.ANONYMISER else Expediteur.AFFICHER
     }
 
     companion object {

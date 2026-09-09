@@ -27,13 +27,17 @@ interface OutgoingMessageMirror {
         localMirrorBody: String? = null,
     ): Long
 
-    /** Met à jour le statut d'un message sortant (transition PENDING→SENT/DELIVERED/FAILED). */
     /**
-     * Fait PROGRESSER le statut d'un envoi. La promotion est monotone : voir
-     * `MessageDao.promoteStatusMonotonic`. Destiné aux accusés d'envoi / de réception et aux
-     * échecs — c'est-à-dire à tout ce qui est subi, pas décidé.
-     */
-    /**
+     * Fait PROGRESSER le statut d'un envoi (transition `PENDING → SENT / DELIVERED / FAILED`).
+     * La promotion est monotone : voir `MessageDao.promoteStatusMonotonic`. Destiné aux accusés
+     * d'envoi / de réception et aux échecs — c'est-à-dire à tout ce qui est subi, pas décidé.
+     *
+     * v1.28.3 — rend `true` si la ligne a REELLEMENT change d'etat. L'ecriture est conditionnelle
+     * a deux titres — monotone, et liee a une tentative — donc elle peut ne rien faire, et
+     * l'appelant a besoin de le savoir : c'est ce qui empeche la notification d'echec d'envoi de
+     * partir sur un accuse qui n'a rien ecrit (l'accuse tardif d'une tentative perimee, ou le
+     * deuxieme accuse d'echec d'un SMS multi-parties dont le premier a deja pose l'echec).
+     *
      * @param attempt v1.28.3 (F23) — numéro de la tentative dont provient cet accusé. `null`
      *   signifie « quelle que soit la tentative en cours », et reste le bon choix pour tout ce
      *   qui n'est pas un accusé différé : l'échec synchrone écrit juste après la remise à la
@@ -48,7 +52,7 @@ interface OutgoingMessageMirror {
         status: MessageStatus,
         errorCode: Int? = null,
         attempt: Int? = null,
-    )
+    ): Boolean
 
     /**
      * Statut courant d'un message sortant, ou `null` si la ligne n'existe plus.

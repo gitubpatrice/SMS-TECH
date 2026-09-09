@@ -399,14 +399,14 @@ class ConversationMirror @Inject constructor(
         status: MessageStatus,
         errorCode: Int?,
         attempt: Int?,
-    ) = withContext(io) {
+    ): Boolean = withContext(io) {
         // v1.26.1 (audit M8) — promotion monotone : le statut d'un envoi ne peut que progresser.
         // Voir [MessageDao.promoteStatusMonotonic] : c'est ce qui empêche l'accusé positif d'une
         // partie d'écraser l'échec d'une autre sur un SMS multi-parties.
         //
         // v1.28.3 (F23) — et `attempt` empêche l'accusé d'une tentative PRÉCÉDENTE de s'appliquer
         // à la ligne relancée, que la rétrogradation vient de ramener au bas de cette échelle.
-        messageDao.promoteStatusMonotonic(localId, status, status.rawValue, errorCode, attempt)
+        messageDao.promoteStatusMonotonic(localId, status, status.rawValue, errorCode, attempt) > 0
     }
 
     /** v1.28.3 (F05) — voir [OutgoingMessageMirror.outgoingStatus]. */

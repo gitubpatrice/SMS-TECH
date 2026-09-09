@@ -21,6 +21,23 @@ class SmsSentReceiver : BroadcastReceiver() {
     // réparation zéro-clé. L'injection de champ Hilt précède le corps de `onReceive`, sur le main
     // thread : en eager, la reconstruction de la base y tournait sous un timeout ANR de 10 s.
     @Inject lateinit var mirrorLazy: dagger.Lazy<OutgoingMessageMirror>
+
+    /**
+     * v1.28.3 — un SMS sortant qui echoue ne le disait a PERSONNE.
+     *
+     * `MmsFailureNotifier` existe pour un MMS qu'on n'a pas pu recevoir, `IncomingMessageNotifier`
+     * pour un message recu ; rien pour un envoi qui echoue. On ecrivait le statut et on
+     * s'arretait la : l'utilisateur ne l'apprenait qu'en rouvrant le fil.
+     *
+     * `Lazy` comme le miroir : ce receveur est instancie sur le fil principal.
+     */
+    @Inject lateinit var echecNotifierLazy: dagger.Lazy<
+        com.filestech.sms.system.notifications.OutgoingFailureNotifier,
+        >
+
+    /** v1.28.3 — pour connaitre le destinataire du message en echec. */
+    @Inject lateinit var messageDaoLazy: dagger.Lazy<com.filestech.sms.data.local.db.dao.MessageDao>
+
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -40,7 +57,27 @@ class SmsSentReceiver : BroadcastReceiver() {
                     mirror.updateOutgoingStatus(localId, MessageStatus.SENT, attempt = attempt)
                 } else {
                     Timber.w("SMS sent failed for id=%d attempt=%d resultCode=%d", localId, attempt, rc)
-                    mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc, attempt = attempt)
+                    // v1.28.3 — on ne notifie QUE si l'ecriture a reellement pris.
+                    //
+                    // `updateOutgoingStatus` est conditionnelle a deux titres : monotone, et liee
+                    // a une tentative. Deux consequences gratuites, et ce sont exactement les deux
+                    // qu'il fallait :
+                    //
+                    //  - un SMS MULTI-PARTIES dont trois accuses d'echec arrivent ne produit
+                    //    qu'UNE notification, les deux suivants n'ecrivant rien ;
+                    //  - l'accuse TARDIF d'une tentative perimee (F23) n'en produit aucune, alors
+                    //    qu'il aurait annonce en echec un message deja renvoye avec succes.
+                    val ecrit = mirror.updateOutgoingStatus(
+                        localId,
+                        MessageStatus.FAILED,
+                        errorCode = rc,
+                        attempt = attempt,
+                    )
+                    if (ecrit) {
+                        val destinataire = runCatching { messageDaoLazy.get().findById(localId)?.address }
+                            .getOrNull()
+                        echecNotifierLazy.get().notifierEchec(localId, destinataire)
+                    }
                 }
             } finally {
                 pending.finish()
