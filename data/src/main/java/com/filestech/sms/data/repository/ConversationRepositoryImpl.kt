@@ -492,6 +492,10 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun setMuted(id: Long, muted: Boolean) = withContext(io) { conversationDao.setMuted(id, muted) }
     override suspend fun moveToVault(id: Long, inVault: Boolean) = withContext(io) { conversationDao.setInVault(id, inVault) }
 
+    override suspend fun findById(id: Long): Conversation? = withContext(io) {
+        conversationDao.findById(id)?.toDomain()
+    }
+
     // v1.14.8 R8 — Bulk move atomique : wrap dans `database.withTransaction` pour qu'un
     // process-kill au milieu de la boucle laisse la base intacte (rollback) plutôt qu'un
     // état partiel non-récupérable. Retourne le count effectivement modifié.

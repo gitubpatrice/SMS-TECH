@@ -106,14 +106,46 @@ class VaultManager @Inject constructor(
      */
     override suspend fun moveToVault(conversationId: Long): Outcome<Unit> = withContext(io) {
         if (!session.isUnlocked) return@withContext Outcome.Failure(AppError.Locked())
-        conversationRepo.moveToVault(conversationId, true)
+        deplacerAvecLesMembres(listOf(conversationId), intoVault = true)
         Outcome.Success(Unit)
     }
 
     override suspend fun moveOutOfVault(conversationId: Long): Outcome<Unit> = withContext(io) {
         if (!session.isUnlocked) return@withContext Outcome.Failure(AppError.Locked())
-        conversationRepo.moveToVault(conversationId, false)
+        deplacerAvecLesMembres(listOf(conversationId), intoVault = false)
         Outcome.Success(Unit)
+    }
+
+    /**
+     * v1.28.3 (audit global, X-01 — **mesuré sur le S9**) — **mettre un groupe au coffre met ses
+     * membres au coffre, et l'en sortir les en sort.**
+     *
+     * Le SMS n'a pas de groupe. Un texte envoyé depuis un fil de groupe est éclaté en une ligne
+     * par destinataire, chacune dans sa conversation 1-à-1 ; et la réponse d'un membre arrive de
+     * même dans sa 1-à-1. Un « groupe au coffre » dont les membres restent dehors ne protège donc
+     * rien : ce que l'utilisateur y écrit depuis le coffre apparaissait dans la liste ouverte,
+     * avec son texte en aperçu — mesuré. Rattacher les lignes sortantes au groupe n'aurait fermé
+     * que la moitié du trou, les réponses restant dehors.
+     *
+     * La seule sémantique qui tienne pour un groupe SMS est donc celle-ci : ses conversations
+     * 1-à-1 le suivent, dans les deux sens, créées si elles n'existent pas encore — c'est là que
+     * les réponses arriveront. Limite assumée : sortir un groupe du coffre en sort aussi une 1-à-1
+     * que l'utilisateur y aurait mise indépendamment. Le déplacement reste atomique
+     * ([ConversationRepository.bulkMoveToVault]).
+     */
+    private suspend fun deplacerAvecLesMembres(ids: List<Long>, intoVault: Boolean): Int =
+        conversationRepo.bulkMoveToVault(avecLesMembres(ids), intoVault)
+
+    private suspend fun avecLesMembres(ids: List<Long>): List<Long> {
+        val tous = LinkedHashSet(ids)
+        for (id in ids) {
+            val groupe = conversationRepo.findById(id)?.takeIf { it.isGroup } ?: continue
+            for (adresse in groupe.addresses) {
+                val membre = conversationRepo.findOrCreate(listOf(adresse))
+                if (membre is Outcome.Success) tous += membre.value.id
+            }
+        }
+        return tous.toList()
     }
 
     /**
@@ -173,7 +205,7 @@ class VaultManager @Inject constructor(
         if (!intoVault && !session.isUnlocked) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
-        conversationRepo.moveToVault(conversationId, intoVault)
+        deplacerAvecLesMembres(listOf(conversationId), intoVault)
         Outcome.Success(Unit)
     }
 
@@ -226,7 +258,7 @@ class VaultManager @Inject constructor(
         if (!intoVault && !session.isUnlocked) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
-        val updated = conversationRepo.bulkMoveToVault(ids, intoVault)
+        val updated = deplacerAvecLesMembres(ids, intoVault)
         Outcome.Success(updated)
     }
 

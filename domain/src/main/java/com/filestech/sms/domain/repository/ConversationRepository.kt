@@ -44,6 +44,13 @@ interface ConversationRepository {
     suspend fun moveToVault(id: Long, inVault: Boolean)
 
     /**
+     * v1.28.3 (audit global, X-01) — lecture DIRECTE d'une conversation par son id, sans le
+     * masquage du coffre qu'applique [observeOne] : c'est ce qu'il faut à qui décide d'y entrer
+     * ou d'en sortir. `null` si elle n'existe pas.
+     */
+    suspend fun findById(id: Long): Conversation?
+
+    /**
      * v1.14.8 audit R8 — Move bulk atomique : N conversations vers/depuis le coffre dans une
      * SEULE transaction Room. Avant : la VM bouclait `for (id in ids) moveToVault(id, ...)` et
      * un process-kill au milieu laissait l'état partiellement migré sans feedback. Maintenant
