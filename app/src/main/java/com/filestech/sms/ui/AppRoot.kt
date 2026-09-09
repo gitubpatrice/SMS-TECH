@@ -333,6 +333,7 @@ fun AppRoot() {
                 // sommet quand ce callback est invoqué, donc le 1er appel pousse toujours.
                 onOpenThread = { id -> nav.navigate(Thread(id)) { launchSingleTop = true } },
                 onCompose = { nav.navigate(Compose()) },
+                onComposeGroup = { nav.navigate(Compose(groupe = true)) },
                 onOpenSettings = { nav.navigate(Settings) },
                 onOpenVault = { nav.navigate(Vault) },
                 onOpenArchived = { nav.navigate(Conversations(archived = true)) },
@@ -447,6 +448,7 @@ fun AppRoot() {
             val args = backStackEntry.toRoute<Compose>()
             ComposeScreen(
                 initialAddress = args.initialAddress,
+                groupe = args.groupe,
                 onBack = { nav.popBackStack() },
                 onConversationCreated = { id ->
                     nav.popBackStack()

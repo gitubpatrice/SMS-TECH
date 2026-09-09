@@ -52,6 +52,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ComposeScreen(
     initialAddress: String?,
+    /** v1.28.3 — mode groupe : chaque ligne ajoute une puce, rien n'ouvre de fil avant « Continuer ». */
+    groupe: Boolean = false,
     onBack: () -> Unit,
     onConversationCreated: (Long) -> Unit,
     viewModel: ComposeViewModel = hiltViewModel(),
@@ -73,7 +75,9 @@ fun ComposeScreen(
         snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.action_new_message)) },
+                title = {
+                    Text(stringResource(if (groupe) R.string.action_new_group else R.string.action_new_message))
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
@@ -178,7 +182,7 @@ fun ComposeScreen(
                             // query around the moment we navigate away.
                             supportingContent = {
                                 Text(stringResource(
-                                    if (state.recipients.isEmpty()) R.string.compose_use_this_number
+                                    if (state.recipients.isEmpty() && !groupe) R.string.compose_use_this_number
                                     else R.string.compose_add_to_group
                                 ))
                             },

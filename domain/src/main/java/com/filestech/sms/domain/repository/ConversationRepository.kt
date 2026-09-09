@@ -65,6 +65,9 @@ interface ConversationRepository {
      * avatar contact natif). Voir [com.filestech.sms.data.local.db.dao.ConversationDao.setAppearance].
      */
     suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?)
+
+    /** v1.28.3 — nom choisi d'un groupe, déjà normalisé par [com.filestech.sms.domain.model.GroupName]. */
+    suspend fun setCustomName(id: Long, name: String?)
     suspend fun markRead(id: Long)
 
     /**

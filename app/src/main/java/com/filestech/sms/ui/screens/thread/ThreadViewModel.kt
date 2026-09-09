@@ -1439,6 +1439,14 @@ class ThreadViewModel @Inject constructor(
      * `takePersistableUriPermission`). `null` sur un argument = reset à la
      * valeur par défaut.
      */
+    /** v1.28.3 — nommer le groupe ; la normalisation est dans le use case. */
+    fun renameGroup(raw: String?) {
+        viewModelScope.launch {
+            toggleConvState.rename(conversationId, raw)
+            _events.tryEmit(Event.ShowSnackbar(context.getString(com.filestech.sms.R.string.group_renamed)))
+        }
+    }
+
     fun setAppearance(bubbleColorArgb: Int?, avatarUri: String?) {
         viewModelScope.launch {
             toggleConvState.setAppearance(conversationId, bubbleColorArgb, avatarUri)

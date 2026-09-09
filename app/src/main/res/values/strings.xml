@@ -110,6 +110,14 @@
     <string name="action_attach">Attach</string>
     <string name="action_schedule">Schedule</string>
     <string name="action_new_message">New message</string>
+    <!-- v1.28.3 — named groups -->
+    <string name="action_new_group">New group</string>
+    <string name="action_rename_group">Rename the group…</string>
+    <string name="rename_group_title">Group name</string>
+    <string name="rename_group_placeholder">Family, hiking…</string>
+    <string name="rename_group_hint">This name stays on this phone. Members still see your number.</string>
+    <string name="group_renamed">Group renamed</string>
+    <string name="group_avatar_cd">Group</string>
     <string name="action_call">Call</string>
     <string name="conversations_search_hint">Search a number, a contact, a message…</string>
     <string name="conversations_no_match">No matching conversation.</string>

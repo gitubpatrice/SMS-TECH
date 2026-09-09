@@ -170,6 +170,10 @@ interface ConversationDao {
     @Query("UPDATE conversations SET bubble_color_argb = :bubbleColorArgb, avatar_uri = :avatarUri WHERE id = :id")
     suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?)
 
+    /** v1.28.3 — nom choisi d'un groupe ; `null` retire le nom. */
+    @Query("UPDATE conversations SET custom_name = :name WHERE id = :id")
+    suspend fun setCustomName(id: Long, name: String?)
+
     @Query("UPDATE conversations SET unread_count = 0 WHERE id = :id")
     suspend fun clearUnread(id: Long)
 

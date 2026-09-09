@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
@@ -86,6 +87,7 @@ fun ConversationsScreen(
     archived: Boolean = false,
     onOpenThread: (Long) -> Unit,
     onCompose: () -> Unit,
+    onComposeGroup: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenVault: () -> Unit,
     onOpenArchived: () -> Unit,
@@ -363,6 +365,13 @@ fun ConversationsScreen(
                                 }
                             },
                         )
+                        // v1.28.3 — créer un groupe ouvre le composeur en mode groupe : toucher
+                        // un contact y ajoute une puce au lieu d'ouvrir le fil.
+                        DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Outlined.Group, contentDescription = null) },
+                            text = { Text(stringResource(R.string.action_new_group)) },
+                            onClick = { overflowOpen = false; onComposeGroup() },
+                        )
                         DropdownMenuItem(
                             leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
                             text = { Text(stringResource(R.string.settings_title)) },
@@ -555,6 +564,7 @@ fun ConversationsScreen(
                                     onTogglePin = { viewModel.togglePinned(conv) },
                                     onToggleArchive = { viewModel.toggleArchived(conv) },
                                     onToggleMute = { viewModel.toggleMuted(conv) },
+                                    onRename = { nom -> viewModel.rename(conv, nom) },
                                 )
                             },
                             // v1.13.1 — restaure ActionsSheet legacy en long-press
@@ -834,6 +844,8 @@ private fun SwipeableConversationRow(
     var pendingDelete by remember { mutableStateOf(false) }
     var pendingBlock by remember { mutableStateOf(false) }
     var actionsSheetOpen by remember { mutableStateOf(false) }
+    // v1.28.3 — nommer le groupe depuis l'appui long.
+    var renameOpen by remember { mutableStateOf(false) }
     // v1.23.2 — verrou one-shot du swipe gauche. `confirmValueChange` N'EST PAS un callback
     // « une fois à la validation » : foundation l'invoque à CHAQUE frame de drag une fois passé
     // la moitié de la distance vers l'ancre voisine (AnchoredDragScope.dragTo → updateIfNeeded),
@@ -982,6 +994,13 @@ private fun SwipeableConversationRow(
                     handler()
                 }
             },
+            // v1.28.3 — renommer, sur un groupe seulement, et hors mode leurre comme les autres.
+            onRenameRequested = rowActions?.takeIf { conversation.isGroup }?.let {
+                {
+                    actionsSheetOpen = false
+                    renameOpen = true
+                }
+            },
             // v1.26.1 (audit F1) — état courant + gestes. `null` en mode leurre, via le parent.
             pinned = conversation.pinned,
             archived = conversation.archived,
@@ -1003,6 +1022,17 @@ private fun SwipeableConversationRow(
                     actionsSheetOpen = false
                     a.onToggleMute()
                 }
+            },
+        )
+    }
+
+    if (renameOpen) {
+        com.filestech.sms.ui.components.RenameGroupDialog(
+            current = conversation.customName,
+            onDismiss = { renameOpen = false },
+            onConfirm = { nom ->
+                rowActions?.onRename?.invoke(nom)
+                renameOpen = false
             },
         )
     }
@@ -1094,6 +1124,8 @@ class ConversationRowActions(
     val onTogglePin: () -> Unit,
     val onToggleArchive: () -> Unit,
     val onToggleMute: () -> Unit,
+    /** v1.28.3 — nom choisi (brut) d'un groupe ; normalisé plus bas. */
+    val onRename: (String?) -> Unit,
 )
 
 /**
@@ -1110,6 +1142,8 @@ private fun ConversationActionsSheet(
     onDeleteRequested: () -> Unit,
     onMoveToVaultRequested: (() -> Unit)? = null,
     onSelectMultipleRequested: (() -> Unit)? = null,
+    /** v1.28.3 — « Renommer le groupe », `null` hors groupe ou en mode leurre. */
+    onRenameRequested: (() -> Unit)? = null,
     // v1.26.1 (audit F1) — état courant pour choisir le libellé, et gestes correspondants.
     // Les six chaînes existaient déjà, traduites FR+EN, sans aucun référent.
     pinned: Boolean = false,
@@ -1147,6 +1181,13 @@ private fun ConversationActionsSheet(
                     leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
                     headlineContent = { Text(stringResource(R.string.vault_move_in)) },
                     modifier = Modifier.clickable(onClick = onMoveToVaultRequested),
+                )
+            }
+            if (onRenameRequested != null) {
+                androidx.compose.material3.ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                    headlineContent = { Text(stringResource(R.string.action_rename_group)) },
+                    modifier = Modifier.clickable(onClick = onRenameRequested),
                 )
             }
             // v1.26.1 (audit F1) — épingler / archiver / sourdine. Placés avant les gestes

@@ -94,6 +94,9 @@ abstract class AppDatabase : RoomDatabase() {
         //   la ligne en `PENDING`, donc la regle monotone ne le filtrait plus : un `FAILED` en
         //   retard ecrivait 3, sommet de l'echelle, que le succes reel de la nouvelle tentative
         //   ne pouvait PLUS JAMAIS promouvoir. Bulle rouge definitive sur un message recu. F23.
-        const val SCHEMA_VERSION = 11
+        // v12 (2026-09-09, v1.28.3): ajoute `conversations.custom_name TEXT` — nom choisi d'un
+        //   groupe, local au telephone. Strictement additive. Colonne separee de `display_name`,
+        //   que la resolution des contacts reecrit.
+        const val SCHEMA_VERSION = 12
     }
 }

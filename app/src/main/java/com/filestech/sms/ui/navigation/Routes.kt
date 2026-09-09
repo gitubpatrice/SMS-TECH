@@ -20,7 +20,9 @@ import kotlinx.serialization.Serializable
 @Serializable data object Emergency : Route
 @Serializable data object EmergencySetup : Route
 @Serializable data class Thread(val conversationId: Long) : Route
-@Serializable data class Compose(val initialAddress: String? = null) : Route
+
+/** v1.28.3 — `groupe` : le composeur s'ouvre en mode groupe, toucher un contact ajoute une puce. */
+@Serializable data class Compose(val initialAddress: String? = null, val groupe: Boolean = false) : Route
 
 // v1.15.1 — Écran liste des messages programmés (accessible depuis Settings).
 @Serializable data object ScheduledMessages : Route

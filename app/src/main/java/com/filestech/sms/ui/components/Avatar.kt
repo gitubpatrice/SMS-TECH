@@ -3,6 +3,9 @@ package com.filestech.sms.ui.components
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +46,11 @@ fun Avatar(
      * silencieusement et on garde le placeholder ; le rendu reste défensif.
      */
     customUri: String? = null,
+    /**
+     * v1.28.3 — un groupe se reconnaît à son avatar : l'icône « groupe » remplace les initiales
+     * sur le même disque coloré. Un avatar personnalisé garde la priorité.
+     */
+    isGroup: Boolean = false,
 ) {
     val initials = remember(label) { label.avatarInitials() }
     val brush = remember(label) {
@@ -77,6 +85,13 @@ fun Avatar(
                 modifier = Modifier
                     .size(sizeDp.dp)
                     .clip(CircleShape),
+            )
+        } else if (isGroup) {
+            Icon(
+                imageVector = Icons.Outlined.Group,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size((sizeDp * 0.55f).dp),
             )
         } else {
             Text(

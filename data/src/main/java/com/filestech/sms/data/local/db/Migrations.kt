@@ -395,6 +395,18 @@ object Migrations {
         }
     }
 
+    /**
+     * v1.28.3 — groupes nommés : `conversations.custom_name TEXT`, nul sur l'existant. Additive.
+     * Le nom choisi vit dans sa propre colonne parce que `display_name` est RÉÉCRITE par la
+     * résolution des contacts (rattrapage à l'ouverture, changement de contact) : un nom posé
+     * là aurait été effacé à la première synchronisation.
+     */
+    val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `conversations` ADD COLUMN `custom_name` TEXT")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -407,5 +419,6 @@ object Migrations {
         MIGRATION_8_9,
         MIGRATION_9_10,
         MIGRATION_10_11,
+        MIGRATION_11_12,
     )
 }

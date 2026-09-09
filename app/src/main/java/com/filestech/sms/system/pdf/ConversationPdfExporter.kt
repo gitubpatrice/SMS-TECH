@@ -65,7 +65,7 @@ class ConversationPdfExporter @Inject constructor(
     private fun renderToFile(conversation: Conversation, messages: List<Message>): PdfExportResult {
         val doc = PdfDocument()
         val dir = File(context.filesDir, "exports").apply { if (!exists()) mkdirs() }
-        val safeName = (conversation.displayName ?: conversation.addresses.toCsv())
+        val safeName = (conversation.customName ?: conversation.displayName ?: conversation.addresses.toCsv())
             .replace(Regex("[^A-Za-z0-9_-]+"), "_").take(48)
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val out = File(dir, "smstech_conversation_${safeName}_$ts.pdf")
@@ -351,7 +351,7 @@ class ConversationPdfExporter @Inject constructor(
         subtitlePaint: TextPaint,
         margin: Int,
     ): Float {
-        val title = conversation.displayName ?: conversation.addresses.toCsv()
+        val title = conversation.customName ?: conversation.displayName ?: conversation.addresses.toCsv()
         canvas.drawText(title, margin.toFloat(), margin + 18f, titlePaint)
         val sub = context.getString(
             R.string.pdf_header_subtitle,

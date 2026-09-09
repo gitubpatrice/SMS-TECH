@@ -72,6 +72,12 @@ class ComposeViewModel @Inject constructor(
         data class ConversationCreated(val id: Long) : Event
     }
 
+    /**
+     * v1.28.3 — mode groupe (« Nouveau groupe » dans la liste) : le raccourci « toucher = ouvrir le
+     * fil » est désactivé, chaque ligne ajoute une puce, « Continuer » crée la conversation.
+     */
+    val modeGroupe: Boolean = savedStateHandle.get<Boolean>("groupe") ?: false
+
     init {
         savedStateHandle.get<String>("initialAddress")?.let { addr ->
             _state.update { it.copy(recipients = listOf(PhoneAddress.of(addr))) }
@@ -113,7 +119,7 @@ class ComposeViewModel @Inject constructor(
         if (_state.value.recipients.none { it.normalized == addr.normalized }) {
             _state.update { it.copy(recipients = it.recipients + addr) }
         }
-        if (wasEmpty) {
+        if (wasEmpty && !modeGroupe) {
             createConversation()
             return true
         }

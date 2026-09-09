@@ -107,6 +107,14 @@
     <string name="action_attach">Joindre</string>
     <string name="action_schedule">Programmer</string>
     <string name="action_new_message">Nouveau message</string>
+    <!-- v1.28.3 — groupes nommés -->
+    <string name="action_new_group">Nouveau groupe</string>
+    <string name="action_rename_group">Renommer le groupe…</string>
+    <string name="rename_group_title">Nom du groupe</string>
+    <string name="rename_group_placeholder">Famille, rando…</string>
+    <string name="rename_group_hint">Ce nom reste sur ce téléphone. Les membres continuent de voir votre numéro.</string>
+    <string name="group_renamed">Groupe renommé</string>
+    <string name="group_avatar_cd">Groupe</string>
     <string name="action_call">Appeler</string>
     <string name="conversations_search_hint">Rechercher un numéro, un contact, un message…</string>
     <string name="conversations_no_match">Aucune conversation correspondante.</string>

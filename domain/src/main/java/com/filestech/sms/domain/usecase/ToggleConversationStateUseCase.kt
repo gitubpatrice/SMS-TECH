@@ -14,6 +14,10 @@ class ToggleConversationStateUseCase @Inject constructor(
     suspend fun setArchived(id: Long, archived: Boolean) = repo.setArchived(id, archived)
     suspend fun setMuted(id: Long, muted: Boolean) = repo.setMuted(id, muted)
 
+    /** v1.28.3 — nommer un groupe ; la saisie brute est normalisée ici, une fois pour les deux entrées. */
+    suspend fun rename(id: Long, raw: String?) =
+        repo.setCustomName(id, com.filestech.sms.domain.model.GroupName.normalize(raw))
+
     /**
      * v1.11.0 — Sujet 5 apparence : couleur bulle sortante + avatar custom.
      * `null` sur un argument = reset au défaut (bleu marque / avatar contact).

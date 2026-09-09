@@ -61,6 +61,7 @@ fun ConversationEntity.toDomain(): Conversation = Conversation(
     draft = draft,
     bubbleColorArgb = bubbleColorArgb,
     avatarUri = avatarUri,
+    customName = customName,
 )
 
 fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message = Message(

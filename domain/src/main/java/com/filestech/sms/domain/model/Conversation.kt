@@ -32,7 +32,18 @@ data class Conversation(
      * noire est la seule source de vérité, et une conversation redevient normale au déblocage.
      */
     val blocked: Boolean = false,
+    /** v1.28.3 — nom choisi par l'utilisateur pour un groupe, local au téléphone. Cf. [GroupName]. */
+    val customName: String? = null,
 ) {
     val isGroup: Boolean get() = addresses.size > 1
+
+    /**
+     * v1.28.3 — **la** règle de titre : nom choisi, sinon nom résolu, sinon les numéros. Six
+     * sites la recalculaient chacun de leur côté ; un nom choisi aurait dû être ajouté six fois.
+     */
+    val title: String
+        get() = customName?.takeIf { it.isNotBlank() }
+            ?: displayName?.takeIf { it.isNotBlank() }
+            ?: addresses.joinToString { it.raw }
     val firstAddress: PhoneAddress? get() = addresses.firstOrNull()
 }

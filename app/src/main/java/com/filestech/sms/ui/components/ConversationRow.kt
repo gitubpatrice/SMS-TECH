@@ -77,7 +77,8 @@ fun ConversationRow(
     onDelete: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
-    val title = conversation.displayName ?: conversation.addresses.joinToString { it.raw }
+    // v1.28.3 — la règle de titre vit sur le modèle (nom choisi > nom résolu > numéros).
+    val title = conversation.title
     val unread = conversation.unreadCount > 0
 
     // v1.25.3 — mise en évidence des conversations bloquées : fond rouge très pâle + bordure.
@@ -120,7 +121,7 @@ fun ConversationRow(
             if (showAvatars) {
                 // v1.11.0 — Sujet 5 : avatar custom optionnel posé via
                 // AppearanceDialog. `null` = fallback initiales + gradient marque.
-                Avatar(label = title, customUri = conversation.avatarUri)
+                Avatar(label = title, customUri = conversation.avatarUri, isGroup = conversation.isGroup)
                 Spacer(Modifier.width(12.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -144,6 +145,16 @@ fun ConversationRow(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    // v1.28.3 — le nombre de membres, discret, à côté du titre d'un groupe.
+                    if (conversation.isGroup) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "· ${conversation.addresses.size}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = cs.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
                     if (conversation.muted) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.VolumeOff,

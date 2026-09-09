@@ -511,6 +511,10 @@ class ConversationRepositoryImpl @Inject constructor(
         }
     }
     override suspend fun setDraft(id: Long, draft: String?) = withContext(io) { conversationDao.setDraft(id, draft) }
+    override suspend fun setCustomName(id: Long, name: String?) = withContext(io) {
+        conversationDao.setCustomName(id, name)
+    }
+
     override suspend fun setAppearance(id: Long, bubbleColorArgb: Int?, avatarUri: String?) =
         withContext(io) {
             // v1.11.0 audit S5 — whitelist `content://` pour avatar_uri.

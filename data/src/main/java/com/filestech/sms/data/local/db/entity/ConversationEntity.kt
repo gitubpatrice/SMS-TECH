@@ -73,4 +73,6 @@ data class ConversationEntity(
      * `ContentResolver.takePersistableUriPermission` côté caller.
      */
     @ColumnInfo(name = "avatar_uri") val avatarUri: String? = null,
+    /** v1.28.3 (schéma 12) — nom choisi d'un groupe, local ; prime sur `display_name`. */
+    @ColumnInfo(name = "custom_name") val customName: String? = null,
 )

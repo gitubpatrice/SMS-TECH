@@ -632,4 +632,32 @@ class MigrationTest {
             assertThat(c.getInt(0)).isEqualTo(1)
         }
     }
+
+    /** v1.28.3 — groupes nommés : `conversations.custom_name TEXT`, nul sur l'existant. */
+    @Test
+    fun migrate11To12_ajouteLeNomChoisi_nulSurLesLignesExistantes() {
+        helper.createDatabase(TEST_DB, 11).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (1, 7, '+33600000001;+33600000002', 'Alice, Bob', 1700000000000, 'a', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 12, true, Migrations.MIGRATION_11_12)
+
+        db.query("SELECT display_name, custom_name FROM conversations WHERE id = 1").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getString(0)).isEqualTo("Alice, Bob")
+            assertThat(c.isNull(1)).isTrue()
+        }
+        db.execSQL("UPDATE conversations SET custom_name = 'Famille' WHERE id = 1")
+        db.query("SELECT custom_name FROM conversations WHERE id = 1").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getString(0)).isEqualTo("Famille")
+        }
+    }
 }

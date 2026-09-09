@@ -380,6 +380,11 @@ class ConversationsViewModel @Inject constructor(
      * et les deux badges de [ConversationRow] ne pouvaient jamais s'allumer. Les six libellés
      * étaient déjà traduits FR et EN, référencés par personne. Il ne manquait que le geste.
      */
+    /** v1.28.3 — nommer un groupe depuis l'appui long ; la normalisation est dans le use case. */
+    fun rename(conversation: Conversation, raw: String?) = viewModelScope.launch {
+        toggle.rename(conversation.id, raw)
+    }
+
     fun togglePinned(conversation: Conversation) = viewModelScope.launch {
         toggle.setPinned(conversation.id, !conversation.pinned)
     }

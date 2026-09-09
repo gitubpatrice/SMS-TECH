@@ -40,6 +40,8 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
@@ -263,6 +265,8 @@ fun ThreadScreen(
     var detailsOpen by remember { mutableStateOf(false) }
     // v1.11.0 — Sujet 5 apparence : dialog ouvert depuis l'overflow menu.
     var appearanceOpen by remember { mutableStateOf(false) }
+    // v1.28.3 — nommer le groupe (menu du fil).
+    var renameOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Message?>(null) }
     var askBlock by remember { mutableStateOf(false) }
     // v1.3.0 — état des dialogs/sheets de réaction emoji.
@@ -450,8 +454,8 @@ fun ThreadScreen(
         }
     }
 
-    val title = state.conversation?.displayName
-        ?: state.conversation?.addresses?.joinToString { it.raw }.orEmpty()
+    // v1.28.3 — la règle de titre vit sur le modèle (nom choisi > nom résolu > numéros).
+    val title = state.conversation?.title.orEmpty()
     // v1.23.x — numéro en sous-titre de l'en-tête pour une conversation 1-to-1 QUI A un nom de
     // contact (sinon le titre EST déjà le numéro, inutile de le répéter). Permet de voir tout de
     // suite quel numéro on a ouvert (ex. distinguer un numéro FR d'un numéro étranger).
@@ -511,6 +515,21 @@ fun ThreadScreen(
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
                         }
+                    } else if (state.conversation?.isGroup == true) {
+                        // v1.28.3 — l'icône « groupe » en tête du fil, comme dans la liste.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.Group,
+                                contentDescription = stringResource(R.string.group_avatar_cd),
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                title,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
                     } else {
                         Text(title)
                     }
@@ -559,6 +578,8 @@ fun ThreadScreen(
                         onDetails = { menuOpen = false; detailsOpen = true },
                         onExportPdf = { menuOpen = false; viewModel.exportToPdf() },
                         onAppearance = { menuOpen = false; appearanceOpen = true },
+                        isGroup = state.conversation?.isGroup == true,
+                        onRename = { menuOpen = false; renameOpen = true },
                         onBlock = { menuOpen = false; askBlock = true },
                         onDelete = { menuOpen = false; askDelete = true },
                         // v1.15.1 — Programmer le draft pour plus tard. Grisé tant qu'il
@@ -992,9 +1013,7 @@ fun ThreadScreen(
     // si la conversation n'est pas (encore) résolue, on rend "ce contact" plutôt que vide
     // pour ne jamais afficher un dialog sans destinataire visible.
     reactionConfirmRequest?.let { (messageId, emoji) ->
-        val recipientLabel = state.conversation?.displayName
-            ?.takeIf { it.isNotBlank() }
-            ?: state.conversation?.addresses?.joinToString { it.raw }?.takeIf { it.isNotBlank() }
+        val recipientLabel = state.conversation?.title?.takeIf { it.isNotBlank() }
             ?: stringResource(R.string.reaction_send_confirm_fallback_recipient)
         com.filestech.sms.ui.components.ReactionSendConfirmDialog(
             emoji = emoji,
@@ -1061,6 +1080,17 @@ fun ThreadScreen(
             onConfirm = { color, avatar ->
                 viewModel.setAppearance(color, avatar)
                 appearanceOpen = false
+            },
+        )
+    }
+    // v1.28.3 — nommer le groupe.
+    if (renameOpen) {
+        com.filestech.sms.ui.components.RenameGroupDialog(
+            current = state.conversation?.customName,
+            onDismiss = { renameOpen = false },
+            onConfirm = { nom ->
+                viewModel.renameGroup(nom)
+                renameOpen = false
             },
         )
     }
@@ -1213,6 +1243,9 @@ private fun ThreadActionsMenu(
     onDetails: () -> Unit,
     onExportPdf: () -> Unit,
     onAppearance: () -> Unit,
+    /** v1.28.3 — « Renommer le groupe… », présent sur un groupe seulement. */
+    isGroup: Boolean,
+    onRename: () -> Unit,
     onBlock: () -> Unit,
     onDelete: () -> Unit,
     // v1.15.1 — Programme l'envoi du draft pour plus tard. Grisé si pas de draft.
@@ -1261,6 +1294,13 @@ private fun ThreadActionsMenu(
             text = { Text(stringResource(R.string.thread_overflow_appearance)) },
             onClick = onAppearance,
         )
+        if (isGroup) {
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                text = { Text(stringResource(R.string.action_rename_group)) },
+                onClick = onRename,
+            )
+        }
         // v1.12.0 — Déplacer vers le coffre / sortir du coffre.
         // Absent en PanicDecoy (onMoveVault == null).
         if (onMoveVault != null) {
