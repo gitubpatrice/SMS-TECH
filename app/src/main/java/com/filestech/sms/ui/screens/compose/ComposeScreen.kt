@@ -173,6 +173,26 @@ fun ComposeScreen(
                                 ))
                             },
                             leadingContent = { Avatar(label = input) },
+                            // v1.28.3 (audit global, X-05 — mesure sur le S9) — le bouton qui
+                            // rend le groupe ATTEIGNABLE. Depuis le raccourci « tap-to-pick »
+                            // (v1.3.11), toucher une ligne sur une liste vide ouvre le fil :
+                            // « Ajouter au groupe » ne pouvait donc jamais apparaitre, et creer
+                            // un groupe dans l'application etait impossible — le libelle
+                            // existait, le chemin etait mort. Ce bouton pose une puce sans
+                            // naviguer ; la ligne garde son raccourci.
+                            trailingContent = {
+                                IconButton(
+                                    onClick = {
+                                        viewModel.addRecipient(input)
+                                        viewModel.setQuery("")
+                                    },
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.PersonAdd,
+                                        contentDescription = stringResource(R.string.compose_add_to_group),
+                                    )
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp)
@@ -189,6 +209,21 @@ fun ComposeScreen(
                         headlineContent = { Text(contact.displayName ?: number) },
                         supportingContent = { Text(number) },
                         leadingContent = { Avatar(label = contact.displayName ?: number) },
+                        // X-05 — meme bouton que sur la saisie libre : une puce, pas de navigation.
+                        trailingContent = {
+                            IconButton(
+                                onClick = {
+                                    viewModel.addRecipient(number)
+                                    viewModel.setQuery("")
+                                },
+                                enabled = number.isNotBlank(),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.PersonAdd,
+                                    contentDescription = stringResource(R.string.compose_add_to_group),
+                                )
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(enabled = number.isNotBlank()) {
