@@ -98,7 +98,7 @@ paire séparée par le bit 16.
 
 ## 4. État du chantier de correction
 
-### Corrigés et commités (18 / 32)
+### Corrigés et commités (21 / 32)
 
 | Commit | Findings | Substance |
 |---|---|---|
@@ -112,13 +112,12 @@ paire séparée par le bit 16.
 | `596a348` | **F26** | `blockUnknown` câblé (`IncomingBlockPolicy`) ; `retryFailedAutomatically` retiré. |
 | `9a6a09e` | F06, F08, F19 | Authentification avant désarmement ; rédaction des notifications d'échec MMS ; identité des `PendingIntent`. |
 | `11d4908` | F15, F16, F17 | Le PDU n'est plus consommé quand la persistance échoue ; toutes les parties sont retenues, vCard compris ; transaction à deux états. |
+| `025b13c` | **F20** | Le verrou d'envoi reçoit un **bail** (migration 9 → 10). Un envoi revendiqué puis abandonné se conclut `INTERRUPTED` — issue inconnue, mais **atteignable** — au lieu de rester `SENDING` à vie. L'annulation dit enfin qu'elle n'a pas pris. |
+| `88c0e5c` | **F23** | Chaque message porte un numéro de **tentative** (migration 10 → 11), présent dans les extras du `PendingIntent` **et dans son `requestCode`**. L'accusé tardif d'une tentative périmée ne s'applique plus. |
+| `00c54fa` | **F21** | Un destinataire bloqué laisse une ligne locale en échec ; `SendReport` compte les trois issues et le fil dit qu'un envoi n'a pas atteint tout le monde. |
 
-### Restants (14)
+### Restants (11)
 
-- **Machine d'état d'envoi** — F20 (message programmé bloqué à jamais en `SENDING`, annulation
-  silencieusement sans effet), F21 (un destinataire réussi = succès global ; destinataire bloqué
-  sans trace), F23 (rappels non rattachés à une tentative ; `resetOutgoingForRetry` casse la
-  monotonie).
 - **Propriété et identité des lignes système** — F10 (MMS sans `telephony_uri` échappe au
   nettoyage), F11 (la rétention détruit la preuve de purge ; `purgeOlderThan` n'exclut pas
   `in_vault`), F12 (identité destructrice sur preuve faible), F14 (sentinelle de réaction : le
@@ -133,6 +132,42 @@ paire séparée par le bit 16.
   F33 (message plus haut qu'une page tronqué en PDF ; `PdfDocument` hors `finally`).
 
 ---
+
+### Ce que la fermeture de F20, F21 et F23 a appris
+
+- **Un correctif de confidentialité peut créer une perte de données sur le chemin voisin.** Le
+  filet de replanification du démarrage lisait `observePending()`, c'est-à-dire le flux destiné à
+  l'écran — que le correctif F02 de cette même branche masque tant que le second facteur du coffre
+  n'a pas été donné, ce qui au démarrage est toujours le cas. Un envoi programmé depuis une
+  conversation protégée cessait donc d'être rattrapé. Trouvé en relisant les appelants du flux que
+  je venais de modifier, et non par un test. **Une règle d'affichage ne doit pas décider de ce qui
+  part** — `allUnsettled()` est désormais la lecture non masquée que ce filet exige.
+- **Le remède de F23 aurait pu reproduire son propre défaut**, exactement comme F19. Séparer les
+  tentatives en multipliant le `requestCode` aurait rapproché les identifiants que l'audit F36
+  avait justement séparés. Les trois séparations — par tentative, par partie, par message — sont
+  donc verrouillées **ensemble**, et non une à une.
+- **Ne pas trancher l'incertitude à la place de l'utilisateur.** La tentation, sur F20, était de
+  rendre à `PENDING` une ligne dont le bail a expiré. C'était rouvrir le double envoi facturé que
+  le verrou avait fermé en v1.26.1 : le processus a pu mourir **après** que `SmsManager` a accepté
+  le message. L'état `INTERRUPTED` dit l'incertitude au lieu de la résoudre.
+
+### ⚠️ Le gate instrumenté est trompeur tant que le rôle SMS n'est pas reposé
+
+Mesuré le 2026-09-09, sur le S9 **et** sur l'émulateur : `SystemRowIdentityTest` et
+`MmsRowIdentityTest` (8 cas) **passent en campagne ciblée et échouent en campagne complète**.
+`connectedAndroidTest` désinstalle l'application en fin de course, et leur prérequis — le rôle SMS
+— ne lui survit pas ; leur `assumeTrue` couvre l'écriture, pas la lecture qui lève alors une
+`SecurityException`. Vérifié sur l'arbre **sans** les correctifs de cette branche : mêmes huit
+échecs. Préexistant, sans lien avec ce chantier, mais il faut poser le prérequis avant chaque
+campagne :
+
+```
+./gradlew :app:installDebug
+adb shell cmd role add-role-holder android.app.role.SMS com.filestech.sms.debug
+```
+
+Après quoi la campagne complète rend **114 cas, 0 échec, 0 ignoré** — et ce « 0 ignoré » est la
+moitié importante du contrôle.
 
 ## 5. Décisions prises, et pourquoi
 
