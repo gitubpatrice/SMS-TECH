@@ -1,0 +1,175 @@
+# Relecture externe Andrew Pozdnakov — MR F-Droid !38458, 4ᵉ passe (33 findings)
+
+**Date de la note** : 2026-09-09 · **Périmètre audité** : SMS Tech 1.28.2 (291), commit
+`28c50cf7517e7d63928caeb5618f11495cc4fb95` · **Branche de correction** :
+`fix/relecture-externe-38458`
+
+> Note d'origine : <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/38458#note_3806954310>
+
+---
+
+## 1. Ce que la note dit, et ce qu'elle ne dit pas
+
+Andrew a changé de méthode : après trois passes où il remontait un défaut à la fois, il a relu
+**l'architecture d'ensemble** — identité de conversation, suppression du coffre, travail
+programmé, transitions d'état SMS/MMS, notifications, sauvegarde/restauration.
+
+Il prévient lui-même, et c'est à reprendre tel quel auprès de quiconque lira la MR :
+
+> this does not mean "33 remotely exploitable security vulnerabilities"
+
+C'est un relevé d'ingénierie mêlant confidentialité, intégrité de données, machines d'état
+incomplètes et incohérences fonctionnelles. **Un seul finding a été reproduit de bout en bout sur
+émulateur** (F01) ; les autres sont « source-confirmed » ou modélisés, et il le dit.
+
+## 2. Vérification indépendante — le verdict
+
+Les 33 findings ont été vérifiés dans le source avant toute correction. Aucun fichier `.kt`
+n'avait changé entre le commit audité et `main` : la relecture portait bien sur le code courant.
+
+| | |
+|---|---|
+| Tiennent intégralement | **27** |
+| Tiennent partiellement | **5** (F21, F23, F25, F27, F31) |
+| Infirmé | **1 volet** — F31b |
+| Entièrement faux | **aucun** |
+
+### Le seul point où il se trompe — F31b
+
+Il suppose qu'un échec DataStore réémet `AppSettings()` et **réinitialiserait silencieusement les
+réglages de sécurité**. Faux : le `catch` conserve le dernier instantané sans réémettre
+(`SettingsRepository`), `AppLockManager` part de `LockState.Locked`, et `entryGate` reste `null`
+tant que l'état est inconnu. Les trois échouent du bon côté. Le volet (a) reste vrai :
+`settings.flow.first()` sur un flux qui se termine sans émettre lève une `NoSuchElementException`
+non capturée → **crash au lancement**, et non blocage sur le splash comme il l'écrit.
+
+### Trois findings qu'il surévalue
+
+- **F25** — la déduplication *de conversations* reparente et fusionne correctement. Seule celle de
+  la *restauration* est en cause.
+- **F23** — l'écrasement inter-parties a été corrigé en v1.26.1 (monotonie de statut). Reste vrai
+  que les rappels ne sont rattachés à aucune tentative.
+- **F20** — produit un **blocage définitif**, pas un double envoi : le verrou `claimForSending`
+  tient.
+
+### Ce qu'il a manqué ou sous-estimé
+
+- **F01 touche aussi la réception**, pas seulement les brouillons. `SmsDeliverReceiver` ne lit
+  jamais le `thread_id` système : deux SMS d'inconnus entre deux resynchros (12 h) et le premier
+  fil disparaît. Le texte est rattrapé par la resynchro, mais favoris, réactions et appartenance
+  au coffre sont perdus.
+- **F02 est pire que décrit** : la carte « Messages programmés » des Réglages n'est pas sous le
+  garde du mode leurre, contrairement à ses quatre voisines.
+- **F24 dans son scénario nominal** : après réinstallation, la resynchro réimporte tout, la
+  restauration collisionne sur l'index UNIQUE, `msgIdMap` reste vide, `imported = 0` — la
+  sauvegarde ne rend rien de ce qu'elle seule transportait.
+- **F26 : `blockUnknown` est une promesse de sécurité affichée** (« Block unknown numbers ») que
+  zéro ligne ne tenait.
+
+## 3. Le motif dominant, qui vaut plus que la liste
+
+**La grande majorité de ces défauts sont des correctifs déjà écrits, mais posés sur un seul des
+chemins qui en avaient besoin.** Le dépôt savait, et le disait souvent en commentaire :
+
+| Défaut | Où la connaissance existait déjà |
+|---|---|
+| F01 | `BackupService` décrit le mécanisme **mot pour mot** depuis la v1.15.2 (audit SECU-M3) et le contourne — pour lui seul. `ensureConversationByThread` aussi. |
+| F06 | Le chemin voisin, bien moins grave, attend un état déverrouillé depuis la v1.27.2, KDoc à l'appui. |
+| F08 | `IncomingMessageNotifier` applique les trois gardes depuis des versions. |
+| F16 | Le chemin **sortant** gère plusieurs pièces jointes et sait étiqueter `text/x-vcard`. |
+| F18 | `MmsSentReceiver` consulte `mms_system_id` précisément pour refuser d'agir sur la ligne d'autrui. |
+| F22 | Le chemin MMS prend un instantané des pièces jointes — et efface le texte sans condition, **dans la même expression**. |
+| F26 | `blockShortCodes` a été retiré en v1.3.5 comme « champ fantôme », deux lignes au-dessus. |
+
+**Deuxième motif** : *les affirmations d'exhaustivité vieillissent mal.*
+
+- Le commentaire de la carte Sauvegarde affirmait être « la SEULE voie de lecture du coffre qui
+  n'était pas gardée ». Faux — et il a masqué F02 pendant deux versions.
+- `ThreadScreen` promettait « three dialogs, one setting, consistent » en renvoyant à un dialogue
+  supprimé en v1.3.4. Vingt versions de faux.
+- `Migrations.kt` affirmait que toute migration est additive.
+- `ConversationEraser` annonçait « trois dépendances suffisent ».
+
+**Troisième motif** : *un correctif d'audit peut reproduire le défaut qu'il corrige.* F19 : l'audit
+F38 avait remplacé une collision « un message sur deux » par `hash or 0x10000`, qui confond toute
+paire séparée par le bit 16.
+
+---
+
+## 4. État du chantier de correction
+
+### Corrigés et commités (18 / 32)
+
+| Commit | Findings | Substance |
+|---|---|---|
+| `54bc43e` | **F01** · Critique | `thread_id` nullable, migration Room **8 → 9**, `upsert(REPLACE)` → `insert(ABORT)`. Sentinelles supprimées des 4 chemins de création. |
+| `fbcae84` | **F05** · Critique | Safety Call n'avance que sur l'accusé du radio (`outgoingStatus`), plus sur l'acceptation par `SmsManager`. |
+| `f2843e0` | F22, F29, F30 | Les trois chemins d'envoi du composeur suivent les mêmes règles : révision de brouillon, MMS programmable sans légende, confirmation d'envoi rétablie sur le média. |
+| `f4cef8b` | **F28** | ZWJ/ZWNJ ne sont plus retirés : emoji composés et persan cessent d'être altérés **à chaque message reçu**. |
+| `eb5bd38` | **F18** | La purge de l'OUTBOX exige une preuve de propriété (`mms_system_id`), par lots de 900. |
+| `59c67ba` | F03, F04, F09 | La purge du coffre annule les envois programmés, efface les **fichiers** de pièces jointes, et distingue résidu système / échec local. |
+| `72b5a76` | **F02** | Les messages programmés du coffre appliquent la visibilité du coffre. |
+| `596a348` | **F26** | `blockUnknown` câblé (`IncomingBlockPolicy`) ; `retryFailedAutomatically` retiré. |
+| `9a6a09e` | F06, F08, F19 | Authentification avant désarmement ; rédaction des notifications d'échec MMS ; identité des `PendingIntent`. |
+| `11d4908` | F15, F16, F17 | Le PDU n'est plus consommé quand la persistance échoue ; toutes les parties sont retenues, vCard compris ; transaction à deux états. |
+
+### Restants (14)
+
+- **Machine d'état d'envoi** — F20 (message programmé bloqué à jamais en `SENDING`, annulation
+  silencieusement sans effet), F21 (un destinataire réussi = succès global ; destinataire bloqué
+  sans trace), F23 (rappels non rattachés à une tentative ; `resetOutgoingForRetry` casse la
+  monotonie).
+- **Propriété et identité des lignes système** — F10 (MMS sans `telephony_uri` échappe au
+  nettoyage), F11 (la rétention détruit la preuve de purge ; `purgeOlderThan` n'exclut pas
+  `in_vault`), F12 (identité destructrice sur preuve faible), F14 (sentinelle de réaction : le
+  corps local diffère du transport).
+- **Sauvegarde / restauration** — F24 (`msgIdMap` non alimenté sur conflit → citations perdues ;
+  drapeaux non fusionnés), F25 (dédup de restauration sans preuve au niveau des parties), F32
+  (l'écrivain peut produire un fichier que son lecteur refuse ; export interrompu d'apparence
+  valide).
+- **Isolés** — F07 (changer le mode de verrouillage retire le second facteur du coffre sans
+  l'authentifier), F13 (purge non atomique), F27 (copie avant contrôle de taille ; décodage
+  d'image intégral ; PDU sans borne), F31a (crash au lancement si DataStore ne peut pas émettre),
+  F33 (message plus haut qu'une page tronqué en PDF ; `PdfDocument` hors `finally`).
+
+---
+
+## 5. Décisions prises, et pourquoi
+
+1. **`retryFailedAutomatically` retiré plutôt que câblé.** Le câbler reviendrait à écrire une
+   fonctionnalité d'envoi automatique, avec ses risques propres — doublons facturés, message
+   reparti sans que l'utilisateur le veuille. C'est une décision produit ; **elle appartient à
+   Patrice**. En attendant, un interrupteur qui ne fait rien est un mensonge.
+2. **La carte « Messages programmés » reste visible en session leurre.** Ses voisines gardées le
+   sont parce que leur existence trahirait ; un message programmé est une commodité ordinaire. Le
+   contenu, lui, est désormais filtré.
+3. **F28 : retirer ZWJ/ZWNJ de la liste plutôt que stocker le transport.** Andrew proposait de ne
+   nettoyer qu'à l'affichage ; cela demanderait de nettoyer à chaque point de rendu, donc d'en
+   oublier un. Le motif SEC-02 visait le soft hyphen, conservé.
+4. **F03/F04 posés sur `erase`, donc aussi sur la suppression ordinaire.** Ne poser un garde que
+   sur le chemin qui l'a motivé est précisément ce qui a produit la moitié de ces défauts.
+
+## 6. Ce qui reste à vérifier avant publication
+
+- ⚠️ **Le lot MMS entrant (F15, F16, F17) n'a aucun test automatique** et modifie un chemin
+  critique. **Envoyer de vrais MMS entre deux appareils** : un simple, un multi-photos, un vCard.
+- ⚠️ **F06, F08, F22, F29, F30 non couverts** : `MainActivity` et `ThreadViewModel`
+  (21 dépendances) demandent Robolectric. Vérifiés par lecture des deux côtés.
+- **Le rejeu des PDU conservés n'existe toujours pas** : ils survivent au plus 24 h et personne ne
+  les rouvre. La conservation ouvre une fenêtre, pas une reprise.
+- **Dette de testabilité** : `ThreadViewModel` reste non testable. Même motif que celui relevé en
+  v1.28.1 sur le chemin destructeur (« code privé = code non testé »).
+
+## 7. Méthode appliquée à chaque correctif
+
+Chaque défaut fermé a reçu un test **et un contrôle négatif exécuté** : le défaut remis en place
+doit faire tomber le test qui le vise, **et lui seul**. Les contrôles positifs sont écrits
+explicitement — sans eux, un correctif qui refuserait tout, ou masquerait tout, passerait pour bon.
+
+Deux pièges rencontrés, à retenir :
+
+- Un test `= runBlocking { … }` finissant sur une assertion **ne rend pas `void`**, et JUnit rejette
+  alors la classe **entière** — les tests ne s'exécutent pas. Toujours vérifier le nombre de cas
+  exécutés dans le rapport, jamais le seul « BUILD SUCCESSFUL ».
+- `MigrationTest` tourne sur le vrai open-helper **SQLCipher**, pas sur SQLite en clair. C'est ce
+  qui rend la preuve de non-cascade du `DROP TABLE` réelle et non théorique.
