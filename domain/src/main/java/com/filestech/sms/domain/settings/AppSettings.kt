@@ -51,7 +51,15 @@ data class SendingSettings(
     val convertToMmsAfterSegments: Int = 3,
     val mmsImageQuality: MmsImageQuality = MmsImageQuality.BALANCED,
     val deliveryReports: Boolean = false,
-    val retryFailedAutomatically: Boolean = true,
+    // v1.28.3 (F26) — `retryFailedAutomatically` RETIRE. C'etait un champ fantome, comme
+    // `blockShortCodes` avant lui (v1.3.5) : affiche, persiste, restitue — et jamais lu par le
+    // moindre code de production. `RetrySendUseCase` ne consulte aucun reglage, et son unique
+    // appelant est un appui MANUEL sur une bulle en echec ; aucun worker de relance n'existe.
+    //
+    // Retire plutot que cable : le cabler reviendrait a ecrire une fonctionnalite d'envoi
+    // automatique, avec ses risques propres — doublons factures, message reparti sans que
+    // l'utilisateur le veuille. C'est une decision produit, pas une correction de defaut. Un
+    // interrupteur qui ne fait rien est un mensonge ; le retirer coute moins que de le laisser.
     val defaultSubId: Int? = null,
     /**
      * v1.2.6 audit F4 — MSISDN saisi par l'utilisateur quand la détection automatique via

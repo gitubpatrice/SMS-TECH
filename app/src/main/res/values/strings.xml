@@ -385,7 +385,6 @@
     <string name="settings_confirm_broadcast">Confirm before sending</string>
     <string name="settings_confirm_send_title">Send this message?</string>
     <string name="settings_delivery_reports">Delivery reports</string>
-    <string name="settings_retry_failed">Retry failed messages automatically</string>
     <string name="settings_my_number">My phone number</string>
     <string name="settings_my_number_dialog_title">Your phone number</string>
     <string name="settings_my_number_dialog_body">Optional. If set, this number replaces the AOSP placeholder \"insert-address-token\" in the sender address of outgoing MMS, so other SMS apps display you correctly.</string>

@@ -355,11 +355,6 @@ fun SettingsScreen(
                     onChange = { v -> viewModel.update { it.copy(sending = it.sending.copy(deliveryReports = v)) } },
                 )
                 ToggleRow(
-                    title = stringResource(R.string.settings_retry_failed),
-                    value = state.sending.retryFailedAutomatically,
-                    onChange = { v -> viewModel.update { it.copy(sending = it.sending.copy(retryFailedAutomatically = v)) } },
-                )
-                ToggleRow(
                     title = stringResource(R.string.settings_confirm_broadcast),
                     value = state.sending.confirmBeforeBroadcast,
                     onChange = { v -> viewModel.update { it.copy(sending = it.sending.copy(confirmBeforeBroadcast = v)) } },

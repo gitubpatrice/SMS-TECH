@@ -44,11 +44,13 @@ class MmsWapPushReceiver : BroadcastReceiver() {
     @InstallIn(SingletonComponent::class)
     interface MmsWapPushEntryPoint {
         fun mmsDownloader(): MmsDownloader
+
+        // v1.28.3 (F26) — les DEUX regles d'ecartement en un seul point.
+        fun incomingBlockPolicy(): IncomingBlockPolicy
         // Audit R1 (v1.14.8) — notification user lorsque le MMS dépasse le cap auto-download.
         fun mmsFailureNotifier(): MmsFailureNotifier
 
         // v1.26.1 (audit H5) — filtrage des MMS entrants par la liste noire, cf. `onReceive`.
-        fun blockedNumberRepository(): com.filestech.sms.domain.repository.BlockedNumberRepository
 
         @ApplicationScope
         fun applicationScope(): CoroutineScope
@@ -79,7 +81,7 @@ class MmsWapPushReceiver : BroadcastReceiver() {
         }
         val downloader = entry.mmsDownloader()
         val failureNotifier = entry.mmsFailureNotifier()
-        val blockedRepo = entry.blockedNumberRepository()
+        val blockPolicy = entry.incomingBlockPolicy()
         val scope = entry.applicationScope()
 
         val pending = goAsync()
@@ -117,7 +119,8 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 val fromAddress = parsed.from?.string?.stripMmsAddressSuffix()
                 // v1.27.2 (audit externe 2026-08-04 #5) — cf. [isBlockedFailOpen] : même repli
                 // ouvert qu'avant, sans avaler `CancellationException`.
-                if (!fromAddress.isNullOrBlank() && blockedRepo.isBlockedFailOpen(fromAddress)) {
+                // v1.28.3 (F26) — couvre aussi « bloquer les numeros inconnus ».
+                if (!fromAddress.isNullOrBlank() && blockPolicy.doitEcarter(fromAddress)) {
                     Timber.i("Dropping incoming MMS from blocked sender")
                     return@launch
                 }

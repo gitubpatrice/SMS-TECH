@@ -10,7 +10,6 @@ import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
-import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import dagger.hilt.android.AndroidEntryPoint
@@ -43,8 +42,6 @@ class SmsDeliverReceiver : BroadcastReceiver() {
 
     @Inject lateinit var mirrorLazy: dagger.Lazy<ConversationMirror>
 
-    @Inject lateinit var blockedRepoLazy: dagger.Lazy<BlockedNumberRepository>
-
     @Inject lateinit var notifierLazy: dagger.Lazy<IncomingMessageNotifier>
 
     /**
@@ -54,6 +51,13 @@ class SmsDeliverReceiver : BroadcastReceiver() {
      * une row Room nue.
      */
     @Inject lateinit var conversationRepoLazy: dagger.Lazy<ConversationRepository>
+
+    /**
+     * v1.28.3 (F26) — remplace l'injection directe de `BlockedNumberRepository` : les deux
+     * regles d'ecartement — liste noire et « numero inconnu » — vivent desormais au meme
+     * endroit, et ce receveur n'a plus a en connaitre le detail.
+     */
+    @Inject lateinit var blockPolicyLazy: dagger.Lazy<IncomingBlockPolicy>
 
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
@@ -111,21 +115,25 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     Collaborators(
                         telephonyReader = telephonyReaderLazy.get(),
                         mirror = mirrorLazy.get(),
-                        blockedRepo = blockedRepoLazy.get(),
                         notifier = notifierLazy.get(),
                         conversationRepo = conversationRepoLazy.get(),
+                        blockPolicy = blockPolicyLazy.get(),
                     )
                 }
                 val telephonyReader = deps.telephonyReader
                 val mirror = deps.mirror
-                val blockedRepo = deps.blockedRepo
                 val notifier = deps.notifier
                 val conversationRepo = deps.conversationRepo
                 // v1.27.2 (audit externe 2026-08-04 #2) — repli OUVERT via [isBlockedFailOpen] :
                 // une erreur de consultation (Room/SQLCipher) court-circuitait `insertInboxSms`
                 // plus bas et le SMS n'était écrit nulle part. Désormais l'erreur laisse passer
                 // le message ; seul un `true` franc écarte.
-                if (blockedRepo.isBlockedFailOpen(address)) {
+                // v1.28.3 (F26) — la politique couvre desormais AUSSI « bloquer les numeros
+                // inconnus », un reglage affiche et persiste que rien n'appliquait. Cf.
+                // [IncomingBlockPolicy] pour le sens de l'echec, qui est ici l'essentiel : une
+                // permission contacts revoquee ne doit pas se traduire par « tout le monde est
+                // inconnu », donc par un telephone qui ne recoit plus rien.
+                if (deps.blockPolicy.doitEcarter(address)) {
                     droppedByBlocklist = true
                     Timber.i("Dropping incoming SMS from blocked sender")
                     return@launch
@@ -290,7 +298,8 @@ class SmsDeliverReceiver : BroadcastReceiver() {
 private class Collaborators(
     val telephonyReader: TelephonyReader,
     val mirror: ConversationMirror,
-    val blockedRepo: BlockedNumberRepository,
     val notifier: IncomingMessageNotifier,
     val conversationRepo: ConversationRepository,
+    // v1.28.3 (F26) — porte les DEUX regles d'ecartement, liste noire et « numero inconnu ».
+    val blockPolicy: IncomingBlockPolicy,
 )

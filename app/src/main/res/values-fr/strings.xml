@@ -374,7 +374,6 @@
     <string name="settings_confirm_broadcast">Confirmer avant envoi</string>
     <string name="settings_confirm_send_title">Envoyer ce message ?</string>
     <string name="settings_delivery_reports">Accusés de réception</string>
-    <string name="settings_retry_failed">Réessayer automatiquement les échecs</string>
     <string name="settings_my_number">Mon numéro</string>
     <string name="settings_my_number_dialog_title">Votre numéro de téléphone</string>
     <string name="settings_my_number_dialog_body">Optionnel. Si renseigné, ce numéro remplace le placeholder AOSP \"insert-address-token\" dans la chaîne d\'expéditeur des MMS sortants — les autres apps SMS vous affichent alors correctement.</string>

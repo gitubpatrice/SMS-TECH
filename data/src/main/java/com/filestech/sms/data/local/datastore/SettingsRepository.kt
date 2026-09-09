@@ -216,7 +216,6 @@ class SettingsRepository @Inject constructor(
                 convertToMmsAfterSegments = p[K.convertMmsAfter] ?: 3,
                 mmsImageQuality = enumOr(p, K.mmsQuality, MmsImageQuality.BALANCED, MmsImageQuality::valueOf),
                 deliveryReports = p[K.deliveryReports] ?: false,
-                retryFailedAutomatically = p[K.retryFailed] ?: true,
                 defaultSubId = p[K.defaultSubId],
                 userMsisdn = p[K.userMsisdn],
                 sendReactionsToRecipient = p[K.sendReactionsToRecipient] ?: true,
@@ -365,7 +364,6 @@ class SettingsRepository @Inject constructor(
         this[K.convertMmsAfter] = s.sending.convertToMmsAfterSegments
         this[K.mmsQuality] = s.sending.mmsImageQuality.name
         this[K.deliveryReports] = s.sending.deliveryReports
-        this[K.retryFailed] = s.sending.retryFailedAutomatically
         s.sending.defaultSubId?.let { this[K.defaultSubId] = it } ?: remove(K.defaultSubId)
         s.sending.userMsisdn?.takeIf { it.isNotBlank() }?.let { this[K.userMsisdn] = it } ?: remove(K.userMsisdn)
         this[K.sendReactionsToRecipient] = s.sending.sendReactionsToRecipient
@@ -487,7 +485,6 @@ class SettingsRepository @Inject constructor(
         val convertMmsAfter = intPreferencesKey("send.convertMmsAfter")
         val mmsQuality = stringPreferencesKey("send.mmsQuality")
         val deliveryReports = booleanPreferencesKey("send.delivery")
-        val retryFailed = booleanPreferencesKey("send.retry")
         val defaultSubId = intPreferencesKey("send.subId")
         val userMsisdn = stringPreferencesKey("send.userMsisdn")
         val sendReactionsToRecipient = booleanPreferencesKey("send.reactions.toRecipient")

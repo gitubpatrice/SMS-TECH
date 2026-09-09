@@ -57,7 +57,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // v1.26.1 (audit H5) — garde miroir de celle de [MmsWapPushReceiver] : le WAP-Push peut
         // ne pas porter l'expéditeur, auquel cas c'est ici, sur le `RetrieveConf`, qu'on le
         // connaît pour la première fois.
-        fun blockedNumberRepository(): com.filestech.sms.domain.repository.BlockedNumberRepository
+        // v1.28.3 (F26) — les DEUX regles d'ecartement en un seul point.
+        fun incomingBlockPolicy(): IncomingBlockPolicy
 
         @ApplicationScope
         fun applicationScope(): CoroutineScope
@@ -107,7 +108,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val messageDao = entry.messageDao()
                 val notifier = entry.notifier()
                 val failureNotifier = entry.mmsFailureNotifier()
-                val blockedRepo = entry.blockedNumberRepository()
+                val blockPolicy = entry.incomingBlockPolicy()
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
                     // pas qu'un MMS lui était destiné. Maintenant on poste une notification
@@ -215,7 +216,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // receivers via [isBlockedFailOpen] : même sens d'échec (ouvert, le message
                 // survit à une erreur de base) qu'avant, mais `CancellationException` n'est plus
                 // avalée et la politique est écrite à UN seul endroit.
-                if (sender.isNotBlank() && blockedRepo.isBlockedFailOpen(sender)) {
+                // v1.28.3 (F26) — couvre aussi « bloquer les numeros inconnus ».
+                if (blockPolicy.doitEcarter(sender)) {
                     Timber.i("Dropping downloaded MMS from blocked sender")
                     // Rejet DÉLIBÉRÉ, sur un `true` franc de la liste noire : le message ne doit
                     // pas être conservé. Une ERREUR de consultation, elle, rend `false` et
