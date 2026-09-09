@@ -477,18 +477,10 @@ fun ConversationsScreen(
                     )
                 }
             }
-            // v1.23.x — noms de contact partagés par ≥2 conversations (ex. même contact avec un
-            // numéro FR et un numéro étranger). Sert à n'afficher le numéro sous le nom QUE pour
-            // ces conversations ambiguës — pas de bruit sur les noms uniques. Recalculé seulement
-            // quand la liste change.
-            val duplicateDisplayNames = remember(state.conversations) {
-                state.conversations
-                    .mapNotNull { it.displayName?.takeIf { n -> n.isNotBlank() } }
-                    .groupingBy { it }
-                    .eachCount()
-                    .filterValues { it >= 2 }
-                    .keys
-            }
+            // v1.23.x — noms de contact partagés par ≥2 conversations : le numéro n'est affiché
+            // sous le nom que pour celles-là. v1.28.3 (audit global C-03) — calculé dans le
+            // ViewModel, sur IO, avec le filtre et le tri.
+            val duplicateDisplayNames = state.duplicateDisplayNames
             when {
                 state.isImporting -> ImportingPlaceholder(count = state.importedCount)
                 state.isLoading -> Unit

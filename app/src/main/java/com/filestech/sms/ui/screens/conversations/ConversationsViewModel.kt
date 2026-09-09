@@ -141,6 +141,14 @@ class ConversationsViewModel @Inject constructor(
          * saisie qui repasse par `StateFlow` + `debounce` casse la saisie au clavier.
          */
         val filtered: Boolean = false,
+        /**
+         * v1.28.3 (audit global C-03) — noms de contact partagés par au moins deux conversations
+         * (même contact, numéro FR et numéro étranger). L'écran n'affiche le numéro sous le nom
+         * que pour celles-là. Calculé ICI, sur le dispatcher IO avec le filtre et le tri, et non
+         * plus dans un `remember` de l'écran : c'était un parcours de toute la liste sur le fil
+         * principal à chaque écriture de la table `conversations`.
+         */
+        val duplicateDisplayNames: Set<String> = emptySet(),
         val isImporting: Boolean = false,
         val importedCount: Int = 0,
         /**
@@ -214,6 +222,12 @@ class ConversationsViewModel @Inject constructor(
         val (lockState, sel) = lockAndSelection
         val matched = filterConversations(rows, q)
         val sorted = sortConversations(matched, s.conversations.sortMode)
+        val nomsPartages = sorted
+            .mapNotNull { it.displayName?.takeIf { n -> n.isNotBlank() } }
+            .groupingBy { it }
+            .eachCount()
+            .filterValues { it >= 2 }
+            .keys
         // v1.13.0 — sélection effective filtrée :
         //  - PanicDecoy → purge via le collector dans `init {}` (audit SEC-4),
         //    ici on rend juste emptySet par sécurité défensive.
@@ -240,6 +254,7 @@ class ConversationsViewModel @Inject constructor(
             isDefaultSmsApp = defaultAppManager.isDefault(),
             archived = archivedFlag,
             filtered = q.isNotBlank(),
+            duplicateDisplayNames = nomsPartages,
             // Show the "Importing your SMS…" banner only during the very first sync — after that,
             // delta syncs touch a handful of rows and complete in milliseconds, no banner needed.
             isImporting = syncState is TelephonySyncManager.State.Running && syncState.isFirstRun,
