@@ -205,7 +205,7 @@ class PurgeHistoryPropagationTest {
     /**
      * v1.28.3 (F11) — **la retention n'entre plus dans le coffre.**
      *
-     * Elle etait la seule ecriture destructrice de ce fichier a ne pas l'exclure, alors que six
+     * Elle etait la seule ecriture destructrice de ce fichier a ne pas l'exclure, alors que cinq
      * autres requetes le font. Et le contrat de cette purge — la ligne locale part quoi qu'il
      * arrive — rendait la chose pire que la suppression elle-meme : quand la copie systeme
      * resistait, le lien disparaissait avec la ligne, et la resynchronisation suivante

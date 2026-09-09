@@ -258,6 +258,19 @@ class TelephonySystemCopyEraser @Inject constructor(
      * Le corps quand il decrit le message, ou l'adresse quand le fournisseur la rend et que Room
      * en detient une. Si aucun des deux n'a pu etre confronte, l'egalite des criteres ci-dessus
      * ne prouve rien : deux messages d'un meme echange partagent la minute et le sens.
+     *
+     * ⚠️ **LIMITE CONNUE, relevee par l'audit du 2026-09-09 et ecrite ici plutot que tue.**
+     * L'adresse ne discrimine qu'ENTRE conversations. A l'interieur d'une meme conversation elle
+     * est constante, si bien que pour un MMS — dont le corps n'est jamais compare — ou pour une
+     * sentinelle de reaction, l'identite retombe en pratique sur date (a une minute pres) et sens.
+     * Deux photos envoyees au meme correspondant dans la meme minute y repondent identiquement.
+     *
+     * Le fournisseur n'expose, sur l'URI d'une ligne, rien d'autre que Room detienne : aller plus
+     * loin demanderait de stocker un identifiant de transport (`m_id`/`tr_id`) que le schema n'a
+     * pas. Le risque residuel exige en outre une REUTILISATION d'identifiant cote fournisseur dans
+     * cette fenetre d'une minute — une autre application supprimant puis reinserant une ligne.
+     * C'est etroit, ce n'est pas nul, et le lecteur suivant doit le savoir plutot que de croire
+     * l'identite prouvee dans tous les cas.
      */
     private fun preuveSuffisante(
         corpsComparable: Boolean,

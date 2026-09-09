@@ -258,6 +258,12 @@ class SettingsResetGuardsTest {
      *
      * Ici la copie systeme est partie partout (`systemResidue = 0`), mais une suppression locale
      * a leve. Le PIN doit rester, meme sous `force`.
+     *
+     * v1.28.3 (audit du 2026-09-09) — **ce KDoc decrivait deja le trou qu'il ne fermait pas.**
+     * Il dit que le texte de consentement est FAUX pour un echec local... et le test se contentait
+     * pourtant d'attendre `VaultPurgeStuck`, qui rouvre precisement ce dialogue-la. L'utilisateur
+     * bouclait donc sur un message trompeur, sans jamais obtenir d'issue. L'evenement attendu est
+     * desormais `VaultPurgeStuckLocal`, qui dit la verite : le PIN reste, et pourquoi.
      */
     @Test
     fun `the deliberate way out refuses when local data survives`() = runTest(dispatcher) {
@@ -272,7 +278,7 @@ class SettingsResetGuardsTest {
         // LE point : `force` ne suffit plus, c'est la NATURE de ce qui reste qui decide.
         coVerify(exactly = 0) { vaultPin.forgetVaultPin() }
         assertThat(vm.events.first())
-            .isInstanceOf(SettingsViewModel.Event.VaultPurgeStuck::class.java)
+            .isInstanceOf(SettingsViewModel.Event.VaultPurgeStuckLocal::class.java)
     }
 
     /**

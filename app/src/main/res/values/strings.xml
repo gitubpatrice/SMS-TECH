@@ -258,6 +258,8 @@
     <string name="settings_vault_pin_forgot_confirm_action">Empty and remove</string>
     <string name="settings_vault_pin_forgot_done">Vault emptied: %1$d conversation(s) deleted. Its PIN is removed.</string>
     <string name="settings_vault_pin_forgot_incomplete">Purge incomplete: %1$d conversation(s) deleted, %2$d left. The vault PIN was NOT removed. Make SMS Tech your default SMS app, then try again.</string>
+    <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
+    <string name="settings_vault_pin_forgot_local_failure">%1$d conversation(s) deleted, but %2$d could not be removed from this phone. The PIN stays in place: removing it would open a vault that is still full. Free up some storage and try again.</string>
     <string name="settings_vault_pin_forgot_residue">Vault emptied and PIN removed. But %2$d conversation(s) left their copy in the phone’s SMS store: they stay readable by another messaging app. %1$d conversation(s) were deleted in full.</string>
     <string name="settings_vault_pin_force_title">Empty it anyway?</string>
     <string name="settings_vault_pin_force_body">The copy of %1$d conversation(s) could not be removed from the phone’s SMS store, and trying again will give the same result. SMS Tech can empty the vault and remove the PIN regardless: you get access back, but those copies stay on the phone and remain readable by another messaging app. This cannot be undone.</string>

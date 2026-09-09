@@ -521,11 +521,23 @@ class BackupService @Inject constructor(
      * une ligne venue de la resynchronisation ne peut pas les avoir. Les laisser tomber revenait
      * a perdre a la restauration precisement ce que l'utilisateur avait sauvegarde.
      *
-     *  - **favori** : fusionne par OU. Un favori ne se retire jamais tout seul, et retirer par
-     *    restauration un favori pose depuis la sauvegarde serait une perte, pas une remise a
-     *    l'etat anterieur.
-     *  - **reaction** : posee seulement si la ligne existante n'en a pas. La reaction courante
-     *    de l'utilisateur, s'il en a mis une depuis, est plus recente que celle du fichier.
+     *  - **favori** : fusionne par OU ;
+     *  - **reaction** : posee seulement si la ligne existante n'en a pas.
+     *
+     * ⚠️ **Ce KDoc affirmait « la reaction courante de l'utilisateur, s'il en a mis une depuis,
+     * est plus recente que celle du fichier ». C'etait une garantie que le code ne tient pas**,
+     * et l'audit du 2026-09-09 l'a relevee. `reactionEmoji == null` code DEUX etats que rien ne
+     * distingue : « n'a jamais reagi » et « a reagi, puis a RETIRE sa reaction » — un geste
+     * delibere que l'application propose. Idem pour `starred = false`. La fusion repose donc les
+     * deux drapeaux dans le second cas, alors que l'utilisateur les avait retires.
+     *
+     * Les distinguer demanderait d'horodater le dernier changement de chaque drapeau, c'est-a-dire
+     * deux colonnes et une migration, pour arbitrer par fraicheur. **Le compromis est assume en
+     * l'etat** : entre reposer une reaction retiree — visible, et defaisable d'une tape — et
+     * perdre a la restauration tout ce que la sauvegarde transportait seule (le defaut F24, qui
+     * vidait la restauration de sa substance), le second coute infiniment plus cher. Mais il faut
+     * l'ecrire comme un compromis, pas comme une garantie : c'est ce projet qui a paye quatre fois
+     * le prix d'une affirmation d'exhaustivite devenue fausse.
      *
      * Ce qui n'est volontairement PAS fusionne : l'etat « lu ». Il change des deux cotes pour des
      * raisons legitimes, et le reecrire depuis un instantane ancien ferait reapparaitre des

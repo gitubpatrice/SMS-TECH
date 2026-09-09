@@ -249,6 +249,8 @@
     <string name="settings_vault_pin_forgot_confirm_action">Vider et retirer</string>
     <string name="settings_vault_pin_forgot_done">Coffre vidé : %1$d conversation(s) supprimée(s). Son PIN est retiré.</string>
     <string name="settings_vault_pin_forgot_incomplete">Purge incomplète : %1$d conversation(s) supprimée(s), %2$d restante(s). Le PIN du coffre n\'a PAS été retiré. Définissez SMS Tech comme application SMS par défaut, puis réessayez.</string>
+    <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
+    <string name="settings_vault_pin_forgot_local_failure">%1$d conversation(s) supprimée(s), mais %2$d n\'ont pas pu être retirées de ce téléphone. Le PIN reste en place : le retirer ouvrirait un coffre encore plein. Libérez de l\'espace et réessayez.</string>
     <string name="settings_vault_pin_forgot_residue">Coffre vidé et PIN retiré. Mais %2$d conversation(s) ont laissé leur copie dans le stockage SMS du téléphone : elles restent lisibles par une autre application de messagerie. %1$d conversation(s) ont été entièrement supprimées.</string>
     <string name="settings_vault_pin_force_title">Vider quand même ?</string>
     <string name="settings_vault_pin_force_body">La copie de %1$d conversation(s) n\'a pas pu être retirée du stockage SMS du téléphone, et un nouvel essai donnera le même résultat. SMS Tech peut vider le coffre et retirer le PIN malgré tout : vous retrouvez l\'accès, mais ces copies restent sur le téléphone et resteront lisibles par une autre application de messagerie. Action irréversible.</string>

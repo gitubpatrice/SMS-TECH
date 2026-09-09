@@ -177,6 +177,8 @@ fun SettingsScreen(
     // v1.28.3 (F07) — resolue au niveau COMPOSABLE, comme sa voisine ci-dessus : un `Context`
     // capture dans une lambda non composable ne suit pas les changements de configuration.
     val lockDowngradeRefusedMsg = stringResource(R.string.settings_lock_downgrade_vault_refused)
+    // v1.28.3 — idem : gabarit resolu au niveau composable, formate a l'emission.
+    val vaultPurgeLocalFailureFmt = stringResource(R.string.settings_vault_pin_forgot_local_failure)
     // v1.9.0 — scope partagé pour les actions instantanées qui doivent émettre
     // un snack depuis un onClick callback (ex. bouton "Je vais bien" Safety call).
     val rootScope = rememberCoroutineScope()
@@ -258,6 +260,11 @@ fun SettingsScreen(
                 // propre coffre. Un dialogue, et non un message : il doit choisir, pas subir.
                 is SettingsViewModel.Event.VaultPurgeStuck -> {
                     vaultPinForceConfirm = e.left
+                }
+                // v1.28.3 (audit du 2026-09-09) — echec LOCAL : pas de sortie forcee, et on le
+                // dit au lieu de rouvrir un dialogue qui ne mene nulle part.
+                is SettingsViewModel.Event.VaultPurgeStuckLocal -> {
+                    snackbarHost.showError(vaultPurgeLocalFailureFmt.format(e.deleted, e.left))
                 }
                 // Le coffre est ouvert, mais des copies systeme restent sur le telephone. C'est
                 // la contrepartie acceptee, et elle se dit — `showError` pour qu'elle se voie.

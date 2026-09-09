@@ -37,6 +37,12 @@ class AppLockVaultGuardTest {
         settings = SettingsRepository(context, scope),
         kdf = PasswordKdf(),
         vaultSession = session,
+        // v1.28.3 (F07) — le garde d'abaissement du verrouillage a besoin de savoir si le Coffre
+        // s'appuie sur la biometrie. Ces tests-ci portent sur `forceLock`, qui ne l'emprunte pas :
+        // les deux doublures ne sont donc jamais resolues, et `error(...)` le PROUVE — si un
+        // futur correctif faisait passer `forceLock` par ce chemin, le test le dirait.
+        vaultFactor = { error("vaultFactor ne doit pas etre resolu par forceLock") },
+        conversationDao = { error("conversationDao ne doit pas etre resolu par forceLock") },
         io = Dispatchers.Unconfined,
     )
 

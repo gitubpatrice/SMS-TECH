@@ -74,7 +74,7 @@ class MmsFailureNotifier @Inject constructor(
      *    les apercus soient masques. Le motif de l'echec, lui, reste visible — c'est
      *    l'information utile, et elle ne designe personne.
      */
-    fun notifyFailure(reason: Reason, senderAddress: String?, sizeBytes: Long? = null) {
+    suspend fun notifyFailure(reason: Reason, senderAddress: String?, sizeBytes: Long? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     context, Manifest.permission.POST_NOTIFICATIONS,
@@ -145,21 +145,28 @@ class MmsFailureNotifier @Inject constructor(
      * l'adresse d'un PDU arrive sous des formes qui varient d'un chemin a l'autre, et une
      * comparaison stricte rendrait la garde inoperante exactement la ou elle sert.
      *
-     * `runBlocking` est assume ici : la fonction appelante est synchrone et appelee depuis des
-     * receivers de diffusion qui detiennent deja leur `goAsync`. La lecture porte sur les seules
-     * conversations du coffre en tete-a-tete — quelques lignes au plus.
+     * ⚠️ v1.28.3 (audit du 2026-09-09) — **la justification ecrite ici ne tenait pas.** Elle
+     * disait « la fonction appelante est synchrone », ce qui est vrai de `notifyFailure`
+     * elle-meme mais FAUX de ses trois appelants, tous a l'interieur d'un `scope.launch`
+     * (`MmsDownloadedReceiver` deux fois, `MmsWapPushReceiver` une fois — le `return@launch` qui
+     * suit le premier le prouve). Les deux `runBlocking` parquaient donc un thread du pool
+     * `Default` — deux a huit threads sur un telephone — le temps de deux requetes Room, pour
+     * rien. Sous une rafale de MMS en echec, plusieurs receivers reveilles en parallele
+     * pouvaient l'epuiser.
+     *
+     * La fonction est `suspend`, et les deux lectures se font directement. Ce qui reste vrai du
+     * raisonnement d'origine : les receivers detiennent deja leur `goAsync`, et la lecture porte
+     * sur les seules conversations du coffre en tete-a-tete — quelques lignes au plus.
      */
-    private fun politiqueExpediteur(adresse: String): Expediteur {
+    private suspend fun politiqueExpediteur(adresse: String): Expediteur {
         val dansLeCoffre = runCatching {
-            kotlinx.coroutines.runBlocking {
-                val cle = adresse.stripMmsAddressSuffix().blockKey()
-                conversationDao.snapshotVaultOneToOne().any { conv ->
-                    com.filestech.sms.domain.model.PhoneAddress.list(conv.addressesCsv)
-                        .firstOrNull()
-                        ?.raw
-                        ?.stripMmsAddressSuffix()
-                        ?.blockKey() == cle
-                }
+            val cle = adresse.stripMmsAddressSuffix().blockKey()
+            conversationDao.snapshotVaultOneToOne().any { conv ->
+                com.filestech.sms.domain.model.PhoneAddress.list(conv.addressesCsv)
+                    .firstOrNull()
+                    ?.raw
+                    ?.stripMmsAddressSuffix()
+                    ?.blockKey() == cle
             }
         }.getOrElse {
             // Repli SUR, jumeau de l'audit H16 sur les notifications entrantes : une base
@@ -170,7 +177,7 @@ class MmsFailureNotifier @Inject constructor(
         if (dansLeCoffre) return Expediteur.MASQUER_TOUT
 
         val apercusMasques = runCatching {
-            kotlinx.coroutines.runBlocking { settings.hydratedOrNull() }
+            settings.hydratedOrNull()
                 ?.notifications
                 ?.previewMode
                 ?.let { it != com.filestech.sms.domain.settings.PreviewMode.ALWAYS }

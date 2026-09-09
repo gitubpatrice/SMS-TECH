@@ -44,6 +44,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.filestech.sms.R
+import com.filestech.sms.core.ext.asEvents
+import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.domain.model.ScheduledMessage
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
 import com.filestech.sms.domain.usecase.CancelScheduledMessageUseCase
@@ -52,7 +54,6 @@ import com.filestech.sms.domain.usecase.RetryScheduledMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -93,19 +94,23 @@ class ScheduledMessagesViewModel @Inject constructor(
      *
      * L'envoi était alors déjà revendiqué par le worker : le message part, et rien ne l'arrête
      * plus. L'écran affichait pourtant le même bouton et la même boîte de confirmation, puis ne
-     * disait rien. Un canal plutôt qu'un `StateFlow` : c'est un événement, il ne doit pas se
-     * rejouer à la rotation de l'écran.
+     * disait rien.
+     *
+     * v1.28.3 (audit du 2026-09-09) — passé de `Channel` à [oneShotEvents], le patron du projet
+     * pour un événement d'interface qui ne doit pas se rejouer à la rotation. Ma première version
+     * introduisait une SECONDE façon de faire la même chose que `ThreadViewModel` et
+     * `SettingsViewModel` — la duplication que ce chantier passe son temps à défaire. Le `Channel`
+     * offrait certes une capacité de 64 contre 16 ici, mais soixante-quatre refus d'annulation
+     * consécutifs sans personne pour les lire ne décrivent aucune situation réelle.
      */
-    private val _cancelRefused = kotlinx.coroutines.channels.Channel<Unit>(
-        kotlinx.coroutines.channels.Channel.BUFFERED,
-    )
-    val cancelRefused = _cancelRefused.receiveAsFlow()
+    private val _cancelRefused = oneShotEvents<Unit>()
+    val cancelRefused = _cancelRefused.asEvents()
 
     fun cancelMessage(id: Long) {
         viewModelScope.launch {
             val outcome = cancel(id)
             val pris = (outcome as? com.filestech.sms.core.result.Outcome.Success)?.value == true
-            if (!pris) _cancelRefused.send(Unit)
+            if (!pris) _cancelRefused.tryEmit(Unit)
         }
     }
 

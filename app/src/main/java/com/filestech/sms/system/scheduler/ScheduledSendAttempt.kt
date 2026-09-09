@@ -1,11 +1,13 @@
 package com.filestech.sms.system.scheduler
 
+import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.mapper.toDomain
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.ScheduledState
 import com.filestech.sms.domain.usecase.SendSmsUseCase
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -110,10 +112,46 @@ class ScheduledSendAttempt @Inject constructor(
         }
         return when (outcome) {
             is Outcome.Success -> {
+                // v1.28.3 (F21, troisieme passage) — le rapport est enfin LU.
+                //
+                // Il etait jete : un envoi programme vers trois personnes dont une bloquee
+                // passait `SENT` sans reserve, exactement le silence que F21 venait de fermer
+                // sur le chemin interactif. Trouve par l'audit de coherence lance sur cette
+                // branche, apres deux occurrences deja du meme motif.
+                //
+                // La ligne reste malgre tout `SENT`, et c'est un choix : la marquer en echec
+                // ferait proposer une relance qui RE-ENVERRAIT aux destinataires deja servis —
+                // le doublon facture que F20 s'est justement interdit d'ouvrir. Chaque
+                // destinataire refuse a desormais sa propre ligne dans sa propre conversation
+                // (F21), et c'est la que l'utilisateur agit. Ce qui manquait ici n'est donc pas
+                // un etat, c'est une TRACE : sans elle, un envoi partiel etait indiscernable
+                // d'un envoi parfait, y compris dans un rapport de diagnostic.
+                val rapport = outcome.value
+                if (!rapport.isComplete) {
+                    Timber.w(
+                        "ScheduledSendAttempt: envoi %d PARTIEL — %d remis, %d en echec, %d bloques",
+                        id,
+                        rapport.dispatched.size,
+                        rapport.failed.size,
+                        rapport.blocked.size,
+                    )
+                }
                 dao.setState(id, ScheduledState.SENT)
                 Verdict.SENT
             }
-            is Outcome.Failure -> if (runAttemptCount + 1 >= MAX_ATTEMPTS) {
+            // v1.28.3 (F21, troisieme passage) — un BLOCAGE ne se retente pas.
+            //
+            // `AppError.RecipientBlocked` tombait dans la branche generique et repartait pour
+            // jusqu'a cinq tentatives, avec leur backoff exponentiel. Or ce refus vient d'une
+            // regle que l'utilisateur a lui-meme posee : il ne se resorbe pas tout seul, et
+            // aucune des quatre tentatives suivantes ne pouvait aboutir. Le message final
+            // annonçait en outre « echec apres plusieurs tentatives », qui designe une panne
+            // reseau — la mauvaise cause, donc la mauvaise action.
+            is Outcome.Failure -> if (outcome.error is AppError.RecipientBlocked) {
+                Timber.i("ScheduledSendAttempt: envoi %d abandonne — destinataire(s) bloque(s)", id)
+                dao.setState(id, ScheduledState.FAILED)
+                Verdict.GAVE_UP
+            } else if (runAttemptCount + 1 >= MAX_ATTEMPTS) {
                 dao.setState(id, ScheduledState.FAILED)
                 Verdict.GAVE_UP
             } else {

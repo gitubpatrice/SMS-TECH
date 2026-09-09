@@ -1192,14 +1192,30 @@ class ThreadViewModel @Inject constructor(
             opts.inSampleSize = echantillonnagePour(bornes.outWidth, bornes.outHeight, maxDim)
             val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(src.absolutePath, opts) }
                 .getOrNull() ?: return@withContext null
+            // v1.28.3 (audit du 2026-09-09) — la SECONDE allocation etait la seule non protegee.
+            //
+            // Le decodage ci-dessus est enveloppe d'un `runCatching`, qui attrape `Throwable` donc
+            // aussi `OutOfMemoryError`. `createScaledBitmap`, elle, ne l'etait pas — alors qu'elle
+            // alloue un second bitmap alors que le premier occupe deja la memoire, c'est-a-dire au
+            // pire moment. Elle laissait donc fuir le bitmap source ET remontait jusqu'a
+            // `viewModelScope.launch`, qui n'a pas de gestionnaire : plantage de l'application,
+            // precisement quand la memoire est sous tension.
+            //
+            // Tous les autres chemins de cette fonction recyclent deja ; c'etait une omission
+            // ponctuelle, pas un choix.
             val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
                 val ratio = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
-                android.graphics.Bitmap.createScaledBitmap(
-                    bitmap,
-                    (bitmap.width * ratio).toInt(),
-                    (bitmap.height * ratio).toInt(),
-                    true,
-                ).also { if (it != bitmap) bitmap.recycle() }
+                runCatching {
+                    android.graphics.Bitmap.createScaledBitmap(
+                        bitmap,
+                        (bitmap.width * ratio).toInt(),
+                        (bitmap.height * ratio).toInt(),
+                        true,
+                    )
+                }.getOrElse {
+                    bitmap.recycle()
+                    return@withContext null
+                }.also { if (it != bitmap) bitmap.recycle() }
             } else bitmap
 
             val out = java.io.File(src.parentFile, src.nameWithoutExtension + "-compressed.jpg")

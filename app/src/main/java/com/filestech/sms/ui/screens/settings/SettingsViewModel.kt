@@ -61,6 +61,23 @@ class SettingsViewModel @Inject constructor(
         data object PanicCodeCleared : Event
 
         /**
+         * v1.28.3 — la purge du coffre a échoué **localement**, et la sortie forcée ne
+         * s'appliquera pas.
+         *
+         * Distinct de [VaultPurgeStuck], qui ouvre la sortie assumée : celle-ci ne vaut que
+         * pour un résidu SYSTÈME, où plus rien n'est protégé sur l'appareil et où le PIN qu'on
+         * retirerait ne garde donc plus rien. Un échec LOCAL est l'inverse — la conversation est
+         * toujours là, chiffrée, dans le coffre — et retirer le PIN l'ouvrirait en grand.
+         *
+         * Sans cet événement, ce cas retombait dans [VaultPurgeStuck], qui rouvre le dialogue
+         * « Vider quand même ? » ne menant qu'à `force = true`, refusé à son tour : une BOUCLE,
+         * avec un texte affirmant que ce qui reste est « dans le stockage SMS du téléphone », ce
+         * qui est faux ici. Le refus est le bon, c'est son absence d'explication qui ne l'était
+         * pas — un garde sans issue doit au moins dire pourquoi, et ce qu'il reste à faire.
+         */
+        data class VaultPurgeStuckLocal(val deleted: Int, val left: Int) : Event
+
+        /**
          * v1.28.3 (F07) — refus d'abaisser le verrouillage : la biométrie est actuellement le
          * SEUL second facteur du Coffre, et il n'est pas vide.
          *
@@ -444,6 +461,19 @@ class SettingsViewModel @Inject constructor(
                 oublierLEchecPasse()
                 _events.send(Event.VaultPurgedWithResidue(purge.deleted, reste))
             }
+            // v1.28.3 (audit du 2026-09-09) — l'echec LOCAL n'a pas de sortie forcee, et il
+            // faut le DIRE.
+            //
+            // La branche `force && residuSystemeSeul` ci-dessus ne l'accorde qu'a un residu
+            // systeme. Un echec local retombait donc dans `dejaEchoue`, qui rouvre le dialogue
+            // « Vider quand meme ? » ne menant qu'a `force = true` — refuse a son tour. Une
+            // boucle, sous un texte affirmant que ce qui reste est « dans le stockage SMS du
+            // telephone », faux dans ce cas : la conversation est toujours dans le coffre.
+            //
+            // Le refus reste le bon — retirer le PIN ouvrirait un coffre encore plein. Ce qui
+            // manquait est l'explication, sans laquelle un garde devient une impasse.
+            purge.localFailures > 0 ->
+                _events.send(Event.VaultPurgeStuckLocal(purge.deleted, reste))
             // Second echec : celui-la ne se levera pas tout seul, on ouvre la sortie.
             dejaEchoue -> _events.send(Event.VaultPurgeStuck(purge.deleted, reste))
             else -> {

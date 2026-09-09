@@ -251,6 +251,72 @@ class ScheduledSendAttemptTest {
         coVerify(exactly = 1) { dao.claimForSending(ID, now) }
     }
 
+    // ------------------------------------------------------------------------------------------
+    // v1.28.3 (F21, troisieme passage) — l'envoi PROGRAMME jetait le rapport d'envoi.
+    //
+    // Le correctif F21 avait ete pose sur les trois chemins d'envoi, mais pas sur leur APPELANT
+    // de fond : `ScheduledSendAttempt` ignorait `SendReport` et traitait toute `Outcome.Failure`
+    // a l'identique. Trouve par l'audit de coherence lance sur cette branche — la TROISIEME
+    // occurrence du meme motif, apres F02 et F21 lui-meme.
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * Un blocage ne se resorbe pas tout seul : le retenter cinq fois, avec backoff exponentiel,
+     * ne pouvait aboutir dans aucun des quatre essais suivants. Et le message final annoncait
+     * « echec apres plusieurs tentatives », qui designe une panne reseau — la mauvaise cause,
+     * donc la mauvaise action proposee a l'utilisateur.
+     */
+    @Test
+    fun `un destinataire bloque n est pas retente et abandonne des la premiere tentative`() = runTest {
+        coEvery { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) } returns
+            Outcome.Failure(AppError.RecipientBlocked)
+        coEvery { dao.findById(ID) } returns entity()
+
+        assertThat(attempt(ID, runAttemptCount = 0))
+            .isEqualTo(ScheduledSendAttempt.Verdict.GAVE_UP)
+        coVerify(exactly = 1) { dao.setState(ID, ScheduledState.FAILED) }
+        coVerify(exactly = 0) { dao.setState(ID, ScheduledState.PENDING) }
+    }
+
+    /**
+     * Controle POSITIF, sans lequel le precedent ne prouverait rien : un correctif qui
+     * abandonnerait a la premiere tentative QUELLE QUE SOIT la cause le passerait aussi, et
+     * detruirait la reprise que l'audit C2 avait mise en place. Une panne de telephonie, elle,
+     * doit toujours etre retentee.
+     */
+    @Test
+    fun `une panne de telephonie continue d etre retentee`() = runTest {
+        stubSend(failure())
+        coEvery { dao.findById(ID) } returns entity()
+
+        assertThat(attempt(ID, runAttemptCount = 0))
+            .isEqualTo(ScheduledSendAttempt.Verdict.RETRY)
+        coVerify(exactly = 0) { dao.setState(ID, ScheduledState.FAILED) }
+    }
+
+    /**
+     * Un envoi PARTIEL reste `SENT`, et c'est un choix : le marquer en echec ferait proposer une
+     * relance qui RE-ENVERRAIT aux destinataires deja servis — le doublon facture que F20 s'est
+     * interdit d'ouvrir. Ce test fige cette decision pour qu'un futur correctif zele ne la
+     * renverse pas sans s'en apercevoir.
+     */
+    @Test
+    fun `un envoi partiel reste marque SENT`() = runTest {
+        stubSend(
+            Outcome.Success(
+                com.filestech.sms.domain.model.SendReport(
+                    dispatched = listOf(42L),
+                    failed = emptyList(),
+                    blocked = listOf(com.filestech.sms.domain.model.PhoneAddress.of("+33611111111")),
+                ),
+            ),
+        )
+        coEvery { dao.findById(ID) } returns entity()
+
+        assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.SENT)
+        coVerify(exactly = 1) { dao.setState(ID, ScheduledState.SENT) }
+    }
+
     private companion object {
         const val ID = 7L
     }

@@ -120,6 +120,43 @@ class ConversationPdfExporter @Inject constructor(
         val pagination = Pagination(doc, pageWidth, pageHeight, margin) { c, n ->
             drawFooter(c, n, pageWidth, pageHeight, margin)
         }
+        // v1.28.3 (audit du 2026-09-09) — `renderPages` garantit qu'aucune page ne reste ouverte
+        // quand elle sort, quelle que soit la facon dont elle sort. C'est ELLE qui possede la
+        // pagination ; l'appelant ne peut pas l'atteindre, et fermer le document sur une page
+        // ouverte pourrait lever et ecraser la cause reelle. Cf. `Pagination.finirSiOuverte`.
+        try {
+            return rendreLesBulles(
+                pagination, conversation, messages, dateFormatter, timeFormatter,
+                titlePaint, subtitlePaint, datePaint,
+                outgoingTextPaint, incomingTextPaint, timestampPaint,
+                outgoingBg, incomingBg, incomingStroke,
+                pageWidth, margin, bubbleMaxWidth,
+            )
+        } finally {
+            pagination.finirSiOuverte()
+        }
+    }
+
+    @Suppress("LongParameterList", "LongMethod")
+    private fun rendreLesBulles(
+        pagination: Pagination,
+        conversation: Conversation,
+        messages: List<Message>,
+        dateFormatter: SimpleDateFormat,
+        timeFormatter: SimpleDateFormat,
+        titlePaint: TextPaint,
+        subtitlePaint: TextPaint,
+        datePaint: TextPaint,
+        outgoingTextPaint: TextPaint,
+        incomingTextPaint: TextPaint,
+        timestampPaint: TextPaint,
+        outgoingBg: Paint,
+        incomingBg: Paint,
+        incomingStroke: Paint,
+        pageWidth: Int,
+        margin: Int,
+        bubbleMaxWidth: Int,
+    ): Int {
         pagination.cursorY = drawHeader(pagination.canvas, conversation, titlePaint, subtitlePaint, margin)
 
         var lastDayKey: String? = null
@@ -265,6 +302,9 @@ class ConversationPdfExporter @Inject constructor(
             private set
         var cursorY: Float = margin.toFloat()
 
+        /** v1.28.3 — une page est « ouverte » entre son `startPage` et son `finishPage`. */
+        private var ouverte = true
+
         /** Ordonnee au-dela de laquelle plus rien ne doit etre dessine. */
         val bas: Float get() = (pageHeight - margin).toFloat()
 
@@ -282,6 +322,25 @@ class ConversationPdfExporter @Inject constructor(
         fun terminer() {
             piedDePage(canvas, pageNumber)
             doc.finishPage(page)
+            ouverte = false
+        }
+
+        /**
+         * v1.28.3 (audit du 2026-09-09) — ferme la page en cours SI elle l'est encore.
+         *
+         * `renderToFile` appelle `doc.close()` dans un `finally`, y compris quand le rendu a leve
+         * au milieu d'une page : celle-ci restait alors OUVERTE. Selon la version d'Android,
+         * `close()` peut y lever a son tour — et cette exception secondaire ECRASERAIT la cause
+         * reelle, laissant un `AppError.Storage` qui ne dit rien de ce qui s'est passe.
+         *
+         * Le comportement de `PdfDocument.close()` sur une page ouverte vit dans le framework de
+         * l'appareil et n'est pas mesurable ici. Plutot que de parier sur l'une des deux issues,
+         * on rend la question sans objet. Idempotent : sans effet apres un `terminer()` normal.
+         */
+        fun finirSiOuverte() {
+            if (!ouverte) return
+            runCatching { doc.finishPage(page) }
+            ouverte = false
         }
     }
 
