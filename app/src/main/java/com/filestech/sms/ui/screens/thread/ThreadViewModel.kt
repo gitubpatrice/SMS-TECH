@@ -984,17 +984,34 @@ class ThreadViewModel @Inject constructor(
         if (_state.value.conversation == null) return
         viewModelScope.launch {
             val cr = context.contentResolver
-            val mime = cr.getType(uri) ?: when (kind) {
+            // v1.28.3 (audit global, X-02 — mesure sur le S9) — un CONTACT n'est pas un fichier.
+            //
+            // Le selecteur rend l'URI d'une fiche, dont `openInputStream` ne lit rien et dont
+            // `getType` repond `vnd.android.cursor.item/contact` : la copie echouait a tous les
+            // coups, et joindre un contact n'a jamais fonctionne. La carte de visite se lit a
+            // une autre adresse — cf. [ContactCardSource]. Une fiche illisible garde le message
+            // d'echec, qui devient vrai.
+            val carte = if (kind == com.filestech.sms.ui.components.AttachmentKind.CONTACT) {
+                val resolue = kotlinx.coroutines.withContext(io) { ContactCardSource(cr).resoudre(uri) }
+                if (resolue == null) {
+                    _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))
+                    return@launch
+                }
+                resolue
+            } else {
+                null
+            }
+            val source = carte?.uri ?: uri
+            val mime = carte?.mime ?: cr.getType(uri) ?: when (kind) {
                 com.filestech.sms.ui.components.AttachmentKind.PHOTO -> "image/jpeg"
                 com.filestech.sms.ui.components.AttachmentKind.VIDEO -> "video/mp4"
-                com.filestech.sms.ui.components.AttachmentKind.CONTACT -> "text/x-vcard"
                 else -> "application/octet-stream"
             }
             // Resolve the user-facing name via OpenableColumns when possible — Android's
             // PickVisualMedia / OpenDocument both expose it. Falls back to the cached filename
             // (auto-generated, so always visually ugly, hence the lookup).
-            val displayName = resolveDisplayName(uri) ?: "Pièce jointe"
-            val file = copyAttachmentToCache(uri, mime)
+            val displayName = carte?.nomDeFichier ?: resolveDisplayName(uri) ?: "Pièce jointe"
+            val file = copyAttachmentToCache(source, mime)
             if (file == null) {
                 _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))
                 return@launch
