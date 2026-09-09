@@ -69,6 +69,17 @@ abstract class AppDatabase : RoomDatabase() {
         //   d'Android, `content://sms/<id>` cote import), que l'index UNIQUE ne rapprochait
         //   pas : une resynchronisation complete dupliquait chaque message ecrit par l'app.
         //   La migration normalise et supprime les doublons deja crees. Cf. `Migrations.kt`.
-        const val SCHEMA_VERSION = 8
+        // v9 (2026-09-09, v1.28.3): `conversations.thread_id` passe de `INTEGER NOT NULL` a
+        //   `INTEGER` nullable. C'est le premier changement de schema NON additif du projet, et
+        //   il exige une recreation de table — SQLite ne sait pas retirer un `NOT NULL`.
+        //   Motif : la colonne porte un index UNIQUE, et toute conversation sans fil systeme y
+        //   inscrivait la sentinelle partagee `0L`. La deuxieme conversation locale entrait donc
+        //   en conflit, et `OnConflictStrategy.REPLACE` supprimait la premiere — ses messages et
+        //   ses pieces jointes suivant par `ForeignKey.CASCADE`. Reproduit sur emulateur par la
+        //   relecture externe (F01). `NULL` retablit la seule semantique juste : SQLite tient
+        //   deux `NULL` pour distincts sous un index UNIQUE. La migration convertit en `NULL`
+        //   tout `thread_id <= 0`, ce qui absorbe aussi les placeholders negatifs que
+        //   `BackupService` fabriquait depuis la v1.15.2 pour contourner le meme piege.
+        const val SCHEMA_VERSION = 9
     }
 }

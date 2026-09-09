@@ -63,7 +63,7 @@ class PurgeHistoryPropagationTest {
             .allowMainThreadQueries()
             .build()
         runBlocking {
-            db.conversationDao().upsert(
+            db.conversationDao().insert(
                 ConversationEntity(
                     id = CONV_ID,
                     threadId = CONV_ID,

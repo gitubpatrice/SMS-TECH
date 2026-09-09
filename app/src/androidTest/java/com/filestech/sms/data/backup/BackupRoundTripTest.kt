@@ -127,6 +127,17 @@ class BackupRoundTripTest {
             assertThat(convA).isNotNull()
             assertThat(convB).isNotNull()
 
+            // v1.28.3 (F01) — la restauration ne reprend JAMAIS le `thread_id` de la sauvegarde,
+            // meme quand elle en porte un : il designe un fil du fournisseur de l'appareil SOURCE
+            // et peut, ici, pointer une autre conversation — c'est le defaut que la v1.27.11 a
+            // ferme sur `telephony_uri`. `TelephonySyncWorker` reassignera le vrai fil.
+            //
+            // La conversation A portait `thread_id = 1` a la source, la B `null` : les deux
+            // ressortent a `null`, ce qui verrouille du meme coup la disparition des
+            // placeholders negatifs que cette methode fabriquait depuis la v1.15.2.
+            assertThat(convA!!.threadId).isNull()
+            assertThat(convB!!.threadId).isNull()
+
             // ⚠️ La premiere version s'arretait a `findConversationIdsByTelephonyUris`, qui rend
             // des IDENTIFIANTS de conversation — pas des corps, malgre le nom que j'avais donne a
             // la variable (relecture Codex du 2026-08-05, finding 2). Une sauvegarde qui aurait
@@ -183,7 +194,7 @@ class BackupRoundTripTest {
             assertThat(written).isInstanceOf(Outcome.Success::class.java)
 
             // L'HOMONYME EN CLAIR : sans lui, la garde n'est jamais exercee.
-            dbTarget.conversationDao().upsert(conversation(99L, ADDR_B, inVault = false))
+            dbTarget.conversationDao().insert(conversation(99L, ADDR_B, inVault = false))
             assertThat(dbTarget.conversationDao().countInVault()).isEqualTo(0)
 
             serviceFor(dbTarget, VaultSessionState()).readSmsbk(uriOf(backupFile), PASSWORD)
@@ -320,7 +331,7 @@ class BackupRoundTripTest {
     @Test
     fun coffreVide_lExportResteSansFriction_memeVerrouille() {
         runBlocking {
-            dbSource.conversationDao().upsert(conversation(1L, ADDR_A, inVault = false))
+            dbSource.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
             dbSource.messageDao().insert(message(1L, 1L, "content://sms/1", BODY_1))
             assertThat(dbSource.conversationDao().countInVault()).isEqualTo(0)
 
@@ -335,8 +346,9 @@ class BackupRoundTripTest {
 
     /** Deux conversations : une ordinaire (2 messages), une dans le coffre (1 message). */
     private suspend fun seedSource() {
-        dbSource.conversationDao().upsert(conversation(1L, ADDR_A, inVault = false))
-        dbSource.conversationDao().upsert(conversation(2L, ADDR_B, inVault = true))
+        dbSource.conversationDao().insert(conversation(1L, ADDR_A, inVault = false))
+        // v1.28.3 (F01) — sans fil systeme : exerce le `null` a la serialisation.
+        dbSource.conversationDao().insert(conversation(2L, ADDR_B, inVault = true, threadId = null))
         dbSource.messageDao().insert(message(1L, 1L, "content://sms/1", BODY_1))
         dbSource.messageDao().insert(message(2L, 1L, "content://sms/2", BODY_2))
         dbSource.messageDao().insert(message(3L, 2L, "content://sms/3", BODY_VAULT))
@@ -393,9 +405,21 @@ class BackupRoundTripTest {
         io = Dispatchers.IO,
     )
 
-    private fun conversation(id: Long, address: String, inVault: Boolean) = ConversationEntity(
+    /**
+     * v1.28.3 (F01) — [threadId] est parametrable et vaut `null` par defaut sur l'une des
+     * conversations du jeu d'essai : c'est le seul moyen d'exercer la serialisation JSON d'un
+     * `thread_id` ABSENT de bout en bout (ecriture chiffree, relecture, reinsertion). La colonne
+     * etant devenue nullable, une sauvegarde produite par cette version en contient desormais
+     * couramment.
+     */
+    private fun conversation(
+        id: Long,
+        address: String,
+        inVault: Boolean,
+        threadId: Long? = id,
+    ) = ConversationEntity(
         id = id,
-        threadId = id,
+        threadId = threadId,
         addressesCsv = address,
         displayName = null,
         lastMessageAt = id * 1_000L,

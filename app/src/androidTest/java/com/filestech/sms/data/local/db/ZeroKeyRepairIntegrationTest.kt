@@ -83,7 +83,7 @@ class ZeroKeyRepairIntegrationTest {
             .addMigrations(*Migrations.ALL)
             .build()
         runBlocking {
-            db.conversationDao().upsert(
+            db.conversationDao().insert(
                 com.filestech.sms.data.local.db.entity.ConversationEntity(
                     id = 0,
                     threadId = 42,

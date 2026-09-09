@@ -2,7 +2,6 @@ package com.filestech.sms.data.local.db.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.filestech.sms.data.local.db.entity.ConversationEntity
@@ -108,8 +107,27 @@ interface ConversationDao {
     @Query("SELECT id FROM conversations WHERE in_vault = 1")
     suspend fun idsInVault(): List<Long>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(entity: ConversationEntity): Long
+    /**
+     * Insère une conversation **nouvelle**. Pour modifier une conversation existante, passer
+     * par [update] ou par l'un des `set*` ciblés — jamais par ici.
+     *
+     * v1.28.3 — s'appelait `upsert` et portait `OnConflictStrategy.REPLACE`. Les deux étaient
+     * faux, et ensemble ils ont produit F01 :
+     *
+     *  - `REPLACE` n'est pas une mise à jour. SQLite **supprime** la ligne en conflit avant
+     *    d'insérer la nouvelle, ce qui déclenche `ForeignKey.CASCADE` sur `messages` puis sur
+     *    `attachments`. Une conversation entière disparaissait pour laisser place à une autre.
+     *  - le nom `upsert` promettait précisément le contraire, et c'est ce qui a rendu l'appel
+     *    inoffensif à la lecture aux deux endroits qui l'utilisaient pour créer.
+     *
+     * `ABORT` (le défaut) lève désormais plutôt que de détruire. Les deux appelants de
+     * création — `ConversationMirror.ensureConversation*` et
+     * `ConversationRepositoryImpl.findOrCreate` — cherchent une conversation existante dans la
+     * même transaction juste avant, donc un conflit ici signalerait un vrai défaut de logique
+     * et doit remonter, pas être avalé.
+     */
+    @Insert
+    suspend fun insert(entity: ConversationEntity): Long
 
     @Update
     suspend fun update(entity: ConversationEntity)

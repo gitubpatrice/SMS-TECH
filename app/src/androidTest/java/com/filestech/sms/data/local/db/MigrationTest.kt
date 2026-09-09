@@ -376,4 +376,149 @@ class MigrationTest {
             assertThat(c.getString(2)).isEqualTo("content://sms/9164")
         }
     }
+
+    // ──────────────────────────── v8 → v9 (F01) ────────────────────────────
+
+    /**
+     * v1.28.3 (F01) — la migration convertit en `NULL` **les deux** sentinelles « pas de fil
+     * système » qui ont existé en base, et ne touche pas à un `thread_id` AOSP réel.
+     *
+     * Le `0L` venait de la composition et de la réception ; les valeurs négatives venaient de
+     * `BackupService`, qui les fabriquait depuis la v1.15.2 pour contourner ce même piège sur
+     * le chemin de la restauration. Les deux disent « inconnu » et doivent finir `NULL`.
+     */
+    @Test
+    fun migrate8To9_convertitLesDeuxSentinellesEnNull_etPreserveUnVraiFilSysteme() {
+        helper.createDatabase(TEST_DB, 8).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES
+                    (1, 0,           '+33600000001', 'Locale',      1700000000000, 'a', 0, 0, 0, 0, 0),
+                    (2, -1757000000, '+33600000002', 'Restauree',   1700000000000, 'b', 0, 0, 0, 0, 0),
+                    (3, 42,          '+33600000003', 'Importee',    1700000000000, 'c', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, Migrations.MIGRATION_8_9)
+
+        db.query("SELECT id, thread_id, display_name FROM conversations ORDER BY id").use { c ->
+            assertThat(c.count).isEqualTo(3)
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.isNull(1)).isTrue()
+            assertThat(c.getString(2)).isEqualTo("Locale")
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.isNull(1)).isTrue()
+            assertThat(c.getString(2)).isEqualTo("Restauree")
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getLong(1)).isEqualTo(42L)
+            assertThat(c.getString(2)).isEqualTo("Importee")
+        }
+    }
+
+    /**
+     * **Contrôle de la cascade.** [Migrations.MIGRATION_8_9] est la seule migration du projet à
+     * exécuter un `DROP TABLE` sur une table référencée. `messages.conversation_id` pointe
+     * `conversations(id)` en `ForeignKey.CASCADE` : si les clés étrangères étaient actives à ce
+     * moment-là, le `DROP` exécuterait un `DELETE FROM` implicite et **effacerait tous les
+     * messages** de l'utilisateur.
+     *
+     * Room n'active `PRAGMA foreign_keys` que dans `onOpen`, donc après les migrations. Ce test
+     * le VÉRIFIE au lieu de s'y fier, et il vérifie du même coup que les `conversation_id`
+     * continuent de désigner la même conversation après la recréation de table — les `id` sont
+     * recopiés, jamais régénérés.
+     */
+    @Test
+    fun migrate8To9_laRecreationDeTable_neCascadePasSurLesMessages() {
+        helper.createDatabase(TEST_DB, 8).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (7, 0, '+33612345678', 'Alice', 1700000000000, 'salut', 1, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction,
+                     date, date_sent, read, starred, status, error_code, sub_id,
+                     scheduled_at, attachments_count, reaction_emoji)
+                VALUES (1, 7, 'content://sms/1', '+33612345678', 'a ne pas perdre',
+                        0, 0, 1700000000000, NULL, 0, 0, 1, NULL, NULL, NULL, 0, NULL)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, Migrations.MIGRATION_8_9)
+
+        db.query("SELECT conversation_id, body FROM messages").use { c ->
+            assertThat(c.count).isEqualTo(1)
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getLong(0)).isEqualTo(7L)
+            assertThat(c.getString(1)).isEqualTo("a ne pas perdre")
+        }
+    }
+
+    /**
+     * Après la migration, l'index UNIQUE doit avoir été recréé — `DROP TABLE` l'emporte — et
+     * accepter plusieurs `NULL`, ce qui est toute la raison d'être du changement : SQLite tient
+     * deux `NULL` pour distincts sous un index UNIQUE.
+     */
+    @Test
+    fun migrate8To9_lIndexEstRecree_etAccepteAutantDeNullQueVoulu() {
+        helper.createDatabase(TEST_DB, 8).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (1, 0, '+33600000001', 'Locale', 1700000000000, 'a', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, Migrations.MIGRATION_8_9)
+
+        // Deux conversations locales de plus : c'est le scénario que F01 rendait impossible.
+        db.execSQL(
+            """
+            INSERT INTO conversations
+                (id, thread_id, addresses_csv, display_name, last_message_at,
+                 last_message_preview, unread_count, pinned, archived, muted, in_vault)
+            VALUES
+                (2, NULL, '+33600000002', 'B', 1700000000000, 'b', 0, 0, 0, 0, 0),
+                (3, NULL, '+33600000003', 'C', 1700000000000, 'c', 0, 0, 0, 0, 0)
+            """.trimIndent(),
+        )
+        db.query("SELECT COUNT(*) FROM conversations WHERE thread_id IS NULL").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getInt(0)).isEqualTo(3)
+        }
+
+        // L'index tient toujours sur les valeurs réelles.
+        db.execSQL(
+            """
+            INSERT INTO conversations
+                (id, thread_id, addresses_csv, display_name, last_message_at,
+                 last_message_preview, unread_count, pinned, archived, muted, in_vault)
+            VALUES (4, 99, '+33600000004', 'D', 1700000000000, 'd', 0, 0, 0, 0, 0)
+            """.trimIndent(),
+        )
+        val doublon = runCatching {
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (5, 99, '+33600000005', 'E', 1700000000000, 'e', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+        }
+        assertThat(doublon.isFailure).isTrue()
+    }
 }

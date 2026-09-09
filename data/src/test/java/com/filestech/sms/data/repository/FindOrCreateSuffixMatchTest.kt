@@ -30,7 +30,7 @@ class FindOrCreateSuffixMatchTest {
 
     private fun conv(id: Long, addressesCsv: String) = ConversationEntity(
         id = id,
-        threadId = 0L,
+        threadId = null,
         addressesCsv = addressesCsv,
         displayName = null,
         lastMessageAt = 0L,

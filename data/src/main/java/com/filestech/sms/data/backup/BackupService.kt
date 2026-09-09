@@ -450,16 +450,23 @@ class BackupService @Inject constructor(
             var created = 0
             // Mapping ancien id Room du backup → nouvel id Room dans la DB cible.
             val convIdMap = HashMap<Long, Long>(payload.conversations.size)
-            // Audit SECU-M3 v1.15.2 — Placeholders négatifs UNIQUES par session de restore
-            // pour le `thread_id` des conv créées. Pourquoi pas 0L : la table conversations
-            // a un UNIQUE INDEX sur thread_id ; insérer N convs avec thread_id=0L déclenche
-            // une UNIQUE constraint violation → OnConflictStrategy.REPLACE supprime
-            // silencieusement les précédentes (seule la dernière survit). Les vrais
-            // thread_id AOSP sont positifs (≥ 1) ; les négatifs sont garantis sans collision.
-            // Le sync `TelephonySyncWorker` réassignera des thread_ids positifs lorsqu'il
-            // ré-importera depuis le content provider système.
-            val threadIdBase = -(System.currentTimeMillis())
-            for ((convIndex, backupConv) in payload.conversations.withIndex()) {
+            // v1.28.3 (F01) — les placeholders `thread_id` négatifs de l'audit SECU-M3 (v1.15.2)
+            // ont disparu : la colonne est désormais nullable, et `null` dit exactement ce que
+            // les négatifs simulaient — « aucun fil système connu ».
+            //
+            // Ce commentaire décrivait déjà, en v1.15.2, le mécanisme complet de F01 : index
+            // UNIQUE sur `thread_id`, sentinelle partagée, `REPLACE` qui « supprime
+            // silencieusement les précédentes ». Le constat était juste ; il n'a été appliqué
+            // qu'ici. La composition et la réception ont gardé la sentinelle `0L` pendant
+            // quatorze versions, jusqu'à ce que la relecture externe la reproduise. La leçon
+            // vaut plus que le correctif : un défaut compris sur un chemin doit être cherché
+            // sur tous ses jumeaux le jour même.
+            //
+            // On n'importe JAMAIS le `thread_id` de la sauvegarde, même à `sameDevice` : il
+            // désigne un fil du fournisseur de l'appareil SOURCE et peut, ici, pointer une
+            // autre conversation — c'est le défaut exact que la v1.27.11 a corrigé sur
+            // `telephony_uri`. `TelephonySyncWorker` réassignera le vrai fil à la resynchro.
+            for (backupConv in payload.conversations) {
                 // v1.26.1 (audit H12) — on ne réutilise une conversation existante que si elle a
                 // le MÊME statut de coffre que celle de la sauvegarde.
                 //
@@ -476,9 +483,8 @@ class BackupService @Inject constructor(
                     convIdMap[backupConv.id] = existing.id
                     reused++
                 } else {
-                    val placeholderThreadId = threadIdBase - convIndex
-                    val newId = conversationDao.upsert(
-                        backupConv.copy(id = 0L, threadId = placeholderThreadId),
+                    val newId = conversationDao.insert(
+                        backupConv.copy(id = 0L, threadId = null),
                     )
                     convIdMap[backupConv.id] = newId
                     created++

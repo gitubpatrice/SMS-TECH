@@ -214,7 +214,7 @@ class VaultPurgeRetryTest {
         ConversationEraser(db, db.conversationDao(), db.messageDao(), systemCopy)
 
     private suspend fun seedVaultConversation() {
-        db.conversationDao().upsert(
+        db.conversationDao().insert(
             ConversationEntity(
                 id = VAULT_ID,
                 threadId = VAULT_ID,

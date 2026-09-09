@@ -24,7 +24,27 @@ import kotlinx.serialization.Serializable
 data class ConversationEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    @ColumnInfo(name = "thread_id") val threadId: Long,
+    /**
+     * `thread_id` AOSP du fournisseur système, ou **`null` tant qu'aucun n'est connu**.
+     *
+     * v1.28.3 — cette colonne était `NOT NULL` et les conversations sans fil système y
+     * portaient la sentinelle `0L`. Comme l'index ci-dessus est UNIQUE, deux conversations
+     * locales ne pouvaient pas coexister : la seconde insertion entrait en conflit et
+     * `OnConflictStrategy.REPLACE` **supprimait la première**, ses messages et ses pièces
+     * jointes partant avec elle par `ForeignKey.CASCADE`. Reproduit sur émulateur par la
+     * relecture externe (F01) : deux brouillons créés d'affilée, le premier disparaît.
+     *
+     * Le mécanisme était connu à deux endroits du code, qui le contournaient chacun à sa
+     * façon — `ensureConversationByThread` en exigeant un identifiant système réel, et
+     * `BackupService` en fabriquant des sentinelles négatives — mais ni la composition ni
+     * la réception ne l'appliquaient. `null` est la réponse juste : SQLite considère deux
+     * `NULL` comme distincts sous un index UNIQUE, donc autant de conversations sans fil
+     * système que nécessaire peuvent coexister, et l'absence de valeur cesse d'être codée
+     * par une valeur.
+     *
+     * Invariant : jamais `0L` ni négatif. Un `thread_id` AOSP est toujours ≥ 1.
+     */
+    @ColumnInfo(name = "thread_id") val threadId: Long?,
     @ColumnInfo(name = "addresses_csv") val addressesCsv: String,
     @ColumnInfo(name = "display_name") val displayName: String?,
     @ColumnInfo(name = "last_message_at") val lastMessageAt: Long,

@@ -400,9 +400,13 @@ class ConversationRepositoryImpl @Inject constructor(
                     }
                     suffixMatch.id
                 } else {
-                    conversationDao.upsert(
+                    // v1.28.3 (F01) — `threadId = null` et non plus `0L`. C'est le chemin
+                    // reproduit sur émulateur par la relecture externe : deux conversations
+                    // créées depuis le composeur, la seconde effaçait la première et son
+                    // brouillon. Ici la perte était DÉFINITIVE, rien n'existant côté système.
+                    conversationDao.insert(
                         ConversationEntity(
-                            threadId = 0L,
+                            threadId = null,
                             addressesCsv = csv,
                             displayName = resolvedDisplayName,
                             lastMessageAt = System.currentTimeMillis(),

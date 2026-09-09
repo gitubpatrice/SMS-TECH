@@ -7,9 +7,16 @@ import com.filestech.sms.data.sms.canonicalTelephonyUri
 /**
  * Room migrations for the SQLCipher-backed [AppDatabase].
  *
- * Each migration is **additive** and **idempotent** — a row already imported into the previous
- * schema must remain readable byte-for-byte after the migration runs. We never drop or rename
- * existing columns; new columns are nullable or default-valued so legacy rows project cleanly.
+ * Each migration preserves user data — a row already imported into the previous schema must
+ * remain readable byte-for-byte after the migration runs. New columns are nullable or
+ * default-valued so legacy rows project cleanly.
+ *
+ * Les migrations sont **additives par défaut**, et l'étaient toutes jusqu'à la v9 : on ne
+ * supprime ni ne renomme une colonne existante. [MIGRATION_8_9] est la première exception, et
+ * elle doit rester rare — SQLite exigeant une recréation de table pour retirer un `NOT NULL`,
+ * elle passe par un `DROP TABLE` qui cascaderait sur `messages` si les clés étrangères étaient
+ * actives. Son KDoc détaille les trois précautions que cela impose ; les reprendre avant
+ * d'écrire une seconde migration de ce type.
  *
  * SQLCipher caveat: `ALTER TABLE` runs through the cipher layer exactly like a normal SQL
  * statement — no special handling required. The migration is wrapped in a transaction by Room.
@@ -255,6 +262,110 @@ object Migrations {
         }
     }
 
+    /**
+     * v8 → v9 (2026-09-09, v1.28.3) — **`conversations.thread_id` devient nullable**, et toute
+     * sentinelle « pas de fil système » devient `NULL`.
+     *
+     * # Le défaut
+     *
+     * `thread_id` porte un index UNIQUE, et les deux chemins qui créent une conversation sans
+     * fil système — la composition (`findOrCreate`) et la réception (`ensureConversation`) —
+     * y écrivaient tous deux `0L`. La seconde conversation locale entrait donc en conflit sur
+     * l'index, et `OnConflictStrategy.REPLACE` **supprime** la ligne en conflit avant d'insérer
+     * la nouvelle : la première conversation disparaissait, ses messages et ses pièces jointes
+     * partant avec elle par `ForeignKey.CASCADE`. Reproduit sur émulateur par la relecture
+     * externe (F01) avec deux brouillons créés d'affilée.
+     *
+     * `NULL` est la réponse juste plutôt qu'une sentinelle mieux choisie : SQLite tient deux
+     * `NULL` pour distincts sous un index UNIQUE, donc autant de conversations sans fil système
+     * que nécessaire coexistent, et l'absence de valeur cesse d'être codée par une valeur.
+     *
+     * # Pourquoi elle enfreint la règle « additive » du fichier
+     *
+     * SQLite ne sait pas retirer un `NOT NULL` d'une colonne : il faut recréer la table. C'est
+     * la seule migration du projet à le faire, et elle prend donc trois précautions que les
+     * autres n'ont pas besoin de prendre :
+     *
+     *  - **La cascade.** `messages.conversation_id` référence `conversations(id)` en CASCADE.
+     *    Si les clés étrangères étaient actives, le `DROP TABLE` ci-dessous exécuterait un
+     *    `DELETE FROM` implicite et **effacerait tous les messages**. Room n'active
+     *    `PRAGMA foreign_keys` que dans `onOpen`, donc après les migrations — mais cela ne se
+     *    suppose pas : `MigrationTest.migrateAll_v1ToCurrent_preservesUserData` insère un
+     *    message avant de migrer et échouerait si la cascade se déclenchait.
+     *  - **Les identifiants.** `id` est recopié tel quel, jamais régénéré : les
+     *    `messages.conversation_id` déjà écrits doivent continuer de désigner la même
+     *    conversation. L'`AUTOINCREMENT` est conservé pour que `sqlite_sequence` ne réattribue
+     *    pas un identifiant déjà utilisé par des lignes supprimées.
+     *  - **Les index.** `DROP TABLE` les emporte ; les quatre sont recréés à l'identique, sous
+     *    les noms que Room attend (`runMigrationsAndValidate` refuserait le moindre écart).
+     *
+     * # La conversion
+     *
+     * `thread_id <= 0 → NULL` couvre les deux sentinelles qui ont existé : le `0L` de la
+     * composition et de la réception, et les valeurs négatives que `BackupService` fabriquait
+     * depuis la v1.15.2 pour contourner ce même piège sur le chemin de la restauration. Aucune
+     * collision n'est possible en chemin : l'index UNIQUE garantissait déjà l'unicité de ces
+     * valeurs, et elles deviennent toutes `NULL`, que l'index ne compare pas entre eux.
+     */
+    val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `conversations_new` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `thread_id` INTEGER,
+                    `addresses_csv` TEXT NOT NULL,
+                    `display_name` TEXT,
+                    `last_message_at` INTEGER NOT NULL,
+                    `last_message_preview` TEXT,
+                    `unread_count` INTEGER NOT NULL,
+                    `pinned` INTEGER NOT NULL,
+                    `archived` INTEGER NOT NULL,
+                    `muted` INTEGER NOT NULL,
+                    `in_vault` INTEGER NOT NULL,
+                    `draft` TEXT,
+                    `notification_channel_id` TEXT,
+                    `bubble_color_argb` INTEGER,
+                    `avatar_uri` TEXT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO `conversations_new`
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault,
+                     draft, notification_channel_id, bubble_color_argb, avatar_uri)
+                SELECT
+                    id,
+                    CASE WHEN thread_id > 0 THEN thread_id ELSE NULL END,
+                    addresses_csv, display_name, last_message_at,
+                    last_message_preview, unread_count, pinned, archived, muted, in_vault,
+                    draft, notification_channel_id, bubble_color_argb, avatar_uri
+                  FROM `conversations`
+                """.trimIndent(),
+            )
+            db.execSQL("DROP TABLE `conversations`")
+            db.execSQL("ALTER TABLE `conversations_new` RENAME TO `conversations`")
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_conversations_thread_id` " +
+                    "ON `conversations` (`thread_id`)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversations_pinned_last_message_at` " +
+                    "ON `conversations` (`pinned`, `last_message_at`)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversations_archived` " +
+                    "ON `conversations` (`archived`)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversations_in_vault` " +
+                    "ON `conversations` (`in_vault`)",
+            )
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -264,5 +375,6 @@ object Migrations {
         MIGRATION_5_6,
         MIGRATION_6_7,
         MIGRATION_7_8,
+        MIGRATION_8_9,
     )
 }

@@ -49,7 +49,7 @@ class DuplicateOnResyncTest {
             .allowMainThreadQueries()
             .build()
         runBlocking {
-            db.conversationDao().upsert(
+            db.conversationDao().insert(
                 ConversationEntity(
                     id = 1L,
                     threadId = 1L,

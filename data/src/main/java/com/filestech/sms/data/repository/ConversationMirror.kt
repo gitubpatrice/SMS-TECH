@@ -862,9 +862,13 @@ class ConversationMirror @Inject constructor(
             }
         }
 
-        return conversationDao.upsert(
+        return conversationDao.insert(
             ConversationEntity(
-                threadId = systemThreadId,
+                // v1.28.3 — un `thread_id` AOSP est toujours ≥ 1 ; tout le reste vaut « inconnu ».
+                // Les appelants d'import passent la valeur lue du fournisseur, qui a déjà été
+                // filtrée plus haut, mais l'invariant de la colonne se tient ICI, au seul endroit
+                // qui écrit — pas dans la promesse de six appelants.
+                threadId = systemThreadId.takeIf { it > 0L },
                 addressesCsv = csv,
                 displayName = resolved,
                 // Sentinel 0L — the **next** [touchConversation] call (which always follows an
@@ -941,9 +945,15 @@ class ConversationMirror @Inject constructor(
         }
 
         // 3) Vraiment nouvelle conversation — création.
-        return conversationDao.upsert(
+        //
+        // v1.28.3 (F01) — `threadId = null` et non plus `0L`. La réception ne consulte jamais
+        // `content://mms-sms/threadID`, donc toute conversation créée ici est sans fil système
+        // jusqu'à la resynchro suivante. Avec la sentinelle `0L` sous un index UNIQUE, deux
+        // correspondants inconnus reçus dans le même intervalle se chassaient l'un l'autre :
+        // le second insert supprimait la conversation du premier, messages compris.
+        return conversationDao.insert(
             ConversationEntity(
-                threadId = 0L,
+                threadId = null,
                 addressesCsv = csv,
                 displayName = resolved,
                 // Same sentinel as `ensureConversationByThread` — see comment there.
@@ -1057,13 +1067,13 @@ class ConversationMirror @Inject constructor(
                     conversationDao.delete(victimId)
                 }
                 // 3bis) D3 (audit) — reprise du threadId système AOSP. Si le survivant n'en a pas
-                //   (créé via ensureConversation → threadId=0) mais qu'une victime en portait un
+                //   (créé via ensureConversation → threadId=null) mais qu'une victime en portait un
                 //   (créée via ensureConversationByThread à l'import système), on le récupère pour
                 //   que markRead continue de propager READ=1 vers content://sms|mms. FAIT APRÈS le
                 //   delete des victimes : l'index `conversations.thread_id` est UNIQUE, la victime
                 //   détenait encore ce threadId jusqu'à sa suppression.
-                if (survivor.threadId == 0L) {
-                    val recovered = victims.firstNotNullOfOrNull { it.threadId.takeIf { t -> t > 0L } }
+                if (survivor.threadId == null) {
+                    val recovered = victims.firstNotNullOfOrNull { it.threadId?.takeIf { t -> t > 0L } }
                     if (recovered != null) {
                         conversationDao.setThreadId(plan.survivorId, recovered)
                     }

@@ -141,7 +141,7 @@ class RawKeyMigrationTest {
             .addMigrations(*Migrations.ALL)
             .build().apply {
                 runBlocking {
-                    conversationDao().upsert(
+                    conversationDao().insert(
                         com.filestech.sms.data.local.db.entity.ConversationEntity(
                             id = 0, threadId = 7, addressesCsv = "+33600000000",
                             displayName = "Zoé", lastMessageAt = 1_700_000_000_000,

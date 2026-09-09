@@ -55,8 +55,8 @@ class ReconcileDeletionsPreviewTest {
             .allowMainThreadQueries()
             .build()
 
-        db.conversationDao().upsert(conversation(CONV_MMS, "+33611111111", MMS_LABEL, at = 1_000L))
-        db.conversationDao().upsert(conversation(CONV_SMS, "+33622222222", "Salut", at = 2_000L))
+        db.conversationDao().insert(conversation(CONV_MMS, "+33611111111", MMS_LABEL, at = 1_000L))
+        db.conversationDao().insert(conversation(CONV_SMS, "+33622222222", "Salut", at = 2_000L))
 
         // Le MMS sans légende : corps VIDE, une pièce jointe. C'est la ligne dont aucun recalcul
         // ne peut retrouver le libellé.

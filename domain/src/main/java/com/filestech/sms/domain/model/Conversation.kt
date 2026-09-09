@@ -2,7 +2,15 @@ package com.filestech.sms.domain.model
 
 data class Conversation(
     val id: Long,
-    val threadId: Long,
+    /**
+     * `thread_id` du fournisseur système AOSP, ou `null` tant qu'aucun n'est connu — une
+     * conversation créée depuis le composeur ou à la réception n'en a pas avant la resynchro.
+     *
+     * v1.28.3 — était `Long` avec la sentinelle `0L`. Cf. `ConversationEntity.threadId` : sous
+     * l'index UNIQUE de la colonne, cette sentinelle partagée faisait s'entre-détruire les
+     * conversations sans fil système.
+     */
+    val threadId: Long?,
     val addresses: List<PhoneAddress>,
     val displayName: String?,
     val lastMessageAt: Long,

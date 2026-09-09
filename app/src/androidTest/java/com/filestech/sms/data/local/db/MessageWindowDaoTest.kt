@@ -40,7 +40,7 @@ class MessageWindowDaoTest {
             .allowMainThreadQueries()
             .build()
         runBlocking {
-            db.conversationDao().upsert(
+            db.conversationDao().insert(
                 ConversationEntity(
                     id = 1,
                     threadId = 1,
@@ -212,7 +212,7 @@ class MessageWindowDaoTest {
         setConvPreview(5_000L, "deleted-1538") // last_message_at ahead of any real message
 
         // Conversation 2: healthy — preview matches its real newest message.
-        db.conversationDao().upsert(
+        db.conversationDao().insert(
             ConversationEntity(
                 id = 2, threadId = 2, addressesCsv = "+33600000002", displayName = "Bob",
                 lastMessageAt = 3_000L, lastMessagePreview = "hi Bob", unreadCount = 0,
