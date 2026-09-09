@@ -2099,7 +2099,10 @@ private fun ThreadMessageItem(
     val audio = msg.audioAttachment
     // v1.3.3 bug #2 — pour les pièces jointes NON-audio (image/video/file), on délègue à
     // MediaAttachmentBubble qui ajoute le tap-to-view (ACTION_VIEW via FileProvider).
-    val mediaAttachment = msg.attachments.firstOrNull { !it.isAudio }
+    // v1.28.3 (audit global, X-04 — mesuré sur le S9) — TOUTES, pas la première : F16 gardait
+    // toutes les parties d'un MMS, l'écran n'en montrait qu'une.
+    val mediaAttachments = msg.attachments.filter { !it.isAudio }
+    val mediaAttachment = mediaAttachments.firstOrNull()
     // v1.3.3 #7 — étiquette d'expéditeur uniquement sur la 1ʳᵉ bulle d'un burst (Solo ou First)
     // pour ne pas surcharger visuellement les suites consécutives du même expéditeur.
     val baseSenderLabel: String? = if (
@@ -2147,6 +2150,7 @@ private fun ThreadMessageItem(
             com.filestech.sms.ui.components.MediaAttachmentBubble(
                 message = msg,
                 attachment = mediaAttachment,
+                autres = mediaAttachments.drop(1),
                 showTimestamp = showTimestamp,
                 onDelete = { actions.onDelete(msg) },
                 onReply = { actions.onReply(msg) },

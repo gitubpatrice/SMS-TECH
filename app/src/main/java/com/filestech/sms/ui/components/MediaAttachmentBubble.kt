@@ -69,6 +69,14 @@ import java.io.File
 fun MediaAttachmentBubble(
     message: Message,
     attachment: Attachment,
+    /**
+     * v1.28.3 (audit global, X-04 — mesuré sur le S9) — **les autres pièces jointes du même
+     * message**, affichées sous la première. F16 avait appris au receveur à garder toutes les
+     * parties d'un MMS ; l'écran, lui, continuait de n'en montrer qu'une — trois photos reçues,
+     * trois fichiers écrits, une seule bulle. Le correctif de données n'avait pas son jumeau
+     * d'affichage.
+     */
+    autres: List<Attachment> = emptyList(),
     showTimestamp: Boolean,
     onDelete: () -> Unit,
     onReply: () -> Unit,
@@ -107,21 +115,22 @@ fun MediaAttachmentBubble(
     //       TelephonyReader → ConversationMirror.upsertIncomingMms)
     // L'ancien code wrappait aveuglément `File(localUri)` → FileProvider throw sur (2)
     // = aucun MMS image historique ne pouvait s'ouvrir. On détecte le scheme avant.
-    val openAttachment: () -> Unit = remember(attachment.id, attachment.localUri) {
-        {
+    // X-04 — une seule fonction d'ouverture, paramétrée par la pièce jointe touchée.
+    val ouvrir: (Attachment) -> Unit = remember(message.id) {
+        fun(cible: Attachment) {
             runCatching {
-                val targetUri = attachment.toShareableUri(context)
+                val targetUri = cible.toShareableUri(context)
                 if (targetUri == null) {
-                    Timber.w("MediaAttachmentBubble: cannot resolve URI for %s", attachment.localUri)
+                    Timber.w("MediaAttachmentBubble: cannot resolve URI for %s", cible.localUri)
                     return@runCatching
                 }
                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(targetUri, attachment.mimeType)
+                    setDataAndType(targetUri, cible.mimeType)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.startActivity(Intent.createChooser(intent, attachment.fileName ?: ""))
-            }.onFailure { Timber.w(it, "Failed to open attachment %d", attachment.id) }
+                context.startActivity(Intent.createChooser(intent, cible.fileName ?: ""))
+            }.onFailure { Timber.w(it, "Failed to open attachment %d", cible.id) }
         }
     }
 
@@ -171,33 +180,13 @@ fun MediaAttachmentBubble(
                 isOutgoing = isOut,
                 onRemoveReaction = onRemoveReaction,
             ) {
-                when {
-                    attachment.isImage -> ImagePreview(
-                        attachment = attachment,
-                        shape = shape,
-                        bgColor = bgColor,
-                        onClick = openAttachment,
-                    )
-                    attachment.mimeType.startsWith("video/", ignoreCase = true) ->
-                        IconAttachment(
-                            attachment = attachment,
-                            icon = Icons.Outlined.PlayCircleOutline,
-                            iconLabelRes = R.string.attachment_video_label,
-                            shape = shape,
-                            bgColor = bgColor,
-                            isOutgoing = isOut,
-                            onClick = openAttachment,
-                        )
-                    else -> IconAttachment(
-                        attachment = attachment,
-                        icon = if (attachment.mimeType.startsWith("text/")) Icons.Outlined.Description else Icons.Outlined.AttachFile,
-                        iconLabelRes = R.string.attachment_file_label,
-                        shape = shape,
-                        bgColor = bgColor,
-                        isOutgoing = isOut,
-                        onClick = openAttachment,
-                    )
-                }
+                MediaPreview(attachment, shape, bgColor, isOut) { ouvrir(attachment) }
+            }
+            // X-04 — les pièces jointes suivantes, empilées sous la première, chacune avec son
+            // propre tap-to-view. La réaction et la légende restent celles du message.
+            autres.forEach { autre ->
+                Spacer(Modifier.size(4.dp))
+                MediaPreview(autre, shape, bgColor, isOut) { ouvrir(autre) }
             }
             // v1.3.10 — caption text affiché EN DESSOUS de l'image / icône quand
             // l'utilisateur a saisi du texte avant d'envoyer un MMS image / vidéo /
@@ -235,6 +224,44 @@ fun MediaAttachmentBubble(
                 onDelete = onDelete,
             )
         }
+    }
+}
+
+/** Une pièce jointe, selon son type : vignette, icône vidéo ou icône de fichier. */
+@Composable
+private fun MediaPreview(
+    attachment: Attachment,
+    shape: androidx.compose.ui.graphics.Shape,
+    bgColor: androidx.compose.ui.graphics.Color,
+    isOutgoing: Boolean,
+    onClick: () -> Unit,
+) {
+    when {
+        attachment.isImage -> ImagePreview(
+            attachment = attachment,
+            shape = shape,
+            bgColor = bgColor,
+            onClick = onClick,
+        )
+        attachment.mimeType.startsWith("video/", ignoreCase = true) ->
+            IconAttachment(
+                attachment = attachment,
+                icon = Icons.Outlined.PlayCircleOutline,
+                iconLabelRes = R.string.attachment_video_label,
+                shape = shape,
+                bgColor = bgColor,
+                isOutgoing = isOutgoing,
+                onClick = onClick,
+            )
+        else -> IconAttachment(
+            attachment = attachment,
+            icon = if (attachment.mimeType.startsWith("text/")) Icons.Outlined.Description else Icons.Outlined.AttachFile,
+            iconLabelRes = R.string.attachment_file_label,
+            shape = shape,
+            bgColor = bgColor,
+            isOutgoing = isOutgoing,
+            onClick = onClick,
+        )
     }
 }
 
