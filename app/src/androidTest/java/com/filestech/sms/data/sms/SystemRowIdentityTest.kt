@@ -184,7 +184,92 @@ class SystemRowIdentityTest {
     }
 
     /** Voir le KDoc de classe : la precondition se TENTE, elle ne s'interroge pas. */
-    private fun insertProbeOrSkip(date: Long, body: String): Uri {
+    /**
+     * v1.28.3 (F14) — **la sentinelle de reaction ne pouvait PAS etre supprimee du systeme.**
+     *
+     * `SendReactionUseCase` passe `localMirrorBody = ""` : la ligne Room porte un corps VIDE
+     * pour ne pas peindre de bulle redondante, tandis que la ligne systeme porte le texte
+     * reellement parti sur le reseau. La comparaison de corps echouait donc a tous les coups, et
+     * l'effaceur refusait de toucher la copie systeme de NOS PROPRES reactions.
+     *
+     * Deux consequences : elles restaient dans `content://sms` apres suppression de la
+     * conversation — et une resynchronisation les ramenait en bulles fantomes « Reacted … » —
+     * et, sur une conversation du coffre, ce refus rendait la purge definitivement incomplete,
+     * donc le PIN impossible a retirer.
+     */
+    @Test
+    fun uneSentinelleDeReaction_estSupprimeeMalgreSonCorpsLocalVide() {
+        val date = System.currentTimeMillis()
+        val uri = insertProbeOrSkip(date, "Reacted ❤️ to «on se voit demain»", sortant = true)
+
+        // Ce que Room detient reellement d'une reaction sortante : un corps vide.
+        val sentinelle = message(uri, "", date, MessageDirection.OUTGOING)
+            .copy(status = MessageStatus.SENT)
+
+        assertThat(eraser.erase(sentinelle)).isTrue()
+        assertThat(ligneSystemePresente(uri)).isFalse()
+    }
+
+    /**
+     * Controle : le garde d'identite s'applique TOUJOURS a une sentinelle. Ne plus comparer le
+     * corps ne veut pas dire ne plus rien comparer — l'adresse reste, et c'est elle qui empeche
+     * de supprimer la ligne d'un autre correspondant.
+     */
+    @Test
+    fun uneSentinelleDeReaction_dAdresseDifferente_nEstPasSupprimee() {
+        val date = System.currentTimeMillis()
+        val uri = insertProbeOrSkip(date, "Reacted ❤️ to «bonjour»", sortant = true)
+
+        val autre = message(uri, "", date, MessageDirection.OUTGOING)
+            .copy(address = "+33699999999")
+
+        assertThat(eraser.erase(autre)).isFalse()
+        assertThat(ligneSystemePresente(uri)).isTrue()
+    }
+
+    /**
+     * v1.28.3 (F12) — **date + sens ne sont pas une identite.**
+     *
+     * Quand le corps n'est pas comparable — sentinelle, ou MMS — et que l'adresse locale est
+     * vide, il ne reste que la date a une minute pres et un bit de sens. C'est le cas ordinaire
+     * de deux messages d'un meme echange, et c'etait suffisant pour SUPPRIMER. L'identite non
+     * etablie doit echouer du cote sur, comme le fait `UNKNOWN` depuis la v1.28.1.
+     */
+    @Test
+    fun uneSentinelleSansAdresseLocale_nEstPasSupprimee() {
+        val date = System.currentTimeMillis()
+        val uri = insertProbeOrSkip(date, "Reacted ❤️ to «salut»", sortant = true)
+
+        val sansAdresse = message(uri, "", date, MessageDirection.OUTGOING).copy(address = "")
+
+        assertThat(eraser.erase(sansAdresse)).isFalse()
+        assertThat(ligneSystemePresente(uri)).isTrue()
+    }
+
+    /**
+     * Controle POSITIF de F12 : un message ORDINAIRE sans adresse locale reste supprimable. Son
+     * corps porte la preuve, et durcir la regle ne doit pas emporter ce cas-la — sans quoi on
+     * aurait remplace une suppression trop facile par un refus systematique.
+     */
+    @Test
+    fun unMessageOrdinaireSansAdresseLocale_resteSupprimable() {
+        val date = System.currentTimeMillis()
+        val corps = "texte parfaitement discriminant"
+        val uri = insertProbeOrSkip(date, corps)
+
+        val sansAdresse = message(uri, corps, date).copy(address = "")
+
+        assertThat(eraser.erase(sansAdresse)).isTrue()
+        assertThat(ligneSystemePresente(uri)).isFalse()
+    }
+
+    /**
+     * v1.28.3 (F14) — [sortant] permet d'inserer une sonde en SENT plutot qu'en INBOX. Une
+     * sentinelle de reaction SORTANTE est le cas qui a motive le correctif ; la tester sur une
+     * ligne entrante aurait teste autre chose, et le critere de SENS l'aurait fait echouer pour
+     * une raison sans rapport.
+     */
+    private fun insertProbeOrSkip(date: Long, body: String, sortant: Boolean = false): Uri {
         val cv = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, ADRESSE)
             put(Telephony.Sms.BODY, body)
@@ -192,9 +277,13 @@ class SystemRowIdentityTest {
             put(Telephony.Sms.DATE_SENT, date)
             put(Telephony.Sms.READ, 1)
             put(Telephony.Sms.SEEN, 1)
-            put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
+            put(
+                Telephony.Sms.TYPE,
+                if (sortant) Telephony.Sms.MESSAGE_TYPE_SENT else Telephony.Sms.MESSAGE_TYPE_INBOX,
+            )
         }
-        val tentative = runCatching { resolver.insert(Telephony.Sms.Inbox.CONTENT_URI, cv) }
+        val cible = if (sortant) Telephony.Sms.Sent.CONTENT_URI else Telephony.Sms.Inbox.CONTENT_URI
+        val tentative = runCatching { resolver.insert(cible, cv) }
         // Le motif du refus est REPORTE. Un « ignore » muet est la facon dont quatre tests ont
         // ete comptes verts le 2026-09-07 sans jamais s'executer : qui lit le rapport doit
         // pouvoir distinguer « pas le role SMS » de « pas de telephonie sur cet emulateur ».

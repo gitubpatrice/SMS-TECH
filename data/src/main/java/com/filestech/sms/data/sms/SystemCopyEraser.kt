@@ -185,6 +185,19 @@ class TelephonySystemCopyEraser @Inject constructor(
                     cursor == null -> SystemRowMatch.UNKNOWN
                     !cursor.moveToFirst() -> SystemRowMatch.ABSENT
                     else -> {
+                        val adresseSysteme =
+                            if (isMms) mmsAddress(uri, message.direction) else cursor.getString(3)
+                        // v1.28.3 (F14) — le corps n'est comparable que s'il DECRIT le message.
+                        //
+                        // Une sentinelle de reaction porte `body = ""` en local alors que la
+                        // ligne systeme porte le texte reellement parti sur le reseau
+                        // (« Reacted ❤️ to «…» »). La comparaison echouait donc toujours, et
+                        // l'effaceur REFUSAIT de supprimer la copie systeme de nos propres
+                        // reactions : elles restaient dans `content://sms`, et une
+                        // resynchronisation les ramenait en bulles fantomes une fois la
+                        // conversation supprimee. Sur une conversation du coffre, ce refus rendait
+                        // meme la purge definitivement incomplete.
+                        val corpsComparable = !isMms && !estSentinelleDeReaction(message)
                         // Une LISTE plutot qu'une conjonction : chaque critere se lit et se
                         // discute seul, et en ajouter un n'oblige pas a relire une condition qui
                         // s'allonge. Tous doivent tenir — l'identite se prouve, elle ne se vote
@@ -199,17 +212,59 @@ class TelephonySystemCopyEraser @Inject constructor(
                             // Le corps d'un MMS n'est pas dans la table designee par l'URI : il
                             // vit dans `part`, et l'atteindre demanderait de reassembler les
                             // morceaux. Le sens et l'adresse suffisent a le distinguer.
-                            isMms || (cursor.getString(1) ?: "") == message.body,
-                            sameAddress(
-                                if (isMms) mmsAddress(uri, message.direction) else cursor.getString(3),
-                                message.address,
-                            ),
+                            !corpsComparable || (cursor.getString(1) ?: "") == message.body,
+                            sameAddress(adresseSysteme, message.address),
                         )
-                        if (criteres.all { it }) SystemRowMatch.MATCH else SystemRowMatch.MISMATCH
+                        when {
+                            !criteres.all { it } -> SystemRowMatch.MISMATCH
+                            // v1.28.3 (F12) — date + sens ne sont PAS une identite.
+                            //
+                            // Les deux se ressemblent d'un message a l'autre : une minute est la
+                            // duree ordinaire d'un echange, et le sens ne vaut qu'un bit. Tant
+                            // que le corps etait compare, il portait la preuve ; il ne l'est ni
+                            // pour un MMS ni pour une sentinelle, et `sameAddress` accepte en
+                            // outre une adresse systeme ABSENTE — a juste titre, exiger l'egalite
+                            // d'une donnee manquante serait refuser sans motif.
+                            //
+                            // Restait donc un chemin ou l'on SUPPRIMAIT sur date + sens seuls.
+                            // C'est trop peu pour un acte irreversible : l'identite non etablie
+                            // doit echouer du cote sur, exactement comme [SystemRowMatch.UNKNOWN]
+                            // depuis la v1.28.1. La sortie assumee « PIN oublie » (v1.28.2)
+                            // existe desormais pour les cas ou ce refus deviendrait une impasse.
+                            !preuveSuffisante(corpsComparable, adresseSysteme, message.address) ->
+                                SystemRowMatch.MISMATCH
+                            else -> SystemRowMatch.MATCH
+                        }
                     }
                 }
             }
     }.getOrElse { SystemRowMatch.UNKNOWN }
+
+    /**
+     * v1.28.3 (F14) — la ligne locale est-elle une **sentinelle de reaction** ?
+     *
+     * Meme forme que le predicat d'exclusion de `MessageDao.observeForConversation`, et pour la
+     * meme raison : `body` vide, aucune piece jointe, aucune reaction locale. Ces lignes existent
+     * pour qu'une reaction ne peigne pas de bulle redondante, et leur `body` ne decrit donc PAS
+     * ce qui est parti sur le reseau.
+     */
+    private fun estSentinelleDeReaction(message: MessageEntity): Boolean =
+        message.body.isEmpty() && message.attachmentsCount == 0 && message.reactionEmoji == null
+
+    /**
+     * v1.28.3 (F12) — reste-t-il, au-dela de la date et du sens, **un** discriminant reellement
+     * compare ?
+     *
+     * Le corps quand il decrit le message, ou l'adresse quand le fournisseur la rend et que Room
+     * en detient une. Si aucun des deux n'a pu etre confronte, l'egalite des criteres ci-dessus
+     * ne prouve rien : deux messages d'un meme echange partagent la minute et le sens.
+     */
+    private fun preuveSuffisante(
+        corpsComparable: Boolean,
+        adresseSysteme: String?,
+        adresseLocale: String,
+    ): Boolean = corpsComparable ||
+        (!adresseSysteme.isNullOrBlank() && adresseLocale.isNotBlank())
 
     /**
      * v1.28.1 — l'adresse d'un MMS, seule chose qui separe deux MMS voisins.
