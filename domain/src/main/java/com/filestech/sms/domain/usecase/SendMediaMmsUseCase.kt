@@ -6,9 +6,7 @@ import com.filestech.sms.domain.mms.MediaAttachmentSpec
 import com.filestech.sms.domain.mms.MmsAttachment
 import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
-import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
@@ -37,6 +35,8 @@ class SendMediaMmsUseCase @Inject constructor(
     private val settings: AppSettingsSource,
     private val attachmentStore: OutgoingAttachmentStore,
 ) {
+    private val envoi = EnvoiParDestinataire(blockedRepo, mirror)
+
     suspend operator fun invoke(
         recipients: List<PhoneAddress>,
         attachments: List<AttachmentPayload>,
@@ -98,82 +98,46 @@ class SendMediaMmsUseCase @Inject constructor(
             return envoiDeGroupe(recipients, mirrorSpecs, pduAttachments, textBody, effectiveSubId, deliveryReports)
         }
 
-        val ids = ArrayList<Long>(recipients.size)
-        val failed = ArrayList<PhoneAddress>()
-        val blocked = ArrayList<PhoneAddress>()
-        for (r in recipients) {
-            // v1.28.3 (F21, second passage) — le `continue` muet etait ici AUSSI.
-            //
-            // Le correctif F21 n'avait ete pose que sur `SendSmsUseCase` : un MMS vers un contact
-            // bloque disparaissait donc toujours sans ligne, sans message et sans compte — y
-            // compris pour un envoi PROGRAMME porteur d'une piece jointe, que
-            // `ScheduledSendAttempt` aiguille vers ce chemin-ci. C'est exactement le motif du
-            // correctif asymetrique que cette relecture entiere a mis au jour, et je venais de le
-            // reproduire. Trouve par la revue de qualite lancee sur mon propre delta.
-            if (blockedRepo.isBlocked(r.raw)) {
-                blocked += r
-                val blockedId = mirror.upsertOutgoingMediaMms(
+        // v1.28.3 (F21, second passage) — le `continue` muet était ici AUSSI : le correctif
+        // n'avait été posé que sur `SendSmsUseCase`. v1.28.4 — la boucle n'existe plus qu'une
+        // fois, dans [EnvoiParDestinataire] ; ce chemin ne peut plus diverger du SMS.
+        return envoi.parDestinataire(
+            recipients = recipients,
+            sansRemise = "no MMS dispatched",
+            miroir = { r, _ ->
+                mirror.upsertOutgoingMediaMms(
                     address = r.raw,
                     attachments = mirrorSpecs,
                     textBody = textBody,
                     date = now,
                     subId = effectiveSubId,
                 )
-                mirror.updateOutgoingStatus(
-                    blockedId,
-                    MessageStatus.FAILED,
-                    errorCode = SendErrorCode.RECIPIENT_BLOCKED,
+            },
+            envoi = { localId, r ->
+                sender.sendMediaMms(
+                    localMessageId = localId,
+                    recipients = listOf(r.raw),
+                    attachments = pduAttachments,
+                    textBody = textBody.ifBlank { null },
+                    subId = effectiveSubId,
+                    requestDeliveryReport = deliveryReports,
                 )
-                continue
-            }
-
-            val localId = mirror.upsertOutgoingMediaMms(
-                address = r.raw,
-                attachments = mirrorSpecs,
-                textBody = textBody,
-                date = now,
-                subId = effectiveSubId,
-            )
-
-            when (sender.sendMediaMms(
-                localMessageId = localId,
-                recipients = listOf(r.raw),
-                attachments = pduAttachments,
-                textBody = textBody.ifBlank { null },
-                subId = effectiveSubId,
-                requestDeliveryReport = deliveryReports,
-            )) {
-                is Outcome.Success -> ids += localId
-                is Outcome.Failure -> {
-                    failed += r
-                    mirror.updateOutgoingStatus(
-                        localId,
-                        MessageStatus.FAILED,
-                        errorCode = SendErrorCode.SYNCHRONOUS,
+            },
+            echoDeGroupe = if (echoInGroup) {
+                { statut ->
+                    mirror.upsertGroupEcho(
+                        addresses = recipients,
+                        body = textBody,
+                        date = now,
+                        subId = effectiveSubId,
+                        status = statut,
+                        attachments = mirrorSpecs,
                     )
                 }
-            }
-        }
-
-        // v1.28.3 (groupes) — la copie dans le fil du groupe, cf. [SendSmsUseCase].
-        if (echoInGroup && recipients.size > 1) {
-            mirror.upsertGroupEcho(
-                addresses = recipients,
-                body = textBody,
-                date = now,
-                subId = effectiveSubId,
-                status = if (ids.size == recipients.size) MessageStatus.SENT else MessageStatus.FAILED,
-                attachments = mirrorSpecs,
-            )
-        }
-        if (ids.isEmpty()) {
-            return if (blocked.size == recipients.size) {
-                Outcome.Failure(AppError.RecipientBlocked)
             } else {
-                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
-            }
-        }
-        return Outcome.Success(SendReport(dispatched = ids, failed = failed, blocked = blocked))
+                null
+            },
+        )
     }
 
     /**
@@ -195,18 +159,19 @@ class SendMediaMmsUseCase @Inject constructor(
         textBody: String,
         subId: Int?,
         deliveryReports: Boolean,
-    ): Outcome<SendReport> {
-        val blocked = recipients.filter { blockedRepo.isBlocked(it.raw) }
-        val cibles = recipients - blocked.toSet()
-        if (cibles.isEmpty()) return Outcome.Failure(AppError.RecipientBlocked)
-        val localId = mirror.upsertOutgoingGroupMms(
-            addresses = recipients,
-            attachments = mirrorSpecs,
-            textBody = textBody,
-            date = System.currentTimeMillis(),
-            subId = subId,
-        )
-        return when (
+    ): Outcome<SendReport> = envoi.enGroupe(
+        recipients = recipients,
+        sansRemise = "no MMS dispatched",
+        miroir = {
+            mirror.upsertOutgoingGroupMms(
+                addresses = recipients,
+                attachments = mirrorSpecs,
+                textBody = textBody,
+                date = System.currentTimeMillis(),
+                subId = subId,
+            )
+        },
+        envoi = { localId, cibles ->
             sender.sendMediaMms(
                 localMessageId = localId,
                 recipients = cibles.map { it.raw },
@@ -215,16 +180,8 @@ class SendMediaMmsUseCase @Inject constructor(
                 subId = subId,
                 requestDeliveryReport = deliveryReports,
             )
-        ) {
-            is Outcome.Success -> Outcome.Success(
-                SendReport(dispatched = listOf(localId), failed = emptyList(), blocked = blocked),
-            )
-            is Outcome.Failure -> {
-                mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = SendErrorCode.SYNCHRONOUS)
-                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
-            }
-        }
-    }
+        },
+    )
 
     private fun refusPrealable(
         recipients: List<PhoneAddress>,

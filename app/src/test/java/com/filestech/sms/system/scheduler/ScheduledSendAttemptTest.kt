@@ -5,7 +5,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
 import com.filestech.sms.domain.model.ScheduledState
-import com.filestech.sms.domain.usecase.SendSmsUseCase
+import com.filestech.sms.domain.usecase.EnvoyerMessageUseCase
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -25,21 +25,15 @@ import org.junit.jupiter.api.Test
 class ScheduledSendAttemptTest {
 
     private val dao = mockk<ScheduledMessageDao>(relaxed = true)
-    private val sendSms = mockk<SendSmsUseCase>()
 
     /**
-     * v1.26.0 — le worker aiguille desormais vers le MMS quand l'envoi porte des pieces jointes.
-     * Ces tests-ci portent sur des envois SANS piece jointe, donc ce collaborateur ne doit jamais
-     * etre sollicite : `relaxed = false` par defaut ferait echouer tout appel inattendu, ce qui
-     * verrouille l'aiguillage au passage.
+     * v1.28.4 — un seul collaborateur d'envoi : le routeur [EnvoyerMessageUseCase] decide
+     * SMS / MMS / MMS de groupe et lit lui-meme le reglage. Ce test ne verifie plus l'aiguillage
+     * (c'est `EnvoyerMessageUseCaseTest`, en domain) mais ce qui est TRANSMIS au routeur et ce
+     * qui est fait de sa reponse.
      */
-    private val sendMediaMms = mockk<com.filestech.sms.domain.usecase.SendMediaMmsUseCase>()
-    private val settings = mockk<com.filestech.sms.domain.settings.AppSettingsSource>()
-    private val attempt = ScheduledSendAttempt(dao, sendSms, sendMediaMms, settings)
-
-    init {
-        coEvery { settings.hydratedOrNull() } returns com.filestech.sms.domain.settings.AppSettings()
-    }
+    private val envoyer = mockk<EnvoyerMessageUseCase>()
+    private val attempt = ScheduledSendAttempt(dao, envoyer)
 
     private fun entity(
         state: ScheduledState = ScheduledState.PENDING,
@@ -55,13 +49,9 @@ class ScheduledSendAttemptTest {
         claimedAt = claimedAt,
     )
 
-    /**
-     * Sept `any()` = la signature complète de [SendSmsUseCase.invoke]. L'appelant n'en passe que
-     * trois : les quatre autres arrivent par le pont statique `invoke$default`, que mockk ne
-     * court-circuite pas et qui délègue donc à la surcharge complète, seule interceptée.
-     */
+    /** Cinq `any()` = la signature complete de [EnvoyerMessageUseCase.invoke]. */
     private fun stubSend(result: Outcome<com.filestech.sms.domain.model.SendReport>) {
-        coEvery { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) } returns result
+        coEvery { envoyer.invoke(any(), any(), any(), any(), any()) } returns result
     }
 
     private fun failure() = Outcome.Failure(AppError.Telephony("no SIM"))
@@ -137,7 +127,7 @@ class ScheduledSendAttemptTest {
         )
         assertThat(verdicts.last()).isEqualTo(ScheduledSendAttempt.Verdict.GAVE_UP)
         coVerify(exactly = ScheduledSendAttempt.MAX_ATTEMPTS) {
-            sendSms.invoke(any(), any(), any(), any(), any(), any(), any())
+            envoyer.invoke(any(), any(), any(), any(), any())
         }
         assertThat(stored.state).isEqualTo(ScheduledState.FAILED)
     }
@@ -152,7 +142,7 @@ class ScheduledSendAttemptTest {
             assertThat(attempt(ID, runAttemptCount = 0))
                 .isEqualTo(ScheduledSendAttempt.Verdict.ALREADY_SETTLED)
         }
-        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { envoyer.invoke(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { dao.setState(any(), any()) }
     }
 
@@ -161,7 +151,7 @@ class ScheduledSendAttemptTest {
         coEvery { dao.findById(ID) } returns null
 
         assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.UNKNOWN_ID)
-        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { envoyer.invoke(any(), any(), any(), any(), any()) }
     }
 
     // ------------------------------------------------------------------------------------------
@@ -185,7 +175,7 @@ class ScheduledSendAttemptTest {
 
         assertThat(attempt(ID, runAttemptCount = 0, now = now))
             .isEqualTo(ScheduledSendAttempt.Verdict.IN_FLIGHT)
-        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { envoyer.invoke(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { dao.setState(any(), any()) }
     }
 
@@ -216,7 +206,7 @@ class ScheduledSendAttemptTest {
 
         attempt(ID, runAttemptCount = 0, now = 1_000_000_000L)
 
-        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { envoyer.invoke(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { dao.claimForSending(any(), any()) }
         coVerify(exactly = 0) { dao.setState(ID, ScheduledState.PENDING) }
     }
@@ -273,7 +263,7 @@ class ScheduledSendAttemptTest {
      */
     @Test
     fun `un destinataire bloque n est pas retente et abandonne des la premiere tentative`() = runTest {
-        coEvery { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) } returns
+        coEvery { envoyer.invoke(any(), any(), any(), any(), any()) } returns
             Outcome.Failure(AppError.RecipientBlocked)
         coEvery { dao.findById(ID) } returns entity()
 
@@ -322,52 +312,20 @@ class ScheduledSendAttemptTest {
         coVerify(exactly = 1) { dao.setState(ID, ScheduledState.SENT) }
     }
 
-    private fun reglageMmsDeGroupe(actif: Boolean) {
-        coEvery { settings.hydratedOrNull() } returns com.filestech.sms.domain.settings.AppSettings().let {
-            it.copy(sending = it.sending.copy(groupMms = actif))
-        }
-    }
-
     /**
-     * v1.28.4 — un envoi programme depuis un GROUPE, reglage « MMS de groupe » actif, part en UN
-     * MMS a tous — meme regle que l'envoi immediat. Avant, ce quatrieme chemin d'envoi ignorait
-     * le reglage et eclatait le message en envois 1-a-1.
+     * v1.28.4 — ce que le routeur recoit : les destinataires decodes du CSV, le corps, les pieces
+     * jointes rendues durables a la programmation, et le `subId` de la ligne. L'aiguillage
+     * lui-meme n'est plus ecrit ici, donc plus testable ici — c'est le but.
      */
     @Test
-    fun `un envoi programme depuis un groupe, reglage actif, part en un seul MMS de groupe`() = runTest {
-        reglageMmsDeGroupe(actif = true)
-        coEvery { sendMediaMms.invoke(any(), any(), any(), any(), any(), any()) } returns
-            Outcome.Success(com.filestech.sms.domain.model.SendReport(listOf(42L), emptyList(), emptyList()))
-        coEvery { dao.findById(ID) } returns entity().copy(addressesCsv = "+33600000000;+33611111111")
+    fun `l envoi programme transmet au routeur destinataires, corps, pieces jointes et subId`() = runTest {
+        stubSend(Outcome.Success(rapportComplet()))
+        coEvery { dao.findById(ID) } returns entity().copy(addressesCsv = "+33600000000;+33611111111", subId = 3)
 
         assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.SENT)
         coVerify(exactly = 1) {
-            sendMediaMms.invoke(
-                match { it.size == 2 },
-                emptyList(),
-                "Bonjour",
-                null,
-                echoInGroup = false,
-                groupMms = true,
-            )
+            envoyer.invoke(match { it.size == 2 }, "Bonjour", emptyList(), 3, null)
         }
-        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
-    }
-
-    /** Controle : reglage inactif, le meme envoi de groupe suit le chemin SMS d'avant. */
-    @Test
-    fun `un envoi programme depuis un groupe, reglage inactif, part en SMS 1-a-1`() = runTest {
-        reglageMmsDeGroupe(actif = false)
-        // Huit parametres : `echoInGroup` vaut `true` pour un groupe, `stubSend` le fige a `false`.
-        coEvery { sendSms.invoke(any(), any(), any(), any(), any(), any(), any(), any()) } returns
-            Outcome.Success(com.filestech.sms.domain.model.SendReport(listOf(1L, 2L), emptyList(), emptyList()))
-        coEvery { dao.findById(ID) } returns entity().copy(addressesCsv = "+33600000000;+33611111111")
-
-        assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.SENT)
-        coVerify(exactly = 1) {
-            sendSms.invoke(match { it.size == 2 }, "Bonjour", any(), any(), any(), any(), any(), echoInGroup = true)
-        }
-        coVerify(exactly = 0) { sendMediaMms.invoke(any(), any(), any(), any(), any(), any()) }
     }
 
     private companion object {

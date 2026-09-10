@@ -17,12 +17,12 @@ import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
 import com.filestech.sms.domain.settings.AppSettings
+import com.filestech.sms.domain.usecase.EnvoyerMessageUseCase
 import com.filestech.sms.domain.usecase.ExportConversationPdfUseCase
 import com.filestech.sms.domain.usecase.MarkConversationReadUseCase
 import com.filestech.sms.domain.usecase.RetrySendUseCase
 import com.filestech.sms.domain.usecase.SendMediaMmsUseCase
 import com.filestech.sms.domain.usecase.SendReactionUseCase
-import com.filestech.sms.domain.usecase.SendSmsUseCase
 import com.filestech.sms.domain.usecase.SendVoiceMmsUseCase
 import com.filestech.sms.system.notifications.ActiveConversationTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,9 +51,8 @@ import javax.inject.Inject
 class ThreadViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: ConversationRepository,
-    private val sendSms: SendSmsUseCase,
+    private val envoyer: EnvoyerMessageUseCase,
     private val sendVoiceMms: SendVoiceMmsUseCase,
-    private val sendMediaMms: SendMediaMmsUseCase,
     private val retrySend: RetrySendUseCase,
     private val markRead: MarkConversationReadUseCase,
     private val segCounter: SmsSegmentCounter,
@@ -710,18 +709,9 @@ class ThreadViewModel @Inject constructor(
             // chez nous, et AUCUN SMS parti — que le chien de garde basculait en échec quinze
             // minutes plus tard, sans cause visible.
             val res = withContext(NonCancellable) {
-                // v1.28.4 — MMS de groupe actif : un texte envoyé depuis un groupe part en MMS,
-                // pour que tout le monde le voie et que les réponses reviennent au groupe.
-                if (conv.isGroup && cachedSettings.value.sending.groupMms) {
-                    sendMediaMms.invoke(
-                        recipients = conv.addresses,
-                        attachments = emptyList(),
-                        textBody = body,
-                        groupMms = true,
-                    )
-                } else {
-                    sendSms.invoke(conv.addresses, body, replyToMessageId = replyTargetId, echoInGroup = conv.isGroup)
-                }
+                // v1.28.4 — le routeur decide : MMS de groupe si le reglage est actif et que
+                // la conversation est un groupe, SMS sinon (cf. [EnvoyerMessageUseCase]).
+                envoyer.invoke(conv.addresses, body, replyToMessageId = replyTargetId)
             }
             when (res) {
                 is Outcome.Success -> {
@@ -1134,13 +1124,7 @@ class ThreadViewModel @Inject constructor(
         _state.update { it.copy(isSending = true) }
         val res = try {
             withContext(NonCancellable) {
-                sendMediaMms.invoke(
-                    recipients = conv.addresses,
-                    attachments = payloads,
-                    textBody = textBody,
-                    echoInGroup = conv.isGroup,
-                    groupMms = cachedSettings.value.sending.groupMms,
-                )
+                envoyer.invoke(conv.addresses, textBody, attachments = payloads)
             }
         } finally {
             _state.update { it.copy(isSending = false) }

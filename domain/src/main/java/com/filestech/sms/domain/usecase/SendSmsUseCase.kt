@@ -4,7 +4,6 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
@@ -35,6 +34,8 @@ class SendSmsUseCase @Inject constructor(
     private val blockedRepo: BlockedNumberRepository,
     private val settings: AppSettingsSource,
 ) {
+    private val envoi = EnvoiParDestinataire(blockedRepo, mirror)
+
     /**
      * Les trois gardes qui precedent toute ecriture, regroupes en une seule decision.
      *
@@ -112,99 +113,55 @@ class SendSmsUseCase @Inject constructor(
         val deliveryReports = s.sending.deliveryReports
         val effectiveSubId = subId ?: s.sending.defaultSubId
 
-        val ids = ArrayList<Long>(recipients.size)
-        val failed = ArrayList<PhoneAddress>()
-        val blocked = ArrayList<PhoneAddress>()
         val now = System.currentTimeMillis()
-        for (r in recipients) {
-            // v1.28.3 (F21) — un destinataire bloqué laisse désormais une TRACE.
-            //
-            // La boucle se contentait d'un `continue` muet : ni ligne, ni message, ni compte. On
-            // tapait « Envoyer », et le message disparaissait — sans erreur, sans bulle, sans
-            // rien. Sur un envoi à plusieurs, personne ne pouvait même s'apercevoir qu'un
-            // destinataire manquait à l'appel.
-            //
-            // La ligne est écrite dans le miroir local UNIQUEMENT : rien n'est parti sur le
-            // réseau, et écrire chez le fournisseur système une ligne « envoyée » qui ne l'est
-            // pas mentirait à toutes les autres applications SMS de l'appareil. Le
-            // `telephonyUri` reste donc `null`, et le statut est posé en échec dès l'insertion —
-            // il n'existe aucune tentative dont un accusé pourrait le faire progresser.
-            if (respectBlocklistOnIncoming && blockedRepo.isBlocked(r.raw)) {
-                blocked += r
-                val blockedId = mirror.upsertOutgoingSms(
+        // v1.28.3 (F21) — un destinataire bloqué laisse une TRACE, dans le miroir local
+        // UNIQUEMENT : rien n'est parti, et écrire chez le fournisseur système une ligne
+        // « envoyée » qui ne l'est pas mentirait aux autres applications SMS de l'appareil. Le
+        // `telephonyUri` reste donc `null`. Statut posé en deux temps par l'aide :
+        // `upsertOutgoingSms` n'écrit pas de code d'erreur, et la promotion monotone refuserait
+        // ensuite d'en poser un sur une ligne déjà au sommet de l'échelle.
+        // v1.28.4 — boucle, écho et verdict vivent dans [EnvoiParDestinataire].
+        return envoi.parDestinataire(
+            recipients = recipients,
+            sansRemise = "no message dispatched",
+            miroir = { r, bloque ->
+                mirror.upsertOutgoingSms(
                     address = r.raw,
                     body = finalBody,
                     date = now,
-                    telephonyUri = null,
+                    telephonyUri = if (bloque) {
+                        null
+                    } else {
+                        sentSmsRecorder.insertSentSms(
+                            address = r.raw,
+                            body = finalBody,
+                            date = now,
+                            subId = effectiveSubId,
+                        )
+                    },
                     subId = effectiveSubId,
                     initialStatus = MessageStatus.PENDING,
                     replyToMessageId = replyToMessageId,
                     localMirrorBody = localMirrorBody,
                 )
-                // En deux temps, et non `initialStatus = FAILED` : `upsertOutgoingSms` n'écrit
-                // pas de code d'erreur, et la promotion monotone refuserait ensuite d'en poser
-                // un sur une ligne déjà au sommet de l'échelle. Le motif de l'échec doit
-                // pourtant être lisible — c'est lui qui distingue « bloqué » de « en panne ».
-                mirror.updateOutgoingStatus(
-                    blockedId,
-                    MessageStatus.FAILED,
-                    errorCode = SendErrorCode.RECIPIENT_BLOCKED,
-                )
-                continue
-            }
-            val systemUri = sentSmsRecorder.insertSentSms(
-                address = r.raw,
-                body = finalBody,
-                date = now,
-                subId = effectiveSubId,
-            )
-            val localId = mirror.upsertOutgoingSms(
-                address = r.raw,
-                body = finalBody,
-                date = now,
-                telephonyUri = systemUri,
-                subId = effectiveSubId,
-                initialStatus = MessageStatus.PENDING,
-                replyToMessageId = replyToMessageId,
-                localMirrorBody = localMirrorBody,
-            )
-            when (sender.send(localId, r.raw, finalBody, effectiveSubId, deliveryReports)) {
-                is Outcome.Success -> ids += localId
-                is Outcome.Failure -> {
-                    failed += r
-                    mirror.updateOutgoingStatus(
-                        localId,
-                        MessageStatus.FAILED,
-                        errorCode = SendErrorCode.SYNCHRONOUS,
+            },
+            envoi = { localId, r -> sender.send(localId, r.raw, finalBody, effectiveSubId, deliveryReports) },
+            // v1.28.3 (groupes) — la copie dans le fil du groupe. Pas pour une réaction (corps
+            // local vide, filtré à l'affichage).
+            echoDeGroupe = if (echoInGroup && localMirrorBody != "") {
+                { statut ->
+                    mirror.upsertGroupEcho(
+                        addresses = recipients,
+                        body = localMirrorBody ?: finalBody,
+                        date = now,
+                        subId = effectiveSubId,
+                        status = statut,
+                        replyToMessageId = replyToMessageId,
                     )
                 }
-            }
-        }
-        // v1.28.3 (groupes) — la copie dans le fil du groupe. Pas pour une réaction (corps local
-        // vide, filtré à l'affichage) ni pour un seul destinataire, qui n'a pas de « groupe ».
-        if (echoInGroup && recipients.size > 1 && localMirrorBody != "") {
-            mirror.upsertGroupEcho(
-                addresses = recipients,
-                body = localMirrorBody ?: finalBody,
-                date = now,
-                subId = effectiveSubId,
-                status = if (ids.size == recipients.size) MessageStatus.SENT else MessageStatus.FAILED,
-                replyToMessageId = replyToMessageId,
-            )
-        }
-        // v1.28.3 (F21) — l'échec total dit enfin POURQUOI.
-        //
-        // « Aucun message remis » était rendu comme une erreur de téléphonie, y compris quand
-        // aucune pile n'avait été sollicitée parce que tous les destinataires étaient bloqués.
-        // L'utilisateur lisait un problème de réseau là où il n'y avait qu'une règle qu'il avait
-        // lui-même posée, et attendait donc que « ça repasse ».
-        if (ids.isEmpty()) {
-            return if (blocked.size == recipients.size) {
-                Outcome.Failure(AppError.RecipientBlocked)
             } else {
-                Outcome.Failure(AppError.Telephony("no message dispatched"))
-            }
-        }
-        return Outcome.Success(SendReport(dispatched = ids, failed = failed, blocked = blocked))
+                null
+            },
+        )
     }
 }

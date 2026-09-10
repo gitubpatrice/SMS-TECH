@@ -6,9 +6,7 @@ import com.filestech.sms.data.local.db.dao.ScheduledMessageDao
 import com.filestech.sms.data.local.db.mapper.toDomain
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.ScheduledState
-import com.filestech.sms.domain.settings.AppSettings
-import com.filestech.sms.domain.settings.AppSettingsSource
-import com.filestech.sms.domain.usecase.SendSmsUseCase
+import com.filestech.sms.domain.usecase.EnvoyerMessageUseCase
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -26,11 +24,10 @@ import javax.inject.Inject
  */
 class ScheduledSendAttempt @Inject constructor(
     private val dao: ScheduledMessageDao,
-    private val sendSms: SendSmsUseCase,
-    // v1.26.0 — un envoi programme peut porter des pieces jointes ; il faut alors la voie MMS.
-    private val sendMediaMms: com.filestech.sms.domain.usecase.SendMediaMmsUseCase,
-    // v1.28.4 — le MMS de groupe est un reglage ; l'envoi programme doit le lire comme l'envoi immediat.
-    private val settings: AppSettingsSource,
+    // v1.28.4 — l'aiguillage SMS / MMS / MMS de groupe n'est plus ecrit ici : ce chemin avait
+    // deja diverge deux fois de l'envoi immediat (piece jointe perdue en v1.26.0, reglage
+    // « MMS de groupe » ignore en 1.28.3). Le routeur porte la regle, et la lit lui-meme.
+    private val envoyer: EnvoyerMessageUseCase,
 ) {
 
     /**
@@ -109,18 +106,7 @@ class ScheduledSendAttempt @Inject constructor(
         // Decodage via le mapper de l'entite : une seule voie de lecture, partagee avec la liste
         // des envois programmes. Le codec lui-meme reste interne au module `data`.
         val attachments = entity.toDomain().attachments
-        // v1.28.4 — MMS de groupe : le MEME message programme depuis un groupe partait en N
-        // envois 1-a-1 alors que l'envoi immediat, lui, lisait le reglage et partait en un seul
-        // MMS. Quatrieme chemin d'envoi, meme regle que `ThreadViewModel` : un groupe et le
-        // reglage actif font un MMS de groupe, texte seul compris.
-        val groupe = recipients.size > 1 && (settings.hydratedOrNull() ?: AppSettings()).sending.groupMms
-        val outcome = if (groupe) {
-            sendMediaMms.invoke(recipients, attachments, entity.body, entity.subId, groupMms = true)
-        } else if (attachments.isEmpty()) {
-            sendSms.invoke(recipients, entity.body, entity.subId, echoInGroup = recipients.size > 1)
-        } else {
-            sendMediaMms.invoke(recipients, attachments, entity.body, entity.subId, echoInGroup = recipients.size > 1)
-        }
+        val outcome = envoyer.invoke(recipients, entity.body, attachments, entity.subId)
         return when (outcome) {
             is Outcome.Success -> {
                 // v1.28.3 (F21, troisieme passage) — le rapport est enfin LU.

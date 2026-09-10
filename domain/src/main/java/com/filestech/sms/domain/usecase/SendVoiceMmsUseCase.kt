@@ -4,9 +4,7 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
-import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
@@ -34,6 +32,8 @@ class SendVoiceMmsUseCase @Inject constructor(
     private val settings: AppSettingsSource,
     private val attachmentStore: OutgoingAttachmentStore,
 ) {
+    private val envoi = EnvoiParDestinataire(blockedRepo, mirror)
+
     suspend operator fun invoke(
         recipients: List<PhoneAddress>,
         audioFile: File,
@@ -66,21 +66,15 @@ class SendVoiceMmsUseCase @Inject constructor(
             return envoiDeGroupe(recipients, durableAudio, mimeType, durationMs, effectiveSubId, deliveryReports)
         }
 
-        val ids = ArrayList<Long>(recipients.size)
-        val failed = ArrayList<PhoneAddress>()
-        val blocked = ArrayList<PhoneAddress>()
         val now = System.currentTimeMillis()
-        for (r in recipients) {
-            // v1.28.3 (F21, second passage) — troisieme occurrence du meme `continue` muet.
-            //
-            // Le correctif n'avait ete pose que sur `SendSmsUseCase`, et la revue de qualite n'a
-            // signale que la voie media : celle-ci, la voie VOCALE, portait le meme defaut sans
-            // que personne ne la cite. Un message vocal vers un contact bloque disparaissait donc
-            // lui aussi sans trace. Les trois chemins d'envoi appliquent maintenant la meme regle,
-            // ce qui est tout l'objet de cette relecture.
-            if (blockedRepo.isBlocked(r.raw)) {
-                blocked += r
-                val blockedId = mirror.upsertOutgoingMms(
+        // v1.28.3 (F21, second passage) — troisième occurrence du même `continue` muet, sur la
+        // voie VOCALE que personne ne citait. v1.28.4 — la boucle n'existe plus qu'une fois,
+        // dans [EnvoiParDestinataire] ; les trois voies ne peuvent plus diverger.
+        return envoi.parDestinataire(
+            recipients = recipients,
+            sansRemise = "no MMS dispatched",
+            miroir = { r, _ ->
+                mirror.upsertOutgoingMms(
                     address = r.raw,
                     audioFile = durableAudio,
                     mimeType = mimeType,
@@ -88,61 +82,38 @@ class SendVoiceMmsUseCase @Inject constructor(
                     date = now,
                     subId = effectiveSubId,
                 )
-                mirror.updateOutgoingStatus(
-                    blockedId,
-                    MessageStatus.FAILED,
-                    errorCode = SendErrorCode.RECIPIENT_BLOCKED,
+            },
+            envoi = { localId, r ->
+                sender.sendVoiceMms(
+                    localMessageId = localId,
+                    recipients = listOf(r.raw),
+                    audioFile = durableAudio,
+                    mimeType = mimeType,
+                    subId = effectiveSubId,
+                    requestDeliveryReport = deliveryReports,
                 )
-                continue
-            }
-            val localId = mirror.upsertOutgoingMms(
-                address = r.raw,
-                audioFile = durableAudio,
-                mimeType = mimeType,
-                durationMs = durationMs,
-                date = now,
-                subId = effectiveSubId,
-            )
-            when (sender.sendVoiceMms(
-                localMessageId = localId,
-                recipients = listOf(r.raw),
-                audioFile = durableAudio,
-                mimeType = mimeType,
-                subId = effectiveSubId,
-                requestDeliveryReport = deliveryReports,
-            )) {
-                is Outcome.Success -> ids += localId
-                is Outcome.Failure -> {
-                    failed += r
-                    mirror.updateOutgoingStatus(
-                        localId,
-                        MessageStatus.FAILED,
-                        errorCode = SendErrorCode.SYNCHRONOUS,
+            },
+            echoDeGroupe = if (echoInGroup) {
+                { statut ->
+                    mirror.upsertGroupEcho(
+                        addresses = recipients,
+                        body = "",
+                        date = now,
+                        subId = effectiveSubId,
+                        status = statut,
+                        attachments = listOf(
+                            com.filestech.sms.domain.mms.MediaAttachmentSpec(
+                                durableAudio,
+                                mimeType,
+                                durationMs = durationMs,
+                            ),
+                        ),
                     )
                 }
-            }
-        }
-        // v1.28.3 (groupes) — la copie dans le fil du groupe, cf. [SendSmsUseCase].
-        if (echoInGroup && recipients.size > 1) {
-            mirror.upsertGroupEcho(
-                addresses = recipients,
-                body = "",
-                date = now,
-                subId = effectiveSubId,
-                status = if (ids.size == recipients.size) MessageStatus.SENT else MessageStatus.FAILED,
-                attachments = listOf(
-                    com.filestech.sms.domain.mms.MediaAttachmentSpec(durableAudio, mimeType, durationMs = durationMs),
-                ),
-            )
-        }
-        if (ids.isEmpty()) {
-            return if (blocked.size == recipients.size) {
-                Outcome.Failure(AppError.RecipientBlocked)
             } else {
-                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
-            }
-        }
-        return Outcome.Success(SendReport(dispatched = ids, failed = failed, blocked = blocked))
+                null
+            },
+        )
     }
 
     /** v1.28.3 (F21, second passage) — cf. le jumeau de [SendMediaMmsUseCase]. */
@@ -155,20 +126,21 @@ class SendVoiceMmsUseCase @Inject constructor(
         durationMs: Long,
         subId: Int?,
         deliveryReports: Boolean,
-    ): Outcome<SendReport> {
-        val blocked = recipients.filter { blockedRepo.isBlocked(it.raw) }
-        val cibles = recipients - blocked.toSet()
-        if (cibles.isEmpty()) return Outcome.Failure(AppError.RecipientBlocked)
-        val localId = mirror.upsertOutgoingGroupMms(
-            addresses = recipients,
-            attachments = listOf(
-                com.filestech.sms.domain.mms.MediaAttachmentSpec(audio, mimeType, durationMs = durationMs),
-            ),
-            textBody = "",
-            date = System.currentTimeMillis(),
-            subId = subId,
-        )
-        return when (
+    ): Outcome<SendReport> = envoi.enGroupe(
+        recipients = recipients,
+        sansRemise = "no MMS dispatched",
+        miroir = {
+            mirror.upsertOutgoingGroupMms(
+                addresses = recipients,
+                attachments = listOf(
+                    com.filestech.sms.domain.mms.MediaAttachmentSpec(audio, mimeType, durationMs = durationMs),
+                ),
+                textBody = "",
+                date = System.currentTimeMillis(),
+                subId = subId,
+            )
+        },
+        envoi = { localId, cibles ->
             sender.sendVoiceMms(
                 localMessageId = localId,
                 recipients = cibles.map { it.raw },
@@ -177,16 +149,8 @@ class SendVoiceMmsUseCase @Inject constructor(
                 subId = subId,
                 requestDeliveryReport = deliveryReports,
             )
-        ) {
-            is Outcome.Success -> Outcome.Success(
-                SendReport(dispatched = listOf(localId), failed = emptyList(), blocked = blocked),
-            )
-            is Outcome.Failure -> {
-                mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = SendErrorCode.SYNCHRONOUS)
-                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
-            }
-        }
-    }
+        },
+    )
 
     private fun refusPrealable(recipients: List<PhoneAddress>, audioFile: File): AppError? = when {
         !defaultAppManager.isDefault() -> AppError.NotDefaultSmsApp
