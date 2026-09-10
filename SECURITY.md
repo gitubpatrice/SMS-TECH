@@ -119,6 +119,14 @@ déverrouillage par le code panique) ; et le second facteur **biométrique**, qu
 rendre pour un coffre sans PIN de coffre et que l'export doit respecter. Contrôles négatifs sur la
 politique, sur le garde d'export, sur le garde de restauration.
 
+**Deux limites, dites plutôt que tues.** (1) Annuler un envoi programmé est une demande à
+WorkManager : une opération radio déjà remise par une tentative en cours n'est pas rappelée, la
+ligne est retirée et, si le radio avait déjà accepté l'envoi, le message part. (2) Un message qui
+commet **après** la transaction finale vise un parent disparu : Room applique la clé étrangère,
+l'insertion échoue au lieu de créer un orphelin protégé, et la ligne du fournisseur est importée
+plus tard dans une conversation ordinaire neuve — comme tout message de ce correspondant arrivé
+après la purge. Le coffre protège ce que l'application connaît.
+
 **Hors sécurité, dans la même version** : MMS de groupe (réglage désactivé par défaut), colonne
 `hidden` (schéma 13) pour ne plus reconnaître une sentinelle de réaction par sa forme, boucle
 d'envoi et aiguillage écrits une seule fois après une quatrième divergence entre chemins jumeaux.
