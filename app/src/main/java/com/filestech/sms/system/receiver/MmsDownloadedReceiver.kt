@@ -70,6 +70,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // v1.28.3 (F26) — les DEUX regles d'ecartement en un seul point.
         fun incomingBlockPolicy(): IncomingBlockPolicy
 
+        // v1.28.4 — MMS de groupe : le réglage et « Mon numéro », pour reconstituer les membres,
+        // et la règle de rapprochement des numéros (E.164 selon la région).
+        fun settings(): com.filestech.sms.domain.settings.AppSettingsSource
+        fun phoneIdentity(): com.filestech.sms.data.sms.PhoneIdentity
+
         @ApplicationScope
         fun applicationScope(): CoroutineScope
     }
@@ -305,6 +310,22 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // in `messages.body` and rendered as an inline caption below the attachment.
                 val previewLabel = caption ?: subject ?: defaultPreviewLabel(mime)
 
+                // v1.28.4 — MMS de groupe : l'en-tête du PDU porte tous les destinataires, nous
+                // compris. Réglage actif et « Mon numéro » connu, la conversation est celle du
+                // groupe (retrouvée ou créée) ; sinon, conversation ordinaire, comme avant.
+                val envoi = runCatching { entry.settings().hydratedOrNull() }.getOrNull()?.sending
+                val membres = if (envoi?.groupMms == true) {
+                    val identite = entry.phoneIdentity().snapshot()
+                    com.filestech.sms.domain.mms.GroupMmsMembers.of(
+                        from = sender,
+                        to = parsed.to?.map { it.string.stripMmsAddressSuffix().stripInvisibleChars() }.orEmpty(),
+                        cc = parsed.cc?.map { it.string.stripMmsAddressSuffix().stripInvisibleChars() }.orEmpty(),
+                        self = envoi.userMsisdn,
+                        identityKey = identite::key,
+                    )
+                } else {
+                    null
+                }
                 val msgId = mirror.upsertIncomingMms(
                     address = sender,
                     pieces = pieces,
@@ -312,6 +333,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     previewLabel = previewLabel,
                     date = date,
                     subId = subId,
+                    groupMembers = membres,
                 )
                 // v1.27.2 (relecture Codex 2026-08-04) — le message est en base : le PDU a
                 // rempli son office et peut être supprimé. Tout ce qui suit (lecture du

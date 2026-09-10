@@ -121,6 +121,19 @@ interface OutgoingMessageMirror {
      * (remis, échoué) restent sur les lignes 1-à-1. Les pièces jointes référencent les mêmes
      * fichiers que les lignes 1-à-1, comme ces lignes le font déjà entre elles.
      */
+    /**
+     * v1.28.4 — **la ligne d'un MMS de groupe** : UNE ligne, dans la conversation du groupe, que
+     * le radio suivra par son id (accusé, échec). Contrairement à [upsertGroupEcho], ce n'est pas
+     * une copie : c'est le vrai envoi. Un texte seul est permis — c'est un MMS de texte.
+     */
+    suspend fun upsertOutgoingGroupMms(
+        addresses: List<PhoneAddress>,
+        attachments: List<MediaAttachmentSpec>,
+        textBody: String,
+        date: Long,
+        subId: Int? = null,
+    ): Long
+
     suspend fun upsertGroupEcho(
         addresses: List<PhoneAddress>,
         body: String,

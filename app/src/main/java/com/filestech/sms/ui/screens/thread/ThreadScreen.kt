@@ -798,7 +798,12 @@ fun ThreadScreen(
                     prev = state.messages.getOrNull(index - 1),
                     next = state.messages.getOrNull(index + 1),
                     daySeparatorLabel = daySeparatorLabels.getOrNull(index),
-                    conversationDisplayName = state.conversation?.displayName,
+                    // v1.28.4 — dans un groupe, la bulle nomme son expéditeur, pas le groupe.
+                    conversationDisplayName = if (state.conversation?.isGroup == true) {
+                        state.memberNames[msg.address] ?: msg.address
+                    } else {
+                        state.conversation?.displayName
+                    },
                     bubbleColorArgb = state.conversation?.bubbleColorArgb,
                     smishingReasons = state.smishingVerdicts[msg.id] ?: emptyList(),
                     playbackProvider = { playbackState },

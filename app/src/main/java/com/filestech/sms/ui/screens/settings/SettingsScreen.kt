@@ -375,6 +375,13 @@ fun SettingsScreen(
                     value = state.sending.confirmBeforeBroadcast,
                     onChange = { v -> viewModel.update { it.copy(sending = it.sending.copy(confirmBeforeBroadcast = v)) } },
                 )
+                // v1.28.4 — MMS de groupe, désactivé par défaut (décision produit du 2026-09-10).
+                ToggleRow(
+                    title = stringResource(R.string.settings_group_mms),
+                    value = state.sending.groupMms,
+                    onChange = { v -> viewModel.update { it.copy(sending = it.sending.copy(groupMms = v)) } },
+                    description = stringResource(R.string.settings_group_mms_hint),
+                )
                 // v1.2.6 audit F4 — saisie facultative du MSISDN. Sans cette valeur, les MMS
                 // envoyés peuvent afficher "insert-address-token" comme expéditeur dans
                 // d'autres apps SMS sur certaines ROM Samsung One UI.

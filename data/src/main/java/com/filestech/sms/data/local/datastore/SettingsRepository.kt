@@ -216,6 +216,7 @@ class SettingsRepository @Inject constructor(
                 deliveryReports = p[K.deliveryReports] ?: false,
                 defaultSubId = p[K.defaultSubId],
                 userMsisdn = p[K.userMsisdn],
+                groupMms = p[K.groupMms] ?: false,
                 sendReactionsToRecipient = p[K.sendReactionsToRecipient] ?: true,
                 reactionConfirmDismissed = p[K.reactionConfirmDismissed] ?: false,
                 reactionEmojiOnly = p[K.reactionEmojiOnly] ?: false,
@@ -357,6 +358,7 @@ class SettingsRepository @Inject constructor(
         this[K.deliveryReports] = s.sending.deliveryReports
         s.sending.defaultSubId?.let { this[K.defaultSubId] = it } ?: remove(K.defaultSubId)
         s.sending.userMsisdn?.takeIf { it.isNotBlank() }?.let { this[K.userMsisdn] = it } ?: remove(K.userMsisdn)
+        this[K.groupMms] = s.sending.groupMms
         this[K.sendReactionsToRecipient] = s.sending.sendReactionsToRecipient
         this[K.reactionConfirmDismissed] = s.sending.reactionConfirmDismissed
         this[K.reactionEmojiOnly] = s.sending.reactionEmojiOnly
@@ -471,6 +473,7 @@ class SettingsRepository @Inject constructor(
         val deliveryReports = booleanPreferencesKey("send.delivery")
         val defaultSubId = intPreferencesKey("send.subId")
         val userMsisdn = stringPreferencesKey("send.userMsisdn")
+        val groupMms = booleanPreferencesKey("send.groupMms")
         val sendReactionsToRecipient = booleanPreferencesKey("send.reactions.toRecipient")
         val reactionConfirmDismissed = booleanPreferencesKey("send.reactions.confirmDismissed")
         val reactionEmojiOnly = booleanPreferencesKey("send.reactions.emojiOnly")

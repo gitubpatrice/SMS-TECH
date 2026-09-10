@@ -171,6 +171,11 @@ class ThreadViewModel @Inject constructor(
         val draft: String = "",
         val segments: SmsSegmentCounter.Stats = SmsSegmentCounter.Stats(0, 0, 0, false),
         val isExporting: Boolean = false,
+        /**
+         * v1.28.4 — noms de contact des expéditeurs, par adresse brute de message : c'est le nom
+         * que chaque bulle reçue d'un GROUPE affiche. Inutilisé pour une conversation ordinaire.
+         */
+        val memberNames: Map<String, String> = emptyMap(),
         val draftSeeded: Boolean = false,
         val hasContact: Boolean = false,
         val messageCount: Int = 0,
@@ -459,6 +464,7 @@ class ThreadViewModel @Inject constructor(
         // chargée en mémoire.
         repo.observeMessagesWindow(conversationId, windowLimit).onEach { window ->
             val msgs = window.messages
+            resoudreNomsDesExpediteurs(msgs)
             _state.update {
                 it.copy(
                     isLoading = false,
@@ -704,7 +710,18 @@ class ThreadViewModel @Inject constructor(
             // chez nous, et AUCUN SMS parti — que le chien de garde basculait en échec quinze
             // minutes plus tard, sans cause visible.
             val res = withContext(NonCancellable) {
-                sendSms.invoke(conv.addresses, body, replyToMessageId = replyTargetId, echoInGroup = conv.isGroup)
+                // v1.28.4 — MMS de groupe actif : un texte envoyé depuis un groupe part en MMS,
+                // pour que tout le monde le voie et que les réponses reviennent au groupe.
+                if (conv.isGroup && cachedSettings.value.sending.groupMms) {
+                    sendMediaMms.invoke(
+                        recipients = conv.addresses,
+                        attachments = emptyList(),
+                        textBody = body,
+                        groupMms = true,
+                    )
+                } else {
+                    sendSms.invoke(conv.addresses, body, replyToMessageId = replyTargetId, echoInGroup = conv.isGroup)
+                }
             }
             when (res) {
                 is Outcome.Success -> {
@@ -1122,6 +1139,7 @@ class ThreadViewModel @Inject constructor(
                     attachments = payloads,
                     textBody = textBody,
                     echoInGroup = conv.isGroup,
+                    groupMms = cachedSettings.value.sending.groupMms,
                 )
             }
         } finally {
@@ -1440,6 +1458,30 @@ class ThreadViewModel @Inject constructor(
         }
     }
 
+    /**
+     * v1.28.4 — dans un groupe, chaque bulle reçue nomme SON expéditeur, pas le groupe. Les noms
+     * sont résolus par adresse BRUTE de message, une fois par adresse : c'est la clé que l'écran
+     * possède, et `lookupByPhone` applique déjà la règle de rapprochement des numéros.
+     */
+    private fun resoudreNomsDesExpediteurs(msgs: List<Message>) {
+        val connus = _state.value.memberNames
+        val inconnus = msgs.asSequence()
+            .filter { it.isIncoming }
+            .map { it.address }
+            .filter { it.isNotBlank() && it !in connus }
+            .distinct()
+            .toList()
+        if (inconnus.isEmpty()) return
+        viewModelScope.launch {
+            val noms = inconnus.mapNotNull { a ->
+                runCatching { contactRepo.lookupByPhone(a)?.displayName }.getOrNull()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { a to it }
+            }.toMap()
+            if (noms.isNotEmpty()) _state.update { it.copy(memberNames = it.memberNames + noms) }
+        }
+    }
+
     fun setAppearance(bubbleColorArgb: Int?, avatarUri: String?) {
         viewModelScope.launch {
             toggleConvState.setAppearance(conversationId, bubbleColorArgb, avatarUri)
@@ -1577,6 +1619,7 @@ class ThreadViewModel @Inject constructor(
         when (val res = sendVoiceMms.invoke(
             recipients = conv.addresses,
             echoInGroup = conv.isGroup,
+            groupMms = cachedSettings.value.sending.groupMms,
             audioFile = reviewing.file,
             mimeType = reviewing.mimeType,
             durationMs = reviewing.durationMs,

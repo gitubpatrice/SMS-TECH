@@ -42,6 +42,8 @@ class SendVoiceMmsUseCase @Inject constructor(
         subId: Int? = null,
         /** v1.28.3 (groupes) — cf. [SendSmsUseCase.invoke]. */
         echoInGroup: Boolean = false,
+        /** v1.28.4 — MMS de groupe, même règle que [SendMediaMmsUseCase]. */
+        groupMms: Boolean = false,
     ): Outcome<SendReport> {
         refusPrealable(recipients, audioFile)?.let { return Outcome.Failure(it) }
 
@@ -59,6 +61,10 @@ class SendVoiceMmsUseCase @Inject constructor(
         // mirroring/dispatch, so the sent voice bubble keeps playing back after a lock or a reboot.
         // Cf. [OutgoingAttachmentStore].
         val durableAudio = attachmentStore.promoteToDurable(audioFile)
+
+        if (groupMms && recipients.size > 1) {
+            return envoiDeGroupe(recipients, durableAudio, mimeType, durationMs, effectiveSubId, deliveryReports)
+        }
 
         val ids = ArrayList<Long>(recipients.size)
         val failed = ArrayList<PhoneAddress>()
@@ -140,6 +146,48 @@ class SendVoiceMmsUseCase @Inject constructor(
     }
 
     /** v1.28.3 (F21, second passage) — cf. le jumeau de [SendMediaMmsUseCase]. */
+    /** v1.28.4 — le MMS vocal de groupe : un seul PDU, une seule ligne dans le groupe. */
+    @Suppress("LongParameterList")
+    private suspend fun envoiDeGroupe(
+        recipients: List<PhoneAddress>,
+        audio: File,
+        mimeType: String,
+        durationMs: Long,
+        subId: Int?,
+        deliveryReports: Boolean,
+    ): Outcome<SendReport> {
+        val blocked = recipients.filter { blockedRepo.isBlocked(it.raw) }
+        val cibles = recipients - blocked.toSet()
+        if (cibles.isEmpty()) return Outcome.Failure(AppError.RecipientBlocked)
+        val localId = mirror.upsertOutgoingGroupMms(
+            addresses = recipients,
+            attachments = listOf(
+                com.filestech.sms.domain.mms.MediaAttachmentSpec(audio, mimeType, durationMs = durationMs),
+            ),
+            textBody = "",
+            date = System.currentTimeMillis(),
+            subId = subId,
+        )
+        return when (
+            sender.sendVoiceMms(
+                localMessageId = localId,
+                recipients = cibles.map { it.raw },
+                audioFile = audio,
+                mimeType = mimeType,
+                subId = subId,
+                requestDeliveryReport = deliveryReports,
+            )
+        ) {
+            is Outcome.Success -> Outcome.Success(
+                SendReport(dispatched = listOf(localId), failed = emptyList(), blocked = blocked),
+            )
+            is Outcome.Failure -> {
+                mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = SendErrorCode.SYNCHRONOUS)
+                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
+            }
+        }
+    }
+
     private fun refusPrealable(recipients: List<PhoneAddress>, audioFile: File): AppError? = when {
         !defaultAppManager.isDefault() -> AppError.NotDefaultSmsApp
         recipients.isEmpty() -> AppError.Validation("no recipients")

@@ -10,6 +10,7 @@ import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SentSmsRecorder
 import com.filestech.sms.domain.sender.SmsSender
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -156,6 +157,18 @@ internal class NoopMirror : OutgoingMessageMirror {
 
     val echos = mutableListOf<Echo>()
 
+    /** v1.28.4 — la ligne unique d'un MMS de groupe, adressée au groupe (csv `;`). */
+    override suspend fun upsertOutgoingGroupMms(
+        addresses: List<com.filestech.sms.domain.model.PhoneAddress>,
+        attachments: List<MediaAttachmentSpec>,
+        textBody: String,
+        date: Long,
+        subId: Int?,
+    ): Long {
+        lignes += LigneEcrite(addresses.joinToString(";") { it.raw }, telephonyUri = null, statut = MessageStatus.PENDING)
+        return prochainId++
+    }
+
     override suspend fun upsertGroupEcho(
         addresses: List<com.filestech.sms.domain.model.PhoneAddress>,
         body: String,
@@ -214,3 +227,57 @@ internal class BlockedList(private val numeros: Set<String>) : BlockedNumberRepo
 
 /** Échec d'envoi côté radio — SIM absente, mode avion, pas de réseau. */
 internal fun radioFailure(): Outcome<Unit> = Outcome.Failure(AppError.Telephony("no radio"))
+
+// ── v1.28.4 — doublures MMS partagées (extraites de MmsRecipientAccountingTest) ──
+
+internal class DefaultSettingsSource : AppSettingsSource {
+    private val value = AppSettings()
+    override val flow: Flow<AppSettings> = flowOf(value)
+    override val state: kotlinx.coroutines.flow.StateFlow<AppSettings> = kotlinx.coroutines.flow.MutableStateFlow(value)
+    override suspend fun hydratedOrNull(): AppSettings = value
+    override suspend fun update(transform: (AppSettings) -> AppSettings) = Unit
+}
+
+internal class PassthroughAttachmentStore : com.filestech.sms.domain.mms.OutgoingAttachmentStore {
+    override fun promoteToDurable(staged: File): File = staged
+}
+
+internal fun alwaysDefaultSmsApp() = object : DefaultSmsAppChecker {
+    override fun isDefault() = true
+}
+
+/** Enregistre chaque envoi MMS : combien de fois le radio est sollicité, et pour qui. */
+internal class RecordingMmsDispatcher(
+    private val outcome: Outcome<Unit> = Outcome.Success(Unit),
+) : com.filestech.sms.domain.mms.MmsDispatcher {
+    val destinatairesTentes = mutableListOf<String>()
+    var appels = 0
+    var dernierTexte: String? = null
+
+    override suspend fun sendVoiceMms(
+        localMessageId: Long,
+        recipients: List<String>,
+        audioFile: File,
+        mimeType: String,
+        subId: Int?,
+        requestDeliveryReport: Boolean,
+    ): Outcome<Unit> {
+        appels++
+        destinatairesTentes += recipients
+        return outcome
+    }
+
+    override suspend fun sendMediaMms(
+        localMessageId: Long,
+        recipients: List<String>,
+        attachments: List<com.filestech.sms.domain.mms.MmsAttachment>,
+        textBody: String?,
+        subId: Int?,
+        requestDeliveryReport: Boolean,
+    ): Outcome<Unit> {
+        appels++
+        destinatairesTentes += recipients
+        dernierTexte = textBody
+        return outcome
+    }
+}

@@ -555,6 +555,56 @@ class ConversationMirror @Inject constructor(
     }
 
     /** v1.28.3 (groupes) — voir [OutgoingMessageMirror.upsertGroupEcho]. */
+    override suspend fun upsertOutgoingGroupMms(
+        addresses: List<PhoneAddress>,
+        attachments: List<MediaAttachmentSpec>,
+        textBody: String,
+        date: Long,
+        subId: Int?,
+    ): Long = withContext(io) {
+        val corps = textBody.trim()
+        require(attachments.isNotEmpty() || corps.isNotEmpty()) { "un MMS de groupe sans contenu" }
+        val preview = corps.ifBlank { mediaPreviewLabel(attachments.first()) }
+        database.withTransaction {
+            val convId = ensureConversation(addresses)
+            val msgId = messageDao.insert(
+                MessageEntity(
+                    conversationId = convId,
+                    telephonyUri = null,
+                    address = addresses.joinToString(";") { it.raw },
+                    body = corps,
+                    type = MessageType.MMS,
+                    direction = MessageDirection.OUTGOING,
+                    date = date,
+                    dateSent = null,
+                    read = true,
+                    starred = false,
+                    status = MessageStatus.PENDING,
+                    errorCode = null,
+                    subId = subId,
+                    scheduledAt = null,
+                    attachmentsCount = attachments.size,
+                ),
+            )
+            for (a in attachments) {
+                attachmentDao.insert(
+                    AttachmentEntity(
+                        messageId = msgId,
+                        mimeType = a.mimeType,
+                        fileName = a.file.name,
+                        sizeBytes = a.file.length(),
+                        localUri = a.file.absolutePath,
+                        width = a.width,
+                        height = a.height,
+                        durationMs = a.durationMs,
+                    ),
+                )
+            }
+            touchConversation(convId, date, preview, deltaUnread = 0)
+            msgId
+        }
+    }
+
     override suspend fun upsertGroupEcho(
         addresses: List<PhoneAddress>,
         body: String,
@@ -646,10 +696,16 @@ class ConversationMirror @Inject constructor(
         date: Long,
         telephonyUri: String? = null,
         subId: Int? = null,
+        /**
+         * v1.28.4 — les membres du groupe reconstitués depuis l'en-tête du PDU (`GroupMmsMembers`),
+         * ou `null` pour une conversation ordinaire. La ligne garde [address] = l'expéditeur :
+         * c'est lui que la bulle nomme.
+         */
+        groupMembers: List<PhoneAddress>? = null,
     ): Long = withContext(io) {
         val storedBody = caption?.trim().orEmpty()
         database.withTransaction {
-            val convId = ensureConversation(listOf(PhoneAddress.of(address)))
+            val convId = ensureConversation(groupMembers ?: listOf(PhoneAddress.of(address)))
             val msg = MessageEntity(
                 conversationId = convId,
                 telephonyUri = telephonyUri,

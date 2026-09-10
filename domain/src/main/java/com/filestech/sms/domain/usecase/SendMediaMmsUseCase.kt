@@ -44,6 +44,11 @@ class SendMediaMmsUseCase @Inject constructor(
         subId: Int? = null,
         /** v1.28.3 (groupes) — cf. [SendSmsUseCase.invoke]. */
         echoInGroup: Boolean = false,
+        /**
+         * v1.28.4 — MMS de groupe : un seul PDU à tous, une seule ligne dans le groupe. Le réglage
+         * est lu par l'appelant, qui sait aussi si la conversation est un groupe.
+         */
+        groupMms: Boolean = false,
     ): Outcome<SendReport> {
         refusPrealable(recipients, attachments, textBody)?.let { return Outcome.Failure(it) }
 
@@ -87,6 +92,10 @@ class SendMediaMmsUseCase @Inject constructor(
                     else -> MmsAttachment.Kind.OTHER
                 },
             )
+        }
+
+        if (groupMms && recipients.size > 1) {
+            return envoiDeGroupe(recipients, mirrorSpecs, pduAttachments, textBody, effectiveSubId, deliveryReports)
         }
 
         val ids = ArrayList<Long>(recipients.size)
@@ -173,6 +182,50 @@ class SendMediaMmsUseCase @Inject constructor(
      * Meme raison que dans [SendSmsUseCase] : elles repondent toutes a « a-t-on le droit
      * d'envoyer », et les regrouper vaut mieux que d'excuser leur nombre dans la baseline.
      */
+    /**
+     * v1.28.4 — **le MMS de groupe** : les membres bloqués sortent du PDU (et sont comptés), les
+     * autres reçoivent UN seul MMS, et le miroir n'a qu'UNE ligne — dans le groupe — que le radio
+     * suit par son id. Tous bloqués : refus de blocage, pas panne de téléphonie.
+     */
+    @Suppress("LongParameterList")
+    private suspend fun envoiDeGroupe(
+        recipients: List<PhoneAddress>,
+        mirrorSpecs: List<MediaAttachmentSpec>,
+        pduAttachments: List<MmsAttachment>,
+        textBody: String,
+        subId: Int?,
+        deliveryReports: Boolean,
+    ): Outcome<SendReport> {
+        val blocked = recipients.filter { blockedRepo.isBlocked(it.raw) }
+        val cibles = recipients - blocked.toSet()
+        if (cibles.isEmpty()) return Outcome.Failure(AppError.RecipientBlocked)
+        val localId = mirror.upsertOutgoingGroupMms(
+            addresses = recipients,
+            attachments = mirrorSpecs,
+            textBody = textBody,
+            date = System.currentTimeMillis(),
+            subId = subId,
+        )
+        return when (
+            sender.sendMediaMms(
+                localMessageId = localId,
+                recipients = cibles.map { it.raw },
+                attachments = pduAttachments,
+                textBody = textBody.ifBlank { null },
+                subId = subId,
+                requestDeliveryReport = deliveryReports,
+            )
+        ) {
+            is Outcome.Success -> Outcome.Success(
+                SendReport(dispatched = listOf(localId), failed = emptyList(), blocked = blocked),
+            )
+            is Outcome.Failure -> {
+                mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = SendErrorCode.SYNCHRONOUS)
+                Outcome.Failure(AppError.Telephony("no MMS dispatched"))
+            }
+        }
+    }
+
     private fun refusPrealable(
         recipients: List<PhoneAddress>,
         attachments: List<AttachmentPayload>,

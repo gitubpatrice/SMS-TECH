@@ -205,6 +205,14 @@ internal class NoopMirror(
         subId: Int?,
     ): Long = error("non utilise")
 
+    override suspend fun upsertOutgoingGroupMms(
+        addresses: List<com.filestech.sms.domain.model.PhoneAddress>,
+        attachments: List<com.filestech.sms.domain.mms.MediaAttachmentSpec>,
+        textBody: String,
+        date: Long,
+        subId: Int?,
+    ): Long = 0L
+
     override suspend fun upsertGroupEcho(
         addresses: List<com.filestech.sms.domain.model.PhoneAddress>,
         body: String,

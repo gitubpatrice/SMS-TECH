@@ -395,6 +395,8 @@
     <string name="settings_confirm_broadcast">Confirm before sending</string>
     <string name="settings_confirm_send_title">Send this message?</string>
     <string name="settings_delivery_reports">Delivery reports</string>
+    <string name="settings_group_mms">Group MMS</string>
+    <string name="settings_group_mms_hint">One MMS to everyone, and every reply comes back to the group. Messages sent from a group then always go as MMS, text included. Set \"My phone number\" so received group messages can leave you out of the member list.</string>
     <string name="settings_my_number">My phone number</string>
     <string name="settings_my_number_dialog_title">Your phone number</string>
     <string name="settings_my_number_dialog_body">Optional. If set, this number replaces the AOSP placeholder \"insert-address-token\" in the sender address of outgoing MMS, so other SMS apps display you correctly.</string>

@@ -61,6 +61,18 @@ data class SendingSettings(
     // interrupteur qui ne fait rien est un mensonge ; le retirer coute moins que de le laisser.
     val defaultSubId: Int? = null,
     /**
+     * v1.28.4 — **MMS de groupe** : un seul MMS adressé à tous les membres, et chaque réponse
+     * revient au groupe (ce que font Google et Samsung Messages). Désactivé par défaut, décision
+     * de Patrice du 2026-09-10 : le comportement historique — un message par destinataire —
+     * reste celui de tous les utilisateurs existants, et un MMS a un coût selon le forfait.
+     *
+     * Activé, tout envoi depuis un groupe part en MMS, texte seul compris ; et un MMS reçu dont
+     * l'en-tête porte plusieurs destinataires ouvre (ou retrouve) la conversation de groupe —
+     * à condition que [userMsisdn] soit renseigné, faute de quoi on ne sait pas se retirer de
+     * la liste. Cf. `GroupMmsMembers`.
+     */
+    val groupMms: Boolean = false,
+    /**
      * v1.2.6 audit F4 — MSISDN saisi par l'utilisateur quand la détection automatique via
      * `SubscriptionManager.getActiveSubscriptionInfoForSubscriptionId(subId).number` retourne
      * `null` (Free Mobile FR, MVNO, certaines configs Samsung One UI). Utilisé par
