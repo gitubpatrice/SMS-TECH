@@ -75,6 +75,10 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE addresses_csv NOT LIKE '%;%'")
     suspend fun snapshotOneToOneConversations(): List<ConversationEntity>
 
+    /** v1.28.4 — le jumeau pour les GROUPES : rapprochement par membres, cf. `matchGroupByIdentity`. */
+    @Query("SELECT * FROM conversations WHERE addresses_csv LIKE '%;%'")
+    suspend fun snapshotGroupConversations(): List<ConversationEntity>
+
     @Query("SELECT * FROM conversations WHERE display_name IS NULL OR display_name = ''")
     suspend fun findMissingDisplayName(): List<ConversationEntity>
 

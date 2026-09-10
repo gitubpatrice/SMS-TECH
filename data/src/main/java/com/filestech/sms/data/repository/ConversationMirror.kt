@@ -954,7 +954,7 @@ class ConversationMirror @Inject constructor(
         // [TelephonySyncManager.bulkImportMmsFromTelephony] is now importing the same MMS
         // with its real system thread id. Without this, we'd insert a second conversation
         // for the same correspondent — user-visible as a duplicate thread.
-        conversationDao.findByAddressesCsv(csv)?.let { existing ->
+        (conversationDao.findByAddressesCsv(csv) ?: rapprocherGroupe(addresses))?.let { existing ->
             if (systemThreadId > 0L && existing.threadId != systemThreadId) {
                 conversationDao.update(existing.copy(
                     threadId = systemThreadId,
@@ -1032,13 +1032,31 @@ class ConversationMirror @Inject constructor(
         )
     }
 
+    /**
+     * v1.28.4 — **un groupe se reconnaît à ses membres, pas à l'écriture de leurs numéros.** Mesuré
+     * sur le S24 : le groupe composé en national (`0617…;0698…`) et le même groupe reconstitué
+     * depuis un PDU en international (`+33617…;+33698…`) faisaient deux fils. Le jumeau du repli
+     * 1-à-1, en second choix après la CSV exacte, aux deux points de rapprochement — cf.
+     * [ConversationRepositoryImpl.matchGroupByIdentity].
+     */
+    private suspend fun rapprocherGroupe(addresses: List<PhoneAddress>): ConversationEntity? =
+        if (addresses.size > 1) {
+            ConversationRepositoryImpl.matchGroupByIdentity(
+                conversationDao.snapshotGroupConversations(),
+                addresses,
+                phoneIdentity.snapshot()::matches,
+            )
+        } else {
+            null
+        }
+
     private suspend fun ensureConversation(addresses: List<PhoneAddress>): Long {
         val csv = addresses.sortedBy { it.normalized }.toCsv()
         val resolved = if (addresses.size == 1) resolveDisplayName(addresses.first().raw) else nomDeGroupe(addresses)
 
         // 1) Exact-CSV match — chemin rapide, couvre la majorité des cas (même format
         //    d'adresse stocké et présenté).
-        conversationDao.findByAddressesCsv(csv)?.let { existing ->
+        (conversationDao.findByAddressesCsv(csv) ?: rapprocherGroupe(addresses))?.let { existing ->
             if (existing.displayName == null && resolved != null) {
                 conversationDao.update(existing.copy(displayName = resolved))
             }

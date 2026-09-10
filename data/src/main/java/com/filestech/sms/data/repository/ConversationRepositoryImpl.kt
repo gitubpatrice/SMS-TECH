@@ -409,7 +409,14 @@ class ConversationRepositoryImpl @Inject constructor(
                         addresses.first(),
                         phoneIdentity.snapshot()::matches,
                     )
-                } else null
+                } else {
+                    // v1.28.4 — le jumeau pour les groupes, cf. [matchGroupByIdentity].
+                    matchGroupByIdentity(
+                        conversationDao.snapshotGroupConversations(),
+                        addresses,
+                        phoneIdentity.snapshot()::matches,
+                    )
+                }
 
                 if (suffixMatch != null) {
                     if (suffixMatch.displayName.isNullOrBlank() && !resolvedDisplayName.isNullOrBlank()) {
@@ -463,6 +470,29 @@ class ConversationRepositoryImpl @Inject constructor(
          * minuscules AVEC leurs lettres. L'appelant restreint déjà aux 1-to-1 ; on ne
          * rapproche jamais deux groupes par suffixe.
          */
+        /**
+         * v1.28.4 — **un groupe se reconnaît à ses membres, pas à l'écriture de leurs numéros.**
+         *
+         * Mesuré sur le S24 : le groupe créé depuis le composeur (`0617…;0698…`) et le même
+         * groupe reconstitué depuis un PDU reçu (`+33617…;+33698…`) faisaient deux conversations.
+         * Règle stricte, sans le risque du suffixe partiel que le miroir redoutait : MÊME nombre
+         * de membres, et chaque membre rapproché par la règle d'identité (E.164 quand possible),
+         * dans les deux sens. Un sous-ensemble n'est pas un groupe.
+         */
+        internal fun matchGroupByIdentity(
+            groups: List<ConversationEntity>,
+            target: List<PhoneAddress>,
+            matches: (String, String) -> Boolean,
+        ): ConversationEntity? {
+            if (target.size < 2) return null
+            return groups.firstOrNull { existing ->
+                val membres = PhoneAddress.list(existing.addressesCsv)
+                membres.size == target.size &&
+                    target.all { t -> membres.any { m -> matches(m.raw, t.raw) } } &&
+                    membres.all { m -> target.any { t -> matches(m.raw, t.raw) } }
+            }
+        }
+
         internal fun matchOneToOneByBlockKey(
             oneToOne: List<ConversationEntity>,
             target: PhoneAddress,

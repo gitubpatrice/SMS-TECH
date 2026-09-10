@@ -326,6 +326,15 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 } else {
                     null
                 }
+                // Mesure sans numéro : ce que le PDU porte, et ce qu'on en a décidé.
+                Timber.i(
+                    "MMS groupe: reglage=%s monNumero=%s to=%d cc=%d -> membres=%s",
+                    envoi?.groupMms,
+                    !envoi?.userMsisdn.isNullOrBlank(),
+                    parsed.to?.size ?: 0,
+                    parsed.cc?.size ?: 0,
+                    membres?.size,
+                )
                 val msgId = mirror.upsertIncomingMms(
                     address = sender,
                     pieces = pieces,
