@@ -350,6 +350,46 @@ class VaultPurgeRetryTest {
         )
 
     /**
+     * v1.28.4 — **R01, second volet : une annulation qui LÈVE compte comme un échec.** Le test
+     * voisin refuse le `DELETE`, qui vit dans la transaction finale ; ici c'est l'aide elle-même
+     * (`annulerLesTravauxProgrammes`) qui échoue, et c'est SON compte qui doit garder le parent.
+     * Trouvé par le contrôle négatif : le compte remis à zéro ne faisait tomber aucun test.
+     */
+    @Test
+    fun r01_uneAnnulationQuiLeve_gardeLeParentEtCompteLEchec(): Unit = runBlocking {
+        seedVaultConversation()
+        val programme = db.scheduledMessageDao().upsert(
+            com.filestech.sms.data.local.db.entity.ScheduledMessageEntity(
+                conversationId = VAULT_ID,
+                addressesCsv = "+33600000009",
+                body = "contenu du coffre, programme",
+                scheduledAt = System.currentTimeMillis() + 3_600_000L,
+                subId = null,
+                attachmentsJson = null,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+        val ordonnanceurEnPanne = object : com.filestech.sms.domain.scheduler.ScheduledMessageScheduler {
+            override fun scheduleAt(scheduledMessageId: Long, epochMillis: Long) = Unit
+            override fun cancel(scheduledMessageId: Long): Unit = error("R01_ANNULATION_REFUSEE")
+        }
+
+        val refuse = eraserAvec(ToutSEfface, ordonnanceurEnPanne).purgeVault()
+
+        assertThat(refuse.isComplete).isFalse()
+        assertThat(refuse.localFailures).isEqualTo(1)
+        assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+        assertThat(db.scheduledMessageDao().findById(programme)).isNotNull()
+
+        // L'ordonnanceur répond de nouveau : la reprise part du parent conservé et finit.
+        val reprise = eraserAvec(ToutSEfface).purgeVault()
+
+        assertThat(reprise.isComplete).isTrue()
+        assertThat(db.scheduledMessageDao().findById(programme)).isNull()
+        assertThat(db.conversationDao().idsInVault()).isEmpty()
+    }
+
+    /**
      * v1.28.4 — **R01 (relecture externe, mesuré par Andrew sur émulateur) : un envoi programmé
      * dont le DELETE est refusé ne doit pas laisser la purge se dire complète.** Avant, l'échec
      * était gobé, le parent partait, et l'orphelin devenait invisible ET visible hors coffre.
