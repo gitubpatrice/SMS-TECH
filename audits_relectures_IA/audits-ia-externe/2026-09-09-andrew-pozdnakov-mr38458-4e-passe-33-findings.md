@@ -265,6 +265,36 @@ fonctions annoncées n'avaient jamais fonctionné** sans qu'aucun test ne le dis
 Campagne finale : **131 cas sur S9, 0 échec, 0 ignoré** ; 557 tests unitaires ; migration
 11 → 12 exécutée sur appareil.
 
+### Cinquième note d'Andrew (2026-09-10, `note_3814788966`) — R01, R02, R03
+
+Andrew a resserré sur **F03/F04/F09/F13** et mesuré, sur émulateur Android 14 avec la base
+SQLCipher réelle et le graphe Hilt de production (`ProductionStackPurgeVerificationTest`, tests
+fournis et relus, exécution assistée par IA — dit tel quel), **trois cas où la purge du coffre se
+dit complète alors qu'il reste quelque chose** :
+
+| | Ce qui survit | Cause dans le source de 1.28.3 |
+|---|---|---|
+| **R01** | un envoi programmé dont le `DELETE` est refusé — parent supprimé, PIN retiré, `VaultPurged` émis, et l'orphelin **redevient visible hors coffre** (`COALESCE(c.in_vault, 0)`) ; la reprise ne le retrouve jamais | `annulerEnvoisProgrammes` gobe l'exception ; `purgeVault` compte des conversations, pas des enfants |
+| **R02** | un fichier possédé dont `delete()` rend `false` — parent supprimé, PIN retiré | `supprimerFichiersPossedes` journalise `exists() && !delete()` sans rien rendre ; `getOrDefault(emptyList())` sur l'énumération |
+| **R03** | un message importé (fournisseur réel, synchro de production) qui **commet après la seconde relecture et avant le `DELETE` du parent** — emporté par la cascade, copie système intacte, purge « complète » ; la resynchro delta ne le rend pas, la complète oui | la relecture d'après-boucle ne voit que ce qui est déjà commis |
+
+Il souligne que R01/R02 n'ont **pas besoin de `force`** : la branche de succès ordinaire est
+atteinte parce qu'un nettoyage incomplet est rapporté complet. Il donne des critères
+d'acceptation, pas un refactor imposé : rendre compte des vrais résultats des aides, garder
+ensemble preuve de reprise et protection (garder le parent tant qu'un enfant reste est un
+design admis), ne pas classer un enfant par une jointure sur un parent disparu, et coordonner
+écrivains et finalisation (une courte transaction locale avec relecture est admise).
+
+**Réponse (v1.28.4, branche `fix/tests-promis-a-andrew`)** — `ConversationEraser.erase` rend
+`Issue(systemCopyGone, localeComplete)` : les deux aides rendent un compte d'échecs (énumération
+ratée = échec, `delete()` à `false` = échec), un seul échec **garde le parent** pour le coffre et
+compte en `localFailures` ; la relecture et la suppression du parent vivent dans **une seule
+transaction Room** — SQLite n'ayant qu'un écrivain, un import qui commet pendant la purge attend
+le verrou et ne peut plus se glisser entre les deux. Trois tests sur Room réel reproduisent R01
+(`TRIGGER` refusant le `DELETE`), R02 (dossier 0500, `delete()` mesuré à `false`) et R03 (message
+inséré au point d'injection de l'ordonnanceur), chacun avec sa reprise, et chacun tombe quand
+son défaut est remis.
+
 ## 5. Décisions prises, et pourquoi
 
 1. **`retryFailedAutomatically` retiré plutôt que câblé.** Le câbler reviendrait à écrire une

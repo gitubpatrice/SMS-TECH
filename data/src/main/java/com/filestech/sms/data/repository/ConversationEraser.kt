@@ -88,41 +88,60 @@ class ConversationEraser @Inject constructor(
      * un fil a demande qu'il disparaisse, et lui laisser une ligne qu'il croyait supprimee serait
      * un mensonge dans l'autre sens.
      */
-    suspend fun erase(id: Long, preserveOnSystemFailure: Boolean = false): Boolean {
+    suspend fun erase(id: Long, preserveOnSystemFailure: Boolean = false): Issue {
         var systemCopyGone = true
+        var connus: Set<Long> = emptySet()
         runCatching {
             val balayes = messageDao.findByConversation(id)
             for (m in balayes) if (!systemCopy.erase(m)) systemCopyGone = false
-            // v1.28.1 (relecture externe GPT, point 4) — un message ARRIVE pendant le balayage
-            // n'a jamais ete presente au fournisseur. Sans ce controle, la conversation partait
-            // avec lui, sa copie systeme restait, et la purge se declarait complete : la fuite
-            // que corrige [preserveOnSystemFailure], par une autre porte. La reprise s'en charge
-            // au prochain essai, ou le message sera dans la liste des le depart.
-            val connus = balayes.mapTo(HashSet(balayes.size)) { it.id }
-            if (messageDao.findByConversation(id).any { it.id !in connus }) {
-                systemCopyGone = false
-                Timber.w("delete: message arrived during sweep of conversation %d", id)
-            }
+            connus = balayes.mapTo(HashSet(balayes.size)) { it.id }
         }.onFailure {
             systemCopyGone = false
             Timber.w(it, "delete: system-provider sweep failed for conversation %d", id)
         }
-        if (systemCopyGone || !preserveOnSystemFailure) {
-            // v1.28.3 (F03/F04) — ce que la cascade Room ne fait pas, et que personne ne faisait.
-            //
-            // L'ordre compte : les deux opérations ci-dessous doivent précéder la suppression de
-            // la conversation. Après, `attachments` a déjà disparu par `ForeignKey.CASCADE` et
-            // plus rien ne référence les fichiers — ils deviendraient irrécupérables ET
-            // ineffaçables. Un processus tué entre les deux laisse au pire une conversation dont
-            // les fichiers sont déjà partis : l'inverse laisserait des orphelins définitifs.
-            annulerEnvoisProgrammes(id)
-            supprimerFichiersPossedes(id)
-            conversationDao.delete(id)
-        } else {
+        if (!systemCopyGone && preserveOnSystemFailure) {
             Timber.w("delete: conversation %d kept locally, its system copy survives", id)
+            return Issue(systemCopyGone = false, localeComplete = true)
         }
-        return systemCopyGone
+
+        // v1.28.4 (relecture externe, R01/R02) — les dépendants RENDENT COMPTE. Le travail
+        // WorkManager et les fichiers sont traités HORS transaction : idempotents, retentables,
+        // et l'on ne tient pas un verrou SQLite sur de l'entrée-sortie. Un seul échec et, pour
+        // le coffre, le parent est CONSERVÉ : c'est lui qui permettra de retrouver l'orphelin au
+        // prochain essai — supprimé, plus rien n'y mènerait, et la purge se dirait complète.
+        val echecs = annulerLesTravauxProgrammes(id) + supprimerFichiersPossedes(id)
+        if (echecs > 0 && preserveOnSystemFailure) {
+            Timber.w("delete: conversation %d kept locally, %d dependant(s) not cleaned", id, echecs)
+            return Issue(systemCopyGone, localeComplete = false)
+        }
+
+        // v1.28.4 (relecture externe, R03) — la FIN est atomique : relecture et suppression dans
+        // UNE transaction d'écriture. SQLite n'a qu'un écrivain à la fois : un import ou une
+        // réception qui commet pendant la purge attend notre verrou, et ne peut plus se glisser
+        // entre la relecture et la suppression pour être emporté par la cascade avec sa copie
+        // système intacte. Un message arrivé AVANT est vu par la relecture et garde le parent.
+        val arriveTard = database.withTransaction {
+            if (preserveOnSystemFailure && messageDao.findByConversation(id).any { it.id !in connus }) {
+                true
+            } else {
+                for (envoi in scheduledDao.findForConversation(id)) scheduledDao.delete(envoi.id)
+                conversationDao.delete(id)
+                false
+            }
+        }
+        if (arriveTard) {
+            Timber.w("delete: message arrived during sweep of conversation %d", id)
+            return Issue(systemCopyGone = false, localeComplete = true)
+        }
+        return Issue(systemCopyGone, localeComplete = true)
     }
+
+    /**
+     * v1.28.4 — ce qu'un effacement laisse derrière lui, dit séparément : la copie système
+     * ([systemCopyGone]) et les dépendants locaux — envois programmés, fichiers
+     * ([localeComplete]). Un parent conservé pour l'un ou l'autre motif compte dans `remaining`.
+     */
+    data class Issue(val systemCopyGone: Boolean, val localeComplete: Boolean)
 
     /**
      * v1.28.3 (F03) — annule et efface les envois programmés d'une conversation qui disparaît.
@@ -142,27 +161,34 @@ class ConversationEraser @Inject constructor(
      * ligne absente. Chaque envoi est isolé — un échec ne doit pas empêcher les suivants ni la
      * suppression de la conversation.
      */
-    private suspend fun annulerEnvoisProgrammes(conversationId: Long) {
+    private suspend fun annulerLesTravauxProgrammes(conversationId: Long): Int {
+        // v1.28.4 (R01) — une énumération qui échoue n'est PAS une liste vide : c'est un échec.
         val programmes = runCatching { scheduledDao.findForConversation(conversationId) }
             .onFailure { Timber.w(it, "delete: lecture des envois programmes de %d echouee", conversationId) }
-            .getOrDefault(emptyList())
+            .getOrNull() ?: return 1
+        var echecs = 0
         for (envoi in programmes) {
             runCatching {
                 scheduler.cancel(envoi.id)
                 for (piece in ScheduledAttachmentCodec.decode(envoi.attachmentsJson)) {
-                    runCatching { piece.file.delete() }
-                        .onFailure { Timber.w(it, "delete: piece jointe programmee non effacee") }
+                    // Un `delete()` qui rend `false` n'est pas une exception — mais c'est un échec.
+                    if (piece.file.exists() && !piece.file.delete()) echecs++
                 }
-                scheduledDao.delete(envoi.id)
-            }.onFailure { Timber.w(it, "delete: envoi programme %d non annule", envoi.id) }
+            }.onFailure {
+                echecs++
+                Timber.w(it, "delete: envoi programme %d non annule", envoi.id)
+            }
         }
+        // La ligne elle-même part dans la transaction finale d'[erase], avec le parent.
         if (programmes.isNotEmpty()) {
             Timber.i(
-                "delete: %d envoi(s) programme(s) annule(s) avec la conversation %d",
+                "delete: %d envoi(s) programme(s) annule(s) avec la conversation %d (%d echec(s))",
                 programmes.size,
                 conversationId,
+                echecs,
             )
         }
+        return echecs
     }
 
     /**
@@ -186,26 +212,36 @@ class ConversationEraser @Inject constructor(
      *    exact que la v1.27.11 a fermé sur `telephony_uri`, et un chemin de suppression ne doit
      *    pas le rouvrir sous une autre forme.
      */
-    private suspend fun supprimerFichiersPossedes(conversationId: Long) {
+    private suspend fun supprimerFichiersPossedes(conversationId: Long): Int {
+        // v1.28.4 (R02) — une énumération qui échoue n'est PAS une liste vide : c'est un échec.
         val pieces = runCatching { attachmentDao.findForConversation(conversationId) }
             .onFailure { Timber.w(it, "delete: lecture des pieces jointes de %d echouee", conversationId) }
-            .getOrDefault(emptyList())
+            .getOrNull() ?: return 1
         val racines = listOfNotNull(context.filesDir, context.cacheDir)
             .map { it.canonicalPath + java.io.File.separator }
+        var echecs = 0
         for (piece in pieces) {
             if (piece.localUri.startsWith("content://")) continue
             runCatching {
                 val fichier = java.io.File(piece.localUri)
                 val chemin = fichier.canonicalPath
                 if (racines.none { chemin.startsWith(it) }) {
+                    // Refusé à dessein, pas un échec : ce n'est pas notre fichier.
                     Timber.w("delete: piece jointe hors du bac a sable ignoree (conversation %d)", conversationId)
                     return@runCatching
                 }
+                // Un `delete()` qui rend `false` n'est pas une exception — mais c'est un échec, et
+                // il compte : le parent reste, la référence au fichier avec lui.
                 if (fichier.exists() && !fichier.delete()) {
+                    echecs++
                     Timber.w("delete: piece jointe non effacee (conversation %d)", conversationId)
                 }
-            }.onFailure { Timber.w(it, "delete: effacement de piece jointe echoue") }
+            }.onFailure {
+                echecs++
+                Timber.w(it, "delete: effacement de piece jointe echoue")
+            }
         }
+        return echecs
     }
 
     /**
@@ -305,7 +341,15 @@ class ConversationEraser @Inject constructor(
             // d'un echec LOCAL. La distinction n'est pas cosmetique — elle decide si la sortie
             // forcee a le droit de retirer le PIN. Cf. [VaultPurgeResult].
             runCatching { erase(id, preserveOnSystemFailure = !force) }
-                .onSuccess { systemCopyGone -> if (systemCopyGone) deleted++ else systemResidue++ }
+                .onSuccess { issue ->
+                    when {
+                        // v1.28.4 (R01/R02) — un dépendant resté derrière est un échec LOCAL, le
+                        // parent est conservé et compte dans `remaining` : jamais « complet ».
+                        !issue.localeComplete -> localFailures++
+                        issue.systemCopyGone -> deleted++
+                        else -> systemResidue++
+                    }
+                }
                 .onFailure {
                     localFailures++
                     Timber.w(it, "deleteAllInVault: conversation %d not deleted", id)

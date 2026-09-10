@@ -140,7 +140,7 @@ class VaultPurgeRetryTest {
         seedVaultConversation()
         val eraser = eraserAvec(RefusSystematique)
 
-        val systemeParti = eraser.erase(VAULT_ID)
+        val systemeParti = eraser.erase(VAULT_ID).systemCopyGone
 
         assertThat(systemeParti).isFalse()
         assertThat(db.conversationDao().idsInVault()).isEmpty()
@@ -348,6 +348,136 @@ class VaultPurgeRetryTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             com.filestech.sms.security.VaultPurgeBarrier(),
         )
+
+    /**
+     * v1.28.4 — **R01 (relecture externe, mesuré par Andrew sur émulateur) : un envoi programmé
+     * dont le DELETE est refusé ne doit pas laisser la purge se dire complète.** Avant, l'échec
+     * était gobé, le parent partait, et l'orphelin devenait invisible ET visible hors coffre.
+     * Ici le refus est un `TRIGGER` restreint à cette ligne ; le parent est CONSERVÉ, l'échec
+     * compté, et une fois le refus levé, la reprise retrouve l'orphelin par son parent.
+     */
+    @Test
+    fun r01_unEnvoiProgrammeDontLeDeleteEstRefuse_gardeLeParentEtCompteLEchec(): Unit = runBlocking {
+        seedVaultConversation()
+        val programme = db.scheduledMessageDao().upsert(
+            com.filestech.sms.data.local.db.entity.ScheduledMessageEntity(
+                conversationId = VAULT_ID,
+                addressesCsv = "+33600000009",
+                body = "contenu du coffre, programme",
+                scheduledAt = System.currentTimeMillis() + 3_600_000L,
+                subId = null,
+                attachmentsJson = null,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+        db.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER r01_refus BEFORE DELETE ON scheduled_messages WHEN OLD.id = $programme " +
+                "BEGIN SELECT RAISE(ABORT, 'R01_DELETE_REFUSE'); END;",
+        )
+
+        val refuse = eraserAvec(ToutSEfface).purgeVault()
+
+        assertThat(refuse.isComplete).isFalse()
+        assertThat(refuse.localFailures).isEqualTo(1)
+        assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+        assertThat(db.scheduledMessageDao().findById(programme)).isNotNull()
+
+        // Le refus levé, la reprise part du parent conservé et finit le travail.
+        db.openHelper.writableDatabase.execSQL("DROP TRIGGER r01_refus")
+        val reprise = eraserAvec(ToutSEfface).purgeVault()
+
+        assertThat(reprise.isComplete).isTrue()
+        assertThat(db.scheduledMessageDao().findById(programme)).isNull()
+        assertThat(db.conversationDao().idsInVault()).isEmpty()
+    }
+
+    /**
+     * v1.28.4 — **R02 : un fichier possédé que `delete()` refuse ne doit pas laisser la purge se
+     * dire complète.** Le dossier est rendu non inscriptible (0500) : `delete()` rend `false`,
+     * sans exception — le cas que `onFailure` ne voyait pas. Le parent reste, l'échec compte ;
+     * droits rétablis, la reprise efface le fichier et complète.
+     */
+    @Test
+    fun r02_unFichierQueDeleteRefuse_gardeLeParentEtCompteLEchec(): Unit = runBlocking {
+        seedVaultConversation()
+        val dossier = java.io.File(context.filesDir, "mms_attachments/r02-${System.nanoTime()}").apply { mkdirs() }
+        val fichier = java.io.File(dossier, "secret.jpg").apply { writeBytes(ByteArray(16)) }
+        val messageId = db.messageDao().insert(messageDuCoffre())
+        db.attachmentDao().insert(
+            com.filestech.sms.data.local.db.entity.AttachmentEntity(
+                messageId = messageId,
+                mimeType = "image/jpeg",
+                fileName = fichier.name,
+                sizeBytes = fichier.length(),
+                localUri = fichier.absolutePath,
+            ),
+        )
+        android.system.Os.chmod(dossier.path, 0b101_000_000) // 0500
+        try {
+            // Précondition mesurée, pas supposée : le refus est réel.
+            assertThat(fichier.delete()).isFalse()
+
+            val refuse = eraserAvec(ToutSEfface).purgeVault()
+
+            assertThat(refuse.isComplete).isFalse()
+            assertThat(refuse.localFailures).isEqualTo(1)
+            assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+            assertThat(fichier.exists()).isTrue()
+        } finally {
+            android.system.Os.chmod(dossier.path, 0b111_000_000) // 0700
+        }
+
+        val reprise = eraserAvec(ToutSEfface).purgeVault()
+
+        assertThat(reprise.isComplete).isTrue()
+        assertThat(fichier.exists()).isFalse()
+        dossier.delete()
+    }
+
+    /**
+     * v1.28.4 — **R03 : un message qui commet APRÈS la relecture d'avant et AVANT la suppression
+     * du parent** était emporté par la cascade, sa copie système intacte, purge « complète ».
+     * L'annulation de l'ordonnanceur est le point d'injection : elle a lieu après le balayage et
+     * avant la transaction finale — exactement l'ancienne fenêtre. La relecture vit désormais
+     * DANS la transaction de suppression : le message est vu, le parent reste, rien n'est perdu.
+     */
+    @Test
+    fun r03_unMessageQuiCommetApresLeBalayage_estVuParLaTransactionFinale(): Unit = runBlocking {
+        seedVaultConversation()
+        db.scheduledMessageDao().upsert(
+            com.filestech.sms.data.local.db.entity.ScheduledMessageEntity(
+                conversationId = VAULT_ID,
+                addressesCsv = "+33600000009",
+                body = "point d'injection",
+                scheduledAt = System.currentTimeMillis() + 3_600_000L,
+                subId = null,
+                attachmentsJson = null,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+        val tardif = object : com.filestech.sms.domain.scheduler.ScheduledMessageScheduler {
+            var insere: Long = -1L
+            override fun scheduleAt(scheduledMessageId: Long, epochMillis: Long) = Unit
+            override fun cancel(scheduledMessageId: Long) {
+                if (insere < 0L) {
+                    insere = runBlocking { db.messageDao().insert(messageDuCoffre().copy(body = "B, arrive tard")) }
+                }
+            }
+        }
+
+        val resultat = eraserAvec(ToutSEfface, tardif).purgeVault()
+
+        assertThat(resultat.isComplete).isFalse()
+        assertThat(resultat.systemResidue).isEqualTo(1)
+        assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+        assertThat(db.messageDao().findById(tardif.insere)?.body).isEqualTo("B, arrive tard")
+
+        // La reprise, sans nouvel intrus, présente B au fournisseur et complète.
+        val reprise = eraserAvec(ToutSEfface).purgeVault()
+
+        assertThat(reprise.isComplete).isTrue()
+        assertThat(db.conversationDao().idsInVault()).isEmpty()
+    }
 
     private suspend fun seedVaultConversation() {
         db.conversationDao().insert(

@@ -176,7 +176,10 @@ class TelephonySyncManager @Inject constructor(
             //
             // Wrapped in runCatching so a blocklist failure (provider quirks on OEM ROMs)
             // never blocks the SMS sync itself — silent log + continue.
-            runCatching { blockedNumbersImporter.importFromSystem() }
+            // v1.28.4 — le miroir de la liste noire est étranglé ; une première synchronisation
+            // (ou une resynchronisation complète, curseur remis à zéro) le force.
+            val miroirForce = settings.flow.first().advanced.lastSyncedSmsId == 0L
+            runCatching { blockedNumbersImporter.importFromSystem(force = miroirForce) }
                 .onFailure {
                     Timber.w(it, "runSync(%s): system blocklist mirror failed; continuing", reason)
                 }

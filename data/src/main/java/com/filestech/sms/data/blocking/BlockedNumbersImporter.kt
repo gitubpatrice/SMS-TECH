@@ -62,7 +62,18 @@ class BlockedNumbersImporter @Inject constructor(
      * Idempotent : rejouer à chaque démarrage à froid est peu coûteux, et sans effet quand rien
      * n'a changé.
      */
-    suspend fun importFromSystem() = withContext(io) {
+    /**
+     * v1.28.4 — le miroir est ÉTRANGLÉ : une fois par [MIROIR_INTERVALLE_MS], sauf demande forcée
+     * (resynchronisation complète). Mesuré sur le S24 : 245 entrées remiroitées à chaque reprise
+     * de l'application, chaque `onResume` demandant une synchronisation. Cf. [Etrangleur].
+     */
+    private val etrangleur = com.filestech.sms.core.util.Etrangleur(MIROIR_INTERVALLE_MS)
+
+    suspend fun importFromSystem(force: Boolean = false) = withContext(io) {
+        if (!etrangleur.autorise(force)) {
+            Timber.d("BlockedNumbersImporter: miroir recent, demande absorbee")
+            return@withContext
+        }
         // v1.25.4 — AVANT le miroir, et avant même le garde de version : une entrée restée sur
         // l'ancienne clé ne bloque plus rien, donc plus tôt elle est convertie, mieux c'est.
         runCatching { rekeyLegacyEntries() }
@@ -209,5 +220,10 @@ class BlockedNumbersImporter @Inject constructor(
         }
         Timber.i("Purge: result purged=%d partialMatch=%d", purged, partialMatch)
         purged
+    }
+
+    private companion object {
+        /** Dix minutes : la liste noire du système change rarement, et une resynchronisation complète force. */
+        const val MIROIR_INTERVALLE_MS: Long = 10L * 60L * 1000L
     }
 }
