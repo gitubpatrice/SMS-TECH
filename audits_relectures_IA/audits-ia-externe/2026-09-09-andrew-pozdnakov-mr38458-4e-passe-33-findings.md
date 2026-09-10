@@ -285,6 +285,13 @@ ensemble preuve de reprise et protection (garder le parent tant qu'un enfant res
 design admis), ne pas classer un enfant par une jointure sur un parent disparu, et coordonner
 écrivains et finalisation (une courte transaction locale avec relecture est admise).
 
+**Publié le 2026-09-10 en v1.28.4 (293), tag `aafe607`.** Pipeline F-Droid `2837277885` verte
+(9 jobs, `fdroid build` 46 min, `check apk` : APK identique à l'asset GitHub). Réponse postée :
+https://gitlab.com/fdroid/fdroiddata/-/merge_requests/38458#note_3815897687 — elle reprend son
+tableau d'acceptation ligne par ligne, avec les deux limites dites (rappel radio, message commis
+après la transaction). Le contrôle négatif de R01 ne tombait pas au premier passage : le compte
+d'échecs de l'annulation n'était couvert par rien — quatrième test ajouté (`r01_uneAnnulationQuiLeve_…`).
+
 **Réponse (v1.28.4, branche `fix/tests-promis-a-andrew`)** — `ConversationEraser.erase` rend
 `Issue(systemCopyGone, localeComplete)` : les deux aides rendent un compte d'échecs (énumération
 ratée = échec, `delete()` à `false` = échec), un seul échec **garde le parent** pour le coffre et
