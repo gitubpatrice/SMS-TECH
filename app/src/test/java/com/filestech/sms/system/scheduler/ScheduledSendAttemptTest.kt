@@ -34,7 +34,12 @@ class ScheduledSendAttemptTest {
      * verrouille l'aiguillage au passage.
      */
     private val sendMediaMms = mockk<com.filestech.sms.domain.usecase.SendMediaMmsUseCase>()
-    private val attempt = ScheduledSendAttempt(dao, sendSms, sendMediaMms)
+    private val settings = mockk<com.filestech.sms.domain.settings.AppSettingsSource>()
+    private val attempt = ScheduledSendAttempt(dao, sendSms, sendMediaMms, settings)
+
+    init {
+        coEvery { settings.hydratedOrNull() } returns com.filestech.sms.domain.settings.AppSettings()
+    }
 
     private fun entity(
         state: ScheduledState = ScheduledState.PENDING,
@@ -315,6 +320,54 @@ class ScheduledSendAttemptTest {
 
         assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.SENT)
         coVerify(exactly = 1) { dao.setState(ID, ScheduledState.SENT) }
+    }
+
+    private fun reglageMmsDeGroupe(actif: Boolean) {
+        coEvery { settings.hydratedOrNull() } returns com.filestech.sms.domain.settings.AppSettings().let {
+            it.copy(sending = it.sending.copy(groupMms = actif))
+        }
+    }
+
+    /**
+     * v1.28.4 — un envoi programme depuis un GROUPE, reglage « MMS de groupe » actif, part en UN
+     * MMS a tous — meme regle que l'envoi immediat. Avant, ce quatrieme chemin d'envoi ignorait
+     * le reglage et eclatait le message en envois 1-a-1.
+     */
+    @Test
+    fun `un envoi programme depuis un groupe, reglage actif, part en un seul MMS de groupe`() = runTest {
+        reglageMmsDeGroupe(actif = true)
+        coEvery { sendMediaMms.invoke(any(), any(), any(), any(), any(), any()) } returns
+            Outcome.Success(com.filestech.sms.domain.model.SendReport(listOf(42L), emptyList(), emptyList()))
+        coEvery { dao.findById(ID) } returns entity().copy(addressesCsv = "+33600000000;+33611111111")
+
+        assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.SENT)
+        coVerify(exactly = 1) {
+            sendMediaMms.invoke(
+                match { it.size == 2 },
+                emptyList(),
+                "Bonjour",
+                null,
+                echoInGroup = false,
+                groupMms = true,
+            )
+        }
+        coVerify(exactly = 0) { sendSms.invoke(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    /** Controle : reglage inactif, le meme envoi de groupe suit le chemin SMS d'avant. */
+    @Test
+    fun `un envoi programme depuis un groupe, reglage inactif, part en SMS 1-a-1`() = runTest {
+        reglageMmsDeGroupe(actif = false)
+        // Huit parametres : `echoInGroup` vaut `true` pour un groupe, `stubSend` le fige a `false`.
+        coEvery { sendSms.invoke(any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            Outcome.Success(com.filestech.sms.domain.model.SendReport(listOf(1L, 2L), emptyList(), emptyList()))
+        coEvery { dao.findById(ID) } returns entity().copy(addressesCsv = "+33600000000;+33611111111")
+
+        assertThat(attempt(ID, runAttemptCount = 0)).isEqualTo(ScheduledSendAttempt.Verdict.SENT)
+        coVerify(exactly = 1) {
+            sendSms.invoke(match { it.size == 2 }, "Bonjour", any(), any(), any(), any(), any(), echoInGroup = true)
+        }
+        coVerify(exactly = 0) { sendMediaMms.invoke(any(), any(), any(), any(), any(), any()) }
     }
 
     private companion object {
