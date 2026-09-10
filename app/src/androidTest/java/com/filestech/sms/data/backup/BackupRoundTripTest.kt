@@ -17,6 +17,7 @@ import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.MessageType
+import com.filestech.sms.domain.settings.LockMode
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.VaultSessionState
 import com.google.common.truth.Truth.assertThat
@@ -354,6 +355,85 @@ class BackupRoundTripTest {
         }
     }
 
+    /**
+     * v1.28.4 — **la branche `BIOMETRIC` de la politique, jamais couverte.** Un coffre gardé par
+     * la seule biométrie n'a pas de PIN de coffre ; la politique doit quand même rendre un
+     * second facteur, et l'export doit le respecter comme le PIN. Le réglage est posé ET défait
+     * par le test : il lit l'état RÉEL de l'application.
+     */
+    @Test
+    fun coffreGardeParLaSeuleBiometrie_estUnSecondFacteur_etLExportEstRefuse() {
+        runBlocking {
+            seedSource()
+            assertThat(dbSource.conversationDao().countInVault()).isEqualTo(1)
+            val settings = SettingsRepository(context, scope)
+            settings.update { it.copy(security = it.security.copy(lockMode = LockMode.BIOMETRIC)) }
+            try {
+                // Prémisse explicite : pas de PIN de coffre, sinon c'est la branche PIN qui répond.
+                assertThat(vaultPinManager().isVaultPinConfigured()).isFalse()
+                assertThat(vaultFactorPolicy().current())
+                    .isEqualTo(com.filestech.sms.security.VaultSecondFactor.BIOMETRIC)
+
+                val written =
+                    serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+
+                assertThat(written).isInstanceOf(Outcome.Failure::class.java)
+                assertThat((written as Outcome.Failure).error)
+                    .isInstanceOf(AppError.Locked::class.java)
+                assertThat(backupFile.exists() && backupFile.length() > 0L).isFalse()
+            } finally {
+                settings.update { it.copy(security = it.security.copy(lockMode = LockMode.OFF)) }
+            }
+        }
+    }
+
+    /**
+     * v1.28.4 — **le refus d'export ET de restauration en session leurre, jamais testé** depuis
+     * la v1.26.1 (le commentaire de `serviceFor` le disait : « jamais `PanicDecoy` »). La session
+     * leurre est ATTEINTE par le vrai chemin — PIN principal, code panique, déverrouillage par le
+     * code panique — et non posée à la main. Le refus est générique (`Locked`), sans nommer le
+     * coffre. La sauvegarde valide écrite AVANT le leurre sert à prouver le refus de restauration.
+     */
+    @Test
+    fun sessionLeurre_refuseLExportEtLaRestauration_sansRienEcrire() {
+        runBlocking {
+            seedSource()
+            // Une sauvegarde légitime, hors leurre, coffre sans second facteur.
+            assertThat(serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD))
+                .isInstanceOf(Outcome.Success::class.java)
+            val fichierLeurre = File(context.cacheDir, "roundtrip-leurre.smsbk").apply { delete() }
+            val appLock = appLockFor(dbSource, vaultSource)
+            val store = SecurityStore(context)
+            val settings = SettingsRepository(context, scope)
+            try {
+                assertThat(appLock.setPin("135790".toCharArray())).isEqualTo(AppLockManager.SetPinOutcome.Ok)
+                assertThat(appLock.setPanicCode("246813".toCharArray()))
+                    .isEqualTo(AppLockManager.PanicCodeOutcome.Ok)
+                // Prémisse explicite : le code panique ouvre une session LEURRE, pas une session normale.
+                assertThat(appLock.attemptUnlock("246813".toCharArray()))
+                    .isEqualTo(AppLockManager.LockState.PanicDecoy)
+                val service = serviceFor(dbSource, vaultSource, appLock)
+
+                val written = service.writeSmsbk(uriOf(fichierLeurre), PASSWORD.copyOf())
+                assertThat(written).isInstanceOf(Outcome.Failure::class.java)
+                assertThat((written as Outcome.Failure).error).isInstanceOf(AppError.Locked::class.java)
+                assertThat(fichierLeurre.exists() && fichierLeurre.length() > 0L).isFalse()
+
+                val read = serviceFor(dbTarget, VaultSessionState(), appLock)
+                    .readSmsbk(uriOf(backupFile), PASSWORD.copyOf())
+                assertThat(read).isInstanceOf(Outcome.Failure::class.java)
+                assertThat((read as Outcome.Failure).error).isInstanceOf(AppError.Locked::class.java)
+                assertThat(dbTarget.messageDao().listAll()).isEmpty()
+            } finally {
+                // `clearPin` refuse en leurre, par construction : on nettoie le magasin directement.
+                store.clearPanic()
+                store.clearPin()
+                settings.update { it.copy(security = it.security.copy(lockMode = LockMode.OFF)) }
+                fichierLeurre.delete()
+            }
+        }
+    }
+
     // ────────────── v1.28.3 — F24, F25 et F32 ──────────────
 
     /**
@@ -589,7 +669,11 @@ class BackupRoundTripTest {
      * PRODUCTION, et un test qui exporte la vraie base de l'appareil serait à la fois inutile et
      * dangereux.
      */
-    private fun serviceFor(db: AppDatabase, vault: VaultSessionState) = BackupService(
+    private fun serviceFor(
+        db: AppDatabase,
+        vault: VaultSessionState,
+        appLock: AppLockManager = appLockFor(db, vault),
+    ) = BackupService(
         context = context,
         database = db,
         conversationDao = db.conversationDao(),
@@ -598,7 +682,13 @@ class BackupRoundTripTest {
         aead = AeadCipher(),
         // État initial `Locked`, jamais `PanicDecoy` : le garde anti-leurre laisse donc passer,
         // et c'est bien le garde du COFFRE que ces tests exercent.
-        appLock = AppLockManager(
+        appLock = appLock,
+        vaultSession = vault,
+        vaultFactor = vaultFactorPolicy(),
+        io = Dispatchers.IO,
+    )
+
+    private fun appLockFor(db: AppDatabase, vault: VaultSessionState) = AppLockManager(
             securityStore = SecurityStore(context),
             settings = SettingsRepository(context, scope),
             kdf = PasswordKdf(),
@@ -612,11 +702,7 @@ class BackupRoundTripTest {
             vaultFactor = { vaultFactorPolicy() },
             conversationDao = { db.conversationDao() },
             io = Dispatchers.IO,
-        ),
-        vaultSession = vault,
-        vaultFactor = vaultFactorPolicy(),
-        io = Dispatchers.IO,
-    )
+        )
 
     /**
      * v1.28.0 — construite sur les MEMES reglages et le MEME magasin securise que le service.
