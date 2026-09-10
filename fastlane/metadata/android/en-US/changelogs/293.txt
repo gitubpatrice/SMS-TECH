@@ -1,0 +1,5 @@
+New: group MMS (setting, off by default) — one MMS to everyone, every reply lands back in the group. Scheduled sends follow the same setting.
+
+Vault purge: a scheduled send or a file that resists keeps the conversation and counts as a failure; the end of the purge is one transaction, so a message arriving meanwhile is no longer swept away.
+
+A restored MMS without a caption stays visible. The blocked-numbers mirror no longer replays on every resume. The send loop is written once.

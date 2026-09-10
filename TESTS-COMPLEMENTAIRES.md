@@ -169,3 +169,26 @@ en arrière-plan, dialogue en coroutine IO), mais la durée est inconnue.
   deux téléphones, aucun signalé par un test. Les tests écrits ensuite tombent chacun sur le
   défaut qu'ils visent (contrôle négatif), mais ils n'auraient pas trouvé le défaut.
 
+---
+
+## Mesures du 2026-09-10 (v1.28.4)
+
+- **Galaxy S9 / Android 10** : `VaultPurgeRetryTest` 14 cas (R01 ×2, R02, R03 avec reprise) +
+  `PurgeHistoryPropagationTest`, 0 échec ; `BackupRoundTripTest` 15 cas, 0 échec ;
+  `MigrationTest` 12 → 13 ; 58 cas sur la colonne `hidden`.
+- **Contrôles négatifs, tous probants** : R01 (compte de l'annulation), R02, R03, politique
+  BIOMETRIC, garde d'export en leurre, garde de restauration en leurre, réglage MMS de groupe de
+  l'envoi programmé, routeur d'envoi. Le premier contrôle R01 ne tombait PAS : le test visait le
+  `DELETE` refusé, protégé par la transaction ; le compte d'échecs de l'aide n'était couvert par
+  rien. *Un contrôle négatif qui ne tombe pas est une trouvaille, pas un échec de méthode.*
+- **Un faux verdict** : sur cinq passes de `BackupRoundTripTest`, une a fait tomber
+  `unMauvaisMotDePasse_nImportePasUneSeuleLigne` alors que le défaut remis visait un autre test.
+  Non reproduit. À surveiller ; si cela revient, chercher un état partagé entre tests (magasin
+  sécurisé, réglages DataStore).
+- **Mesure réelle après le refactor de la boucle d'envoi** (debug `8e9b833` sur S9 et S24) :
+  photo S24 → groupe (MMS_SENT, reçue S9 « membres=2 »), texte S9 depuis le groupe (MMS, reçu
+  S24 « membres=2 »), SMS 1-à-1 S9. Journaux, pas seulement l'écran.
+- **Ce que la campagne ne mesure pas** : deux scripts de contrôle négatif lancés en parallèle
+  (une tâche de fond « morte » qui ne l'était pas) donnent des « RAPPORT PÉRIMÉ » et un fichier
+  de sauvegarde disparu — le rapport de test ne dit rien de qui a compilé quoi.
+

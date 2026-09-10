@@ -1,0 +1,5 @@
+Nouveau : MMS de groupe (réglage, désactivé par défaut) — un seul MMS à tous, chaque réponse revient dans le groupe. L'envoi programmé suit le même réglage.
+
+Purge du coffre : un envoi programmé ou un fichier qui résiste garde la conversation et compte comme échec ; la fin de purge est une transaction, un message arrivé entre-temps n'est plus emporté.
+
+Un MMS restauré sans légende reste visible. Le miroir des numéros bloqués ne se rejoue plus à chaque reprise. Boucle d'envoi écrite une fois.

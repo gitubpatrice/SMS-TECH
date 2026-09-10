@@ -3,6 +3,53 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.4] — 2026-09-10
+
+*Réponse à la cinquième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (R01, R02, R03 — trois
+cas où la purge du coffre se disait complète alors qu'il restait quelque chose, mesurés par lui
+sur émulateur avec la base SQLCipher réelle), les tests promis dans la réponse à sa quatrième
+passe, et le MMS de groupe.*
+
+### Sécurité
+- **La purge du coffre rend compte de ses dépendants** (R01, R02) : un envoi programmé dont
+  l'annulation échoue ou un fichier dont `delete()` rend `false` **garde la conversation** et
+  compte comme échec local — le PIN n'est pas retiré, la reprise repart du parent conservé.
+- **La fin de purge est une transaction** (R03) : la relecture des messages et la suppression du
+  parent vivent dans une seule transaction Room. Un message importé qui commet pendant la purge
+  attend le verrou ; il n'est plus emporté par la cascade avec sa copie système intacte.
+- Trois tests sur Room réel, un par cas, chacun avec sa reprise. Le contrôle négatif a montré
+  qu'un quatrième chemin (le compte d'échecs de l'annulation elle-même) n'était couvert par
+  aucun test qui tombe — ajouté.
+- **Refus d'export et de restauration en session leurre : testés**, par le vrai chemin (PIN,
+  code panique, déverrouillage par le code panique). **Le second facteur biométrique** du coffre
+  est reconnu par la politique et respecté par l'export — testé.
+
+### Ajouté
+- **MMS de groupe** (réglage, désactivé par défaut) : un seul MMS à tous les membres, une seule
+  ligne dans le groupe ; à la réception, le groupe est reconstitué depuis les destinataires du
+  PDU moins soi-même, et rapproché des groupes existants par ses membres (E.164). Chaque
+  réponse revient dans le groupe. Mesuré dans les deux sens entre un S9 et un S24.
+- **« Pièce jointe non restaurée »** : un MMS restauré sans légende ni pièce jointe s'affiche
+  ainsi au lieu de disparaître.
+
+### Corrigé
+- **Un MMS restauré sans légende était invisible** : cinq requêtes le prenaient pour une
+  sentinelle de réaction, reconnue par sa forme. Colonne `messages.hidden` (migration Room
+  12 → 13, additive) ; la sentinelle se déclare, plus personne ne devine.
+- **L'envoi programmé depuis un groupe ignorait le réglage « MMS de groupe »** — quatrième
+  chemin d'envoi, et sa deuxième divergence d'avec l'envoi immédiat.
+- **Le miroir des numéros bloqués se rejouait à chaque reprise** de l'application (245 entrées
+  sur le S24) : une fois par dix minutes désormais, forcé sur resynchronisation complète.
+
+### Interne
+- **La boucle d'envoi et l'aiguillage SMS / MMS / MMS de groupe sont écrits une seule fois**
+  (`EnvoiParDestinataire`, `EnvoyerMessageUseCase`) ; le fil, les trois use cases et l'envoi
+  programmé les appellent. Quatre divergences en une semaine sur ces copies : ce n'était plus
+  une duplication, c'était un générateur de bugs. Mesuré sur appareil après le refactor.
+- **Tests promis à Andrew** : bornes de lecture des pièces jointes (`LectureBornee`, F27),
+  barrière de purge (`VaultPurgeBarrier`, F13), porte du Safety call (`SafetyCallResetGate`,
+  F06). Contrôles négatifs sur chaque test de cette version.
+
 ## [1.28.3] — 2026-09-09
 
 *Quatrième passe de la relecture d'Andrew Pozdnakov sur la MR F-Droid !38458 (33 constats), un

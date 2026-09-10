@@ -81,6 +81,48 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.4 — Un nettoyage incomplet rapporté complet
+
+*Cinquième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (2026-09-10) : il a resserré sur la
+purge du coffre (F03/F04/F09/F13) et mesuré, sur émulateur Android 14 avec la base SQLCipher
+réelle et le graphe Hilt de production, **trois cas où la purge se dit complète alors qu'il
+reste quelque chose**. Registre : même fichier que la 1.28.3, section « Cinquième note ».*
+
+**Ce qu'il a trouvé, et pourquoi c'est grave.** La 1.28.3 avait rendu la purge reprenable en
+conservant le parent quand la copie système résiste. Mais ses **dépendants** — envois programmés,
+fichiers de pièces jointes — étaient nettoyés par des aides qui ne rendaient rien : une exception
+gobée, un `delete()` à `false` journalisé et oublié. La branche de succès ordinaire était donc
+atteinte **sans `force`**, le parent partait, le PIN était retiré, `VaultPurged` émis — et un
+envoi programmé orphelin **redevenait visible hors coffre** (`COALESCE(c.in_vault, 0)`), sans que
+la reprise puisse jamais le retrouver, son parent ayant disparu. Troisième cas : un message
+importé par la synchronisation de production qui **commet entre la seconde relecture et le
+`DELETE` du parent** est emporté par la cascade, copie système intacte, purge « complète ».
+
+**Ce qui change.** `ConversationEraser.erase` rend `Issue(systemCopyGone, localeComplete)`. Les
+deux aides rendent un compte d'échecs (énumération ratée = échec, `delete()` à `false` = échec) ;
+un seul échec **garde le parent** pour le coffre et compte en `localFailures`, donc jamais
+« complet ». La relecture et la suppression du parent vivent dans **une seule transaction Room** :
+SQLite n'ayant qu'un écrivain, un import qui commet pendant la purge attend le verrou et ne peut
+plus se glisser entre les deux. Les lignes programmées sont supprimées dans cette même
+transaction, plus par l'aide.
+
+**Ce que la mesure a ajouté.** Trois tests sur Room réel reproduisent R01 (`TRIGGER` refusant le
+`DELETE`), R02 (dossier `0500`, `delete()` mesuré à `false`), R03 (message inséré au point
+d'injection de l'ordonnanceur), chacun avec sa reprise. Le **contrôle négatif de R01 ne tombait
+pas** : le `DELETE` refusé vit désormais dans la transaction finale et remonte par un autre
+chemin — le compte d'échecs de l'annulation elle-même n'était couvert par rien. Un quatrième test
+fait lever `cancel()` de l'ordonnanceur et tombe seul quand ce compte est neutralisé.
+
+**Deux branches du coffre jamais testées depuis la v1.26.1**, fermées : le refus d'export **et de
+restauration** en session leurre, atteinte par le vrai chemin (PIN principal, code panique,
+déverrouillage par le code panique) ; et le second facteur **biométrique**, que la politique doit
+rendre pour un coffre sans PIN de coffre et que l'export doit respecter. Contrôles négatifs sur la
+politique, sur le garde d'export, sur le garde de restauration.
+
+**Hors sécurité, dans la même version** : MMS de groupe (réglage désactivé par défaut), colonne
+`hidden` (schéma 13) pour ne plus reconnaître une sentinelle de réaction par sa forme, boucle
+d'envoi et aiguillage écrits une seule fois après une quatrième divergence entre chemins jumeaux.
+
 ### v1.28.3 — Un correctif posé sur un seul des chemins qui en avaient besoin
 
 *Quatrième passe de la relecture externe d'Andrew Pozdnakov sur la MR F-Droid !38458 — 33
