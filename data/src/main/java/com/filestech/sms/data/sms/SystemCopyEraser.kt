@@ -249,7 +249,8 @@ class TelephonySystemCopyEraser @Inject constructor(
      * ce qui est parti sur le reseau.
      */
     private fun estSentinelleDeReaction(message: MessageEntity): Boolean =
-        message.body.isEmpty() && message.attachmentsCount == 0 && message.reactionEmoji == null
+        // v1.28.4 — l'intention est écrite sur la ligne (`hidden`), plus reconnue à sa forme.
+        message.hidden
 
     /**
      * v1.28.3 (F12) — reste-t-il, au-dela de la date et du sens, **un** discriminant reellement

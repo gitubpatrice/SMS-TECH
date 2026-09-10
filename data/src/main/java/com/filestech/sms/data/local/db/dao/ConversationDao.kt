@@ -243,7 +243,7 @@ interface ConversationDao {
             WHERE conversation_id = :conversationId
               AND read = 0
               AND direction = 0
-              AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+              AND hidden = 0
         )
         WHERE id = :conversationId
         """,

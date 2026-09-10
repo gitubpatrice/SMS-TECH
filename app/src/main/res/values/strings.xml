@@ -583,6 +583,7 @@
     <string name="attachment_image_label">Image</string>
     <string name="attachment_video_label">Video</string>
     <string name="attachment_file_label">File</string>
+    <string name="bubble_mms_parts_missing">Attachment not restored</string>
     <string name="bubble_sender_self">You</string>
     <string name="attachment_remove_label">Remove attachment</string>
 

@@ -116,4 +116,16 @@ data class MessageEntity(
      * entre dans leur `requestCode`), donc `FLAG_UPDATE_CURRENT` ne les fait plus se confondre.
      */
     @ColumnInfo(name = "send_attempt", defaultValue = "0") val sendAttempt: Int = 0,
+    /**
+     * v1.28.4 — **ligne de service, jamais affichée** : la trace locale d'une réaction (Tapback)
+     * envoyée ou reçue, dont seul le badge est exposé.
+     *
+     * Avant, six requêtes la reconnaissaient à sa FORME — `body = ''`, aucune pièce jointe,
+     * aucune réaction. Or un MMS sans légende restauré d'une sauvegarde, qui ne transporte pas
+     * les pièces jointes, prenait exactement cette forme : importé, compté comme importé, et
+     * montré nulle part (trouvé en écrivant les tests de F25). L'intention est désormais écrite
+     * par le seul producteur de sentinelles, pas devinée par les lecteurs ; et le garde
+     * d'identité (F14) sait qu'un corps n'est pas comparable parce que la ligne le DIT.
+     */
+    @ColumnInfo(name = "hidden", defaultValue = "0") val hidden: Boolean = false,
 )

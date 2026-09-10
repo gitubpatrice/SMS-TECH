@@ -237,7 +237,7 @@ class MessageWindowDaoTest {
     @Test
     fun refreshConversationPreview_ignoresReactionSentinels() = runBlocking {
         db.messageDao().insert(message(1, 1_000L, body = "real message"))
-        db.messageDao().insert(message(2, 2_000L, body = "")) // reaction sentinel (newest)
+        db.messageDao().insert(message(2, 2_000L, body = "").copy(hidden = true)) // reaction sentinel (newest)
         setConvPreview(1_000L, "real message")
 
         db.messageDao().refreshConversationPreview(1)
@@ -250,7 +250,7 @@ class MessageWindowDaoTest {
     @Test
     fun reactionSentinels_areExcludedFromBothWindowAndStats() = runBlocking {
         seed(10)
-        db.messageDao().insert(message(99, 2_000L, body = ""))
+        db.messageDao().insert(message(99, 2_000L, body = "").copy(hidden = true))
 
         val window = db.messageDao().observeWindowForConversation(1, 200).first()
         val stats = db.messageDao().observeStatsForConversation(1).first()
@@ -258,5 +258,23 @@ class MessageWindowDaoTest {
         assertThat(window.map { it.id }).doesNotContain(99L)
         assertThat(window).hasSize(10)
         assertThat(stats.total).isEqualTo(10)
+    }
+
+    /**
+     * v1.28.4 — **un MMS restauré sans légende n'est pas une sentinelle.** La sauvegarde ne
+     * transporte pas les pièces jointes : la ligne revient avec un corps vide et zéro pièce
+     * jointe — exactement la forme que les requêtes excluaient. Elle doit rester visible, dans la
+     * fenêtre ET dans le total, parce que c'est la colonne `hidden` qui décide, pas la forme.
+     */
+    @Test
+    fun unMmsRestaureSansLegende_resteVisibleDansLaFenetreEtLeTotal() = runBlocking {
+        seed(10)
+        db.messageDao().insert(message(98, 1_500L, body = "").copy(type = MessageType.MMS))
+
+        val window = db.messageDao().observeWindowForConversation(1, 200).first()
+        val stats = db.messageDao().observeStatsForConversation(1).first()
+
+        assertThat(window.map { it.id }).contains(98L)
+        assertThat(stats.total).isEqualTo(11)
     }
 }

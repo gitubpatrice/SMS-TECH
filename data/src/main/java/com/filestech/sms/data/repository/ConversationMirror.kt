@@ -185,6 +185,8 @@ class ConversationMirror @Inject constructor(
                 subId = null,
                 scheduledAt = null,
                 attachmentsCount = 0,
+                // v1.28.4 — la sentinelle se DÉCLARE, elle n'est plus devinée à sa forme.
+                hidden = true,
             )
             // `OnConflictStrategy.IGNORE` on the insert means a second call with the same
             // telephonyUri is a no-op — idempotent.
@@ -389,6 +391,8 @@ class ConversationMirror @Inject constructor(
                 scheduledAt = null,
                 attachmentsCount = 0,
                 replyToMessageId = replyToMessageId,
+                // v1.28.4 — la sentinelle de réaction sortante se DÉCLARE, elle n'est plus devinée.
+                hidden = localMirrorBody != null && localMirrorBody.isEmpty(),
             )
             val msgId = messageDao.insert(msg)
             // v1.4.1 — when the row is a hidden reaction sentinel (mirrorBody=""),

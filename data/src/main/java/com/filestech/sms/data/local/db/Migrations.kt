@@ -407,6 +407,22 @@ object Migrations {
         }
     }
 
+    /**
+     * v1.28.4 — `messages.hidden` : la sentinelle de réaction se déclare au lieu d'être reconnue à
+     * sa forme. Le rattrapage marque les sentinelles existantes — une DERNIÈRE fois à leur forme,
+     * et parmi les SMS seulement : un MMS de cette forme est un MMS restauré sans ses pièces
+     * jointes, celui qu'il s'agit justement de rendre visible.
+     */
+    val MIGRATION_12_13: Migration = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `messages` ADD COLUMN `hidden` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL(
+                "UPDATE `messages` SET `hidden` = 1 " +
+                    "WHERE `body` = '' AND `attachments_count` = 0 AND `reaction_emoji` IS NULL AND `type` = 0",
+            )
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -420,5 +436,6 @@ object Migrations {
         MIGRATION_9_10,
         MIGRATION_10_11,
         MIGRATION_11_12,
+        MIGRATION_12_13,
     )
 }

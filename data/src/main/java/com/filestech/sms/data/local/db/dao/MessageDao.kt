@@ -30,22 +30,20 @@ interface MessageDao {
      *     thread — they already have the local badge on the message they
      *     reacted to.
      *
-     * Both sentinels share the same shape : `body = ''` + no attachment + no
-     * reaction emoji, regardless of direction. A legitimate empty body always
-     * carries either an attachment (image / audio / file MMS without caption) or
-     * a reaction emoji, so the predicate is tight enough to never hide a real
-     * message — outgoing SMS reject blank bodies in [SendSmsUseCase] before they
-     * ever reach the DB.
+     * Both sentinels used to be recognised by their SHAPE — `body = ''` + no attachment + no
+     * reaction emoji — on the assumption that a legitimate empty body always carries an
+     * attachment. **That assumption was false**: a captionless MMS restored from a backup
+     * comes back without its attachments (the backup does not carry them) and took exactly
+     * that shape — imported, counted, shown nowhere.
+     *
+     * v1.28.4 — the sentinel now DECLARES itself (`hidden = 1`, set by its only two producers)
+     * and every reader filters on that column, never on the shape.
      */
     @Query(
         """
         SELECT * FROM messages
         WHERE conversation_id = :conversationId
-          AND NOT (
-              body = ''
-              AND attachments_count = 0
-              AND reaction_emoji IS NULL
-          )
+          AND hidden = 0
         ORDER BY date ASC, id ASC
         """
     )
@@ -75,11 +73,7 @@ interface MessageDao {
         SELECT * FROM (
             SELECT * FROM messages
             WHERE conversation_id = :conversationId
-              AND NOT (
-                  body = ''
-                  AND attachments_count = 0
-                  AND reaction_emoji IS NULL
-              )
+              AND hidden = 0
             ORDER BY date DESC, id DESC
             LIMIT :limit
         ) ORDER BY date ASC, id ASC
@@ -102,11 +96,7 @@ interface MessageDao {
         """
         SELECT COUNT(*) AS total, MIN(date) AS firstAt, MAX(date) AS lastAt FROM messages
         WHERE conversation_id = :conversationId
-          AND NOT (
-              body = ''
-              AND attachments_count = 0
-              AND reaction_emoji IS NULL
-          )
+          AND hidden = 0
         """
     )
     fun observeStatsForConversation(conversationId: Long): Flow<ThreadStats>
@@ -484,8 +474,8 @@ interface MessageDao {
     /**
      * Snapshot read for backup pipeline.
      *
-     * v1.6.0 (audit S2) — exclut les rows sentinels (`body = '' AND attachments_count = 0
-     * AND reaction_emoji IS NULL`) qui sont des artefacts internes Tapback :
+     * v1.6.0 (audit S2) — exclut les rows sentinels (`hidden = 1` depuis la v1.28.4 ; avant,
+     * reconnues à leur forme) qui sont des artefacts internes Tapback :
      *   - `upsertReactionSentinel` (incoming Tapback déjà folded sur le message d'origine) ;
      *   - `upsertOutgoingSms(localMirrorBody = "")` (la propre réaction sortante du user,
      *     dont seul le badge est exposé en UI).
@@ -496,7 +486,7 @@ interface MessageDao {
     @Query(
         """
         SELECT * FROM messages
-        WHERE NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+        WHERE hidden = 0
         ORDER BY conversation_id ASC, date ASC
         """
     )
@@ -717,13 +707,13 @@ interface MessageDao {
           last_message_at = COALESCE(
               (SELECT MAX(date) FROM messages
                WHERE conversation_id = conversations.id
-                 AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)),
+                 AND hidden = 0),
               0
           ),
           last_message_preview = (
               SELECT body FROM messages
               WHERE conversation_id = conversations.id
-                AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+                AND hidden = 0
               ORDER BY date DESC, id DESC LIMIT 1
           )
         """,
@@ -749,13 +739,13 @@ interface MessageDao {
           last_message_at = COALESCE(
               (SELECT MAX(date) FROM messages
                WHERE conversation_id = :conversationId
-                 AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)),
+                 AND hidden = 0),
               0
           ),
           last_message_preview = (
               SELECT body FROM messages
               WHERE conversation_id = :conversationId
-                AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+                AND hidden = 0
               ORDER BY date DESC, id DESC LIMIT 1
           )
         WHERE id = :conversationId
@@ -780,13 +770,13 @@ interface MessageDao {
           last_message_at = COALESCE(
               (SELECT MAX(date) FROM messages
                WHERE conversation_id = conversations.id
-                 AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)),
+                 AND hidden = 0),
               0
           ),
           last_message_preview = (
               SELECT body FROM messages
               WHERE conversation_id = conversations.id
-                AND NOT (body = '' AND attachments_count = 0 AND reaction_emoji IS NULL)
+                AND hidden = 0
               ORDER BY date DESC, id DESC LIMIT 1
           )
         WHERE last_message_at > COALESCE(

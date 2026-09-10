@@ -660,4 +660,53 @@ class MigrationTest {
             assertThat(c.getString(0)).isEqualTo("Famille")
         }
     }
+
+    /**
+     * v1.28.4 — `hidden` : la sentinelle SMS existante est marquée, le MMS de même forme ne l'est
+     * PAS — c'est lui, le MMS restauré sans légende, que la colonne rend enfin visible.
+     */
+    @Test
+    fun migrate12To13_marqueLesSentinellesSms_etLaisseVisibleLeMmsDeMemeForme() {
+        helper.createDatabase(TEST_DB, 12).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (1, 7, '+33600000001', 'Alice', 1700000000000, 'a', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+            // Une sentinelle de réaction sortante : SMS, corps vide, rien d'autre.
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction, date,
+                     date_sent, read, starred, status, attachments_count)
+                VALUES (1, 1, 'content://sms/1', '+33600000001', '', 0, 1, 1700000000000,
+                        NULL, 1, 0, 1, 0)
+                """.trimIndent(),
+            )
+            // Un MMS restauré sans légende : même forme, autre type.
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction, date,
+                     date_sent, read, starred, status, attachments_count)
+                VALUES (2, 1, NULL, '+33600000001', '', 1, 0, 1700000001000,
+                        NULL, 1, 0, 4, 0)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 13, true, Migrations.MIGRATION_12_13)
+
+        db.query("SELECT id, hidden FROM messages ORDER BY id").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getInt(0)).isEqualTo(1)
+            assertThat(c.getInt(1)).isEqualTo(1)
+            assertThat(c.moveToNext()).isTrue()
+            assertThat(c.getInt(0)).isEqualTo(2)
+            assertThat(c.getInt(1)).isEqualTo(0)
+        }
+    }
 }

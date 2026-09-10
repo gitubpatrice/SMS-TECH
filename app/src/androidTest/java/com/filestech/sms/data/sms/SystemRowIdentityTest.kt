@@ -203,7 +203,7 @@ class SystemRowIdentityTest {
         val uri = insertProbeOrSkip(date, "Reacted ❤️ to «on se voit demain»", sortant = true)
 
         // Ce que Room detient reellement d'une reaction sortante : un corps vide.
-        val sentinelle = message(uri, "", date, MessageDirection.OUTGOING)
+        val sentinelle = message(uri, "", date, MessageDirection.OUTGOING).copy(hidden = true)
             .copy(status = MessageStatus.SENT)
 
         assertThat(eraser.erase(sentinelle)).isTrue()
@@ -220,7 +220,7 @@ class SystemRowIdentityTest {
         val date = System.currentTimeMillis()
         val uri = insertProbeOrSkip(date, "Reacted ❤️ to «bonjour»", sortant = true)
 
-        val autre = message(uri, "", date, MessageDirection.OUTGOING)
+        val autre = message(uri, "", date, MessageDirection.OUTGOING).copy(hidden = true)
             .copy(address = "+33699999999")
 
         assertThat(eraser.erase(autre)).isFalse()
@@ -240,7 +240,7 @@ class SystemRowIdentityTest {
         val date = System.currentTimeMillis()
         val uri = insertProbeOrSkip(date, "Reacted ❤️ to «salut»", sortant = true)
 
-        val sansAdresse = message(uri, "", date, MessageDirection.OUTGOING).copy(address = "")
+        val sansAdresse = message(uri, "", date, MessageDirection.OUTGOING).copy(hidden = true).copy(address = "")
 
         assertThat(eraser.erase(sansAdresse)).isFalse()
         assertThat(ligneSystemePresente(uri)).isTrue()

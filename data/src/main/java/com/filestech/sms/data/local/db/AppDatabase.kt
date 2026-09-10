@@ -97,6 +97,9 @@ abstract class AppDatabase : RoomDatabase() {
         // v12 (2026-09-09, v1.28.3): ajoute `conversations.custom_name TEXT` — nom choisi d'un
         //   groupe, local au telephone. Strictement additive. Colonne separee de `display_name`,
         //   que la resolution des contacts reecrit.
-        const val SCHEMA_VERSION = 12
+        // v13 (2026-09-10, v1.28.4): ajoute `messages.hidden INTEGER NOT NULL DEFAULT 0` — la
+        //   sentinelle de reaction se declare au lieu d'etre reconnue a sa forme ; rattrapage des
+        //   sentinelles SMS existantes. Un MMS restaure sans legende redevient visible.
+        const val SCHEMA_VERSION = 13
     }
 }

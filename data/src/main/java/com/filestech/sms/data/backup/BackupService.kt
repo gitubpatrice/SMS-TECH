@@ -793,6 +793,9 @@ class BackupService @Inject constructor(
             conversationId = conversationId,
             replyToMessageId = null,
             attachmentsCount = 0,
+            // v1.28.4 — une ligne restaurée n'est JAMAIS une sentinelle : la sauvegarde ne les
+            // emporte pas, et un MMS sans légende doit rester visible même sans ses pièces jointes.
+            hidden = false,
             telephonyUri = if (sameDevice) backupMsg.telephonyUri else null,
             mmsSystemId = if (sameDevice) backupMsg.mmsSystemId else null,
             subId = if (sameDevice) backupMsg.subId else null,

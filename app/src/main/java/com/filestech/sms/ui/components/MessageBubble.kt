@@ -210,6 +210,18 @@ fun MessageBubble(
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = textColor,
                             )
+                        } else if (message.estUnMmsSansContenu()) {
+                            // v1.28.4 — un MMS restauré d'une sauvegarde n'a plus ses pièces
+                            // jointes : la bulle le DIT, plutôt que de rester vide.
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(
+                                    com.filestech.sms.R.string.bubble_mms_parts_missing,
+                                ),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                ),
+                                color = textColor,
+                            )
                         } else {
                             MessageTextWithLinks(
                                 text = message.body,
@@ -322,3 +334,7 @@ private fun bubbleVerticalSpacing(position: BurstPosition) = when (position) {
     BurstPosition.Solo, BurstPosition.First, BurstPosition.Last -> 8.dp
     BurstPosition.Middle -> 2.dp
 }
+
+/** v1.28.4 — un MMS sans texte ni pièce jointe : le cas d'une restauration, jamais d'une réception. */
+private fun com.filestech.sms.domain.model.Message.estUnMmsSansContenu(): Boolean =
+    type == com.filestech.sms.domain.model.Message.Type.MMS && body.isBlank() && attachments.isEmpty()

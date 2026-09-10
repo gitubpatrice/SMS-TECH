@@ -573,6 +573,7 @@
     <string name="attachment_image_label">Image</string>
     <string name="attachment_video_label">Vidéo</string>
     <string name="attachment_file_label">Fichier</string>
+    <string name="bubble_mms_parts_missing">Pièce jointe non restaurée</string>
     <string name="bubble_sender_self">Vous</string>
     <string name="attachment_remove_label">Retirer la pièce jointe</string>
 
