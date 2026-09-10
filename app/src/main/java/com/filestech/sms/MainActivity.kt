@@ -417,10 +417,10 @@ class MainActivity : FragmentActivity() {
                 try {
                     // Suspend tant que l'application n'est pas réellement ouverte. `PanicDecoy`
                     // n'est pas dans la liste : sous contrainte, on ne remet rien à zéro.
-                    appLock.state.first { st ->
-                        st is AppLockManager.LockState.Unlocked ||
-                            st is AppLockManager.LockState.Disabled
-                    }
+                    // v1.28.4 (F06) — la règle « réellement ouvert » vit dans
+                    // [com.filestech.sms.security.SafetyCallResetGate], testée ; les deux
+                    // chemins jumeaux l'attendent de la même façon.
+                    com.filestech.sms.security.SafetyCallResetGate.attendreOuverture(appLock.state)
                     // v1.27.2 — lecture HYDRATÉE obligatoire, cf. [SettingsRepository.hydratedOrNull].
                     //
                     // `state.value` rendait ici les réglages PAR DÉFAUT tant que DataStore n'avait
@@ -549,10 +549,10 @@ class MainActivity : FragmentActivity() {
                     // L'attente est bornée par le cycle de vie de l'activité : si l'utilisateur
                     // n'ouvre jamais réellement l'application, rien n'est écrit et le deadman
                     // continue de courir — le bon sens de l'échec.
-                    appLock.state.first { st ->
-                        st is AppLockManager.LockState.Unlocked ||
-                            st is AppLockManager.LockState.Disabled
-                    }
+                    // v1.28.4 (F06) — la règle « réellement ouvert » vit dans
+                    // [com.filestech.sms.security.SafetyCallResetGate], testée ; les deux
+                    // chemins jumeaux l'attendent de la même façon.
+                    com.filestech.sms.security.SafetyCallResetGate.attendreOuverture(appLock.state)
                     // v1.27.4 — l'état AVANT l'écriture décide de la phrase à confirmer, et il doit
                     // être relevé dans la transaction : le lire après, c'est le lire déjà remis à
                     // zéro par `withActivityReset`. Même relevé que celui du bouton des Réglages,

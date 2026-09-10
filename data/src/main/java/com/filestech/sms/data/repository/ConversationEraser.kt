@@ -44,6 +44,8 @@ class ConversationEraser @Inject constructor(
     private val attachmentDao: com.filestech.sms.data.local.db.dao.AttachmentDao,
     @dagger.hilt.android.qualifiers.ApplicationContext
     private val context: android.content.Context,
+    // v1.28.4 (F13) — la purge lève une barrière : on n'entre pas au coffre pendant qu'on le vide.
+    private val barriere: com.filestech.sms.security.VaultPurgeBarrier,
 ) {
 
     private companion object {
@@ -292,7 +294,7 @@ class ConversationEraser @Inject constructor(
      * qu'on lui a dit ce qui subsisterait. Le resultat continue de rendre `failed` : l'appelant
      * doit le lui montrer, pas le taire.
      */
-    suspend fun purgeVault(force: Boolean = false): VaultPurgeResult {
+    suspend fun purgeVault(force: Boolean = false): VaultPurgeResult = barriere.pendant {
         var deleted = 0
         var systemResidue = 0
         var localFailures = 0
@@ -311,7 +313,7 @@ class ConversationEraser @Inject constructor(
         }
         // Relu APRES la boucle, et non deduit d'elle : une conversation deplacee dans le coffre
         // pendant la purge n'apparait dans aucun des compteurs ci-dessus.
-        return VaultPurgeResult(
+        VaultPurgeResult(
             deleted = deleted,
             systemResidue = systemResidue,
             localFailures = localFailures,

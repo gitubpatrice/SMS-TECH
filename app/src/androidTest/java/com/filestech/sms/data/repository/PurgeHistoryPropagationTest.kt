@@ -263,6 +263,7 @@ class PurgeHistoryPropagationTest {
             },
             db.attachmentDao(),
             InstrumentationRegistry.getInstrumentation().targetContext,
+            com.filestech.sms.security.VaultPurgeBarrier(),
         )
 
     private suspend fun insere(

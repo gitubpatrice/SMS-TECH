@@ -1315,25 +1315,17 @@ class ThreadViewModel @Inject constructor(
             // la declarent pas — ou qui mentent.
             val tailleDeclaree = tailleDeclareeDe(uri)
             if (tailleDeclaree != null && tailleDeclaree > PLAFOND_COPIE_BYTES) return@withContext null
+            // v1.28.4 (F27) — la borne vit dans `LectureBornee`, testée à l'octet ; ici on ne
+            // fait que l'appliquer.
             runCatching {
-                var recopie = 0L
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    target.outputStream().use { os ->
-                        val tampon = ByteArray(COPIE_TAMPON_BYTES)
-                        while (true) {
-                            val lus = input.read(tampon)
-                            if (lus <= 0) break
-                            recopie += lus
-                            if (recopie > PLAFOND_COPIE_BYTES) return@use
-                            os.write(tampon, 0, lus)
-                        }
-                    }
-                } ?: return@runCatching null
-                if (recopie > PLAFOND_COPIE_BYTES) {
-                    runCatching { target.delete() }
-                    return@runCatching null
-                }
-                target.takeIf { it.exists() && it.length() > 0L }
+                val input = context.contentResolver.openInputStream(uri) ?: return@runCatching null
+                val tenue = com.filestech.sms.core.io.LectureBornee.recopier(
+                    input,
+                    target,
+                    PLAFOND_COPIE_BYTES,
+                    COPIE_TAMPON_BYTES,
+                )
+                if (tenue) target else null
             }.getOrNull()
         }
 

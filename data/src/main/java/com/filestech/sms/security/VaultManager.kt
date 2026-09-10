@@ -53,6 +53,8 @@ class VaultManager @Inject constructor(
     // par la couche données sans cycle de dépendances. Voir [VaultSessionState].
     private val session: VaultSessionState,
     @IoDispatcher private val io: CoroutineDispatcher,
+    // v1.28.4 (F13) — on n'entre pas au coffre pendant qu'on le vide. Voir [VaultPurgeBarrier].
+    private val barriere: VaultPurgeBarrier,
 ) : VaultMover {
 
     // v1.11.0 audit SEC-V2 — AtomicBoolean au lieu de `@Volatile Boolean`.
@@ -106,6 +108,7 @@ class VaultManager @Inject constructor(
      */
     override suspend fun moveToVault(conversationId: Long): Outcome<Unit> = withContext(io) {
         if (!session.isUnlocked) return@withContext Outcome.Failure(AppError.Locked())
+        if (barriere.enCours) return@withContext Outcome.Failure(AppError.VaultPurging)
         deplacerAvecLesMembres(listOf(conversationId), intoVault = true)
         Outcome.Success(Unit)
     }
@@ -205,6 +208,9 @@ class VaultManager @Inject constructor(
         if (!intoVault && !session.isUnlocked) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
+        // v1.28.4 (F13) — la barrière ne ferme que l'ENTRÉE : sortir pendant une purge ne peut
+        // que réduire ce qu'elle doit détruire.
+        if (intoVault && barriere.enCours) return@withContext Outcome.Failure(AppError.VaultPurging)
         deplacerAvecLesMembres(listOf(conversationId), intoVault)
         Outcome.Success(Unit)
     }
@@ -258,6 +264,7 @@ class VaultManager @Inject constructor(
         if (!intoVault && !session.isUnlocked) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
+        if (intoVault && barriere.enCours) return@withContext Outcome.Failure(AppError.VaultPurging)
         val updated = deplacerAvecLesMembres(ids, intoVault)
         Outcome.Success(updated)
     }

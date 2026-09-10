@@ -50,7 +50,7 @@ class VaultGroupMembersTest {
             every { m.isOpenForUi(any()) } answers { callOriginal() }
         }
         val session = VaultSessionState().apply { markUnlocked() }
-        return VaultManager(mockk<KeystoreManager>(relaxed = true), repo, lock, session, io)
+        return VaultManager(mockk<KeystoreManager>(relaxed = true), repo, lock, session, io, VaultPurgeBarrier())
     }
 
     @Test

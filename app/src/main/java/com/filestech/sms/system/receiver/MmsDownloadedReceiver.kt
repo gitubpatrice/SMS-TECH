@@ -185,7 +185,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     pduConsumed = true
                     return@launch
                 }
-                val bytes = runCatching { pduFile.readBytes() }.getOrNull()
+                // v1.28.4 (F27) — la lecture passe par la borne TESTÉE (`LectureBornee.lire`),
+                // qui refuse sur la taille avant d'allouer ; le garde ci-dessus garde son
+                // journal et sa décision de consommer, la fonction garantit l'allocation.
+                val bytes = com.filestech.sms.core.io.LectureBornee.lire(pduFile, PDU_MAX_BYTES)
                 if (bytes == null) {
                     Timber.w("Cannot read MMS PDU bytes: %s", pduPath)
                     return@launch

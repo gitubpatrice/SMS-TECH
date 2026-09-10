@@ -41,6 +41,12 @@ sealed class AppError(open val cause: Throwable? = null) {
      * la conversation de chaque membre, où vivent les vraies lignes et leurs accusés.
      */
     data object GroupEchoRetryUnsupported : AppError()
+
+    /**
+     * v1.28.4 (F13) — une purge du coffre est en cours : on n'y entre pas pendant qu'on le vide.
+     * Passager par nature ; l'utilisateur réessaie une fois la purge terminée.
+     */
+    data object VaultPurging : AppError()
     data class Locked(val unlockRequired: Boolean = true) : AppError()
     data class NotFound(val what: String) : AppError()
     data class Cancelled(val reason: String? = null) : AppError()
