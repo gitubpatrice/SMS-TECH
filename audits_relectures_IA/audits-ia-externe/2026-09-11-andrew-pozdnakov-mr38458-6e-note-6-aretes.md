@@ -180,3 +180,26 @@ Contrôles négatifs : voir §6, remplis pendant le gate.
 et le script relisait les XML **périmés** de la campagne verte. Correctifs : chemin absolu
 normalisé du wrapper, suppression des XML de la classe **avant** le run, impression de `rc` et
 de la durée. Un contrôle négatif qui ne mesure pas la durée de Gradle n'a rien mesuré.
+
+## 8. Publication — 2026-09-11, 22:18 → 2026-09-12, 00:05
+
+| Étape | Résultat |
+|---|---|
+| Commit de release | `0ca8c9d`, tag `v1.28.5` ; rectification `590518c` (deux listes de clés commises par erreur à la racine) |
+| Release GitHub | 4 fichiers, certificat `b09a9511…c687d` inchangé |
+| Site files-tech.com | `ab1dc8a`, 6 pages FR/EN vérifiées en ligne |
+| Recette F-Droid | `fe335040c4` sur `add-sms-tech`, entrée 1.28.5 (294) |
+| Pipeline MR `!38458` | `2842001900` — `fdroid build` **rouge** à 23:22, puis **vert** au second essai (00:01), pipeline entièrement verte |
+| Note à Andrew | `note_3823827918` |
+
+**Ce qui a rougi, et pourquoi.** L'agent de release a été tué par un `/compact` involontaire après
+`assembleRelease`. Reprise à la main. Le job `fdroid build` a rebâti les neuf entrées de la recette :
+les huit précédentes se reproduisaient, **la 294 seule divergeait** — `classes.dex` +16 octets,
+`classes2.dex` +128, `baseline.prof` +1, même R8 8.13.19, mêmes classes, mêmes chaînes, `pg-map-id`
+différent. L'APK avait pourtant été construit `--no-build-cache clean`. Après `gradlew --stop`, la
+même commande a donné un APK identique à l'artefact du job sur ses 365 entrées : **le daemon Gradle
+portait un état que ni `clean` ni `--no-build-cache` ne purgent**. Quatre fichiers remplacés sur la
+release (`--clobber`), job relancé, vert. Consigné dans `NOTE-release-reproductible.md` (`0f6b0a0`).
+
+Leçon : huit versions vertes dans le même job ne prouvent rien sur la neuvième ; comparer les dex
+de l'APK publié à l'artefact du job avant de commenter la MR.
