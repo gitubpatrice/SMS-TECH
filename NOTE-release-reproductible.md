@@ -69,6 +69,32 @@ L'ordre correct :
 4. **attendre que `fdroid build` soit vert**
 5. seulement ensuite : bumper la recette sur `add-sms-tech`, puis commenter la MR
 
+## Rechute du 2026-09-11 — `--no-build-cache clean` n'a pas suffi
+
+La **v1.28.5 (294)** a été construite avec la commande de la règle, et le job `fdroid build` a
+quand même échoué sur la comparaison : `classes.dex` et `classes2.dex` plus longs de 16 et
+128 octets, `baseline.prof` d'un octet. Même R8 (`8.13.19`), mêmes classes, mêmes chaînes ;
+seul le `pg-map-id` du marqueur R8 différait — R8 n'avait pas reçu exactement les mêmes entrées.
+Les **huit entrées précédentes** de la recette, rebâties dans le même job, se reproduisaient
+toutes : l'environnement F-Droid n'était pas en cause.
+
+**Ce qui a tranché** : `./gradlew --stop`, puis la même commande. Les 365 entrées de l'APK
+(hors `META-INF/`) sont alors identiques à celles de `tmp/com.filestech.sms_294.apk`, l'artefact
+du job. Le **daemon** Gradle / Kotlin porte donc un état que ni `clean` ni `--no-build-cache`
+ne purgent. Réparation : `gh release upload --clobber` des quatre fichiers, puis
+`glab api --method POST projects/<id>/jobs/<job>/retry`.
+
+**La règle, complétée :**
+
+```bash
+./gradlew --stop
+./gradlew --no-build-cache clean :app:assembleRelease
+```
+
+puis, avant de commenter la MR, comparer les dex de l'APK publié à l'artefact du job
+(`glab api projects/<id>/jobs/<job>/artifacts`) — huit versions vertes ne prouvent rien sur
+la neuvième.
+
 ## Deux détails qui reviennent à chaque fois
 
 **`fdroid rewritemeta` local ≠ celui de leur CI.** Le nôtre veut replier `Binaries:` sur une seule
