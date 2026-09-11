@@ -74,7 +74,9 @@ class PhoneNumberWireFormatter @Inject constructor(
      * n'apporterait rien.
      */
     suspend fun hydratedDefaultRegionIso(): String? {
-        val hydrated = runCatching { settings.hydratedOrNull() }.getOrNull()
+        // v1.28.5 — une annulation remonte : figer un instantane d'identite sur la region de la
+        // SIM au lieu de l'override rouvrirait F-01 par un autre chemin.
+        val hydrated = com.filestech.sms.core.result.runCatchingCancellable { settings.hydratedOrNull() }.getOrNull()
         return hydrated?.sending?.defaultRegionIso?.takeIf { it.isNotBlank() }
             ?: simRegionIso(null)
     }

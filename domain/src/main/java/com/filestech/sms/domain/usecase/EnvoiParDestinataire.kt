@@ -80,17 +80,24 @@ class EnvoiParDestinataire @Inject constructor(
      * Un envoi DE GROUPE : une seule ligne miroir dans le groupe, une seule remise à la pile
      * vers tous les destinataires non bloqués. Les bloqués sont écartés et comptés, jamais
      * servis ; s'il ne reste personne, rien n'est écrit.
+     *
+     * v1.28.5 (sixième note d'Andrew, point 3) — **le miroir reçoit les mêmes [cibles] que le
+     * PDU.** Il recevait la liste d'origine : avec un membre bloqué, le groupe local était
+     * `A+B+C` et le groupe transmis `A+B`. Le rapprochement à la réception exigeant le même
+     * ensemble de membres, la réponse de A revenait dans un second groupe `A+B` au lieu du fil
+     * d'origine. Le miroir dit désormais ce qui est parti ; le membre bloqué est dans `blocked`,
+     * et c'est l'appelant qui le montre.
      */
     suspend fun enGroupe(
         recipients: List<PhoneAddress>,
         sansRemise: String,
-        miroir: suspend () -> Long,
+        miroir: suspend (cibles: List<PhoneAddress>) -> Long,
         envoi: suspend (localId: Long, cibles: List<PhoneAddress>) -> Outcome<*>,
     ): Outcome<SendReport> {
         val blocked = recipients.filter { blockedRepo.isBlocked(it.raw) }
         val cibles = recipients - blocked.toSet()
         if (cibles.isEmpty()) return Outcome.Failure(AppError.RecipientBlocked)
-        val localId = miroir()
+        val localId = miroir(cibles)
         return when (envoi(localId, cibles)) {
             is Outcome.Success -> Outcome.Success(
                 SendReport(dispatched = listOf(localId), failed = emptyList(), blocked = blocked),

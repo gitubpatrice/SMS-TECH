@@ -70,7 +70,6 @@ class ConversationRepositoryImpl @Inject constructor(
     // v1.28.1 — le chemin destructeur a quitte cette classe pour devenir testable, cf.
     // [ConversationEraser] et [com.filestech.sms.data.sms.SystemCopyEraser].
     private val eraser: ConversationEraser,
-    private val systemCopy: com.filestech.sms.data.sms.SystemCopyEraser,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ConversationRepository {
 
@@ -520,7 +519,6 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun setPinned(id: Long, pinned: Boolean) = withContext(io) { conversationDao.setPinned(id, pinned) }
     override suspend fun setArchived(id: Long, archived: Boolean) = withContext(io) { conversationDao.setArchived(id, archived) }
     override suspend fun setMuted(id: Long, muted: Boolean) = withContext(io) { conversationDao.setMuted(id, muted) }
-    override suspend fun moveToVault(id: Long, inVault: Boolean) = withContext(io) { conversationDao.setInVault(id, inVault) }
 
     override suspend fun findById(id: Long): Conversation? = withContext(io) {
         conversationDao.findById(id)?.toDomain()
@@ -616,8 +614,11 @@ class ConversationRepositoryImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun deleteAllInVault(force: Boolean): VaultPurgeResult = withContext(io) {
-        eraser.purgeVault(force)
+    override suspend fun deleteAllInVault(
+        force: Boolean,
+        apresPurge: suspend (VaultPurgeResult) -> Unit,
+    ): VaultPurgeResult = withContext(io) {
+        eraser.purgeVault(force, apresPurge)
     }
 
     /** v1.26.1 (audit F2) — voir [ConversationRepository.setMessageStarred]. */
@@ -626,18 +627,9 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteMessage(messageId: Long) = withContext(io) {
-        // Same rationale as [delete]: remove the row from the system content provider so the
-        // next launch (or a future re-import) doesn't bring it back.
-        val msg = messageDao.findById(messageId)
-        msg?.let { systemCopy.erase(it) }
-        // v1.24.0 (bug suppression) — atomique : effacer le message ET recalculer l'aperçu de la
-        // conversation. Sans le refresh, supprimer le dernier message d'un fil laissait la liste
-        // afficher le message supprimé indéfiniment (confirmé sur une vraie sauvegarde 2026-07-23).
-        database.withTransaction {
-            messageDao.delete(messageId)
-            val convId = msg?.conversationId
-            if (convId != null) messageDao.refreshConversationPreview(convId)
-        }
+        // v1.28.5 (audit de coherence C1) — meme chemin que [delete] : l'effaceur emporte la
+        // copie systeme ET les fichiers de pieces jointes, que la cascade Room laissait en clair.
+        eraser.eraseMessage(messageId)
     }
 
     override suspend fun setReaction(messageId: Long, emoji: String?): SetReactionResult =

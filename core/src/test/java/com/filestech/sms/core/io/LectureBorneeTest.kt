@@ -47,6 +47,27 @@ class LectureBorneeTest {
         assertThat(cible.exists()).isFalse()
     }
 
+    /**
+     * v1.28.5 (sixième note d'Andrew, point 6) — une source qui LÈVE au milieu de la copie ne
+     * laisse pas de fichier partiel. Avant, seule la sortie « dépassement » nettoyait ; une
+     * exception fermait les flux et laissait derrière elle ce qui avait déjà été écrit.
+     */
+    @Test
+    fun `une exception au milieu de la copie ne laisse rien derriere et remonte`() {
+        val cible = File(dossier, "partiel.bin")
+        val sourceQuiLache = object : InputStream() {
+            private var restants = 200
+            override fun read(): Int = if (restants-- > 0) 7 else throw java.io.IOException("SOURCE_LACHEE")
+        }
+
+        val erreur = org.junit.jupiter.api.assertThrows<java.io.IOException> {
+            LectureBornee.recopier(sourceQuiLache, cible, plafond = 10_000L, tampon = 64)
+        }
+
+        assertThat(erreur).hasMessageThat().isEqualTo("SOURCE_LACHEE")
+        assertThat(cible.exists()).isFalse()
+    }
+
     @Test
     fun `une source vide ne laisse pas de fichier vide`() {
         val cible = File(dossier, "vide.bin")

@@ -27,9 +27,15 @@ inline fun <T> Outcome<T>.onFailure(action: (AppError) -> Unit): Outcome<T> = al
     if (it is Outcome.Failure) action(it.error)
 }
 
+/**
+ * v1.28.5 — une annulation REMONTE : elle n'est pas un echec metier. Avant, un export ou une
+ * restauration interrompus s'affichaient « echec de stockage ». Cf. [runCatchingCancellable].
+ */
 inline fun <T> runCatchingOutcome(block: () -> T, errorMapper: (Throwable) -> AppError): Outcome<T> =
     try {
         Outcome.Success(block())
+    } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+        throw e
     } catch (t: Throwable) {
         Outcome.Failure(errorMapper(t))
     }

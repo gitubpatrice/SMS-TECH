@@ -7,6 +7,8 @@ import com.filestech.sms.core.crypto.PasswordKdf
 import com.filestech.sms.data.local.datastore.SecurityStore
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -116,6 +118,90 @@ class AppLockVaultGuardTest {
                 manager.forceLock()
                 assertThat(manager.attemptUnlock("1111".toCharArray()))
                     .isEqualTo(AppLockManager.LockState.Unlocked)
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    // ───── v1.28.5 (sixième note d'Andrew, point 4) — le garde d'abaissement échoue FERMÉ ─────
+
+    /** Même constructeur, mais les deux doublures du garde d'abaissement sont fournies par le cas. */
+    private fun managerAvecCoffre(
+        scope: CoroutineScope,
+        dao: com.filestech.sms.data.local.db.dao.ConversationDao,
+        facteur: () -> VaultSecondFactorPolicy = { error("vaultFactor ne doit pas etre atteint") },
+    ) = AppLockManager(
+        securityStore = SecurityStore(context),
+        settings = SettingsRepository(context, scope),
+        kdf = PasswordKdf(),
+        vaultSession = VaultSessionState(),
+        vaultFactor = { facteur() },
+        conversationDao = { dao },
+        io = Dispatchers.Unconfined,
+    )
+
+    /**
+     * `countInVault()` lève : en 1.28.4, `getOrDefault(0)` en faisait « coffre vide », la seule
+     * lecture qui AUTORISE l'abaissement — obtenue sans avoir rien lu. Le garde refuse désormais,
+     * et le code de l'utilisateur ouvre toujours : rien n'a été retiré.
+     */
+    @Test
+    fun `abaisser le verrou echoue ferme quand le coffre ne se lit pas`() {
+        runBlocking {
+            val scope = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val dao = mockk<com.filestech.sms.data.local.db.dao.ConversationDao> {
+                    coEvery { countInVault() } throws IllegalStateException("BASE_INDISPONIBLE")
+                }
+                val manager = managerAvecCoffre(scope, dao)
+                manager.setPin("1111".toCharArray())
+
+                assertThat(manager.clearPin())
+                    .isEqualTo(AppLockManager.LockDowngradeOutcome.VaultStateUnknown)
+
+                manager.forceLock()
+                assertThat(manager.attemptUnlock("1111".toCharArray()))
+                    .isEqualTo(AppLockManager.LockState.Unlocked)
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    /** Coffre non vide et facteur illisible : `getOrNull()` en faisait « pas de biométrie », donc `Ok`. */
+    @Test
+    fun `abaisser le verrou echoue ferme quand le second facteur ne se lit pas`() {
+        runBlocking {
+            val scope = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val dao = mockk<com.filestech.sms.data.local.db.dao.ConversationDao> {
+                    coEvery { countInVault() } returns 3
+                }
+                val manager = managerAvecCoffre(scope, dao) { error("POLITIQUE_INDISPONIBLE") }
+                manager.setPin("1111".toCharArray())
+
+                assertThat(manager.clearPin())
+                    .isEqualTo(AppLockManager.LockDowngradeOutcome.VaultStateUnknown)
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    /** Contrôle positif : un coffre lu VIDE autorise l'abaissement — sinon les deux tests ci-dessus ne prouvent rien. */
+    @Test
+    fun `abaisser le verrou passe quand le coffre est lu vide`() {
+        runBlocking {
+            val scope = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val dao = mockk<com.filestech.sms.data.local.db.dao.ConversationDao> {
+                    coEvery { countInVault() } returns 0
+                }
+                val manager = managerAvecCoffre(scope, dao)
+                manager.setPin("1111".toCharArray())
+
+                assertThat(manager.clearPin()).isEqualTo(AppLockManager.LockDowngradeOutcome.Ok)
             } finally {
                 scope.cancel()
             }

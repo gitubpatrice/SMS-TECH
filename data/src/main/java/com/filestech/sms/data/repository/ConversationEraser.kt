@@ -78,17 +78,25 @@ class ConversationEraser @Inject constructor(
      * partait, la copie systeme survivait, et la resynchronisation suivante la ressuscitait en
      * clair. Exactement l'etat que la v1.27.11 pretendait empecher.
      *
-     * [preserveOnSystemFailure] est le correctif, et il n'a pas besoin d'un journal de purge
+     * [Mode.COFFRE] est le correctif, et il n'a pas besoin d'un journal de purge
      * persistant : **la ligne du coffre EST le journal**. Conservee, elle est relue par
      * `idsInVault()` au prochain essai comme apres un redemarrage, elle compte dans `remaining`,
      * et la suppression systeme est retentee. Une ligne deja partie du fournisseur se declare
      * absente : l'operation est idempotente.
      *
-     * Le drapeau reste a `false` pour la suppression ordinaire et il doit le rester : qui efface
-     * un fil a demande qu'il disparaisse, et lui laisser une ligne qu'il croyait supprimee serait
-     * un mensonge dans l'autre sens.
+     * La suppression ordinaire reste en [Mode.ORDINAIRE] et doit le rester : qui efface un fil a
+     * demande qu'il disparaisse, et lui laisser une ligne qu'il croyait supprimee serait un
+     * mensonge dans l'autre sens.
+     *
+     * v1.28.5 (sixième note d'Andrew, point 1) — **le drapeau booléen mentait par omission.**
+     * `purgeVault(force = true)` appelait `erase(preserveOnSystemFailure = false)`, et ce même
+     * drapeau gardait AUSSI le compte des dépendants et la relecture d'arrivée tardive. Sous
+     * `force`, un `delete()` refusé ou un `cancel()` qui lève passait donc à la suppression du
+     * parent avec `localeComplete = true` : la sortie assumée, qui ne doit lever que la condition
+     * « copie système », effaçait le journal de reprise et se disait localement complète. Ma note
+     * du 10 septembre affirmait le contraire du code. Trois contrats, trois noms : [Mode].
      */
-    suspend fun erase(id: Long, preserveOnSystemFailure: Boolean = false): Issue {
+    suspend fun erase(id: Long, mode: Mode = Mode.ORDINAIRE): Issue {
         var systemCopyGone = true
         var connus: Set<Long> = emptySet()
         runCatching {
@@ -99,7 +107,8 @@ class ConversationEraser @Inject constructor(
             systemCopyGone = false
             Timber.w(it, "delete: system-provider sweep failed for conversation %d", id)
         }
-        if (!systemCopyGone && preserveOnSystemFailure) {
+        // Seule condition que la sortie assumée lève : la copie système qui résiste.
+        if (!systemCopyGone && mode == Mode.COFFRE) {
             Timber.w("delete: conversation %d kept locally, its system copy survives", id)
             return Issue(systemCopyGone = false, localeComplete = true)
         }
@@ -109,8 +118,10 @@ class ConversationEraser @Inject constructor(
         // et l'on ne tient pas un verrou SQLite sur de l'entrée-sortie. Un seul échec et, pour
         // le coffre, le parent est CONSERVÉ : c'est lui qui permettra de retrouver l'orphelin au
         // prochain essai — supprimé, plus rien n'y mènerait, et la purge se dirait complète.
+        // v1.28.5 — forcée ou non : un dépendant qui reste est un échec LOCAL, et `force` n'y
+        // change rien. Il est retentable, contrairement à une liaison système durablement fausse.
         val echecs = annulerLesTravauxProgrammes(id) + supprimerFichiersPossedes(id)
-        if (echecs > 0 && preserveOnSystemFailure) {
+        if (echecs > 0 && mode != Mode.ORDINAIRE) {
             Timber.w("delete: conversation %d kept locally, %d dependant(s) not cleaned", id, echecs)
             return Issue(systemCopyGone, localeComplete = false)
         }
@@ -120,10 +131,15 @@ class ConversationEraser @Inject constructor(
         // réception qui commet pendant la purge attend notre verrou, et ne peut plus se glisser
         // entre la relecture et la suppression pour être emporté par la cascade avec sa copie
         // système intacte. Un message arrivé AVANT est vu par la relecture et garde le parent.
+        // v1.28.5 — sous `force`, ce message part avec le parent, comme l'utilisateur l'a
+        // accepté ; mais sa copie système n'a jamais été présentée au fournisseur, et cela se
+        // DIT : résidu système, pas « supprimé ».
         val arriveTard = database.withTransaction {
-            if (preserveOnSystemFailure && messageDao.findByConversation(id).any { it.id !in connus }) {
+            val tardif = mode != Mode.ORDINAIRE && messageDao.findByConversation(id).any { it.id !in connus }
+            if (tardif && mode == Mode.COFFRE) {
                 true
             } else {
+                if (tardif) systemCopyGone = false
                 for (envoi in scheduledDao.findForConversation(id)) scheduledDao.delete(envoi.id)
                 conversationDao.delete(id)
                 false
@@ -134,6 +150,24 @@ class ConversationEraser @Inject constructor(
             return Issue(systemCopyGone = false, localeComplete = true)
         }
         return Issue(systemCopyGone, localeComplete = true)
+    }
+
+    /**
+     * v1.28.5 — les trois contrats d'effacement, nommés, parce qu'un booléen en portait deux à
+     * la fois et que la sortie assumée en héritait un qu'elle n'aurait pas dû lever.
+     */
+    enum class Mode {
+        /** Suppression ordinaire : la ligne locale part quoi qu'il arrive. */
+        ORDINAIRE,
+
+        /** Purge du coffre : le parent est CONSERVÉ sur tout échec — copie système, dépendant, arrivée tardive. */
+        COFFRE,
+
+        /**
+         * Sortie assumée : SEULE la condition « copie système » est levée. Un dépendant qui
+         * résiste garde le parent ; un message arrivé tard part, compté en résidu système.
+         */
+        COFFRE_FORCE,
     }
 
     /**
@@ -217,6 +251,43 @@ class ConversationEraser @Inject constructor(
         val pieces = runCatching { attachmentDao.findForConversation(conversationId) }
             .onFailure { Timber.w(it, "delete: lecture des pieces jointes de %d echouee", conversationId) }
             .getOrNull() ?: return 1
+        return supprimerFichiers(pieces, conversationId)
+    }
+
+    /**
+     * v1.28.5 (audit de cohérence C1) — **la suppression d'UN message emporte ses fichiers**, comme
+     * celle d'une conversation depuis F04. `deleteMessage` vivait dans le repository, hors de cet
+     * effaceur : la ligne `attachments` partait en cascade, le fichier de `filesDir` restait en
+     * clair. C'est la classe de défaut fermée en 1.28.3 pour la conversation entière, rouverte
+     * sur le chemin le plus fréquent — supprimer UN MMS gênant plutôt que tout le fil.
+     *
+     * Contrat de la suppression ordinaire : la ligne locale part quoi qu'il arrive ; un fichier
+     * qui résiste est journalisé, pas retenu — il n'y a ici aucune décision de sécurité qui
+     * dépende de la propagation (cf. [purgeHistory]).
+     */
+    suspend fun eraseMessage(messageId: Long) {
+        val msg = messageDao.findById(messageId) ?: return
+        runCatching { systemCopy.erase(msg) }
+            .onFailure { Timber.w(it, "deleteMessage: system copy of %d not erased", messageId) }
+        val pieces = runCatching { attachmentDao.findForMessage(messageId) }
+            .onFailure { Timber.w(it, "deleteMessage: lecture des pieces jointes de %d echouee", messageId) }
+            .getOrDefault(emptyList())
+        val echecs = supprimerFichiers(pieces, msg.conversationId)
+        if (echecs > 0) Timber.w("deleteMessage: %d fichier(s) de %d non efface(s)", echecs, messageId)
+        // v1.24.0 (bug suppression) — atomique : effacer le message ET recalculer l'aperçu de la
+        // conversation. Sans le refresh, supprimer le dernier message d'un fil laissait la liste
+        // afficher le message supprimé indéfiniment (confirmé sur une vraie sauvegarde 2026-07-23).
+        database.withTransaction {
+            messageDao.delete(messageId)
+            messageDao.refreshConversationPreview(msg.conversationId)
+        }
+    }
+
+    /** Le corps commun de F04 et de [eraseMessage] : les fichiers possédés, dans le bac à sable seulement. */
+    private fun supprimerFichiers(
+        pieces: List<com.filestech.sms.data.local.db.entity.AttachmentEntity>,
+        conversationId: Long,
+    ): Int {
         val racines = listOfNotNull(context.filesDir, context.cacheDir)
             .map { it.canonicalPath + java.io.File.separator }
         var echecs = 0
@@ -329,18 +400,27 @@ class ConversationEraser @Inject constructor(
      * l'arbitrage LOCAL, et il appartient a l'utilisateur, qui l'a explicitement demande apres
      * qu'on lui a dit ce qui subsisterait. Le resultat continue de rendre `failed` : l'appelant
      * doit le lui montrer, pas le taire.
+     *
+     * v1.28.5 (sixième note d'Andrew, point 2) — [apresPurge] s'exécute **sous la barrière**,
+     * avec le résultat. C'est là que l'appelant retire le PIN : entre le retour de cette fonction
+     * et le retrait, la barrière retombait, et une entrée au coffre pouvait se glisser après la
+     * relecture de `remaining`. Le PIN partait alors sur un coffre qui venait de se remplir.
      */
-    suspend fun purgeVault(force: Boolean = false): VaultPurgeResult = barriere.pendant {
+    suspend fun purgeVault(
+        force: Boolean = false,
+        apresPurge: suspend (VaultPurgeResult) -> Unit = {},
+    ): VaultPurgeResult = barriere.pendant {
         var deleted = 0
         var systemResidue = 0
         var localFailures = 0
+        val mode = if (force) Mode.COFFRE_FORCE else Mode.COFFRE
         for (id in conversationDao.idsInVault()) {
             // v1.28.3 (F09) — les deux natures d'echec sont desormais comptees separement.
             // `erase` attrape lui-meme tout ce qui touche au fournisseur du systeme : ce qui
             // remonte jusqu'ici ne peut donc venir que de `conversationDao.delete`, c'est-a-dire
             // d'un echec LOCAL. La distinction n'est pas cosmetique — elle decide si la sortie
             // forcee a le droit de retirer le PIN. Cf. [VaultPurgeResult].
-            runCatching { erase(id, preserveOnSystemFailure = !force) }
+            runCatching { erase(id, mode) }
                 .onSuccess { issue ->
                     when {
                         // v1.28.4 (R01/R02) — un dépendant resté derrière est un échec LOCAL, le
@@ -357,11 +437,13 @@ class ConversationEraser @Inject constructor(
         }
         // Relu APRES la boucle, et non deduit d'elle : une conversation deplacee dans le coffre
         // pendant la purge n'apparait dans aucun des compteurs ci-dessus.
-        VaultPurgeResult(
+        val resultat = VaultPurgeResult(
             deleted = deleted,
             systemResidue = systemResidue,
             localFailures = localFailures,
             remaining = conversationDao.idsInVault().size,
         )
+        apresPurge(resultat)
+        resultat
     }
 }

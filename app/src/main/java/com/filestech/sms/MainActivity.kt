@@ -527,7 +527,7 @@ class MainActivity : FragmentActivity() {
                     incomingShare.clear()
                     return
                 }
-                lifecycleScope.launch {
+                lancerGesteDeNotification {
                     // 🔴 v1.28.3 (F06) — L'AUTHENTIFICATION D'ABORD, L'ÉCRITURE ENSUITE.
                     //
                     // Le nonce prouve que l'intention vient bien de NOTRE notification ; il ne
@@ -550,9 +550,18 @@ class MainActivity : FragmentActivity() {
                     // n'ouvre jamais réellement l'application, rien n'est écrit et le deadman
                     // continue de courir — le bon sens de l'échec.
                     // v1.28.4 (F06) — la règle « réellement ouvert » vit dans
-                    // [com.filestech.sms.security.SafetyCallResetGate], testée ; les deux
-                    // chemins jumeaux l'attendent de la même façon.
-                    com.filestech.sms.security.SafetyCallResetGate.attendreOuverture(appLock.state)
+                    // [com.filestech.sms.security.SafetyCallResetGate], testée.
+                    // v1.28.5 (sixième note d'Andrew, point 5) — ce chemin DÉSARME : un geste
+                    // reçu en session leurre ou pendant un blocage est JETÉ, pas retenu jusqu'au
+                    // prochain vrai déverrouillage. Le jumeau de remise à zéro, qui ne désarme
+                    // rien, continue d'attendre. Le nonce est déjà consommé : on republie la
+                    // notification pour qu'un geste ultérieur, légitime, reste possible.
+                    if (!com.filestech.sms.security.SafetyCallResetGate.attendreOuvertureOuJeter(appLock.state)) {
+                        Timber.w("MainActivity: SAFETY_CALL_RESET discarded — locked out or decoy session")
+                        republishSafetyCallNotice()
+                        incomingShare.clear()
+                        return@lancerGesteDeNotification
+                    }
                     // v1.27.4 — l'état AVANT l'écriture décide de la phrase à confirmer, et il doit
                     // être relevé dans la transaction : le lire après, c'est le lire déjà remis à
                     // zéro par `withActivityReset`. Même relevé que celui du bouton des Réglages,
@@ -637,7 +646,19 @@ class MainActivity : FragmentActivity() {
                     incomingShare.clear()
                     return
                 }
-                lifecycleScope.launch {
+                lancerGesteDeNotification {
+                    // v1.28.5 (lecture ciblée, Q3) — LE MÊME GARDE QUE SON JUMEAU. Réarmer ne
+                    // peut que remettre la protection en marche, et c'est vrai ; mais c'est une
+                    // écriture persistée des réglages de sécurité faite sans preuve de
+                    // déverrouillage, sur un chemin dont le jumeau exige cette preuve. Deux
+                    // chemins jumeaux avec deux gardes, c'est le motif de défaut le plus fréquent
+                    // ici : on l'applique par symétrie, et le geste en leurre ou blocage est jeté.
+                    if (!com.filestech.sms.security.SafetyCallResetGate.attendreOuvertureOuJeter(appLock.state)) {
+                        Timber.w("MainActivity: SAFETY_CALL_REARM discarded — locked out or decoy session")
+                        republishSafetyCallNotice()
+                        incomingShare.clear()
+                        return@lancerGesteDeNotification
+                    }
                     var rearmed = false
                     runCatching {
                         settings.update { s ->
@@ -854,6 +875,28 @@ class MainActivity : FragmentActivity() {
      * l'écriture avait en fait abouti, ou si le mode leurre s'est engagé entre-temps,
      * [SafetyCallNotice.decide] rendra la bonne réponse — y compris `None`, qui retire tout.
      */
+    /**
+     * v1.28.5 (relecture externe de la seconde vague) — **un geste venu d'une notification est
+     * BORNÉ au premier plan.** `lifecycleScope.launch` seul survit à l'arrière-plan : notification
+     * tapée, application laissée verrouillée, l'attente de [com.filestech.sms.security.SafetyCallResetGate]
+     * restait suspendue et le geste s'exécutait des heures plus tard, au premier déverrouillage
+     * venu pour une autre raison — désarmant ou réarmant l'homme mort à retardement. Quand
+     * l'activité s'arrête, le geste encore en attente est annulé et la notification republiée,
+     * pour que le bouton reste disponible. Les deux chemins jumeaux (RESET, REARM) passent ici.
+     */
+    private fun lancerGesteDeNotification(bloc: suspend () -> Unit) {
+        val travail = lifecycleScope.launch { bloc() }
+        val observateur = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && travail.isActive) {
+                Timber.i("MainActivity: notification gesture dropped — activity stopped while waiting")
+                travail.cancel()
+                republishSafetyCallNotice()
+            }
+        }
+        lifecycle.addObserver(observateur)
+        travail.invokeOnCompletion { runOnUiThread { lifecycle.removeObserver(observateur) } }
+    }
+
     private fun republishSafetyCallNotice() {
         lifecycleScope.launch {
             runCatching {

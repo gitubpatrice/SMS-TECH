@@ -179,7 +179,9 @@ class MmsSender @Inject constructor(
         // v1.2.6 audit F2 idempotence retry + v1.2.7 audit Q2 atomicité — délimité par le mutex
         // au-dessus : un retry concurrent attend la fin de la séquence (find → delete → insert
         // → setMmsSystemId) avant de lire à son tour.
-        runCatching { messageDao.findMmsSystemId(localMessageId) }
+        // v1.28.5 — une annulation remonte, sinon `null` laissait la ligne systeme precedente
+        // orpheline dans `content://mms`, visible des autres applications.
+        com.filestech.sms.core.result.runCatchingCancellable { messageDao.findMmsSystemId(localMessageId) }
             .getOrNull()
             ?.takeIf { it > 0L }
             ?.let { previous ->

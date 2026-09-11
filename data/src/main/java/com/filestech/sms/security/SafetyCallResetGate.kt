@@ -13,18 +13,38 @@ import kotlinx.coroutines.flow.first
  * testable, et l'activité ne fait que l'appliquer.
  *
  * Ce qu'elle dit : on n'exécute que sur un état **réellement ouvert** — [AppLockManager.LockState.Unlocked],
- * ou [AppLockManager.LockState.Disabled] quand il n'y a pas de verrou. `Locked`, `LockedOut` et
- * `PanicDecoy` retiennent le geste ; en particulier la session leurre, qui est précisément ce
- * qu'un agresseur obtient sous contrainte. L'attente n'écrit rien : si l'application n'est jamais
- * réellement ouverte, l'homme mort continue de courir — le bon sens de l'échec.
+ * ou [AppLockManager.LockState.Disabled] quand il n'y a pas de verrou. L'attente n'écrit rien : si
+ * l'application n'est jamais réellement ouverte, l'homme mort continue de courir — le bon sens de
+ * l'échec.
+ *
+ * v1.28.5 (sixième note d'Andrew, point 5) — **retenir n'est pas la bonne politique pour tous les
+ * états fermés.** `Locked` est traversé : c'est le cas légitime, le téléphone est déverrouillé,
+ * l'application demande son code, l'utilisateur le saisit et le geste s'exécute. Mais `LockedOut`
+ * et `PanicDecoy` disent autre chose — quelqu'un s'est trompé de code plusieurs fois, ou a saisi
+ * le code leurre sous contrainte. Un geste retenu là aurait DÉSARMÉ plus tard, au premier vrai
+ * déverrouillage de la même session, alors qu'une ouverture réelle ne fait que remettre le minuteur
+ * à zéro, jamais désarmer : le geste ajoutait un désarmement que l'utilisateur n'avait pas fait.
+ * Le geste venu d'une notification est donc **jeté** sur ces deux états ; celui de la remise à zéro
+ * à l'ouverture, qui ne désarme rien, continue d'attendre.
  */
 object SafetyCallResetGate {
 
     fun ouvre(state: AppLockManager.LockState): Boolean =
         state is AppLockManager.LockState.Unlocked || state is AppLockManager.LockState.Disabled
 
-    /** Suspend jusqu'au premier état qui [ouvre]. */
+    /** Les états qui jettent un geste de DÉSARMEMENT : trop d'échecs, ou session leurre. */
+    fun jette(state: AppLockManager.LockState): Boolean =
+        state is AppLockManager.LockState.LockedOut || state is AppLockManager.LockState.PanicDecoy
+
+    /** Suspend jusqu'au premier état qui [ouvre]. Pour la remise à zéro à l'ouverture, qui ne désarme rien. */
     suspend fun attendreOuverture(states: Flow<AppLockManager.LockState>) {
         states.first { ouvre(it) }
     }
+
+    /**
+     * Suspend jusqu'au premier état qui [ouvre] — rend `true` — ou qui [jette] — rend `false`,
+     * et le geste doit alors être abandonné. Seul `Locked` est traversé.
+     */
+    suspend fun attendreOuvertureOuJeter(states: Flow<AppLockManager.LockState>): Boolean =
+        ouvre(states.first { ouvre(it) || jette(it) })
 }

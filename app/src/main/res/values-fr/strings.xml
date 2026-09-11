@@ -731,8 +731,12 @@
     <string name="send_failure_notification_unknown_recipient">un contact</string>
     <!-- v1.28.3 — la sauvegarde ne transporte aucune piece jointe ; on le dit au lieu de le taire. -->
     <string name="backup_restore_without_attachments">Dont %1$d sans leur pièce jointe, que les sauvegardes ne transportent pas.</string>
+    <!-- v1.28.5 — des conversations du coffre restaurées sur un appareil sans second facteur. -->
+    <string name="backup_restore_vault_without_factor">Des conversations du coffre ont été restaurées, mais aucun code coffre ni biométrie n\'est configuré ici : définissez-en un dans les Réglages pour les protéger.</string>
     <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
     <string name="settings_lock_downgrade_vault_refused">La biométrie est aujourd\'hui le seul second facteur qui protège votre coffre. Définissez d\'abord un code coffre, vous pourrez ensuite modifier ceci.</string>
+    <!-- v1.28.5 — l'état du coffre n'a pas pu être lu : le garde refuse plutôt que de supposer. -->
+    <string name="settings_lock_downgrade_vault_unverifiable">Impossible de vérifier l\'état du coffre pour le moment. Le verrouillage est conservé, réessayez dans un instant.</string>
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
     <string name="send_partial">Envoyé à %1$d destinataire(s) ; %2$d n\'ont pas pu être joints.</string>
     <string name="send_partial_blocked">Envoyé à %1$d destinataire(s) ; %2$d écarté(s) car vous les avez bloqués.</string>

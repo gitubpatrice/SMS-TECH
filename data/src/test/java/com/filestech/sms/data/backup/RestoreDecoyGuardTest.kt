@@ -36,8 +36,10 @@ import org.junit.jupiter.api.Test
 class RestoreDecoyGuardTest {
 
     private val appLock = mockk<AppLockManager>()
+    private val barriere = com.filestech.sms.security.VaultPurgeBarrier()
 
     private fun service() = BackupService(
+        barriere = barriere,
         context = mockk<Context>(),
         database = mockk<AppDatabase>(),
         conversationDao = mockk<ConversationDao>(),
@@ -62,7 +64,24 @@ class RestoreDecoyGuardTest {
         val issue = service().readSmsbk(mockk<Uri>(), passphrase)
 
         assertThat(issue).isEqualTo(Outcome.Failure(AppError.Locked()))
-        assertThat(passphrase.all { it == '\u0000' }).isTrue()
+        assertThat(passphrase.all { it == Char(0) }).isTrue()
+    }
+
+    /**
+     * v1.28.5 — **pendant une purge du coffre, la restauration est refusée**, avant de lire un
+     * octet : elle insérerait des conversations `in_vault` entre la relecture de `remaining` et
+     * le retrait du PIN. Chemin voisin de la barrière, trouvé en cherchant tout autre écrivain
+     * de `in_vault`. Doublures strictes : une lecture du fichier lèverait.
+     */
+    @Test
+    fun `pendant une purge la restauration est refusee et la passphrase effacee`() = runTest {
+        etat(AppLockManager.LockState.Unlocked)
+        val passphrase = "secret".toCharArray()
+
+        val issue = barriere.pendant { service().readSmsbk(mockk<Uri>(), passphrase) }
+
+        assertThat(issue).isEqualTo(Outcome.Failure(AppError.VaultPurging))
+        assertThat(passphrase.all { it == Char(0) }).isTrue()
     }
 
     /**

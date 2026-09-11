@@ -31,6 +31,15 @@ data class RestoreResult(
      * enoncee vaut infiniment mieux qu'une perte muette.
      */
     val messagesWithoutAttachments: Int = 0,
+    /**
+     * v1.28.5 (lecture ciblee, Q1) — la sauvegarde contenait des conversations DU COFFRE, et
+     * l'appareil cible n'a AUCUN second facteur de coffre (ni PIN coffre, ni biometrie). Elles
+     * sont restaurees au coffre, comme la sauvegarde les portait — ecrire dans le coffre n'a
+     * jamais exige de secret — mais elles y sont lisibles en deux tapes tant qu'aucun facteur
+     * n'est configure. Ce drapeau le DIT a l'utilisateur au seul moment ou cela compte, au lieu
+     * de le laisser croire qu'un contenu protege sur l'ancien telephone l'est encore ici.
+     */
+    val vaultRestoredWithoutSecondFactor: Boolean = false,
 ) {
     val totalConversationsInBackup: Int get() = conversationsReused + conversationsCreated
     val totalMessagesInBackup: Int get() = messagesImported + messagesSkipped

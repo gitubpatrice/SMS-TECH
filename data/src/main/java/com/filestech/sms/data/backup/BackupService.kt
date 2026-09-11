@@ -57,6 +57,9 @@ class BackupService @Inject constructor(
     // v1.27.13 — « y a-t-il un second facteur a prouver ? », lu au meme endroit que la porte du
     // coffre. Voir [com.filestech.sms.security.VaultSecondFactorPolicy] pour la raison.
     private val vaultFactor: com.filestech.sms.security.VaultSecondFactorPolicy,
+    // v1.28.5 — la restauration est une ENTREE au coffre : elle insere `in_vault` tel que la
+    // sauvegarde le porte. Elle passe donc par la barriere de purge, comme `moveToVault`.
+    private val barriere: com.filestech.sms.security.VaultPurgeBarrier,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : BackupRestorer {
 
@@ -392,6 +395,25 @@ class BackupService @Inject constructor(
             password.wipe()
             return@withContext Outcome.Failure(AppError.Locked())
         }
+        // v1.28.5 (sixieme note d'Andrew, point 2, chemin VOISIN trouve en verifiant « aucun
+        // autre ecrivain de in_vault ne contourne la barriere ») — la restauration insere des
+        // conversations AVEC le `in_vault` de la sauvegarde (cf. [importPayload]). Pendant une
+        // purge, une telle insertion pouvait se glisser entre la relecture de `remaining` et le
+        // retrait du PIN : le PIN partait sur un coffre que la restauration venait de remplir.
+        // La restauration s'inscrit donc comme une entree ; une purge levee la refuse.
+        val sousBarriere = barriere.enEntrant {
+            restaurer(uri, password)
+        }
+        when (sousBarriere) {
+            is Outcome.Success -> sousBarriere.value
+            is Outcome.Failure -> {
+                password.wipe()
+                Outcome.Failure(AppError.VaultPurging)
+            }
+        }
+    }
+
+    private suspend fun restaurer(uri: Uri, password: CharArray): Outcome<RestoreResult> = try {
         runCatchingOutcome(
             block = {
                 require(password.isNotEmpty()) { "password is required" }
@@ -413,11 +435,12 @@ class BackupService @Inject constructor(
                     else -> AppError.Storage(throwable)
                 }
             },
-        ).also {
-            // password wipé dans tous les chemins (succès comme échec) — `also` court-circuite
-            // pas le retour de l'outcome.
-            password.wipe()
-        }
+        )
+    } finally {
+        // password wipé dans TOUS les chemins — succès, échec, et depuis la v1.28.5 l'annulation,
+        // que `runCatchingOutcome` laisse désormais remonter : un `also` la laissait passer avec
+        // la passphrase encore en mémoire (relecture externe de la seconde vague).
+        password.wipe()
     }
 
     /**
@@ -569,7 +592,8 @@ class BackupService @Inject constructor(
     }
 
     private suspend fun importPayload(payload: BackupPayload): RestoreResult {
-        return database.withTransaction {
+        val aDesLignesDuCoffre = payload.conversations.any { it.inVault }
+        val importe = database.withTransaction {
             var reused = 0
             var created = 0
             // Mapping ancien id Room du backup → nouvel id Room dans la DB cible.
@@ -745,6 +769,12 @@ class BackupService @Inject constructor(
                 messagesWithoutAttachments = sansPiecesJointes,
             )
         }
+        // v1.28.5 (lecture ciblee, Q1) — lu APRES la transaction, et hors du verrou SQLite : c'est
+        // l'etat du second facteur au moment ou le contenu devient lisible qui compte, pas celui
+        // d'avant l'attente du verrou. Cf. [RestoreResult.vaultRestoredWithoutSecondFactor].
+        return importe.copy(
+            vaultRestoredWithoutSecondFactor = aDesLignesDuCoffre && vaultFactor.current() == VaultSecondFactor.NONE,
+        )
     }
 
     /** Big-endian Int read at [offset] (4 bytes). Inverse de [intToBytesBE]. */

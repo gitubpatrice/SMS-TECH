@@ -177,6 +177,7 @@ fun SettingsScreen(
     // v1.28.3 (F07) — resolue au niveau COMPOSABLE, comme sa voisine ci-dessus : un `Context`
     // capture dans une lambda non composable ne suit pas les changements de configuration.
     val lockDowngradeRefusedMsg = stringResource(R.string.settings_lock_downgrade_vault_refused)
+    val lockDowngradeUnverifiableMsg = stringResource(R.string.settings_lock_downgrade_vault_unverifiable)
     // v1.28.3 — idem : gabarit resolu au niveau composable, formate a l'emission.
     val vaultPurgeLocalFailureFmt = stringResource(R.string.settings_vault_pin_forgot_local_failure)
     // v1.9.0 — scope partagé pour les actions instantanées qui doivent émettre
@@ -196,6 +197,8 @@ fun SettingsScreen(
                 // explication se repete.
                 is SettingsViewModel.Event.LockDowngradeRefusedVault ->
                     snackbarHost.showError(lockDowngradeRefusedMsg)
+                is SettingsViewModel.Event.LockDowngradeUnverifiable ->
+                    snackbarHost.showError(lockDowngradeUnverifiableMsg)
                 is SettingsViewModel.Event.BlockedPurged -> {
                     val msg = if (e.count > 0) {
                         ctx.getString(R.string.settings_purge_blocked_result, e.count)

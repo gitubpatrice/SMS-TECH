@@ -162,9 +162,10 @@ class SendMediaMmsUseCase @Inject constructor(
     ): Outcome<SendReport> = envoi.enGroupe(
         recipients = recipients,
         sansRemise = "no MMS dispatched",
-        miroir = {
+        // v1.28.5 — le miroir porte les CIBLES, pas la liste d'origine : cf. `EnvoiParDestinataire.enGroupe`.
+        miroir = { cibles ->
             mirror.upsertOutgoingGroupMms(
-                addresses = recipients,
+                addresses = cibles,
                 attachments = mirrorSpecs,
                 textBody = textBody,
                 date = System.currentTimeMillis(),

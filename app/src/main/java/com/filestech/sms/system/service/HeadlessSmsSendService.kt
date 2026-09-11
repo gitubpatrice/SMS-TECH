@@ -6,7 +6,7 @@ import android.os.IBinder
 import android.telephony.TelephonyManager
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.PhoneAddress
-import com.filestech.sms.domain.usecase.SendSmsUseCase
+import com.filestech.sms.domain.usecase.EnvoyerMessageUseCase
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +32,11 @@ class HeadlessSmsSendService : Service() {
 
     // v1.24.0 SEC-CRIT — `Lazy` : atteint un DAO donc `AppDatabase` donc la réparation zéro-clé.
     // L'injection de champ Hilt précède onCreate/onStartCommand, sur le main thread.
-    @Inject lateinit var sendSmsLazy: dagger.Lazy<SendSmsUseCase>
+    // v1.28.5 (audit de coherence C2) — l'AIGUILLAGE unique (SMS / MMS / MMS de groupe), et non
+    // plus SendSmsUseCase en direct : ce service etait le troisieme point d'envoi, celui que le
+    // refactor du 2026-09-10 n'avait pas vu. Une reponse rapide vers plusieurs numeros suit
+    // desormais le reglage « MMS de groupe » comme le fil et l'envoi programme.
+    @Inject lateinit var envoyerLazy: dagger.Lazy<EnvoyerMessageUseCase>
     @Inject lateinit var appLock: AppLockManager
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
 
@@ -108,7 +112,7 @@ class HeadlessSmsSendService : Service() {
         }
         scope.launch {
             try {
-                val sendSms = sendSmsLazy.get()
+                val envoyer = envoyerLazy.get()
                 // Audit M-12: bound the service lifetime. SendSmsUseCase opens N Room transactions
                 // (one per recipient) sequentially; a single stuck SQLCipher write or a deadlock
                 // with the import job could keep this Service alive past the OS Service-watchdog,
@@ -120,7 +124,7 @@ class HeadlessSmsSendService : Service() {
                         Timber.i("HeadlessSmsSendService: refused while app is locked")
                         return@withTimeout
                     }
-                    sendSms.invoke(recipients = recipients, body = text)
+                    envoyer.invoke(recipients = recipients, body = text)
                 }
             } catch (_: TimeoutCancellationException) {
                 Timber.w("HeadlessSmsSendService timed out after %d ms", SEND_TIMEOUT_MS)

@@ -333,6 +333,7 @@ class VaultPurgeRetryTest {
         systemCopy: SystemCopyEraser,
         ordonnanceur: com.filestech.sms.domain.scheduler.ScheduledMessageScheduler =
             OrdonnanceurEspion(),
+        barriere: com.filestech.sms.security.VaultPurgeBarrier = com.filestech.sms.security.VaultPurgeBarrier(),
     ) =
         ConversationEraser(
             db,
@@ -346,8 +347,168 @@ class VaultPurgeRetryTest {
             ordonnanceur,
             db.attachmentDao(),
             InstrumentationRegistry.getInstrumentation().targetContext,
-            com.filestech.sms.security.VaultPurgeBarrier(),
+            barriere,
         )
+
+    // ───── v1.28.5 (sixième note d'Andrew, point 1) — `force` ne lève QUE la condition « copie système » ─────
+
+    /**
+     * Le cas d'Andrew, avec le vrai producteur d'échec et non un résultat préconstruit : sous
+     * `force`, un `delete()` mesuré à `false` gardait le parent ? NON en 1.28.4 — le drapeau
+     * `preserveOnSystemFailure = !force` gardait aussi le compte des dépendants, le parent
+     * partait, `localeComplete = true`. Ma note à Andrew affirmait le contraire du code.
+     */
+    @Test
+    fun force_unFichierQueDeleteRefuse_gardeLeParentEtCompteLEchec(): Unit = runBlocking {
+        seedVaultConversation()
+        val dossier = java.io.File(context.filesDir, "mms_attachments/force-${System.nanoTime()}").apply { mkdirs() }
+        val fichier = java.io.File(dossier, "secret.jpg").apply { writeBytes(ByteArray(16)) }
+        val messageId = db.messageDao().insert(messageDuCoffre())
+        db.attachmentDao().insert(
+            com.filestech.sms.data.local.db.entity.AttachmentEntity(
+                messageId = messageId,
+                mimeType = "image/jpeg",
+                fileName = fichier.name,
+                sizeBytes = fichier.length(),
+                localUri = fichier.absolutePath,
+            ),
+        )
+        android.system.Os.chmod(dossier.path, 0b101_000_000) // 0500
+        try {
+            assertThat(fichier.delete()).isFalse()
+
+            val refuse = eraserAvec(ToutSEfface).purgeVault(force = true)
+
+            assertThat(refuse.localFailures).isEqualTo(1)
+            assertThat(refuse.residuSystemeSeul).isFalse()
+            assertThat(refuse.isComplete).isFalse()
+            assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+            assertThat(fichier.exists()).isTrue()
+        } finally {
+            android.system.Os.chmod(dossier.path, 0b111_000_000) // 0700
+        }
+
+        val reprise = eraserAvec(ToutSEfface).purgeVault(force = true)
+
+        assertThat(reprise.isComplete).isTrue()
+        assertThat(fichier.exists()).isFalse()
+        dossier.delete()
+    }
+
+    @Test
+    fun force_uneAnnulationQuiLeve_gardeLeParentEtCompteLEchec(): Unit = runBlocking {
+        seedVaultConversation()
+        val programme = db.scheduledMessageDao().upsert(
+            com.filestech.sms.data.local.db.entity.ScheduledMessageEntity(
+                conversationId = VAULT_ID,
+                addressesCsv = "+33600000009",
+                body = "contenu du coffre, programme",
+                scheduledAt = System.currentTimeMillis() + 3_600_000L,
+                subId = null,
+                attachmentsJson = null,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+        val ordonnanceurEnPanne = object : com.filestech.sms.domain.scheduler.ScheduledMessageScheduler {
+            override fun scheduleAt(scheduledMessageId: Long, epochMillis: Long) = Unit
+            override fun cancel(scheduledMessageId: Long): Unit = error("FORCE_ANNULATION_REFUSEE")
+        }
+
+        val refuse = eraserAvec(ToutSEfface, ordonnanceurEnPanne).purgeVault(force = true)
+
+        assertThat(refuse.localFailures).isEqualTo(1)
+        assertThat(refuse.isComplete).isFalse()
+        assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+        assertThat(db.scheduledMessageDao().findById(programme)).isNotNull()
+    }
+
+    /**
+     * Sous `force`, un message arrivé pendant le balayage PART avec le parent — c'est ce que
+     * l'utilisateur a accepté — mais sa copie système n'a jamais été présentée au fournisseur :
+     * il compte en résidu système, pas en « supprimé ». En 1.28.4 il comptait en `deleted`.
+     */
+    @Test
+    fun force_unMessageArriveTard_partMaisCompteEnResiduSysteme(): Unit = runBlocking {
+        seedVaultConversation()
+        val intrus = object : SystemCopyEraser {
+            var dejaInsere = false
+            override fun erase(message: MessageEntity): Boolean {
+                if (!dejaInsere) {
+                    dejaInsere = true
+                    runBlocking { db.messageDao().insert(message.copy(id = 0, telephonyUri = null)) }
+                }
+                return true
+            }
+        }
+
+        val resultat = eraserAvec(intrus).purgeVault(force = true)
+
+        assertThat(db.conversationDao().idsInVault()).isEmpty()
+        assertThat(resultat.deleted).isEqualTo(0)
+        assertThat(resultat.systemResidue).isEqualTo(1)
+    }
+
+    /**
+     * Contrôle positif des trois tests ci-dessus : ce que `force` lève encore. Copie système qui
+     * résiste, aucun dépendant — la ligne locale part, le résidu est dit. Inchangé depuis 1.28.2.
+     */
+    @Test
+    fun force_leveToujoursLaSeuleConditionCopieSysteme(): Unit = runBlocking {
+        seedVaultConversation()
+
+        val resultat = eraserAvec(RefusSystematique).purgeVault(force = true)
+
+        assertThat(db.conversationDao().idsInVault()).isEmpty()
+        assertThat(resultat.residuSystemeSeul).isTrue()
+    }
+
+    /**
+     * v1.28.5 (audit de cohérence C1) — **supprimer UN message emporte son fichier**, comme
+     * supprimer la conversation (F04). Le fichier est réellement créé sur disque ; avant, seule
+     * la ligne `attachments` partait en cascade et l'image restait en clair dans `filesDir`.
+     */
+    @Test
+    fun laSuppressionDUnMessageEffaceSonFichier(): Unit = runBlocking {
+        seedVaultConversation()
+        val fichier = java.io.File(context.filesDir, "mms_attachments").let { dossier ->
+            dossier.mkdirs()
+            java.io.File(dossier, "seul-${System.nanoTime()}.jpg").apply { writeBytes(ByteArray(16)) }
+        }
+        val messageId = db.messageDao().insert(messageDuCoffre())
+        db.attachmentDao().insert(
+            com.filestech.sms.data.local.db.entity.AttachmentEntity(
+                messageId = messageId,
+                mimeType = "image/jpeg",
+                fileName = fichier.name,
+                sizeBytes = fichier.length(),
+                localUri = fichier.absolutePath,
+            ),
+        )
+
+        eraserAvec(ToutSEfface).eraseMessage(messageId)
+
+        assertThat(db.messageDao().findById(messageId)).isNull()
+        assertThat(fichier.exists()).isFalse()
+        // La conversation, elle, reste : on n'a supprimé qu'un message.
+        assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+    }
+
+    /**
+     * v1.28.5 (point 2) — ce que l'appelant décide APRÈS la purge — retirer le PIN — s'exécute
+     * SOUS la barrière : une entrée au coffre ne peut pas se glisser entre la relecture de
+     * `remaining` et le retrait.
+     */
+    @Test
+    fun laDecisionDApresPurgeSExecuteSousLaBarriere(): Unit = runBlocking {
+        seedVaultConversation()
+        val barriere = com.filestech.sms.security.VaultPurgeBarrier()
+        var barriereLeveeAuMomentDeDecider: Boolean? = null
+
+        eraserAvec(ToutSEfface, barriere = barriere).purgeVault { barriereLeveeAuMomentDeDecider = barriere.enCours }
+
+        assertThat(barriereLeveeAuMomentDeDecider).isTrue()
+        assertThat(barriere.enCours).isFalse()
+    }
 
     /**
      * v1.28.4 — **R01, second volet : une annulation qui LÈVE compte comme un échec.** Le test

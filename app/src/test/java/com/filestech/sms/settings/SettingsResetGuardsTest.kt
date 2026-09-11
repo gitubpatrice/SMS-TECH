@@ -45,6 +45,11 @@ import org.junit.jupiter.api.Test
  * Les deux assertions portent sur [SettingsViewModel] et non sur l'ecran : c'est precisement
  * l'erreur que la v1.27.10 avait deja commise une fois, en posant sa garde dans un dialogue de
  * confirmation. Un garde d'ecran ne dit rien du prochain point d'entree.
+ *
+ * v1.28.5 (sixieme note d'Andrew, point 2) — le faux depot EXECUTE le rappel `apresPurge` avec
+ * le resultat, comme le vrai le fait sous la barriere : c'est par ce rappel que le PIN part
+ * desormais, et un faux qui l'ignorerait rendrait tous les tests ci-dessous verts sur un PIN
+ * jamais retire... ou jamais conserve.
  */
 class SettingsResetGuardsTest {
 
@@ -62,8 +67,30 @@ class SettingsResetGuardsTest {
         }
     }
 
-    private val conversationRepo: ConversationRepository = mockk(relaxed = true)
-    private val vaultPin: VaultPinManager = mockk(relaxed = true)
+    /** Ce que la purge rendra, selon `force` — configure par chaque cas. */
+    private var purge: (force: Boolean) -> VaultPurgeResult = { error("purge non configuree") }
+
+    /** Vrai pendant l'execution du rappel `apresPurge`, c'est-a-dire « sous la barriere ». */
+    private var sousLaBarriere = false
+
+    /** Ce que `forgetVaultPin` a vu de la barriere au moment de chaque appel. */
+    private val retraitsDuPin = mutableListOf<Boolean>()
+
+    private val conversationRepo: ConversationRepository = mockk(relaxed = true) {
+        coEvery { deleteAllInVault(any(), any()) } coAnswers {
+            val resultat = purge(firstArg())
+            sousLaBarriere = true
+            try {
+                secondArg<suspend (VaultPurgeResult) -> Unit>().invoke(resultat)
+            } finally {
+                sousLaBarriere = false
+            }
+            resultat
+        }
+    }
+    private val vaultPin: VaultPinManager = mockk(relaxed = true) {
+        coEvery { forgetVaultPin() } answers { retraitsDuPin += sousLaBarriere }
+    }
     private val appLock: AppLockManager = mockk(relaxed = true) {
         every { state } returns MutableStateFlow(AppLockManager.LockState.Unlocked)
     }
@@ -134,8 +161,7 @@ class SettingsResetGuardsTest {
         runTest(dispatcher) {
             // Une conversation effacee, une dont la copie systeme a survecu : elle reviendra a la
             // resynchronisation suivante, hors du coffre. Le PIN ne doit pas partir.
-            coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-                VaultPurgeResult(deleted = 1, systemResidue = 1, localFailures = 0, remaining = 0)
+            purge = { VaultPurgeResult(deleted = 1, systemResidue = 1, localFailures = 0, remaining = 0) }
 
             val vm = viewModel()
             vm.forgetVaultPinAndPurge()
@@ -150,8 +176,7 @@ class SettingsResetGuardsTest {
         runTest(dispatcher) {
             // Rien n'a echoue, et pourtant le coffre n'est pas vide : c'est le cas que ni le
             // compte de succes ni celui d'echecs ne voit, et que `remaining` releve.
-            coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-                VaultPurgeResult(deleted = 3, systemResidue = 0, localFailures = 0, remaining = 1)
+            purge = { VaultPurgeResult(deleted = 3, systemResidue = 0, localFailures = 0, remaining = 1) }
 
             val vm = viewModel()
             vm.forgetVaultPinAndPurge()
@@ -164,8 +189,7 @@ class SettingsResetGuardsTest {
         runTest(dispatcher) {
             // Le controle positif : sans lui, une garde qui refuserait TOUJOURS passerait les
             // deux tests ci-dessus tout en condamnant la seule issue de l'utilisateur.
-            coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-                VaultPurgeResult(deleted = 4, systemResidue = 0, localFailures = 0, remaining = 0)
+            purge = { VaultPurgeResult(deleted = 4, systemResidue = 0, localFailures = 0, remaining = 0) }
 
             val vm = viewModel()
             vm.forgetVaultPinAndPurge()
@@ -179,6 +203,35 @@ class SettingsResetGuardsTest {
             assertThat(stored.security.vaultPurgeFailedOnce).isFalse()
         }
 
+    /**
+     * v1.28.5 (sixieme note d'Andrew, point 2) — **le PIN part SOUS la barriere, jamais apres.**
+     *
+     * Entre le retour de la purge et le retrait du PIN, la barriere d'entree au coffre retombait :
+     * une conversation pouvait y entrer apres la relecture de `remaining`, et le PIN partait sur un
+     * coffre qui venait de se remplir. Le retrait est desormais execute par le rappel que le depot
+     * invoque avant d'abaisser la barriere. Ce test mesure l'ORDRE, pas seulement le fait.
+     */
+    @Test
+    fun `the PIN is removed while the purge barrier is still raised`() = runTest(dispatcher) {
+        purge = { VaultPurgeResult(deleted = 2, systemResidue = 0, localFailures = 0, remaining = 0) }
+
+        viewModel().forgetVaultPinAndPurge()
+
+        assertThat(retraitsDuPin).containsExactly(true)
+    }
+
+    /** Controle negatif du precedent : la sortie assumee retire le PIN par le MEME rappel. */
+    @Test
+    fun `the deliberate way out also removes the PIN under the barrier`() = runTest(dispatcher) {
+        stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
+        settingsFlow.value = stored
+        purge = { VaultPurgeResult(deleted = 2, systemResidue = 1, localFailures = 0, remaining = 0) }
+
+        viewModel().forgetVaultPinAndPurge(force = true)
+
+        assertThat(retraitsDuPin).containsExactly(true)
+    }
+
     // ───────────── v1.28.2 : le refus prudent ne doit pas devenir une impasse definitive ─────────────
 
     /**
@@ -188,8 +241,7 @@ class SettingsResetGuardsTest {
      */
     @Test
     fun `the first failure only remembers it happened`() = runTest(dispatcher) {
-        coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-            VaultPurgeResult(deleted = 0, systemResidue = 1, localFailures = 0, remaining = 1)
+        purge = { VaultPurgeResult(deleted = 0, systemResidue = 1, localFailures = 0, remaining = 1) }
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge()
@@ -209,8 +261,7 @@ class SettingsResetGuardsTest {
     fun `the second failure offers the way out without taking it`() = runTest(dispatcher) {
         stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
         settingsFlow.value = stored
-        coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-            VaultPurgeResult(deleted = 0, systemResidue = 1, localFailures = 0, remaining = 1)
+        purge = { VaultPurgeResult(deleted = 0, systemResidue = 1, localFailures = 0, remaining = 1) }
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge()
@@ -229,8 +280,10 @@ class SettingsResetGuardsTest {
     fun `the deliberate way out removes the PIN and states what survives`() = runTest(dispatcher) {
         stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
         settingsFlow.value = stored
-        coEvery { conversationRepo.deleteAllInVault(force = true) } returns
+        purge = { force ->
+            check(force) { "la sortie assumee doit demander force = true" }
             VaultPurgeResult(deleted = 2, systemResidue = 1, localFailures = 0, remaining = 0)
+        }
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge(force = true)
@@ -269,8 +322,7 @@ class SettingsResetGuardsTest {
     fun `the deliberate way out refuses when local data survives`() = runTest(dispatcher) {
         stored = stored.copy(security = stored.security.copy(vaultPurgeFailedOnce = true))
         settingsFlow.value = stored
-        coEvery { conversationRepo.deleteAllInVault(force = true) } returns
-            VaultPurgeResult(deleted = 2, systemResidue = 0, localFailures = 1, remaining = 1)
+        purge = { VaultPurgeResult(deleted = 2, systemResidue = 0, localFailures = 1, remaining = 1) }
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge(force = true)
@@ -288,8 +340,7 @@ class SettingsResetGuardsTest {
      */
     @Test
     fun `the way out is never taken on the caller's behalf`() = runTest(dispatcher) {
-        coEvery { conversationRepo.deleteAllInVault(force = false) } returns
-            VaultPurgeResult(deleted = 0, systemResidue = 2, localFailures = 0, remaining = 2)
+        purge = { VaultPurgeResult(deleted = 0, systemResidue = 2, localFailures = 0, remaining = 2) }
 
         val vm = viewModel()
         vm.forgetVaultPinAndPurge()
@@ -297,6 +348,6 @@ class SettingsResetGuardsTest {
         vm.forgetVaultPinAndPurge()
 
         coVerify(exactly = 0) { vaultPin.forgetVaultPin() }
-        coVerify(exactly = 0) { conversationRepo.deleteAllInVault(force = true) }
+        coVerify(exactly = 0) { conversationRepo.deleteAllInVault(true, any()) }
     }
 }

@@ -1,0 +1,5 @@
+Coffre : « vider quand même » ne lève plus que la condition « copie système » — un fichier ou un envoi programmé qui résiste garde la conversation. Le PIN part sous la barrière de purge, qui refuse aussi une restauration.
+
+Abaisser le verrouillage refuse si l'état du coffre ne se lit pas. Un geste « Je vais bien » reçu en session leurre ou pendant un blocage est ignoré.
+
+MMS de groupe : le fil local porte les membres servis. Une copie interrompue ne laisse plus de fichier partiel.

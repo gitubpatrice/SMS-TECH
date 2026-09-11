@@ -1,0 +1,5 @@
+Vault: "empty anyway" now waives only the system-copy condition — a file or a scheduled send that resists keeps the conversation. The PIN goes under the purge barrier, which awaits entries under way and refuses a restore.
+
+Lowering the lock refuses when the vault state cannot be read. An "I'm fine" gesture received in a decoy session or during a lockout is discarded.
+
+Group MMS: the local thread carries the members actually served. An interrupted copy no longer leaves a partial file.

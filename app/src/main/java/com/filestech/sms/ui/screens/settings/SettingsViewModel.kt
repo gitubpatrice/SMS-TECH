@@ -89,6 +89,13 @@ class SettingsViewModel @Inject constructor(
         data object LockDowngradeRefusedVault : Event
 
         /**
+         * v1.28.5 (sixième note d'Andrew, point 4) — refus d'abaisser le verrouillage parce que
+         * l'état du Coffre n'a pas pu être lu. Le garde échoue fermé ; il le dit pour qu'on
+         * réessaie plutôt que de conclure à une application cassée.
+         */
+        data object LockDowngradeUnverifiable : Event
+
+        /**
          * v1.26.0 — refus : le code proposé est le PIN principal, ou aucun PIN n'est configuré.
          * Les deux enfermeraient l'utilisateur en mode leurre sans issue.
          */
@@ -312,8 +319,15 @@ class SettingsViewModel @Inject constructor(
 
     /** v1.28.3 (F07) — un refus silencieux ferait recommencer l'utilisateur indéfiniment. */
     private suspend fun signalerRefus(outcome: AppLockManager.LockDowngradeOutcome) {
-        if (outcome is AppLockManager.LockDowngradeOutcome.VaultWouldLoseItsFactor) {
-            _events.send(Event.LockDowngradeRefusedVault)
+        when (outcome) {
+            AppLockManager.LockDowngradeOutcome.VaultWouldLoseItsFactor ->
+                _events.send(Event.LockDowngradeRefusedVault)
+            // v1.28.5 — un refus faute de lecture se dit aussi, sinon l'utilisateur recommence.
+            AppLockManager.LockDowngradeOutcome.VaultStateUnknown ->
+                _events.send(Event.LockDowngradeUnverifiable)
+            AppLockManager.LockDowngradeOutcome.Ok,
+            AppLockManager.LockDowngradeOutcome.PanicDecoy,
+            -> Unit
         }
     }
 
@@ -438,26 +452,37 @@ class SettingsViewModel @Inject constructor(
      */
     fun forgetVaultPinAndPurge(force: Boolean = false) = viewModelScope.launch {
         val dejaEchoue = settings.flow.first().security.vaultPurgeFailedOnce
-        val purge = conversationRepo.deleteAllInVault(force)
+        // v1.28.5 (sixieme note d'Andrew, point 2) — le PIN est retire SOUS la barriere de purge,
+        // pas apres le retour. Entre les deux, la barriere retombait et une conversation pouvait
+        // entrer au coffre apres la relecture de `remaining` : le PIN partait sur un coffre qui
+        // venait de se remplir. La decision est prise ici, une seule fois, et les evenements
+        // ci-dessous decoulent de ce qui a ete FAIT, pas d'une seconde evaluation des memes
+        // conditions — le jumeau asymetrique, encore lui.
+        //
+        // v1.28.2 — sortie assumee : l'utilisateur a demande qu'on vide quand meme, apres
+        // qu'on lui a dit ce qui subsisterait. Ce qui subsiste lui est redit ici.
+        //
+        // v1.28.3 (F09) — la sortie n'est plus accordee sur le seul fait que `force` a ete
+        // demande, mais sur la NATURE de ce qui subsiste. `residuSystemeSeul` veut dire que
+        // plus rien n'est protege sur cet appareil : le PIN qu'on retire ne garde plus rien.
+        // Un echec de suppression LOCALE tombe dans la branche `VaultPurgeStuckLocal`
+        // ci-dessous, qui ne retire pas le PIN — sans quoi on ouvrirait un coffre encore
+        // plein, alors que le texte de consentement promet a l'utilisateur que ce qui reste
+        // est « dans le stockage SMS du telephone ».
+        var pinRetire = false
+        val purge = conversationRepo.deleteAllInVault(force) { resultat ->
+            if (resultat.isComplete || (force && resultat.residuSystemeSeul)) {
+                vaultPin.forgetVaultPin()
+                pinRetire = true
+            }
+        }
         val reste = purge.reste
         when {
-            purge.isComplete -> {
-                vaultPin.forgetVaultPin()
+            pinRetire && purge.isComplete -> {
                 oublierLEchecPasse()
                 _events.send(Event.VaultPurged(purge.deleted))
             }
-            // v1.28.2 — sortie assumee : l'utilisateur a demande qu'on vide quand meme, apres
-            // qu'on lui a dit ce qui subsisterait. Ce qui subsiste lui est redit ici.
-            //
-            // v1.28.3 (F09) — la sortie n'est plus accordee sur le seul fait que `force` a ete
-            // demande, mais sur la NATURE de ce qui subsiste. `residuSystemeSeul` veut dire que
-            // plus rien n'est protege sur cet appareil : le PIN qu'on retire ne garde plus rien.
-            // Un echec de suppression LOCALE tombe desormais dans la branche `dejaEchoue`
-            // ci-dessous, qui ne retire pas le PIN — sans quoi on ouvrirait un coffre encore
-            // plein, alors que le texte de consentement promet a l'utilisateur que ce qui reste
-            // est « dans le stockage SMS du telephone ».
-            force && purge.residuSystemeSeul -> {
-                vaultPin.forgetVaultPin()
+            pinRetire -> {
                 oublierLEchecPasse()
                 _events.send(Event.VaultPurgedWithResidue(purge.deleted, reste))
             }

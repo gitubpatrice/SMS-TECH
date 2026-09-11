@@ -108,6 +108,55 @@ class BackupRoundTripTest {
 
     // ──────────────────────── Le contrat principal ────────────────────────
 
+    /**
+     * v1.28.5 (lecture ciblée, Q1) — **restaurer des conversations du coffre sur un appareil
+     * sans second facteur le DIT.** Le réglage est POSÉ par le test, pas supposé : `lockMode = PIN`
+     * sans PIN de coffre donne `VaultSecondFactor.NONE`. Contrôle positif juste en dessous.
+     */
+    @Test
+    fun restaurerUnCoffreSansSecondFacteurIci_leDit() {
+        runBlocking {
+            seedSource()
+            vaultSource.markUnlocked()
+            serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+            val reglages = SettingsRepository(context, scope)
+            reglages.update {
+                it.copy(security = it.security.copy(lockMode = LockMode.PIN, vaultPinEnabled = false))
+            }
+            assertThat(vaultFactorPolicy().current()).isEqualTo(com.filestech.sms.security.VaultSecondFactor.NONE)
+
+            val restored = serviceFor(dbTarget, VaultSessionState()).readSmsbk(uriOf(backupFile), PASSWORD)
+
+            val result = (restored as Outcome.Success).value
+            assertThat(result.vaultRestoredWithoutSecondFactor).isTrue()
+        }
+    }
+
+    /** Contrôle POSITIF : avec la biométrie comme second facteur, le drapeau reste faux. */
+    @Test
+    fun restaurerUnCoffreAvecSecondFacteurIci_neDitRien() {
+        runBlocking {
+            seedSource()
+            vaultSource.markUnlocked()
+            serviceFor(dbSource, vaultSource).writeSmsbk(uriOf(backupFile), PASSWORD)
+            val reglages = SettingsRepository(context, scope)
+            reglages.update {
+                it.copy(security = it.security.copy(lockMode = LockMode.BIOMETRIC, vaultPinEnabled = false))
+            }
+            try {
+                assertThat(vaultFactorPolicy().current())
+                    .isEqualTo(com.filestech.sms.security.VaultSecondFactor.BIOMETRIC)
+
+                val restored = serviceFor(dbTarget, VaultSessionState()).readSmsbk(uriOf(backupFile), PASSWORD)
+
+                val result = (restored as Outcome.Success).value
+                assertThat(result.vaultRestoredWithoutSecondFactor).isFalse()
+            } finally {
+                reglages.update { it.copy(security = it.security.copy(lockMode = LockMode.PIN)) }
+            }
+        }
+    }
+
     @Test
     fun uneSauvegardeRestauree_rendLesMemesConversationsEtLesMemesMessages() {
         runBlocking {
@@ -685,6 +734,7 @@ class BackupRoundTripTest {
         appLock = appLock,
         vaultSession = vault,
         vaultFactor = vaultFactorPolicy(),
+        barriere = com.filestech.sms.security.VaultPurgeBarrier(),
         io = Dispatchers.IO,
     )
 

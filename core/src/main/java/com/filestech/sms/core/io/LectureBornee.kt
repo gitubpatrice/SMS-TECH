@@ -30,21 +30,27 @@ object LectureBornee {
         require(plafond >= 0L) { "plafond negatif" }
         var recopie = 0L
         var depasse = false
-        source.use { input ->
-            cible.outputStream().use { os ->
-                val bloc = ByteArray(tampon)
-                var lus = input.read(bloc)
-                while (lus > 0 && !depasse) {
-                    recopie += lus
-                    if (recopie > plafond) {
-                        depasse = true
-                    } else {
-                        os.write(bloc, 0, lus)
-                        lus = input.read(bloc)
+        // v1.28.5 (sixième note d'Andrew, point 6) — une exception AU MILIEU de la copie fermait
+        // les flux et laissait le fichier partiel derrière elle : seul le dépassement nettoyait.
+        // Le fichier part avant que l'exception ne remonte ; la promesse « aucun fichier
+        // derrière » vaut pour toutes les sorties, pas seulement celle qu'on avait prévue.
+        runCatching {
+            source.use { input ->
+                cible.outputStream().use { os ->
+                    val bloc = ByteArray(tampon)
+                    var lus = input.read(bloc)
+                    while (lus > 0 && !depasse) {
+                        recopie += lus
+                        if (recopie > plafond) {
+                            depasse = true
+                        } else {
+                            os.write(bloc, 0, lus)
+                            lus = input.read(bloc)
+                        }
                     }
                 }
             }
-        }
+        }.onFailure { cible.delete() }.getOrThrow()
         if (depasse || recopie == 0L) {
             cible.delete()
             return false

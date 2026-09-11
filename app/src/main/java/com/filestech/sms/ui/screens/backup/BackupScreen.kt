@@ -261,6 +261,7 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
     // v1.28.3 — gabarit resolu au niveau composable, formate a l'emission : un `Context` capture
     // dans une lambda non composable ne suit pas les changements de configuration.
     val sansPiecesJointesFmt = stringResource(R.string.backup_restore_without_attachments)
+    val coffreSansFacteurMsg = stringResource(R.string.backup_restore_vault_without_factor)
     LaunchedEffect(Unit) {
         viewModel.events.collect { ev ->
             when (ev) {
@@ -293,6 +294,11 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                         if (ev.result.messagesWithoutAttachments > 0) {
                             append(' ')
                             append(sansPiecesJointesFmt.format(ev.result.messagesWithoutAttachments))
+                        }
+                        // v1.28.5 — un coffre restaure sans second facteur ici : dit, pas tu.
+                        if (ev.result.vaultRestoredWithoutSecondFactor) {
+                            append(' ')
+                            append(coffreSansFacteurMsg)
                         }
                     },
                 )

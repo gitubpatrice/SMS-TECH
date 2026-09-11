@@ -69,7 +69,11 @@ class CancelScheduledMessageUseCase @Inject constructor(
         // ligne `CANCELLED`. Les deux ne peuvent pas être vrais. La règle réelle, désormais
         // écrite des deux côtés : les fichiers d'un envoi ANNULÉ partent tout de suite, parce
         // qu'aucune liste n'affiche l'état `CANCELLED` et que la ligne serait donc inatteignable.
-        runCatching { repo.clearAttachments(id) }
+        // v1.28.5 — une annulation de la coroutine remonte au lieu de laisser les copies des
+        // pieces jointes sur le disque avec un « Success » : la ligne CANCELLED n'etant affichee
+        // nulle part, personne ne les aurait jamais retrouvees.
+        com.filestech.sms.core.result.runCatchingCancellable { repo.clearAttachments(id) }
+            .onFailure { timber.log.Timber.w(it, "cancel: attachments of scheduled %d not cleared", id) }
         return Outcome.Success(true)
     }
 }

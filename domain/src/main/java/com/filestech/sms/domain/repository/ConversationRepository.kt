@@ -41,7 +41,6 @@ interface ConversationRepository {
     suspend fun setPinned(id: Long, pinned: Boolean)
     suspend fun setArchived(id: Long, archived: Boolean)
     suspend fun setMuted(id: Long, muted: Boolean)
-    suspend fun moveToVault(id: Long, inVault: Boolean)
 
     /**
      * v1.28.3 (audit global, X-01) — lecture DIRECTE d'une conversation par son id, sans le
@@ -89,8 +88,17 @@ interface ConversationRepository {
      *
      * v1.27.11 (meme revue, constat 2) — renvoie un [VaultPurgeResult] et non plus un simple
      * compte. Voir ce type pour la raison : un nombre de succes ne dit pas si le coffre est vide.
+     *
+     * v1.28.5 (sixieme note d'Andrew, point 2) — [apresPurge] s'execute avec le resultat, AVANT
+     * que la barriere d'entree au coffre ne retombe. C'est la que l'appelant decide du PIN : le
+     * decider apres le retour laissait une fenetre ou une conversation entrait au coffre entre la
+     * relecture de `remaining` et le retrait du PIN. L'appelant choisit ; l'implementation garantit
+     * seulement que personne n'entre pendant qu'il choisit.
      */
-    suspend fun deleteAllInVault(force: Boolean = false): VaultPurgeResult
+    suspend fun deleteAllInVault(
+        force: Boolean = false,
+        apresPurge: suspend (VaultPurgeResult) -> Unit = {},
+    ): VaultPurgeResult
     suspend fun deleteMessage(messageId: Long)
 
     /**

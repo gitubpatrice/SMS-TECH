@@ -68,24 +68,34 @@ class PanicService @Inject constructor(
             context.getSharedPreferences("db_repair", android.content.Context.MODE_PRIVATE)
                 .edit().clear().commit()
         }.onFailure { Timber.w(it, "clear db_repair prefs") }
-        runCatching { securityStore.clearPin() }
-        runCatching { securityStore.clearPanic() }
-        // Audit S-P2-2: clearPin / clearPanic above remove the credential snapshots themselves
-        // but leave the surrounding bookkeeping (`failCount`, `lockoutUntil`) untouched in the
-        // DataStore. After a wipe the user re-onboards with a brand-new lock; if the previous
-        // session had been close to the lockout threshold, the new setup would inherit those
-        // counters and lock the user out before they had a chance to authenticate.
-        runCatching {
-            securityStore.setFailCount(0)
-            // v1.14.8 R7 — clearLockout wipe les 3 fields (wall + mono baseline + duration).
-            securityStore.clearLockout()
-        }
         runCatching {
             File(context.filesDir, "mms_attachments").deleteRecursively()
             File(context.filesDir, "exports").deleteRecursively()
             File(context.filesDir, "db").deleteRecursively()
             context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         }.onFailure { Timber.w(it, "wipe file dirs") }
-        runCatching { settings.update { com.filestech.sms.domain.settings.AppSettings() } }
+        // v1.28.5 (balayage des `runCatching`, constat de SECURITE) — les quatre ecritures
+        // DataStore ci-dessous sont NON ANNULABLES, et leurs echecs sont journalises. L'appel
+        // vit dans un `viewModelScope` : si l'ecran des Reglages quittait la pile a cet instant,
+        // les etapes synchrones (base, cles, fichiers) etaient deja faites, puis chaque `suspend`
+        // levait une annulation que `runCatching` avalait SANS un mot — et « supprimer toutes
+        // mes donnees » rendait la main en laissant le PIN, le code panique, les compteurs de
+        // verrouillage et tous les reglages (contacts du Safety call, « Mon numero »).
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            runCatching { securityStore.clearPin() }.onFailure { Timber.w(it, "wipe: clearPin") }
+            runCatching { securityStore.clearPanic() }.onFailure { Timber.w(it, "wipe: clearPanic") }
+            // Audit S-P2-2: clearPin / clearPanic above remove the credential snapshots themselves
+            // but leave the surrounding bookkeeping (`failCount`, `lockoutUntil`) untouched in the
+            // DataStore. After a wipe the user re-onboards with a brand-new lock; if the previous
+            // session had been close to the lockout threshold, the new setup would inherit those
+            // counters and lock the user out before they had a chance to authenticate.
+            runCatching {
+                securityStore.setFailCount(0)
+                // v1.14.8 R7 — clearLockout wipe les 3 fields (wall + mono baseline + duration).
+                securityStore.clearLockout()
+            }.onFailure { Timber.w(it, "wipe: lockout counters") }
+            runCatching { settings.update { com.filestech.sms.domain.settings.AppSettings() } }
+                .onFailure { Timber.w(it, "wipe: settings") }
+        }
     }
 }

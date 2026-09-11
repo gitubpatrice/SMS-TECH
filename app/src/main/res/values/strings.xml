@@ -743,8 +743,12 @@
     <string name="send_failure_notification_unknown_recipient">a contact</string>
     <!-- v1.28.3 — la sauvegarde ne transporte aucune piece jointe ; on le dit au lieu de le taire. -->
     <string name="backup_restore_without_attachments">%1$d of them came back without their attachment, which backups do not carry.</string>
+    <!-- v1.28.5 — vault conversations restored on a device with no second factor. -->
+    <string name="backup_restore_vault_without_factor">Vault conversations were restored, but no vault code or biometrics is set up here: set one in Settings to protect them.</string>
     <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
     <string name="settings_lock_downgrade_vault_refused">Biometrics is currently the only second factor protecting your vault. Set a vault code first, then you can change this.</string>
+    <!-- v1.28.5 — the vault state could not be read: the guard refuses rather than assume. -->
+    <string name="settings_lock_downgrade_vault_unverifiable">The vault state could not be checked right now. The lock is kept, please try again in a moment.</string>
     <string name="error_send_recipient_blocked">Not sent: you have blocked this number. Unblock it to send again.</string>
     <string name="error_retry_group_echo">This is the copy kept in the group. Resend from each member\'s conversation.</string>
     <string name="error_retry_mms_unsupported">This MMS can\'t be resent from here. Send it again from the composer.</string>

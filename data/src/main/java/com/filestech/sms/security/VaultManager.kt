@@ -3,6 +3,7 @@ package com.filestech.sms.security
 import com.filestech.sms.core.crypto.KeystoreManager
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.map
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.vault.VaultMover
@@ -108,9 +109,9 @@ class VaultManager @Inject constructor(
      */
     override suspend fun moveToVault(conversationId: Long): Outcome<Unit> = withContext(io) {
         if (!session.isUnlocked) return@withContext Outcome.Failure(AppError.Locked())
-        if (barriere.enCours) return@withContext Outcome.Failure(AppError.VaultPurging)
-        deplacerAvecLesMembres(listOf(conversationId), intoVault = true)
-        Outcome.Success(Unit)
+        // v1.28.5 — l'entrée s'inscrit sous le verrou de la barrière, elle ne se contente plus
+        // de le lire : cf. [VaultPurgeBarrier.enEntrant].
+        barriere.enEntrant { deplacerAvecLesMembres(listOf(conversationId), intoVault = true) }.map { }
     }
 
     override suspend fun moveOutOfVault(conversationId: Long): Outcome<Unit> = withContext(io) {
@@ -210,10 +211,21 @@ class VaultManager @Inject constructor(
         }
         // v1.28.4 (F13) — la barrière ne ferme que l'ENTRÉE : sortir pendant une purge ne peut
         // que réduire ce qu'elle doit détruire.
-        if (intoVault && barriere.enCours) return@withContext Outcome.Failure(AppError.VaultPurging)
-        deplacerAvecLesMembres(listOf(conversationId), intoVault)
-        Outcome.Success(Unit)
+        deplacerSousLaBarriere(listOf(conversationId), intoVault).map { }
     }
+
+    /**
+     * v1.28.5 (sixième note d'Andrew, point 2) — l'entrée au coffre s'INSCRIT auprès de la
+     * barrière au lieu de la lire : une purge levée entre le test et l'écriture ne voyait pas
+     * l'entrée, et pouvait relire `remaining` avant son commit. Écrit une fois pour les deux
+     * jumeaux, l'unitaire et le groupé.
+     */
+    private suspend fun deplacerSousLaBarriere(ids: List<Long>, intoVault: Boolean): Outcome<Int> =
+        if (intoVault) {
+            barriere.enEntrant { deplacerAvecLesMembres(ids, intoVault = true) }
+        } else {
+            Outcome.Success(deplacerAvecLesMembres(ids, intoVault = false))
+        }
 
     /**
      * v1.14.8 audit R8 — Bulk move atomique. Replace l'ancienne boucle itérative dans
@@ -264,9 +276,7 @@ class VaultManager @Inject constructor(
         if (!intoVault && !session.isUnlocked) {
             return@withContext Outcome.Failure(AppError.Locked())
         }
-        if (intoVault && barriere.enCours) return@withContext Outcome.Failure(AppError.VaultPurging)
-        val updated = deplacerAvecLesMembres(ids, intoVault)
-        Outcome.Success(updated)
+        deplacerSousLaBarriere(ids, intoVault)
     }
 
     /** Ensures the underlying Keystore alias exists. Called at first vault use. */

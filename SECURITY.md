@@ -81,6 +81,116 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.5 — Six arêtes déduites du source, toutes réelles
+
+*Sixième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (2026-09-11) : il clôt R01/R02/R03
+sur revue du source de la 1.28.4, puis liste cinq candidats déduits du code et non mesurés, plus
+une arête mineure. Vérifiés un par un dans le source avant de répondre : **les six sont réels.**
+Registre : `audits_relectures_IA/audits-ia-externe/2026-09-11-andrew-pozdnakov-mr38458-6e-note-6-aretes.md`.*
+
+**1. La sortie assumée levait plus que la condition « copie système ».** `purgeVault(force = true)`
+appelait `erase(preserveOnSystemFailure = false)`, et ce même booléen gardait aussi le compte des
+dépendants et la relecture d'arrivée tardive. Sous `force`, un `delete()` refusé ou un `cancel()`
+qui lève passait donc à la suppression du parent avec `localeComplete = true` : le journal de
+reprise disparaissait, la purge se disait localement complète, et `residuSystemeSeul` autorisait
+le retrait du PIN. **Ma note du 10 septembre affirmait le contraire du code** — j'ai décrit
+l'intention, pas la ligne. Trois contrats, trois noms : `ConversationEraser.Mode` (`ORDINAIRE`,
+`COFFRE`, `COFFRE_FORCE`). Sous `COFFRE_FORCE`, seule la condition « copie système » est levée ; un
+dépendant qui résiste garde le parent ; un message arrivé tard part, compté en résidu système.
+Quatre tests sur Room réel, avec le vrai producteur d'échec (dossier `0500`, `cancel()` qui lève,
+message inséré pendant le balayage), et le contrôle positif de ce que `force` lève encore.
+
+**2. La barrière de purge était un test-puis-agir.** Une entrée lisait `enCours`, puis écrivait en
+base plus tard ; une purge levée entre les deux ne la voyait pas et pouvait relire `remaining = 0`
+avant son commit. Et la barrière retombait **avant** le retrait du PIN. `VaultPurgeBarrier` est
+linéarisée : une entrée s'inscrit sous le même verrou que celui qui lève la purge, la purge attend
+les entrées inscrites avant elle, une entrée arrivée après est refusée. Le retrait du PIN s'exécute
+**sous la barrière**, par un rappel `apresPurge` que `deleteAllInVault` invoque avec le résultat
+avant de l'abaisser ; le ViewModel y prend sa décision une fois, et ses événements découlent de ce
+qui a été fait. Tests : entrée en vol attendue puis commise, nouvelle entrée refusée pendant
+l'attente, entrée qui lève désinscrite quand même, PIN retiré barrière levée (mesuré, pas supposé).
+
+**3. MMS de groupe : miroir avec les bloqués, PDU sans eux.** Le fil local était `A+B+C`, le MMS
+transmis `A+B` ; le rapprochement à la réception exigeant le même ensemble de membres, la réponse
+de A revenait dans un second groupe. Le miroir reçoit désormais les mêmes cibles que le PDU, dans
+les deux voies (photo, vocal). Test : trois membres dont un bloqué, le miroir porte `A;B`.
+
+**4. Le garde d'abaissement échouait ouvert.** `countInVault()` en échec devenait `0` et le facteur
+illisible `null` — exactement la combinaison qui autorise l'abaissement, obtenue sans rien lire.
+Les deux lectures rendent `VaultStateUnknown`, refus dit à l'écran. Tests d'injection de panne sur
+chaque lecture, contrôle positif sur un coffre lu vide.
+
+**5. Le geste « Je vais bien » venu d'une notification était retenu en session leurre.** La
+politique « attendre l'authentification » était voulue, mais fausse pour `LockedOut` et
+`PanicDecoy` : une ouverture réelle ne fait que remettre le minuteur à zéro, jamais désarmer ; un
+geste retenu pendant le leurre ajoutait donc, au premier vrai déverrouillage, un désarmement que
+l'utilisateur n'avait pas fait. Le geste est **jeté** sur ces deux états, retenu sur `Locked`
+seulement, et la notification est republiée pour qu'un geste légitime reste possible. Le jumeau
+de remise à zéro, qui ne désarme rien, continue d'attendre.
+
+**6. Copie bornée : un fichier partiel après exception.** `LectureBornee.recopier` ne nettoyait
+que sur dépassement ; une source qui lève au milieu laissait ce qui était écrit. Le fichier part
+avant que l'exception ne remonte. Test : source qui lâche après 200 octets.
+
+**7. Trouvé en vérifiant le point 2, pas signalé.** En cherchant « tout autre écrivain de
+`in_vault` qui contourne la barrière » : la **restauration d'une sauvegarde** insère des
+conversations avec le `in_vault` de la sauvegarde (`BackupService.importPayload`), hors barrière.
+Une restauration lancée pendant une purge pouvait donc remplir le coffre entre la relecture de
+`remaining` et le retrait du PIN. La restauration s'inscrit désormais comme une entrée
+(`barriere.enEntrant`) ; une purge levée la refuse avant de lire un octet, passphrase effacée.
+Test avec doublures strictes, contrôle positif existant conservé. Dans le même geste,
+`ConversationRepository.moveToVault(id, inVault)` — un `setInVault` nu, sans barrière ni second
+facteur, sans aucun appelant depuis que `VaultManager` porte les gardes — est **retirée** de
+l'interface : une voie non gardée laissée publique à côté de sa jumelle gardée est un piège pour
+le prochain appelant, et l'audit du 2026-08-03 (F11) l'avait déjà demandé.
+
+**8. Deux dérives de cohérence, trouvées par l'audit de l'application entière lancé dans la
+foulée.** (a) **Supprimer UN message laissait ses fichiers en clair** : `deleteMessage` vivait
+dans le repository, hors de `ConversationEraser` ; la ligne `attachments` partait en cascade, le
+fichier de `filesDir` restait — la classe de défaut fermée en 1.28.3 (F04) pour la conversation
+entière, rouverte sur le chemin le plus fréquent, supprimer un MMS gênant. `eraseMessage` vit
+désormais dans l'effaceur, avec le même bac à sable ; le repository délègue. Test sur Room réel,
+fichier réellement créé puis mesuré absent. (b) La **réponse rapide depuis un appel**
+(`HeadlessSmsSendService`) appelait `SendSmsUseCase` en direct : troisième point d'envoi, celui
+que l'aiguillage unique du 2026-09-10 n'avait pas vu. Il passe par `EnvoyerMessageUseCase`.
+
+**9. Lecture ciblée sur les angles morts du coffre en session leurre** (agent, application
+entière). Quinze surfaces de lecture vérifiées une à une — recherche plein texte, notification
+entrante, identité du correspondant, badge de non-lus, marquage lu, envois programmés, export
+PDF, deep-link, partage entrant : **toutes gardées**, `in_vault = 0` en SQL ou garde de session.
+Deux points moyens corrigés : (a) le chemin « Réactiver » de la notification Safety Call
+(`ACTION_SAFETY_CALL_REARM`) n'avait pas le garde de son jumeau — écriture persistée des réglages
+de sécurité sans preuve de déverrouillage ; il applique désormais `attendreOuvertureOuJeter`.
+(b) Restaurer une sauvegarde contenant des conversations du coffre sur un appareil **sans second
+facteur** les rendait lisibles en deux tapes sans que rien ne le dise. Ce n'est pas un trou de la
+restauration (écrire au coffre n'exige pas de secret, `VaultSecondFactor.NONE` est une
+configuration assumée), c'est un silence : `RestoreResult.vaultRestoredWithoutSecondFactor` le
+dit à l'écran et renvoie vers les Réglages.
+
+**10. Balayage des 245 `runCatching` du dépôt** (agent, lecture seule) : lesquels englobent un
+appel `suspend` sans relancer `CancellationException`. Un constat de **sécurité** : les quatre
+écritures finales de « supprimer toutes mes données » (`PanicService.nukeEverything` — retrait
+du PIN, du code panique, des compteurs de verrouillage, des réglages) vivaient dans un
+`viewModelScope` ; si l'écran des Réglages quittait la pile à cet instant, chaque `suspend`
+levait une annulation que `runCatching` avalait **sans un mot**, et la fonction rendait la main
+en laissant le PIN et les contacts du Safety call. Les quatre écritures sont désormais sous
+`NonCancellable`, échecs journalisés. Cinq sites de données corrigés par un helper commun
+`runCatchingCancellable` qui laisse remonter l'annulation : cache négatif des noms de contacts
+(empoisonné par une annulation), fichiers d'un envoi programmé annulé (jamais effacés),
+instantané de région de numérotation (F-01 rouvert), ligne système précédente d'un MMS
+(orpheline dans `content://mms`), et `runCatchingOutcome` lui-même (export et restauration
+interrompus s'affichaient « échec de stockage »). Les ~30 autres sites relevés sont du bruit de
+journal avec un repli du côté sûr ; listés dans le registre, non modifiés.
+
+**11. Relecture externe (Gemini) de la seconde vague**, deux constats retenus : (a) conséquence
+directe du point 10, la passphrase de restauration n'était plus effacée quand l'annulation
+remontait — `restaurer` est en `try/finally` ; (b) préexistant depuis la 1.28.3, l'attente du
+geste « Je vais bien » vivait dans un `lifecycleScope.launch` qui survit à l'arrière-plan :
+notification tapée puis application laissée verrouillée, le geste s'exécutait au premier
+déverrouillage venu, des heures plus tard. `lancerGesteDeNotification` borne les deux jumeaux
+au premier plan : à l'arrêt de l'activité, le geste en attente est annulé et la notification
+republiée.
+
 ### v1.28.4 — Un nettoyage incomplet rapporté complet
 
 *Cinquième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (2026-09-10) : il a resserré sur la

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -66,6 +67,14 @@ class AppLockManager @Inject constructor(
 
         /** Refuse : session leurre. Meme garde que [clearPin], meme raison. */
         data object PanicDecoy : LockDowngradeOutcome
+
+        /**
+         * v1.28.5 (sixieme note d'Andrew, point 4) — refuse : l'etat du Coffre n'a pas pu etre
+         * LU. « Je ne sais pas s'il reste quelque chose a proteger » n'est pas « il n'y a rien » :
+         * un garde de securite echoue ferme. Une base qui ne repond pas est passagere ; abaisser
+         * le verrou sur la foi d'une lecture ratee ne l'est pas.
+         */
+        data object VaultStateUnknown : LockDowngradeOutcome
     }
 
     /**
@@ -93,9 +102,20 @@ class AppLockManager @Inject constructor(
      */
     private suspend fun refusDAbaissement(): LockDowngradeOutcome = withContext(io) {
         if (_state.value is LockState.PanicDecoy) return@withContext LockDowngradeOutcome.PanicDecoy
-        val coffreNonVide = runCatching { conversationDao.get().countInVault() }.getOrDefault(0) > 0
+        // v1.28.5 (sixieme note d'Andrew, point 4) — les deux lectures echouent FERME. Elles
+        // tombaient sur `0` et `null`, c'est-a-dire « coffre vide, pas de facteur » : la seule
+        // combinaison qui autorise l'abaissement, obtenue sans avoir rien lu.
+        val coffreNonVide = runCatching { conversationDao.get().countInVault() > 0 }
+            .getOrElse {
+                Timber.w(it, "lock downgrade: vault count unreadable, refusing")
+                return@withContext LockDowngradeOutcome.VaultStateUnknown
+            }
         if (!coffreNonVide) return@withContext LockDowngradeOutcome.Ok
-        val facteur = runCatching { vaultFactor.get().current() }.getOrNull()
+        val facteur = runCatching { vaultFactor.get().current() }
+            .getOrElse {
+                Timber.w(it, "lock downgrade: vault factor unreadable, refusing")
+                return@withContext LockDowngradeOutcome.VaultStateUnknown
+            }
         if (facteur == VaultSecondFactor.BIOMETRIC) {
             LockDowngradeOutcome.VaultWouldLoseItsFactor
         } else {

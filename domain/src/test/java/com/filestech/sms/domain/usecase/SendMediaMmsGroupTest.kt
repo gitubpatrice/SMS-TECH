@@ -117,6 +117,34 @@ class SendMediaMmsGroupTest {
         assertThat(dispatcher.destinatairesTentes).containsExactly(ALICE)
         assertThat(rapport.blocked.map { it.raw }).containsExactly(BOB)
         assertThat(rapport.isComplete).isFalse()
+        // v1.28.5 (sixième note d'Andrew, point 3) — le miroir porte les MÊMES membres que le
+        // PDU. Avec `ALICE;BOB` en local et `ALICE` transmis, la réponse d'Alice revenait dans un
+        // second groupe, faute de rapprochement par membres identiques.
+        assertThat(mirror.lignes.single().adresse).isEqualTo(ALICE)
+    }
+
+    /**
+     * v1.28.5 (point 3) — le cas exact d'Andrew : trois membres, un bloqué. Le miroir dit ce qui
+     * est parti (`A;B`), pas ce qui a été tapé (`A;B;C`). Le tiers bloqué reste dans `blocked`.
+     */
+    @Test
+    fun `trois membres dont un bloque, le miroir ne porte que les deux servis`(@TempDir dir: File) {
+        val mirror = NoopMirror()
+        val dispatcher = RecordingMmsDispatcher()
+        val carol = "+33633333333"
+
+        val out = runBlocking {
+            useCase(mirror, dispatcher, bloques = setOf(carol)).invoke(
+                recipients = listOf(PhoneAddress.of(ALICE), PhoneAddress.of(BOB), PhoneAddress.of(carol)),
+                attachments = photo(dir),
+                groupMms = true,
+            )
+        }
+
+        val rapport = (out as Outcome.Success).value
+        assertThat(dispatcher.destinatairesTentes).containsExactly(ALICE, BOB)
+        assertThat(mirror.lignes.single().adresse).isEqualTo("$ALICE;$BOB")
+        assertThat(rapport.blocked.map { it.raw }).containsExactly(carol)
     }
 
     @Test

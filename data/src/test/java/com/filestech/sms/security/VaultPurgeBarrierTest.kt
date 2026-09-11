@@ -8,8 +8,11 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -80,7 +83,73 @@ class VaultPurgeBarrierTest {
     fun `deux purges ne s'entrelacent pas`() = runTest {
         barriere.pendant {
             assertThrows<IllegalStateException> { barriere.pendant { } }
+            // v1.28.5 — la seconde, refusée AVANT son `try`, n'abaisse pas la barrière de la
+            // première (constat d'une relecture externe, réfuté ici par la mesure).
+            assertThat(barriere.enCours).isTrue()
         }
         assertThat(barriere.enCours).isFalse()
+    }
+
+    // ───────── v1.28.5 (sixième note d'Andrew, point 2) — test-puis-agir devenu linéarisé ─────────
+
+    /**
+     * Le cas exact d'Andrew : une entrée a passé le test AVANT que la purge ne lève la barrière,
+     * puis suspend ; la purge de la v1.28.4 balayait, relisait `remaining = 0`, et l'entrée
+     * commettait ensuite. Ici la purge ATTEND l'entrée inscrite ; et pendant qu'elle attend, une
+     * nouvelle entrée est refusée.
+     */
+    @Test
+    fun `une entree inscrite avant la purge est attendue par elle`() = runTest {
+        val porte = CompletableDeferred<Unit>()
+        var entreeCommise = false
+        val entree = launch {
+            barriere.enEntrant {
+                porte.await()
+                entreeCommise = true
+            }
+        }
+        advanceUntilIdle()
+
+        var purgeExecutee = false
+        val purge = launch { barriere.pendant { purgeExecutee = true } }
+        advanceUntilIdle()
+
+        // La purge est levée mais n'a pas balayé : elle attend l'entrée en vol.
+        assertThat(barriere.enCours).isTrue()
+        assertThat(purgeExecutee).isFalse()
+        assertThat(entreeCommise).isFalse()
+        // Une entrée qui arrive APRÈS la levée est refusée, comme avant.
+        assertThat(barriere.enEntrant { 1 }).isEqualTo(Outcome.Failure(AppError.VaultPurging))
+
+        porte.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(entreeCommise).isTrue()
+        assertThat(purgeExecutee).isTrue()
+        entree.join()
+        purge.join()
+        assertThat(barriere.enCours).isFalse()
+    }
+
+    /** Une entrée qui lève est désinscrite quand même : sinon la purge suivante attendrait pour toujours. */
+    @Test
+    fun `une entree qui leve ne bloque pas la purge suivante`() = runTest {
+        assertThrows<IllegalStateException> { barriere.enEntrant { error("entree en echec") } }
+
+        var purgeExecutee = false
+        barriere.pendant { purgeExecutee = true }
+
+        assertThat(purgeExecutee).isTrue()
+    }
+
+    /** Contrôle positif du premier test : sans entrée en vol, la purge ne s'attend à rien. */
+    @Test
+    fun `sans entree en vol la purge balaie tout de suite`() = runTest {
+        var purgeExecutee = false
+        val purge = launch { barriere.pendant { purgeExecutee = true } }
+        advanceUntilIdle()
+
+        assertThat(purgeExecutee).isTrue()
+        purge.join()
     }
 }

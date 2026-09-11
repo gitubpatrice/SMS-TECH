@@ -76,7 +76,11 @@ class ConversationMirror @Inject constructor(
 
     private suspend fun resolveDisplayName(rawAddress: String): String? {
         displayNameCache.get(rawAddress)?.let { return if (it.isEmpty()) null else it }
-        val name = runCatching { contacts.lookupByPhone(rawAddress)?.displayName }.getOrNull()
+        // v1.28.5 — une annulation ne doit pas EMPOISONNER le cache negatif d'un singleton : le
+        // correspondant s'affichait par son numero jusqu'au prochain `refreshContactNames()`.
+        val name = com.filestech.sms.core.result
+            .runCatchingCancellable { contacts.lookupByPhone(rawAddress)?.displayName }
+            .getOrNull()
         // Empty string is our sentinel for "looked up, no match" — keeps `LruCache`
         // happy (it rejects nulls) without losing the negative-cache behaviour.
         displayNameCache.put(rawAddress, name.orEmpty())
