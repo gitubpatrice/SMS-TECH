@@ -86,6 +86,10 @@ Toute modification qui touche un chemin listé doit démontrer que l'invariant t
 ### I1 — En session leurre, aucune surface ne révèle A1
 
 *Prédicat d'autorité :* `AppLockManager.LockState.PanicDecoy`
+
+*Corollaire (v1.28.6) :* en session leurre, une action destructrice n'atteint que ce que le leurre
+montre. « Supprimer toutes mes données » reste visible — son absence serait un indice — mais
+`PanicService` n'y efface que les conversations hors coffre et les réglages hors sécurité.
 *Couche d'application :* **données** (autorité) + navigation (refus) + UI (masquage)
 
 Surfaces à couvrir, **toutes** : liste des conversations (icône coffre), réglages (verrouillage,

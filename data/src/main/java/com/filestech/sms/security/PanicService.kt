@@ -2,12 +2,17 @@ package com.filestech.sms.security
 
 import com.filestech.sms.core.crypto.KeystoreManager
 import com.filestech.sms.data.local.datastore.SecurityStore
-import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.DatabaseKeyManager
+import com.filestech.sms.data.local.db.dao.ConversationDao
+import com.filestech.sms.data.repository.ConversationEraser
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.security.PanicStateProvider
+import com.filestech.sms.domain.settings.AppSettings
+import com.filestech.sms.domain.settings.AppSettingsSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -18,6 +23,13 @@ import javax.inject.Singleton
  * Hard wipe of all locally stored sensitive data. Triggered by user action (settings →
  * "Supprimer toutes mes données"). Order matters: drop the SQLCipher key file first so even
  * a crash mid-wipe leaves the DB unreadable.
+ *
+ * v1.28.6 — **en session leurre, la purge n'efface que ce que le leurre montre.** Le bouton reste
+ * visible en leurre, pour la même raison que « Réinitialiser tous les réglages » (v1.27.11) : une
+ * application SMS ordinaire sait s'effacer, et son absence serait un indice. Mais son effet était
+ * total : depuis une session leurre, il détruisait le coffre réel, le PIN et le code panique —
+ * précisément ce que le leurre existe pour préserver. La branche est prise ICI, au point d'entrée
+ * unique, et non dans l'écran : un garde d'écran ne dit rien du prochain point d'entrée.
  */
 @Singleton
 class PanicService @Inject constructor(
@@ -26,10 +38,17 @@ class PanicService @Inject constructor(
     private val keyManager: DatabaseKeyManager,
     private val keystore: KeystoreManager,
     private val securityStore: SecurityStore,
-    private val settings: SettingsRepository,
+    private val settings: AppSettingsSource,
+    private val panicState: PanicStateProvider,
+    private val conversationDao: ConversationDao,
+    private val eraser: ConversationEraser,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
     suspend fun nukeEverything(): Unit = withContext(io) {
+        if (panicState.isPanicDecoyActive) {
+            effacerCeQueLeLeurreMontre()
+            return@withContext
+        }
         // Order matters (audit F29):
         //  1. Close the Room/SQLCipher database synchronously so no transaction can re-write
         //     after we delete its on-disk files.
@@ -48,7 +67,7 @@ class PanicService @Inject constructor(
             keystore.deleteKey(KeystoreManager.ALIAS_SETTINGS_AEAD)
             keystore.deleteKey(KeystoreManager.ALIAS_PANIC_DECOY)
         }.onFailure { Timber.w(it, "delete keystore aliases") }
-        runCatching { context.deleteDatabase(com.filestech.sms.data.local.db.AppDatabase.DATABASE_NAME) }
+        runCatching { context.deleteDatabase(AppDatabase.DATABASE_NAME) }
             .onFailure { Timber.w(it, "deleteDatabase") }
         // v1.24.0 SEC — `deleteDatabase` ne connaît que `<db>`, `-journal`, `-wal` et `-shm`. La
         // réparation zéro-clé ([LegacyZeroKeyRekey]) peut laisser un `<db>.rekeyold` ou
@@ -57,7 +76,7 @@ class PanicService @Inject constructor(
         // purge, « supprimer toutes mes données » détruisait tout SAUF le seul fichier lisible
         // sans clé.
         runCatching {
-            val dbName = com.filestech.sms.data.local.db.AppDatabase.DATABASE_NAME
+            val dbName = AppDatabase.DATABASE_NAME
             context.getDatabasePath(dbName).parentFile
                 ?.listFiles { f -> f.name.startsWith(dbName) }
                 ?.forEach { it.delete() }
@@ -70,9 +89,8 @@ class PanicService @Inject constructor(
         }.onFailure { Timber.w(it, "clear db_repair prefs") }
         runCatching {
             File(context.filesDir, "mms_attachments").deleteRecursively()
-            File(context.filesDir, "exports").deleteRecursively()
             File(context.filesDir, "db").deleteRecursively()
-            context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+            effacerLesFichiersTransitoires()
         }.onFailure { Timber.w(it, "wipe file dirs") }
         // v1.28.5 (balayage des `runCatching`, constat de SECURITE) — les quatre ecritures
         // DataStore ci-dessous sont NON ANNULABLES, et leurs echecs sont journalises. L'appel
@@ -81,7 +99,7 @@ class PanicService @Inject constructor(
         // levait une annulation que `runCatching` avalait SANS un mot — et « supprimer toutes
         // mes donnees » rendait la main en laissant le PIN, le code panique, les compteurs de
         // verrouillage et tous les reglages (contacts du Safety call, « Mon numero »).
-        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        withContext(NonCancellable) {
             runCatching { securityStore.clearPin() }.onFailure { Timber.w(it, "wipe: clearPin") }
             runCatching { securityStore.clearPanic() }.onFailure { Timber.w(it, "wipe: clearPanic") }
             // Audit S-P2-2: clearPin / clearPanic above remove the credential snapshots themselves
@@ -94,8 +112,50 @@ class PanicService @Inject constructor(
                 // v1.14.8 R7 — clearLockout wipe les 3 fields (wall + mono baseline + duration).
                 securityStore.clearLockout()
             }.onFailure { Timber.w(it, "wipe: lockout counters") }
-            runCatching { settings.update { com.filestech.sms.domain.settings.AppSettings() } }
+            runCatching { settings.update { AppSettings() } }
                 .onFailure { Timber.w(it, "wipe: settings") }
         }
+    }
+
+    /**
+     * v1.28.6 — la purge vue depuis une session leurre : le même résultat visible qu'une purge
+     * réelle, sans toucher à ce que le leurre protège.
+     *
+     * Ce qui part : chaque conversation hors coffre, par [ConversationEraser.erase] en mode
+     * ordinaire — donc avec sa copie système, ses envois programmés et ses fichiers, exactement
+     * comme une suppression faite à la main —, les fichiers transitoires (exports, cache), et
+     * les réglages, ramenés aux défauts **en préservant le bloc sécurité**, comme
+     * « Réinitialiser tous les réglages » depuis la v1.27.11 ; le splash de première ouverture se
+     * rejoue donc, comme après une purge réelle.
+     *
+     * Ce qui ne bouge pas : la base et sa clé, les alias du Keystore, le PIN, le code panique,
+     * les compteurs de verrouillage, et le dossier `mms_attachments` en bloc — il porte aussi les
+     * pièces jointes du coffre ; l'effaceur retire celles des conversations qu'il supprime.
+     *
+     * Le tout est non annulable, pour la raison écrite dans [nukeEverything] : rendre la main
+     * à moitié fait est le défaut que la v1.28.5 a fermé.
+     */
+    private suspend fun effacerCeQueLeLeurreMontre() = withContext(NonCancellable) {
+        val ids = runCatching { conversationDao.idsHorsCoffre() }
+            .onFailure { Timber.w(it, "decoy wipe: listing") }
+            .getOrDefault(emptyList())
+        var echecs = 0
+        for (id in ids) {
+            runCatching { eraser.erase(id, ConversationEraser.Mode.ORDINAIRE) }
+                .onFailure {
+                    echecs++
+                    Timber.w(it, "decoy wipe: conversation %d", id)
+                }
+        }
+        Timber.i("decoy wipe: %d conversation(s), %d failure(s)", ids.size, echecs)
+        runCatching { effacerLesFichiersTransitoires() }.onFailure { Timber.w(it, "decoy wipe: files") }
+        runCatching { settings.update { AppSettings(security = it.security) } }
+            .onFailure { Timber.w(it, "decoy wipe: settings") }
+    }
+
+    /** Exports et cache : sans contenu du coffre qui ne soit déjà purgé à chaque verrouillage. */
+    private fun effacerLesFichiersTransitoires() {
+        File(context.filesDir, "exports").deleteRecursively()
+        context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
     }
 }

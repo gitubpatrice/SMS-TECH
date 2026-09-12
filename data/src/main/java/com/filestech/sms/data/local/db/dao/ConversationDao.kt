@@ -112,6 +112,15 @@ interface ConversationDao {
     suspend fun idsInVault(): List<Long>
 
     /**
+     * v1.28.6 — le complément exact de [idsInVault] : ce qu'une session leurre voit. Sert à
+     * « Supprimer toutes mes données » en leurre, qui n'efface que cela, par
+     * `ConversationRepository.delete` comme toute suppression ordinaire, jamais par un `DELETE`
+     * direct (même raison que ci-dessus : la copie système reviendrait à la resynchronisation).
+     */
+    @Query("SELECT id FROM conversations WHERE in_vault = 0")
+    suspend fun idsHorsCoffre(): List<Long>
+
+    /**
      * v1.28.3 (F08) — conversations **du coffre** en tête-à-tête, pour savoir si une adresse dont
      * on ne connaît rien d'autre appartient à un correspondant protégé.
      *

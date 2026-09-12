@@ -95,6 +95,21 @@ la rend **vérifiable** sur l'appareil de mesure. Test instrumenté : appui long
 d'outils, lecture de la description du clip système ; contrôle négatif : sans l'enveloppe, la
 marque est absente.
 
+**« Supprimer toutes mes données » s'exécutait en session leurre, en totalité.** Trouvé par un
+audit de motif lancé après le correctif du splash, pour chercher ses voisins : le bouton est
+volontairement visible en leurre (v1.27.11, même raison que « Réinitialiser tous les réglages » :
+une application SMS ordinaire sait s'effacer), mais son effet détruisait le coffre réel, le PIN et
+le code panique depuis une session dont la raison d'être est de les préserver. Aucun test ne
+couvrait `nukeEverything`. En leurre, la purge n'efface désormais que ce que le leurre montre :
+chaque conversation hors coffre par `ConversationEraser` en mode ordinaire (copie système, envois
+programmés, fichiers, comme une suppression à la main), les fichiers transitoires, et les réglages
+en préservant le bloc sécurité — le splash se rejoue, l'écran est celui d'une purge réelle. La base,
+sa clé, le Keystore, le PIN, le code panique et les compteurs ne bougent pas. La branche est prise
+dans `PanicService`, point d'entrée unique, et non dans l'écran. Trois tests unitaires, contrôle
+négatif fait. Gravité retenue : moyenne — le leurre protège l'existence du coffre, pas sa
+disponibilité, et qui tient le téléphone peut désinstaller ; mais perdre le coffre ET le code
+panique en trois tapes depuis le leurre n'était pas acceptable.
+
 **L'écran de bienvenue restait bloqué après une réinitialisation** (garde d'idempotence jamais
 réarmé). Pas de portée sécurité, mais le chemin est celui de « Supprimer toutes mes données » :
 un utilisateur qui vide l'application doit pouvoir la reprendre sans la tuer.
