@@ -1,11 +1,12 @@
 package com.filestech.sms.ui.security
 
 import android.content.ClipData
-import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
-import android.os.Build
 import android.os.PersistableBundle
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.NativeClipboard
 
 /**
  * v1.27.0 (N4) — copie dans le presse-papier en marquant le contenu **sensible**.
@@ -56,11 +57,46 @@ import android.os.PersistableBundle
  */
 fun Context.copyToClipboardSensitive(label: String, text: String) {
     val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-    val clip = ClipData.newPlainText(label, text)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        clip.description.extras = PersistableBundle().apply {
-            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
-        }
+    manager.setPrimaryClip(ClipData.newPlainText(label, text).markSensitive())
+}
+
+/**
+ * v1.28.6 — la marque « sensible » posée sur un [ClipData], **quel que soit l'appareil**.
+ *
+ * Avant, la marque n'était posée qu'à partir d'Android 13, seule version qui la lit. Elle est
+ * désormais posée partout : en deçà, le système l'ignore et rien ne change ; au-delà, le
+ * comportement est identique. Ce qui change, c'est que la marque devient **vérifiable sur les
+ * appareils de mesure** (S9 sous Android 10), là où un `if` sur la version rendait tout test
+ * vert sans rien prouver. La clé est copiée en clair : la constante `EXTRA_IS_SENSITIVE`
+ * n'existe qu'en API 33 et son inlining aurait valu un avertissement lint sans rien apporter.
+ *
+ * Mutation en place, sur la description du clip reçu, et retour du même objet pour chaîner.
+ */
+fun ClipData.markSensitive(): ClipData = apply {
+    description.extras = PersistableBundle().apply { putBoolean(EXTRA_IS_SENSITIVE, true) }
+}
+
+/** Valeur de `ClipDescription.EXTRA_IS_SENSITIVE` (API 33), utilisable sur toute version. */
+const val EXTRA_IS_SENSITIVE: String = "android.content.extra.IS_SENSITIVE"
+
+/**
+ * v1.28.6 — le même invariant, pour les copies faites **par Compose** et non par l'application.
+ *
+ * Le menu système d'une sélection de texte (`SelectionContainer`) copie via [Clipboard], pas via
+ * [copyToClipboardSensitive] : sans cette enveloppe, sélectionner un extrait d'un message du
+ * coffre le faisait ressortir en vignette d'aperçu sous Android 13+, exactement le défaut N4 que
+ * la copie totale avait fermé en v1.27.0. À fournir par `CompositionLocalProvider(LocalClipboard
+ * provides SensitiveClipboard(LocalClipboard.current))` autour de tout conteneur sélectionnable.
+ *
+ * La lecture et le presse-papiers natif sont délégués tels quels : seule l'écriture est marquée.
+ */
+class SensitiveClipboard(private val delegate: Clipboard) : Clipboard {
+    override suspend fun getClipEntry(): ClipEntry? = delegate.getClipEntry()
+
+    override suspend fun setClipEntry(clipEntry: ClipEntry?) {
+        clipEntry?.clipData?.markSensitive()
+        delegate.setClipEntry(clipEntry)
     }
-    manager.setPrimaryClip(clip)
+
+    override val nativeClipboard: NativeClipboard get() = delegate.nativeClipboard
 }

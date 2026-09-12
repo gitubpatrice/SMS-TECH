@@ -86,6 +86,8 @@ fun MediaAttachmentBubble(
      * `null` when the message has no caption to avoid an inert "Copier" menu entry.
      */
     onCopy: (() -> Unit)? = null,
+    /** v1.28.6 — sélection libre d'un extrait de la légende ; même disponibilité que [onCopy]. */
+    onSelectText: (() -> Unit)? = null,
     /** v1.3.11 (F5) — forward the attachment (+ caption if any) to another conversation. */
     onForward: (() -> Unit)? = null,
     /** v1.26.1 (audit F2) — bascule « favori » ; l'état est lu sur [message]. */
@@ -144,6 +146,7 @@ fun MediaAttachmentBubble(
         if (isOut) {
             BubbleMenuTrigger(
                 onCopy = onCopy,
+                onSelectText = onSelectText,
                 onForward = onForward,
                 onReply = onReply,
                 onReact = onReact,
@@ -216,6 +219,7 @@ fun MediaAttachmentBubble(
         if (!isOut) {
             BubbleMenuTrigger(
                 onCopy = onCopy,
+                onSelectText = onSelectText,
                 onForward = onForward,
                 onReply = onReply,
                 onReact = onReact,

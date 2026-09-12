@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Translate
@@ -60,6 +61,11 @@ fun BubbleMenuTrigger(
      */
     onCopy: (() -> Unit)? = null,
     /**
+     * v1.28.6 — ouvre la sélection libre d'un extrait ([MessageTextSelectionDialog]). Même
+     * disponibilité que [onCopy] : `null` sans corps de texte.
+     */
+    onSelectText: (() -> Unit)? = null,
+    /**
      * v1.3.11 (F5) — forward the message to another conversation or new recipient. Caller
      * passes `null` for bubbles where forwarding is not yet supported.
      */
@@ -106,6 +112,24 @@ fun BubbleMenuTrigger(
                     onClick = {
                         expanded = false
                         onCopy()
+                    },
+                )
+            }
+            // v1.28.6 — « Sélectionner le texte » juste sous Copier : même intention, la
+            // partie au lieu du tout. Aussi joignable par appui long sur la bulle, qui ne copie
+            // plus le message entier (doublon de Copier).
+            if (onSelectText != null) {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.SelectAll,
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(stringResource(R.string.action_select_text)) },
+                    onClick = {
+                        expanded = false
+                        onSelectText()
                     },
                 )
             }

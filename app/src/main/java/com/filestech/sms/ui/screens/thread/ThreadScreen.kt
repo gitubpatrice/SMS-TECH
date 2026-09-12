@@ -268,6 +268,8 @@ fun ThreadScreen(
     // v1.28.3 — nommer le groupe (menu du fil).
     var renameOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Message?>(null) }
+    // v1.28.6 — message dont un extrait est en cours de sélection (appui long ou menu ⋮).
+    var textSelectionTarget by remember { mutableStateOf<Message?>(null) }
     var askBlock by remember { mutableStateOf(false) }
     // v1.3.0 — état des dialogs/sheets de réaction emoji.
     //   `pickingReactionFor` non-null = bottom-sheet quick-pick affiché pour ce message.
@@ -739,6 +741,7 @@ fun ThreadScreen(
                 onForward = { msg -> forwardingMessage = msg },
                 onTranslate = { msg -> translateMessageExternal(msg) },
                 onCopy = { msg -> copyMessageBody(msg) },
+                onSelectText = { msg -> textSelectionTarget = msg },
                 // v1.26.1 (audit F2) — bascule sur l'état courant du message.
                 onToggleStar = { msg -> viewModel.toggleMessageStarred(msg.id, !msg.starred) },
                 onPhoneClick = onPhoneClick,
@@ -947,6 +950,14 @@ fun ThreadScreen(
             number = number,
             onDismiss = { pickingPhoneNumber = null },
             onSnack = { msg -> scope.launch { snackbarHost.showSnackbar(msg) } },
+        )
+    }
+
+    // v1.28.6 — sélection libre d'un extrait, hors de la liste (cf. MessageTextSelectionDialog).
+    textSelectionTarget?.let { msg ->
+        com.filestech.sms.ui.components.MessageTextSelectionDialog(
+            body = msg.body,
+            onDismiss = { textSelectionTarget = null },
         )
     }
 
@@ -2091,6 +2102,8 @@ private class ThreadMessageItemActions(
     val onForward: (Message) -> Unit,
     val onTranslate: (Message) -> Unit,
     val onCopy: (Message) -> Unit,
+    /** v1.28.6 — sélection libre d'un extrait (appui long sur la bulle, ou menu ⋮). */
+    val onSelectText: (Message) -> Unit,
     /** v1.26.1 (audit F2) — bascule « favori » ; le drapeau protège déjà de la purge auto. */
     val onToggleStar: (Message) -> Unit,
     val onPhoneClick: (String) -> Unit,
@@ -2203,6 +2216,7 @@ private fun ThreadMessageItem(
                 onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
                 // v1.3.11 (F3) — copy exposed only when the bubble carries a user-typed caption.
                 onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
+                onSelectText = if (msg.body.isNotBlank()) { { actions.onSelectText(msg) } } else null,
                 onForward = { actions.onForward(msg) },
                 // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
                 onToggleStar = { actions.onToggleStar(msg) },
@@ -2225,6 +2239,7 @@ private fun ThreadMessageItem(
                 onTranslate = if (msg.body.isNotBlank()) { { actions.onTranslate(msg) } } else null,
                 onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
                 onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
+                onSelectText = if (msg.body.isNotBlank()) { { actions.onSelectText(msg) } } else null,
                 onForward = { actions.onForward(msg) },
                 // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
                 onToggleStar = { actions.onToggleStar(msg) },

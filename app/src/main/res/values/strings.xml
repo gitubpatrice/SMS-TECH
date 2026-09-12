@@ -103,6 +103,7 @@
     <string name="action_back">Back</string>
     <string name="action_copy">Copy</string>
     <string name="action_forward">Forward</string>
+    <string name="action_select_text">Select text</string>
     <string name="action_retry">Retry</string>
     <string name="action_close">Close</string>
     <string name="action_continue">Continue</string>

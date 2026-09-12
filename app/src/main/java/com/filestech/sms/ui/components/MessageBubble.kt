@@ -52,11 +52,17 @@ fun MessageBubble(
     onTranslate: (() -> Unit)? = null,
     onReact: (() -> Unit)? = null,
     /**
-     * v1.3.11 (F3) — copy the bubble's text body to the clipboard. Triggered from both the
-     * overflow menu and the long-press gesture on the bubble itself. `null` for bubbles
-     * without a text payload (none today — every [MessageBubble] has a body).
+     * v1.3.11 (F3) — copy the bubble's text body to the clipboard, from the overflow menu.
+     * v1.28.6 — l'appui long ne copie PLUS le message entier (doublon de cette entrée) : il
+     * ouvre la sélection libre, cf. [onSelectText]. `null` for bubbles without a text payload.
      */
     onCopy: (() -> Unit)? = null,
+    /**
+     * v1.28.6 — sélection libre d'un extrait du corps ([MessageTextSelectionDialog]). Déclenchée
+     * par l'appui long sur la bulle ET par l'entrée « Sélectionner le texte » du menu ⋮. Même
+     * disponibilité que [onCopy].
+     */
+    onSelectText: (() -> Unit)? = null,
     /** v1.3.11 (F5) — forward the bubble's text body to another conversation. */
     onForward: (() -> Unit)? = null,
     /** v1.26.1 (audit F2) — bascule « favori » ; l'état est lu sur [message]. */
@@ -132,6 +138,7 @@ fun MessageBubble(
         if (isOut) {
             BubbleMenuTrigger(
                 onCopy = onCopy,
+                onSelectText = onSelectText,
                 onForward = onForward,
                 onReply = onReply,
                 onTranslate = onTranslate,
@@ -167,14 +174,15 @@ fun MessageBubble(
                             if (isOut) Modifier.drawBehind { drawRect(outgoingBrush) }
                             else Modifier.background(com.filestech.sms.ui.theme.bubbleIncomingColor(cs)),
                         )
-                        // v1.3.11 (F3) — long-press copies the bubble body when [onCopy] is wired.
-                        // Falls back to a plain `clickable` when copy is not available so the
-                        // bubble keeps its tap-to-retry behaviour on FAILED rows untouched.
+                        // v1.3.11 (F3) — long-press on the bubble. v1.28.6 — it no longer copies
+                        // the whole body (a duplicate of the ⋮ « Copier » entry) but opens the
+                        // free text selection ([onSelectText]). Falls back to a plain `clickable`
+                        // when unavailable so tap-to-retry on FAILED rows stays untouched.
                         .then(
-                            if (onCopy != null) {
+                            if (onSelectText != null) {
                                 Modifier.combinedClickable(
                                     onClick = onTap,
-                                    onLongClick = onCopy,
+                                    onLongClick = onSelectText,
                                 )
                             } else {
                                 Modifier.clickable(onClick = onTap)
@@ -242,6 +250,7 @@ fun MessageBubble(
         if (!isOut) {
             BubbleMenuTrigger(
                 onCopy = onCopy,
+                onSelectText = onSelectText,
                 onForward = onForward,
                 onReply = onReply,
                 onTranslate = onTranslate,
