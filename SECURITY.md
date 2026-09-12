@@ -110,6 +110,64 @@ négatif fait. Gravité retenue : moyenne — le leurre protège l'existence du 
 disponibilité, et qui tient le téléphone peut désinstaller ; mais perdre le coffre ET le code
 panique en trois tapes depuis le leurre n'était pas acceptable.
 
+**« Supprimer toutes mes données » ne supprimait aucun message du téléphone.** Soulevé par
+Patrice, d'une question qui valait mieux qu'un audit : si l'on supprime tout, c'est pour supprimer
+les messages. La purge détruisait le **fichier** de base sans jamais passer par
+`ConversationEraser`, seul chemin qui propage au fournisseur du système. La copie de chaque message
+restait donc dans `content://sms`, et la resynchronisation du lancement suivant — curseur remis à
+zéro par cette même purge — les ramenait **tous**. Y compris ceux du COFFRE, dans la liste
+principale et **en clair** : leur copie système n'a jamais été supprimée (limite N2, assumée) et le
+drapeau `in_vault` ne vivait que dans la base qu'on venait de détruire. C'était le seul chemin de
+suppression de l'application à contourner le téléphone. Désormais : balayage de toutes les
+conversations par l'effaceur, sous la barrière de purge, avant la destruction de la base ; ce qui
+résiste est compté et **dit** avant le redémarrage, au lieu d'être promis effacé. Mesuré de bout en
+bout sur S9 avec le rôle SMS détenu par l'application : 10 messages dans le téléphone avant, 0
+après, 0 copie système restante.
+
+**La purge pouvait bloquer l'application définitivement**, sur la 1.28.5 déjà publiée. Elle détruit
+la base, le fichier de clé enrobée et les alias du Keystore, mais le processus SURVIT en gardant la
+passphrase SQLCipher en mémoire — `DatabaseFactory` documente pourquoi on ne peut pas l'effacer. La
+moindre réouverture de Room réécrivait une base chiffrée avec une clé dont l'enrobage n'existait
+plus, et le lancement suivant affichait « ne parvient pas à ouvrir sa base de données », pour
+toujours. Deux couches : le processus redémarre après la purge, et au démarrage une base qu'aucune
+clé existante n'ouvre — clé enrobée absente — est écartée au lieu de bloquer, ce qui répare les
+installations déjà bloquées. **La doctrine F18 reste entière** : clé enrobée PRÉSENTE et base
+illisible lève toujours, sans rien supprimer, et un test instrumenté tient ce contrôle positif.
+
+**Le magasin sécurisé ne partait que par huit clés nommées sur dix-huit.** Survivaient à la purge
+l'empreinte du PIN **du coffre** (v1.13.0), sa temporisation (v1.27.10), l'horodatage du dernier
+déverrouillage et le jeton persistant de notification — dans un DataStore de préférences **non
+chiffré**. Une empreinte PBKDF2 de code à quatre chiffres se casse hors ligne, et sa seule présence
+prouve qu'un coffre a existé, ce que le leurre existe pour taire. Aucun défaut de comportement en
+revanche, vérifié : la porte du coffre exige l'empreinte ET le drapeau `vaultPinEnabled`, que la
+purge remet à faux, et reposer un PIN réécrit l'empreinte en purgeant la temporisation. C'est le
+motif d'asymétrie habituel de ce dépôt — `pin.*` et `panic.*` effacés, leur jumeau `vault.*` jamais
+rattaché à la liste. Corrigé par un `clearAll()` unique : une liste de clés à tenir à jour est un
+rendez-vous manqué à chaque nouvelle clé, et il a été manqué trois fois. La session leurre ne
+l'appelle jamais, et un test le tient.
+
+**Les notifications survivaient à toute suppression.** Le seul appel d'annulation du dépôt vivait
+dans « marquer comme lu » : l'effaceur, règle unique de suppression depuis la v1.28.1, n'avait même
+pas la dépendance. Supprimer une conversation non lue laissait son expéditeur et son texte dans le
+volet système ; « Supprimer toutes mes données » les y laissait tous, après un dialogue qui promet
+l'irréversible, et au pire moment — on purge parce que quelqu'un va prendre le téléphone. Celle du
+raccourci d'urgence est `ongoing`, donc pas même balayable à la main. Borne vérifiée : une
+conversation du coffre ne notifie jamais, la purge du coffre ne laissait donc rien. L'annulation est
+posée dans l'effaceur — la suppression ordinaire et celle d'un seul message sont réparées du même
+geste — et la purge totale annule tout, dans les deux sessions avec le même effet visible (une
+différence entre leurre et session réelle serait la fuite que I1 interdit).
+
+**La purge n'était non annulable que sur sa fin**, et c'est l'audit pré-release qui l'a trouvé, sur
+du code écrit dans cette même version. Elle vit dans un `viewModelScope` ; la v1.28.5 avait mis ses
+écritures finales sous `NonCancellable` pour cette raison précise, et le balayage des conversations
+ajouté ici est passé **au-dessus** de ce bloc, alors qu'il est suspendu et long. Quitter les
+Réglages pendant la purge annulait le balayage, puis les étapes synchrones détruisaient la base :
+les messages non propagés revenaient à la synchronisation suivante — le défaut que cette version
+ferme. La garantie est portée par la fonction entière. Le commentaire qui justifiait `exitProcess`
+affirmait « `NonCancellable` de bout en bout » : il était faux quand il a été écrit, il est
+rectifié et nomme l'endroit où l'invariant est tenu. *Une justification qui s'appuie sur un
+invariant doit dire où il est tenu, faute de quoi elle survit à sa propre vérité.*
+
 **L'écran de bienvenue restait bloqué après une réinitialisation** (garde d'idempotence jamais
 réarmé). Pas de portée sécurité, mais le chemin est celui de « Supprimer toutes mes données » :
 un utilisateur qui vide l'application doit pouvoir la reprendre sans la tuer.

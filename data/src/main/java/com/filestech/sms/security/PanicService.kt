@@ -7,6 +7,7 @@ import com.filestech.sms.data.local.db.DatabaseKeyManager
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.repository.ConversationEraser
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.notification.AllNotificationsCanceller
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
@@ -43,12 +44,46 @@ class PanicService @Inject constructor(
     private val conversationDao: ConversationDao,
     private val eraser: ConversationEraser,
     private val barriere: VaultPurgeBarrier,
+    private val notifications: AllNotificationsCanceller,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
-    suspend fun nukeEverything(): Residu = withContext(io) {
-        if (panicState.isPanicDecoyActive) {
-            return@withContext effacerCeQueLeLeurreMontre()
+    /**
+     * v1.28.6 (audit 3 axes pré-release) — **non annulable de bout en bout**, et non plus sur son
+     * seul bloc final.
+     *
+     * La v1.28.5 avait mis les écritures DataStore de fin sous `NonCancellable` pour cette raison
+     * précise : l'appel vit dans un `viewModelScope`, et quitter les Réglages pendant la purge
+     * annulait le job. Cette version a ajouté AU-DESSUS un balayage suspendu et long — la barrière
+     * prend un `Mutex`, l'effaceur parle au fournisseur du système pour chaque message — sans
+     * reporter la leçon d'un cran plus haut. Annulé en cours de balayage, on détruisait la base
+     * sans avoir propagé les suppressions : les messages revenaient à la synchronisation suivante,
+     * c'est-à-dire exactement le défaut que cette même version ferme. Et le dialogue aurait
+     * attribué le résidu à la mauvaise cause.
+     *
+     * La garantie est donc portée par la fonction entière, une fois, et non par un bloc interne
+     * qu'un ajout ultérieur contournerait encore.
+     */
+    suspend fun nukeEverything(): Residu = withContext(io + NonCancellable) {
+        val residu = if (panicState.isPanicDecoyActive) {
+            effacerCeQueLeLeurreMontre()
+        } else {
+            purgeTotale()
         }
+        // v1.28.6 — CE QUI EST EFFACÉ NE DOIT PLUS S'AFFICHER. Les notifications déjà posées
+        // survivaient à la purge : le volet gardait expéditeur et texte, et le raccourci
+        // d'urgence, qui est `ongoing`, n'est même pas balayable à la main. Le pire moment pour
+        // laisser ça — on purge parce que quelqu'un va prendre le téléphone.
+        //
+        // Dans LES DEUX sessions, au même endroit, avec le même effet visible : une purge de
+        // leurre qui laisserait des notifications là où la vraie les efface serait une différence
+        // observable, donc la fuite que I1 interdit. Rien du coffre ne s'y trouve de toute façon —
+        // une conversation du coffre ne notifie jamais.
+        runCatching { notifications.cancelAll() }
+            .onFailure { Timber.w(it, "wipe: annulation des notifications") }
+        residu
+    }
+
+    private suspend fun purgeTotale(): Residu {
         // v1.28.6 — LES MESSAGES DU TÉLÉPHONE PARTENT AVANT LA BASE, ET PAR LE MÊME CHEMIN QU'UNE
         // SUPPRESSION À LA MAIN.
         //
@@ -109,30 +144,26 @@ class PanicService @Inject constructor(
             File(context.filesDir, "db").deleteRecursively()
             effacerLesFichiersTransitoires()
         }.onFailure { Timber.w(it, "wipe file dirs") }
-        // v1.28.5 (balayage des `runCatching`, constat de SECURITE) — les quatre ecritures
-        // DataStore ci-dessous sont NON ANNULABLES, et leurs echecs sont journalises. L'appel
-        // vit dans un `viewModelScope` : si l'ecran des Reglages quittait la pile a cet instant,
-        // les etapes synchrones (base, cles, fichiers) etaient deja faites, puis chaque `suspend`
-        // levait une annulation que `runCatching` avalait SANS un mot — et « supprimer toutes
-        // mes donnees » rendait la main en laissant le PIN, le code panique, les compteurs de
-        // verrouillage et tous les reglages (contacts du Safety call, « Mon numero »).
-        withContext(NonCancellable) {
-            runCatching { securityStore.clearPin() }.onFailure { Timber.w(it, "wipe: clearPin") }
-            runCatching { securityStore.clearPanic() }.onFailure { Timber.w(it, "wipe: clearPanic") }
-            // Audit S-P2-2: clearPin / clearPanic above remove the credential snapshots themselves
-            // but leave the surrounding bookkeeping (`failCount`, `lockoutUntil`) untouched in the
-            // DataStore. After a wipe the user re-onboards with a brand-new lock; if the previous
-            // session had been close to the lockout threshold, the new setup would inherit those
-            // counters and lock the user out before they had a chance to authenticate.
-            runCatching {
-                securityStore.setFailCount(0)
-                // v1.14.8 R7 — clearLockout wipe les 3 fields (wall + mono baseline + duration).
-                securityStore.clearLockout()
-            }.onFailure { Timber.w(it, "wipe: lockout counters") }
-            runCatching { settings.update { AppSettings() } }
-                .onFailure { Timber.w(it, "wipe: settings") }
-        }
-        residu
+        // v1.28.5 (balayage des `runCatching`, constat de SECURITE) — les ecritures DataStore
+        // ci-dessous sont NON ANNULABLES, et leurs echecs sont journalises. Depuis la v1.28.6 la
+        // garantie vient de la tete de [nukeEverything], qui la porte pour toute la fonction ;
+        // elle etait ici seule, et l'ajout du balayage passait au-dessus d'elle.
+        //
+        // v1.28.6 — LE MAGASIN SECURISE PART EN ENTIER, et non par liste de cles nommees.
+        // Elle en nommait huit sur dix-huit : le PIN DU COFFRE (v1.13.0), sa temporisation
+        // (v1.27.10), l'horodatage du dernier deverrouillage et le jeton de notification ne s'y
+        // sont jamais ajoutes. Ils survivaient donc a « supprimer toutes mes donnees », dans un
+        // DataStore de preferences NON chiffre — une empreinte PBKDF2 de code a quatre chiffres se
+        // casse hors ligne, et sa seule presence prouvait qu'un coffre avait existe, ce que le
+        // leurre existe pour taire. Voir [SecurityStore.clearAll] : une liste a tenir a jour est
+        // un rendez-vous manque a chaque nouvelle cle, et il a ete manque trois fois.
+        //
+        // Ce que l'audit S-P2-2 demandait est tenu par construction : les compteurs d'echec et de
+        // temporisation partent avec le reste, donc une reinscription ne les herite plus.
+        runCatching { securityStore.clearAll() }.onFailure { Timber.w(it, "wipe: magasin securise") }
+        runCatching { settings.update { AppSettings() } }
+            .onFailure { Timber.w(it, "wipe: settings") }
+        return residu
     }
 
     /**
@@ -183,7 +214,8 @@ class PanicService @Inject constructor(
      * pièces jointes du coffre ; l'effaceur retire celles des conversations qu'il supprime.
      *
      * Le tout est non annulable, pour la raison écrite dans [nukeEverything] : rendre la main
-     * à moitié fait est le défaut que la v1.28.5 a fermé.
+     * à moitié fait est le défaut que la v1.28.5 a fermé. La garantie vient désormais de la tête
+     * de [nukeEverything], qui couvre les deux chemins.
      */
     private suspend fun effacerCeQueLeLeurreMontre(): Residu = withContext(NonCancellable) {
         val ids = runCatching { conversationDao.idsHorsCoffre() }

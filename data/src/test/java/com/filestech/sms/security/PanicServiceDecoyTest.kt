@@ -7,6 +7,7 @@ import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.DatabaseKeyManager
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.repository.ConversationEraser
+import com.filestech.sms.domain.notification.AllNotificationsCanceller
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
@@ -17,10 +18,13 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
@@ -64,6 +68,7 @@ class PanicServiceDecoyTest {
     private val conversationDao = mockk<ConversationDao>()
     private val eraser = mockk<ConversationEraser>()
     private val barriere = VaultPurgeBarrier()
+    private val notifications = mockk<AllNotificationsCanceller>(relaxed = true)
     private val settings = FakeSettings(reglagesModifies)
 
     private fun fichier(chemin: String): File = File(dossier, chemin).apply {
@@ -90,6 +95,7 @@ class PanicServiceDecoyTest {
             conversationDao = conversationDao,
             eraser = eraser,
             barriere = barriere,
+            notifications = notifications,
             io = UnconfinedTestDispatcher(),
         )
     }
@@ -111,10 +117,15 @@ class PanicServiceDecoyTest {
         verify(exactly = 0) { database.close() }
         verify(exactly = 0) { keyManager.destroyKeyFile() }
         verify(exactly = 0) { keystore.deleteKey(any()) }
-        coVerify(exactly = 0) { securityStore.clearPin() }
-        coVerify(exactly = 0) { securityStore.clearPanic() }
-        coVerify(exactly = 0) { securityStore.setFailCount(any()) }
-        coVerify(exactly = 0) { securityStore.clearLockout() }
+        // v1.28.6 — la verification porte sur `clearAll`, le seul appel que la purge fait
+        // desormais. Les quatre precedentes (`clearPin`, `clearPanic`, `setFailCount`,
+        // `clearLockout`) seraient devenues VACUEUSES : plus personne ne les appelle, donc
+        // « exactly = 0 » aurait ete vrai meme si le leurre avait vide le magasin entier — soit
+        // le PIN reel et le code panique, c'est-a-dire tout ce que le leurre protege.
+        coVerify(exactly = 0) { securityStore.clearAll() }
+        // Les notifications, elles, partent dans les DEUX sessions : une purge de leurre qui les
+        // laisserait la ou la vraie les efface serait une difference observable (I1).
+        verify(exactly = 1) { notifications.cancelAll() }
         assertThat(pieceJointeDuCoffre.exists()).isTrue()
         // Le bloc sécurité est préservé, le reste revient aux défauts, le splash se rejouera.
         assertThat(settings.state.value.security).isEqualTo(securiteArmee)
@@ -154,7 +165,7 @@ class PanicServiceDecoyTest {
         assertThat(residu.copiesSystemeRestantes).isEqualTo(2)
         // Et la destruction a bien eu lieu malgre les residus : la base ne survit pas a la purge.
         verify(exactly = 1) { database.close() }
-        coVerify(exactly = 1) { securityStore.clearPin() }
+        coVerify(exactly = 1) { securityStore.clearAll() }
     }
 
     @Test
@@ -176,10 +187,50 @@ class PanicServiceDecoyTest {
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_VAULT_KEK) }
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_SETTINGS_AEAD) }
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_PANIC_DECOY) }
-        coVerify(exactly = 1) { securityStore.clearPin() }
-        coVerify(exactly = 1) { securityStore.clearPanic() }
-        coVerify(exactly = 1) { securityStore.setFailCount(0) }
-        coVerify(exactly = 1) { securityStore.clearLockout() }
+        // v1.28.6 — LE MAGASIN SECURISE PART EN ENTIER, et non par liste de cles nommees. Elle
+        // en nommait huit sur dix-huit : le PIN DU COFFRE, sa temporisation, l'horodatage du
+        // dernier deverrouillage et le jeton de notification n'y ont jamais ete ajoutes et
+        // survivaient a la purge, dans un DataStore non chiffre. Trouve par l'audit du
+        // 2026-09-12, et par l'audit 3 axes pre-release au meme moment (son S2).
+        coVerify(exactly = 1) { securityStore.clearAll() }
+        verify(exactly = 1) { notifications.cancelAll() }
+        assertThat(settings.state.value).isEqualTo(AppSettings())
+    }
+
+    /**
+     * v1.28.6 (audit 3 axes pre-release, S1) — **la purge n'est pas annulable.**
+     *
+     * Elle vit dans un `viewModelScope` : quitter les Reglages pendant qu'elle tourne annulait le
+     * job. La v1.28.5 avait mis les ecritures de fin sous `NonCancellable` pour cette raison ;
+     * cette version a ajoute AU-DESSUS un balayage suspendu et long — la barriere prend un
+     * `Mutex`, l'effaceur parle au fournisseur pour chaque message — sans reporter la lecon d'un
+     * cran plus haut. Annule en cours de balayage, on detruisait la base sans avoir propage les
+     * suppressions : les messages revenaient a la synchronisation suivante, c'est-a-dire le defaut
+     * que cette meme version ferme.
+     *
+     * Le test annule le `Job` appelant PENDANT le balayage, a la premiere conversation, et exige
+     * que les suivantes soient tout de meme presentees a l'effaceur et que la destruction aille au
+     * bout. Controle negatif fait le 2026-09-12 : avec `withContext(io)` seul, il tombe — la
+     * deuxieme conversation n'est jamais atteinte.
+     */
+    @Test
+    fun `une annulation pendant le balayage n'interrompt pas la purge`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns listOf(1L, 2L, 3L)
+        val portee = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        coEvery { eraser.erase(1L, any()) } coAnswers {
+            portee.cancel()
+            ConversationEraser.Issue(true, true)
+        }
+        coEvery { eraser.erase(2L, any()) } returns ConversationEraser.Issue(true, true)
+        coEvery { eraser.erase(3L, any()) } returns ConversationEraser.Issue(true, true)
+
+        val service = service(decoy = false)
+        portee.launch { service.nukeEverything() }.join()
+
+        coVerify(exactly = 1) { eraser.erase(2L, ConversationEraser.Mode.ORDINAIRE) }
+        coVerify(exactly = 1) { eraser.erase(3L, ConversationEraser.Mode.ORDINAIRE) }
+        verify(exactly = 1) { database.close() }
+        coVerify(exactly = 1) { securityStore.clearAll() }
         assertThat(settings.state.value).isEqualTo(AppSettings())
     }
 }

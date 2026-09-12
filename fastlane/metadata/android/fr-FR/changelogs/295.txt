@@ -1,3 +1,5 @@
-Sélection libre d'un extrait de message : l'appui long sur une bulle ouvre une boîte où l'on sélectionne et copie une partie du texte, aussi accessible par le menu (« Sélectionner le texte »). L'appui long ne copie plus le message entier, « Copier » le fait déjà. Un extrait du coffre garde la marque « sensible », sans vignette d'aperçu.
+« Supprimer toutes mes données » efface désormais aussi les messages dans la messagerie du téléphone, avec les pièces jointes et les envois programmés, puis confirme ce qui a été fait. Elle ne peut plus bloquer l'application, ne laisse plus de notification ni d'empreinte du code du coffre, et ne va plus à moitié.
 
-Corrigé : après « Réinitialiser tous les réglages » ou « Supprimer toutes mes données », l'écran de bienvenue restait bloqué jusqu'à la fermeture forcée.
+Sélection libre d'un extrait : l'appui long ouvre une boîte où l'on copie une partie du texte.
+
+Corrigé : l'écran de bienvenue restait bloqué après une réinitialisation.

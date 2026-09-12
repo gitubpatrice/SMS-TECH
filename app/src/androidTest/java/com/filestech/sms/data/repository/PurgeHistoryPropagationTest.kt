@@ -264,6 +264,10 @@ class PurgeHistoryPropagationTest {
             db.attachmentDao(),
             InstrumentationRegistry.getInstrumentation().targetContext,
             com.filestech.sms.security.VaultPurgeBarrier(),
+            // v1.28.6 — l'effaceur annule les notifications de ce qu'il supprime. Ces tests-ci
+            // portent sur la propagation au fournisseur ; l'espion est la pour satisfaire la
+            // signature, et [VaultPurgeRetryTest] tient le comportement.
+            AnnulateurDeNotificationsEspion(),
         )
 
     private suspend fun insere(

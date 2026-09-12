@@ -273,6 +273,26 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         return result
     }
 
+    /**
+     * v1.28.6 — vide le magasin ENTIER, et non une liste de clés tenue à la main.
+     *
+     * « Supprimer toutes mes données » effaçait `pin.*`, `panic.*` et le bloc `auth.lockout*`,
+     * en nommant chaque clé. Le PIN DU COFFRE (`vault.salt`, `vault.hash`, `vault.iters`),
+     * arrivé en v1.13.0, n'a jamais été rattaché à cette liste — ni sa temporisation
+     * (v1.27.10), ni `auth.lastUnlock`, ni le jeton de notification. Ils survivaient donc à la
+     * purge, dans un DataStore de préférences NON chiffré : une empreinte PBKDF2 de code à
+     * quatre ou six chiffres se casse hors ligne, et sa seule présence prouvait qu'un coffre
+     * avait existé.
+     *
+     * Une liste de clés à tenir à jour est un rendez-vous manqué à chaque nouvelle clé — c'est
+     * exactement ce qui s'est produit trois fois. `clear()` n'a pas cette faiblesse : toute clé
+     * future part avec les autres sans que personne n'y pense.
+     *
+     * Réservé à la purge totale. La session leurre ne l'appelle JAMAIS : ce magasin porte
+     * précisément ce que le leurre existe pour préserver.
+     */
+    suspend fun clearAll() = context.secStore.edit { it.clear() }
+
     private object K {
         val notifIntentToken = longPreferencesKey("notif.intentToken")
         val pinSalt = byteArrayPreferencesKey("pin.salt")

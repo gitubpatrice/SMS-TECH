@@ -6,6 +6,7 @@ import com.filestech.sms.data.local.db.ScheduledAttachmentCodec
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.sms.SystemCopyEraser
+import com.filestech.sms.domain.notification.ConversationNotificationCanceller
 import com.filestech.sms.domain.repository.VaultPurgeResult
 import timber.log.Timber
 import javax.inject.Inject
@@ -46,6 +47,15 @@ class ConversationEraser @Inject constructor(
     private val context: android.content.Context,
     // v1.28.4 (F13) — la purge lève une barrière : on n'entre pas au coffre pendant qu'on le vide.
     private val barriere: com.filestech.sms.security.VaultPurgeBarrier,
+    // v1.28.6 — ce qui est supprimé ne doit plus être affiché. Les notifications déjà posées
+    // survivaient à toute suppression : le seul appel d'annulation du dépôt vivait dans
+    // « marquer comme lu ». Supprimer une conversation non lue laissait donc son expéditeur et
+    // son texte dans le volet système, et « Supprimer toutes mes données » les y laissait tous.
+    // L'annulation est posée ICI, dans la règle unique de suppression, et non chez les
+    // appelants : c'est la seule place qui les couvre tous — liste, fil, purge du coffre, purge
+    // totale — et le motif de défaut de ce dépôt est précisément le correctif posé sur un seul
+    // des chemins jumeaux.
+    private val notifications: ConversationNotificationCanceller,
 ) {
 
     private companion object {
@@ -149,6 +159,10 @@ class ConversationEraser @Inject constructor(
             Timber.w("delete: message arrived during sweep of conversation %d", id)
             return Issue(systemCopyGone = false, localeComplete = true)
         }
+        // La ligne locale est partie — et seulement dans ce cas. Les trois sorties ci-dessus
+        // CONSERVENT le parent : annuler ses notifications y aurait masqué une conversation
+        // toujours présente, l'inverse du contrat.
+        notifications.cancelAllForConversation(id)
         return Issue(systemCopyGone, localeComplete = true)
     }
 
@@ -281,6 +295,8 @@ class ConversationEraser @Inject constructor(
             messageDao.delete(messageId)
             messageDao.refreshConversationPreview(msg.conversationId)
         }
+        // v1.28.6 — et sa notification, qui portait son texte.
+        notifications.cancelForMessage(msg.conversationId, messageId)
     }
 
     /** Le corps commun de F04 et de [eraseMessage] : les fichiers possédés, dans le bac à sable seulement. */

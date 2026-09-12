@@ -27,6 +27,13 @@ autre chemin. Quatre exemples réels, tous confirmés :
 
 **Le corollaire est l'ASYMÉTRIE** : deux chemins jumeaux dont un seul porte la garde.
 
+*Variante coûteuse, vue trois fois (v1.28.6) :* une **liste de clés tenue à la main** est un
+rendez-vous manqué à chaque clé ajoutée ensuite. Le PIN du coffre, sa temporisation et deux autres
+champs n'ont jamais rejoint la liste que la purge effaçait nommément ; ils survivaient donc à
+« supprimer toutes mes données ». Quand l'intention est « tout », l'écrire « tout » (`clear()`) et
+non l'énumérer. De même pour un correctif posé sur la fin d'une fonction et non sur la fonction :
+le balayage ajouté au-dessus du bloc `NonCancellable` est passé à côté de la garantie.
+
 | Constat | Chemin gardé | Jumeau oublié |
 |---|---|---|
 | C3 | `setPanicCode` refusait un code égal au PIN | `setPin` ne vérifiait rien → enfermement définitif en leurre |
@@ -90,6 +97,13 @@ Toute modification qui touche un chemin listé doit démontrer que l'invariant t
 *Corollaire (v1.28.6) :* en session leurre, une action destructrice n'atteint que ce que le leurre
 montre. « Supprimer toutes mes données » reste visible — son absence serait un indice — mais
 `PanicService` n'y efface que les conversations hors coffre et les réglages hors sécurité.
+
+*Second corollaire (v1.28.6) :* ce qui est **observable** doit l'être à l'identique dans les deux
+sessions. Une purge de leurre qui laisserait des notifications là où la purge réelle les efface
+serait une différence mesurable au doigt, donc un indice — c'est pourquoi l'annulation des
+notifications est faite pour les deux, au même point. Le raisonnement inverse vaut aussi : le
+magasin sécurisé n'est vidé QUE hors leurre, parce qu'il porte ce que le leurre protège, et cette
+asymétrie-là n'est pas observable depuis l'écran.
 *Couche d'application :* **données** (autorité) + navigation (refus) + UI (masquage)
 
 Surfaces à couvrir, **toutes** : liste des conversations (icône coffre), réglages (verrouillage,

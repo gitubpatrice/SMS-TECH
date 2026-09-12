@@ -346,9 +346,20 @@ class IncomingMessageNotifier @Inject constructor(
         ).build()
     }
 
-    fun cancel(messageId: Long) {
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)
-            ?.cancel(stableNotificationId(messageId))
+    /**
+     * v1.28.6 — remplace un `cancel(messageId: Long)` qui était **mort ET faux**.
+     *
+     * Il annulait par `nm.cancel(id)`, sans tag, alors que tout est posté avec tag (cf. le
+     * `notify` ci-dessus) : il ne pouvait rien annuler. Aucun appelant, ni dans le source ni
+     * dans les tests — donc aucun défaut observable, mais un piège posé pour qui l'aurait
+     * câblé en croyant tenir la suppression d'un message. Celle-ci le tient : même tag qu'à la
+     * pose, même identité que [cancelAllForConversation] emploie.
+     */
+    override fun cancelForMessage(conversationId: Long, messageId: Long) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?
+            ?: return
+        runCatching { nm.cancel(conversationTag(conversationId), stableNotificationId(messageId)) }
+            .onFailure { Timber.w(it, "cancelForMessage: %d", messageId) }
     }
 
     /**

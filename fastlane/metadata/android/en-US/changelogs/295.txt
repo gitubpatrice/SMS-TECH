@@ -1,3 +1,5 @@
-Free text selection: long-pressing a bubble opens a box where you select and copy part of the message, also reachable from the menu ("Select text"). Long press no longer copies the whole message — "Copy" already does. The copy keeps the "sensitive" mark: no clipboard preview for an excerpt from the vault.
+"Delete all my data" now also erases the messages in the phone's message store, along with attachments and scheduled sends, then confirms what was done. It can no longer brick the app, leaves no notification in the shade and no imprint of the vault code, and no longer stops halfway.
 
-Fixed: after "Reset all settings" or "Delete all my data", the welcome screen stayed stuck until the app was force-closed.
+Free text selection: a long press opens a box where you copy part of the message.
+
+Fixed: the welcome screen stayed stuck after a reset.

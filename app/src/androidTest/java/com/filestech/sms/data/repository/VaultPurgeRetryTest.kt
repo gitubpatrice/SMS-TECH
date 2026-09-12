@@ -334,6 +334,7 @@ class VaultPurgeRetryTest {
         ordonnanceur: com.filestech.sms.domain.scheduler.ScheduledMessageScheduler =
             OrdonnanceurEspion(),
         barriere: com.filestech.sms.security.VaultPurgeBarrier = com.filestech.sms.security.VaultPurgeBarrier(),
+        annulateur: AnnulateurDeNotificationsEspion = AnnulateurDeNotificationsEspion(),
     ) =
         ConversationEraser(
             db,
@@ -348,6 +349,7 @@ class VaultPurgeRetryTest {
             db.attachmentDao(),
             InstrumentationRegistry.getInstrumentation().targetContext,
             barriere,
+            annulateur,
         )
 
     // ───── v1.28.5 (sixième note d'Andrew, point 1) — `force` ne lève QUE la condition « copie système » ─────
@@ -678,6 +680,68 @@ class VaultPurgeRetryTest {
 
         assertThat(reprise.isComplete).isTrue()
         assertThat(db.conversationDao().idsInVault()).isEmpty()
+    }
+
+    /**
+     * v1.28.6 — **ce qui est supprime ne doit plus s'afficher.**
+     *
+     * Aucun chemin de suppression n'annulait les notifications deja posees : le seul appel
+     * d'annulation du depot vivait dans « marquer comme lu ». Supprimer une conversation non lue
+     * laissait donc son expediteur et son texte dans le volet systeme, et « Supprimer toutes mes
+     * donnees » les y laissait TOUS — apres un dialogue qui promet l'irreversible, et au pire
+     * moment, puisqu'on purge parce que quelqu'un va prendre le telephone.
+     *
+     * Controle negatif fait le 2026-09-12 : sans l'appel pose dans l'effaceur, ce test tombe
+     * (la liste de l'espion reste vide).
+     */
+    @Test
+    fun uneConversationSupprimeeVoitSesNotificationsAnnulees() = runBlocking<Unit> {
+        seedVaultConversation()
+        val espion = AnnulateurDeNotificationsEspion()
+
+        eraserAvec(ToutSEfface, annulateur = espion).erase(VAULT_ID)
+
+        assertThat(db.conversationDao().idsInVault()).isEmpty()
+        assertThat(espion.conversations).containsExactly(VAULT_ID)
+    }
+
+    /**
+     * v1.28.6 — le pendant, et il compte autant : un parent CONSERVE garde ses notifications.
+     *
+     * Les trois sorties qui conservent le parent le font pour permettre la reprise. Annuler leurs
+     * notifications aurait masque une conversation toujours presente — l'inverse du contrat, et
+     * une purge qui se croit faite parce que l'ecran ne montre plus rien.
+     */
+    @Test
+    fun unParentConserveGardeSesNotifications() = runBlocking<Unit> {
+        seedVaultConversation()
+        val espion = AnnulateurDeNotificationsEspion()
+
+        val issue = eraserAvec(RefusSystematique, annulateur = espion)
+            .erase(VAULT_ID, ConversationEraser.Mode.COFFRE)
+
+        assertThat(issue.systemCopyGone).isFalse()
+        assertThat(db.conversationDao().idsInVault()).containsExactly(VAULT_ID)
+        assertThat(espion.conversations).isEmpty()
+    }
+
+    /**
+     * v1.28.6 — et la notification d'UN message supprime, qui portait son texte.
+     *
+     * Le jumeau du defaut ci-dessus, sur le chemin le plus frequent : supprimer un seul message
+     * genant plutot que tout le fil. La v1.28.5 avait deja du rattacher `eraseMessage` aux
+     * fichiers des pieces jointes pour cette meme raison.
+     */
+    @Test
+    fun laSuppressionDUnMessageAnnuleSaNotification() = runBlocking<Unit> {
+        seedVaultConversation()
+        val espion = AnnulateurDeNotificationsEspion()
+        val messageId = db.messageDao().findByConversation(VAULT_ID).first().id
+
+        eraserAvec(ToutSEfface, annulateur = espion).eraseMessage(messageId)
+
+        assertThat(db.messageDao().findById(messageId)).isNull()
+        assertThat(espion.messages).containsExactly(VAULT_ID to messageId)
     }
 
     private suspend fun seedVaultConversation() {

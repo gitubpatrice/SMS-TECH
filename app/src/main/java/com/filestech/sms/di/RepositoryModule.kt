@@ -22,6 +22,7 @@ import com.filestech.sms.domain.emergency.IAmOkMessageProvider
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.mms.MmsDispatcher
 import com.filestech.sms.domain.mms.OutgoingAttachmentStore
+import com.filestech.sms.domain.notification.AllNotificationsCanceller
 import com.filestech.sms.domain.notification.ConversationNotificationCanceller
 import com.filestech.sms.domain.pdf.PdfExporter
 import com.filestech.sms.domain.repository.BlockedNumberRepository
@@ -41,6 +42,7 @@ import com.filestech.sms.domain.vault.VaultMover
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.VaultManager
 import com.filestech.sms.system.emergency.IAmOkMessageProviderImpl
+import com.filestech.sms.system.notifications.AllNotificationsCancellerImpl
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.pdf.ConversationPdfExporter
 import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
@@ -125,4 +127,9 @@ abstract class RepositoryModule {
     abstract fun bindConversationNotificationCanceller(
         impl: IncomingMessageNotifier,
     ): ConversationNotificationCanceller
+
+    @Binds @Singleton
+    abstract fun bindAllNotificationsCanceller(
+        impl: AllNotificationsCancellerImpl,
+    ): AllNotificationsCanceller
 }

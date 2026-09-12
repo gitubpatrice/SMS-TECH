@@ -307,9 +307,18 @@ class SettingsViewModel @Inject constructor(
         runCatching { context.startActivity(intent) }
             .onFailure { Timber.w(it, "wipe: relance de l'activite") }
         // `exitProcess` plutôt que `killProcess` : le premier laisse la JVM dérouler sa sortie
-        // normale (flush des journaux), le second tue au signal. Aucune donnée n'est en vol — les
-        // écritures de la purge sont terminées, `nukeEverything` étant `NonCancellable` de bout en
-        // bout — et le système relance l'activité de la tâche créée juste au-dessus.
+        // normale (flush des journaux), le second tue au signal.
+        //
+        // Aucune donnée n'est en vol, pour DEUX raisons indépendantes, et il en faut deux : la
+        // purge est attendue avant que [Event.DataWiped] ne soit émis, et le redémarrage n'arrive
+        // qu'au tap suivant de l'utilisateur sur le dialogue. Et `nukeEverything` est
+        // `NonCancellable` de bout en bout.
+        //
+        // Cette dernière phrase était FAUSSE quand elle a été écrite : seul le bloc final de la
+        // purge l'était, son balayage des conversations — suspendu, et le plus long — ne l'était
+        // pas. Trouvé par l'audit pré-release, corrigé à la tête de `nukeEverything`. Une
+        // justification qui s'appuie sur un invariant doit nommer l'endroit où il est tenu, faute
+        // de quoi elle survit à sa propre vérité.
         kotlin.system.exitProcess(0)
     }
 
