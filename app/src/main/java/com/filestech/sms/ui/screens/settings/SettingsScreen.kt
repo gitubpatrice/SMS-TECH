@@ -114,6 +114,10 @@ fun SettingsScreen(
     // qui révèlent que l'app dispose de fonctions de sécurité personnelle.
     val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
     var showNuke by remember { mutableStateOf(false) }
+    // v1.28.6 — nombre de conversations restees dans la messagerie du telephone apres la purge.
+    // `null` = pas de dialogue. Non nul = l'effacement est INCOMPLET et on le dit avant de
+    // redemarrer l'application, cf. [SettingsViewModel.Event.DataWipedWithResidue].
+    var nukeResidue by remember { mutableStateOf<Int?>(null) }
     var lockModePickerOpen by remember { mutableStateOf(false) }
     // v1.26.1 (audit F4) — sélecteur du délai de verrouillage automatique.
     var autoLockDelayPickerOpen by remember { mutableStateOf(false) }
@@ -263,6 +267,12 @@ fun SettingsScreen(
                 // propre coffre. Un dialogue, et non un message : il doit choisir, pas subir.
                 is SettingsViewModel.Event.VaultPurgeStuck -> {
                     vaultPinForceConfirm = e.left
+                }
+                // v1.28.6 — la purge totale a laisse des messages dans le telephone. Un DIALOGUE
+                // et non un message glissant : le processus redemarre juste apres, un snackbar
+                // disparaitrait avec lui sans avoir ete lu.
+                is SettingsViewModel.Event.DataWipedWithResidue -> {
+                    nukeResidue = e.left
                 }
                 // v1.28.3 (audit du 2026-09-09) — echec LOCAL : pas de sortie forcee, et on le
                 // dit au lieu de rouvrir un dialogue qui ne mene nulle part.
@@ -799,7 +809,22 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showNuke = false },
             title = { Text(stringResource(R.string.settings_nuke_data)) },
-            text = { Text(stringResource(R.string.settings_nuke_confirm)) },
+            // v1.28.6 — l'avertissement dit desormais que les messages du TELEPHONE partent aussi
+            // (c'est ce que la purge fait depuis cette version), et, quand SMS Tech n'est pas
+            // l'application SMS par defaut, que le systeme le lui refusera. Deux textes plutot
+            // qu'un seul conditionnel : celui qui s'ajoute est un AVERTISSEMENT, il porte la
+            // couleur d'erreur, et la promesse principale ne se reecrit pas selon l'etat.
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.settings_nuke_confirm))
+                    if (!viewModel.defaultAppManager.isDefault()) {
+                        Text(
+                            text = stringResource(R.string.settings_nuke_confirm_not_default),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
             confirmButton = {
                 androidx.compose.material3.FilledTonalButton(
                     onClick = { viewModel.nukeData(); showNuke = false },
@@ -816,6 +841,47 @@ fun SettingsScreen(
                         .focusRequester(cancelFocus)
                         .focusable(),
                 ) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
+    // v1.28.6 — L'EFFACEMENT N'A PAS TOUT EMPORTE, ET CELA SE DIT.
+    //
+    // Le dialogue de confirmation promet « irréversible ». Quand le système refuse la suppression
+    // des messages du téléphone — en pratique parce que SMS Tech n'est pas l'application SMS par
+    // défaut — la promesse est fausse, et une promesse fausse est pire que pas de promesse. Un
+    // seul bouton : il n'y a rien à décider, seulement à savoir. Sa fermeture déclenche le
+    // redémarrage que la purge avait mis en attente pour laisser ce message se lire.
+    nukeResidue?.let { restantes ->
+        AlertDialog(
+            onDismissRequest = { /* lecture obligatoire : seul le bouton ferme */ },
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.WarningAmber,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.settings_nuke_residue_title),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            },
+            text = {
+                Text(
+                    text = androidx.compose.ui.res.pluralStringResource(
+                        R.plurals.settings_nuke_residue_body,
+                        restantes,
+                        restantes,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    nukeResidue = null
+                    viewModel.terminerEffacement()
+                }) { Text(stringResource(R.string.action_close)) }
             },
         )
     }

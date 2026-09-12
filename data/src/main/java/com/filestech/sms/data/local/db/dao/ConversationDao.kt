@@ -121,6 +121,18 @@ interface ConversationDao {
     suspend fun idsHorsCoffre(): List<Long>
 
     /**
+     * v1.28.6 — TOUTES les conversations, coffre compris, pour « Supprimer toutes mes données ».
+     *
+     * La purge détruisait le fichier de base directement, sans passer par
+     * [com.filestech.sms.data.repository.ConversationEraser] : la copie de chaque message restait
+     * donc dans `content://sms`, et la resynchronisation du lancement suivant les ramenait TOUS —
+     * y compris ceux du coffre, dans la liste principale et en clair, le drapeau `in_vault`
+     * n'ayant vécu que dans la base détruite. Le dialogue promettait « irréversible ».
+     */
+    @Query("SELECT id FROM conversations")
+    suspend fun idsToutes(): List<Long>
+
+    /**
      * v1.28.3 (F08) — conversations **du coffre** en tête-à-tête, pour savoir si une adresse dont
      * on ne connaît rien d'autre appartient à un correspondant protégé.
      *

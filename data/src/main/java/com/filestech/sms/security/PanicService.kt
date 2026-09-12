@@ -42,13 +42,30 @@ class PanicService @Inject constructor(
     private val panicState: PanicStateProvider,
     private val conversationDao: ConversationDao,
     private val eraser: ConversationEraser,
+    private val barriere: VaultPurgeBarrier,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
-    suspend fun nukeEverything(): Unit = withContext(io) {
+    suspend fun nukeEverything(): Residu = withContext(io) {
         if (panicState.isPanicDecoyActive) {
-            effacerCeQueLeLeurreMontre()
-            return@withContext
+            return@withContext effacerCeQueLeLeurreMontre()
         }
+        // v1.28.6 — LES MESSAGES DU TÉLÉPHONE PARTENT AVANT LA BASE, ET PAR LE MÊME CHEMIN QU'UNE
+        // SUPPRESSION À LA MAIN.
+        //
+        // Jusqu'ici la purge supprimait le FICHIER de base, sans jamais passer par
+        // [ConversationEraser] : la copie de chaque message restait donc dans `content://sms`, et
+        // la resynchronisation du lancement suivant — curseur remis à 0 par cette même purge —
+        // les ramenait TOUS. Le dialogue promettait « irréversible » ; il était faux. Pire, les
+        // conversations du COFFRE revenaient dans la liste principale, en clair : leur copie
+        // système n'avait jamais été supprimée (limite N2, assumée) et le drapeau `in_vault` ne
+        // vivait que dans la base qu'on venait de détruire.
+        //
+        // Sous la barrière, comme la purge du coffre : on balaie des conversations du coffre, et
+        // personne ne doit y entrer pendant ce temps.
+        val toutes = runCatching { conversationDao.idsToutes() }
+            .onFailure { Timber.w(it, "wipe: enumeration des conversations") }
+            .getOrDefault(emptyList())
+        val residu = effacerConversations(toutes)
         // Order matters (audit F29):
         //  1. Close the Room/SQLCipher database synchronously so no transaction can re-write
         //     after we delete its on-disk files.
@@ -115,6 +132,39 @@ class PanicService @Inject constructor(
             runCatching { settings.update { AppSettings() } }
                 .onFailure { Timber.w(it, "wipe: settings") }
         }
+        residu
+    }
+
+    /**
+     * v1.28.6 — ce qui a RÉSISTÉ, pour que l'application le dise au lieu de promettre le contraire.
+     *
+     * [copiesSystemeRestantes] compte les conversations dont la copie dans `content://sms` est
+     * toujours là. Cause quasi unique : SMS Tech n'est pas l'application SMS par défaut, et le
+     * système lui refuse alors la suppression. Un échec dont on ne sait rien compte ici aussi —
+     * le doute se résout du côté « nous n'avons pas tout effacé », jamais de l'autre.
+     */
+    data class Residu(val copiesSystemeRestantes: Int)
+
+    /**
+     * Supprime [ids] par [ConversationEraser] en mode ordinaire — copie système, envois
+     * programmés et fichiers compris —, et compte ce qui reste dans le téléphone.
+     *
+     * Mode ORDINAIRE et non COFFRE : ici la ligne locale doit partir quoi qu'il arrive, la base
+     * entière étant détruite juste après ; conserver un parent comme journal de reprise n'aurait
+     * aucun sens. Ce que l'on veut de ce balayage, c'est la propagation au fournisseur du système.
+     */
+    private suspend fun effacerConversations(ids: List<Long>): Residu = barriere.pendant {
+        var restantes = 0
+        for (id in ids) {
+            runCatching { eraser.erase(id, ConversationEraser.Mode.ORDINAIRE) }
+                .onSuccess { if (!it.systemCopyGone) restantes++ }
+                .onFailure {
+                    restantes++
+                    Timber.w(it, "wipe: conversation %d non supprimee", id)
+                }
+        }
+        Timber.i("wipe: %d conversation(s), %d copie(s) systeme restante(s)", ids.size, restantes)
+        Residu(restantes)
     }
 
     /**
@@ -135,22 +185,15 @@ class PanicService @Inject constructor(
      * Le tout est non annulable, pour la raison écrite dans [nukeEverything] : rendre la main
      * à moitié fait est le défaut que la v1.28.5 a fermé.
      */
-    private suspend fun effacerCeQueLeLeurreMontre() = withContext(NonCancellable) {
+    private suspend fun effacerCeQueLeLeurreMontre(): Residu = withContext(NonCancellable) {
         val ids = runCatching { conversationDao.idsHorsCoffre() }
             .onFailure { Timber.w(it, "decoy wipe: listing") }
             .getOrDefault(emptyList())
-        var echecs = 0
-        for (id in ids) {
-            runCatching { eraser.erase(id, ConversationEraser.Mode.ORDINAIRE) }
-                .onFailure {
-                    echecs++
-                    Timber.w(it, "decoy wipe: conversation %d", id)
-                }
-        }
-        Timber.i("decoy wipe: %d conversation(s), %d failure(s)", ids.size, echecs)
+        val residu = effacerConversations(ids)
         runCatching { effacerLesFichiersTransitoires() }.onFailure { Timber.w(it, "decoy wipe: files") }
         runCatching { settings.update { AppSettings(security = it.security) } }
             .onFailure { Timber.w(it, "decoy wipe: settings") }
+        residu
     }
 
     /** Exports et cache : sans contenu du coffre qui ne soit déjà purgé à chaque verrouillage. */

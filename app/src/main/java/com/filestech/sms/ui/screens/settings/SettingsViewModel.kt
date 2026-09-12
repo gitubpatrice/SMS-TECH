@@ -146,6 +146,17 @@ class SettingsViewModel @Inject constructor(
          * Cela se dit, cela ne se tait pas : c'est la contrepartie qu'il a acceptee.
          */
         data class VaultPurgedWithResidue(val deleted: Int, val left: Int) : Event
+
+        /**
+         * v1.28.6 — « Supprimer toutes mes données » a laissé [left] conversation(s) dans la
+         * messagerie du téléphone, que le système a refusé de supprimer — en pratique parce que
+         * SMS Tech n'est pas l'application SMS par défaut.
+         *
+         * Cela se DIT, et avant le redémarrage : le dialogue de confirmation promet « irréversible »,
+         * et une promesse fausse est pire que l'absence de promesse. Même vocabulaire que la purge
+         * du coffre ([VaultPurgedWithResidue]), qui affronte exactement le même refus du système.
+         */
+        data class DataWipedWithResidue(val left: Int) : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -270,9 +281,18 @@ class SettingsViewModel @Inject constructor(
      * l'application, et non le lanceur : le système la redémarre à partir de la tâche neuve.
      */
     fun nukeData() = viewModelScope.launch {
-        panic.nukeEverything()
-        redemarrerApplication()
+        val residu = panic.nukeEverything()
+        if (residu.copiesSystemeRestantes > 0) {
+            // v1.28.6 — ce qui RESTE se dit, et se dit AVANT le redémarrage : après, il n'y a plus
+            // d'écran pour le lire. L'utilisateur ferme le message, et le redémarrage suit.
+            _events.send(Event.DataWipedWithResidue(residu.copiesSystemeRestantes))
+        } else {
+            redemarrerApplication()
+        }
     }
+
+    /** v1.28.6 — l'utilisateur a lu ce qui restait ; on termine par le redémarrage. */
+    fun terminerEffacement() = redemarrerApplication()
 
     private fun redemarrerApplication() {
         val intent = Intent(context, com.filestech.sms.MainActivity::class.java).apply {

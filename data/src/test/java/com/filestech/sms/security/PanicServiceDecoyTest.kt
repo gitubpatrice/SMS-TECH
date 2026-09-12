@@ -63,6 +63,7 @@ class PanicServiceDecoyTest {
     private val securityStore = mockk<SecurityStore>(relaxed = true)
     private val conversationDao = mockk<ConversationDao>()
     private val eraser = mockk<ConversationEraser>()
+    private val barriere = VaultPurgeBarrier()
     private val settings = FakeSettings(reglagesModifies)
 
     private fun fichier(chemin: String): File = File(dossier, chemin).apply {
@@ -88,6 +89,7 @@ class PanicServiceDecoyTest {
             panicState = panicState,
             conversationDao = conversationDao,
             eraser = eraser,
+            barriere = barriere,
             io = UnconfinedTestDispatcher(),
         )
     }
@@ -134,14 +136,40 @@ class PanicServiceDecoyTest {
         assertThat(settings.state.value.security).isEqualTo(securiteArmee)
     }
 
+    /**
+     * v1.28.6 — UNE COPIE SYSTEME QUI RESISTE EST COMPTEE, pour que l'application le DISE au lieu
+     * de promettre « irréversible ». Cause habituelle : SMS Tech n'est pas l'application SMS par
+     * défaut et le système lui refuse la suppression. Un échec dont on ne sait rien compte ici
+     * aussi : le doute se résout du côté « nous n'avons pas tout effacé ».
+     */
     @Test
-    fun `hors leurre, la purge totale reste totale et ne passe pas par l'effaceur`() = runTest {
-        coEvery { conversationDao.idsHorsCoffre() } returns listOf(7L)
+    fun `une copie systeme qui resiste, ou un echec, est comptee en residu`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns listOf(1L, 2L, 3L)
+        coEvery { eraser.erase(1L, any()) } returns ConversationEraser.Issue(systemCopyGone = true, localeComplete = true)
+        coEvery { eraser.erase(2L, any()) } returns ConversationEraser.Issue(systemCopyGone = false, localeComplete = true)
+        coEvery { eraser.erase(3L, any()) } throws IllegalStateException("fournisseur indisponible")
 
-        service(decoy = false).nukeEverything()
+        val residu = service(decoy = false).nukeEverything()
 
-        coVerify(exactly = 0) { eraser.erase(any(), any()) }
+        assertThat(residu.copiesSystemeRestantes).isEqualTo(2)
+        // Et la destruction a bien eu lieu malgre les residus : la base ne survit pas a la purge.
+        verify(exactly = 1) { database.close() }
+        coVerify(exactly = 1) { securityStore.clearPin() }
+    }
+
+    @Test
+    fun `hors leurre, TOUTES les conversations passent par l'effaceur puis tout est detruit`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns listOf(7L, 8L)
+        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true)
+
+        val residu = service(decoy = false).nukeEverything()
+
+        // v1.28.6 — les copies dans `content://sms` partent AVANT la base : sans cela, la
+        // resynchronisation du lancement suivant ramenait tout, coffre compris et en clair.
+        coVerify(exactly = 1) { eraser.erase(7L, ConversationEraser.Mode.ORDINAIRE) }
+        coVerify(exactly = 1) { eraser.erase(8L, ConversationEraser.Mode.ORDINAIRE) }
         coVerify(exactly = 0) { conversationDao.idsHorsCoffre() }
+        assertThat(residu.copiesSystemeRestantes).isEqualTo(0)
         verify(exactly = 1) { database.close() }
         verify(exactly = 1) { keyManager.destroyKeyFile() }
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_DB_MASTER) }

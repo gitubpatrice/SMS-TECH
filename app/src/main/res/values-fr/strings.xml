@@ -663,7 +663,13 @@
     <string name="settings_app_log">Journal de l\'application</string>
     <string name="settings_reset_all">Réinitialiser tous les réglages</string>
     <string name="settings_nuke_data">Supprimer toutes mes données</string>
-    <string name="settings_nuke_confirm">Toutes les conversations et tous les réglages seront effacés. Cette opération est irréversible.</string>
+    <string name="settings_nuke_confirm">Toutes les conversations seront effacées dans SMS Tech ET dans la messagerie du téléphone, avec les pièces jointes, les envois programmés et tous les réglages. Le coffre est effacé lui aussi. Cette opération est irréversible : rien ne revient à la prochaine synchronisation.</string>
+    <string name="settings_nuke_confirm_not_default">⚠️ SMS Tech n’est pas votre application SMS par défaut : le système lui refusera la suppression des messages du téléphone. Ils resteront donc en place et reviendront à la prochaine synchronisation. Seules les données propres à SMS Tech seront effacées.</string>
+    <string name="settings_nuke_residue_title">Effacement incomplet</string>
+    <plurals name="settings_nuke_residue_body">
+        <item quantity="one">SMS Tech a effacé ses propres données, mais %1$d conversation est restée dans la messagerie du téléphone : le système a refusé de la supprimer, et elle reviendra à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
+        <item quantity="other">SMS Tech a effacé ses propres données, mais %1$d conversations sont restées dans la messagerie du téléphone : le système a refusé de les supprimer, et elles reviendront à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
+    </plurals>
 
     <string name="about_title">À propos</string>
     <string name="about_tagline_short">SMS &amp; MMS moderne et privé pour Android.</string>
