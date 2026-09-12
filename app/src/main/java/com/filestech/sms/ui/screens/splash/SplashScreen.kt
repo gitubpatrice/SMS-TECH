@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -61,9 +62,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * **Pourquoi ce design est sans faille** :
  *
- *  1. `LaunchedEffect(Unit)` ne se relance JAMAIS de la vie du Composable. Toute
- *     écriture concurrente du flag splash (par [SplashViewModel.markShown]) ne peut
- *     pas re-déclencher l'effet et donc pas non plus rendre `onFinished()` réentrant.
+ *  1. `LaunchedEffect(Unit)` ne se relance pas tant que la branche d'affichage reste en
+ *     composition. Toute écriture concurrente du flag splash (par [SplashViewModel.markShown])
+ *     ne peut pas re-déclencher l'effet et donc pas non plus rendre `onFinished()` réentrant.
+ *     ⚠️ La branche QUITTE la composition quand `shouldShow` passe à `false`, et y REVIENT si
+ *     le flag est remis à `false` par une réinitialisation (v1.28.6) : l'effet repart alors
+ *     avec un garde réarmé, cf. le `LaunchedEffect(shouldShow)` ci-dessous.
  *  2. [dismissOnce] est gardé par un [AtomicBoolean] — thread-safe même si un futur
  *     refactor déplace un appel sur un dispatcher background. En pratique Compose
  *     execute sur Main, mais on ceinture-et-bretelles.
@@ -107,6 +111,22 @@ fun SplashScreen(
                 onFinished()
             }
         }
+    }
+
+    // v1.28.6 — REARMEMENT. Ce composable vit dans `AppRoot` pendant toute la vie de
+    // l'activite, et `firedGuard` avec lui. « Reinitialiser tous les reglages » et « Supprimer
+    // toutes mes donnees » remettent `splashShown` a `false` : `shouldShow` repasse a `true`, la
+    // branche d'affichage re-entre en composition, les animations rejouent... mais le garde
+    // etait reste a `true` depuis la premiere sortie. Tap, retour et auto-fermeture passaient
+    // tous par `dismissOnce`, qui ne faisait plus rien : le `Box` plein ecran cliquable restait
+    // en overlay au-dessus du graphe et avalait chaque geste jusqu'a ce que l'utilisateur tue
+    // l'application (signale par un testeur le 2026-09-12). Le garde est donc rearme a chaque
+    // passage `false -> true` de `shouldShow`, soit exactement une fois par « premiere ouverture ».
+    // Limite assumee : la transition doit etre OBSERVEE par la composition ; une remise a `false`
+    // dans la meme frame que la sortie (impossible a la main, mesure dans `SplashScreenTest`) est
+    // invisible d'ici.
+    LaunchedEffect(shouldShow) {
+        if (shouldShow) firedGuard.set(false)
     }
 
     // Branche "déjà vu" : redirige immédiatement sans rendre l'UI splash. Le
@@ -177,7 +197,9 @@ fun SplashScreen(
                 onClickLabel = stringResource(R.string.splash_skip_label),
                 onClick = dismissOnce,
             )
-            .clearAndSetSemantics { /* TalkBack annonce uniquement les enfants nommés */ },
+            // v1.28.6 — le tag n'est pas annonce par TalkBack ; il permet a `SplashScreenTest`
+            // de constater la presence de l'overlay et d'y poser un vrai evenement de pointeur.
+            .clearAndSetSemantics { testTag = SPLASH_TEST_TAG },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -228,6 +250,7 @@ fun SplashScreen(
 // → 3-4 s de lecture confortable + marge pour traiter visuellement). Total ≈ 5.5 s,
 // skippable à tout moment via tap ou back. Si re-perçu trop long après usage réel,
 // abaisser AUTO_DISMISS_MS sans toucher au reste — les délais relatifs restent ok.
+internal const val SPLASH_TEST_TAG = "splash_overlay"
 private const val LOGO_ANIM_MS = 900
 private const val TAGLINE_DELAY_MS = 700L
 private const val TAGLINE_ANIM_MS = 800

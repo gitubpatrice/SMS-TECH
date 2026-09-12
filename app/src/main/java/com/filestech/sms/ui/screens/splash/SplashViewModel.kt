@@ -2,7 +2,7 @@ package com.filestech.sms.ui.screens.splash
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.domain.settings.AppSettingsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +37,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class SplashViewModel @Inject constructor(
-    private val settings: SettingsRepository,
+    // v1.28.6 — port domaine plutôt que la classe concrète, comme les use-cases : c'est ce qui
+    // permet à `SplashScreenTest` de monter l'écran sur un faux et de rejouer une réinitialisation.
+    private val settings: AppSettingsSource,
 ) : ViewModel() {
 
     val shouldShow: StateFlow<Boolean> = settings.flow
