@@ -157,7 +157,7 @@ Presse-papier, partage, export PDF, notifications, écriture dans `content://sms
 recevoir `LocalClipboard provides SensitiveClipboard(LocalClipboard.current)`** ; la marque est
 alors posée par `ClipData.markSensitive()`, seule écriture de cette marque dans l'application.
 Le menu système d'une sélection porte aussi les actions `ACTION_PROCESS_TEXT` du téléphone
-(traduire, rechercher…) : c'est le même canal que le bouton « Traduire » du menu ⋮, déjà accepté
+(mesuré sur S9 / One UI le 2026-09-12 : Copier, Sélectionner tout, Dictionnaire) : c'est le même canal que le bouton « Traduire » du menu ⋮, déjà accepté
 pour le message entier, étendu à un extrait — pas un canal nouveau.
 
 ⚠️ Le marquage est **uniforme**, non conditionné à l'appartenance au coffre. Le conditionner
