@@ -6,9 +6,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Visibility
@@ -37,10 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -480,27 +487,68 @@ private fun PassphraseDialog(
     // éviter une erreur de frappe qui rendrait le backup irrestaurable. Désactivé par défaut.
     var pwVisible by remember { mutableStateOf(false) }
     val matches = pw.length >= MIN_PASSPHRASE_LEN && pw == pw2
+    val tooShort = pw.isNotEmpty() && pw.length < MIN_PASSPHRASE_LEN
+    val mismatch = pw2.isNotEmpty() && pw != pw2
+
+    // v1.28.6 — LE CLAVIER CACHAIT LE BOUTON « Enregistrer », signale par Patrice : il fallait
+    // refermer le clavier pour valider. Deux corrections, et non une seule :
+    //
+    //  1. la touche de validation du clavier enregistre — c'est le geste naturel une fois la
+    //     confirmation tapee, et c'est deja le motif de [PinEntryDialog] ;
+    //  2. le contenu du dialogue DEFILE, pour que les boutons restent atteignables meme quand la
+    //     fenetre reduite par le clavier ne peut plus tout afficher. Sans cela, la premiere
+    //     correction masquerait le defaut sans le fermer : quelqu'un qui ne trouve pas la touche
+    //     de validation resterait coince.
+    //
+    // L'action de confirmation vit dans UNE lambda, partagee par le bouton et le clavier. Deux
+    // copies auraient divergé — c'est le motif d'asymetrie le plus frequent de ce depot — et
+    // celle-ci efface des secrets.
+    val enregistrer = {
+        val chars = pw.toCharArray()
+        pw = ""
+        pw2 = ""
+        onConfirm(chars)
+    }
 
     AlertDialog(
+        // v1.28.6 — LE DEFILEMENT SEUL NE SUFFISAIT PAS, et Patrice l'a constate : un
+        // `verticalScroll` ne sert a rien tant que la FENETRE du dialogue garde toute la hauteur
+        // de l'ecran. Une `Dialog` Compose a sa propre fenetre ; avec `decorFitsSystemWindows`
+        // a `true` — le defaut — elle ignore l'encart du clavier, et les boutons se retrouvent
+        // simplement dessous, hors de l'ecran. Il n'y avait donc rien a faire defiler.
+        //
+        // En passant a `false`, l'application prend la main sur les encarts : `imePadding` remonte
+        // le dialogue au-dessus du clavier, `safeDrawingPadding` le garde hors de la barre d'etat
+        // et de la barre de navigation, et le contenu defile pour le cas ou meme cette hauteur
+        // reduite ne suffirait pas. Les trois sont necessaires : le premier resout le defaut, le
+        // deuxieme empeche de le remplacer par un dialogue sous la barre d'etat, le troisieme
+        // couvre les tres petits ecrans et les polices agrandies.
+        modifier = Modifier
+            .safeDrawingPadding()
+            .imePadding(),
+        properties = DialogProperties(decorFitsSystemWindows = false),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.backup_passphrase_title)) },
         text = {
             // v1.27.1 (N3) — DANS le contenu du dialogue : phrase secrète d'export.
             ProtectSecretInput()
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     text = stringResource(R.string.backup_passphrase_explain),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.size(12.dp))
+                Spacer(Modifier.size(8.dp))
                 OutlinedTextField(
                     value = pw,
                     onValueChange = { pw = it },
                     singleLine = true,
                     label = { Text(stringResource(R.string.backup_passphrase)) },
                     visualTransformation = if (pwVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Next,
+                    ),
                     trailingIcon = {
                         IconButton(onClick = { pwVisible = !pwVisible }) {
                             Icon(
@@ -512,15 +560,20 @@ private fun PassphraseDialog(
                         }
                     },
                     // v1.15.2 — Indicateur visuel du minimum requis (sous le champ).
-                    // Devient rouge tant que la longueur n'est pas atteinte.
-                    supportingText = {
-                        val tooShort = pw.isNotEmpty() && pw.length < MIN_PASSPHRASE_LEN
-                        Text(
-                            text = stringResource(R.string.backup_passphrase_min_length, MIN_PASSPHRASE_LEN),
-                            color = if (tooShort) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    // v1.28.6 — il ne s'affiche PLUS EN PERMANENCE. Le texte d'explication juste
+                    // au-dessus dit déjà « Au minimum 8 caractères » : la même phrase sous le champ
+                    // était un doublon, et elle coûtait une ligne — celle qui, clavier ouvert,
+                    // faisait sortir le second champ et les boutons de l'écran. Elle ne paraît donc
+                    // plus que quand elle APPREND quelque chose : la saisie est trop courte.
+                    // `supportingText = null` ne réserve aucune place, contrairement à un `Text` vide.
+                    supportingText = if (tooShort) {
+                        {
+                            Text(stringResource(R.string.backup_passphrase_min_length, MIN_PASSPHRASE_LEN))
+                        }
+                    } else {
+                        null
                     },
-                    isError = pw.isNotEmpty() && pw.length < MIN_PASSPHRASE_LEN,
+                    isError = tooShort,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.size(8.dp))
@@ -530,7 +583,13 @@ private fun PassphraseDialog(
                     singleLine = true,
                     label = { Text(stringResource(R.string.backup_passphrase_repeat)) },
                     visualTransformation = if (pwVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    // La touche de validation n'enregistre QUE si le bouton l'aurait fait : meme
+                    // predicat `matches`, pas un second jugement ecrit a cote.
+                    keyboardActions = KeyboardActions(onDone = { if (matches) enregistrer() }),
                     // v1.15.2 — Œil aussi sur le champ confirmation : le state `pwVisible` est
                     // partagé donc cliquer ici ou sur le 1er champ produit le même effet
                     // (les deux champs se masquent/affichent ensemble). Permet à l'user de
@@ -545,27 +604,23 @@ private fun PassphraseDialog(
                             )
                         }
                     },
+                    // v1.28.6 — L'ÉCART EST DIT PAR LE CHAMP CONCERNÉ, et non par un `Text` posé
+                    // dessous en `labelSmall` : cette taille-là était illisible (constaté par
+                    // Patrice), et le message flottait sans être rattaché à un champ. En
+                    // `supportingText`, Material lui donne sa taille, sa couleur d'erreur et sa
+                    // place, et le champ se souligne en rouge avec lui.
+                    supportingText = if (mismatch) {
+                        { Text(stringResource(R.string.backup_passphrase_mismatch)) }
+                    } else {
+                        null
+                    },
+                    isError = mismatch,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                if (pw.isNotEmpty() && pw != pw2) {
-                    Text(
-                        text = stringResource(R.string.backup_passphrase_mismatch),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = matches,
-                onClick = {
-                    val chars = pw.toCharArray()
-                    pw = ""
-                    pw2 = ""
-                    onConfirm(chars)
-                },
-            ) {
+            TextButton(enabled = matches, onClick = enregistrer) {
                 Text(stringResource(R.string.action_save))
             }
         },
@@ -599,13 +654,28 @@ private fun RestorePassphraseDialog(
     // déchiffrement échoue avec une erreur générique → il ne saura pas si c'est une faute de
     // frappe ou la mauvaise passphrase. L'œil lui permet de vérifier visuellement.
     var pwVisible by remember { mutableStateOf(false) }
+    // v1.28.6 — le jumeau du dialogue d'export, corrigé en même temps que lui : le clavier y
+    // cachait le bouton de la même façon. Corriger un seul des deux aurait reproduit l'asymétrie
+    // que ce dépôt rencontre le plus souvent — et celui-ci se présente au pire moment, quand on
+    // restaure après avoir perdu ses données.
+    val restaurer = {
+        val chars = pw.toCharArray()
+        pw = ""
+        onConfirm(chars)
+    }
     AlertDialog(
+        // v1.28.6 — meme correction que [PassphraseDialog], son jumeau : cf. le commentaire y
+        // figurant pour le raisonnement complet.
+        modifier = Modifier
+            .safeDrawingPadding()
+            .imePadding(),
+        properties = DialogProperties(decorFitsSystemWindows = false),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.backup_restore_passphrase_title)) },
         text = {
             // v1.27.1 (N3) — DANS le contenu du dialogue : phrase secrète de restauration.
             ProtectSecretInput()
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     text = stringResource(R.string.backup_restore_explainer),
                     style = MaterialTheme.typography.bodyMedium,
@@ -618,7 +688,11 @@ private fun RestorePassphraseDialog(
                     singleLine = true,
                     label = { Text(stringResource(R.string.backup_restore_passphrase_field)) },
                     visualTransformation = if (pwVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { if (pw.isNotEmpty()) restaurer() }),
                     trailingIcon = {
                         IconButton(onClick = { pwVisible = !pwVisible }) {
                             Icon(
@@ -634,14 +708,7 @@ private fun RestorePassphraseDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = pw.isNotEmpty(),
-                onClick = {
-                    val chars = pw.toCharArray()
-                    pw = ""
-                    onConfirm(chars)
-                },
-            ) {
+            TextButton(enabled = pw.isNotEmpty(), onClick = restaurer) {
                 Text(stringResource(R.string.backup_restore_action))
             }
         },

@@ -675,6 +675,8 @@
     <string name="settings_nuke_data">Delete all my data</string>
     <string name="settings_nuke_confirm">All conversations will be erased in SMS Tech AND in the phone’s message store, along with attachments, scheduled sends and every setting. The vault is erased too. This cannot be undone, and nothing comes back at the next sync.</string>
     <string name="settings_nuke_confirm_not_default">⚠️ SMS Tech is not your default SMS app: the system will refuse to delete the phone’s messages. They will stay in place and come back at the next sync. Only SMS Tech’s own data will be erased.</string>
+    <string name="settings_nuke_done_title">Data erased</string>
+    <string name="settings_nuke_done_body">Conversations and settings have been erased, both in SMS Tech and in the phone’s message store. Nothing will come back at the next sync. SMS Tech is about to restart.</string>
     <string name="settings_nuke_residue_title">Incomplete deletion</string>
     <plurals name="settings_nuke_residue_body">
         <item quantity="one">SMS Tech erased its own data, but %1$d conversation stayed in the phone’s message store: the system refused to delete it, and it will come back at the next sync. The usual cause is that SMS Tech is not the default SMS app.</item>

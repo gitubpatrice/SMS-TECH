@@ -148,15 +148,20 @@ class SettingsViewModel @Inject constructor(
         data class VaultPurgedWithResidue(val deleted: Int, val left: Int) : Event
 
         /**
-         * v1.28.6 — « Supprimer toutes mes données » a laissé [left] conversation(s) dans la
-         * messagerie du téléphone, que le système a refusé de supprimer — en pratique parce que
-         * SMS Tech n'est pas l'application SMS par défaut.
+         * v1.28.6 — « Supprimer toutes mes données » a rendu la main. [restantes] compte les
+         * conversations laissées dans la messagerie du téléphone, que le système a refusé de
+         * supprimer — en pratique parce que SMS Tech n'est pas l'application SMS par défaut.
          *
-         * Cela se DIT, et avant le redémarrage : le dialogue de confirmation promet « irréversible »,
-         * et une promesse fausse est pire que l'absence de promesse. Même vocabulaire que la purge
-         * du coffre ([VaultPurgedWithResidue]), qui affronte exactement le même refus du système.
+         * Émis dans les DEUX cas, et non seulement en cas de résidu. Une action irréversible doit
+         * dire ce qu'elle a fait : à zéro, l'écran confirme ; au-delà, il avertit en rouge. Sans la
+         * confirmation, l'effacement complet ne montrait RIEN — le processus redémarrant aussitôt,
+         * il ne restait qu'une liste vide, indiscernable d'un échec (remarque de Patrice, mesurée
+         * sur S9 le 2026-09-12 : « je n'ai pas vu le message »).
+         *
+         * Le dialogue est le même dans les deux sessions, normale et leurre, avec les mêmes mots :
+         * une différence observable serait la fuite que le leurre existe pour empêcher.
          */
-        data class DataWipedWithResidue(val left: Int) : Event
+        data class DataWiped(val restantes: Int) : Event
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -282,13 +287,10 @@ class SettingsViewModel @Inject constructor(
      */
     fun nukeData() = viewModelScope.launch {
         val residu = panic.nukeEverything()
-        if (residu.copiesSystemeRestantes > 0) {
-            // v1.28.6 — ce qui RESTE se dit, et se dit AVANT le redémarrage : après, il n'y a plus
-            // d'écran pour le lire. L'utilisateur ferme le message, et le redémarrage suit.
-            _events.send(Event.DataWipedWithResidue(residu.copiesSystemeRestantes))
-        } else {
-            redemarrerApplication()
-        }
+        // v1.28.6 — le résultat se dit AVANT le redémarrage : après, il n'y a plus d'écran pour le
+        // lire, et un message glissant partirait avec le processus. L'utilisateur ferme le
+        // dialogue, et le redémarrage suit.
+        _events.send(Event.DataWiped(residu.copiesSystemeRestantes))
     }
 
     /** v1.28.6 — l'utilisateur a lu ce qui restait ; on termine par le redémarrage. */

@@ -271,8 +271,8 @@ fun SettingsScreen(
                 // v1.28.6 — la purge totale a laisse des messages dans le telephone. Un DIALOGUE
                 // et non un message glissant : le processus redemarre juste apres, un snackbar
                 // disparaitrait avec lui sans avoir ete lu.
-                is SettingsViewModel.Event.DataWipedWithResidue -> {
-                    nukeResidue = e.left
+                is SettingsViewModel.Event.DataWiped -> {
+                    nukeResidue = e.restantes
                 }
                 // v1.28.3 (audit du 2026-09-09) — echec LOCAL : pas de sortie forcee, et on le
                 // dit au lieu de rouvrir un dialogue qui ne mene nulle part.
@@ -853,29 +853,48 @@ fun SettingsScreen(
     // seul bouton : il n'y a rien à décider, seulement à savoir. Sa fermeture déclenche le
     // redémarrage que la purge avait mis en attente pour laisser ce message se lire.
     nukeResidue?.let { restantes ->
+        val incomplet = restantes > 0
         AlertDialog(
             onDismissRequest = { /* lecture obligatoire : seul le bouton ferme */ },
             icon = {
                 Icon(
-                    imageVector = Icons.Outlined.WarningAmber,
+                    imageVector = if (incomplet) Icons.Outlined.WarningAmber else Icons.Outlined.Check,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = if (incomplet) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
                 )
             },
             title = {
                 Text(
-                    text = stringResource(R.string.settings_nuke_residue_title),
-                    color = MaterialTheme.colorScheme.error,
+                    text = stringResource(
+                        if (incomplet) {
+                            R.string.settings_nuke_residue_title
+                        } else {
+                            R.string.settings_nuke_done_title
+                        },
+                    ),
+                    color = if (incomplet) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                 )
             },
             text = {
-                Text(
-                    text = androidx.compose.ui.res.pluralStringResource(
-                        R.plurals.settings_nuke_residue_body,
-                        restantes,
-                        restantes,
-                    ),
-                )
+                if (incomplet) {
+                    Text(
+                        text = androidx.compose.ui.res.pluralStringResource(
+                            R.plurals.settings_nuke_residue_body,
+                            restantes,
+                            restantes,
+                        ),
+                    )
+                } else {
+                    Text(stringResource(R.string.settings_nuke_done_body))
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
