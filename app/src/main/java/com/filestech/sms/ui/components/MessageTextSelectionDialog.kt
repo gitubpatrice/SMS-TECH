@@ -1,5 +1,6 @@
 package com.filestech.sms.ui.components
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -60,18 +61,29 @@ internal fun MessageTextSelectionContent(body: String) {
     val clipboard = LocalClipboard.current
     val sensitive = remember(clipboard) { SensitiveClipboard(clipboard) }
     CompositionLocalProvider(LocalClipboard provides sensitive) {
-        SelectionContainer(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .testTag(MESSAGE_TEXT_SELECTION_TAG),
-        ) {
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+        // Mesuré sur S9 le 2026-09-12 : un `verticalScroll` posé SUR le conteneur de sélection
+        // rend les poignées saccadées et parfois bloquées ; posé sur un parent, c'est net mais
+        // « peut-être moins fluide » ; sans défilement, c'est parfait. Les corps courts — presque
+        // tous — n'ont donc aucun défilement ; seuls ceux qui ne tiendraient pas dans la boîte
+        // en reçoivent un, sur un parent, plutôt que d'être coupés.
+        val selectable: @Composable () -> Unit = {
+            SelectionContainer(modifier = Modifier.testTag(MESSAGE_TEXT_SELECTION_TAG)) {
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        if (body.length > LONG_BODY_CHARS) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) { selectable() }
+        } else {
+            selectable()
         }
     }
 }
 
 internal const val MESSAGE_TEXT_SELECTION_TAG = "message_text_selection"
+
+/** Trois segments SMS, une douzaine de lignes en `bodyLarge` : au-delà, la boîte doit défiler. */
+private const val LONG_BODY_CHARS = 480
