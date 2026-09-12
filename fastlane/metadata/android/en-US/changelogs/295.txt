@@ -1,0 +1,3 @@
+Free text selection: long-pressing a bubble opens a box where you select and copy part of the message, also reachable from the menu ("Select text"). Long press no longer copies the whole message — "Copy" already does. The copy keeps the "sensitive" mark: no clipboard preview for an excerpt from the vault.
+
+Fixed: after "Reset all settings" or "Delete all my data", the welcome screen stayed stuck until the app was force-closed.

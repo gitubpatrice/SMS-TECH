@@ -152,6 +152,14 @@ Presse-papier, partage, export PDF, notifications, écriture dans `content://sms
 *Point d'autorité pour le presse-papier :* `copyToClipboardSensitive` — **jamais**
 `LocalClipboardManager`, qui n'expose pas `EXTRA_IS_SENSITIVE`.
 
+*Seconde voie, depuis la v1.28.6 :* une sélection Compose (`SelectionContainer`) copie par
+`LocalClipboard`, sans passer par la fonction ci-dessus. **Tout conteneur sélectionnable doit
+recevoir `LocalClipboard provides SensitiveClipboard(LocalClipboard.current)`** ; la marque est
+alors posée par `ClipData.markSensitive()`, seule écriture de cette marque dans l'application.
+Le menu système d'une sélection porte aussi les actions `ACTION_PROCESS_TEXT` du téléphone
+(traduire, rechercher…) : c'est le même canal que le bouton « Traduire » du menu ⋮, déjà accepté
+pour le message entier, étendu à un extrait — pas un canal nouveau.
+
 ⚠️ Le marquage est **uniforme**, non conditionné à l'appartenance au coffre. Le conditionner
 obligerait à propager « ce message est au coffre » jusqu'à chaque bouton copier : un drapeau de
 plus à ne pas oublier sur chaque nouveau chemin, c'est-à-dire la fabrique d'asymétries décrite en

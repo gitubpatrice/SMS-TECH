@@ -81,6 +81,24 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.6 — Une seconde voie de copie, alignée sur la première
+
+*Deux retours d'utilisateurs, sans rapport avec la relecture F-Droid.*
+
+**La sélection libre d'un extrait de message copie par le menu système**, donc par
+`LocalClipboard` de Compose et non par `copyToClipboardSensitive`. Sans rien, un extrait d'un
+message du coffre ressortait en vignette d'aperçu sous Android 13+ — le défaut N4 exactement,
+rouvert par une voie neuve. `SensitiveClipboard` enveloppe le presse-papiers Compose sous le
+conteneur de sélection et pose la même marque ; `ClipData.markSensitive()` est l'unique écriture
+de cette marque, désormais posée sur toute version (le système l'ignore avant Android 13), ce qui
+la rend **vérifiable** sur l'appareil de mesure. Test instrumenté : appui long, copie par la barre
+d'outils, lecture de la description du clip système ; contrôle négatif : sans l'enveloppe, la
+marque est absente.
+
+**L'écran de bienvenue restait bloqué après une réinitialisation** (garde d'idempotence jamais
+réarmé). Pas de portée sécurité, mais le chemin est celui de « Supprimer toutes mes données » :
+un utilisateur qui vide l'application doit pouvoir la reprendre sans la tuer.
+
 ### v1.28.5 — Six arêtes déduites du source, toutes réelles
 
 *Sixième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (2026-09-11) : il clôt R01/R02/R03

@@ -1,0 +1,3 @@
+Sélection libre d'un extrait de message : l'appui long sur une bulle ouvre une boîte où l'on sélectionne et copie une partie du texte, aussi accessible par le menu (« Sélectionner le texte »). L'appui long ne copie plus le message entier, « Copier » le fait déjà. Un extrait du coffre garde la marque « sensible », sans vignette d'aperçu.
+
+Corrigé : après « Réinitialiser tous les réglages » ou « Supprimer toutes mes données », l'écran de bienvenue restait bloqué jusqu'à la fermeture forcée.
