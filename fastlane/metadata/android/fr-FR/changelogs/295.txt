@@ -1,4 +1,4 @@
-« Supprimer toutes mes données » efface désormais aussi les messages dans la messagerie du téléphone, avec les pièces jointes et les envois programmés, puis confirme ce qui a été fait. Elle ne peut plus bloquer l'application, ne laisse plus de notification ni d'empreinte du code du coffre, et ne va plus à moitié.
+« Supprimer toutes mes données » efface désormais aussi les messages de la messagerie du téléphone, pièces jointes et envois programmés compris, puis confirme ce qui a été fait. Elle ne bloque plus l'application, ne va plus à moitié, et ne laisse ni notification, ni texte copié, ni empreinte du code du coffre.
 
 Sélection libre d'un extrait : l'appui long ouvre une boîte où l'on copie une partie du texte.
 

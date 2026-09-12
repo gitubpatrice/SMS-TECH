@@ -157,6 +157,28 @@ posée dans l'effaceur — la suppression ordinaire et celle d'un seul message s
 geste — et la purge totale annule tout, dans les deux sessions avec le même effet visible (une
 différence entre leurre et session réelle serait la fuite que I1 interdit).
 
+**Le presse-papiers aussi.** Cette version ajoute la copie d'un extrait de message : on
+sélectionne, on copie, on purge — et le texte restait dans le presse-papiers du téléphone, lisible
+par toute application. Le presse-papiers est hors du périmètre du coffre (I7/N4), limite assumée et
+écrite ; ce qui ne l'était pas, c'est qu'une purge se disant irréversible le laisse garni. Il est
+vidé dans les deux sessions, au même point que les notifications. `clearPrimaryClip` demande
+Android 9 alors que `minSdk` vaut 26 : un repli par clip vide couvre Android 8, faute de quoi la
+ligne n'y aurait rien fait sans le signaler. Android 10 et suivants n'autorisent cette écriture qu'à
+l'application au premier plan — ce qu'elle est au moment du tap —, et le code le dit plutôt que de
+le promettre.
+
+**Ce que l'annulation des notifications ne couvre pas encore.** La relecture sécurité du delta
+final a trouvé trois chemins qui suppriment sans passer par l'effaceur, et laissent donc leurs
+notifications : la purge de rétention, la réconciliation de synchronisation quand un message
+disparaît du fournisseur par une autre application, et la fusion de doublons. Préexistants et
+d'impact borné — une notification ne survit pas au redémarrage du téléphone, la rétention vise des
+messages anciens, la fusion ne supprime aucun message —, ils sont consignés pour une version
+ultérieure plutôt que corrigés au dernier moment. De même, `cancelAll()` ne retire pas la
+notification d'un service au premier plan actif : celle du mode « résistant » part quand la remise à
+zéro des réglages arrête le service. La même relecture a trouvé la seule étape de la purge sans
+filet — le presse-papiers, dont une exception aurait fait planter l'application après la destruction
+des données et avant le dialogue de confirmation — ; elle est corrigée.
+
 **La purge n'était non annulable que sur sa fin**, et c'est l'audit pré-release qui l'a trouvé, sur
 du code écrit dans cette même version. Elle vit dans un `viewModelScope` ; la v1.28.5 avait mis ses
 écritures finales sous `NonCancellable` pour cette raison précise, et le balayage des conversations

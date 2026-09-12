@@ -52,9 +52,19 @@ class ConversationEraser @Inject constructor(
     // « marquer comme lu ». Supprimer une conversation non lue laissait donc son expéditeur et
     // son texte dans le volet système, et « Supprimer toutes mes données » les y laissait tous.
     // L'annulation est posée ICI, dans la règle unique de suppression, et non chez les
-    // appelants : c'est la seule place qui les couvre tous — liste, fil, purge du coffre, purge
-    // totale — et le motif de défaut de ce dépôt est précisément le correctif posé sur un seul
+    // appelants : c'est la place qui couvre la liste, le fil, la purge du coffre et la purge
+    // totale — le motif de défaut de ce dépôt étant précisément le correctif posé sur un seul
     // des chemins jumeaux.
+    //
+    // CE QU'ELLE NE COUVRE PAS — un premier commentaire affirmait « tous », c'était faux
+    // (relecture sécurité du delta final, S2/S3). Trois chemins suppriment encore sans passer
+    // par [erase] ni [eraseMessage], et laissent donc les notifications : [purgeHistory], par un
+    // DELETE de masse ; la réconciliation de `TelephonySyncManager`, quand un message disparaît
+    // du fournisseur par une autre application ; la fusion de doublons de `ConversationMirror`,
+    // qui supprime la conversation victime après avoir déplacé ses messages. Préexistants et
+    // d'impact borné — une notification ne survit pas au redémarrage du téléphone, la rétention
+    // vise des messages anciens, la fusion ne supprime aucun message —, ils sont consignés et
+    // non corrigés en 1.28.6.
     private val notifications: ConversationNotificationCanceller,
 ) {
 

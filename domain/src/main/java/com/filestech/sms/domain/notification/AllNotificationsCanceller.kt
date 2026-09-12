@@ -11,6 +11,13 @@ package com.filestech.sms.domain.notification
  * outre des notifications qui n'appartiennent à aucune conversation — échec d'envoi, veille du
  * Safety call, et le raccourci d'urgence, qui est `ongoing` donc **non balayable à la main**.
  *
+ * **Ce que `cancelAll()` ne retire pas** (relecture sécurité du delta final, S4) : la notification
+ * d'un service au premier plan actif — ici `KeepAliveService`, le mode « résistant ». Android la
+ * garde tant que le service tourne. Elle part par un autre chemin : la purge remet les réglages
+ * avancés aux défauts, `keepAliveService` y vaut `false`, et l'observateur de `MainApplication`
+ * arrête alors le service. Même effet dans les deux sessions, qui remettent toutes deux ce bloc
+ * aux défauts.
+ *
  * Deux ports plutôt qu'une méthode ajoutée au premier : le contrat n'est pas le même, et le nom
  * du premier dit « conversation ». Un `cancelAll()` posé dessus aurait menti sur sa portée.
  *

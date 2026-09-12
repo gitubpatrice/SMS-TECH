@@ -1,4 +1,4 @@
-"Delete all my data" now also erases the messages in the phone's message store, along with attachments and scheduled sends, then confirms what was done. It can no longer brick the app, leaves no notification in the shade and no imprint of the vault code, and no longer stops halfway.
+"Delete all my data" now also erases the messages in the phone's message store, attachments and scheduled sends included, then confirms what was done. It no longer bricks the app, no longer stops halfway, and leaves no notification, no copied text and no imprint of the vault code.
 
 Free text selection: a long press opens a box where you copy part of the message.
 

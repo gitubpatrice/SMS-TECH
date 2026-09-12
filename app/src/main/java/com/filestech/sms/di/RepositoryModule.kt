@@ -18,6 +18,7 @@ import com.filestech.sms.data.sms.SystemCopyEraser
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.data.sms.TelephonySystemCopyEraser
 import com.filestech.sms.domain.backup.BackupRestorer
+import com.filestech.sms.domain.clipboard.ClipboardCleaner
 import com.filestech.sms.domain.emergency.IAmOkMessageProvider
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.mms.MmsDispatcher
@@ -41,6 +42,7 @@ import com.filestech.sms.domain.settings.AppSettingsSource
 import com.filestech.sms.domain.vault.VaultMover
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.VaultManager
+import com.filestech.sms.system.clipboard.ClipboardCleanerImpl
 import com.filestech.sms.system.emergency.IAmOkMessageProviderImpl
 import com.filestech.sms.system.notifications.AllNotificationsCancellerImpl
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
@@ -132,4 +134,7 @@ abstract class RepositoryModule {
     abstract fun bindAllNotificationsCanceller(
         impl: AllNotificationsCancellerImpl,
     ): AllNotificationsCanceller
+
+    @Binds @Singleton
+    abstract fun bindClipboardCleaner(impl: ClipboardCleanerImpl): ClipboardCleaner
 }

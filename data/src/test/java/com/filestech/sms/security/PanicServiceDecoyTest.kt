@@ -7,6 +7,7 @@ import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.DatabaseKeyManager
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.repository.ConversationEraser
+import com.filestech.sms.domain.clipboard.ClipboardCleaner
 import com.filestech.sms.domain.notification.AllNotificationsCanceller
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettings
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -69,6 +71,7 @@ class PanicServiceDecoyTest {
     private val eraser = mockk<ConversationEraser>()
     private val barriere = VaultPurgeBarrier()
     private val notifications = mockk<AllNotificationsCanceller>(relaxed = true)
+    private val pressePapiers = mockk<ClipboardCleaner>(relaxed = true)
     private val settings = FakeSettings(reglagesModifies)
 
     private fun fichier(chemin: String): File = File(dossier, chemin).apply {
@@ -96,6 +99,7 @@ class PanicServiceDecoyTest {
             eraser = eraser,
             barriere = barriere,
             notifications = notifications,
+            pressePapiers = pressePapiers,
             io = UnconfinedTestDispatcher(),
         )
     }
@@ -126,6 +130,9 @@ class PanicServiceDecoyTest {
         // Les notifications, elles, partent dans les DEUX sessions : une purge de leurre qui les
         // laisserait la ou la vraie les efface serait une difference observable (I1).
         verify(exactly = 1) { notifications.cancelAll() }
+        // Le presse-papiers aussi : l'extrait copie juste avant ne doit pas survivre a la purge,
+        // et il part dans les deux sessions pour ne pas les rendre distinguables.
+        verify(exactly = 1) { pressePapiers.clear() }
         assertThat(pieceJointeDuCoffre.exists()).isTrue()
         // Le bloc sécurité est préservé, le reste revient aux défauts, le splash se rejouera.
         assertThat(settings.state.value.security).isEqualTo(securiteArmee)
@@ -194,6 +201,7 @@ class PanicServiceDecoyTest {
         // 2026-09-12, et par l'audit 3 axes pre-release au meme moment (son S2).
         coVerify(exactly = 1) { securityStore.clearAll() }
         verify(exactly = 1) { notifications.cancelAll() }
+        verify(exactly = 1) { pressePapiers.clear() }
         assertThat(settings.state.value).isEqualTo(AppSettings())
     }
 
@@ -210,8 +218,8 @@ class PanicServiceDecoyTest {
      *
      * Le test annule le `Job` appelant PENDANT le balayage, a la premiere conversation, et exige
      * que les suivantes soient tout de meme presentees a l'effaceur et que la destruction aille au
-     * bout. Controle negatif fait le 2026-09-12 : avec `withContext(io)` seul, il tombe — la
-     * deuxieme conversation n'est jamais atteinte.
+     * bout. Controle negatif mesure le 2026-09-12 : avec `withContext(io)` seul, il tombe — la
+     * suite de chaque conversation suivante ne s'execute jamais, le `yield()` levant l'annulation.
      */
     @Test
     fun `une annulation pendant le balayage n'interrompt pas la purge`() = runTest {
@@ -221,16 +229,49 @@ class PanicServiceDecoyTest {
             portee.cancel()
             ConversationEraser.Issue(true, true)
         }
-        coEvery { eraser.erase(2L, any()) } returns ConversationEraser.Issue(true, true)
-        coEvery { eraser.erase(3L, any()) } returns ConversationEraser.Issue(true, true)
+        // Les suivantes SUSPENDENT avant de rendre compte : `yield()` leve si le job est annule.
+        // Sans ce point de suspension, rien dans ce test ne suspendrait reellement — un mock rend
+        // la main sans jamais consulter l'annulation — et une verification sur l'APPEL aurait ete
+        // vraie meme sans `NonCancellable` : un test qui ne peut pas echouer. Ce qui est compte,
+        // c'est donc ce qui s'est passe APRES la suspension, et non l'appel lui-meme.
+        val effacees = mutableListOf<Long>()
+        coEvery { eraser.erase(2L, any()) } coAnswers {
+            yield()
+            effacees += 2L
+            ConversationEraser.Issue(true, true)
+        }
+        coEvery { eraser.erase(3L, any()) } coAnswers {
+            yield()
+            effacees += 3L
+            ConversationEraser.Issue(true, true)
+        }
 
         val service = service(decoy = false)
         portee.launch { service.nukeEverything() }.join()
 
-        coVerify(exactly = 1) { eraser.erase(2L, ConversationEraser.Mode.ORDINAIRE) }
-        coVerify(exactly = 1) { eraser.erase(3L, ConversationEraser.Mode.ORDINAIRE) }
+        assertThat(effacees).containsExactly(2L, 3L).inOrder()
         verify(exactly = 1) { database.close() }
         coVerify(exactly = 1) { securityStore.clearAll() }
         assertThat(settings.state.value).isEqualTo(AppSettings())
+    }
+
+    /**
+     * v1.28.6 (relecture securite du delta final, S1) — un presse-papiers qui leve ne fait pas
+     * planter la purge. C'etait la seule etape sans filet, et la derniere avant le compte rendu :
+     * une exception y remontait APRES la destruction de la base et des cles, et AVANT le dialogue
+     * de confirmation. Controle negatif mesure le 2026-09-12 : sans le `runCatching`, la purge
+     * leve et ce test tombe.
+     */
+    @Test
+    fun `un presse-papiers qui leve n'empeche pas la purge de rendre compte`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns listOf(4L)
+        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true)
+        every { pressePapiers.clear() } throws SecurityException("presse-papiers refuse")
+
+        val residu = service(decoy = false).nukeEverything()
+
+        assertThat(residu.copiesSystemeRestantes).isEqualTo(0)
+        coVerify(exactly = 1) { securityStore.clearAll() }
+        verify(exactly = 1) { notifications.cancelAll() }
     }
 }

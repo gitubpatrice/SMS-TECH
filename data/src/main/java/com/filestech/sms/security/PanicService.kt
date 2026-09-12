@@ -7,6 +7,7 @@ import com.filestech.sms.data.local.db.DatabaseKeyManager
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.repository.ConversationEraser
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.clipboard.ClipboardCleaner
 import com.filestech.sms.domain.notification.AllNotificationsCanceller
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettings
@@ -45,6 +46,7 @@ class PanicService @Inject constructor(
     private val eraser: ConversationEraser,
     private val barriere: VaultPurgeBarrier,
     private val notifications: AllNotificationsCanceller,
+    private val pressePapiers: ClipboardCleaner,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
     /**
@@ -80,6 +82,20 @@ class PanicService @Inject constructor(
         // une conversation du coffre ne notifie jamais.
         runCatching { notifications.cancelAll() }
             .onFailure { Timber.w(it, "wipe: annulation des notifications") }
+        // v1.28.6 — ET LE PRESSE-PAPIERS, pour la meme raison et au meme endroit. Cette version
+        // ajoute la copie d'un EXTRAIT de message : on selectionne, on copie, on purge — et le
+        // texte restait dans le presse-papiers du telephone, lisible par toute application. Le
+        // presse-papiers est deja hors perimetre du coffre (I7/N4, limite assumee et ecrite) ;
+        // ce qui ne l'etait pas, c'est qu'une purge se disant irreversible le laisse garni.
+        // Dans les deux sessions, comme les notifications : une difference observable entre
+        // leurre et session reelle serait la fuite que I1 interdit.
+        // Sous filet, comme chaque autre etape : c'est la derniere ligne avant que la purge ne
+        // rende compte. Une exception ici — `getSystemService` intercepte par une ROM ou un EMM —
+        // remonterait APRES la destruction de la base et des cles, et AVANT le dialogue de
+        // confirmation : un plantage au lieu du « Donnees effacees » que cette version ajoute.
+        // Trouve par la relecture securite du delta final (S1).
+        runCatching { pressePapiers.clear() }
+            .onFailure { Timber.w(it, "wipe: presse-papiers") }
         residu
     }
 
