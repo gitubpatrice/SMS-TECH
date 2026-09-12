@@ -60,6 +60,10 @@ class DatabaseFactory @Inject constructor(
             )
         }
         loadNativeOnce()
+        // v1.28.6 — lu AVANT la création : `getOrCreatePassphrase` écrit le fichier de clé, donc
+        // après lui la réponse serait toujours `true`. Une clé fabriquée à l'instant signifie
+        // qu'aucune autre n'existe sur cet appareil ; cf. `rekeyIfNeeded(cleOrpheline = …)`.
+        val cleEnrobeePresente = keyManager.hasWrappedKey()
         val raw = keyManager.getOrCreatePassphrase()
 
         // v1.24.0 SEC-CRIT — repair databases still encrypted with the legacy all-zero key.
@@ -70,7 +74,7 @@ class DatabaseFactory @Inject constructor(
         // startup sequence forces this whole provision onto an IO dispatcher and holds the splash
         // screen until `repairState` settles. `markSettled` is in a `finally`: a failure must
         // surface as an exception, never as a splash screen pinned forever.
-        LegacyZeroKeyRekey.rekeyIfNeeded(context, raw)
+        LegacyZeroKeyRekey.rekeyIfNeeded(context, raw, cleOrpheline = !cleEnrobeePresente)
 
         // v1.25.0 — convert the database to RAW-KEY encryption so opening it skips SQLCipher's
         // 256 000 PBKDF2 iterations (pointless for a random 32-byte key). This is what made the

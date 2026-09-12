@@ -54,6 +54,21 @@ class DatabaseKeyManager @Inject constructor(
         class Io(cause: Throwable? = null) : Failure("I/O failure reading the wrapped DB key", cause)
     }
 
+    /**
+     * v1.28.6 — y a-t-il une clé enrobée sur le disque, **avant** que
+     * [getOrCreatePassphrase] n'en crée une ?
+     *
+     * La réponse est la prémisse dont [LegacyZeroKeyRekey] a besoin pour distinguer deux états
+     * que rien ne séparait : une base qu'on n'arrive pas à ouvrir *maintenant* (l'alias Keystore
+     * peut avoir été invalidé, le fichier de clé est là, les données sont peut-être récupérables)
+     * et une base dont **aucune clé n'existe plus nulle part** — cas où la clé vient d'être
+     * fabriquée à l'instant. Cf. `LegacyZeroKeyRekey.rekeyIfNeeded(cleOrpheline = …)`.
+     *
+     * À lire AVANT [getOrCreatePassphrase] : l'appel crée le fichier et la réponse deviendrait
+     * `true` pour tout le monde.
+     */
+    fun hasWrappedKey(): Boolean = keyFile.exists()
+
     /** Returns the raw 32-byte SQLCipher key, generating it on first call. */
     @Throws(Failure::class)
     fun getOrCreatePassphrase(): ByteArray =

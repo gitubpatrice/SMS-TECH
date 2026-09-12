@@ -65,6 +65,12 @@ object LegacyZeroKeyRekey {
 
         /** The file was encrypted with the zero key and has been re-encrypted. */
         REKEYED,
+
+        /**
+         * v1.28.6 — le fichier existait, **aucune clé capable de l'ouvrir n'existe plus sur cet
+         * appareil**, et il a été écarté pour que l'application redémarre sur une base neuve.
+         */
+        ORPHANED_DISCARDED,
     }
 
     /** The database exists but decrypts with neither the real passphrase nor the legacy zero key. */
@@ -114,7 +120,11 @@ object LegacyZeroKeyRekey {
      * [dbFile] is injectable so tests can point at a throwaway file — running them against the
      * real `smstech.db` would destroy the device's messages.
      *
-     * @throws Failure when the file exists but decrypts with neither key.
+     * @param cleOrpheline `true` quand [DatabaseKeyManager] n'a trouvé AUCUNE clé enrobée et vient
+     *   d'en fabriquer une : plus aucune clé capable d'ouvrir un fichier préexistant n'existe alors
+     *   sur l'appareil, et ce fichier est écarté au lieu de bloquer le démarrage. `false` conserve
+     *   le comportement de la doctrine F18 — lever, ne rien supprimer.
+     * @throws Failure when the file exists but decrypts with neither key, and [cleOrpheline] is false.
      */
     /**
      * Remembers a failure for the lifetime of the process.
@@ -137,6 +147,7 @@ object LegacyZeroKeyRekey {
         context: Context,
         passphrase: ByteArray,
         dbFile: File = context.getDatabasePath(AppDatabase.DATABASE_NAME),
+        cleOrpheline: Boolean = false,
     ): Result {
         failures[dbFile.absolutePath]?.let { throw it }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -162,8 +173,59 @@ object LegacyZeroKeyRekey {
             return Result.ALREADY_CORRECT
         }
 
+        return reparerOuEcarter(prefs, dbFile, passphrase, cleOrpheline)
+    }
+
+    /**
+     * La décision finale, séparée pour rester sous la limite de sorties de `rekeyIfNeeded` :
+     * la base existe, elle n'ouvre pas avec la passphrase, il reste trois issues — l'écarter
+     * (aucune clé n'existe plus), la reconstruire (clé nulle héritée), ou lever.
+     */
+    private fun reparerOuEcarter(
+        prefs: android.content.SharedPreferences,
+        dbFile: File,
+        passphrase: ByteArray,
+        cleOrpheline: Boolean,
+    ): Result {
         val legacyKey = ByteArray(passphrase.size)
         if (!canOpen(dbFile, legacyKey)) {
+            if (cleOrpheline) {
+                // v1.28.6 — LE SEUL CAS OÙ ÉCARTER LE FICHIER N'EST PAS UNE PERTE DE DONNÉES.
+                //
+                // `cleOrpheline` dit que [DatabaseKeyManager] n'a trouvé AUCUNE clé enrobée et
+                // vient d'en fabriquer une. Le fichier n'ouvre ni avec elle, ni avec la clé nulle
+                // héritée : il n'existe donc plus, nulle part sur cet appareil, de clé capable de
+                // le lire. Ce n'est plus une base de données, c'est du chiffré sans clé.
+                //
+                // La doctrine F18 — « jamais d'effacement silencieux » — visait le cas INVERSE,
+                // et elle reste en vigueur juste en dessous : quand le fichier de clé est là mais
+                // que l'alias Keystore a été invalidé (changement de code de verrouillage,
+                // restauration d'appareil), les données sont peut-être récupérables et l'écran de
+                // réparation doit le dire. Ici, il n'y a rien à récupérer, et refuser de démarrer
+                // n'est pas une protection : c'est un cul-de-sac dont l'application ne sort qu'en
+                // étant réinstallée.
+                //
+                // Le cas se produit après « Supprimer toutes mes données » : la purge supprime la
+                // base, le fichier de clé et les alias, mais le processus SURVIT, et SQLCipher
+                // garde la passphrase en mémoire pour toute sa durée de vie (cf. [DatabaseFactory],
+                // qui explique pourquoi on ne peut pas l'effacer). La moindre réouverture de Room
+                // — jusqu'au vidage final, à la mort du processus — récrit donc un `smstech.db`
+                // chiffré avec une clé dont l'enrobage n'existe plus. Mesuré sur S24 / Android 16
+                // le 2026-09-12 : au lancement suivant, l'application restait BLOQUÉE sur l'écran
+                // de réparation, définitivement, et seule une réinstallation la ramenait.
+                //
+                // Écarter ici répare aussi les installations déjà bloquées, sans rien demander.
+                Timber.w(
+                    "LegacyZeroKeyRekey: %s n'ouvre avec aucune clé existante (clé enrobée absente) " +
+                        "— fichier écarté, la base repart vierge",
+                    dbFile.name,
+                )
+                SIDECAR_SUFFIXES.forEach { File(dbFile.absolutePath + it).delete() }
+                discardTemp(dbFile)
+                discardOld(dbFile)
+                prefs.edit().putBoolean(doneKey(dbFile), true).apply()
+                return Result.ORPHANED_DISCARDED
+            }
             // Doctrine (audit F18): a silent wipe is silent data loss. Surface, never delete.
             failures[dbFile.absolutePath] = Failure(
                 "database ${dbFile.name} decrypts with neither the Keystore passphrase " +

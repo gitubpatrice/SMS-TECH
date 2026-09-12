@@ -198,6 +198,52 @@ class LegacyZeroKeyRekeyTest {
     }
 
     /**
+     * v1.28.6 — **« Supprimer toutes mes données » bloquait l'application, définitivement.**
+     *
+     * Mesuré sur S24 / Android 16 le 2026-09-12, sur la v1.28.5 déjà publiée : la purge supprime la
+     * base, le fichier de clé enrobée et les alias Keystore, mais le processus SURVIT, et SQLCipher
+     * garde la passphrase en mémoire pour toute sa durée de vie. Room récrit donc un `smstech.db`
+     * chiffré avec une clé dont l'enrobage n'existe plus (constaté : base et sidecars réapparus à
+     * la mort du processus). Au lancement suivant, une clé neuve est fabriquée, n'ouvre pas ce
+     * fichier, et l'application reste sur l'écran de réparation — dont le seul moyen de sortir
+     * était de la réinstaller.
+     *
+     * Le fichier de clé ABSENT au démarrage est la preuve qui manquait : plus aucune clé capable
+     * d'ouvrir ce fichier n'existe sur l'appareil. L'écarter n'est donc pas l'effacement silencieux
+     * que la doctrine F18 interdit — c'est jeter du chiffré sans clé. Le test juste au-dessus tient
+     * l'autre bord : clé enrobée présente, on lève et on ne supprime rien.
+     */
+    @Test
+    fun baseOrpheline_aucuneCleNExistePlus_estEcarteeAuLieuDeBloquerLApplication() {
+        val cleMorte = ByteArray(32) { 0x5A }
+        seedDatabase(cleMorte, marker = "chiffre-sans-cle")
+        assertThat(readMarker(cleMorte)).isEqualTo("chiffre-sans-cle-0")
+
+        val result = LegacyZeroKeyRekey.rekeyIfNeeded(context, realPassphrase, dbFile, cleOrpheline = true)
+
+        assertThat(result).isEqualTo(LegacyZeroKeyRekey.Result.ORPHANED_DISCARDED)
+        assertThat(dbFile.exists()).isFalse()
+        // Et l'appel suivant ne lève pas : rien n'a été mémoïsé en échec, la base repart vierge.
+        assertThat(LegacyZeroKeyRekey.rekeyIfNeeded(context, realPassphrase, dbFile, cleOrpheline = true))
+            .isEqualTo(LegacyZeroKeyRekey.Result.ALREADY_CORRECT)
+    }
+
+    /**
+     * Le contrôle positif de l'autre branche : une base sur la clé nulle héritée reste RÉPARÉE,
+     * pas écartée, même quand la clé enrobée est absente — elle est lisible, donc récupérable.
+     */
+    @Test
+    fun baseOrpheline_maisLisibleParLaCleNulle_estRepareeEtNonEcartee() {
+        seedDatabase(zeroKey, marker = "recuperable", rows = 3)
+
+        val result = LegacyZeroKeyRekey.rekeyIfNeeded(context, realPassphrase, dbFile, cleOrpheline = true)
+
+        assertThat(result).isEqualTo(LegacyZeroKeyRekey.Result.REKEYED)
+        assertThat(dbFile.exists()).isTrue()
+        assertThat(countRows(realPassphrase)).isEqualTo(3)
+    }
+
+    /**
      * The original is only moved aside once a validated replacement exists, so an interrupted swap
      * can always be rolled back to a readable database.
      */

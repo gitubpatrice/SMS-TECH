@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.screens.settings
 
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.filestech.sms.core.crypto.wipe
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -233,7 +235,61 @@ class SettingsViewModel @Inject constructor(
         settings.update { AppSettings(security = it.security) }
     }
 
-    fun nukeData() = viewModelScope.launch { panic.nukeEverything() }
+    /**
+     * v1.28.6 — « Supprimer toutes mes données », **puis redémarrage du processus**.
+     *
+     * # Pourquoi le redémarrage fait partie de l'effacement
+     *
+     * SQLCipher conserve la passphrase en mémoire pour toute la durée du processus : il doit
+     * pouvoir rouvrir la base après un `close()`, et [com.filestech.sms.data.local.db
+     * .DatabaseFactory] explique pourquoi on ne peut pas l'effacer. La purge, elle, détruit la
+     * base, le fichier de clé enrobée et les alias du Keystore. Le processus survivait donc à son
+     * propre effacement en gardant en mémoire la seule chose qu'il venait de rendre irrécupérable,
+     * et la moindre réouverture de Room — jusqu'au vidage final, à la mort du processus — récrivait
+     * un `smstech.db` chiffré avec une clé dont l'enrobage n'existait plus.
+     *
+     * Mesuré sur S24 / Android 16 le 2026-09-12, sur la v1.28.5 publiée : au lancement suivant,
+     * l'application restait **définitivement** bloquée sur l'écran « ne parvient pas à ouvrir sa
+     * base de données », et seule une réinstallation la ramenait. Signalé par Patrice, reproduit
+     * fichier par fichier (base et sidecars réapparus à la mort du processus, clé absente).
+     *
+     * Terminer le processus supprime la classe entière plutôt qu'un de ses chemins : plus aucun
+     * code ne peut toucher la base avec une clé morte, et la passphrase quitte la mémoire — ce que
+     * « supprimer toutes mes données » promettait déjà. Au prochain lancement, tout est reconstruit
+     * et les messages sont réimportés depuis le fournisseur du système, comportement déjà
+     * documenté de la purge ([com.filestech.sms.data.sync.TelephonySyncManager], curseur remis à 0).
+     *
+     * # Pourquoi le même redémarrage en session leurre
+     *
+     * En leurre, la purge n'efface que ce que le leurre montre et ne touche NI la base NI les clés :
+     * techniquement, le redémarrage n'y est pas nécessaire. Il a lieu quand même, parce qu'une
+     * différence de comportement observable entre les deux sessions **est** la fuite que le leurre
+     * existe pour empêcher. Les deux chemins doivent se voir pareil.
+     *
+     * L'activité est relancée avant la mort du processus pour que l'utilisateur retrouve
+     * l'application, et non le lanceur : le système la redémarre à partir de la tâche neuve.
+     */
+    fun nukeData() = viewModelScope.launch {
+        panic.nukeEverything()
+        redemarrerApplication()
+    }
+
+    private fun redemarrerApplication() {
+        val intent = Intent(context, com.filestech.sms.MainActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP,
+            )
+        }
+        runCatching { context.startActivity(intent) }
+            .onFailure { Timber.w(it, "wipe: relance de l'activite") }
+        // `exitProcess` plutôt que `killProcess` : le premier laisse la JVM dérouler sa sortie
+        // normale (flush des journaux), le second tue au signal. Aucune donnée n'est en vol — les
+        // écritures de la purge sont terminées, `nukeEverything` étant `NonCancellable` de bout en
+        // bout — et le système relance l'activité de la tâche créée juste au-dessus.
+        kotlin.system.exitProcess(0)
+    }
 
     /**
      * Sets the user's PIN/passphrase via [AppLockManager.setPin]. The `CharArray` is wiped
