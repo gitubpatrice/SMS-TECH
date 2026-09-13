@@ -81,6 +81,24 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.8 — La recherche traverse l'historique, jamais le coffre
+
+**La recherche dans le texte des messages est branchée** (issue GitHub #17). Elle existait côté
+données sans aucun appelant ; le champ ne cherchait que le nom, le numéro et le dernier aperçu.
+Portée sécurité : les résultats sont bornés **dans le SQL** — jamais un message d'une conversation du
+coffre (`in_vault = 0`), donc rien de plus en session leurre, qui voit la même liste hors coffre ;
+jamais une ligne de service (`hidden = 0`) ; le texte seul, jamais les numéros. Les conversations des
+résultats sont relues avec la même exigence dans le SQL, contre un passage au coffre entre deux
+lectures, et le flux se réémet quand une conversation passe au coffre pendant qu'une recherche est
+affichée — mesuré sur appareil. Chaque garde a son test instrumenté et son contrôle négatif. L'index
+plein texte couvre toute la base, coffre compris, dans la même base chiffrée : seuls les résultats
+sont bornés, comme avant cette version.
+
+**Épinglées en tête dans tous les tris**, et **isolement des tests DataStore** : sans portée sécurité.
+Le second touche `SecurityStore` (constructeur principal recevant le `DataStore`, constructeur injecté
+inchangé) : graphe Hilt, fichier, clés et comportements identiques — relu par GPT 5.2 et par un audit
+sécurité dédié.
+
 ### v1.28.7 — Ce qui est supprimé ne s'affiche plus, sur tous les chemins
 
 **Trois suppressions laissaient leurs notifications**, consignées sans correction en 1.28.6 par la

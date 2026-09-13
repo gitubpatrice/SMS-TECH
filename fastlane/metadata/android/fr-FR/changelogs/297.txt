@@ -1,0 +1,3 @@
+Nouveau : la recherche trouve désormais le texte de tous les messages, pas seulement le dernier de chaque conversation. Les messages trouvés s'affichent sous les conversations, mots mis en évidence. Le coffre n'apparaît jamais dans les résultats.
+
+Corrigé : les conversations épinglées restent en tête, quel que soit le tri.

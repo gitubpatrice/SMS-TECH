@@ -3,6 +3,78 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.8] — 2026-09-13
+
+*Quatre issues GitHub (#15, #16, #17, #19) et un test instable du gate.*
+
+### Ajouté
+- **La recherche trouve le texte de tous les messages** (#17), et plus seulement le nom, le numéro
+  et le dernier message de chaque conversation. Les messages trouvés s'affichent sous les
+  conversations, mots mis en évidence ; un appui ouvre la conversation. Le coffre n'y apparaît
+  jamais, en session leurre non plus. Mesuré sur Galaxy S9 avec 100 000 messages : 68 à 185 ms.
+
+### Corrigé
+- **Les conversations épinglées restent en tête dans tous les tris** (#17) ; l'option « Épinglés
+  d'abord », devenue identique, est retirée.
+- **Test instable du gate** (`SettingsHydrationTest`, « Unable to rename » sous Windows) : un
+  magasin DataStore par test.
+
+### Interne
+- Notes de release de nouveau bilingues (#15), celle de la 1.28.7 corrigée. Ce journal est
+  rattrapé : il s'arrêtait à la 1.28.4.
+
+## [1.28.7] — 2026-09-13
+
+*Les deux points laissés ouverts par la 1.28.6.*
+
+### Corrigé
+- **Bouton ⋮ écrasé sur écran étroit** (messages reçus) : 16 dp au lieu de 40 sur un écran de
+  360 dp avec un long message, 0 dp sur 320 dp, menu inatteignable.
+- **Trois suppressions laissaient leurs notifications** : purge de rétention, synchronisation
+  après une suppression faite dans une autre application, fusion de doublons. Toute suppression
+  annule désormais ses notifications, ou ne peut pas en avoir.
+
+## [1.28.6] — 2026-09-12
+
+*Deux retours d'utilisateurs, et « Supprimer toutes mes données » repris de bout en bout.*
+
+### Sécurité
+- **« Supprimer toutes mes données » ne supprimait aucun message du téléphone** : la
+  resynchronisation les ramenait tous, coffre compris et en clair. Balayage par l'effaceur
+  ordinaire avant la destruction de la base ; ce qui résiste est compté et dit.
+- **Cette purge pouvait bloquer l'application définitivement** (base réécrite avec une clé
+  détruite) : le processus redémarre après la purge, et une base orpheline est écartée au
+  démarrage.
+- **En session leurre**, elle n'efface plus que ce que le leurre montre.
+- **Survivaient à la purge** : l'empreinte du PIN du coffre et d'autres clés du magasin sécurisé,
+  les notifications, le presse-papiers. La purge est désormais non annulable de bout en bout.
+
+### Ajouté
+- **Sélection libre d'un extrait de message** par l'appui long.
+
+### Corrigé
+- **L'écran de bienvenue restait bloqué** après une réinitialisation.
+- **Le clavier cachait « Enregistrer »** dans les dialogues de phrase de passe de sauvegarde et de
+  restauration.
+
+## [1.28.5] — 2026-09-11
+
+*Sixième note d'Andrew Pozdnakov sur la MR F-Droid !38458 : six arêtes déduites du source, toutes
+réelles, et cinq voisines trouvées en les vérifiant.*
+
+### Sécurité
+- **Sous `force`, un dépendant qui résiste ne laisse plus supprimer son parent** ; barrière de
+  purge linéarisée, PIN retiré sous la barrière, restauration de sauvegarde inscrite comme une
+  entrée.
+- **Le garde d'abaissement du verrou échoue fermé** ; le geste « Je vais bien » est ignoré en
+  session leurre.
+- **Supprimer un message emporte ses fichiers** ; copie bornée sans fichier partiel ; phrase de
+  passe de restauration effacée après usage ; écritures finales de la purge non annulables.
+
+### Corrigé
+- Le miroir du MMS de groupe porte les membres servis ; la réponse rapide d'appel passe par
+  l'aiguillage unique.
+
 ## [1.28.4] — 2026-09-10
 
 *Réponse à la cinquième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (R01, R02, R03 — trois

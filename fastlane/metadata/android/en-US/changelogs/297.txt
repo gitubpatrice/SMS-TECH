@@ -1,0 +1,3 @@
+New: search now finds the text of every message, not just the latest one in each conversation. Matching messages appear below the conversations, with the words highlighted. The vault never appears in the results.
+
+Fixed: pinned conversations stay at the top, whatever the sort order.
