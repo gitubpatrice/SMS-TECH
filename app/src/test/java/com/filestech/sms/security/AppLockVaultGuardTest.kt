@@ -1,19 +1,22 @@
 package com.filestech.sms.security
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.filestech.sms.core.crypto.PasswordKdf
 import com.filestech.sms.data.local.datastore.SecurityStore
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.testing.magasinDeTest
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
@@ -24,6 +27,9 @@ import org.robolectric.annotation.Config
  * Les deux relèvent du même motif, celui qui a produit la majorité des vrais défauts de ce
  * projet : **la garde était sur l'affichage, pas sur l'accès.**
  *
+ * v1.28.8 — chaque test a ses propres magasins ([magasinDeTest]). Construits sur un `Context`, ils
+ * étaient ceux de toute la JVM : les PIN et codes panique d'un test restaient visibles du suivant.
+ *
  * ⚠️ JUnit 4 exécuté par le moteur *vintage*. Les méthodes doivent rendre `Unit` : un corps en
  * expression (`fun f() = runBlocking { … }`) fait échouer la classe entière à l'initialisation.
  */
@@ -31,12 +37,21 @@ import org.robolectric.annotation.Config
 @Config(sdk = [33])
 class AppLockVaultGuardTest {
 
-    private val context: Context
-        get() = ApplicationProvider.getApplicationContext()
+    @get:Rule
+    val dossier = TemporaryFolder()
+
+    private val porteeMagasins = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val magasinSecurite by lazy { magasinDeTest(dossier, porteeMagasins) }
+    private val magasinReglages by lazy { magasinDeTest(dossier, porteeMagasins) }
+
+    @After
+    fun fermeLesMagasins() {
+        porteeMagasins.cancel()
+    }
 
     private fun managerWith(session: VaultSessionState, scope: CoroutineScope) = AppLockManager(
-        securityStore = SecurityStore(context),
-        settings = SettingsRepository(context, scope),
+        securityStore = SecurityStore(magasinSecurite),
+        settings = SettingsRepository(magasinReglages, scope),
         kdf = PasswordKdf(),
         vaultSession = session,
         // v1.28.3 (F07) — le garde d'abaissement du verrouillage a besoin de savoir si le Coffre
@@ -132,8 +147,8 @@ class AppLockVaultGuardTest {
         dao: com.filestech.sms.data.local.db.dao.ConversationDao,
         facteur: () -> VaultSecondFactorPolicy = { error("vaultFactor ne doit pas etre atteint") },
     ) = AppLockManager(
-        securityStore = SecurityStore(context),
-        settings = SettingsRepository(context, scope),
+        securityStore = SecurityStore(magasinSecurite),
+        settings = SettingsRepository(magasinReglages, scope),
         kdf = PasswordKdf(),
         vaultSession = VaultSessionState(),
         vaultFactor = { facteur() },

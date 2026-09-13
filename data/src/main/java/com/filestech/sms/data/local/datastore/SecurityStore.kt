@@ -1,6 +1,8 @@
 package com.filestech.sms.data.local.datastore
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.byteArrayPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -20,31 +22,39 @@ private val Context.secStore by preferencesDataStore(name = "sms_tech_security")
  */
 
 @Singleton
-class SecurityStore @Inject constructor(@ApplicationContext private val context: Context) {
+class SecurityStore(private val store: DataStore<Preferences>) {
+
+    /**
+     * v1.28.8 — le constructeur de l'application : le magasin unique du processus, comme avant. Le
+     * constructeur principal reçoit le [DataStore] pour que chaque test JVM ait le sien — la raison
+     * est détaillée sur le constructeur de [SettingsRepository].
+     */
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context.secStore)
 
     suspend fun setPinHash(salt: ByteArray, hash: ByteArray, iterations: Int) {
-        context.secStore.edit { p ->
+        store.edit { p ->
             p[K.pinSalt] = salt
             p[K.pinHash] = hash
             p[K.pinIters] = iterations
         }
     }
 
-    suspend fun clearPin() = context.secStore.edit { p ->
+    suspend fun clearPin() = store.edit { p ->
         p.remove(K.pinSalt); p.remove(K.pinHash); p.remove(K.pinIters)
     }
 
     suspend fun pinSnapshot(): PinSnapshot? {
-        val p = context.secStore.data.first()
+        val p = store.data.first()
         val salt = p[K.pinSalt] ?: return null
         val hash = p[K.pinHash] ?: return null
         val iters = p[K.pinIters] ?: return null
         return PinSnapshot(salt, hash, iters)
     }
 
-    val failCount: Flow<Int> = context.secStore.data.map { it[K.failCount] ?: 0 }
-    suspend fun setFailCount(n: Int) = context.secStore.edit { it[K.failCount] = n.coerceIn(0, 1000) }
-    val lockoutUntil: Flow<Long> = context.secStore.data.map { it[K.lockoutUntil] ?: 0L }
+    val failCount: Flow<Int> = store.data.map { it[K.failCount] ?: 0 }
+    suspend fun setFailCount(n: Int) = store.edit { it[K.failCount] = n.coerceIn(0, 1000) }
+    val lockoutUntil: Flow<Long> = store.data.map { it[K.lockoutUntil] ?: 0L }
 
     /**
      * Audit P1-1 (v1.2.0): clamp the lockout horizon to 24 hours forward. Without this, a
@@ -53,7 +63,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
      * above the legitimate exponential-backoff ceiling (5 minutes) and short enough that a
      * real lockout ages off naturally if anything went wrong.
      */
-    suspend fun setLockoutUntil(ts: Long) = context.secStore.edit {
+    suspend fun setLockoutUntil(ts: Long) = store.edit {
         val now = System.currentTimeMillis()
         val maxHorizon = now + 24L * 60L * 60L * 1_000L
         it[K.lockoutUntil] = ts.coerceIn(0L, maxHorizon)
@@ -71,7 +81,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
      * géré par la guard `nowElapsed < setAtElapsed` dans [isLockoutActive] qui fallback alors sur
      * la wall clock seule, comportement raisonnable post-reboot).
      */
-    suspend fun setLockout(untilWall: Long, durationMs: Long, nowElapsed: Long) = context.secStore.edit {
+    suspend fun setLockout(untilWall: Long, durationMs: Long, nowElapsed: Long) = store.edit {
         val now = System.currentTimeMillis()
         val maxHorizon = now + 24L * 60L * 60L * 1_000L
         it[K.lockoutUntil] = untilWall.coerceIn(0L, maxHorizon)
@@ -79,7 +89,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         it[K.lockoutDurationMs] = durationMs.coerceIn(0L, 24L * 60L * 60L * 1_000L)
     }
 
-    suspend fun clearLockout() = context.secStore.edit {
+    suspend fun clearLockout() = store.edit {
         it[K.lockoutUntil] = 0L
         it[K.lockoutSetAtElapsed] = 0L
         it[K.lockoutDurationMs] = 0L
@@ -87,7 +97,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
 
     /** Snapshot des 3 champs lockout en une seule lecture DataStore (vs 3 .first()). */
     suspend fun lockoutSnapshot(): LockoutSnapshot {
-        val p = context.secStore.data.first()
+        val p = store.data.first()
         return LockoutSnapshot(
             untilWall = p[K.lockoutUntil] ?: 0L,
             setAtElapsed = p[K.lockoutSetAtElapsed] ?: 0L,
@@ -134,17 +144,17 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
     }
 
     suspend fun setPanicCode(salt: ByteArray, hash: ByteArray, iterations: Int) {
-        context.secStore.edit { p ->
+        store.edit { p ->
             p[K.panicSalt] = salt
             p[K.panicHash] = hash
             p[K.panicIters] = iterations
         }
     }
-    suspend fun clearPanic() = context.secStore.edit { p ->
+    suspend fun clearPanic() = store.edit { p ->
         p.remove(K.panicSalt); p.remove(K.panicHash); p.remove(K.panicIters)
     }
     suspend fun panicSnapshot(): PinSnapshot? {
-        val p = context.secStore.data.first()
+        val p = store.data.first()
         val salt = p[K.panicSalt] ?: return null
         val hash = p[K.panicHash] ?: return null
         val iters = p[K.panicIters] ?: return null
@@ -166,7 +176,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
      * accès Keystore (qui reste protégé par lockscreen Android).
      */
     suspend fun setVaultPinHash(salt: ByteArray, hash: ByteArray, iterations: Int) {
-        context.secStore.edit { p ->
+        store.edit { p ->
             p[K.vaultSalt] = salt
             p[K.vaultHash] = hash
             p[K.vaultIters] = iterations
@@ -179,7 +189,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
      * retire son PIN survivait a la reconfiguration suivante : il aurait retrouve un coffre
      * neuf deja bloque, sans aucun echec a son actif.
      */
-    suspend fun clearVaultPin() = context.secStore.edit { p ->
+    suspend fun clearVaultPin() = store.edit { p ->
         p.remove(K.vaultSalt); p.remove(K.vaultHash); p.remove(K.vaultIters)
         p[K.vaultFail] = 0
         p[K.vaultLockoutUntil] = 0L
@@ -187,7 +197,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
         p[K.vaultLockoutDurationMs] = 0L
     }
     suspend fun vaultPinSnapshot(): PinSnapshot? {
-        val p = context.secStore.data.first()
+        val p = store.data.first()
         val salt = p[K.vaultSalt] ?: return null
         val hash = p[K.vaultHash] ?: return null
         val iters = p[K.vaultIters] ?: return null
@@ -206,14 +216,14 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
      * le PIN d'application : il lui aurait suffi de verrouiller puis deverrouiller entre deux
      * essais pour effacer la temporisation a volonte. Deux compteurs, deux vies.
      */
-    val vaultFailCount: Flow<Int> = context.secStore.data.map { it[K.vaultFail] ?: 0 }
-    suspend fun setVaultFailCount(n: Int) = context.secStore.edit {
+    val vaultFailCount: Flow<Int> = store.data.map { it[K.vaultFail] ?: 0 }
+    suspend fun setVaultFailCount(n: Int) = store.edit {
         it[K.vaultFail] = n.coerceIn(0, 1000)
     }
 
     /** Meme bornage a 24 h que [setLockout] — voir son KDoc (audit P1-1). */
     suspend fun setVaultLockout(untilWall: Long, durationMs: Long, nowElapsed: Long) =
-        context.secStore.edit {
+        store.edit {
             val now = System.currentTimeMillis()
             val maxHorizon = now + 24L * 60L * 60L * 1_000L
             it[K.vaultLockoutUntil] = untilWall.coerceIn(0L, maxHorizon)
@@ -221,7 +231,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
             it[K.vaultLockoutDurationMs] = durationMs.coerceIn(0L, 24L * 60L * 60L * 1_000L)
         }
 
-    suspend fun clearVaultLockout() = context.secStore.edit {
+    suspend fun clearVaultLockout() = store.edit {
         it[K.vaultFail] = 0
         it[K.vaultLockoutUntil] = 0L
         it[K.vaultLockoutSetAtElapsed] = 0L
@@ -230,7 +240,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
 
     /** Instantane des 3 champs de temporisation du coffre en une seule lecture DataStore. */
     suspend fun vaultLockoutSnapshot(): LockoutSnapshot {
-        val p = context.secStore.data.first()
+        val p = store.data.first()
         return LockoutSnapshot(
             untilWall = p[K.vaultLockoutUntil] ?: 0L,
             setAtElapsed = p[K.vaultLockoutSetAtElapsed] ?: 0L,
@@ -239,8 +249,8 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
     }
 
     /** Last time the user successfully unlocked the app. Used by auto-lock. */
-    suspend fun setLastUnlock(ts: Long) = context.secStore.edit { it[K.lastUnlock] = ts }
-    val lastUnlock: Flow<Long> = context.secStore.data.map { it[K.lastUnlock] ?: 0L }
+    suspend fun setLastUnlock(ts: Long) = store.edit { it[K.lastUnlock] = ts }
+    val lastUnlock: Flow<Long> = store.data.map { it[K.lastUnlock] ?: 0L }
 
     /**
      * v1.26.1 (audit H2) — secret PERSISTANT qui authentifie les intents internes que
@@ -258,7 +268,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
      */
     suspend fun notificationTokenOrCreate(): Long {
         var result = 0L
-        context.secStore.edit { p ->
+        store.edit { p ->
             val current = p[K.notifIntentToken] ?: 0L
             result = if (current != 0L) {
                 current
@@ -291,7 +301,7 @@ class SecurityStore @Inject constructor(@ApplicationContext private val context:
      * Réservé à la purge totale. La session leurre ne l'appelle JAMAIS : ce magasin porte
      * précisément ce que le leurre existe pour préserver.
      */
-    suspend fun clearAll() = context.secStore.edit { it.clear() }
+    suspend fun clearAll() = store.edit { it.clear() }
 
     private object K {
         val notifIntentToken = longPreferencesKey("notif.intentToken")

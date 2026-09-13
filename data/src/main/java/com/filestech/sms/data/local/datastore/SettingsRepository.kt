@@ -1,6 +1,7 @@
 package com.filestech.sms.data.local.datastore
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -57,10 +58,27 @@ private val Context.dataStore by preferencesDataStore(name = "sms_tech_settings"
 private const val SETTINGS_READ_RETRIES = 3L
 
 @Singleton
-class SettingsRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
-    @ApplicationScope private val appScope: CoroutineScope,
+class SettingsRepository(
+    private val dataStore: DataStore<Preferences>,
+    private val appScope: CoroutineScope,
 ) : AppSettingsSource {
+
+    /**
+     * v1.28.8 — le constructeur de l'application : le magasin unique du processus, comme avant.
+     *
+     * Le constructeur principal reçoit le [DataStore] pour que chaque test JVM ait le sien. Le
+     * délégué `preferencesDataStore` garde la PREMIÈRE instance de la JVM, sur le fichier du premier
+     * `Context` vu : sous Robolectric, tous les tests partageaient ce fichier, et sous Windows une
+     * lecture en vol d'un test faisait échouer le remplacement du fichier par l'écriture d'un autre
+     * (« Unable to rename »). Sur Android, un processus n'a qu'un `Context` d'application : rien ne
+     * change.
+     */
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+        @ApplicationScope appScope: CoroutineScope,
+    ) : this(context.dataStore, appScope)
+
     /**
      * v1.26.1 (audit H14) — le flux SURVIT à une lecture qui échoue.
      *
@@ -76,7 +94,7 @@ class SettingsRepository @Inject constructor(
      * d'émettre plutôt que de servir des défauts : le repli est ainsi « pas de nouvelle valeur »
      * et non « valeurs par défaut », ce qui laisse le dernier instantané VALIDE en place.
      */
-    override val flow: Flow<AppSettings> = context.dataStore.data
+    override val flow: Flow<AppSettings> = dataStore.data
         .retry(SETTINGS_READ_RETRIES) { t ->
             Timber.w(t, "SettingsRepository: DataStore read failed — retrying")
             true
@@ -181,7 +199,7 @@ class SettingsRepository @Inject constructor(
     }
 
     override suspend fun update(transform: (AppSettings) -> AppSettings) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs.toAppSettings()
             val next = transform(current)
             prefs.write(next)

@@ -1,19 +1,22 @@
 package com.filestech.sms.settings
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.settings.PreviewMode
+import com.filestech.sms.testing.magasinDeTest
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.After
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import java.util.concurrent.CountDownLatch
@@ -47,7 +50,13 @@ import java.util.concurrent.Executors
  * # Pourquoi dans `:app` et non dans `:data`
  *
  * `SettingsRepository` vit dans `:data`, mais ce module n'a ni Robolectric ni moteur vintage
- * JUnit 4 — et un `Context` Android est indispensable ici, DataStore écrivant un vrai fichier.
+ * JUnit 4 — et DataStore écrit ici un vrai fichier.
+ *
+ * # Un magasin par test (v1.28.8)
+ *
+ * Chaque test a son propre fichier ([magasinDeTest]). Construits sur un `Context`, ces dépôts
+ * partageaient le magasin de toute la JVM — et `laCollecteInternePublieBienDansState` échouait par
+ * intermittence sous Windows : « Unable to rename », dans le dossier d'un test d'une autre classe.
  *
  * ⚠️ JUnit 4 exécuté par le moteur *vintage*. Les méthodes doivent rendre `Unit` : un corps en
  * expression (`fun f() = runBlocking { … }`) fait échouer la classe entière à l'initialisation.
@@ -56,8 +65,16 @@ import java.util.concurrent.Executors
 @Config(sdk = [33])
 class SettingsHydrationTest {
 
-    private val context: Context
-        get() = ApplicationProvider.getApplicationContext()
+    @get:Rule
+    val dossier = TemporaryFolder()
+
+    private val porteeMagasin = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val magasin by lazy { magasinDeTest(dossier, porteeMagasin) }
+
+    @After
+    fun fermeLeMagasin() {
+        porteeMagasin.cancel()
+    }
 
     private companion object {
         const val TIMEOUT_MS = 10_000L
@@ -85,7 +102,7 @@ class SettingsHydrationTest {
     fun apresUneLectureFroide_stateConnaitLaMemeValeur() {
         runBlocking {
             val writerScope = CoroutineScope(Dispatchers.Unconfined)
-            SettingsRepository(context, writerScope).update { s ->
+            SettingsRepository(magasin, writerScope).update { s ->
                 s.copy(notifications = s.notifications.copy(previewMode = PreviewMode.NEVER))
             }
             writerScope.cancel()
@@ -97,7 +114,7 @@ class SettingsHydrationTest {
             executor.execute { gate.await() }
             val coldScope = CoroutineScope(executor.asCoroutineDispatcher())
             try {
-                val cold = SettingsRepository(context, coldScope)
+                val cold = SettingsRepository(magasin, coldScope)
 
                 // 1. Le snapshot chaud ment encore — il rend le DEFAUT, le plus bavard. Verifie
                 //    pendant que la collecte est TENUE a l'arret.
@@ -134,7 +151,7 @@ class SettingsHydrationTest {
     fun uneCollecteQuiNeDemarreJamais_rendNullSansSeSuspendreIndefiniment() {
         runBlocking {
             val deadScope = CoroutineScope(Dispatchers.IO).apply { cancel() }
-            val repo = SettingsRepository(context, deadScope)
+            val repo = SettingsRepository(magasin, deadScope)
 
             val value = withTimeout(TIMEOUT_MS) { repo.hydratedOrNull() }
 
@@ -152,7 +169,7 @@ class SettingsHydrationTest {
     fun laCollecteInternePublieBienDansState() {
         runBlocking {
             val scope = CoroutineScope(Dispatchers.Unconfined)
-            val repo = SettingsRepository(context, scope)
+            val repo = SettingsRepository(magasin, scope)
             repo.update { s ->
                 s.copy(
                     notifications = s.notifications.copy(
