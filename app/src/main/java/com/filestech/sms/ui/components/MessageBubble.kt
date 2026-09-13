@@ -162,6 +162,10 @@ fun MessageBubble(
         // `weight(1f, fill = false)` fait mesurer la colonne APRÈS le bouton, dans l'espace qui
         // reste, sans l'étirer : une bulle courte garde sa largeur naturelle, et l'alignement
         // d'entrée ou de sortie est inchangé.
+        //
+        // Seules les bulles ENTRANTES étaient écrasées : pour une sortante, le bouton précède la
+        // bulle dans le `Row`, il était donc déjà mesuré en premier. Contrôle négatif mesuré : sans
+        // ce poids, le test entrant tombe et le test sortant reste vert.
         Column(
             modifier = Modifier.weight(1f, fill = false),
             horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
