@@ -76,13 +76,18 @@ class MessageBubbleGesturesTest {
     }
 
     /**
-     * v1.28.7 — **sur un écran étroit, le bouton ⋮ garde sa taille et ouvre le menu**, en entrée
-     * comme en sortie.
+     * v1.28.7 — **sur un écran étroit, le bouton ⋮ garde sa taille et ouvre le menu.**
      *
      * Le `Row` de la bulle mesurait la bulle — plafonnée à 320 dp fixes — AVANT le bouton : mesuré
      * sur émulateur, il tombait à 0 dp sur un écran de 320 dp, et le menu devenait inatteignable.
      * La largeur est bornée DANS le test, et non par l'écran de l'appareil : le test mesure la
      * même chose sur le S9, sur l'émulateur de la CI et partout ailleurs.
+     *
+     * ⚠️ **Seul le test ENTRANT prouve le correctif.** Contrôle négatif mesuré le 2026-09-13 : sans
+     * `weight`, le test entrant tombe et le test SORTANT reste vert. Pour une bulle sortante, le
+     * bouton est placé AVANT la bulle dans le `Row`, donc mesuré en premier : elle n'a jamais été
+     * écrasée. Le test sortant est gardé comme garde — il tomberait si le bouton passait après la
+     * bulle ou si la colonne cessait de céder la place —, pas comme preuve de ce correctif.
      */
     @Test
     fun surUnEcranEtroit_leBoutonGardeSaTailleEtOuvreLeMenu_messageEntrant() =
