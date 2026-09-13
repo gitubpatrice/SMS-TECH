@@ -599,6 +599,16 @@ interface MessageDao {
      *   trouvés encadrés par les marqueurs de [MessageSearchHit]. C'est l'index qui dit ce qui a
      *   correspondu, accents compris (`unicode61`) : l'écran n'a rien à redeviner.
      *
+     * **En deux temps**, mesuré avant d'être écrit. En une seule requête, `snippet()` était
+     * calculé pour TOUTES les correspondances avant le tri et le `LIMIT` : sur un Galaxy S9 avec
+     * 100 000 messages, 83 à 269 ms par recherche large, contre 18 à 60 ms sans extrait. La
+     * sous-requête choisit d'abord les [SEARCH_LIMIT] plus récents ; l'extrait n'est calculé que
+     * pour eux : 32 à 91 ms, mêmes messages dans le même ordre sur les six requêtes mesurées.
+     * Tous les filtres vivent dans la sous-requête : c'est elle qui décide de ce qui est montré.
+     *
+     * `m.id DESC` départage deux dates égales (parties d'un MMS) : sans ordre total, la frontière
+     * des [SEARCH_LIMIT] ne serait pas déterministe.
+     *
      * `Flow` : Room relance la requête quand `messages` ou `conversations` changent.
      */
     @Query(
@@ -607,13 +617,19 @@ interface MessageDao {
             snippet(messages_fts, '${MessageSearchHit.MARK_START}', '${MessageSearchHit.MARK_END}', '…', 0, $SEARCH_EXCERPT_TOKENS) AS excerpt
         FROM messages_fts
         JOIN messages m ON m.id = messages_fts.rowid
-        JOIN conversations c ON c.id = m.conversation_id
         WHERE messages_fts.body MATCH :query
-          AND m.hidden = 0
-          AND c.in_vault = 0
-          AND (:archivedOnly = 0 OR c.archived = 1)
-        ORDER BY m.date DESC
-        LIMIT $SEARCH_LIMIT
+          AND m.id IN (
+            SELECT m.id FROM messages_fts
+            JOIN messages m ON m.id = messages_fts.rowid
+            JOIN conversations c ON c.id = m.conversation_id
+            WHERE messages_fts.body MATCH :query
+              AND m.hidden = 0
+              AND c.in_vault = 0
+              AND (:archivedOnly = 0 OR c.archived = 1)
+            ORDER BY m.date DESC, m.id DESC
+            LIMIT $SEARCH_LIMIT
+          )
+        ORDER BY m.date DESC, m.id DESC
         """,
     )
     fun observeSearch(query: String, archivedOnly: Boolean): Flow<List<MessageSearchRow>>
