@@ -81,6 +81,28 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.7 — Ce qui est supprimé ne s'affiche plus, sur tous les chemins
+
+**Trois suppressions laissaient leurs notifications**, consignées sans correction en 1.28.6 par la
+relecture sécurité du delta final : la purge de rétention (un `DELETE` de masse), la réconciliation de
+synchronisation quand un message disparaît du fournisseur par une autre application, et la fusion de
+conversations en double. Un message effacé restait lisible dans le volet, expéditeur et texte compris.
+Les deux premières relèvent désormais les messages qu'elles vont effacer — dans la même transaction et
+avec la même clause SQL que le `DELETE`, coffre exclu — puis annulent leurs notifications après la
+validation, et seulement si des lignes sont parties ; la fusion annule celles des conversations
+victimes réellement supprimées. L'annulation groupée lit une seule fois les notifications actives et
+n'annule que les paires tag + identifiant visées, jamais une notification sans tag. L'inventaire de
+toutes les suppressions de l'application est fermé : chacune annule ses notifications, ou ne peut pas en
+avoir.
+
+Une relecture GPT 5.2 a trouvé une erreur dans le correctif lui-même avant publication : la fusion
+annulait les victimes de tous les plans, y compris d'un plan sauté sans rien supprimer — donc les
+notifications de conversations toujours présentes. Corrigée.
+
+**Bouton ⋮ écrasé sur écran étroit** (sans portée sécurité ; accessibilité) : la bulle, plafonnée à une
+largeur fixe, était mesurée avant le bouton — 16 dp au lieu de 40 sur un écran de 360 dp avec un long
+message, 0 dp sur 320 dp, menu alors inatteignable. Seules les bulles reçues étaient touchées.
+
 ### v1.28.6 — Une seconde voie de copie, alignée sur la première
 
 *Deux retours d'utilisateurs, sans rapport avec la relecture F-Droid.*

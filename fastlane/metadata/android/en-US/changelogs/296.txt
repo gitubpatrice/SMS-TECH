@@ -1,0 +1,3 @@
+Fixed: on a narrow screen, the ⋮ button of a received message was squeezed by the bubble — shrunk on a common screen with a long message, invisible on a small one — making its menu hard or impossible to open.
+
+Fixed: purging old messages, syncing a deletion made in another app and merging duplicate conversations left their notifications in the shade.

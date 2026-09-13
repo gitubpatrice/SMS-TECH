@@ -1,0 +1,3 @@
+Corrigé : sur un écran étroit, le bouton ⋮ d'un message reçu était écrasé par la bulle — réduit sur un écran courant avec un long message, invisible sur un petit écran — et son menu devenait difficile, voire impossible à ouvrir.
+
+Corrigé : la purge des anciens messages, la synchronisation après une suppression faite dans une autre application et la fusion de conversations en double laissaient leurs notifications dans le volet.
