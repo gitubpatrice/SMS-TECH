@@ -1187,6 +1187,12 @@ class ConversationMirror @Inject constructor(
         // prouve alors RIEN. On rend `true` pour que la migration one-shot ne se croie pas
         // terminee et rejoue au prochain demarrage, region hydratee.
         if (plans.isEmpty()) return@withContext !ident.regionKnown
+        // v1.28.7 (relecture GPT 5.2) — les victimes REELLEMENT supprimees, relevees dans la
+        // transaction. Un plan dont le survivant manque est saute (`continue` ci-dessous) sans rien
+        // supprimer : annuler ses notifications apres coup les couperait sur des conversations
+        // toujours presentes. Le cas est juge inatteignable, mais la garde doit rester vraie le
+        // jour ou l'invariant casserait.
+        val victimesSupprimees = mutableListOf<Long>()
         database.withTransaction {
             for (plan in plans) {
                 // 1) reparent AVANT toute suppression (FK CASCADE sur messages.conversation_id).
@@ -1239,6 +1245,7 @@ class ConversationMirror @Inject constructor(
                 // 3) suppression des conversations sources (désormais vidées de leurs messages).
                 for (victimId in plan.victimIds) {
                     conversationDao.delete(victimId)
+                    victimesSupprimees += victimId
                 }
                 // 3bis) D3 (audit) — reprise du threadId système AOSP. Si le survivant n'en a pas
                 //   (créé via ensureConversation → threadId=null) mais qu'une victime en portait un
@@ -1256,13 +1263,13 @@ class ConversationMirror @Inject constructor(
             // 4) recalcule conversations.unread_count depuis les messages réellement non lus.
             conversationDao.recomputeAllUnreadCounts()
         }
-        // v1.28.7 — APRÈS la validation, et pour les seules victimes. Leurs messages vivent désormais
-        // sous le survivant, mais leurs notifications portaient le tag de la conversation supprimée :
-        // un tap ouvrait un fil qui n'existe plus. On les retire plutôt que de les laisser mentir ;
-        // le compteur de non-lus du survivant, recalculé plus haut, porte toujours ces messages.
-        for (plan in plans) {
-            for (victimId in plan.victimIds) notifications.cancelAllForConversation(victimId)
-        }
+        // v1.28.7 — APRÈS la validation, et pour les seules victimes réellement supprimées. Leurs
+        // messages vivent désormais sous le survivant, mais leurs notifications portaient le tag de
+        // la conversation supprimée : un tap ouvrait un fil qui n'existe plus (`AppRoot` navigue
+        // vers l'identifiant sans vérifier qu'il existe). On les retire plutôt que de les laisser
+        // mentir ; le compteur de non-lus du survivant, recalculé plus haut, porte toujours ces
+        // messages.
+        for (victimId in victimesSupprimees) notifications.cancelAllForConversation(victimId)
         Timber.i("dedupeSameNumberConversations: %d groupe(s) de doublons fusionné(s)", plans.size)
         true
     }
