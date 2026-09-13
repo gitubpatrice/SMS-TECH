@@ -678,23 +678,15 @@ class ConversationRepositoryImpl @Inject constructor(
     // [com.filestech.sms.domain.purge.PurgePolicy]. Tous les call sites passent par là.
 
     override fun observeMessageSearch(query: String, archivedOnly: Boolean): Flow<List<MessageSearchHit>> {
-        val safe = escapeFtsQuery(query)
-        if (query.trim().length < MessageSearchHit.MIN_QUERY_LENGTH || safe.isBlank()) {
-            return flowOf(emptyList())
-        }
-        return messageDao.observeSearch(safe, archivedOnly)
+        val requete = requeteRecherchable(query) ?: return flowOf(emptyList())
+        return messageDao.observeSearch(requete, archivedOnly)
             .map { rows ->
                 if (rows.isEmpty()) return@map emptyList()
                 val conversations = conversationDao
                     .findOutsideVaultByIds(rows.map { it.conversationId }.distinct())
-                    .associate { it.id to it.toDomain() }
-                // Une conversation absente de cette lecture vient d'entrer au coffre ou d'être
-                // supprimée : ses messages sont écartés, jamais montrés sans leur conversation.
-                rows.mapNotNull { row ->
-                    conversations[row.conversationId]?.let { conversation ->
-                        MessageSearchHit(row.id, row.date, row.excerpt, conversation)
-                    }
-                }
+                    .map { it.toDomain() }
+                // Défense en profondeur, testée : cf. [apparierResultats].
+                apparierResultats(rows, conversations)
             }
             .flowOn(io)
     }
@@ -725,11 +717,6 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun findMessageForResend(id: Long): Message? = withContext(io) {
         messageDao.findById(id)?.toDomain()
     }
-
-    // v1.6.1 (audit QUAL-18) — délégation à la fonction top-level pure
-    // [escapeFtsQuery] (testable sans instance ConversationRepositoryImpl).
-    private fun escapeFtsQuery(input: String): String =
-        com.filestech.sms.data.repository.escapeFtsQuery(input)
 
     // v1.6.1 (audit QUAL-01) — SAFETY_NET_DAYS centralisé dans
     // [com.filestech.sms.domain.purge.PurgePolicy]. Plus de companion local nécessaire.

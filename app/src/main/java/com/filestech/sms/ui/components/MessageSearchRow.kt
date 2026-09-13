@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -31,7 +32,11 @@ import com.filestech.sms.ui.util.rememberChatFormatters
 @Composable
 fun MessageSearchRow(
     hit: MessageSearchHit,
-    /** `null` = ligne non cliquable (mode sélection) : ni action, ni effet d'appui. */
+    /**
+     * `null` = ligne non cliquable (mode sélection) : ni action, ni effet d'appui. Sa sémantique reste
+     * FUSIONNÉE (audit 3 axes, U1) : sans `clickable`, TalkBack annoncerait sinon l'avatar, le titre,
+     * la date et l'extrait comme quatre éléments séparés.
+     */
     onClick: (() -> Unit)?,
     showAvatars: Boolean = true,
 ) {
@@ -44,7 +49,13 @@ fun MessageSearchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier.semantics(mergeDescendants = true) {}
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
