@@ -3,6 +3,7 @@ package com.filestech.sms.domain.repository
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
+import com.filestech.sms.domain.model.MessageSearchHit
 import com.filestech.sms.domain.model.MessageWindow
 import com.filestech.sms.domain.model.PhoneAddress
 import kotlinx.coroutines.flow.Flow
@@ -109,7 +110,16 @@ interface ConversationRepository {
      * l'utilisateur. Sans ce chemin d'écriture, la promesse ne protégeait rien.
      */
     suspend fun setMessageStarred(messageId: Long, starred: Boolean)
-    suspend fun search(query: String): List<Message>
+
+    /**
+     * v1.28.8 (issue #17) — recherche dans le TEXTE des messages, par l'index plein texte.
+     *
+     * Jamais dans le coffre : c'est aussi ce que voit une session leurre. [archivedOnly] limite aux
+     * conversations archivées (écran des archives). Le flux se réémet quand un message arrive ou
+     * disparaît : un message supprimé quitte les résultats. Moins de
+     * [MessageSearchHit.MIN_QUERY_LENGTH] caractères : liste vide.
+     */
+    fun observeMessageSearch(query: String, archivedOnly: Boolean): Flow<List<MessageSearchHit>>
 
     /**
      * v1.3.1 — lookup ponctuel d'un message par id. Retourne `null` si purgé ou supprimé

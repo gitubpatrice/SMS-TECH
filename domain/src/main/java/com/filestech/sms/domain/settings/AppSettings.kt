@@ -43,7 +43,12 @@ data class ConversationSettings(
     val signature: String? = null,
 )
 
-enum class SortMode { DATE, UNREAD_FIRST, PINNED_FIRST }
+/**
+ * v1.28.8 (issue #17) — `PINNED_FIRST` est retiré : les conversations épinglées sont désormais en
+ * tête dans TOUS les tris. Une valeur `PINNED_FIRST` encore enregistrée retombe sur [DATE] à la
+ * lecture (`SettingsRepository.enumOr`), ce qui donne exactement l'ordre qu'elle produisait.
+ */
+enum class SortMode { DATE, UNREAD_FIRST }
 
 data class SendingSettings(
     val confirmBeforeBroadcast: Boolean = true,

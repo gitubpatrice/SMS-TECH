@@ -17,6 +17,7 @@ import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Attachment
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
+import com.filestech.sms.domain.model.MessageSearchHit
 import com.filestech.sms.domain.model.MessageWindow
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.PhoneAddress.Companion.toCsv
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -675,9 +677,26 @@ class ConversationRepositoryImpl @Inject constructor(
     // v1.6.1 (audit QUAL-01) — `purgeCutoffMs` et `SAFETY_NET_DAYS` centralisés dans
     // [com.filestech.sms.domain.purge.PurgePolicy]. Tous les call sites passent par là.
 
-    override suspend fun search(query: String): List<Message> = withContext(io) {
+    override fun observeMessageSearch(query: String, archivedOnly: Boolean): Flow<List<MessageSearchHit>> {
         val safe = escapeFtsQuery(query)
-        if (safe.isBlank()) emptyList() else messageDao.search(safe).map { it.toDomain() }
+        if (query.trim().length < MessageSearchHit.MIN_QUERY_LENGTH || safe.isBlank()) {
+            return flowOf(emptyList())
+        }
+        return messageDao.observeSearch(safe, archivedOnly)
+            .map { rows ->
+                if (rows.isEmpty()) return@map emptyList()
+                val conversations = conversationDao
+                    .findOutsideVaultByIds(rows.map { it.conversationId }.distinct())
+                    .associate { it.id to it.toDomain() }
+                // Une conversation absente de cette lecture vient d'entrer au coffre ou d'être
+                // supprimée : ses messages sont écartés, jamais montrés sans leur conversation.
+                rows.mapNotNull { row ->
+                    conversations[row.conversationId]?.let { conversation ->
+                        MessageSearchHit(row.id, row.date, row.excerpt, conversation)
+                    }
+                }
+            }
+            .flowOn(io)
     }
 
     override suspend fun findMessageById(id: Long): Message? = withContext(io) {

@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.filestech.sms.data.local.db.entity.MessageEntity
+import com.filestech.sms.domain.model.MessageSearchHit
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -582,27 +583,40 @@ interface MessageDao {
     suspend fun findRefsByTelephonyUris(uris: List<String>): List<MessageRef>
 
     /**
-     * FTS search across body + address. Returns matching message ids ordered by relevance.
+     * v1.28.8 (issue #17) — recherche plein texte, enfin branchée à l'écran.
      *
-     * v1.11.0 audit SEC-V1 — JOIN sur `conversations` avec filtre `in_vault = 0`
-     * pour ne PAS exposer les messages d'une conv déplacée dans le coffre.
-     * Sans ce filtre, l'utilisateur (ou un agresseur en PanicDecoy) pourrait
-     * voir le body d'un message vault dans les résultats de recherche, alors
-     * que la conv parente est cachée de la liste. L'index FTS reste indexé
-     * pour tous les messages (refacto FTS architectural différé v1.12.x).
+     * Elle existait sans aucun appelant, alors que le champ de recherche promet « un message » :
+     * seul l'aperçu du DERNIER message de chaque conversation était cherché.
+     *
+     * - `messages_fts.body MATCH` : le TEXTE seulement. L'index porte aussi `address` ; sans ce
+     *   ciblage, taper `06` remontait tous les messages des numéros en 06 (relecture GPT 5.2). La
+     *   recherche par numéro reste celle du filtre des conversations.
+     * - `c.in_vault = 0` (v1.11.0 audit SEC-V1) : jamais un message du coffre, ni en session normale
+     *   ni en session leurre, qui voit la même liste hors coffre. L'index, lui, couvre tout.
+     * - `m.hidden = 0` : les lignes de service (traces de réaction) ne sont jamais affichées.
+     * - `:archivedOnly` : l'écran des archives ne cherche que dans les conversations archivées.
+     * - `snippet(…, 0, …)` : extrait de la colonne `body` (la 0ᵉ de `messages_fts`), passages
+     *   trouvés encadrés par les marqueurs de [MessageSearchHit]. C'est l'index qui dit ce qui a
+     *   correspondu, accents compris (`unicode61`) : l'écran n'a rien à redeviner.
+     *
+     * `Flow` : Room relance la requête quand `messages` ou `conversations` changent.
      */
     @Query(
         """
-        SELECT m.* FROM messages m
-        JOIN messages_fts ON messages_fts.rowid = m.id
+        SELECT m.id AS id, m.conversation_id AS conversation_id, m.date AS date,
+            snippet(messages_fts, '${MessageSearchHit.MARK_START}', '${MessageSearchHit.MARK_END}', '…', 0, $SEARCH_EXCERPT_TOKENS) AS excerpt
+        FROM messages_fts
+        JOIN messages m ON m.id = messages_fts.rowid
         JOIN conversations c ON c.id = m.conversation_id
-        WHERE messages_fts MATCH :query
+        WHERE messages_fts.body MATCH :query
+          AND m.hidden = 0
           AND c.in_vault = 0
+          AND (:archivedOnly = 0 OR c.archived = 1)
         ORDER BY m.date DESC
-        LIMIT :limit
+        LIMIT $SEARCH_LIMIT
         """,
     )
-    suspend fun search(query: String, limit: Int = 200): List<MessageEntity>
+    fun observeSearch(query: String, archivedOnly: Boolean): Flow<List<MessageSearchRow>>
 
     @Query(
         """

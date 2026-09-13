@@ -53,6 +53,14 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): ConversationEntity?
 
+    /**
+     * v1.28.8 — les conversations des résultats de recherche, en une lecture. `in_vault = 0` est
+     * exigé ICI, dans le SQL : une conversation passée au coffre entre la recherche et cette
+     * lecture ne doit pas apparaître.
+     */
+    @Query("SELECT * FROM conversations WHERE id IN (:ids) AND in_vault = 0")
+    suspend fun findOutsideVaultByIds(ids: List<Long>): List<ConversationEntity>
+
     @Query("SELECT * FROM conversations WHERE thread_id = :threadId LIMIT 1")
     suspend fun findByThreadId(threadId: Long): ConversationEntity?
 

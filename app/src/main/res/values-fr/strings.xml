@@ -83,6 +83,7 @@
     <string name="conversation_block_confirm_title">Bloquer cette conversation ?</string>
     <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. La conversation reste dans votre liste, signalée comme bloquée, et rien n\'est supprimé. Vous pourrez la débloquer à tout moment.</string>
     <string name="conversations_section_blocked">Bloqués</string>
+    <string name="conversations_section_messages">Messages</string>
     <string name="conversation_blocked_label">Bloqué</string>
     <string name="settings_purge_blocked">Purger les conversations bloquées</string>
     <string name="settings_purge_blocked_desc">Supprime définitivement toutes les conversations dont les participants sont sur la liste de blocage système.</string>
@@ -96,7 +97,6 @@
     <string name="sort_section">Trier les conversations</string>
     <string name="sort_date">Plus récent d\'abord</string>
     <string name="sort_unread">Non lus d\'abord</string>
-    <string name="sort_pinned">Épinglés d\'abord</string>
     <string name="action_back">Retour</string>
     <string name="action_copy">Copier</string>
     <string name="action_forward">Transférer</string>

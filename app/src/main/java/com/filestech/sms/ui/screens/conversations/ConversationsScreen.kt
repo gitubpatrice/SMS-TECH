@@ -101,6 +101,7 @@ fun ConversationsScreen(
     // resservait sa valeur en cache (`isPanicDecoy = false`) le temps de redemarrer, ce qui
     // faisait apparaitre l'icone du Coffre en session leurre.
     val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
+    val messageHits by viewModel.messageHits.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
 
     val defaultAppLauncher = rememberLauncherForActivityResult(
@@ -416,14 +417,6 @@ fun ConversationsScreen(
                                 viewModel.setSortMode(com.filestech.sms.domain.settings.SortMode.UNREAD_FIRST)
                             },
                         )
-                        SortMenuItem(
-                            label = stringResource(R.string.sort_pinned),
-                            selected = state.settings.conversations.sortMode == com.filestech.sms.domain.settings.SortMode.PINNED_FIRST,
-                            onClick = {
-                                overflowOpen = false
-                                viewModel.setSortMode(com.filestech.sms.domain.settings.SortMode.PINNED_FIRST)
-                            },
-                        )
                     }
                 },
             )
@@ -493,7 +486,7 @@ fun ConversationsScreen(
             when {
                 state.isImporting -> ImportingPlaceholder(count = state.importedCount)
                 state.isLoading -> Unit
-                state.conversations.isEmpty() -> EmptyState(
+                state.sansAucunResultat(messageHits) -> EmptyState(
                     archived = archived,
                     filtered = state.filtered,
                     onCompose = onCompose,
@@ -624,6 +617,16 @@ fun ConversationsScreen(
                             HorizontalDivider(color = dividerColor)
                         }
                     }
+
+                    // v1.28.8 (issue #17) — les messages dont le TEXTE correspond, sous les
+                    // conversations.
+                    messageHitsSection(
+                        hits = messageHits,
+                        showAvatars = state.settings.conversations.showAvatars,
+                        selectionMode = state.selectionMode,
+                        dividerColor = dividerColor,
+                        onOpenThread = onOpenThread,
+                    )
                 }
             }
         }

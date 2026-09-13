@@ -86,6 +86,7 @@
     <string name="conversation_block_confirm_title">Block this conversation?</string>
     <string name="conversation_block_confirm_body">Every number in this conversation will be blocked. The conversation stays in your list, marked as blocked, and nothing is deleted. You can unblock it at any time.</string>
     <string name="conversations_section_blocked">Blocked</string>
+    <string name="conversations_section_messages">Messages</string>
     <string name="conversation_blocked_label">Blocked</string>
     <string name="settings_purge_blocked">Purge blocked conversations</string>
     <string name="settings_purge_blocked_desc">Permanently delete every conversation whose participants are all on the system blocklist.</string>
@@ -99,7 +100,6 @@
     <string name="sort_section">Sort conversations</string>
     <string name="sort_date">Most recent first</string>
     <string name="sort_unread">Unread first</string>
-    <string name="sort_pinned">Pinned first</string>
     <string name="action_back">Back</string>
     <string name="action_copy">Copy</string>
     <string name="action_forward">Forward</string>

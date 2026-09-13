@@ -16,6 +16,7 @@ import com.filestech.sms.data.sms.DefaultSmsAppManager
 import com.filestech.sms.data.sync.TelephonySyncManager
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Conversation
+import com.filestech.sms.domain.model.MessageSearchHit
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.SortMode
@@ -24,15 +25,18 @@ import com.filestech.sms.domain.usecase.ToggleConversationStateUseCase
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -47,8 +51,10 @@ import javax.inject.Inject
  * (Room repository, persisted settings, local search query, telephony sync state) and a small
  * set of mutation methods.
  *
- * The search filters by display name, raw / normalized phone numbers, and last message preview.
- * Case-insensitive. Done client-side because the dataset stays modest (a few thousand rows max).
+ * The search filters conversations by display name, raw / normalized phone numbers, and last
+ * message preview — case- and accent-insensitive, client-side because the dataset stays modest.
+ * v1.28.8 (issue #17): the TEXT of every message is searched too, through the full-text index
+ * ([messageHits]); before, a message older than the last one of its conversation was never found.
  *
  * The SMS import is no longer driven from this ViewModel — it is owned by [TelephonySyncManager],
  * a singleton registered in [com.filestech.sms.MainApplication.onCreate] that listens on the
@@ -221,7 +227,7 @@ class ConversationsViewModel @Inject constructor(
     ) { rows, s, q, lockAndSelection, syncState ->
         val (lockState, sel) = lockAndSelection
         val matched = filterConversations(rows, q)
-        val sorted = sortConversations(matched, s.conversations.sortMode)
+        val sorted = trierConversations(matched, s.conversations.sortMode)
         val nomsPartages = sorted
             .mapNotNull { it.displayName?.takeIf { n -> n.isNotBlank() } }
             .groupingBy { it }
@@ -271,6 +277,24 @@ class ConversationsViewModel @Inject constructor(
         // souscription côté Compose, comme attendu.
         .flowOn(io)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())
+
+    /**
+     * v1.28.8 (issue #17) — messages dont le TEXTE correspond à la recherche, sous les conversations.
+     *
+     * Hors coffre, donc aussi en session leurre, qui voit la même liste. Une requête qui échoue ne
+     * rend une liste vide que pour ELLE : l'erreur est absorbée dans `flatMapLatest`, pas après,
+     * sans quoi la première erreur couperait toutes les recherches suivantes.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val messageHits: StateFlow<List<MessageSearchHit>> = debouncedQuery
+        .flatMapLatest { q ->
+            repo.observeMessageSearch(q, archivedOnly = archivedFlag)
+                .catch { t ->
+                    Timber.w(t, "ConversationsViewModel: recherche de messages en echec")
+                    emit(emptyList())
+                }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
     /** Forces a re-evaluation of [DefaultSmsAppManager.isDefault]. Call from ON_RESUME / role result. */
     fun refreshDefaultStatus() {
@@ -329,20 +353,6 @@ class ConversationsViewModel @Inject constructor(
                 c.lastMessagePreview?.foldForSearch()?.contains(needle) == true ||
                 (needleDigits.isNotBlank() && c.addresses.any { it.normalized.contains(needleDigits) })
         }
-    }
-
-    private fun sortConversations(rows: List<Conversation>, mode: SortMode): List<Conversation> = when (mode) {
-        // v1.6.1 (audit QUAL-14) — DATE = tri par date pure SANS prioriser les
-        // épinglés (avant : DATE et PINNED_FIRST produisaient le même tri à
-        // l'identique, ce qui rendait DATE indistinguable de PINNED_FIRST pour
-        // l'utilisateur qui sélectionnait l'un ou l'autre).
-        SortMode.DATE -> rows.sortedByDescending { it.lastMessageAt }
-        SortMode.UNREAD_FIRST -> rows.sortedWith(
-            compareByDescending<Conversation> { it.unreadCount > 0 }.thenByDescending { it.lastMessageAt },
-        )
-        SortMode.PINNED_FIRST -> rows.sortedWith(
-            compareByDescending<Conversation> { it.pinned }.thenByDescending { it.lastMessageAt },
-        )
     }
 
     /** Persists the picked sort mode — observed by the conversations Flow which re-sorts. */
