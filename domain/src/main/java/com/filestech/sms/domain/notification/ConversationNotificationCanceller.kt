@@ -26,4 +26,15 @@ interface ConversationNotificationCanceller {
      * avec un tag, et une annulation sans tag n'atteint rien.
      */
     fun cancelForMessage(conversationId: Long, messageId: Long)
+
+    /**
+     * v1.28.7 — annule les notifications d'un LOT de messages supprimés, groupés par conversation.
+     *
+     * Existe pour les suppressions de masse qui ne passent pas par la suppression d'une
+     * conversation entière : la purge de rétention et la réconciliation de synchronisation.
+     * Elles laissaient leurs notifications dans le volet. Un appel par message y serait un appel
+     * système par ligne purgée — des milliers pour une rétention ; l'implémentation lit donc une
+     * seule fois les notifications actives, et n'annule que celles qui correspondent.
+     */
+    fun cancelForMessages(messagesByConversation: Map<Long, Collection<Long>>)
 }

@@ -247,7 +247,47 @@ class PurgeHistoryPropagationTest {
         assertThat(efface).isEqualTo(annonce)
     }
 
-    private fun eraserAvec(systemCopy: SystemCopyEraser) =
+    /**
+     * v1.28.7 — **la purge de retention annule les notifications des messages qu'elle efface, et
+     * de ceux-la seulement.** Elle faisait un DELETE de masse sans les annuler : un message efface
+     * restait lisible dans le volet.
+     *
+     * Les exclusions sont celles du DELETE, mot pour mot — un favori, un message recent et un
+     * message du coffre restent en base, donc leurs notifications aussi. Deux criteres qui
+     * divergeraient annuleraient la notification d'un message conserve.
+     */
+    @Test
+    fun laPurgeDeRetentionAnnuleLesNotificationsDesSeulsMessagesEffaces() = runBlocking<Unit> {
+        creeConversationDuCoffre()
+        val vieux = insere(uri = "content://sms/70", date = VIEUX)
+        val vieuxSansLiaison = insere(uri = null, date = VIEUX)
+        insere(uri = "content://sms/71", date = VIEUX, starred = true)
+        insere(uri = "content://sms/72", date = RECENT)
+        insere(uri = "content://sms/73", date = VIEUX, conversationId = CONV_COFFRE)
+        val annulateur = AnnulateurDeNotificationsEspion()
+
+        eraserAvec(Espion(), annulateur).purgeHistory(CUTOFF)
+
+        assertThat(annulateur.lots).hasSize(1)
+        assertThat(annulateur.lots.single().keys).containsExactly(CONV_ID)
+        assertThat(annulateur.lots.single().getValue(CONV_ID)).containsExactly(vieux, vieuxSansLiaison)
+    }
+
+    /** Rien d'efface, rien a annuler : aucun appel, pas meme un lot vide. */
+    @Test
+    fun uneRetentionQuiNEffaceRienNAnnuleRien() = runBlocking<Unit> {
+        insere(uri = "content://sms/80", date = RECENT)
+        val annulateur = AnnulateurDeNotificationsEspion()
+
+        eraserAvec(Espion(), annulateur).purgeHistory(CUTOFF)
+
+        assertThat(annulateur.lots).isEmpty()
+    }
+
+    private fun eraserAvec(
+        systemCopy: SystemCopyEraser,
+        annulateur: AnnulateurDeNotificationsEspion = AnnulateurDeNotificationsEspion(),
+    ) =
         ConversationEraser(
             db,
             db.conversationDao(),
@@ -264,10 +304,9 @@ class PurgeHistoryPropagationTest {
             db.attachmentDao(),
             InstrumentationRegistry.getInstrumentation().targetContext,
             com.filestech.sms.security.VaultPurgeBarrier(),
-            // v1.28.6 — l'effaceur annule les notifications de ce qu'il supprime. Ces tests-ci
-            // portent sur la propagation au fournisseur ; l'espion est la pour satisfaire la
-            // signature, et [VaultPurgeRetryTest] tient le comportement.
-            AnnulateurDeNotificationsEspion(),
+            // v1.28.6 — l'effaceur annule les notifications de ce qu'il supprime ;
+            // v1.28.7 — la purge de retention aussi, et ce fichier le tient.
+            annulateur,
         )
 
     private suspend fun insere(
@@ -276,8 +315,8 @@ class PurgeHistoryPropagationTest {
         starred: Boolean = false,
         conversationId: Long = CONV_ID,
         mmsSystemId: Long? = null,
-    ) {
-        db.messageDao().insert(
+    ): Long {
+        return db.messageDao().insert(
             MessageEntity(
                 conversationId = conversationId,
                 telephonyUri = uri,

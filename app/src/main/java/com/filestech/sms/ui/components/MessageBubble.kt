@@ -151,7 +151,21 @@ fun MessageBubble(
         // Stack the optional reply quote ABOVE the bubble — same horizontal alignment so it
         // visually anchors to the same side as the bubble. Inline column to keep the row
         // layout intact.
-        Column(horizontalAlignment = if (isOut) Alignment.End else Alignment.Start) {
+        // v1.28.7 — LE BOUTON ⋮ EST MESURÉ AVANT LA BULLE. Un `Row` mesure d'abord ses enfants
+        // SANS poids, dans l'ordre : la bulle, plafonnée à une largeur FIXE de 320 dp, prenait
+        // tout ce qu'elle voulait, et le bouton de 40 dp recevait le reste. Une bulle pleine
+        // exige 384 dp avec les marges ; mesuré sur émulateur, le bouton tombait à 16 dp sur un
+        // écran de 360 dp avec un long message, et à 0 dp sur 320 dp — le menu (copier,
+        // transférer, répondre, favori, supprimer) devenait inatteignable. Trouvé par un test
+        // de la v1.28.6 sur l'émulateur étroit de la CI.
+        //
+        // `weight(1f, fill = false)` fait mesurer la colonne APRÈS le bouton, dans l'espace qui
+        // reste, sans l'étirer : une bulle courte garde sa largeur naturelle, et l'alignement
+        // d'entrée ou de sortie est inchangé.
+        Column(
+            modifier = Modifier.weight(1f, fill = false),
+            horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
+        ) {
             if (repliedToPreview != null) {
                 ReplyQuoteCard(
                     preview = repliedToPreview,

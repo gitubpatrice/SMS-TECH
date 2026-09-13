@@ -17,6 +17,7 @@ internal class AnnulateurDeNotificationsEspion : ConversationNotificationCancell
 
     val conversations = mutableListOf<Long>()
     val messages = mutableListOf<Pair<Long, Long>>()
+    val lots = mutableListOf<Map<Long, Collection<Long>>>()
 
     override fun cancelAllForConversation(conversationId: Long) {
         conversations += conversationId
@@ -24,5 +25,9 @@ internal class AnnulateurDeNotificationsEspion : ConversationNotificationCancell
 
     override fun cancelForMessage(conversationId: Long, messageId: Long) {
         messages += conversationId to messageId
+    }
+
+    override fun cancelForMessages(messagesByConversation: Map<Long, Collection<Long>>) {
+        lots += messagesByConversation
     }
 }

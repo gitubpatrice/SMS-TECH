@@ -120,6 +120,24 @@ class ReconcileDeletionsPreviewTest {
 
     // ──────────── La requête qui rend le recalcul ciblé possible ────────────
 
+    /**
+     * v1.28.7 — les messages que la reconciliation va effacer, lisibles AVANT le DELETE pour en
+     * annuler ensuite les notifications. Meme clause que le DELETE : un message du coffre n'y
+     * figure pas, puisque la suppression ne le touche pas.
+     */
+    @Test
+    fun messageRefs_areReadableBeforeTheDelete_andExcludeTheVault() { runBlocking {
+        db.conversationDao().insert(conversation(3L, "+33633333333", "coffre", at = 3_000L).copy(inVault = true))
+        db.messageDao().insert(message(id = 30L, convId = 3L, uri = "content://sms/30", body = "secret", date = 3_000L))
+
+        val refs = db.messageDao().findRefsByTelephonyUris(listOf("content://sms/21", "content://sms/30"))
+        val supprimes = db.messageDao().deleteByTelephonyUris(listOf("content://sms/21", "content://sms/30"))
+
+        assertThat(refs).containsExactly(com.filestech.sms.data.local.db.dao.MessageRef(id = 21L, conversationId = CONV_SMS))
+        assertThat(supprimes).isEqualTo(refs.size)
+        assertThat(db.messageDao().findRefsByTelephonyUris(listOf("content://sms/21"))).isEmpty()
+    } }
+
     @Test
     fun affectedConversationIds_areReadableBeforeTheDelete() { runBlocking {
         val ids = db.messageDao().findConversationIdsByTelephonyUris(listOf("content://sms/21"))

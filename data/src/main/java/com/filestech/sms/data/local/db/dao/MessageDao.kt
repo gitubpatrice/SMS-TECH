@@ -569,6 +569,19 @@ interface MessageDao {
     suspend fun findConversationIdsByTelephonyUris(uris: List<String>): List<Long>
 
     /**
+     * v1.28.7 — les messages que [deleteByTelephonyUris] va effacer, avec leur conversation, À
+     * LIRE AVANT le `DELETE`. Même clause, coffre exclu compris.
+     */
+    @Query(
+        """
+        SELECT id, conversation_id FROM messages
+        WHERE telephony_uri IN (:uris)
+          AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
+    suspend fun findRefsByTelephonyUris(uris: List<String>): List<MessageRef>
+
+    /**
      * FTS search across body + address. Returns matching message ids ordered by relevance.
      *
      * v1.11.0 audit SEC-V1 — JOIN sur `conversations` avec filtre `in_vault = 0`
@@ -631,6 +644,21 @@ interface MessageDao {
         """,
     )
     suspend fun purgeOlderThan(olderThan: Long): Int
+
+    /**
+     * v1.28.7 — ce que [purgeOlderThan] va effacer, désigné sans contenu, à lire DANS la même
+     * transaction et AVANT elle. La clause est celle du `DELETE`, mot pour mot : deux critères
+     * qui divergeraient annuleraient la notification d'un message conservé, ou oublieraient celle
+     * d'un message effacé.
+     */
+    @Query(
+        """
+        SELECT id, conversation_id FROM messages
+         WHERE date < :olderThan AND starred = 0
+           AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
+    suspend fun findRefsOlderThan(olderThan: Long): List<MessageRef>
 
     /**
      * v1.28.1 — les messages que [purgeOlderThan] va effacer **et qui ont une copie dans le

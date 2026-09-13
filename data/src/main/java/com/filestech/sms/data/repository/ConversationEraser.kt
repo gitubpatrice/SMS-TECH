@@ -56,15 +56,12 @@ class ConversationEraser @Inject constructor(
     // totale — le motif de défaut de ce dépôt étant précisément le correctif posé sur un seul
     // des chemins jumeaux.
     //
-    // CE QU'ELLE NE COUVRE PAS — un premier commentaire affirmait « tous », c'était faux
-    // (relecture sécurité du delta final, S2/S3). Trois chemins suppriment encore sans passer
-    // par [erase] ni [eraseMessage], et laissent donc les notifications : [purgeHistory], par un
-    // DELETE de masse ; la réconciliation de `TelephonySyncManager`, quand un message disparaît
-    // du fournisseur par une autre application ; la fusion de doublons de `ConversationMirror`,
-    // qui supprime la conversation victime après avoir déplacé ses messages. Préexistants et
-    // d'impact borné — une notification ne survit pas au redémarrage du téléphone, la rétention
-    // vise des messages anciens, la fusion ne supprime aucun message —, ils sont consignés et
-    // non corrigés en 1.28.6.
+    // Les trois chemins qui suppriment SANS passer par [erase] ni [eraseMessage] annulent eux
+    // aussi depuis la v1.28.7, chacun à sa manière : [purgeHistory] et la réconciliation de
+    // `TelephonySyncManager` par lot ([ConversationNotificationCanceller.cancelForMessages]),
+    // la fusion de doublons de `ConversationMirror` par conversation victime. Consignés en
+    // 1.28.6 par la relecture sécurité du delta final (S2/S3), où un premier commentaire
+    // affirmait à tort que ce point les couvrait tous.
     private val notifications: ConversationNotificationCanceller,
 ) {
 
@@ -393,7 +390,13 @@ class ConversationEraser @Inject constructor(
         // que le processus meure entre le DELETE et le rafraichissement pour que
         // `conversations.last_message_preview` conserve LE CORPS EN CLAIR du message purge, et
         // rien ne reparait cet etat : l'apercu perime etait PERMANENT.
-        return database.withTransaction {
+        // v1.28.7 — les notifications des messages purges partent avec eux. La retention faisait un
+        // DELETE de masse sans les annuler : un message efface restait lisible dans le volet. Les
+        // references sont lues dans la MEME transaction que le DELETE, avec la meme clause ;
+        // l'annulation vient apres la validation, jamais avant.
+        var purges: List<com.filestech.sms.data.local.db.dao.MessageRef> = emptyList()
+        val efface = database.withTransaction {
+            purges = messageDao.findRefsOlderThan(cutoff)
             val n = messageDao.purgeOlderThan(cutoff)
             if (n > 0) {
                 // v1.3.3 (audit G1) — une conversation videe garderait sinon son apercu en clair.
@@ -401,6 +404,8 @@ class ConversationEraser @Inject constructor(
             }
             n
         }
+        if (efface > 0) notifications.cancelForMessages(purges.groupBy({ it.conversationId }, { it.id }))
+        return efface
     }
 
     /**

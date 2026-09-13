@@ -45,6 +45,9 @@ class ConversationMirror @Inject constructor(
     // v1.27.2 (audit Codex, C-07) — le rapprochement de conversation exige la region : neuf
     // chiffres ne portent aucune information de pays.
     private val phoneIdentity: PhoneIdentity,
+    // v1.28.7 — la fusion de doublons supprime la conversation victime : ses notifications
+    // pointaient ensuite vers une conversation qui n'existe plus.
+    private val notifications: com.filestech.sms.domain.notification.ConversationNotificationCanceller,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : OutgoingMessageMirror {
 
@@ -1252,6 +1255,13 @@ class ConversationMirror @Inject constructor(
             }
             // 4) recalcule conversations.unread_count depuis les messages réellement non lus.
             conversationDao.recomputeAllUnreadCounts()
+        }
+        // v1.28.7 — APRÈS la validation, et pour les seules victimes. Leurs messages vivent désormais
+        // sous le survivant, mais leurs notifications portaient le tag de la conversation supprimée :
+        // un tap ouvrait un fil qui n'existe plus. On les retire plutôt que de les laisser mentir ;
+        // le compteur de non-lus du survivant, recalculé plus haut, porte toujours ces messages.
+        for (plan in plans) {
+            for (victimId in plan.victimIds) notifications.cancelAllForConversation(victimId)
         }
         Timber.i("dedupeSameNumberConversations: %d groupe(s) de doublons fusionné(s)", plans.size)
         true

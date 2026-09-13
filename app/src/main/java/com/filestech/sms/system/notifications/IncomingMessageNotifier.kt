@@ -362,6 +362,17 @@ class IncomingMessageNotifier @Inject constructor(
             .onFailure { Timber.w(it, "cancelForMessage: %d", messageId) }
     }
 
+    /** v1.28.7 — voir [ConversationNotificationCanceller.cancelForMessages]. */
+    override fun cancelForMessages(messagesByConversation: Map<Long, Collection<Long>>) {
+        if (messagesByConversation.isEmpty()) return
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?
+            ?: return
+        runCatching {
+            val actives = nm.activeNotifications.map { it.tag to it.id }
+            for ((tag, id) in notificationsToCancel(actives, messagesByConversation)) nm.cancel(tag, id)
+        }.onFailure { Timber.w(it, "cancelForMessages") }
+    }
+
     /**
      * v1.8.0 (bug 3 fix, MEDIUM 3c) — détecte si l'utilisateur a désactivé soit
      * les notifications de l'app au global, soit le canal `incoming_messages`
@@ -423,8 +434,7 @@ class IncomingMessageNotifier @Inject constructor(
      * outils debug (`dumpsys notification`) et éviter toute collision avec d'éventuels
      * tags posés par d'autres composants futurs.
      */
-    private fun conversationTag(conversationId: Long): String =
-        "com.filestech.sms.conv.$conversationId"
+    private fun conversationTag(conversationId: Long): String = conversationTagFor(conversationId)
 
     companion object {
         const val KEY_REPLY = "key_reply_text"
@@ -505,3 +515,31 @@ internal fun notificationIdFor(messageId: Long): Int {
 
 /** Seule valeur de repli, pour l'unique identifiant dont le hachage vaut `0`. */
 internal const val NOTIFICATION_ID_FALLBACK = 0x10000
+
+/**
+ * v1.28.7 — le tag de toutes les notifications d'une conversation. Sorti de la classe pour que
+ * [notificationsToCancel] le construise à l'identique : deux écritures du même littéral auraient
+ * pu diverger, et l'annulation ne toucherait alors plus rien, sans erreur.
+ */
+internal fun conversationTagFor(conversationId: Long): String = "com.filestech.sms.conv.$conversationId"
+
+/**
+ * v1.28.7 — parmi les notifications [actives] (tag, identifiant), celles qui portent un des
+ * messages [cibles], groupés par conversation.
+ *
+ * Fonction pure, et c'est le point : la décision d'annuler se teste sans `NotificationManager`.
+ * Une notification appartient à un message par la PAIRE tag + identifiant — l'identifiant seul
+ * est un hachage, deux conversations peuvent le partager. Les notifications sans tag
+ * (raccourci d'urgence, échecs d'envoi) ne sont jamais concernées.
+ */
+internal fun notificationsToCancel(
+    actives: List<Pair<String?, Int>>,
+    cibles: Map<Long, Collection<Long>>,
+): List<Pair<String, Int>> {
+    val voulues = HashSet<Pair<String, Int>>()
+    for ((conversationId, messages) in cibles) {
+        val tag = conversationTagFor(conversationId)
+        for (messageId in messages) voulues += tag to notificationIdFor(messageId)
+    }
+    return actives.mapNotNull { (tag, id) -> if (tag != null && (tag to id) in voulues) tag to id else null }
+}

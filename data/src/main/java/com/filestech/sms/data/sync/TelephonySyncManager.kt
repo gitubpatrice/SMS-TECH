@@ -62,6 +62,9 @@ class TelephonySyncManager @Inject constructor(
     // v1.27.2 (audit externe 2026-08-04 #6) — transaction Room pour [reconcileDeletions] :
     // suppression + recalcul des aperçus atomiques, même recette que `purgeHistoryNow` (H9).
     private val database: AppDatabase,
+    // v1.28.7 — un message effacé côté système par une autre application ne doit pas rester
+    // lisible dans le volet : la réconciliation annule les notifications de ce qu'elle retire.
+    private val notifications: com.filestech.sms.domain.notification.ConversationNotificationCanceller,
     private val blockedRepo: BlockedNumberRepository,
     private val blockedSystem: BlockedNumberSystem,
     private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
@@ -483,6 +486,7 @@ class TelephonySyncManager @Inject constructor(
             // du processus entre le DELETE et le refresh recrée exactement l'état permanent
             // que H9 a fermé — au tour suivant `gone` serait vide et le refresh jamais rejoué.
             var removed = 0
+            var retires: List<com.filestech.sms.data.local.db.dao.MessageRef> = emptyList()
             database.withTransaction {
                 // v1.27.2 (relecture Codex 2026-08-04) — recalcul CIBLÉ, et non plus global.
                 //
@@ -499,6 +503,10 @@ class TelephonySyncManager @Inject constructor(
                 val affected = gone.chunked(SQLITE_HOST_PARAM_LIMIT)
                     .flatMap { batch -> messageDao.findConversationIdsByTelephonyUris(batch) }
                     .toSet()
+                // v1.28.7 — les messages eux-mêmes, lus pour la même raison que `affected` : après
+                // le DELETE ils n'existent plus, et leurs notifications seraient orphelines.
+                retires = gone.chunked(SQLITE_HOST_PARAM_LIMIT)
+                    .flatMap { batch -> messageDao.findRefsByTelephonyUris(batch) }
                 gone.chunked(SQLITE_HOST_PARAM_LIMIT).forEach { batch ->
                     removed += messageDao.deleteByTelephonyUris(batch)
                 }
@@ -521,6 +529,7 @@ class TelephonySyncManager @Inject constructor(
                     }
                 }
             }
+            if (removed > 0) notifications.cancelForMessages(retires.groupBy({ it.conversationId }, { it.id }))
             Timber.i("reconcileDeletions: %d local row(s) dropped (deleted system-side)", removed)
         }.onFailure { Timber.w(it, "reconcileDeletions failed") }
     }
