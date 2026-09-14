@@ -160,8 +160,16 @@ class SettingsViewModel @Inject constructor(
          *
          * Le dialogue est le même dans les deux sessions, normale et leurre, avec les mêmes mots :
          * une différence observable serait la fuite que le leurre existe pour empêcher.
+         *
+         * v1.28.9 (septième note d'Andrew, constat 2) — deux causes de plus, dites séparément :
+         * [listeIllisible], la liste des conversations n'a pas pu être lue et aucune copie système
+         * n'a été présentée au fournisseur ; [echecsLocaux], ce qui n'a pas pu être effacé sur
+         * l'appareil lui-même. Une liste illisible passait pour vide, et le dialogue disait
+         * « Rien ne reviendra ».
          */
-        data class DataWiped(val restantes: Int) : Event
+        data class DataWiped(val restantes: Int, val listeIllisible: Boolean, val echecsLocaux: Int) : Event {
+            val incomplet: Boolean get() = restantes > 0 || listeIllisible || echecsLocaux > 0
+        }
     }
 
     val state: StateFlow<AppSettings> = settings.flow.stateIn(
@@ -290,7 +298,7 @@ class SettingsViewModel @Inject constructor(
         // v1.28.6 — le résultat se dit AVANT le redémarrage : après, il n'y a plus d'écran pour le
         // lire, et un message glissant partirait avec le processus. L'utilisateur ferme le
         // dialogue, et le redémarrage suit.
-        _events.send(Event.DataWiped(residu.copiesSystemeRestantes))
+        _events.send(Event.DataWiped(residu.copiesSystemeRestantes, residu.listeIllisible, residu.echecsLocaux))
     }
 
     /** v1.28.6 — l'utilisateur a lu ce qui restait ; on termine par le redémarrage. */

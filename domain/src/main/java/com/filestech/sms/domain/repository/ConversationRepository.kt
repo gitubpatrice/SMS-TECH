@@ -78,7 +78,12 @@ interface ConversationRepository {
      * Maintenant la logique vit dans le repository (qui sait déjà tout ce qu'il faut).
      */
     suspend fun markAllRead()
-    suspend fun delete(id: Long)
+
+    /**
+     * v1.28.9 (septième note d'Andrew, point 5) — rend ce qu'il est advenu de la conversation : une
+     * conversation du coffre est CONSERVÉE sur tout échec, cf. [ConversationDeleteResult].
+     */
+    suspend fun delete(id: Long): ConversationDeleteResult
 
     /**
      * v1.27.10 (revue externe GitLab !38458) — supprime TOUTES les conversations du coffre,

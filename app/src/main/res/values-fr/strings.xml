@@ -142,6 +142,9 @@
     <string name="conversations_importing_count">%1$d messages importés…</string>
     <string name="conversations_delete_confirm_title">Supprimer cette conversation ?</string>
     <string name="conversations_delete_confirm_body">Tous les messages de cette conversation seront définitivement supprimés de cet appareil. Les autres conversations ne sont pas affectées.</string>
+    <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
+    <string name="conversations_delete_vault_kept_system">Cette conversation du coffre n’a pas été supprimée : sa copie dans la messagerie du téléphone n’a pas pu être retirée, et elle serait revenue hors du coffre à la prochaine synchronisation. Définissez SMS Tech comme application SMS par défaut, puis réessayez. Si l’échec persiste, sortez d’abord la conversation du coffre : elle pourra alors revenir dans la liste principale.</string>
+    <string name="conversations_delete_kept_local">La conversation n’a pas été supprimée : une partie n’a pas pu être retirée de ce téléphone. Réessayez.</string>
     <string name="conversations_draft_prefix">Brouillon : %1$s</string>
     <string name="conversations_preview_attachment">Pièce jointe</string>
 
@@ -669,9 +672,12 @@
     <string name="settings_nuke_done_body">Les conversations et les réglages ont été effacés, dans SMS Tech comme dans la messagerie du téléphone. Rien ne reviendra à la prochaine synchronisation. SMS Tech va redémarrer.</string>
     <string name="settings_nuke_residue_title">Effacement incomplet</string>
     <plurals name="settings_nuke_residue_body">
-        <item quantity="one">SMS Tech a effacé ses propres données, mais %1$d conversation est restée dans la messagerie du téléphone : le système a refusé de la supprimer, et elle reviendra à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
-        <item quantity="other">SMS Tech a effacé ses propres données, mais %1$d conversations sont restées dans la messagerie du téléphone : le système a refusé de les supprimer, et elles reviendront à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
+        <item quantity="one">%1$d conversation est restée dans la messagerie du téléphone : le système a refusé de la supprimer, et elle reviendra à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
+        <item quantity="other">%1$d conversations sont restées dans la messagerie du téléphone : le système a refusé de les supprimer, et elles reviendront à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
     </plurals>
+    <!-- v1.28.9 (septieme note d'Andrew, constat 2) — ne pas savoir n'est pas « rien a effacer ». -->
+    <string name="settings_nuke_list_unreadable">La liste des conversations n’a pas pu être lue : leurs copies dans la messagerie du téléphone n’ont pas été supprimées et reviendront à la prochaine synchronisation.</string>
+    <string name="settings_nuke_local_failure">Une partie des données propres à SMS Tech n’a pas pu être effacée de ce téléphone. Relancez « Supprimer toutes mes données ».</string>
 
     <string name="about_title">À propos</string>
     <string name="about_tagline_short">SMS &amp; MMS moderne et privé pour Android.</string>

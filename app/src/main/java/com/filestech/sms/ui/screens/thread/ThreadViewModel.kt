@@ -1712,8 +1712,21 @@ class ThreadViewModel @Inject constructor(
 
     fun deleteThisConversation(onDeleted: () -> Unit) {
         viewModelScope.launch {
-            toggleConvState.delete(conversationId)
-            onDeleted()
+            // v1.28.9 (septième note d'Andrew, point 5) — une conversation du coffre peut être
+            // CONSERVÉE : on reste alors dans le fil, et on dit pourquoi. Revenir à la liste aurait
+            // fait croire à une suppression qui n'a pas eu lieu.
+            val message = when (toggleConvState.delete(conversationId)) {
+                com.filestech.sms.domain.repository.ConversationDeleteResult.DELETED -> null
+                com.filestech.sms.domain.repository.ConversationDeleteResult.KEPT_SYSTEM_COPY ->
+                    com.filestech.sms.R.string.conversations_delete_vault_kept_system
+                com.filestech.sms.domain.repository.ConversationDeleteResult.KEPT_LOCAL_FAILURE ->
+                    com.filestech.sms.R.string.conversations_delete_kept_local
+            }
+            if (message == null) {
+                onDeleted()
+            } else {
+                _events.tryEmit(Event.ShowSnackbar(context.getString(message), isError = true))
+            }
         }
     }
 

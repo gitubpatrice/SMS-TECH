@@ -147,6 +147,9 @@
     <string name="conversations_importing_count">%1$d messages imported…</string>
     <string name="conversations_delete_confirm_title">Delete this conversation?</string>
     <string name="conversations_delete_confirm_body">All messages in this conversation will be permanently removed from this device. Other conversations are not affected.</string>
+    <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
+    <string name="conversations_delete_vault_kept_system">This vault conversation was not deleted: its copy in the phone’s message store could not be removed, and it would have come back outside the vault at the next sync. Make SMS Tech your default SMS app, then try again. If it keeps failing, move the conversation out of the vault first: it may then come back in the main list.</string>
+    <string name="conversations_delete_kept_local">The conversation was not deleted: part of it could not be removed from this phone. Try again.</string>
     <string name="conversations_draft_prefix">Draft: %1$s</string>
     <string name="conversations_preview_attachment">Attachment</string>
 
@@ -679,9 +682,12 @@
     <string name="settings_nuke_done_body">Conversations and settings have been erased, both in SMS Tech and in the phone’s message store. Nothing will come back at the next sync. SMS Tech is about to restart.</string>
     <string name="settings_nuke_residue_title">Incomplete deletion</string>
     <plurals name="settings_nuke_residue_body">
-        <item quantity="one">SMS Tech erased its own data, but %1$d conversation stayed in the phone’s message store: the system refused to delete it, and it will come back at the next sync. The usual cause is that SMS Tech is not the default SMS app.</item>
-        <item quantity="other">SMS Tech erased its own data, but %1$d conversations stayed in the phone’s message store: the system refused to delete them, and they will come back at the next sync. The usual cause is that SMS Tech is not the default SMS app.</item>
+        <item quantity="one">%1$d conversation stayed in the phone’s message store: the system refused to delete it, and it will come back at the next sync. The usual cause is that SMS Tech is not the default SMS app.</item>
+        <item quantity="other">%1$d conversations stayed in the phone’s message store: the system refused to delete them, and they will come back at the next sync. The usual cause is that SMS Tech is not the default SMS app.</item>
     </plurals>
+    <!-- v1.28.9 (septieme note d'Andrew, constat 2) — ne pas savoir n'est pas « rien a effacer ». -->
+    <string name="settings_nuke_list_unreadable">The conversation list could not be read: their copies in the phone’s message store were not deleted and will come back at the next sync.</string>
+    <string name="settings_nuke_local_failure">Some of SMS Tech’s own data could not be erased from this phone. Run “Delete all my data” again.</string>
 
     <!-- About -->
     <string name="about_title">About</string>

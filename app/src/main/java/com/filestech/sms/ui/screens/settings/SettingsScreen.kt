@@ -114,10 +114,10 @@ fun SettingsScreen(
     // qui révèlent que l'app dispose de fonctions de sécurité personnelle.
     val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
     var showNuke by remember { mutableStateOf(false) }
-    // v1.28.6 — nombre de conversations restees dans la messagerie du telephone apres la purge.
-    // `null` = pas de dialogue. Non nul = l'effacement est INCOMPLET et on le dit avant de
-    // redemarrer l'application, cf. [SettingsViewModel.Event.DataWipedWithResidue].
-    var nukeResidue by remember { mutableStateOf<Int?>(null) }
+    // v1.28.6 — le compte rendu de la purge, lu avant de redemarrer l'application. `null` = pas de
+    // dialogue ; sinon il confirme, ou dit ce qui a resiste — cf. [SettingsViewModel.Event.DataWiped].
+    // v1.28.9 — le compte rendu entier, et non plus le seul nombre de copies système.
+    var nukeResultat by remember { mutableStateOf<SettingsViewModel.Event.DataWiped?>(null) }
     var lockModePickerOpen by remember { mutableStateOf(false) }
     // v1.26.1 (audit F4) — sélecteur du délai de verrouillage automatique.
     var autoLockDelayPickerOpen by remember { mutableStateOf(false) }
@@ -272,7 +272,7 @@ fun SettingsScreen(
                 // et non un message glissant : le processus redemarre juste apres, un snackbar
                 // disparaitrait avec lui sans avoir ete lu.
                 is SettingsViewModel.Event.DataWiped -> {
-                    nukeResidue = e.restantes
+                    nukeResultat = e
                 }
                 // v1.28.3 (audit du 2026-09-09) — echec LOCAL : pas de sortie forcee, et on le
                 // dit au lieu de rouvrir un dialogue qui ne mene nulle part.
@@ -852,8 +852,10 @@ fun SettingsScreen(
     // défaut — la promesse est fausse, et une promesse fausse est pire que pas de promesse. Un
     // seul bouton : il n'y a rien à décider, seulement à savoir. Sa fermeture déclenche le
     // redémarrage que la purge avait mis en attente pour laisser ce message se lire.
-    nukeResidue?.let { restantes ->
-        val incomplet = restantes > 0
+    // v1.28.9 (septième note d'Andrew, constat 2) — trois causes possibles, dites séparément par
+    // [EffacementIncompletTexte] : l'écran est au seuil de complexité de detekt.
+    nukeResultat?.let { resultat ->
+        val incomplet = resultat.incomplet
         AlertDialog(
             onDismissRequest = { /* lecture obligatoire : seul le bouton ferme */ },
             icon = {
@@ -885,20 +887,14 @@ fun SettingsScreen(
             },
             text = {
                 if (incomplet) {
-                    Text(
-                        text = androidx.compose.ui.res.pluralStringResource(
-                            R.plurals.settings_nuke_residue_body,
-                            restantes,
-                            restantes,
-                        ),
-                    )
+                    EffacementIncompletTexte(resultat)
                 } else {
                     Text(stringResource(R.string.settings_nuke_done_body))
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    nukeResidue = null
+                    nukeResultat = null
                     viewModel.terminerEffacement()
                 }) { Text(stringResource(R.string.action_close)) }
             },

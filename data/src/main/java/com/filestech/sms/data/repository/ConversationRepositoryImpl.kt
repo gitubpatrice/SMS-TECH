@@ -609,12 +609,14 @@ class ConversationRepositoryImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun delete(id: Long) = withContext(io) {
-        // Suppression ordinaire : la ligne locale part meme si la copie systeme resiste — voir
-        // [ConversationEraser.erase] pour la raison, et pour ce qui differe cote coffre.
-        eraser.erase(id)
-        Unit
-    }
+    override suspend fun delete(id: Long): com.filestech.sms.domain.repository.ConversationDeleteResult =
+        withContext(io) {
+            // Suppression ordinaire : la ligne locale part meme si la copie systeme resiste — voir
+            // [ConversationEraser.erase] pour la raison, et pour ce qui differe cote coffre.
+            // v1.28.9 (septième note d'Andrew, point 5) — sauf pour une conversation du COFFRE,
+            // conservée sur tout échec : voir [ConversationEraser.supprimer].
+            eraser.supprimer(id)
+        }
 
     override suspend fun deleteAllInVault(
         force: Boolean,

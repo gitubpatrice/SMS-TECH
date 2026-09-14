@@ -1,12 +1,14 @@
 package com.filestech.sms.data.repository
 
 import androidx.room.withTransaction
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.data.local.db.AppDatabase
 import com.filestech.sms.data.local.db.ScheduledAttachmentCodec
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.sms.SystemCopyEraser
 import com.filestech.sms.domain.notification.ConversationNotificationCanceller
+import com.filestech.sms.domain.repository.ConversationDeleteResult
 import com.filestech.sms.domain.repository.VaultPurgeResult
 import timber.log.Timber
 import javax.inject.Inject
@@ -88,6 +90,9 @@ class ConversationEraser @Inject constructor(
      * efface un fil voit la ligne disparaitre, c'est ce qu'il a demande — mais [purgeVault] en a
      * besoin : la, une copie systeme laissee derriere finit par revenir.
      *
+     * v1.28.9 — ce n'est plus vrai du coffre : le geste de l'utilisateur passe par [supprimer], qui
+     * choisit [Mode.COFFRE] pour une conversation du coffre et laisse l'écran dire qu'elle est restée.
+     *
      * v1.28.1 (meme revue, 3e passe, constat reproduit sur emulateur) — **rendre compte ne
      * suffisait pas** : la ligne Room partait quand meme, y compris quand la copie systeme
      * restait. Le premier essai de la porte « PIN oublie » refusait donc correctement de retirer
@@ -128,7 +133,7 @@ class ConversationEraser @Inject constructor(
         // Seule condition que la sortie assumée lève : la copie système qui résiste.
         if (!systemCopyGone && mode == Mode.COFFRE) {
             Timber.w("delete: conversation %d kept locally, its system copy survives", id)
-            return Issue(systemCopyGone = false, localeComplete = true)
+            return Issue(systemCopyGone = false, localeComplete = true, conservee = true)
         }
 
         // v1.28.4 (relecture externe, R01/R02) — les dépendants RENDENT COMPTE. Le travail
@@ -146,7 +151,7 @@ class ConversationEraser @Inject constructor(
         val echecs = programmes.echecs + possedes.echecs
         if (echecs > 0 && mode != Mode.ORDINAIRE) {
             Timber.w("delete: conversation %d kept locally, %d dependant(s) not cleaned", id, echecs)
-            return Issue(systemCopyGone, localeComplete = false)
+            return Issue(systemCopyGone, localeComplete = false, conservee = true)
         }
 
         // v1.28.4 (relecture externe, R03) — la FIN est atomique : relecture et suppression dans
@@ -176,7 +181,11 @@ class ConversationEraser @Inject constructor(
                 ).filterNot { it in possedes.chemins }
             when {
                 tardif && mode == Mode.COFFRE -> Conservation.MESSAGE_TARDIF
-                cheminsTardifs.isNotEmpty() && mode == Mode.COFFRE -> Conservation.PIECE_TARDIVE
+                // Sous `force` aussi : une pièce tardive est un dépendant pas encore traité, et
+                // `force` ne lève que la condition « copie système ». Partie avec le parent, son
+                // fichier deviendrait orphelin au premier effacement raté, sans plus aucun parent
+                // pour le retrouver — et le coffre relu vide se dirait complet.
+                cheminsTardifs.isNotEmpty() && mode != Mode.ORDINAIRE -> Conservation.PIECE_TARDIVE
                 else -> {
                     if (tardif) systemCopyGone = false
                     for (envoi in programmesRestants) scheduledDao.delete(envoi.id)
@@ -185,16 +194,15 @@ class ConversationEraser @Inject constructor(
                 }
             }
         }
-        when (conservation) {
-            Conservation.MESSAGE_TARDIF -> {
-                Timber.w("delete: message arrived during sweep of conversation %d", id)
-                return Issue(systemCopyGone = false, localeComplete = true)
+        conservation?.let { cause ->
+            Timber.w("delete: %s during sweep of conversation %d, parent kept", cause, id)
+            // Un message tardif n'a jamais été présenté au fournisseur ; une pièce tardive est un
+            // dépendant pas encore traité. Un seul retour : `erase` est à la limite de detekt.
+            return if (cause == Conservation.MESSAGE_TARDIF) {
+                Issue(systemCopyGone = false, localeComplete = true, conservee = true)
+            } else {
+                Issue(systemCopyGone, localeComplete = false, conservee = true)
             }
-            Conservation.PIECE_TARDIVE -> {
-                Timber.w("delete: attachment arrived during sweep of conversation %d", id)
-                return Issue(systemCopyGone, localeComplete = false)
-            }
-            null -> Unit
         }
         // Les lignes sont parties avec la conversation : plus aucune citation à écarter.
         val echecsTardifs = if (cheminsTardifs.isEmpty()) 0 else fichiers.effacerSiPlusCites(cheminsTardifs)
@@ -205,7 +213,11 @@ class ConversationEraser @Inject constructor(
         // CONSERVENT le parent : annuler ses notifications y aurait masqué une conversation
         // toujours présente, l'inverse du contrat.
         notifications.cancelAllForConversation(id)
-        return Issue(systemCopyGone, localeComplete = true)
+        // v1.28.9 — `localeComplete` dit la vérité en mode ordinaire aussi : la ligne est partie,
+        // mais un fichier ou un envoi programmé qui a résisté reste sur le téléphone, et la purge
+        // totale doit pouvoir le dire. Les modes du coffre n'arrivent jamais ici avec un échec :
+        // ils sont sortis plus haut, parent conservé.
+        return Issue(systemCopyGone, localeComplete = echecs == 0 && echecsTardifs == 0, conservee = false)
     }
 
     /**
@@ -230,8 +242,50 @@ class ConversationEraser @Inject constructor(
      * v1.28.4 — ce qu'un effacement laisse derrière lui, dit séparément : la copie système
      * ([systemCopyGone]) et les dépendants locaux — envois programmés, fichiers
      * ([localeComplete]). Un parent conservé pour l'un ou l'autre motif compte dans `remaining`.
+     *
+     * v1.28.9 — [conservee] dit si la ligne locale est restée. Il ne se déduit pas des deux autres :
+     * sous `force`, une copie système qui résiste n'empêche pas la ligne de partir, et en mode
+     * ordinaire un fichier qui résiste non plus. Sans valeur par défaut : chaque sortie doit le dire.
      */
-    data class Issue(val systemCopyGone: Boolean, val localeComplete: Boolean)
+    data class Issue(val systemCopyGone: Boolean, val localeComplete: Boolean, val conservee: Boolean)
+
+    /**
+     * v1.28.9 (septième note d'Andrew, MR !38458, point 5) — **la suppression demandée par
+     * l'utilisateur**, celle de la liste et du fil.
+     *
+     * Elle appelait [erase] en [Mode.ORDINAIRE] pour toute conversation, coffre compris. Une
+     * conversation du coffre dont la copie système résiste — SMS Tech n'est pas l'application SMS
+     * par défaut, ou l'identité de la ligne n'est pas prouvée — perdait alors sa ligne locale, et
+     * avec elle `in_vault`, le seul drapeau qui la protège : la synchronisation suivante la
+     * réimportait HORS du coffre, en clair. C'est le retour que F11 a fermé pour la rétention, et
+     * que son commentaire qualifie de pire que la suppression elle-même.
+     *
+     * Une conversation du coffre passe donc en [Mode.COFFRE] : conservée sur tout échec, et
+     * l'appelant le dit. Hors coffre, le contrat ordinaire ne change pas — la purge totale et la
+     * purge du leurre continuent d'appeler [erase] directement.
+     *
+     * Un état illisible n'est pas « hors coffre » : on ne supprime pas ce qu'on ne sait pas protéger.
+     * Limite assumée : le mode est choisi à la lecture. Une conversation déplacée au coffre PENDANT
+     * sa propre suppression suivrait le mode lu ; l'interface ne permet pas ce geste, et la barrière
+     * de purge ne peut pas servir ici — elle refuse deux balayages simultanés.
+     */
+    suspend fun supprimer(id: Long): ConversationDeleteResult {
+        val conversation = runCatchingCancellable { conversationDao.findById(id) }.getOrElse {
+            Timber.w(it, "delete: etat de la conversation %d illisible, rien n'est supprime", id)
+            return ConversationDeleteResult.KEPT_LOCAL_FAILURE
+        } ?: return ConversationDeleteResult.DELETED
+        val mode = if (conversation.inVault) Mode.COFFRE else Mode.ORDINAIRE
+        // Une exception ici vient de la transaction finale : annulée, la conversation est restée.
+        val issue = runCatchingCancellable { erase(id, mode) }.getOrElse {
+            Timber.w(it, "delete: conversation %d non supprimee", id)
+            return ConversationDeleteResult.KEPT_LOCAL_FAILURE
+        }
+        return when {
+            !issue.conservee -> ConversationDeleteResult.DELETED
+            !issue.localeComplete -> ConversationDeleteResult.KEPT_LOCAL_FAILURE
+            else -> ConversationDeleteResult.KEPT_SYSTEM_COPY
+        }
+    }
 
     /**
      * v1.28.3 (F03) — annule et efface les envois programmés d'une conversation qui disparaît.
@@ -332,7 +386,10 @@ class ConversationEraser @Inject constructor(
         val chemins = LinkedHashSet<String>()
         pieces.mapTo(chemins) { it.localUri }
         chemins += cheminsProgrammes
-        val echecs = fichiers.effacerSiPlusCites(chemins, FichiersDePiecesJointes.Exclusion.Conversation(conversationId))
+        val echecs = fichiers.effacerSiPlusCites(
+            chemins,
+            FichiersDePiecesJointes.Exclusion.Conversation(conversationId),
+        )
         return Dependants(echecs, chemins)
     }
 
@@ -378,7 +435,9 @@ class ConversationEraser @Inject constructor(
         }
         if (tardives.isNotEmpty()) {
             val echecsTardifs = fichiers.effacerSiPlusCites(tardives)
-            if (echecsTardifs > 0) Timber.w("deleteMessage: %d fichier(s) tardif(s) de %d non efface(s)", echecsTardifs, messageId)
+            if (echecsTardifs > 0) {
+                Timber.w("deleteMessage: %d fichier(s) tardif(s) de %d non efface(s)", echecsTardifs, messageId)
+            }
         }
         // v1.28.6 — et sa notification, qui portait son texte.
         notifications.cancelForMessage(msg.conversationId, messageId)

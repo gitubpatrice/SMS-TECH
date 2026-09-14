@@ -113,10 +113,21 @@ class PanicService @Inject constructor(
         //
         // Sous la barrière, comme la purge du coffre : on balaie des conversations du coffre, et
         // personne ne doit y entrer pendant ce temps.
+        //
+        // v1.28.9 (septième note d'Andrew, constat 2) — UNE LISTE ILLISIBLE N'EST PAS UNE LISTE VIDE.
+        // `getOrDefault(emptyList())` faisait passer l'échec de lecture pour « aucune conversation » :
+        // aucune copie système n'était présentée au fournisseur, et le dialogue annonçait pourtant
+        // « Rien ne reviendra ». La destruction locale continue — on purge parce que quelqu'un va
+        // prendre le téléphone, et une base illisible n'est pas une raison de la laisser —, mais le
+        // compte rendu le dit.
         val toutes = runCatching { conversationDao.idsToutes() }
             .onFailure { Timber.w(it, "wipe: enumeration des conversations") }
-            .getOrDefault(emptyList())
-        val residu = effacerConversations(toutes)
+            .getOrNull()
+        val balayage = effacerConversations(toutes.orEmpty())
+        // v1.28.9 — chaque étape locale rend compte, et les dossiers sont VÉRIFIÉS après coup. Les
+        // booléens de `delete()` et les exceptions étaient avalés : la purge se disait complète quoi
+        // qu'il reste sur le disque.
+        var echecs = balayage.echecsLocaux
         // Order matters (audit F29):
         //  1. Close the Room/SQLCipher database synchronously so no transaction can re-write
         //     after we delete its on-disk files.
@@ -128,13 +139,19 @@ class PanicService @Inject constructor(
         //  5. Wipe cache + exports + attachments.
         //  6. Reset preferences.
         runCatching { database.close() }.onFailure { Timber.w(it, "PanicService: db close") }
-        runCatching { keyManager.destroyKeyFile() }.onFailure { Timber.w(it, "destroy key file") }
+        runCatching { keyManager.destroyKeyFile() }.onFailure {
+            echecs++
+            Timber.w(it, "destroy key file")
+        }
         runCatching {
             keystore.deleteKey(KeystoreManager.ALIAS_DB_MASTER)
             keystore.deleteKey(KeystoreManager.ALIAS_VAULT_KEK)
             keystore.deleteKey(KeystoreManager.ALIAS_SETTINGS_AEAD)
             keystore.deleteKey(KeystoreManager.ALIAS_PANIC_DECOY)
-        }.onFailure { Timber.w(it, "delete keystore aliases") }
+        }.onFailure {
+            echecs++
+            Timber.w(it, "delete keystore aliases")
+        }
         runCatching { context.deleteDatabase(AppDatabase.DATABASE_NAME) }
             .onFailure { Timber.w(it, "deleteDatabase") }
         // v1.24.0 SEC — `deleteDatabase` ne connaît que `<db>`, `-journal`, `-wal` et `-shm`. La
@@ -143,12 +160,19 @@ class PanicService @Inject constructor(
         // l'historique COMPLET chiffré avec 32 octets nuls — une constante publique. Sans cette
         // purge, « supprimer toutes mes données » détruisait tout SAUF le seul fichier lisible
         // sans clé.
+        //
+        // v1.28.9 — puis on VÉRIFIE qu'aucun fichier de la base ne subsiste : c'est la seule preuve
+        // que `deleteDatabase` et ces suppressions ont abouti. Son booléen n'en est pas une — il
+        // vaut aussi `false` pour une base déjà absente.
         runCatching {
             val dbName = AppDatabase.DATABASE_NAME
-            context.getDatabasePath(dbName).parentFile
-                ?.listFiles { f -> f.name.startsWith(dbName) }
-                ?.forEach { it.delete() }
-        }.onFailure { Timber.w(it, "wipe database residues") }
+            val dossierBase = context.getDatabasePath(dbName).parentFile
+            dossierBase?.listFiles { f -> f.name.startsWith(dbName) }?.forEach { it.delete() }
+            echecs += dossierBase?.listFiles { f -> f.name.startsWith(dbName) }?.size ?: 0
+        }.onFailure {
+            echecs++
+            Timber.w(it, "wipe database residues")
+        }
         // Le marqueur de complétion de la réparation n'a aucune valeur secrète, mais « tout
         // effacer » doit être total.
         runCatching {
@@ -156,10 +180,13 @@ class PanicService @Inject constructor(
                 .edit().clear().commit()
         }.onFailure { Timber.w(it, "clear db_repair prefs") }
         runCatching {
-            File(context.filesDir, "mms_attachments").deleteRecursively()
-            File(context.filesDir, "db").deleteRecursively()
-            effacerLesFichiersTransitoires()
-        }.onFailure { Timber.w(it, "wipe file dirs") }
+            if (!File(context.filesDir, "mms_attachments").deleteRecursively()) echecs++
+            if (!File(context.filesDir, "db").deleteRecursively()) echecs++
+            echecs += effacerLesFichiersTransitoires()
+        }.onFailure {
+            echecs++
+            Timber.w(it, "wipe file dirs")
+        }
         // v1.28.5 (balayage des `runCatching`, constat de SECURITE) — les ecritures DataStore
         // ci-dessous sont NON ANNULABLES, et leurs echecs sont journalises. Depuis la v1.28.6 la
         // garantie vient de la tete de [nukeEverything], qui la porte pour toute la fonction ;
@@ -176,10 +203,18 @@ class PanicService @Inject constructor(
         //
         // Ce que l'audit S-P2-2 demandait est tenu par construction : les compteurs d'echec et de
         // temporisation partent avec le reste, donc une reinscription ne les herite plus.
-        runCatching { securityStore.clearAll() }.onFailure { Timber.w(it, "wipe: magasin securise") }
-        runCatching { settings.update { AppSettings() } }
-            .onFailure { Timber.w(it, "wipe: settings") }
-        return residu
+        //
+        // v1.28.9 — journalisés, et désormais COMPTÉS : une empreinte de PIN restée sur le disque ne
+        // doit pas laisser la purge se dire complète.
+        runCatching { securityStore.clearAll() }.onFailure {
+            echecs++
+            Timber.w(it, "wipe: magasin securise")
+        }
+        runCatching { settings.update { AppSettings() } }.onFailure {
+            echecs++
+            Timber.w(it, "wipe: settings")
+        }
+        return Residu(balayage.copiesSystemeRestantes, listeIllisible = toutes == null, echecsLocaux = echecs)
     }
 
     /**
@@ -189,8 +224,21 @@ class PanicService @Inject constructor(
      * toujours là. Cause quasi unique : SMS Tech n'est pas l'application SMS par défaut, et le
      * système lui refuse alors la suppression. Un échec dont on ne sait rien compte ici aussi —
      * le doute se résout du côté « nous n'avons pas tout effacé », jamais de l'autre.
+     *
+     * v1.28.9 (septième note d'Andrew, constat 2) — deux autres causes, comptées à part parce que le
+     * dialogue ne dit pas la même chose : [listeIllisible], la liste des conversations n'a pas pu
+     * être lue, donc aucune copie système n'a été présentée au fournisseur — elle passait pour
+     * vide ; [echecsLocaux], ce qui n'a pas pu être effacé sur l'appareil lui-même (fichier,
+     * dossier, clé, magasin sécurisé, réglages). Le doute se résout du même côté.
      */
-    data class Residu(val copiesSystemeRestantes: Int)
+    data class Residu(
+        val copiesSystemeRestantes: Int,
+        val listeIllisible: Boolean,
+        val echecsLocaux: Int,
+    ) {
+        /** Rien n'a résisté, nulle part : la seule condition sous laquelle l'écran confirme. */
+        val complet: Boolean get() = copiesSystemeRestantes == 0 && !listeIllisible && echecsLocaux == 0
+    }
 
     /**
      * Supprime [ids] par [ConversationEraser] en mode ordinaire — copie système, envois
@@ -202,16 +250,27 @@ class PanicService @Inject constructor(
      */
     private suspend fun effacerConversations(ids: List<Long>): Residu = barriere.pendant {
         var restantes = 0
+        // v1.28.9 — en mode ordinaire la ligne part quoi qu'il arrive, mais un fichier ou un envoi
+        // programmé qui a résisté le dit (`localeComplete`) : il reste sur l'appareil, et cela compte.
+        var echecsLocaux = 0
         for (id in ids) {
             runCatching { eraser.erase(id, ConversationEraser.Mode.ORDINAIRE) }
-                .onSuccess { if (!it.systemCopyGone) restantes++ }
+                .onSuccess {
+                    if (!it.systemCopyGone) restantes++
+                    if (!it.localeComplete) echecsLocaux++
+                }
                 .onFailure {
                     restantes++
                     Timber.w(it, "wipe: conversation %d non supprimee", id)
                 }
         }
-        Timber.i("wipe: %d conversation(s), %d copie(s) systeme restante(s)", ids.size, restantes)
-        Residu(restantes)
+        Timber.i(
+            "wipe: %d conversation(s), %d copie(s) systeme restante(s), %d echec(s) local(aux)",
+            ids.size,
+            restantes,
+            echecsLocaux,
+        )
+        Residu(restantes, listeIllisible = false, echecsLocaux = echecsLocaux)
     }
 
     /**
@@ -234,19 +293,34 @@ class PanicService @Inject constructor(
      * de [nukeEverything], qui couvre les deux chemins.
      */
     private suspend fun effacerCeQueLeLeurreMontre(): Residu = withContext(NonCancellable) {
+        // v1.28.9 (constat 2, le jumeau que la note ne citait pas) — même aveu qu'en session réelle.
+        // Une liste illisible n'effaçait RIEN ici, et le dialogue disait « effacé » devant une liste
+        // restée pleine ; il le dit désormais, avec les mêmes mots que la purge totale.
         val ids = runCatching { conversationDao.idsHorsCoffre() }
             .onFailure { Timber.w(it, "decoy wipe: listing") }
-            .getOrDefault(emptyList())
-        val residu = effacerConversations(ids)
-        runCatching { effacerLesFichiersTransitoires() }.onFailure { Timber.w(it, "decoy wipe: files") }
-        runCatching { settings.update { AppSettings(security = it.security) } }
-            .onFailure { Timber.w(it, "decoy wipe: settings") }
-        residu
+            .getOrNull()
+        val balayage = effacerConversations(ids.orEmpty())
+        var echecs = balayage.echecsLocaux
+        runCatching { echecs += effacerLesFichiersTransitoires() }.onFailure {
+            echecs++
+            Timber.w(it, "decoy wipe: files")
+        }
+        runCatching { settings.update { AppSettings(security = it.security) } }.onFailure {
+            echecs++
+            Timber.w(it, "decoy wipe: settings")
+        }
+        balayage.copy(listeIllisible = ids == null, echecsLocaux = echecs)
     }
 
-    /** Exports et cache : sans contenu du coffre qui ne soit déjà purgé à chaque verrouillage. */
-    private fun effacerLesFichiersTransitoires() {
-        File(context.filesDir, "exports").deleteRecursively()
-        context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+    /**
+     * Exports et cache : sans contenu du coffre qui ne soit déjà purgé à chaque verrouillage.
+     *
+     * v1.28.9 — rend le nombre d'éléments qui ont résisté, au lieu de l'avaler.
+     */
+    private fun effacerLesFichiersTransitoires(): Int {
+        var echecs = 0
+        if (!File(context.filesDir, "exports").deleteRecursively()) echecs++
+        context.cacheDir.listFiles()?.forEach { if (!it.deleteRecursively()) echecs++ }
+        return echecs
     }
 }

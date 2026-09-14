@@ -378,7 +378,19 @@ class ConversationsViewModel @Inject constructor(
         .map { it is AppLockManager.LockState.PanicDecoy }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    fun delete(id: Long) = viewModelScope.launch { toggle.delete(id) }
+    /**
+     * v1.28.9 (septième note d'Andrew, point 5) — une conversation conservée se dit. La liste
+     * n'affiche pas le coffre, mais un état illisible ou une suppression locale qui échoue laissent
+     * aussi la ligne en place : sans message, le geste semblait simplement ignoré.
+     */
+    fun delete(id: Long) = viewModelScope.launch {
+        val copieSysteme = when (toggle.delete(id)) {
+            com.filestech.sms.domain.repository.ConversationDeleteResult.DELETED -> return@launch
+            com.filestech.sms.domain.repository.ConversationDeleteResult.KEPT_SYSTEM_COPY -> true
+            com.filestech.sms.domain.repository.ConversationDeleteResult.KEPT_LOCAL_FAILURE -> false
+        }
+        _events.trySend(Event.DeleteKept(copieSysteme))
+    }
 
     /**
      * v1.26.1 (audit F1) — épingler / archiver / mettre en sourdine.
@@ -558,11 +570,25 @@ class ConversationsViewModel @Inject constructor(
         data class MovedToVault(val count: Int) : Event
         data class MoveToVaultFailed(val count: Int) : Event
 
+        /**
+         * v1.28.9 — les échecs qui s'affichent en rouge, sous UNE seule branche de l'écran : sa
+         * complexité est au seuil de detekt. Le texte de chacun est choisi hors de l'écran, à partir
+         * de chaînes résolues à la composition (audit H16).
+         */
+        sealed interface Erreur : Event
+
         /** v1.25.3 (audit H16) — aucun numéro n'a pu être bloqué ; la conversation est conservée. */
-        data object BlockFailed : Event
+        data object BlockFailed : Erreur
 
         /** v1.25.3 (audit SEC3) — blocage partiel ; la conversation est conservée volontairement. */
         data class BlockPartial(val blocked: Int, val total: Int) : Event
+
+        /**
+         * v1.28.9 (septième note d'Andrew, point 5) — la suppression n'a pas eu lieu. [copieSysteme] :
+         * la copie d'une conversation du coffre résiste dans la messagerie du téléphone ; sinon, un
+         * élément local n'a pas pu être supprimé ou l'état de la conversation n'a pas pu être lu.
+         */
+        data class DeleteKept(val copieSysteme: Boolean) : Erreur
         /** v1.14.0 — Reset cooldown + SMS "Je vais bien" envoyé. */
         data class IAmOkDoneWithSms(val sent: Int, val failed: Int) : Event
         /** v1.14.0 — Reset cooldown effectué, pas de SMS (opt-in OFF). */

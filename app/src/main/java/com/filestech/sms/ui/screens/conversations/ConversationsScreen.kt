@@ -183,7 +183,13 @@ fun ConversationsScreen(
     // v1.25.3 (audit H16) — résolue ici plutôt que via `ctx.getString` dans le collecteur :
     // `LocalContextGetResourceValueCall` rate les changements de configuration (langue, thème)
     // parce que le `Context` capturé n'est pas relu à la recomposition.
-    val blockFailedMessage = stringResource(R.string.snack_block_failed)
+    // v1.28.9 — même règle pour les deux messages de suppression conservée ; le choix du texte vit
+    // dans [MessagesDErreur], l'écran étant au seuil de complexité de detekt.
+    val messagesDErreur = MessagesDErreur(
+        blocageEchoue = stringResource(R.string.snack_block_failed),
+        suppressionCopieSysteme = stringResource(R.string.conversations_delete_vault_kept_system),
+        suppressionLocale = stringResource(R.string.conversations_delete_kept_local),
+    )
 
     // Le message partiel porte des arguments connus seulement à l'exécution : on hisse le
     // *format* ici (même raison que ci-dessus) et on l'applique dans le collecteur.
@@ -201,8 +207,8 @@ fun ConversationsScreen(
                 }
                 is ConversationsViewModel.Event.MoveToVaultFailed ->
                     snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))
-                is ConversationsViewModel.Event.BlockFailed ->
-                    snackbarHost.showError(blockFailedMessage)
+                is ConversationsViewModel.Event.Erreur ->
+                    snackbarHost.showError(messagesDErreur.pour(event))
                 is ConversationsViewModel.Event.BlockPartial ->
                     snackbarHost.showError(
                         String.format(

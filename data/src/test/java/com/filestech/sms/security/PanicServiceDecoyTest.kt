@@ -107,7 +107,7 @@ class PanicServiceDecoyTest {
     @Test
     fun `en leurre, seules les conversations hors coffre partent, par l'effaceur ordinaire`() = runTest {
         coEvery { conversationDao.idsHorsCoffre() } returns listOf(7L, 9L)
-        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true)
+        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true, conservee = false)
         val pieceJointeDuCoffre = fichier("files/mms_attachments/coffre.jpg")
         val export = fichier("files/exports/fil.pdf")
 
@@ -144,8 +144,8 @@ class PanicServiceDecoyTest {
     fun `en leurre, une conversation qui resiste n'empeche pas les suivantes ni les reglages`() = runTest {
         coEvery { conversationDao.idsHorsCoffre() } returns listOf(1L, 2L, 3L)
         coEvery { eraser.erase(2L, any()) } throws IllegalStateException("verrou")
-        coEvery { eraser.erase(1L, any()) } returns ConversationEraser.Issue(true, true)
-        coEvery { eraser.erase(3L, any()) } returns ConversationEraser.Issue(true, true)
+        coEvery { eraser.erase(1L, any()) } returns ConversationEraser.Issue(true, true, conservee = false)
+        coEvery { eraser.erase(3L, any()) } returns ConversationEraser.Issue(true, true, conservee = false)
 
         service(decoy = true).nukeEverything()
 
@@ -163,8 +163,10 @@ class PanicServiceDecoyTest {
     @Test
     fun `une copie systeme qui resiste, ou un echec, est comptee en residu`() = runTest {
         coEvery { conversationDao.idsToutes() } returns listOf(1L, 2L, 3L)
-        coEvery { eraser.erase(1L, any()) } returns ConversationEraser.Issue(systemCopyGone = true, localeComplete = true)
-        coEvery { eraser.erase(2L, any()) } returns ConversationEraser.Issue(systemCopyGone = false, localeComplete = true)
+        coEvery { eraser.erase(1L, any()) } returns
+            ConversationEraser.Issue(systemCopyGone = true, localeComplete = true, conservee = false)
+        coEvery { eraser.erase(2L, any()) } returns
+            ConversationEraser.Issue(systemCopyGone = false, localeComplete = true, conservee = false)
         coEvery { eraser.erase(3L, any()) } throws IllegalStateException("fournisseur indisponible")
 
         val residu = service(decoy = false).nukeEverything()
@@ -178,7 +180,7 @@ class PanicServiceDecoyTest {
     @Test
     fun `hors leurre, TOUTES les conversations passent par l'effaceur puis tout est detruit`() = runTest {
         coEvery { conversationDao.idsToutes() } returns listOf(7L, 8L)
-        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true)
+        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true, conservee = false)
 
         val residu = service(decoy = false).nukeEverything()
 
@@ -188,6 +190,10 @@ class PanicServiceDecoyTest {
         coVerify(exactly = 1) { eraser.erase(8L, ConversationEraser.Mode.ORDINAIRE) }
         coVerify(exactly = 0) { conversationDao.idsHorsCoffre() }
         assertThat(residu.copiesSystemeRestantes).isEqualTo(0)
+        // v1.28.9 — contrôle positif des tests « liste illisible » et « échec local » plus bas.
+        assertThat(residu.listeIllisible).isFalse()
+        assertThat(residu.echecsLocaux).isEqualTo(0)
+        assertThat(residu.complet).isTrue()
         verify(exactly = 1) { database.close() }
         verify(exactly = 1) { keyManager.destroyKeyFile() }
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_DB_MASTER) }
@@ -227,7 +233,7 @@ class PanicServiceDecoyTest {
         val portee = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         coEvery { eraser.erase(1L, any()) } coAnswers {
             portee.cancel()
-            ConversationEraser.Issue(true, true)
+            ConversationEraser.Issue(true, true, conservee = false)
         }
         // Les suivantes SUSPENDENT avant de rendre compte : `yield()` leve si le job est annule.
         // Sans ce point de suspension, rien dans ce test ne suspendrait reellement — un mock rend
@@ -238,12 +244,12 @@ class PanicServiceDecoyTest {
         coEvery { eraser.erase(2L, any()) } coAnswers {
             yield()
             effacees += 2L
-            ConversationEraser.Issue(true, true)
+            ConversationEraser.Issue(true, true, conservee = false)
         }
         coEvery { eraser.erase(3L, any()) } coAnswers {
             yield()
             effacees += 3L
-            ConversationEraser.Issue(true, true)
+            ConversationEraser.Issue(true, true, conservee = false)
         }
 
         val service = service(decoy = false)
@@ -265,7 +271,7 @@ class PanicServiceDecoyTest {
     @Test
     fun `un presse-papiers qui leve n'empeche pas la purge de rendre compte`() = runTest {
         coEvery { conversationDao.idsToutes() } returns listOf(4L)
-        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true)
+        coEvery { eraser.erase(any(), any()) } returns ConversationEraser.Issue(true, true, conservee = false)
         every { pressePapiers.clear() } throws SecurityException("presse-papiers refuse")
 
         val residu = service(decoy = false).nukeEverything()
@@ -273,5 +279,69 @@ class PanicServiceDecoyTest {
         assertThat(residu.copiesSystemeRestantes).isEqualTo(0)
         coVerify(exactly = 1) { securityStore.clearAll() }
         verify(exactly = 1) { notifications.cancelAll() }
+    }
+
+    /**
+     * v1.28.9 (septième note d'Andrew, constat 2) — **une liste illisible n'est pas une liste vide.**
+     *
+     * `getOrDefault(emptyList())` faisait passer l'échec de lecture pour « aucune conversation » :
+     * aucune copie système n'était présentée au fournisseur, et le dialogue annonçait « Rien ne
+     * reviendra ». La destruction locale a quand même lieu — on purge parce que quelqu'un va prendre
+     * le téléphone —, mais le compte rendu le dit. Contrôle positif : le test « TOUTES les
+     * conversations » ci-dessus exige un compte rendu complet.
+     */
+    @Test
+    fun `hors leurre, une liste illisible se dit et n'arrete pas la destruction locale`() = runTest {
+        coEvery { conversationDao.idsToutes() } throws IllegalStateException("base indisponible")
+
+        val residu = service(decoy = false).nukeEverything()
+
+        assertThat(residu.listeIllisible).isTrue()
+        assertThat(residu.complet).isFalse()
+        coVerify(exactly = 0) { eraser.erase(any(), any()) }
+        verify(exactly = 1) { database.close() }
+        coVerify(exactly = 1) { securityStore.clearAll() }
+    }
+
+    /** Le jumeau en session leurre, que la note d'Andrew ne citait pas : le même aveu, avec les mêmes mots. */
+    @Test
+    fun `en leurre, une liste illisible se dit aussi`() = runTest {
+        coEvery { conversationDao.idsHorsCoffre() } throws IllegalStateException("base indisponible")
+
+        val residu = service(decoy = true).nukeEverything()
+
+        assertThat(residu.listeIllisible).isTrue()
+        assertThat(residu.complet).isFalse()
+        coVerify(exactly = 0) { eraser.erase(any(), any()) }
+        assertThat(settings.state.value.security).isEqualTo(securiteArmee)
+        assertThat(settings.state.value.advanced.splashShown).isFalse()
+    }
+
+    /** La ligne est partie, pas son fichier : l'effaceur l'a dit, la purge le compte. */
+    @Test
+    fun `un dependant qui resiste dans l'effaceur compte en echec local`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns listOf(1L, 2L)
+        coEvery { eraser.erase(1L, any()) } returns
+            ConversationEraser.Issue(systemCopyGone = true, localeComplete = false, conservee = false)
+        coEvery { eraser.erase(2L, any()) } returns ConversationEraser.Issue(true, true, conservee = false)
+
+        val residu = service(decoy = false).nukeEverything()
+
+        assertThat(residu.echecsLocaux).isEqualTo(1)
+        assertThat(residu.copiesSystemeRestantes).isEqualTo(0)
+        assertThat(residu.complet).isFalse()
+    }
+
+    /** Une étape locale qui lève était avalée : l'empreinte du PIN restait, et la purge se disait complète. */
+    @Test
+    fun `un magasin securise qui leve compte en echec local`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns emptyList()
+        coEvery { securityStore.clearAll() } throws IllegalStateException("DataStore")
+
+        val residu = service(decoy = false).nukeEverything()
+
+        assertThat(residu.echecsLocaux).isEqualTo(1)
+        assertThat(residu.listeIllisible).isFalse()
+        assertThat(residu.complet).isFalse()
     }
 }

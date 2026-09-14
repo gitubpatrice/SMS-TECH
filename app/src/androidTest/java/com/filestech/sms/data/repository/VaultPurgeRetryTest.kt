@@ -134,6 +134,10 @@ class VaultPurgeRetryTest {
      * disparaitre, meme si la copie systeme resiste. Sans ce test, un correctif zele finirait par
      * aligner les deux chemins et laisserait a l'ecran une conversation que l'on vient
      * d'effacer.
+     *
+     * v1.28.9 — ce contrat est celui d'`erase` en mode ordinaire, qu'emploie la purge totale. Le
+     * geste « Supprimer » de l'utilisateur passe par `supprimer`, qui CONSERVE une conversation du
+     * coffre dont la copie resiste : cf. `SuppressionConversationCoffreTest`.
      */
     @Test
     fun laSuppressionOrdinaireEffaceLaLigneLocaleMemeSiLeSystemeRefuse() = runBlocking<Unit> {
