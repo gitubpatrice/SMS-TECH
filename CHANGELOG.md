@@ -3,6 +3,32 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.9] — 2026-09-14
+
+*Septième note d'Andrew Pozdnakov sur la MR F-Droid !38458 : cinq constats, tous confirmés et corrigés.*
+
+### Sécurité
+- **Une pièce jointe partagée partait avec le premier message qui la citait** (envoi à plusieurs
+  destinataires, écho de groupe, envoi programmé) : les autres affichaient une tuile vide. Un fichier ne
+  part plus qu'avec sa dernière citation, sur tous les chemins de suppression, rétention comprise.
+- **Une conversation du coffre dont la copie système résistait revenait hors du coffre** à la
+  resynchronisation : elle reste dans le coffre, et l'application le dit.
+- **« Supprimer toutes mes données » prenait une liste illisible pour une liste vide** : ce qui résiste
+  est compté et dit, en session leurre aussi ; clés Keystore relues après suppression, clé biométrique
+  ajoutée.
+
+### Corrigé
+- **Un MMS reçu dont la photo n'avait pas pu être enregistrée n'était jamais repris** : il l'est
+  automatiquement, sans doublon, et ne revient pas si le message a été supprimé entre-temps (schéma de
+  base 14).
+- Un MMS reçu sans aucun expéditeur n'est plus enregistré sous une adresse vide.
+- Un MMS ne portant qu'une carte de visite n'est plus sauté à l'import depuis la messagerie du téléphone.
+- Un fichier temporaire à moitié écrit ne reste plus après un échec d'écriture.
+
+### Interne
+- Pluriels français complétés ; mockk-android retiré des tests instrumentés (il cassait les tests Compose
+  sous Android 11) ; mises à jour Dependabot bloquées par AGP 9 ignorées.
+
 ## [1.28.8] — 2026-09-13
 
 *Quatre issues GitHub (#15, #16, #17, #19) et un test instable du gate.*

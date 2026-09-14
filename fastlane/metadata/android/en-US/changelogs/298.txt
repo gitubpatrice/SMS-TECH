@@ -1,0 +1,1 @@
+Fixed: a photo sent to several people no longer disappears from the other conversations when one of them is deleted. A received MMS whose photo could not be saved is now recovered automatically. A vault conversation the phone refuses to delete stays in the vault, and the app says so. "Delete all my data" now tells what could not be erased.

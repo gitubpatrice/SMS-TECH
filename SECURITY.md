@@ -81,6 +81,48 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.9 — Ce qui résiste est gardé et dit, jamais annoncé effacé
+
+Septième note d'Andrew Pozdnakov sur la MR F-Droid !38458 : cinq constats déduits du source 1.28.8, tous
+confirmés dans le code et corrigés. Leur point commun : un effacement qui échouait, ou qui ne savait pas,
+était traité comme un effacement réussi.
+
+**Fichiers de pièces jointes partagés.** Un même fichier est cité par plusieurs lignes (un envoi à
+plusieurs destinataires, l'écho d'un groupe, un envoi programmé). Le premier effacement l'emportait et
+laissait les autres lignes vers un fichier absent. Un fichier ne part plus qu'avec sa dernière citation ;
+une lecture des citations qui échoue le garde et compte l'échec. Même règle pour la purge de rétention,
+dont les fichiers restaient sur le téléphone sans plus rien pour y mener.
+
+**Conversation du coffre dont la copie système résiste.** Sans le rôle SMS, ou sur un refus du fournisseur,
+elle disparaissait de l'application et la resynchronisation la recréait **hors du coffre**, en clair. Elle
+est désormais gardée dans le coffre, et l'utilisateur en est averti. Hors coffre, le contrat reste celui
+d'avant : la conversation disparaît, sa copie système peut revenir.
+
+**« Supprimer toutes mes données ».** Une liste des conversations illisible passait pour une liste vide,
+et le dialogue disait « effacé » ; en session leurre, rien n'était effacé. Ce qui résiste — copies
+système, échecs locaux, liste illisible — est compté et dit. Les alias Keystore sont relus après leur
+suppression (`deleteKey` avale ses erreurs), et la clé du second facteur biométrique, oubliée de la
+liste, y est ajoutée.
+
+**MMS reçus (F17).** Aucun MMS entrant n'est écrit dans `content://mms` : le PDU téléchargé est la seule
+copie. Quand un média ne pouvait pas être écrit, il était gardé mais jamais rouvert, puis balayé à 24 h.
+Il est repris : une clé de transaction — SHA-256 du `transactionId`, de l'adresse de téléchargement et de
+la SIM, chaque champ préfixé par sa longueur — est portée par le nom du fichier et par la base (schéma 14,
+index unique ; exclue des sauvegardes). Ni l'adresse du MMSC, qui peut porter un jeton, ni l'identifiant
+opérateur n'apparaissent en clair. La reprise est idempotente ; la présence du PDU est relue **dans** la
+transaction d'écriture, si bien qu'un message supprimé pendant la reprise ne ressuscite pas ; le PDU part
+avec son message, et un PDU arrivé pendant une suppression garde la conversation. Un média qui échoue dans
+une conversation du coffre ne publie aucune notification d'échec, qui nommerait le correspondant — mesuré
+sur appareil.
+
+**Limites écrites.** Un PDU écrit avant cette version (sans clé) ou sans expéditeur n'est pas repris ; un
+envoi programmé déjà remis à la radio n'est pas rappelé.
+
+**Vérification.** Chaque garde a son test (Room et fournisseur réels pour les chemins de données) et son
+contrôle négatif lu dans le rapport XML : 53 mutations, toutes tombées. Tests sur Galaxy S9 (Android 10)
+et S24 (Android 16) des quatre scénarios, rôle SMS retiré et rendu. Relectures : Gemini 3.1 Pro
+(conception F17), GPT 5.2 (code), audits data-room, cohérence et 3 axes — aucun constat critique ni élevé.
+
 ### v1.28.8 — La recherche traverse l'historique, jamais le coffre
 
 **La recherche dans le texte des messages est branchée** (issue GitHub #17). Elle existait côté
