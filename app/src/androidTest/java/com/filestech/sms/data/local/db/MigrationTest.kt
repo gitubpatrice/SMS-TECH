@@ -709,4 +709,47 @@ class MigrationTest {
             assertThat(c.getInt(1)).isEqualTo(0)
         }
     }
+
+    /**
+     * v1.28.9 (F17) — `mms_transaction_key` : nulle sur l'existant, et UNIQUE. Plusieurs lignes sans clé
+     * coexistent ; une seconde ligne de même clé est refusée — c'est ce qui empêche la reprise d'un PDU
+     * gardé d'écrire deux fois le même MMS.
+     */
+    @Test
+    fun migrate13To14_ajouteLaCleDeTransaction_nulleSurLExistant_etUnique() {
+        helper.createDatabase(TEST_DB, 13).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (1, 7, '+33600000001', 'Alice', 1700000000000, 'a', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+            for (id in 1..2) {
+                db.execSQL(
+                    """
+                    INSERT INTO messages
+                        (id, conversation_id, telephony_uri, address, body, type, direction, date,
+                         date_sent, read, starred, status, attachments_count)
+                    VALUES ($id, 1, NULL, '+33600000001', 'mms', 1, 0, 170000000${id}000,
+                            NULL, 1, 0, 4, 1)
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 14, true, Migrations.MIGRATION_13_14)
+
+        db.query("SELECT COUNT(*) FROM messages WHERE mms_transaction_key IS NULL").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getInt(0)).isEqualTo(2)
+        }
+        db.execSQL("UPDATE messages SET mms_transaction_key = 'cle-a' WHERE id = 1")
+        val doublon = runCatching { db.execSQL("UPDATE messages SET mms_transaction_key = 'cle-a' WHERE id = 2") }
+        assertThat(doublon.isFailure).isTrue()
+        assertThat(doublon.exceptionOrNull()?.message.orEmpty()).contains("UNIQUE")
+        // Contrôle positif : une autre clé passe.
+        db.execSQL("UPDATE messages SET mms_transaction_key = 'cle-b' WHERE id = 2")
+    }
 }

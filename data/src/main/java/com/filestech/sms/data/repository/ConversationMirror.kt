@@ -695,6 +695,7 @@ class ConversationMirror @Inject constructor(
      * SORTANT qui en profitait (`upsertOutgoingMediaMms`), le chemin entrant non. Encore un
      * jumeau asymetrique.
      */
+    @Suppress("LongParameterList")
     suspend fun upsertIncomingMms(
         address: String,
         pieces: List<IncomingAttachment>,
@@ -709,9 +710,43 @@ class ConversationMirror @Inject constructor(
          * c'est lui que la bulle nomme.
          */
         groupMembers: List<PhoneAddress>? = null,
-    ): Long = withContext(io) {
+    ): Long = inscrireMmsRecu(address, pieces, caption, previewLabel, date, telephonyUri, subId, groupMembers)
+        .messageId
+
+    /** v1.28.9 (F17) — ce qu'a produit l'inscription d'un MMS entrant : la ligne, et si elle est nouvelle. */
+    data class InscriptionMmsRecu(val messageId: Long, val nouveau: Boolean)
+
+    /**
+     * v1.28.9 (F17, septième note d'Andrew sur la MR !38458) — [upsertIncomingMms], **idempotente par
+     * clé de transaction**.
+     *
+     * Le PDU d'un MMS dont le traitement a échoué est gardé, puis repris plus tard. La reprise doit
+     * reconnaître un message déjà écrit — traitement mort après le commit, ou média perdu —, sinon elle
+     * le dupliquerait. La clé ([com.filestech.sms.data.mms.PdusEnAttente.cle]) est cherchée DANS la
+     * transaction d'écriture, avant tout : Room ouvre ses transactions en `BEGIN IMMEDIATE`, un seul
+     * écrivain à la fois, donc le receveur et la reprise ne peuvent pas insérer tous deux. L'index
+     * UNIQUE sur la colonne tient la même règle en défense en profondeur : `insert` est en `IGNORE`, un
+     * conflit rend `-1`, et l'on relit alors l'existant.
+     *
+     * La clé est cherchée AVANT `ensureConversation` : sinon un message déjà rangé dans un groupe
+     * créerait, à la reprise, une conversation vide à son expéditeur.
+     */
+    @Suppress("LongParameterList")
+    suspend fun inscrireMmsRecu(
+        address: String,
+        pieces: List<IncomingAttachment>,
+        caption: String?,
+        previewLabel: String,
+        date: Long,
+        telephonyUri: String? = null,
+        subId: Int? = null,
+        groupMembers: List<PhoneAddress>? = null,
+        transactionKey: String? = null,
+    ): InscriptionMmsRecu = withContext(io) {
         val storedBody = caption?.trim().orEmpty()
         database.withTransaction {
+            val deja = transactionKey?.let { messageDao.findIdByTransactionKey(it) }
+            if (deja != null) return@withTransaction InscriptionMmsRecu(deja, nouveau = false)
             val convId = ensureConversation(groupMembers ?: listOf(PhoneAddress.of(address)))
             val msg = MessageEntity(
                 conversationId = convId,
@@ -729,8 +764,17 @@ class ConversationMirror @Inject constructor(
                 subId = subId,
                 scheduledAt = null,
                 attachmentsCount = pieces.size,
+                mmsTransactionKey = transactionKey,
             )
             val msgId = messageDao.insert(msg)
+            if (msgId == -1L) {
+                // `IGNORE` : un index unique a refusé la ligne. Pour la clé, c'est le message déjà là ;
+                // pour tout autre conflit, rien ne permet de rendre un id honnête — on lève, et le
+                // receveur garde le PDU.
+                val existant = transactionKey?.let { messageDao.findIdByTransactionKey(it) }
+                    ?: error("MMS entrant refuse par un index unique")
+                return@withTransaction InscriptionMmsRecu(existant, nouveau = false)
+            }
             if (pieces.isNotEmpty()) {
                 attachmentDao.insertAll(
                     pieces.map { piece ->
@@ -748,9 +792,48 @@ class ConversationMirror @Inject constructor(
                 )
             }
             touchConversation(convId, date, previewLabel, deltaUnread = +1)
-            msgId
+            InscriptionMmsRecu(msgId, nouveau = true)
         }
     }
+
+    /**
+     * v1.28.9 (F17) — **remplace les pièces jointes d'un MMS reçu** par [pieces], dans une transaction,
+     * et rend les `local_uri` des lignes remplacées.
+     *
+     * C'est la complétion d'un message écrit sans toutes ses pièces (disque plein, renommage refusé) : la
+     * reprise du PDU gardé réécrit TOUTES les parties, puis les substitue d'un bloc. Tout remplacer
+     * plutôt qu'ajouter la pièce manquante : rien ne dit laquelle a manqué, et l'ordre du PDU est gardé.
+     * L'appelant efface ensuite les anciens fichiers par
+     * [FichiersDePiecesJointes.effacerSiPlusCites] — jamais par un `delete()` direct : un fichier peut être
+     * cité ailleurs.
+     *
+     * Rend `null`, sans rien écrire, si le message n'existe plus : supprimé entre-temps, il ne doit pas
+     * reprendre de pièces.
+     */
+    suspend fun remplacerPiecesMmsRecu(messageId: Long, pieces: List<IncomingAttachment>): List<String>? =
+        withContext(io) {
+            database.withTransaction {
+                if (messageDao.findById(messageId) == null) return@withTransaction null
+                val anciennes = attachmentDao.findForMessage(messageId).map { it.localUri }
+                attachmentDao.deleteForMessage(messageId)
+                attachmentDao.insertAll(
+                    pieces.map { piece ->
+                        AttachmentEntity(
+                            messageId = messageId,
+                            mimeType = piece.mimeType,
+                            fileName = piece.file.name,
+                            sizeBytes = piece.file.length(),
+                            localUri = piece.file.absolutePath,
+                            width = null,
+                            height = null,
+                            durationMs = piece.durationMs,
+                        )
+                    },
+                )
+                messageDao.setAttachmentsCount(messageId, pieces.size)
+                anciennes
+            }
+        }
 
     private fun formatDurationLabel(ms: Long): String {
         val totalSec = (ms / 1000).coerceAtLeast(0)

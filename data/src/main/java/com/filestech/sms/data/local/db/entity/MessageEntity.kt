@@ -39,6 +39,10 @@ import kotlinx.serialization.Serializable
         // page (~1 s pour 50 k rows). L'index composite (conversation_id, date) est inopérant
         // ici puisque la purge est inter-conversations. Coût ~8 B / row, négligeable.
         Index(value = ["date"]),
+        // Schema v14 (v1.28.9, F17). UNIQUE : receveur et reprise ne peuvent pas écrire deux fois le
+        // même MMS entrant. SQLite admet plusieurs NULL sous un index unique — seuls les MMS entrants
+        // portent une clé.
+        Index(value = ["mms_transaction_key"], unique = true),
     ],
 )
 data class MessageEntity(
@@ -128,4 +132,19 @@ data class MessageEntity(
      * d'identité (F14) sait qu'un corps n'est pas comparable parce que la ligne le DIT.
      */
     @ColumnInfo(name = "hidden", defaultValue = "0") val hidden: Boolean = false,
+    /**
+     * Schema v14 (v1.28.9, F17 — septième note d'Andrew sur la MR !38458) — **clé de transaction d'un
+     * MMS entrant** : empreinte de ce que la notification WAP-Push a donné pour ce message
+     * (`transactionId`, adresse de téléchargement, SIM), cf. [com.filestech.sms.data.mms.PdusEnAttente].
+     * `null` pour tout le reste.
+     *
+     * Elle permet à la reprise d'un PDU gardé de reconnaître un message déjà écrit : le compléter plutôt
+     * que le dupliquer, et ne pas ressusciter un message supprimé. Index UNIQUE.
+     *
+     * `@Transient` pour la sauvegarde : la clé ne vaut que pour les PDU de CE téléphone, et les
+     * sauvegardes sérialisent cette entité avec un parseur strict qui refuse les clés inconnues — une
+     * version antérieure ne relirait plus un fichier qui la porterait. Le format reste identique.
+     */
+    @kotlinx.serialization.Transient
+    @ColumnInfo(name = "mms_transaction_key") val mmsTransactionKey: String? = null,
 )

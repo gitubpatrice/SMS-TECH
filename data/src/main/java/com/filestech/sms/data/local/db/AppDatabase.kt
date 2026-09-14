@@ -100,6 +100,9 @@ abstract class AppDatabase : RoomDatabase() {
         // v13 (2026-09-10, v1.28.4): ajoute `messages.hidden INTEGER NOT NULL DEFAULT 0` — la
         //   sentinelle de reaction se declare au lieu d'etre reconnue a sa forme ; rattrapage des
         //   sentinelles SMS existantes. Un MMS restaure sans legende redevient visible.
-        const val SCHEMA_VERSION = 13
+        // v14 (2026-09-14, v1.28.9): ajoute `messages.mms_transaction_key TEXT` + index UNIQUE — la cle
+        //   de transaction d'un MMS entrant, pour que la reprise d'un PDU garde reconnaisse un message
+        //   deja ecrit au lieu de le dupliquer ou de le ressusciter (F17). Strictement additive.
+        const val SCHEMA_VERSION = 14
     }
 }

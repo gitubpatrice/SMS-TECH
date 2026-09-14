@@ -423,6 +423,21 @@ object Migrations {
         }
     }
 
+    /**
+     * v1.28.9 (F17) — `messages.mms_transaction_key TEXT`, nulle sur l'existant, et son index UNIQUE.
+     * Additive. Aucun rattrapage n'est possible ni utile : la clé vient de la notification WAP-Push,
+     * que rien ne conserve, et seuls les PDU téléchargés à partir de cette version la portent.
+     */
+    val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `messages` ADD COLUMN `mms_transaction_key` TEXT")
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_messages_mms_transaction_key` " +
+                    "ON `messages` (`mms_transaction_key`)",
+            )
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -437,5 +452,6 @@ object Migrations {
         MIGRATION_10_11,
         MIGRATION_11_12,
         MIGRATION_12_13,
+        MIGRATION_13_14,
     )
 }

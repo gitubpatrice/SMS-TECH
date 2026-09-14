@@ -150,7 +150,10 @@ class ConversationEraser @Inject constructor(
         // s'ils ne sont plus cités hors de cette conversation.
         val programmes = annulerLesTravauxProgrammes(id)
         val possedes = supprimerFichiersPossedes(id, programmes.chemins)
-        val echecs = programmes.echecs + possedes.echecs
+        // v1.28.9 (F17) — les PDU gardés de ses MMS, avant ses lignes : rejoués ensuite, ils la
+        // ressusciteraient. Même règle que les autres dépendants — un échec garde le parent du coffre.
+        val pdus = effacerPdusGardes(id)
+        val echecs = programmes.echecs + possedes.echecs + pdus.echecs
         if (echecs > 0 && mode != Mode.ORDINAIRE) {
             Timber.w("delete: conversation %d kept locally, %d dependant(s) not cleaned", id, echecs)
             return Issue(systemCopyGone, localeComplete = false, conservee = true)
@@ -172,7 +175,12 @@ class ConversationEraser @Inject constructor(
         // d'écriture : pour le coffre elle garde le parent, comme un message tardif ; ailleurs son
         // fichier suit la conversation, une fois la transaction validée.
         var cheminsTardifs: List<String> = emptyList()
+        // v1.28.9 (F17) — les clés des MMS arrivés pendant le balayage : sous `force` et en mode
+        // ordinaire, leur message part avec le parent, et leur PDU gardé doit le suivre après la
+        // validation — rejoué, il ressusciterait le message. Pour le coffre, le parent est conservé.
+        var clesTardives: List<String> = emptyList()
         val conservation = database.withTransaction {
+            clesTardives = messageDao.findTransactionKeysForConversation(id).filterNot { it in pdus.cles }
             val tardif = mode != Mode.ORDINAIRE && messageDao.findByConversation(id).any { it.id !in connus }
             val programmesRestants = scheduledDao.findForConversation(id)
             cheminsTardifs = (
@@ -207,9 +215,11 @@ class ConversationEraser @Inject constructor(
             }
         }
         // Les lignes sont parties avec la conversation : plus aucune citation à écarter.
-        val echecsTardifs = if (cheminsTardifs.isEmpty()) 0 else fichiers.effacerSiPlusCites(cheminsTardifs)
+        // v1.28.9 (F17) — et les PDU gardés des MMS arrivés pendant le balayage, partis avec elle.
+        val echecsTardifs = (if (cheminsTardifs.isEmpty()) 0 else fichiers.effacerSiPlusCites(cheminsTardifs)) +
+            fichiers.effacerPdusGardes(clesTardives)
         if (echecsTardifs > 0) {
-            Timber.w("delete: %d late attachment file(s) of conversation %d not erased", echecsTardifs, id)
+            Timber.w("delete: %d late file(s) of conversation %d not erased", echecsTardifs, id)
         }
         // La ligne locale est partie — et seulement dans ce cas. Les trois sorties ci-dessus
         // CONSERVENT le parent : annuler ses notifications y aurait masqué une conversation
@@ -353,6 +363,20 @@ class ConversationEraser @Inject constructor(
      */
     private data class Dependants(val echecs: Int, val chemins: Set<String>)
 
+    /**
+     * v1.28.9 (F17) — les PDU MMS gardés pour reprise des messages de la conversation, effacés AVANT ses
+     * lignes : rejoués ensuite, ils la ressusciteraient. [PdusGardes.cles] sont celles vues ici ; la
+     * transaction finale traite en tardives celles qui n'y figurent pas.
+     */
+    private suspend fun effacerPdusGardes(conversationId: Long): PdusGardes {
+        val cles = runCatchingCancellable { messageDao.findTransactionKeysForConversation(conversationId) }
+            .onFailure { Timber.w(it, "delete: cles de transaction de %d illisibles", conversationId) }
+            .getOrNull() ?: return PdusGardes(echecs = 1, cles = emptySet())
+        return PdusGardes(fichiers.effacerPdusGardes(cles), cles.toSet())
+    }
+
+    private data class PdusGardes(val echecs: Int, val cles: Set<String>)
+
     /** v1.28.9 (B5) — pourquoi la transaction finale d'[erase] a gardé le parent du coffre. */
     private enum class Conservation { MESSAGE_TARDIF, PIECE_TARDIVE }
 
@@ -423,6 +447,14 @@ class ConversationEraser @Inject constructor(
         val pieces = runCatchingCancellable { attachmentDao.findForMessage(messageId) }
             .onFailure { Timber.w(it, "deleteMessage: lecture des pieces jointes de %d echouee, abandon", messageId) }
             .getOrNull() ?: return
+        // v1.28.9 (F17) — le PDU gardé de ce MMS part AVANT lui : rejoué après la suppression, il le
+        // ressusciterait. S'il résiste, la suppression s'arrête, comme pour une lecture ratée — le message
+        // reste à l'écran et le geste peut être refait.
+        val cle = msg.mmsTransactionKey
+        if (cle != null && fichiers.effacerPdusGardes(listOf(cle)) > 0) {
+            Timber.w("deleteMessage: PDU garde de %d non efface, abandon", messageId)
+            return
+        }
         runCatching { systemCopy.erase(msg) }
             .onFailure { Timber.w(it, "deleteMessage: system copy of %d not erased", messageId) }
         // v1.28.9 (constat 1) — un fichier que cite un autre message — autre destinataire, écho de
@@ -520,9 +552,19 @@ class ConversationEraser @Inject constructor(
         // Le prix est une fenêtre : un processus tué entre la validation et l'effacement laisse ces
         // fichiers orphelins — journalisé, jamais présenté comme effacé.
         var cheminsPurges: List<String> = emptyList()
+        // v1.28.9 (F17) — les PDU gardés des MMS purgés partent AVANT eux : rejoués ensuite, ils les
+        // ressusciteraient. Le contrat de la rétention ne change pas — les lignes partent quoi qu'il
+        // arrive ; un PDU qui résiste est journalisé. Ceux des messages entrés dans la clause entre
+        // cette lecture et la transaction sont relus dedans, et effacés après la validation.
+        val clesAvant = runCatchingCancellable { messageDao.findTransactionKeysOlderThan(cutoff) }
+            .onFailure { Timber.w(it, "purgeHistory: cles de transaction illisibles") }
+            .getOrDefault(emptyList())
+        val echecsPdu = fichiers.effacerPdusGardes(clesAvant)
+        var clesPurgees: List<String> = emptyList()
         val efface = database.withTransaction {
             purges = messageDao.findRefsOlderThan(cutoff)
             cheminsPurges = messageDao.findAttachmentUrisOlderThan(cutoff)
+            clesPurgees = messageDao.findTransactionKeysOlderThan(cutoff)
             val n = messageDao.purgeOlderThan(cutoff)
             if (n > 0) {
                 // v1.3.3 (audit G1) — une conversation videe garderait sinon son apercu en clair.
@@ -534,6 +576,10 @@ class ConversationEraser @Inject constructor(
         if (cheminsPurges.isNotEmpty()) {
             val echecs = fichiers.effacerSiPlusCites(cheminsPurges)
             if (echecs > 0) Timber.w("purgeHistory: %d attachment file(s) not erased", echecs)
+        }
+        val echecsPduTardifs = fichiers.effacerPdusGardes(clesPurgees - clesAvant.toSet())
+        if (echecsPdu + echecsPduTardifs > 0) {
+            Timber.w("purgeHistory: %d kept MMS PDU(s) not erased", echecsPdu + echecsPduTardifs)
         }
         return efface
     }

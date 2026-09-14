@@ -710,6 +710,41 @@ interface MessageDao {
     suspend fun findAttachmentUrisOlderThan(olderThan: Long): List<String>
 
     /**
+     * v1.28.9 (F17) — le message qui porte cette clé de transaction, s'il existe. Lue DANS la
+     * transaction d'écriture de [com.filestech.sms.data.repository.ConversationMirror.upsertIncomingMms] :
+     * le receveur et la reprise d'un PDU gardé ne peuvent pas écrire deux fois le même MMS.
+     */
+    @Query("SELECT id FROM messages WHERE mms_transaction_key = :cle LIMIT 1")
+    suspend fun findIdByTransactionKey(cle: String): Long?
+
+    /** v1.28.9 (F17) — les clés des MMS entrants d'une conversation, pour effacer avec elle leurs PDU gardés. */
+    @Query(
+        """
+        SELECT mms_transaction_key FROM messages
+         WHERE conversation_id = :conversationId AND mms_transaction_key IS NOT NULL
+        """,
+    )
+    suspend fun findTransactionKeysForConversation(conversationId: Long): List<String>
+
+    /**
+     * v1.28.9 (F17) — les clés des messages que [purgeOlderThan] va effacer, pour que leurs PDU gardés
+     * partent avec eux. Même clause que le `DELETE`, mot pour mot.
+     */
+    @Query(
+        """
+        SELECT mms_transaction_key FROM messages
+         WHERE date < :olderThan AND starred = 0
+           AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+           AND mms_transaction_key IS NOT NULL
+        """,
+    )
+    suspend fun findTransactionKeysOlderThan(olderThan: Long): List<String>
+
+    /** v1.28.9 (F17) — le nombre de pièces d'un message, réécrit quand la reprise complète un MMS reçu. */
+    @Query("UPDATE messages SET attachments_count = :nombre WHERE id = :id")
+    suspend fun setAttachmentsCount(id: Long, nombre: Int)
+
+    /**
      * v1.28.1 — les messages que [purgeOlderThan] va effacer **et qui ont une copie dans le
      * fournisseur du systeme**, page par page.
      *

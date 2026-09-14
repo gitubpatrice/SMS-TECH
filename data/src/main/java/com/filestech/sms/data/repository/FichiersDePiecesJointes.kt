@@ -155,4 +155,19 @@ class FichiersDePiecesJointes @Inject constructor(
         }
         return cites
     }
+
+    /**
+     * v1.28.9 (F17) — les PDU MMS gardés pour reprise des messages de clés [cles].
+     *
+     * Ce sont aussi des fichiers possédés par un message, et plus sensibles que ses pièces jointes : le
+     * PDU porte le message ENTIER, en clair. Rejoué après la suppression du message, il le
+     * ressusciterait — la clé ne trouvant plus de ligne, la reprise l'écrirait à nouveau. Ils partent
+     * donc AVANT les lignes, et chaque appelant décide de ce qu'un PDU qui résiste lui impose.
+     *
+     * @return le nombre d'échecs, cf. [com.filestech.sms.data.mms.PdusEnAttente.effacerPourCles].
+     */
+    fun effacerPdusGardes(cles: Collection<String>): Int =
+        runCatching { com.filestech.sms.data.mms.PdusEnAttente(context).effacerPourCles(cles) }
+            .onFailure { Timber.w(it, "pdu gardes : effacement echoue") }
+            .getOrDefault(if (cles.isEmpty()) 0 else 1)
 }

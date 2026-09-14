@@ -49,7 +49,18 @@ class MmsDownloader @Inject constructor(
         }
 
         val dir = File(context.cacheDir, MMS_IN_DIR).apply { mkdirs() }
-        val pduFile = File(dir, "in-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.pdu")
+        // v1.28.9 (F17) — le nom porte la clé de transaction et la SIM : si le traitement échoue et que le
+        // PDU est gardé, la reprise reconnaîtra le message déjà écrit au lieu de le dupliquer, cf.
+        // [PdusEnAttente]. Seul ce téléchargeur écrit la clé ; le receveur et la reprise la LISENT ici.
+        val pduFile = File(
+            dir,
+            PdusEnAttente.nom(
+                horodatage = System.currentTimeMillis(),
+                aleatoire = UUID.randomUUID().toString().take(8),
+                cle = PdusEnAttente.cle(transactionId, contentLocation, subId),
+                subId = subId,
+            ),
+        )
         try {
             // Create the file empty; SmsManager writes the downloaded PDU into it.
             pduFile.createNewFile()
