@@ -106,6 +106,36 @@ class PdusGardesTest {
         assertThat(pdu.exists()).isFalse()
     }
 
+    /**
+     * Relecture GPT 5.2 du code F17 (constat 2) — **le jumeau ordinaire.** `eraseMessage` s'arrêtait déjà quand
+     * le PDU résiste ; la suppression d'une conversation hors coffre, elle, supprimait les lignes et laissait
+     * le PDU, que la reprise rejouait ensuite sans plus trouver la clé : la conversation supprimée revenait.
+     */
+    @Test
+    fun unPduQuiResisteGardeAussiUneConversationOrdinaire(): Unit = runBlocking {
+        conversation(ALICE, inVault = false)
+        val cle = cle("ordinaire")
+        message(ALICE, cle)
+        val pdu = pdu(cle)
+        android.system.Os.chmod(dossier.path, 0b101_000_000) // 0500
+        try {
+            assertThat(pdu.delete()).isFalse()
+
+            val refuse = eraserAvec().supprimer(ALICE)
+
+            assertThat(refuse).isEqualTo(ConversationDeleteResult.KEPT_LOCAL_FAILURE)
+            assertThat(db.conversationDao().findById(ALICE)).isNotNull()
+            assertThat(pdu.exists()).isTrue()
+        } finally {
+            android.system.Os.chmod(dossier.path, 0b111_000_000) // 0700
+        }
+
+        val reprise = eraserAvec().supprimer(ALICE)
+
+        assertThat(reprise).isEqualTo(ConversationDeleteResult.DELETED)
+        assertThat(pdu.exists()).isFalse()
+    }
+
     @Test
     fun supprimerUnMessageSArreteSiSonPduResiste(): Unit = runBlocking {
         conversation(ALICE, inVault = false)

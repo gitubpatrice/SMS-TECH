@@ -66,11 +66,17 @@ class PdusEnAttente @Inject constructor(
 
     /**
      * Reste-t-il un PDU que la reprise peut rouvrir : non vide, et porteur d'une clé ? Sans clé, rien ne
-     * reconnaîtrait un message déjà écrit ; vide, il n'y a rien à lire. Un dossier absent ou illisible ne
-     * réclame rien : la reprise n'y verrait rien non plus.
+     * reconnaîtrait un message déjà écrit ; vide, il n'y a rien à lire. Un dossier absent ne réclame rien.
+     *
+     * v1.28.9 (relecture GPT 5.2 du code F17, constat 7) — un dossier présent mais ILLISIBLE réclame une
+     * passe : ne rien voir n'est pas ne rien trouver, et ce filet sert justement quand quelque chose a mal
+     * tourné. Une passe de trop ne coûte qu'un réveil.
      */
-    fun aReprendre(): Boolean =
-        dossier.listFiles()?.any { it.isFile && it.length() > 0L && lireNom(it.name)?.cle != null } == true
+    fun aReprendre(): Boolean {
+        val dossier = dossier
+        val fichiers = dossier.listFiles() ?: return dossier.exists()
+        return fichiers.any { it.isFile && it.length() > 0L && lireNom(it.name)?.cle != null }
+    }
 
     /** Ce que le nom d'un PDU dit de lui. [cle] est `null` pour un fichier écrit avant la 1.28.9. */
     data class Nom(val cle: String?, val subId: Int?)
@@ -94,9 +100,10 @@ class PdusEnAttente @Inject constructor(
         /**
          * Forme stricte, ancrée : `in-<horodatage>-<8 hex>[-k<64 hex>][-s<subId>].pdu`. Une seule
          * fonction la lit, et une seule l'écrit ([nom]) : un nom mal lu serait un fichier « sans clé »,
-         * donc jamais repris.
+         * donc jamais repris. Le `subId` est un `Int` : dix chiffres et un signe (relecture GPT 5.2 du code
+         * F17, constat 5 — neuf chiffres faisaient perdre sa clé à un nom pourtant bien formé).
          */
-        private val FORME = Regex("""^in-\d+-[0-9a-f]{8}(?:-k([0-9a-f]{64}))?(?:-s(-?\d{1,9}))?\.pdu$""")
+        private val FORME = Regex("""^in-\d+-[0-9a-f]{8}(?:-k([0-9a-f]{64}))?(?:-s(-?\d{1,10}))?\.pdu$""")
 
         /**
          * La clé d'un MMS, ou `null` sans `transactionId` — il n'y a alors rien pour reconnaître le

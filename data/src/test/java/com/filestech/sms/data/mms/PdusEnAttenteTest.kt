@@ -131,4 +131,25 @@ class PdusEnAttenteTest {
     fun `un dossier absent n'est pas un echec`() {
         assertThat(pdus().effacerPourCles(listOf("a".repeat(64)))).isEqualTo(0)
     }
+
+    /** Relecture GPT 5.2 du code F17 (constat 5) : un `subId` est un `Int`, jusqu'à dix chiffres et un signe. */
+    @Test
+    fun `un subId a dix chiffres garde sa cle`() {
+        val cle = "d".repeat(64)
+
+        assertThat(PdusEnAttente.lireNom(PdusEnAttente.nom(1L, "ab12cd34", cle, Int.MAX_VALUE)))
+            .isEqualTo(PdusEnAttente.Nom(cle, Int.MAX_VALUE))
+        assertThat(PdusEnAttente.lireNom(PdusEnAttente.nom(1L, "ab12cd34", cle, Int.MIN_VALUE)))
+            .isEqualTo(PdusEnAttente.Nom(cle, Int.MIN_VALUE))
+    }
+
+    /** Relecture GPT 5.2 du code F17 (constat 7) : pour le filet de la reprise, ne rien voir n'est pas ne rien trouver. */
+    @Test
+    fun `un dossier present mais illisible reclame une passe`() {
+        val service = pdus()
+        // Un fichier à la place du dossier : `listFiles()` rend `null`, comme sur un dossier illisible.
+        service.dossier.writeBytes(ByteArray(1))
+
+        assertThat(service.aReprendre()).isTrue()
+    }
 }

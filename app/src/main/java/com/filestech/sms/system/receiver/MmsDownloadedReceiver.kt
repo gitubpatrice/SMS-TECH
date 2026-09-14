@@ -147,7 +147,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // passé APRÈS la garde sandbox : il touchait auparavant un chemin non validé, et
                 // surtout un PDU vide sortait avant elle — donc, une fois la suppression
                 // restreinte au fichier validé, il n'aurait plus jamais été nettoyé du cache.
-                if (!pduFile.exists() || pduFile.length() == 0L) {
+                // v1.28.9 (relecture GPT 5.2 du code F17, constat 4) — et il porte, comme la lecture et
+                // la suppression, sur le fichier VALIDÉ : le chemin brut n'est plus touché après la garde.
+                if (!canonicalPdu.exists() || canonicalPdu.length() == 0L) {
                     Timber.w("MMS PDU missing or empty: %s", pduPath)
                     // Rien à préserver : le fichier est absent ou vide.
                     pduConsumed = true
@@ -162,8 +164,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // stockage partage abime — faisait donc tomber le processus sur un
                 // `OutOfMemoryError`. v1.28.9 — le plafond vit dans [PdusEnAttente], partagé
                 // avec la reprise qui relit les mêmes fichiers.
-                if (pduFile.length() > PdusEnAttente.PLAFOND_OCTETS) {
-                    Timber.w("MMS PDU too large (%d B): %s", pduFile.length(), pduPath)
+                if (canonicalPdu.length() > PdusEnAttente.PLAFOND_OCTETS) {
+                    Timber.w("MMS PDU too large (%d B): %s", canonicalPdu.length(), pduPath)
                     // Definitivement inexploitable : le conserver n'ouvrirait aucune reprise.
                     pduConsumed = true
                     return@launch
@@ -171,7 +173,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // v1.28.4 (F27) — la lecture passe par la borne TESTÉE (`LectureBornee.lire`),
                 // qui refuse sur la taille avant d'allouer ; le garde ci-dessus garde son
                 // journal et sa décision de consommer, la fonction garantit l'allocation.
-                val bytes = LectureBornee.lire(pduFile, PdusEnAttente.PLAFOND_OCTETS)
+                val bytes = LectureBornee.lire(canonicalPdu, PdusEnAttente.PLAFOND_OCTETS)
                 if (bytes == null) {
                     Timber.w("Cannot read MMS PDU bytes: %s", pduPath)
                     return@launch
@@ -190,7 +192,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // surface duplicates in the thread. We dedup by the PDU's `transactionId` for
                 // [DEDUP_TTL_MS] (5 min): replays in the wild always come back within seconds,
                 // and the bounded set means we cap the singleton's memory footprint.
-                val txId = parsed.transactionId?.toString(Charsets.UTF_8)
+                // v1.28.9 (relecture GPT 5.2 du code F17, constat 1) — la marque porte AUSSI la SIM,
+                // cf. [marqueDeTransaction] : deux SIM, deux MMSC, et parfois un même identifiant.
+                val txId = marqueDeTransaction(parsed.transactionId, subId)
                 if (!txId.isNullOrEmpty()) {
                     val now = System.currentTimeMillis()
                     // v1.28.3 (F17) — deux etats, et non plus un seul horodatage.

@@ -109,7 +109,8 @@ class ConversationEraser @Inject constructor(
      *
      * La suppression ordinaire reste en [Mode.ORDINAIRE] et doit le rester : qui efface un fil a
      * demande qu'il disparaisse, et lui laisser une ligne qu'il croyait supprimee serait un
-     * mensonge dans l'autre sens.
+     * mensonge dans l'autre sens. v1.28.9 — une exception, dite à l'écran : un PDU gardé qui résiste
+     * garde la ligne, sans quoi la reprise ressusciterait le message (cf. plus bas).
      *
      * v1.28.5 (sixième note d'Andrew, point 1) — **le drapeau booléen mentait par omission.**
      * `purgeVault(force = true)` appelait `erase(preserveOnSystemFailure = false)`, et ce même
@@ -154,7 +155,12 @@ class ConversationEraser @Inject constructor(
         // ressusciteraient. Même règle que les autres dépendants — un échec garde le parent du coffre.
         val pdus = effacerPdusGardes(id)
         val echecs = programmes.echecs + possedes.echecs + pdus.echecs
-        if (echecs > 0 && mode != Mode.ORDINAIRE) {
+        // v1.28.9 (relecture GPT 5.2 du code F17, constat 2) — un PDU qui résiste garde le parent EN MODE
+        // ORDINAIRE AUSSI. Un fichier orphelin est un résidu ; un PDU laissé derrière ses lignes est rejoué
+        // par la reprise, qui ne trouve plus la clé et réécrit le message : la conversation supprimée
+        // revenait. `eraseMessage` s'arrêtait déjà dans ce cas ; son jumeau, la conversation, ne le faisait
+        // pas. L'écran dit « non supprimée, réessayez » (`KEPT_LOCAL_FAILURE`).
+        if ((echecs > 0 && mode != Mode.ORDINAIRE) || pdus.echecs > 0) {
             Timber.w("delete: conversation %d kept locally, %d dependant(s) not cleaned", id, echecs)
             return Issue(systemCopyGone, localeComplete = false, conservee = true)
         }
