@@ -67,6 +67,35 @@ class TraitementMmsRecuTest {
     }
 
     @Test
+    fun `un MMS sans aucun expediteur n'est pas ecrit sous une adresse vide`() = runTest {
+        val sansFrom = RetrieveConf().apply {
+            setDate(1_700_000_000L)
+            setBody(PduBody())
+        }
+
+        val issue = traitement.traiter(sansFrom, CLE, 1, null) { true }
+
+        assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = false, consigner = false))
+        coVerify(exactly = 0) { integration.integrer(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { notifier.notifyIncoming(any(), any(), any(), any()) }
+    }
+
+    /** Contrôle : sans `From:`, l'indice de la notification WAP-Push suffit — le garde ne doit pas l'écarter. */
+    @Test
+    fun `sans From, l'indice WAP-Push donne l'expediteur et le message est ecrit`() = runTest {
+        coEvery { integration.integrer(any(), any(), any(), any(), any()) } returns Resultat.Ecrit(ID)
+        val sansFrom = RetrieveConf().apply {
+            setDate(1_700_000_000L)
+            setBody(PduBody())
+        }
+
+        val issue = traitement.traiter(sansFrom, CLE, 1, "$ALICE/TYPE=PLMN") { true }
+
+        assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = false, consigner = true))
+        coVerify(exactly = 1) { notifier.notifyIncoming(ALICE, any(), ID, CONVERSATION) }
+    }
+
+    @Test
     fun `un message ecrit est notifie et son PDU part`() = runTest {
         val issue = traiter(Resultat.Ecrit(ID))
 

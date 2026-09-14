@@ -62,6 +62,15 @@ class TraitementMmsRecu @Inject constructor(
         pduPresent: () -> Boolean,
     ): Issue {
         val contenu = LecteurRetrieveConf.lire(conf, indiceExpediteur, System.currentTimeMillis())
+        // v1.28.9 (relecture GPT 5.2 du code F17, constat 3) — ni `From:` ni indice WAP-Push : le message
+        // était écrit sous une adresse VIDE, dans une conversation sans numéro à qui répondre. Écarté, comme
+        // l'import écarte un MMS du fournisseur sans adresse (`TelephonyReader.readMmsBatched`) et comme la
+        // reprise laisse un PDU sans expéditeur. Le PDU n'est pas gardé : aucune passe ne lui trouverait
+        // l'expéditeur qui lui manque.
+        if (contenu.expediteur.isBlank()) {
+            Timber.w("MMS sans expediteur (ni From, ni indice WAP-Push) : ecarte")
+            return Issue(garderLePdu = false, consigner = false)
+        }
         // v1.26.1 (audit H5) — garde miroir de [MmsWapPushReceiver], posée ici parce que le WAP-Push ne porte
         // pas toujours l'expéditeur. ⚠️ AVANT toute écriture sur le disque : écrit puis abandonné, le média
         // d'un expéditeur bloqué restait dans `filesDir/mms_attachments/`, en clair, sans ligne ni purge pour

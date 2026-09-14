@@ -65,6 +65,7 @@
     <plurals name="thread_confirm_attachments_body">
         <item quantity="one">%1$d pièce jointe sera envoyée en MMS.</item>
         <item quantity="other">%1$d pièces jointes seront envoyées en un seul MMS.</item>
+        <item quantity="many">%1$d pièces jointes seront envoyées en un seul MMS.</item>
     </plurals>
     <string name="settings_app_lock">Verrouillage de l\'app</string>
     <string name="lock_mode_off">Aucun</string>
@@ -455,6 +456,7 @@
     <plurals name="settings_safety_call_triggered_state">
         <item quantity="one">Alerte envoyée — %1$d message sur %2$d</item>
         <item quantity="other">Alerte envoyée — %1$d messages sur %2$d</item>
+        <item quantity="many">Alerte envoyée — %1$d messages sur %2$d</item>
     </plurals>
     <string name="settings_safety_call_triggered_hint">Les relances partent toutes les 15 minutes. Appuyez sur « Je vais bien » pour les arrêter.</string>
     <string name="settings_safety_call_triggered_state_sending">Alerte en cours d\'envoi…</string>
@@ -506,6 +508,7 @@
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d message sur %2$d envoyé à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</item>
         <item quantity="other">%1$d messages sur %2$d envoyés à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</item>
+        <item quantity="many">%1$d messages sur %2$d envoyés à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</item>
     </plurals>
     <string name="safety_call_sequence_title_sending">SMS Tech — envoi de l\'alerte</string>
     <string name="safety_call_sequence_body_sending">L\'alerte est en cours d\'envoi à vos proches. Appuyez si vous allez bien : l\'envoi s\'arrêtera.</string>
@@ -513,6 +516,7 @@
     <plurals name="safety_call_sequence_body_done">
         <item quantity="one">%1$d message sur %2$d est parti à vos proches. Le Safety call est maintenant désactivé — appuyez sur « Réactiver » pour le remettre en marche.</item>
         <item quantity="other">Les %1$d messages sont partis à vos proches. Le Safety call est maintenant désactivé — appuyez sur « Réactiver » pour le remettre en marche.</item>
+        <item quantity="many">Les %1$d messages sont partis à vos proches. Le Safety call est maintenant désactivé — appuyez sur « Réactiver » pour le remettre en marche.</item>
     </plurals>
     <string name="safety_call_notif_action_rearm">Réactiver</string>
     <!-- v1.27.4 — confirmation affichée après l'action « Réactiver » du reçu. Les deux autres
@@ -527,6 +531,7 @@
     <plurals name="safety_call_history_count">
         <item quantity="one">%1$d message sur %2$d envoyé</item>
         <item quantity="other">%1$d messages sur %2$d envoyés</item>
+        <item quantity="many">%1$d messages sur %2$d envoyés</item>
     </plurals>
     <string name="safety_call_history_recipients">Adressé à : %1$s</string>
     <string name="safety_call_history_stopped">Séquence interrompue — vous avez confirmé aller bien.</string>
@@ -674,6 +679,7 @@
     <plurals name="settings_nuke_residue_body">
         <item quantity="one">%1$d conversation est restée dans la messagerie du téléphone : le système a refusé de la supprimer, et elle reviendra à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
         <item quantity="other">%1$d conversations sont restées dans la messagerie du téléphone : le système a refusé de les supprimer, et elles reviendront à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
+        <item quantity="many">%1$d conversations sont restées dans la messagerie du téléphone : le système a refusé de les supprimer, et elles reviendront à la prochaine synchronisation. La cause habituelle est que SMS Tech n’est pas l’application SMS par défaut.</item>
     </plurals>
     <!-- v1.28.9 (septieme note d'Andrew, constat 2) — ne pas savoir n'est pas « rien a effacer ». -->
     <string name="settings_nuke_list_unreadable">La liste des conversations n’a pas pu être lue : leurs copies dans la messagerie du téléphone n’ont pas été supprimées et reviendront à la prochaine synchronisation.</string>
@@ -911,20 +917,24 @@
     <plurals name="thread_unseen_messages">
         <item quantity="one">↓ %d nouveau message</item>
         <item quantity="other">↓ %d nouveaux messages</item>
+        <item quantity="many">↓ %d nouveaux messages</item>
     </plurals>
 
     <!-- v1.13.0 — pluriels pour la sélection multiple -->
     <plurals name="conversations_selection_count">
         <item quantity="one">%d sélectionnée</item>
         <item quantity="other">%d sélectionnées</item>
+        <item quantity="many">%d sélectionnées</item>
     </plurals>
     <plurals name="vault_bulk_move_in_done">
         <item quantity="one">%d conversation déplacée dans le coffre</item>
         <item quantity="other">%d conversations déplacées dans le coffre</item>
+        <item quantity="many">%d conversations déplacées dans le coffre</item>
     </plurals>
     <plurals name="vault_bulk_move_out_done">
         <item quantity="one">%d conversation sortie du coffre</item>
         <item quantity="other">%d conversations sorties du coffre</item>
+        <item quantity="many">%d conversations sorties du coffre</item>
     </plurals>
     <!-- v1.24.0 fenêtre glissante : contrôle en tête de fil pour élargir la fenêtre -->
     <string name="thread_load_older">Charger les messages plus anciens</string>

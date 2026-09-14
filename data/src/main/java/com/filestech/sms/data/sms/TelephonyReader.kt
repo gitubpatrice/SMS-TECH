@@ -605,7 +605,7 @@ class TelephonyReader @Inject constructor(
                     val slot = acc[mid] ?: continue
                     when {
                         ct.equals("application/smil", ignoreCase = true) -> Unit
-                        ct.startsWith("text/", ignoreCase = true) -> {
+                        estTexteEnLigne(ct) -> {
                             val t = c.getString(4) ?: ""
                             if (t.isNotBlank()) {
                                 if (slot.first.isNotEmpty()) slot.first.append('\n')
@@ -661,7 +661,7 @@ class TelephonyReader @Inject constructor(
                 val ct = c.getString(1) ?: continue
                 when {
                     ct.equals("application/smil", ignoreCase = true) -> Unit
-                    ct.startsWith("text/", ignoreCase = true) -> {
+                    estTexteEnLigne(ct) -> {
                         val t = c.getString(3) ?: ""
                         if (t.isNotBlank()) {
                             if (text.isNotEmpty()) text.append('\n')
@@ -680,6 +680,20 @@ class TelephonyReader @Inject constructor(
     }
 
     companion object {
+        /**
+         * v1.28.9 (audit de cohérence du 2026-09-14, C2) — la partie est-elle du texte que le fournisseur
+         * range dans sa colonne `text` ? `PduPersister` n'y met que `text/plain` et `text/html` ; tout autre
+         * type, `text/x-vcard` compris, vit dans un fichier et se lit par `content://mms/part/<id>`.
+         *
+         * Le test était `startsWith("text/")` : une carte de visite passait pour du texte, sa colonne `text`
+         * était vide, et un MMS qui ne portait qu'elle était sauté à l'import — le jumeau de F16
+         * (`LecteurRetrieveConf.partiesMedia`), jamais porté sur ce chemin.
+         */
+        internal fun estTexteEnLigne(contentType: String): Boolean {
+            val base = contentType.substringBefore(';').trim()
+            return base.equals("text/plain", ignoreCase = true) || base.equals("text/html", ignoreCase = true)
+        }
+
         private val SMS_PROJECTION = arrayOf(
             Telephony.Sms._ID,
             Telephony.Sms.THREAD_ID,
