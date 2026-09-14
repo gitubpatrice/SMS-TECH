@@ -366,15 +366,39 @@ class FichiersPartagesTest {
     private fun fichiersAvec(attachmentDao: AttachmentDao = db.attachmentDao()) =
         FichiersDePiecesJointes(attachmentDao, db.scheduledMessageDao(), context)
 
-    /** Verrou et session du coffre ne servent qu'aux flux affichés, pas aux deux effacements testés. */
-    private fun depotProgramme(attachmentDao: AttachmentDao = db.attachmentDao()) =
-        ScheduledMessageRepositoryImpl(
-            db.scheduledMessageDao(),
-            io.mockk.mockk(relaxed = true),
-            com.filestech.sms.security.VaultSessionState(),
-            fichiersAvec(attachmentDao),
-            kotlinx.coroutines.Dispatchers.IO,
+    /**
+     * Verrou et session du coffre ne servent qu'aux flux affichés, pas aux deux effacements testés.
+     *
+     * Un VRAI verrou, construit comme dans `ScheduledVaultVisibilityTest`, et surtout pas un `mockk` : MockK
+     * Android réécrit `Object.toString` pour tout le processus de test, et la réflexion qu'il fait ensuite sur
+     * chaque activité lancée bute, jusqu'à Android 11, sur `PictureInPictureUiState` (API 31). Le premier test
+     * Compose exécuté après ce fichier tombait sur la CI, en API 30 (run 34848081641, `EmergencyHoldButtonTest`),
+     * pendant que l'émulateur local, en API 34, restait vert.
+     */
+    private fun depotProgramme(attachmentDao: AttachmentDao = db.attachmentDao()): ScheduledMessageRepositoryImpl {
+        val io = kotlinx.coroutines.Dispatchers.IO
+        val portee = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + io)
+        val reglages = com.filestech.sms.data.local.datastore.SettingsRepository(context, portee)
+        val securite = com.filestech.sms.data.local.datastore.SecurityStore(context)
+        val kdf = com.filestech.sms.core.crypto.PasswordKdf()
+        val session = com.filestech.sms.security.VaultSessionState()
+        val verrou = com.filestech.sms.security.AppLockManager(
+            securite,
+            reglages,
+            kdf,
+            session,
+            {
+                com.filestech.sms.security.VaultSecondFactorPolicy(
+                    reglages,
+                    com.filestech.sms.security.VaultPinManager(securite, reglages, kdf, io),
+                    io,
+                )
+            },
+            { db.conversationDao() },
+            io,
         )
+        return ScheduledMessageRepositoryImpl(db.scheduledMessageDao(), verrou, session, fichiersAvec(attachmentDao), io)
+    }
 
     /** Un seul point de construction : la signature a déjà bougé deux fois. */
     private fun eraserAvec(

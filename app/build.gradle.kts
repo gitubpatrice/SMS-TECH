@@ -326,7 +326,11 @@ dependencies {
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.mockk.android)
+    // v1.28.9 — PAS de `mockk-android` dans les tests instrumentés. Son agent réécrit `Object.toString`
+    // pour tout le processus de test, puis fait de la réflexion sur chaque activité lancée : jusqu'à
+    // Android 11, elle bute sur `PictureInPictureUiState` (API 31) et le premier test Compose qui suit
+    // tombe. Vu sur la CI en API 30 (run 34848081641) quand l'émulateur local, en API 34, restait vert.
+    // Un faux écrit à la main, ou le vrai collaborateur.
     // v1.24.0 — outillage du filet de sécurité instrumenté : assertions Truth, MigrationTestHelper
     // (tests de migration Room sur le chemin SQLCipher réel), coroutines de test, Hilt.
     androidTestImplementation(libs.truth)
