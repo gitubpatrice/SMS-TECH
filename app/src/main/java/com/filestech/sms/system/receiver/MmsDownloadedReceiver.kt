@@ -5,19 +5,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.telephony.SubscriptionManager
-import com.filestech.sms.core.ext.stripInvisibleChars
-import com.filestech.sms.core.ext.stripMmsAddressSuffix
-import com.filestech.sms.data.local.db.dao.MessageDao
+import com.filestech.sms.core.io.LectureBornee
 import com.filestech.sms.data.mms.MmsDownloader
-import com.filestech.sms.data.repository.ConversationMirror
-import com.filestech.sms.data.repository.IncomingAttachment
+import com.filestech.sms.data.mms.PdusEnAttente
 import com.filestech.sms.di.ApplicationScope
-import com.filestech.sms.pdu.CharacterSets
-import com.filestech.sms.pdu.PduBody
 import com.filestech.sms.pdu.PduParser
 import com.filestech.sms.pdu.RetrieveConf
-import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.notifications.MmsFailureNotifier
+import com.filestech.sms.system.scheduler.RepriseMmsWorker
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -26,7 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
-import java.util.UUID
+
 /**
  * v1.28.3 (F17) — etat d'une transaction MMS en cours de traitement.
  *
@@ -39,41 +34,30 @@ private data class EtatTransaction(val vu: Long, val consigne: Boolean)
 
 /**
  * Receives the result of [MmsDownloader.download]. The OS has written the binary RetrieveConf
- * PDU into the cache file whose path we passed in the PendingIntent. We parse the PDU, extract
- * the first non-presentation media part (image, audio, video, file), persist it to a stable
- * cache directory, and mirror the message into Room.
+ * PDU into the cache file whose path we passed in the PendingIntent. We check and read that file,
+ * parse the PDU, and hand it to [TraitementMmsRecu], which writes the message and its attachments.
  *
- * **v1.3.10** :
- *   - No more `@AndroidEntryPoint`. Same root cause as [MmsWapPushReceiver]: silent Hilt
- *     injection crash on Android 10 OEM ROMs when the receiver is dispatched at cold-start.
- *     [EntryPointAccessors.fromApplication] is resolved on-demand inside [onReceive].
- *   - First MMS part of MIME image, video, audio, or application (except application/smil)
- *     is taken as the attachment. SMS Tech v1.3.9 only kept audio, which dropped every
- *     incoming image/file MMS to a placeholder `[MMS]` bubble.
- *   - Optional text/plain part is used as caption body (preferred over the MMS Subject
- *     header, which gateways often leave blank).
+ * **v1.3.10** — No more `@AndroidEntryPoint`. Same root cause as [MmsWapPushReceiver]: silent Hilt
+ * injection crash on Android 10 OEM ROMs when the receiver is dispatched at cold-start.
+ * [EntryPointAccessors.fromApplication] is resolved on-demand inside [onReceive].
+ *
+ * **v1.28.9 (F17)** — la lecture du `RetrieveConf`, l'écartement, le groupe, l'écriture et les
+ * notifications ont quitté ce receveur pour [TraitementMmsRecu] : la reprise d'un PDU gardé
+ * ([RepriseMmsWorker]) en a besoin à l'identique. Reste ici ce qui est propre à l'arrivée : le résultat du
+ * téléchargement, le bac à sable du chemin, la lecture bornée, l'exemplaire répété par l'opérateur, et le
+ * sort du fichier.
  */
 class MmsDownloadedReceiver : BroadcastReceiver() {
 
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface MmsDownloadedEntryPoint {
-        fun mirror(): ConversationMirror
-        fun messageDao(): MessageDao
-        fun notifier(): IncomingMessageNotifier
         // Audit R2 (v1.14.8) — Notification user lorsque le download MMS échoue (rc != OK).
         fun mmsFailureNotifier(): MmsFailureNotifier
 
-        // v1.26.1 (audit H5) — garde miroir de celle de [MmsWapPushReceiver] : le WAP-Push peut
-        // ne pas porter l'expéditeur, auquel cas c'est ici, sur le `RetrieveConf`, qu'on le
-        // connaît pour la première fois.
-        // v1.28.3 (F26) — les DEUX regles d'ecartement en un seul point.
-        fun incomingBlockPolicy(): IncomingBlockPolicy
-
-        // v1.28.4 — MMS de groupe : le réglage et « Mon numéro », pour reconstituer les membres,
-        // et la règle de rapprochement des numéros (E.164 selon la région).
-        fun settings(): com.filestech.sms.domain.settings.AppSettingsSource
-        fun phoneIdentity(): com.filestech.sms.data.sms.PhoneIdentity
+        // v1.28.9 (F17) — lecture, écartement (H5, F26), groupe (v1.28.4), écriture et notifications,
+        // partagés avec la reprise des PDU gardés.
+        fun traitementMmsRecu(): TraitementMmsRecu
 
         @ApplicationScope
         fun applicationScope(): CoroutineScope
@@ -101,10 +85,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
             Timber.e(t, "Hilt entry point resolution failed in MmsDownloadedReceiver")
             return
         }
-        // v1.24.0 SEC-CRIT — `entry.mirror()` / `entry.messageDao()` provisionnent `AppDatabase`,
-        // donc la réparation zéro-clé. Résoudre ici les exécutait sur le main thread d'`onReceive`,
-        // sous un timeout ANR de broadcast de 10 s. Seul le scope est résolu en amont : il n'ouvre
-        // aucune base.
+        // v1.24.0 SEC-CRIT — `entry.traitementMmsRecu()` provisionne `AppDatabase`, donc la réparation
+        // zéro-clé. Résoudre ici l'exécutait sur le main thread d'`onReceive`, sous un timeout ANR de
+        // broadcast de 10 s. Seul le scope est résolu en amont : il n'ouvre aucune base.
         val scope = entry.applicationScope()
 
         val pending = goAsync()
@@ -123,11 +106,6 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         var txIdPourReprise: String? = null
         scope.launch {
             try {
-                val mirror = entry.mirror()
-                val messageDao = entry.messageDao()
-                val notifier = entry.notifier()
-                val failureNotifier = entry.mmsFailureNotifier()
-                val blockPolicy = entry.incomingBlockPolicy()
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
                     // pas qu'un MMS lui était destiné. Maintenant on poste une notification
@@ -136,7 +114,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     // MmsDownloader n'a pas pu l'extraire — le notifier fallback alors sur
                     // "un contact inconnu".
                     Timber.w("MMS download failed rc=%d path=%s", rc, pduPath)
-                    failureNotifier.notifyFailure(
+                    entry.mmsFailureNotifier().notifyFailure(
                         reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
                         senderAddress = senderHint,
                     )
@@ -182,9 +160,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // telephonie : sa taille ne depend pas de nous, et un MMS reel ne depasse pas
                 // quelques centaines de kilooctets. Un fichier aberrant — anomalie de ROM,
                 // stockage partage abime — faisait donc tomber le processus sur un
-                // `OutOfMemoryError`, que le `runCatching` n'attrape meme pas : il ne couvre
-                // que les `Exception`.
-                if (pduFile.length() > PDU_MAX_BYTES) {
+                // `OutOfMemoryError`. v1.28.9 — le plafond vit dans [PdusEnAttente], partagé
+                // avec la reprise qui relit les mêmes fichiers.
+                if (pduFile.length() > PdusEnAttente.PLAFOND_OCTETS) {
                     Timber.w("MMS PDU too large (%d B): %s", pduFile.length(), pduPath)
                     // Definitivement inexploitable : le conserver n'ouvrirait aucune reprise.
                     pduConsumed = true
@@ -193,7 +171,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // v1.28.4 (F27) — la lecture passe par la borne TESTÉE (`LectureBornee.lire`),
                 // qui refuse sur la taille avant d'allouer ; le garde ci-dessus garde son
                 // journal et sa décision de consommer, la fonction garantit l'allocation.
-                val bytes = com.filestech.sms.core.io.LectureBornee.lire(pduFile, PDU_MAX_BYTES)
+                val bytes = LectureBornee.lire(pduFile, PdusEnAttente.PLAFOND_OCTETS)
                 if (bytes == null) {
                     Timber.w("Cannot read MMS PDU bytes: %s", pduPath)
                     return@launch
@@ -217,7 +195,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     val now = System.currentTimeMillis()
                     // v1.28.3 (F17) — deux etats, et non plus un seul horodatage.
                     //
-                    // Le txId etait marque ICI, donc AVANT `upsertIncomingMms`. Si l'insertion
+                    // Le txId etait marque ICI, donc AVANT l'ecriture du message. Si l'insertion
                     // echouait — base indisponible, exactement la situation que le repli ouvert
                     // de la liste noire laisse passer — le `catch` avalait l'erreur, le PDU
                     // survivait, mais le txId restait marque. Un rejeu porteur du meme txId dans
@@ -243,142 +221,25 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     }
                 }
 
-                // v1.6.1 (audit SEC-08) — strip Bidi/RLO/ZWSP sur sender + subject +
-                // caption avant d'arriver dans la notification système. Le PDU MMS est
-                // une entrée externe non-contrôlée ; sans cette sanitization un
-                // expéditeur malicieux pouvait inverser visuellement le preview notif
-                // (parité avec le path SMS qui appelle déjà stripInvisibleChars dans
-                // SmsDeliverReceiver).
-                // v1.26.1 (audit H5) — le `senderHint` de repli est nettoyé LUI AUSSI. Il vient
-                // brut de [MmsWapPushReceiver] via [MmsDownloader.EXTRA_SENDER] et porte donc le
-                // suffixe `/TYPE=PLMN`. Or c'est précisément la branche qui sert quand le
-                // `RetrieveConf` n'a pas de `From:` — le cas même qui justifie cette garde
-                // miroir. Sans ce nettoyage elle échouait exactement là où on l'attend.
-                val sender = (parsed.from?.string ?: senderHint ?: "")
-                    .stripMmsAddressSuffix()
-                    .stripInvisibleChars()
-                // v1.26.1 (audit H5) — garde miroir de [MmsWapPushReceiver], posée ici parce que
-                // le WAP-Push ne porte pas toujours l'expéditeur.
-                //
-                // ⚠️ Placée AVANT `persistAttachment` : plus bas, le média était déjà écrit dans
-                // `filesDir/mms_attachments/` quand on abandonnait, et plus rien ne le
-                // référençait — ni ligne Room, ni purge (`purgeTransientCaches` exclut ce
-                // dossier). La photo d'un expéditeur bloqué restait donc sur l'appareil, en
-                // clair, pour toujours. Ici on abandonne avant tout décodage et toute écriture.
-                // v1.27.2 (audit externe 2026-08-04 #5) — politique de repli commune aux trois
-                // receivers via [isBlockedFailOpen] : même sens d'échec (ouvert, le message
-                // survit à une erreur de base) qu'avant, mais `CancellationException` n'est plus
-                // avalée et la politique est écrite à UN seul endroit.
-                // v1.28.3 (F26) — couvre aussi « bloquer les numeros inconnus ».
-                if (blockPolicy.doitEcarter(sender)) {
-                    Timber.i("Dropping downloaded MMS from blocked sender")
-                    // Rejet DÉLIBÉRÉ, sur un `true` franc de la liste noire : le message ne doit
-                    // pas être conservé. Une ERREUR de consultation, elle, rend `false` et
-                    // n'arrive donc jamais ici.
-                    pduConsumed = true
-                    return@launch
-                }
-                val date = (if (parsed.date > 0) parsed.date * 1000L else System.currentTimeMillis())
-                val subject = parsed.subject?.string?.stripInvisibleChars()?.takeIf { it.isNotBlank() }
-
-                val body = parsed.body
-                val parties = body?.let(::extractMediaParts).orEmpty()
-                val pieces = parties.mapNotNull { (octets, mime) ->
-                    persistAttachment(appContext, octets, mime)
-                        ?.let { IncomingAttachment(file = it, mimeType = mime) }
-                }
-                val mime = parties.firstOrNull()?.second
-                // v1.28.3 (F15) — LE MEDIA EXISTAIT ET N'A PAS PU ETRE ECRIT.
-                //
-                // `persistAttachment` rend `null` sur disque plein, sur `renameTo` refuse ou sur
-                // n'importe quel `Throwable`. Le flot continuait sans le voir : la ligne partait
-                // en base avec `attachmentsCount = 0`, puis `pduConsumed = true` supprimait le
-                // PDU — c'est-a-dire la SEULE copie du media, aucun MMS entrant n'etant ecrit
-                // cote fournisseur systeme. L'utilisateur voyait une bulle vide, et rien n'a
-                // jamais dit qu'une image avait ete perdue.
-                //
-                // On ecrit quand meme la ligne : la legende et la trace du message valent mieux
-                // que rien. Mais le PDU est CONSERVE et l'echec est DIT.
-                val mediaPerdu = pieces.size < parties.size
-                if (mediaPerdu) {
-                    Timber.w("MMS: piece jointe non persistee — PDU conserve, utilisateur averti")
-                }
-                val caption = body?.let(::extractFirstTextCaption)?.stripInvisibleChars()
-                // `previewLabel` is the conversation-list line + notification text. It falls back
-                // to the Subject header, then to a mime-derived placeholder, so the user always
-                // sees something meaningful. `caption` (the raw user text) is what gets stored
-                // in `messages.body` and rendered as an inline caption below the attachment.
-                val previewLabel = caption ?: subject ?: defaultPreviewLabel(mime)
-
-                // v1.28.4 — MMS de groupe : l'en-tête du PDU porte tous les destinataires, nous
-                // compris. Réglage actif et « Mon numéro » connu, la conversation est celle du
-                // groupe (retrouvée ou créée) ; sinon, conversation ordinaire, comme avant.
-                val envoi = runCatching { entry.settings().hydratedOrNull() }.getOrNull()?.sending
-                val membres = if (envoi?.groupMms == true) {
-                    val identite = entry.phoneIdentity().snapshot()
-                    com.filestech.sms.domain.mms.GroupMmsMembers.of(
-                        from = sender,
-                        to = parsed.to?.map { it.string.stripMmsAddressSuffix().stripInvisibleChars() }.orEmpty(),
-                        cc = parsed.cc?.map { it.string.stripMmsAddressSuffix().stripInvisibleChars() }.orEmpty(),
-                        self = envoi.userMsisdn,
-                        identityKey = identite::key,
-                    )
-                } else {
-                    null
-                }
-                // Mesure sans numéro : ce que le PDU porte, et ce qu'on en a décidé.
-                Timber.i(
-                    "MMS groupe: reglage=%s monNumero=%s to=%d cc=%d -> membres=%s",
-                    envoi?.groupMms,
-                    !envoi?.userMsisdn.isNullOrBlank(),
-                    parsed.to?.size ?: 0,
-                    parsed.cc?.size ?: 0,
-                    membres?.size,
-                )
-                val msgId = mirror.upsertIncomingMms(
-                    address = sender,
-                    pieces = pieces,
-                    caption = caption,
-                    previewLabel = previewLabel,
-                    date = date,
-                    subId = subId,
-                    groupMembers = membres,
-                )
-                // v1.27.2 (relecture Codex 2026-08-04) — le message est en base : le PDU a
-                // rempli son office et peut être supprimé. Tout ce qui suit (lecture du
-                // conversationId, notification) n'est plus de la persistance.
-                //
-                // v1.28.3 (F15) — sauf si le media n'a pas pu etre ecrit : le PDU le porte
-                // encore, et le supprimer le perdrait definitivement.
-                pduConsumed = !mediaPerdu
-                if (mediaPerdu) {
-                    entry.mmsFailureNotifier().notifyFailure(
-                        MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
-                        senderAddress = sender,
-                    )
-                }
+                // v1.28.9 (F17) — la clé de transaction est lue dans le NOM du PDU, où [MmsDownloader]
+                // l'a écrite avant le téléchargement ; la reprise la lit au même endroit. La porte
+                // `exists()` est relue dans la transaction d'écriture : le PDU part avec son message quand
+                // l'utilisateur supprime celui-ci.
+                val cle = PdusEnAttente.lireNom(canonicalPdu.name)?.cle
+                val issue = entry.traitementMmsRecu()
+                    .traiter(parsed, cle, subId, senderHint) { canonicalPdu.exists() }
+                // v1.27.2 (relecture Codex 2026-08-04) — le message est en base : le PDU a rempli son
+                // office et peut être supprimé. v1.28.3 (F15) — sauf si un média n'a pas pu être écrit :
+                // le PDU le porte encore, et le supprimer le perdrait ; v1.28.9 — la reprise le rouvrira.
+                pduConsumed = !issue.garderLePdu
                 // v1.28.3 (F17) — la transaction n'est CONSIGNEE qu'ici, une fois la ligne
                 // reellement ecrite. Marquee plus haut, elle faisait passer un rejeu pour un
                 // doublon abouti alors que rien n'avait ete persiste.
-                if (!txId.isNullOrEmpty()) {
+                if (issue.consigner && !txId.isNullOrEmpty()) {
                     synchronized(processedTransactions) {
                         processedTransactions[txId] =
                             EtatTransaction(vu = System.currentTimeMillis(), consigne = true)
                     }
-                }
-                // Symmetric with [SmsDeliverReceiver]: re-fetch the row to get the conversationId
-                // so [IncomingMessageNotifier.cancelAllForConversation] can later clear the
-                // notification by tag when the user opens the thread.
-                val convId = messageDao.findById(msgId)?.conversationId
-                if (convId != null) {
-                    notifier.notifyIncoming(
-                        address = sender,
-                        body = previewLabel,
-                        messageId = msgId,
-                        conversationId = convId,
-                    )
-                } else {
-                    Timber.w("MmsDownloadedReceiver: message %d not found after insert", msgId)
                 }
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 // v1.27.2 (relecture Codex 2026-08-04) — une annulation n'est PAS un traitement
@@ -413,12 +274,12 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // v1.27.2 (relecture Codex 2026-08-04) — et SEULEMENT si son sort est réglé.
                 //
                 // La condition ne portait que sur `rc == RESULT_OK`, c'est-à-dire sur la
-                // réussite du TÉLÉCHARGEMENT, jamais sur celle du traitement. Si
-                // `upsertIncomingMms` échouait — base indisponible, la situation même que le
-                // repli ouvert de la liste noire laisse passer — le `catch` absorbait l'erreur
-                // et le `finally` supprimait quand même le PDU. Le MMS et sa pièce jointe
-                // n'existaient alors NULLE PART : ni en base, ni dans le fournisseur système,
-                // ni sur le disque. Irrécupérables.
+                // réussite du TÉLÉCHARGEMENT, jamais sur celle du traitement. Si l'écriture du
+                // message échouait — base indisponible, la situation même que le repli ouvert de
+                // la liste noire laisse passer — le `catch` absorbait l'erreur et le `finally`
+                // supprimait quand même le PDU. Le MMS et sa pièce jointe n'existaient alors
+                // NULLE PART : ni en base, ni dans le fournisseur système, ni sur le disque.
+                // Irrécupérables.
                 //
                 // Le fichier est désormais conservé tant que rien n'a réglé son sort. Il reste
                 // dans `cacheDir`, que le système récupère sous pression — préférer quelques
@@ -426,195 +287,25 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // cette application.
                 if (rc == Activity.RESULT_OK && pduConsumed) {
                     validatedPdu?.let { pdu -> runCatching { pdu.delete() } }
+                } else if (rc == Activity.RESULT_OK && validatedPdu != null) {
+                    // v1.28.9 (F17) — UN PDU GARDÉ EST REPRIS. Jusqu'ici il attendait le balayage de
+                    // 24 h sans que rien ne le rouvre : le média perdu l'était pour de bon.
+                    runCatching { RepriseMmsWorker.planifier(appContext) }
+                        .onFailure { Timber.w(it, "Reprise MMS: planification echouee") }
                 }
                 pending.finish()
             }
         }
     }
 
-    /**
-     * Decodes a part's content-type bytes. WAP text-strings carry a trailing NUL that
-     * `String(bytes)` would keep, breaking equality / prefix checks ("text/plain\u0000" !=
-     * "text/plain"). Also trims content-type parameters (`; charset=...`) so callers can do
-     * simple prefix / equality on the bare MIME.
-     */
-    private fun decodeMime(bytes: ByteArray?): String? {
-        if (bytes == null || bytes.isEmpty()) return null
-        val end = bytes.indexOf(0.toByte()).let { if (it < 0) bytes.size else it }
-        if (end == 0) return null
-        return String(bytes, 0, end)
-            .substringBefore(';')
-            .trim()
-            .lowercase()
-            .takeIf { it.isNotEmpty() }
-    }
-
-    /**
-     * Returns the (bytes, mimeType) of the first non-presentation media part in [body], or null.
-     * Skips application/smil (the layout descriptor) and text parts (captions go through
-     * [extractFirstTextCaption]). SMS Tech v1 only renders one attachment per MMS — any extras
-     * are ignored.
-     */
-    /**
-     * v1.28.3 (F16) — rend **toutes** les parties porteuses de contenu, et non plus la premiere.
-     *
-     * Deux defauts en un, tous deux relevees par la relecture externe :
-     *
-     *  - la fonction s'arretait a la premiere partie utile (`return data to ct`). Un MMS a
-     *    plusieurs photos n'en gardait qu'une, et le PDU — seule copie, aucun MMS entrant
-     *    n'etant ecrit cote fournisseur systeme — etait ensuite supprime ;
-     *  - `ct.startsWith("text/")` ecartait `text/x-vcard` et `text/vcard`, qui ne sont pas du
-     *    texte a afficher mais une PIECE JOINTE. Un MMS ne portant qu'une carte de visite
-     *    produisait donc `media = null`, `caption = null`, et une bulle vide etiquetee
-     *    « [MMS] ». Le chemin SORTANT savait pourtant deja etiqueter `text/x-vcard` (👤) —
-     *    encore un jumeau asymetrique.
-     *
-     * Seuls `text/plain` (la legende, extraite par [extractFirstTextCaption]) et
-     * `application/smil` (la mise en page, pas du contenu) restent ecartes.
-     */
-    private fun extractMediaParts(body: PduBody): List<Pair<ByteArray, String>> {
-        val trouvees = mutableListOf<Pair<ByteArray, String>>()
-        val n = body.partsNum
-        for (i in 0 until n) {
-            val part = body.getPart(i) ?: continue
-            val ct = decodeMime(part.contentType) ?: continue
-            if (ct == "text/plain" || ct == "application/smil") continue
-            val data = part.data ?: continue
-            if (data.isNotEmpty()) trouvees += data to ct
-        }
-        return trouvees
-    }
-
-    /**
-     * Returns the trimmed text of the first `text/plain` part, if any.
-     *
-     * Charset resolution: the WAP "any-charset" sentinel (MIBenum 0, mapped to the literal `*`
-     * in [CharacterSets]) is not a valid JVM charset — calling `charset("*")` would throw and
-     * silently drop the caption. We also treat the absence of any usable Java charset as
-     * UTF-8, which matches what every modern Android sender produces.
-     */
-    private fun extractFirstTextCaption(body: PduBody): String? {
-        val n = body.partsNum
-        for (i in 0 until n) {
-            val part = body.getPart(i) ?: continue
-            val ct = decodeMime(part.contentType) ?: continue
-            if (ct != "text/plain") continue
-            val data = part.data ?: continue
-            if (data.isEmpty()) continue
-            val javaCharset = resolveCharset(part.charset)
-            val text = runCatching { String(data, javaCharset) }
-                .getOrNull()
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?: continue
-            return text
-        }
-        return null
-    }
-
-    private fun resolveCharset(mibEnum: Int): java.nio.charset.Charset {
-        val name = runCatching { CharacterSets.getMimeName(mibEnum) }.getOrNull()
-        if (name.isNullOrEmpty() || name == "*") return Charsets.UTF_8
-        return runCatching { charset(name) }.getOrDefault(Charsets.UTF_8)
-    }
-
-    /**
-     * Writes the bytes to a stable file the AttachmentEntity will reference.
-     *
-     * **v1.3.10 (Q5)** : atomic `tmp + rename`. If the process is killed mid-write (OOM, MIUI
-     * aggressive background kill), a half-written `in-*.ext` would otherwise be inserted into
-     * Room — the user tapping the message would crash the image viewer on the truncated file.
-     * Writing to `*.tmp` and only renaming on completion guarantees the consumer sees either
-     * the full file or nothing.
-     *
-     * **v1.14.7** : storage moved from `cacheDir/mms_incoming/` to `filesDir/mms_attachments/`.
-     * `cacheDir` est volatile — Android peut le purger en pression mémoire/stockage et "Effacer
-     * le cache" via Réglages → Apps le vide aussi → les fichiers audio MMS reçus disparaissaient
-     * sans bruit alors que les `AttachmentEntity.localUri` Room pointaient toujours vers ces
-     * chemins. `filesDir/mms_attachments/` est persistent et n'est wipé que par PanicService ou
-     * `clearData()`. MainApplication migre rétroactivement les chemins existants au cold-start.
-     */
-    private fun persistAttachment(appContext: Context, bytes: ByteArray, mime: String): File? {
-        return try {
-            val dir = File(appContext.filesDir, ATTACHMENTS_DIR).apply { mkdirs() }
-            val ext = mimeExtension(mime)
-            val name = "in-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.$ext"
-            val finalFile = File(dir, name)
-            val tmp = File(dir, "$name.tmp")
-            tmp.writeBytes(bytes)
-            if (!tmp.renameTo(finalFile)) {
-                tmp.delete()
-                Timber.w("persistAttachment rename failed for %s", finalFile.name)
-                return null
-            }
-            finalFile
-        } catch (t: Throwable) {
-            Timber.w(t, "persistAttachment failed mime=%s", mime)
-            null
-        }
-    }
-
-    private fun mimeExtension(mime: String): String = when (mime.lowercase()) {
-        "audio/mp4", "audio/aac", "audio/mp4a-latm" -> "m4a"
-        "audio/amr", "audio/3gpp" -> "amr"
-        "audio/mpeg", "audio/mp3" -> "mp3"
-        "audio/ogg", "audio/opus" -> "ogg"
-        "image/jpeg", "image/jpg" -> "jpg"
-        "image/png" -> "png"
-        "image/gif" -> "gif"
-        "image/webp" -> "webp"
-        "image/heic" -> "heic"
-        "video/mp4" -> "mp4"
-        "video/3gpp" -> "3gp"
-        "video/webm" -> "webm"
-        "application/pdf" -> "pdf"
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
-        "application/msword" -> "doc"
-        "application/zip" -> "zip"
-        else -> "bin"
-    }
-
     // v1.26.1 (audit H5) — `stripMmsAddressSuffix` a déménagé dans `core/ext/StringExt.kt` :
     // la garde de liste noire des MMS entrants en a besoin des deux côtés du pipeline, et une
     // copie privée par récepteur aurait garanti qu'un des deux finisse par l'oublier.
 
-    /**
-     * Fallback label for the conversation list + notification when neither a `text/plain`
-     * caption nor an MMS Subject is present. Picked to mirror Apple Messages / Google
-     * Messages conventions (image/voice/video emoji + paperclip for generic files).
-     */
-    private fun defaultPreviewLabel(mime: String?): String {
-        if (mime == null) return "[MMS]"
-        val m = mime.lowercase()
-        return when {
-            m.startsWith("audio/") -> "🎤"
-            m.startsWith("image/") -> "🖼️"
-            m.startsWith("video/") -> "🎞️"
-            else -> "📎"
-        }
-    }
-
     private companion object {
-        /**
-         * v1.28.3 (F27) — plafond de lecture d'un PDU entrant.
-         *
-         * Genereux au regard du reel : les MMSC francais plafonnent l'utile a 300 Ko, et
-         * l'en-tete plus l'encodage n'en ajoutent qu'une fraction. Quatre megaoctets laissent
-         * donc passer tout MMS legitime, y compris venu d'un operateur plus permissif, tout en
-         * bornant ce qu'un fichier aberrant peut faire allouer.
-         */
-        const val PDU_MAX_BYTES = 4L * 1024 * 1024
-
-        /**
-         * Legacy cacheDir subdirectory for incoming MMS attachments (v1.3.10 → v1.14.6).
-         * Conservé comme constante pour la migration MainApplication qui rapatrie les fichiers
-         * existants vers [ATTACHMENTS_DIR].
-         */
-        const val INCOMING_DIR: String = "mms_incoming"
-        /** v1.14.7 — nouvelle racine persistante (filesDir) pour les attachments MMS reçus. */
-        const val ATTACHMENTS_DIR: String = "mms_attachments"
         /** Audit M-10: TTL for the in-memory dedup set. 5 min covers real-world carrier replays. */
         const val DEDUP_TTL_MS: Long = 5 * 60 * 1_000L
+
         /**
          * v1.3.10 (SEC-03/P4) — hard ceiling on the dedup set. A storm of distinct fresh
          * transaction-ids (carrier hiccup or hypothetical replay flood from an internal

@@ -44,6 +44,36 @@ class PdusEnAttenteTest {
         assertThat(PdusEnAttente.cle("TX-43", "http://mmsc.example/abc", 1)).isNotEqualTo(base)
     }
 
+    /**
+     * Audit data-room du 2026-09-14 (DR4) — le `transactionId` et l'adresse viennent de la notification
+     * WAP-Push : ils peuvent contenir le séparateur. Les deux paires ci-dessous donnaient la même chaîne
+     * brute, donc la même clé, avant que chaque champ ne porte sa longueur.
+     */
+    @Test
+    fun `un separateur dans un champ ne fait pas coincider deux cles`() {
+        assertThat(PdusEnAttente.cle("A|http://x", "y", 1)).isNotEqualTo(PdusEnAttente.cle("A", "http://x|y", 1))
+        assertThat(PdusEnAttente.cle("A||", "y", null)).isNotEqualTo(PdusEnAttente.cle("A|", "|y", null))
+    }
+
+    @Test
+    fun `seul un PDU non vide et porteur d'une cle est a reprendre`() {
+        val service = pdus()
+        val dossier = service.dossier.apply { mkdirs() }
+        assertThat(service.aReprendre()).isFalse()
+
+        File(dossier, "in-1-aaaaaaaa.pdu").writeBytes(ByteArray(8))
+        File(dossier, PdusEnAttente.nom(2L, "bbbbbbbb", "b".repeat(64), 1)).writeBytes(ByteArray(0))
+        assertThat(service.aReprendre()).isFalse()
+
+        File(dossier, PdusEnAttente.nom(3L, "cccccccc", "c".repeat(64), null)).writeBytes(ByteArray(8))
+        assertThat(service.aReprendre()).isTrue()
+    }
+
+    @Test
+    fun `un dossier absent n'a rien a reprendre`() {
+        assertThat(pdus().aReprendre()).isFalse()
+    }
+
     @Test
     fun `sans transactionId il n'y a pas de cle`() {
         assertThat(PdusEnAttente.cle(null, "http://mmsc.example/abc", 1)).isNull()

@@ -711,7 +711,7 @@ interface MessageDao {
 
     /**
      * v1.28.9 (F17) — le message qui porte cette clé de transaction, s'il existe. Lue DANS la
-     * transaction d'écriture de [com.filestech.sms.data.repository.ConversationMirror.upsertIncomingMms] :
+     * transaction d'écriture de [com.filestech.sms.data.repository.ConversationMirror.inscrireMmsRecu] :
      * le receveur et la reprise d'un PDU gardé ne peuvent pas écrire deux fois le même MMS.
      */
     @Query("SELECT id FROM messages WHERE mms_transaction_key = :cle LIMIT 1")

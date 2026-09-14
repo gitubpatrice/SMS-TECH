@@ -64,10 +64,29 @@ class PdusEnAttente @Inject constructor(
         return echecs
     }
 
+    /**
+     * Reste-t-il un PDU que la reprise peut rouvrir : non vide, et porteur d'une clé ? Sans clé, rien ne
+     * reconnaîtrait un message déjà écrit ; vide, il n'y a rien à lire. Un dossier absent ou illisible ne
+     * réclame rien : la reprise n'y verrait rien non plus.
+     */
+    fun aReprendre(): Boolean =
+        dossier.listFiles()?.any { it.isFile && it.length() > 0L && lireNom(it.name)?.cle != null } == true
+
     /** Ce que le nom d'un PDU dit de lui. [cle] est `null` pour un fichier écrit avant la 1.28.9. */
     data class Nom(val cle: String?, val subId: Int?)
 
     companion object {
+        /**
+         * v1.28.3 (F27) — plafond de lecture d'un PDU entrant, pour le receveur comme pour la reprise.
+         *
+         * Genereux au regard du reel : les MMSC francais plafonnent l'utile a 300 Ko, et l'en-tete plus
+         * l'encodage n'en ajoutent qu'une fraction. Quatre megaoctets laissent donc passer tout MMS
+         * legitime, y compris venu d'un operateur plus permissif, tout en bornant ce qu'un fichier
+         * aberrant peut faire allouer. v1.28.9 — déplacé ici depuis `MmsDownloadedReceiver` : la reprise
+         * lit les mêmes fichiers, sous la même borne.
+         */
+        const val PLAFOND_OCTETS: Long = 4L * 1024 * 1024
+
         /** Préfixe et extension des PDU entrants, partagés avec [MmsDownloader]. */
         private const val PREFIXE = "in-"
         private const val EXTENSION = ".pdu"
@@ -85,7 +104,12 @@ class PdusEnAttente @Inject constructor(
          */
         fun cle(transactionId: String?, contentLocation: String, subId: Int?): String? {
             if (transactionId.isNullOrBlank()) return null
-            val brut = "$transactionId|$contentLocation|${subId?.toString().orEmpty()}"
+            // v1.28.9 (audit data-room du 2026-09-14, DR4) — chaque champ est précédé de sa longueur. Le
+            // `transactionId` et l'adresse viennent de la notification WAP-Push, donc de l'extérieur, et
+            // peuvent contenir le séparateur : « A|http://x » suivi de « y », et « A » suivi de « http://x|y »,
+            // donnaient la même chaîne, donc la même clé — le second MMS passait pour un doublon du premier.
+            val brut = listOf(transactionId, contentLocation, subId?.toString().orEmpty())
+                .joinToString(separator = "|") { champ -> "${champ.length}:$champ" }
             return MessageDigest.getInstance("SHA-256")
                 .digest(brut.toByteArray(Charsets.UTF_8))
                 .joinToString(separator = "") { octet -> "%02x".format(octet) }

@@ -58,6 +58,8 @@ class TelephonySyncWorker @AssistedInject constructor(
     private val mmsSystemWriteback: MmsSystemWriteback,
     private val eraser: com.filestech.sms.data.repository.ConversationEraser,
     // v1.26.1 (audit H9) — nécessaire pour rendre la purge automatique atomique, cf. plus bas.
+    // v1.28.9 (F17) — pour replanifier la reprise des PDU gardés, cf. plus bas.
+    private val pdusEnAttente: com.filestech.sms.data.mms.PdusEnAttente,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -88,6 +90,11 @@ class TelephonySyncWorker @AssistedInject constructor(
             // touched — they back [AttachmentEntity.localUri] and dropping them would surface
             // broken audio bubbles in old threads. A future orphan-scan can address those.
             pruneStaleOutboundCaches(applicationContext)
+            // v1.28.9 (F17) — le filet de la reprise des PDU gardés. Le receveur la planifie dès qu'il garde
+            // un PDU ; ce passage la replanifie s'il en reste un à reprendre — processus tué avant la
+            // planification, travail perdu. APRÈS le balayage : un PDU de plus de 24 h ne se reprend plus.
+            runCatching { if (pdusEnAttente.aReprendre()) RepriseMmsWorker.planifier(applicationContext) }
+                .onFailure { Timber.w(it, "Reprise MMS: planification echouee") }
             // Voice-recorder drafts have their own pruner; we just trigger it on the same cadence.
             runCatching { voiceRecorder.pruneOld() }
                 .onFailure { Timber.w(it, "VoiceRecorder.pruneOld failed") }

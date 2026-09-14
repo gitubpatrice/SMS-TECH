@@ -114,7 +114,7 @@ fun MediaAttachmentBubble(
     // v1.3.3 Z1 audit fix — `localUri` peut être :
     //   (1) un absolute file path (cache MMS, voice_mms, vault decrypt — fichiers app)
     //   (2) une `content://mms/part/N` URI (MMS importés du système Android via
-    //       TelephonyReader → ConversationMirror.upsertIncomingMms)
+    //       TelephonyReader → ConversationMirror.bulkImportMmsFromTelephony)
     // L'ancien code wrappait aveuglément `File(localUri)` → FileProvider throw sur (2)
     // = aucun MMS image historique ne pouvait s'ouvrir. On détecte le scheme avant.
     // X-04 — une seule fonction d'ouverture, paramétrée par la pièce jointe touchée.

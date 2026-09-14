@@ -672,6 +672,9 @@ class ConversationMirror @Inject constructor(
         else -> "📎 " + a.file.name
     }
 
+    /** v1.28.9 (F17) — ce qu'a produit l'inscription d'un MMS entrant : la ligne, et si elle est nouvelle. */
+    data class InscriptionMmsRecu(val messageId: Long, val nouveau: Boolean)
+
     /**
      * Mirrors an incoming MMS retrieved through [com.filestech.sms.pdu.PduParser]. The caller is
      * responsible for having already written the attachment bytes to disk and passed the absolute
@@ -682,43 +685,19 @@ class ConversationMirror @Inject constructor(
      * list line — derived by the caller from caption / Subject / mime placeholder. Decoupling
      * the two avoids rendering a placeholder emoji as a fake text caption under the attachment
      * bubble.
-     */
-    /**
-     * v1.28.3 (F16) — accepte **plusieurs** pieces jointes.
      *
-     * Le parametre etait un unique `attachmentFile`, et le selecteur du receveur s'appelait
-     * `extractFirstMediaPart` : d'un MMS a trois photos, une seule etait conservee, et le PDU —
-     * seule copie, aucun MMS entrant n'etant ecrit cote fournisseur systeme — etait ensuite
-     * supprime. Les autres parties etaient perdues definitivement.
+     * **v1.28.3 (F16)** — accepte **plusieurs** pieces jointes. Le parametre etait un unique
+     * `attachmentFile`, et le selecteur du receveur s'appelait `extractFirstMediaPart` : d'un MMS a trois
+     * photos, une seule etait conservee, et le PDU — seule copie, aucun MMS entrant n'etant ecrit cote
+     * fournisseur systeme — etait ensuite supprime. La table `attachments` savait deja porter plusieurs
+     * lignes par message : c'est le chemin SORTANT qui en profitait (`upsertOutgoingMediaMms`), le chemin
+     * entrant non. Encore un jumeau asymetrique.
      *
-     * La table `attachments` savait deja porter plusieurs lignes par message : c'est le chemin
-     * SORTANT qui en profitait (`upsertOutgoingMediaMms`), le chemin entrant non. Encore un
-     * jumeau asymetrique.
-     */
-    @Suppress("LongParameterList")
-    suspend fun upsertIncomingMms(
-        address: String,
-        pieces: List<IncomingAttachment>,
-        caption: String?,
-        previewLabel: String,
-        date: Long,
-        telephonyUri: String? = null,
-        subId: Int? = null,
-        /**
-         * v1.28.4 — les membres du groupe reconstitués depuis l'en-tête du PDU (`GroupMmsMembers`),
-         * ou `null` pour une conversation ordinaire. La ligne garde [address] = l'expéditeur :
-         * c'est lui que la bulle nomme.
-         */
-        groupMembers: List<PhoneAddress>? = null,
-    ): Long = inscrireMmsRecu(address, pieces, caption, previewLabel, date, telephonyUri, subId, groupMembers)
-        .messageId
-
-    /** v1.28.9 (F17) — ce qu'a produit l'inscription d'un MMS entrant : la ligne, et si elle est nouvelle. */
-    data class InscriptionMmsRecu(val messageId: Long, val nouveau: Boolean)
-
-    /**
-     * v1.28.9 (F17, septième note d'Andrew sur la MR !38458) — [upsertIncomingMms], **idempotente par
-     * clé de transaction**.
+     * **v1.28.4** — [groupMembers] : les membres du groupe reconstitués depuis l'en-tête du PDU
+     * (`GroupMmsMembers`), ou `null` pour une conversation ordinaire. La ligne garde [address] =
+     * l'expéditeur : c'est lui que la bulle nomme.
+     *
+     * **v1.28.9 (F17, septième note d'Andrew sur la MR !38458) — idempotente par clé de transaction.**
      *
      * Le PDU d'un MMS dont le traitement a échoué est gardé, puis repris plus tard. La reprise doit
      * reconnaître un message déjà écrit — traitement mort après le commit, ou média perdu —, sinon elle
@@ -730,6 +709,16 @@ class ConversationMirror @Inject constructor(
      *
      * La clé est cherchée AVANT `ensureConversation` : sinon un message déjà rangé dans un groupe
      * créerait, à la reprise, une conversation vide à son expéditeur.
+     *
+     * **La porte [encoreVoulu]** est lue dans la même transaction, juste après la clé : `false` abandonne
+     * l'écriture et rend `null`. L'effaceur supprime le PDU gardé AVANT son message ([ConversationEraser]) ;
+     * une reprise qui avait lu le PDU juste avant ne trouve plus la ligne et, sans cette porte, écrirait à
+     * nouveau le message que l'utilisateur venait de supprimer. La transaction est sérialisée avec celle de
+     * l'effaceur : ou bien le message est encore là et la clé le trouve, ou bien il est parti, et son PDU
+     * avec lui.
+     *
+     * Remplace `upsertIncomingMms`, dont le receveur était le seul appelant : deux entrées pour la même
+     * écriture, l'une sans clé ni porte, auraient fini par diverger.
      */
     @Suppress("LongParameterList")
     suspend fun inscrireMmsRecu(
@@ -742,11 +731,13 @@ class ConversationMirror @Inject constructor(
         subId: Int? = null,
         groupMembers: List<PhoneAddress>? = null,
         transactionKey: String? = null,
-    ): InscriptionMmsRecu = withContext(io) {
+        encoreVoulu: () -> Boolean = { true },
+    ): InscriptionMmsRecu? = withContext(io) {
         val storedBody = caption?.trim().orEmpty()
         database.withTransaction {
             val deja = transactionKey?.let { messageDao.findIdByTransactionKey(it) }
             if (deja != null) return@withTransaction InscriptionMmsRecu(deja, nouveau = false)
+            if (!encoreVoulu()) return@withTransaction null
             val convId = ensureConversation(groupMembers ?: listOf(PhoneAddress.of(address)))
             val msg = MessageEntity(
                 conversationId = convId,
