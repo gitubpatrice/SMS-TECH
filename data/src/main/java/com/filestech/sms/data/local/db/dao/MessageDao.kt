@@ -691,6 +691,25 @@ interface MessageDao {
     suspend fun findRefsOlderThan(olderThan: Long): List<MessageRef>
 
     /**
+     * v1.28.9 (septième note d'Andrew, constat 3) — les chemins des pièces jointes que
+     * [purgeOlderThan] emporte en cascade.
+     *
+     * La rétention supprimait les lignes `attachments` avec leurs messages, sans jamais lire leurs
+     * `local_uri` : les fichiers de `filesDir/mms_attachments` restaient sur le téléphone, sans
+     * plus aucune ligne pour y mener. À lire DANS la transaction du `DELETE` et avant lui ; la
+     * clause est celle du `DELETE`, mot pour mot, pour la même raison que [findRefsOlderThan].
+     */
+    @Query(
+        """
+        SELECT a.local_uri FROM attachments a
+          JOIN messages m ON m.id = a.message_id
+         WHERE m.date < :olderThan AND m.starred = 0
+           AND m.conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
+    suspend fun findAttachmentUrisOlderThan(olderThan: Long): List<String>
+
+    /**
      * v1.28.1 — les messages que [purgeOlderThan] va effacer **et qui ont une copie dans le
      * fournisseur du systeme**, page par page.
      *

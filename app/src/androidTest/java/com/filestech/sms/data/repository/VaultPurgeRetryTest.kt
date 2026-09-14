@@ -347,7 +347,11 @@ class VaultPurgeRetryTest {
             db.scheduledMessageDao(),
             ordonnanceur,
             db.attachmentDao(),
-            InstrumentationRegistry.getInstrumentation().targetContext,
+            FichiersDePiecesJointes(
+                db.attachmentDao(),
+                db.scheduledMessageDao(),
+                InstrumentationRegistry.getInstrumentation().targetContext,
+            ),
             barriere,
             annulateur,
         )

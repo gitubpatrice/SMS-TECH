@@ -43,8 +43,9 @@ class ConversationEraser @Inject constructor(
     private val scheduler: com.filestech.sms.domain.scheduler.ScheduledMessageScheduler,
     // v1.28.3 (F04) — les lignes `attachments` partaient en cascade, jamais leurs FICHIERS.
     private val attachmentDao: com.filestech.sms.data.local.db.dao.AttachmentDao,
-    @dagger.hilt.android.qualifiers.ApplicationContext
-    private val context: android.content.Context,
+    // v1.28.9 (septième note d'Andrew, constat 1) — un fichier peut être cité par plusieurs lignes :
+    // il ne part que lorsque plus aucune ne le cite. La règle et le bac à sable vivent là-bas.
+    private val fichiers: FichiersDePiecesJointes,
     // v1.28.4 (F13) — la purge lève une barrière : on n'entre pas au coffre pendant qu'on le vide.
     private val barriere: com.filestech.sms.security.VaultPurgeBarrier,
     // v1.28.6 — ce qui est supprimé ne doit plus être affiché. Les notifications déjà posées
@@ -137,7 +138,12 @@ class ConversationEraser @Inject constructor(
         // prochain essai — supprimé, plus rien n'y mènerait, et la purge se dirait complète.
         // v1.28.5 — forcée ou non : un dépendant qui reste est un échec LOCAL, et `force` n'y
         // change rien. Il est retentable, contrairement à une liaison système durablement fausse.
-        val echecs = annulerLesTravauxProgrammes(id) + supprimerFichiersPossedes(id)
+        // v1.28.9 (septième note d'Andrew, constat 1) — les fichiers des envois programmés ne sont
+        // plus effacés dans l'annulation : ils rejoignent ceux des messages, et partent ensemble
+        // s'ils ne sont plus cités hors de cette conversation.
+        val programmes = annulerLesTravauxProgrammes(id)
+        val possedes = supprimerFichiersPossedes(id, programmes.chemins)
+        val echecs = programmes.echecs + possedes.echecs
         if (echecs > 0 && mode != Mode.ORDINAIRE) {
             Timber.w("delete: conversation %d kept locally, %d dependant(s) not cleaned", id, echecs)
             return Issue(systemCopyGone, localeComplete = false)
@@ -151,20 +157,49 @@ class ConversationEraser @Inject constructor(
         // v1.28.5 — sous `force`, ce message part avec le parent, comme l'utilisateur l'a
         // accepté ; mais sa copie système n'a jamais été présentée au fournisseur, et cela se
         // DIT : résidu système, pas « supprimé ».
-        val arriveTard = database.withTransaction {
+        //
+        // v1.28.9 (B5, registre du 11 septembre) — la même relecture pour les FICHIERS. Une pièce
+        // jointe écrite entre la lecture de [supprimerFichiersPossedes] et cette transaction — la
+        // reprise d'un MMS reçu, par exemple — partait en cascade avec sa ligne, et son fichier
+        // restait sur le téléphone sans plus rien pour y mener. Relue ici, sous le verrou
+        // d'écriture : pour le coffre elle garde le parent, comme un message tardif ; ailleurs son
+        // fichier suit la conversation, une fois la transaction validée.
+        var cheminsTardifs: List<String> = emptyList()
+        val conservation = database.withTransaction {
             val tardif = mode != Mode.ORDINAIRE && messageDao.findByConversation(id).any { it.id !in connus }
-            if (tardif && mode == Mode.COFFRE) {
-                true
-            } else {
-                if (tardif) systemCopyGone = false
-                for (envoi in scheduledDao.findForConversation(id)) scheduledDao.delete(envoi.id)
-                conversationDao.delete(id)
-                false
+            val programmesRestants = scheduledDao.findForConversation(id)
+            cheminsTardifs = (
+                attachmentDao.findForConversation(id).map { it.localUri } +
+                    programmesRestants.flatMap { envoi ->
+                        ScheduledAttachmentCodec.decode(envoi.attachmentsJson).map { it.file.absolutePath }
+                    }
+                ).filterNot { it in possedes.chemins }
+            when {
+                tardif && mode == Mode.COFFRE -> Conservation.MESSAGE_TARDIF
+                cheminsTardifs.isNotEmpty() && mode == Mode.COFFRE -> Conservation.PIECE_TARDIVE
+                else -> {
+                    if (tardif) systemCopyGone = false
+                    for (envoi in programmesRestants) scheduledDao.delete(envoi.id)
+                    conversationDao.delete(id)
+                    null
+                }
             }
         }
-        if (arriveTard) {
-            Timber.w("delete: message arrived during sweep of conversation %d", id)
-            return Issue(systemCopyGone = false, localeComplete = true)
+        when (conservation) {
+            Conservation.MESSAGE_TARDIF -> {
+                Timber.w("delete: message arrived during sweep of conversation %d", id)
+                return Issue(systemCopyGone = false, localeComplete = true)
+            }
+            Conservation.PIECE_TARDIVE -> {
+                Timber.w("delete: attachment arrived during sweep of conversation %d", id)
+                return Issue(systemCopyGone, localeComplete = false)
+            }
+            null -> Unit
+        }
+        // Les lignes sont parties avec la conversation : plus aucune citation à écarter.
+        val echecsTardifs = if (cheminsTardifs.isEmpty()) 0 else fichiers.effacerSiPlusCites(cheminsTardifs)
+        if (echecsTardifs > 0) {
+            Timber.w("delete: %d late attachment file(s) of conversation %d not erased", echecsTardifs, id)
         }
         // La ligne locale est partie — et seulement dans ce cas. Les trois sorties ci-dessus
         // CONSERVENT le parent : annuler ses notifications y aurait masqué une conversation
@@ -216,19 +251,22 @@ class ConversationEraser @Inject constructor(
      * ligne absente. Chaque envoi est isolé — un échec ne doit pas empêcher les suivants ni la
      * suppression de la conversation.
      */
-    private suspend fun annulerLesTravauxProgrammes(conversationId: Long): Int {
+    private suspend fun annulerLesTravauxProgrammes(conversationId: Long): Dependants {
         // v1.28.4 (R01) — une énumération qui échoue n'est PAS une liste vide : c'est un échec.
         val programmes = runCatching { scheduledDao.findForConversation(conversationId) }
             .onFailure { Timber.w(it, "delete: lecture des envois programmes de %d echouee", conversationId) }
-            .getOrNull() ?: return 1
+            .getOrNull() ?: return Dependants(echecs = 1, chemins = emptySet())
         var echecs = 0
+        val chemins = LinkedHashSet<String>()
         for (envoi in programmes) {
             runCatching {
                 scheduler.cancel(envoi.id)
-                for (piece in ScheduledAttachmentCodec.decode(envoi.attachmentsJson)) {
-                    // Un `delete()` qui rend `false` n'est pas une exception — mais c'est un échec.
-                    if (piece.file.exists() && !piece.file.delete()) echecs++
-                }
+                // v1.28.9 (septième note d'Andrew, constat 1) — les fichiers ne sont plus effacés
+                // ici. Les messages que cet envoi a produits les citent aussi, dans cette
+                // conversation ou dans une autre : ils rejoignent ceux des messages et partent
+                // ensemble, s'ils ne sont plus cités ailleurs. Relevés APRÈS l'annulation, comme
+                // l'effacement l'était : un envoi qui n'a pas pu être annulé garde ses fichiers.
+                ScheduledAttachmentCodec.decode(envoi.attachmentsJson).mapTo(chemins) { it.file.absolutePath }
             }.onFailure {
                 echecs++
                 Timber.w(it, "delete: envoi programme %d non annule", envoi.id)
@@ -243,8 +281,18 @@ class ConversationEraser @Inject constructor(
                 echecs,
             )
         }
-        return echecs
+        return Dependants(echecs, chemins)
     }
+
+    /**
+     * v1.28.9 — ce qu'une aide d'[erase] a laissé derrière elle ([echecs]), et les fichiers qu'elle
+     * a pris en charge ([chemins]) : la transaction finale relit la conversation et traite comme
+     * tardif tout fichier qui n'y figure pas.
+     */
+    private data class Dependants(val echecs: Int, val chemins: Set<String>)
+
+    /** v1.28.9 (B5) — pourquoi la transaction finale d'[erase] a gardé le parent du coffre. */
+    private enum class Conservation { MESSAGE_TARDIF, PIECE_TARDIVE }
 
     /**
      * v1.28.3 (F04) — efface les FICHIERS des pièces jointes, que la cascade Room laissait
@@ -267,12 +315,25 @@ class ConversationEraser @Inject constructor(
      *    exact que la v1.27.11 a fermé sur `telephony_uri`, et un chemin de suppression ne doit
      *    pas le rouvrir sous une autre forme.
      */
-    private suspend fun supprimerFichiersPossedes(conversationId: Long): Int {
+    /*
+     * v1.28.9 (septième note d'Andrew, constat 1) — les deux garde-fous ci-dessus vivent désormais
+     * dans [FichiersDePiecesJointes], avec la règle qui manquait : un fichier encore cité HORS de
+     * cette conversation — par le fil individuel d'un destinataire, par l'écho de groupe, par un
+     * envoi programmé d'ailleurs — reste. [cheminsProgrammes] sont ceux des envois programmés de la
+     * conversation, relevés après leur annulation.
+     */
+    private suspend fun supprimerFichiersPossedes(conversationId: Long, cheminsProgrammes: Set<String>): Dependants {
         // v1.28.4 (R02) — une énumération qui échoue n'est PAS une liste vide : c'est un échec.
+        // v1.28.9 — et rien n'est pris en charge : la transaction finale traitera en tardif tout ce
+        // qu'elle trouvera, au lieu de laisser des fichiers derrière des lignes supprimées.
         val pieces = runCatching { attachmentDao.findForConversation(conversationId) }
             .onFailure { Timber.w(it, "delete: lecture des pieces jointes de %d echouee", conversationId) }
-            .getOrNull() ?: return 1
-        return supprimerFichiers(pieces, conversationId)
+            .getOrNull() ?: return Dependants(echecs = 1, chemins = emptySet())
+        val chemins = LinkedHashSet<String>()
+        pieces.mapTo(chemins) { it.localUri }
+        chemins += cheminsProgrammes
+        val echecs = fichiers.effacerSiPlusCites(chemins, FichiersDePiecesJointes.Exclusion.Conversation(conversationId))
+        return Dependants(echecs, chemins)
     }
 
     /**
@@ -288,54 +349,39 @@ class ConversationEraser @Inject constructor(
      */
     suspend fun eraseMessage(messageId: Long) {
         val msg = messageDao.findById(messageId) ?: return
+        // v1.28.9 (septième note d'Andrew, point mineur 3) — les pièces jointes sont lues AVANT de
+        // toucher à quoi que ce soit, et une lecture qui échoue ARRÊTE la suppression. Elle rendait
+        // une liste vide : le message partait, ses lignes `attachments` en cascade, et ses fichiers
+        // restaient sur le téléphone sans plus rien pour y mener. Le message reste à l'écran —
+        // l'utilisateur voit que rien n'a été supprimé et peut réessayer —, et sa copie système
+        // n'est pas touchée : une copie partie sous une ligne restée serait l'état incohérent.
+        val pieces = runCatching { attachmentDao.findForMessage(messageId) }
+            .onFailure { Timber.w(it, "deleteMessage: lecture des pieces jointes de %d echouee, abandon", messageId) }
+            .getOrNull() ?: return
         runCatching { systemCopy.erase(msg) }
             .onFailure { Timber.w(it, "deleteMessage: system copy of %d not erased", messageId) }
-        val pieces = runCatching { attachmentDao.findForMessage(messageId) }
-            .onFailure { Timber.w(it, "deleteMessage: lecture des pieces jointes de %d echouee", messageId) }
-            .getOrDefault(emptyList())
-        val echecs = supprimerFichiers(pieces, msg.conversationId)
+        // v1.28.9 (constat 1) — un fichier que cite un autre message — autre destinataire, écho de
+        // groupe — ou un envoi programmé reste : seul ce message est écarté du compte.
+        val connus = pieces.mapTo(LinkedHashSet()) { it.localUri }
+        val echecs = fichiers.effacerSiPlusCites(connus, FichiersDePiecesJointes.Exclusion.Message(messageId))
         if (echecs > 0) Timber.w("deleteMessage: %d fichier(s) de %d non efface(s)", echecs, messageId)
         // v1.24.0 (bug suppression) — atomique : effacer le message ET recalculer l'aperçu de la
         // conversation. Sans le refresh, supprimer le dernier message d'un fil laissait la liste
         // afficher le message supprimé indéfiniment (confirmé sur une vraie sauvegarde 2026-07-23).
+        // v1.28.9 (B5) — et relire ses pièces jointes sous le verrou d'écriture, comme [erase] : une
+        // pièce écrite depuis la lecture partirait en cascade en laissant son fichier.
+        var tardives: List<String> = emptyList()
         database.withTransaction {
+            tardives = attachmentDao.findForMessage(messageId).map { it.localUri }.filterNot { it in connus }
             messageDao.delete(messageId)
             messageDao.refreshConversationPreview(msg.conversationId)
         }
+        if (tardives.isNotEmpty()) {
+            val echecsTardifs = fichiers.effacerSiPlusCites(tardives)
+            if (echecsTardifs > 0) Timber.w("deleteMessage: %d fichier(s) tardif(s) de %d non efface(s)", echecsTardifs, messageId)
+        }
         // v1.28.6 — et sa notification, qui portait son texte.
         notifications.cancelForMessage(msg.conversationId, messageId)
-    }
-
-    /** Le corps commun de F04 et de [eraseMessage] : les fichiers possédés, dans le bac à sable seulement. */
-    private fun supprimerFichiers(
-        pieces: List<com.filestech.sms.data.local.db.entity.AttachmentEntity>,
-        conversationId: Long,
-    ): Int {
-        val racines = listOfNotNull(context.filesDir, context.cacheDir)
-            .map { it.canonicalPath + java.io.File.separator }
-        var echecs = 0
-        for (piece in pieces) {
-            if (piece.localUri.startsWith("content://")) continue
-            runCatching {
-                val fichier = java.io.File(piece.localUri)
-                val chemin = fichier.canonicalPath
-                if (racines.none { chemin.startsWith(it) }) {
-                    // Refusé à dessein, pas un échec : ce n'est pas notre fichier.
-                    Timber.w("delete: piece jointe hors du bac a sable ignoree (conversation %d)", conversationId)
-                    return@runCatching
-                }
-                // Un `delete()` qui rend `false` n'est pas une exception — mais c'est un échec, et
-                // il compte : le parent reste, la référence au fichier avec lui.
-                if (fichier.exists() && !fichier.delete()) {
-                    echecs++
-                    Timber.w("delete: piece jointe non effacee (conversation %d)", conversationId)
-                }
-            }.onFailure {
-                echecs++
-                Timber.w(it, "delete: effacement de piece jointe echoue")
-            }
-        }
-        return echecs
     }
 
     /**
@@ -395,8 +441,21 @@ class ConversationEraser @Inject constructor(
         // references sont lues dans la MEME transaction que le DELETE, avec la meme clause ;
         // l'annulation vient apres la validation, jamais avant.
         var purges: List<com.filestech.sms.data.local.db.dao.MessageRef> = emptyList()
+        // v1.28.9 (septième note d'Andrew, constat 3) — les FICHIERS des pièces jointes purgées.
+        // Le `DELETE` emportait leurs lignes en cascade sans jamais lire leurs `local_uri` : les
+        // images et l'audio restaient dans `filesDir`, sans plus rien pour y mener. Relevés dans la
+        // même transaction et avec la même clause, effacés APRÈS la validation, et seulement s'ils
+        // ne sont plus cités : un écho de groupe récent, un favori ou un envoi programmé peut citer
+        // le même fichier qu'un message purgé.
+        //
+        // Ordre assumé, à l'inverse d'[erase] : ici aucun parent ne doit survivre à un échec, et
+        // décider AVANT le `DELETE` obligerait à recopier sa clause pour écarter les lignes purgées.
+        // Le prix est une fenêtre : un processus tué entre la validation et l'effacement laisse ces
+        // fichiers orphelins — journalisé, jamais présenté comme effacé.
+        var cheminsPurges: List<String> = emptyList()
         val efface = database.withTransaction {
             purges = messageDao.findRefsOlderThan(cutoff)
+            cheminsPurges = messageDao.findAttachmentUrisOlderThan(cutoff)
             val n = messageDao.purgeOlderThan(cutoff)
             if (n > 0) {
                 // v1.3.3 (audit G1) — une conversation videe garderait sinon son apercu en clair.
@@ -405,6 +464,10 @@ class ConversationEraser @Inject constructor(
             n
         }
         if (efface > 0) notifications.cancelForMessages(purges.groupBy({ it.conversationId }, { it.id }))
+        if (cheminsPurges.isNotEmpty()) {
+            val echecs = fichiers.effacerSiPlusCites(cheminsPurges)
+            if (echecs > 0) Timber.w("purgeHistory: %d attachment file(s) not erased", echecs)
+        }
         return efface
     }
 

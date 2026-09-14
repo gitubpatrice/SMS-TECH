@@ -184,4 +184,17 @@ interface ScheduledMessageDao {
      */
     @Query("SELECT * FROM scheduled_messages WHERE conversation_id = :conversationId")
     suspend fun findForConversation(conversationId: Long): List<ScheduledMessageEntity>
+
+    /**
+     * v1.28.9 (septième note d'Andrew, constat 1) — les envois programmés qui citent des fichiers,
+     * **quel que soit leur état**.
+     *
+     * Un envoi programmé promeut ses pièces jointes au moment de programmer, puis l'envoi réutilise
+     * ces mêmes fichiers : les messages qu'il produit les citent aussi. Avant d'effacer un fichier
+     * parce qu'un message disparaît, il faut donc savoir si un envoi programmé le cite encore — et
+     * l'inverse. Tous les états, parce qu'une ligne `SENT` ou `FAILED` cite le même fichier
+     * qu'une ligne `PENDING`. La table est courte : elle se lit en entier.
+     */
+    @Query("SELECT * FROM scheduled_messages WHERE attachments_json IS NOT NULL")
+    suspend fun findWithAttachments(): List<ScheduledMessageEntity>
 }

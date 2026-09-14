@@ -302,7 +302,11 @@ class PurgeHistoryPropagationTest {
                 override fun cancel(scheduledMessageId: Long) = Unit
             },
             db.attachmentDao(),
-            InstrumentationRegistry.getInstrumentation().targetContext,
+            FichiersDePiecesJointes(
+                db.attachmentDao(),
+                db.scheduledMessageDao(),
+                InstrumentationRegistry.getInstrumentation().targetContext,
+            ),
             com.filestech.sms.security.VaultPurgeBarrier(),
             // v1.28.6 — l'effaceur annule les notifications de ce qu'il supprime ;
             // v1.28.7 — la purge de retention aussi, et ce fichier le tient.

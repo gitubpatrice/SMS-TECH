@@ -39,6 +39,30 @@ interface AttachmentDao {
     suspend fun deleteForMessage(messageId: Long)
 
     /**
+     * v1.28.9 (septième note d'Andrew, constat 1) — toutes les lignes qui citent l'un de
+     * [localUris], avec leur message et leur conversation.
+     *
+     * Un envoi à plusieurs destinataires écrit UNE copie durable du fichier et la fait citer par
+     * chaque ligne ; l'écho de groupe et l'envoi programmé la citent aussi. Effacer le fichier au
+     * premier message supprimé vidait les bulles de tous les autres. L'appelant compte ce qui
+     * reste cité une fois écarté ce qu'il supprime — cf.
+     * [com.filestech.sms.data.repository.FichiersDePiecesJointes].
+     *
+     * Comparaison exacte des chaînes : chaque `local_uri` est écrit par l'application à partir de
+     * `File.absolutePath`, sous la même racine, et les chemins comparés viennent de ces mêmes
+     * lignes. `IN` est borné par SQLite : l'appelant découpe en lots.
+     */
+    @Query(
+        """
+        SELECT a.local_uri, a.message_id, m.conversation_id
+          FROM attachments a
+          JOIN messages m ON m.id = a.message_id
+         WHERE a.local_uri IN (:localUris)
+        """,
+    )
+    suspend fun findCitations(localUris: List<String>): List<CitationDePieceJointe>
+
+    /**
      * v1.14.7 — récupère toutes les attachments dont [AttachmentEntity.localUri] commence
      * par [oldPrefix]. Utilisé par la migration cache → filesDir de MainApplication.onCreate
      * pour ré-écrire les chemins pointant vers `cacheDir/mms_incoming/` (volatile, sujet à

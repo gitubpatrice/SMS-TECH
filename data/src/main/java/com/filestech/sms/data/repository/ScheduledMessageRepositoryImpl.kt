@@ -29,6 +29,9 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
     // ne doit pas se lire par une autre porte que celle qui demande le second facteur.
     private val appLock: com.filestech.sms.security.AppLockManager,
     private val vaultSession: com.filestech.sms.security.VaultSessionState,
+    // v1.28.9 (septième note d'Andrew, constat 1) — les messages produits par l'envoi citent les
+    // mêmes fichiers que la ligne programmée : on ne les efface plus sans compter.
+    private val fichiers: FichiersDePiecesJointes,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ScheduledMessageRepository {
 
@@ -136,14 +139,25 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
      *
      * Chaque suppression est isolee : un fichier deja disparu ou verrouille ne doit pas empecher
      * d'effacer la ligne.
+     *
+     * v1.28.9 (septième note d'Andrew, constat 1) — les fichiers ne partent que si plus rien ne
+     * les cite. Les messages que cet envoi a déjà produits — tentatives en échec, envoi partiel —
+     * citent les MÊMES fichiers : les effacer vidait leurs bulles. Et une ligne illisible n'est
+     * pas une ligne sans pièce jointe : on n'efface alors rien, la ligne reste à l'écran et la
+     * suppression peut être retentée, au lieu d'emporter la seule référence à ses fichiers.
      */
     override suspend fun deleteWithAttachments(id: Long) = withContext(io) {
-        val entity = runCatching { dao.findById(id) }.getOrNull()
-        if (entity != null) {
-            for (a in ScheduledAttachmentCodec.decode(entity.attachmentsJson)) {
-                runCatching { a.file.delete() }
-                    .onFailure { Timber.w(it, "Scheduled: suppression piece jointe %s echouee", a.file.name) }
+        val entity = runCatching { dao.findById(id) }
+            .getOrElse {
+                Timber.w(it, "Scheduled: lecture de #%d echouee, rien n'est supprime", id)
+                return@withContext
             }
+        if (entity != null) {
+            val echecs = fichiers.effacerSiPlusCites(
+                cheminsDesPieces(entity),
+                FichiersDePiecesJointes.Exclusion.EnvoiProgramme(id),
+            )
+            if (echecs > 0) Timber.w("Scheduled: %d piece(s) jointe(s) de #%d non effacee(s)", echecs, id)
         }
         dao.delete(id)
     }
@@ -151,16 +165,27 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
     /**
      * v1.26.0 — supprime les fichiers ET vide la colonne, pour que la ligne conservee ne pointe
      * plus vers des chemins morts. Voir le contrat pour la raison d'etre de ce menage.
+     *
+     * v1.28.9 — mêmes deux règles que [deleteWithAttachments]. La colonne n'est vidée que si aucun
+     * fichier n'a résisté : la vider quand même effacerait la dernière citation d'un fichier
+     * resté sur le disque, que plus rien ne permettrait de retrouver.
      */
     override suspend fun clearAttachments(id: Long) = withContext(io) {
         val entity = runCatching { dao.findById(id) }.getOrNull() ?: return@withContext
-        for (a in ScheduledAttachmentCodec.decode(entity.attachmentsJson)) {
-            runCatching { a.file.delete() }
-                .onFailure { Timber.w(it, "Scheduled: suppression piece jointe %s echouee", a.file.name) }
+        val echecs = fichiers.effacerSiPlusCites(
+            cheminsDesPieces(entity),
+            FichiersDePiecesJointes.Exclusion.EnvoiProgramme(id),
+        )
+        if (echecs > 0) {
+            Timber.w("Scheduled: %d piece(s) jointe(s) de #%d non effacee(s), colonne conservee", echecs, id)
+            return@withContext
         }
         if (entity.attachmentsJson != null) {
             runCatching { dao.upsert(entity.copy(attachmentsJson = null)) }
                 .onFailure { Timber.w(it, "Scheduled: purge attachmentsJson #%d echouee", id) }
         }
     }
+
+    private fun cheminsDesPieces(entity: ScheduledMessageEntity): List<String> =
+        ScheduledAttachmentCodec.decode(entity.attachmentsJson).map { it.file.absolutePath }
 }

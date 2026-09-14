@@ -83,6 +83,7 @@ class ScheduledVaultVisibilityTest {
             db.scheduledMessageDao(),
             appLock,
             vaultSession,
+            FichiersDePiecesJointes(db.attachmentDao(), db.scheduledMessageDao(), context),
             Dispatchers.IO,
         )
     }

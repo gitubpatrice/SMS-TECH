@@ -9,6 +9,7 @@ import androidx.room.withTransaction
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.AppDatabase
+import com.filestech.sms.data.local.db.SQLITE_HOST_PARAM_LIMIT
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
@@ -541,8 +542,5 @@ class TelephonySyncManager @Inject constructor(
     private companion object {
         /** v1.26.1 (audit F6) — seules les lignes SMS sont réconciliables, cf. [reconcileDeletions]. */
         const val SMS_URI_PREFIX = "content://sms/"
-
-        /** SQLite plafonne `IN (…)` à 999 paramètres hôtes ; on reste dessous. */
-        const val SQLITE_HOST_PARAM_LIMIT = 900
     }
 }

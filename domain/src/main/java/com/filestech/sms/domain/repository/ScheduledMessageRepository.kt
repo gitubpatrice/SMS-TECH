@@ -59,6 +59,9 @@ interface ScheduledMessageRepository {
      * v1.26.0 — comme [delete], mais efface aussi les pieces jointes durables de l'envoi.
      * Voir [com.filestech.sms.domain.usecase.DeleteScheduledMessageUseCase] : les fichiers vivent
      * tant que la ligne existe.
+     *
+     * v1.28.9 — un fichier que cite encore un message (tentative déjà écrite, envoi partiel) ou un
+     * autre envoi programmé est CONSERVÉ : il ne part qu'avec sa dernière citation.
      */
     suspend fun deleteWithAttachments(id: Long)
 
@@ -69,6 +72,9 @@ interface ScheduledMessageRepository {
      * servent plus a rien — l'envoi ne partira jamais. Sans ce menage ils resteraient sur le
      * telephone **definitivement** : aucune liste n'affiche les lignes annulees, donc plus
      * personne ne pourrait jamais les atteindre pour les supprimer.
+     *
+     * v1.28.9 — même règle de citation que [deleteWithAttachments] ; la colonne n'est vidée que si
+     * aucun fichier n'a résisté, pour ne pas effacer la dernière trace d'un fichier resté.
      */
     suspend fun clearAttachments(id: Long)
 }
