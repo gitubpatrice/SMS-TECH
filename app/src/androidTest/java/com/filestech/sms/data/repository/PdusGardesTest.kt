@@ -200,7 +200,68 @@ class PdusGardesTest {
         assertThat(pduTardif.exists()).isFalse()
     }
 
+    /**
+     * Contrôle négatif I10 du 2026-09-14 — le test précédent insère son MMS pendant le balayage système, donc
+     * AVANT la lecture des clés : l'effacement préalable emporte son PDU, et l'effacement après validation
+     * n'était jamais atteint — la mutation qui le retire laissait le test vert. Ici le MMS arrive APRÈS la
+     * première lecture des clés et avant la transaction finale : seul l'effacement tardif peut emporter son PDU.
+     */
+    @Test
+    fun lePduDUnMmsArriveApresLaLectureDesClesLeSuit(): Unit = runBlocking {
+        conversation(ALICE, inVault = false)
+        message(ALICE, cle("premier"))
+        val tardive = cle("apres-lecture")
+        val pduTardif = pdu(tardive)
+        val dao = ApresLaLectureDesCles(db.messageDao()) { message(ALICE, tardive) }
+
+        val resultat = eraserAvec(messageDao = dao).supprimer(ALICE)
+
+        assertThat(dao.fait).isTrue()
+        assertThat(resultat).isEqualTo(ConversationDeleteResult.DELETED)
+        assertThat(pduTardif.exists()).isFalse()
+    }
+
+    /** Le jumeau de la rétention : un MMS entré dans la clause après la lecture des clés part, et son PDU le suit. */
+    @Test
+    fun laRetentionEffaceLePduDUnMmsEntreApresLaLectureDesCles(): Unit = runBlocking {
+        conversation(ALICE, inVault = false)
+        message(ALICE, cle("ancien"), date = ANCIEN)
+        val tardive = cle("ancien-tardif")
+        val pduTardif = pdu(tardive)
+        val dao = ApresLaLectureDesCles(db.messageDao()) { message(ALICE, tardive, date = ANCIEN) }
+
+        val n = eraserAvec(messageDao = dao).purgeHistory(cutoff = System.currentTimeMillis() - TRENTE_JOURS)
+
+        assertThat(dao.fait).isTrue()
+        assertThat(n).isEqualTo(2)
+        assertThat(pduTardif.exists()).isFalse()
+    }
+
     // ───── Outillage ─────
+
+    /**
+     * Écrit un MMS juste après la PREMIÈRE lecture des clés de transaction : la fenêtre entre l'effacement
+     * préalable des PDU et la transaction finale, que seule la seconde lecture couvre.
+     */
+    private class ApresLaLectureDesCles(
+        private val d: com.filestech.sms.data.local.db.dao.MessageDao,
+        private val tardif: suspend () -> Unit,
+    ) : com.filestech.sms.data.local.db.dao.MessageDao by d {
+        var fait = false
+
+        override suspend fun findTransactionKeysForConversation(conversationId: Long): List<String> =
+            d.findTransactionKeysForConversation(conversationId).also { ecrireUneFois() }
+
+        override suspend fun findTransactionKeysOlderThan(olderThan: Long): List<String> =
+            d.findTransactionKeysOlderThan(olderThan).also { ecrireUneFois() }
+
+        private suspend fun ecrireUneFois() {
+            if (!fait) {
+                fait = true
+                tardif()
+            }
+        }
+    }
 
     private fun cle(graine: String): String = PdusEnAttente.cle(graine, "http://mmsc.example/$graine", 1)!!
 
@@ -209,10 +270,13 @@ class PdusGardesTest {
             .apply { writeBytes(ByteArray(32)) }
             .also { crees += it }
 
-    private fun eraserAvec(systemCopy: SystemCopyEraser = ToutSEfface) = ConversationEraser(
+    private fun eraserAvec(
+        systemCopy: SystemCopyEraser = ToutSEfface,
+        messageDao: com.filestech.sms.data.local.db.dao.MessageDao = db.messageDao(),
+    ) = ConversationEraser(
         db,
         db.conversationDao(),
-        db.messageDao(),
+        messageDao,
         systemCopy,
         db.scheduledMessageDao(),
         object : com.filestech.sms.domain.scheduler.ScheduledMessageScheduler {
