@@ -64,6 +64,23 @@ updates:
       # Nom releve sur la PR #14 elle-meme (trailer updated-dependencies), pas devine.
       - dependency-name: "gradle-wrapper"
         versions: [">= 9"]
+      # Mesure du 2026-09-14 sur les PR #28, #31 et #32, noms releves dans leurs trailers :
+      # AGP 9.4 exige Gradle 9.6 ; Compose 1.12 (BOM 2026.09) et SQLCipher 4.19 exigent
+      # compileSdk 37 ; les plugins Kotlin 2.4 butent sur le mur Hilt mesure le 2026-09-08
+      # (la regle `org.jetbrains.kotlin:*` ci-dessus ne couvre pas les identifiants de
+      # plugin, qui n'ont pas de deux-points). Meme sort : a retirer avec la migration AGP 9.
+      - dependency-name: "com.android.application"
+        versions: [">= 9"]
+      - dependency-name: "com.android.library"
+        versions: [">= 9"]
+      - dependency-name: "com.android.test"
+        versions: [">= 9"]
+      - dependency-name: "org.jetbrains.kotlin.*"
+        versions: [">= 2.4"]
+      - dependency-name: "androidx.compose:compose-bom"
+        versions: [">= 2026.09.00"]
+      - dependency-name: "net.zetetic:sqlcipher-android"
+        versions: [">= 4.19"]
     commit-message:
       prefix: "deps"
       include: "scope"
