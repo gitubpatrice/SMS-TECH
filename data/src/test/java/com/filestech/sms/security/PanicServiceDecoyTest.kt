@@ -172,6 +172,9 @@ class PanicServiceDecoyTest {
         val residu = service(decoy = false).nukeEverything()
 
         assertThat(residu.copiesSystemeRestantes).isEqualTo(2)
+        // v1.28.9 — l'exception de la conversation 3 vient de la partie locale d'`erase` : elle
+        // compte AUSSI en échec local, sinon le dialogue n'en donnait que la cause « copie système ».
+        assertThat(residu.echecsLocaux).isEqualTo(1)
         // Et la destruction a bien eu lieu malgre les residus : la base ne survit pas a la purge.
         verify(exactly = 1) { database.close() }
         coVerify(exactly = 1) { securityStore.clearAll() }

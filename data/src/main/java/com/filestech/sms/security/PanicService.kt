@@ -168,7 +168,14 @@ class PanicService @Inject constructor(
             val dbName = AppDatabase.DATABASE_NAME
             val dossierBase = context.getDatabasePath(dbName).parentFile
             dossierBase?.listFiles { f -> f.name.startsWith(dbName) }?.forEach { it.delete() }
-            echecs += dossierBase?.listFiles { f -> f.name.startsWith(dbName) }?.size ?: 0
+            // `listFiles` rend `null` sans lever sur un dossier illisible : ne rien voir n'est pas ne
+            // rien trouver (relecture GPT 5.2 du 2026-09-14, constat 5). Absent, il n'a rien à rendre.
+            val restants = dossierBase?.listFiles { f -> f.name.startsWith(dbName) }
+            echecs += when {
+                dossierBase == null || !dossierBase.exists() -> 0
+                restants == null -> 1
+                else -> restants.size
+            }
         }.onFailure {
             echecs++
             Timber.w(it, "wipe database residues")
@@ -260,7 +267,12 @@ class PanicService @Inject constructor(
                     if (!it.localeComplete) echecsLocaux++
                 }
                 .onFailure {
+                    // Le doute se résout des deux côtés : ce qui remonte d'`erase` vient de sa partie
+                    // LOCALE (transaction, DAO), et l'on ne sait rien de la copie système. Relecture
+                    // GPT 5.2 du 2026-09-14 : compté seulement en copie, le dialogue donnait la
+                    // mauvaise cause.
                     restantes++
+                    echecsLocaux++
                     Timber.w(it, "wipe: conversation %d non supprimee", id)
                 }
         }

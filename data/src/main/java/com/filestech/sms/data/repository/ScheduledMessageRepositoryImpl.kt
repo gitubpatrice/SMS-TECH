@@ -147,7 +147,7 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
      * suppression peut être retentée, au lieu d'emporter la seule référence à ses fichiers.
      */
     override suspend fun deleteWithAttachments(id: Long) = withContext(io) {
-        val entity = runCatching { dao.findById(id) }
+        val entity = com.filestech.sms.core.result.runCatchingCancellable { dao.findById(id) }
             .getOrElse {
                 Timber.w(it, "Scheduled: lecture de #%d echouee, rien n'est supprime", id)
                 return@withContext
@@ -171,7 +171,8 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
      * resté sur le disque, que plus rien ne permettrait de retrouver.
      */
     override suspend fun clearAttachments(id: Long) = withContext(io) {
-        val entity = runCatching { dao.findById(id) }.getOrNull() ?: return@withContext
+        val entity = com.filestech.sms.core.result.runCatchingCancellable { dao.findById(id) }
+            .getOrNull() ?: return@withContext
         val echecs = fichiers.effacerSiPlusCites(
             cheminsDesPieces(entity),
             FichiersDePiecesJointes.Exclusion.EnvoiProgramme(id),
@@ -181,7 +182,7 @@ class ScheduledMessageRepositoryImpl @Inject constructor(
             return@withContext
         }
         if (entity.attachmentsJson != null) {
-            runCatching { dao.upsert(entity.copy(attachmentsJson = null)) }
+            com.filestech.sms.core.result.runCatchingCancellable { dao.upsert(entity.copy(attachmentsJson = null)) }
                 .onFailure { Timber.w(it, "Scheduled: purge attachmentsJson #%d echouee", id) }
         }
     }

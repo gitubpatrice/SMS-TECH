@@ -122,7 +122,9 @@ class ConversationEraser @Inject constructor(
     suspend fun erase(id: Long, mode: Mode = Mode.ORDINAIRE): Issue {
         var systemCopyGone = true
         var connus: Set<Long> = emptySet()
-        runCatching {
+        // v1.28.9 — une annulation de coroutine n'est pas une copie système qui résiste : elle remonte
+        // (relecture GPT 5.2 du 2026-09-14, constat 3).
+        runCatchingCancellable {
             val balayes = messageDao.findByConversation(id)
             for (m in balayes) if (!systemCopy.erase(m)) systemCopyGone = false
             connus = balayes.mapTo(HashSet(balayes.size)) { it.id }
@@ -307,7 +309,7 @@ class ConversationEraser @Inject constructor(
      */
     private suspend fun annulerLesTravauxProgrammes(conversationId: Long): Dependants {
         // v1.28.4 (R01) — une énumération qui échoue n'est PAS une liste vide : c'est un échec.
-        val programmes = runCatching { scheduledDao.findForConversation(conversationId) }
+        val programmes = runCatchingCancellable { scheduledDao.findForConversation(conversationId) }
             .onFailure { Timber.w(it, "delete: lecture des envois programmes de %d echouee", conversationId) }
             .getOrNull() ?: return Dependants(echecs = 1, chemins = emptySet())
         var echecs = 0
@@ -318,8 +320,14 @@ class ConversationEraser @Inject constructor(
                 // v1.28.9 (septième note d'Andrew, constat 1) — les fichiers ne sont plus effacés
                 // ici. Les messages que cet envoi a produits les citent aussi, dans cette
                 // conversation ou dans une autre : ils rejoignent ceux des messages et partent
-                // ensemble, s'ils ne sont plus cités ailleurs. Relevés APRÈS l'annulation, comme
-                // l'effacement l'était : un envoi qui n'a pas pu être annulé garde ses fichiers.
+                // ensemble, s'ils ne sont plus cités ailleurs.
+                //
+                // Un envoi dont l'annulation lève compte en échec : en mode coffre le parent est
+                // conservé, fichiers compris. En mode ordinaire sa ligne part quand même avec la
+                // conversation dans la transaction finale, et ses fichiers la suivent, relus en
+                // tardifs : le worker qui se réveille ne trouve plus de ligne et n'envoie rien.
+                // Limite antérieure, inchangée : un envoi DÉJÀ en vol à cet instant peut perdre ses
+                // fichiers sous lui (relecture GPT 5.2 du 2026-09-14, constat 2).
                 ScheduledAttachmentCodec.decode(envoi.attachmentsJson).mapTo(chemins) { it.file.absolutePath }
             }.onFailure {
                 echecs++
@@ -380,7 +388,7 @@ class ConversationEraser @Inject constructor(
         // v1.28.4 (R02) — une énumération qui échoue n'est PAS une liste vide : c'est un échec.
         // v1.28.9 — et rien n'est pris en charge : la transaction finale traitera en tardif tout ce
         // qu'elle trouvera, au lieu de laisser des fichiers derrière des lignes supprimées.
-        val pieces = runCatching { attachmentDao.findForConversation(conversationId) }
+        val pieces = runCatchingCancellable { attachmentDao.findForConversation(conversationId) }
             .onFailure { Timber.w(it, "delete: lecture des pieces jointes de %d echouee", conversationId) }
             .getOrNull() ?: return Dependants(echecs = 1, chemins = emptySet())
         val chemins = LinkedHashSet<String>()
@@ -412,7 +420,7 @@ class ConversationEraser @Inject constructor(
         // restaient sur le téléphone sans plus rien pour y mener. Le message reste à l'écran —
         // l'utilisateur voit que rien n'a été supprimé et peut réessayer —, et sa copie système
         // n'est pas touchée : une copie partie sous une ligne restée serait l'état incohérent.
-        val pieces = runCatching { attachmentDao.findForMessage(messageId) }
+        val pieces = runCatchingCancellable { attachmentDao.findForMessage(messageId) }
             .onFailure { Timber.w(it, "deleteMessage: lecture des pieces jointes de %d echouee, abandon", messageId) }
             .getOrNull() ?: return
         runCatching { systemCopy.erase(msg) }
