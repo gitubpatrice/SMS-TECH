@@ -72,11 +72,12 @@ class OutgoingAttachmentStoreImpl @Inject constructor(
         }
     }
 
-    private companion object {
+    internal companion object {
         /**
-         * Durable attachment root (filesDir). MUST stay in sync with the inbound
-         * `MmsDownloadedReceiver.ATTACHMENTS_DIR`, the `<files-path name="attachments" .../>` entry
-         * in `res/xml/file_provider_paths.xml`, and the wipe list in `PanicService.nukeEverything`.
+         * Durable attachment root (filesDir), shared with the inbound writer [EcrivainDePiecesSurDisque]
+         * (v1.28.9 — it replaces `MmsDownloadedReceiver.ATTACHMENTS_DIR`, gone with F17). MUST stay in sync
+         * with the `<files-path name="attachments" .../>` entry in `res/xml/file_provider_paths.xml`, and the
+         * wipe list in `PanicService.nukeEverything`.
          */
         const val ATTACHMENTS_DIR: String = "mms_attachments"
     }

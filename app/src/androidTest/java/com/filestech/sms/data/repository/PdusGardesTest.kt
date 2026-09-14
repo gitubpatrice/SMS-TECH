@@ -201,24 +201,44 @@ class PdusGardesTest {
     }
 
     /**
-     * Contrôle négatif I10 du 2026-09-14 — le test précédent insère son MMS pendant le balayage système, donc
-     * AVANT la lecture des clés : l'effacement préalable emporte son PDU, et l'effacement après validation
-     * n'était jamais atteint — la mutation qui le retire laissait le test vert. Ici le MMS arrive APRÈS la
-     * première lecture des clés et avant la transaction finale : seul l'effacement tardif peut emporter son PDU.
+     * Contrôle négatif I10, puis audit de cohérence du 2026-09-14 (C1) — le test précédent insère son MMS pendant le
+     * balayage système, donc AVANT la lecture des clés : l'effacement préalable emporte son PDU. Ici le MMS arrive
+     * APRÈS la première lecture des clés et avant la transaction finale, et son PDU est encore là : le parent est
+     * gardé. L'effacer après la validation laissait un échec sans recours — la ligne partie, la reprise réécrivait
+     * le message. Au second essai, le PDU part avant les lignes, comme les autres.
      */
     @Test
-    fun lePduDUnMmsArriveApresLaLectureDesClesLeSuit(): Unit = runBlocking {
+    fun unPduTardifEncorePresentGardeLaConversationPuisPartAuSecondEssai(): Unit = runBlocking {
         conversation(ALICE, inVault = false)
         message(ALICE, cle("premier"))
         val tardive = cle("apres-lecture")
         val pduTardif = pdu(tardive)
         val dao = ApresLaLectureDesCles(db.messageDao()) { message(ALICE, tardive) }
 
+        val premier = eraserAvec(messageDao = dao).supprimer(ALICE)
+
+        assertThat(dao.fait).isTrue()
+        assertThat(premier).isEqualTo(ConversationDeleteResult.KEPT_LOCAL_FAILURE)
+        assertThat(db.conversationDao().findById(ALICE)).isNotNull()
+        assertThat(pduTardif.exists()).isTrue()
+
+        val second = eraserAvec(messageDao = dao).supprimer(ALICE)
+
+        assertThat(second).isEqualTo(ConversationDeleteResult.DELETED)
+        assertThat(pduTardif.exists()).isFalse()
+    }
+
+    /** Contrôle positif du précédent : un MMS tardif dont le PDU est déjà parti ne retient pas la conversation. */
+    @Test
+    fun unMmsTardifSansPduNeRetientPasLaConversation(): Unit = runBlocking {
+        conversation(ALICE, inVault = false)
+        message(ALICE, cle("premier"))
+        val dao = ApresLaLectureDesCles(db.messageDao()) { message(ALICE, cle("consomme")) }
+
         val resultat = eraserAvec(messageDao = dao).supprimer(ALICE)
 
         assertThat(dao.fait).isTrue()
         assertThat(resultat).isEqualTo(ConversationDeleteResult.DELETED)
-        assertThat(pduTardif.exists()).isFalse()
     }
 
     /** Le jumeau de la rétention : un MMS entré dans la clause après la lecture des clés part, et son PDU le suit. */

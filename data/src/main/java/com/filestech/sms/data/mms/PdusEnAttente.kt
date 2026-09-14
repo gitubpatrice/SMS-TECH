@@ -78,6 +78,18 @@ class PdusEnAttente @Inject constructor(
         return fichiers.any { it.isFile && it.length() > 0L && lireNom(it.name)?.cle != null }
     }
 
+    /**
+     * v1.28.9 (audit de cohérence du 2026-09-14, C1) — reste-t-il un PDU pour l'une de ces clés ? Un dossier absent
+     * n'en garde aucun ; un dossier présent mais illisible répond « oui » : ne rien voir n'est pas ne rien trouver.
+     */
+    fun existePourCles(cles: Collection<String>): Boolean {
+        if (cles.isEmpty()) return false
+        val dossier = dossier
+        val fichiers = dossier.listFiles() ?: return dossier.exists()
+        val voulues = cles.toHashSet()
+        return fichiers.any { lireNom(it.name)?.cle in voulues }
+    }
+
     /** Ce que le nom d'un PDU dit de lui. [cle] est `null` pour un fichier écrit avant la 1.28.9. */
     data class Nom(val cle: String?, val subId: Int?)
 

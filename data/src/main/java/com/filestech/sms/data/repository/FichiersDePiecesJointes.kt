@@ -170,4 +170,15 @@ class FichiersDePiecesJointes @Inject constructor(
         runCatching { com.filestech.sms.data.mms.PdusEnAttente(context).effacerPourCles(cles) }
             .onFailure { Timber.w(it, "pdu gardes : effacement echoue") }
             .getOrDefault(if (cles.isEmpty()) 0 else 1)
+
+    /**
+     * v1.28.9 (audit de cohérence du 2026-09-14, C1) — reste-t-il un PDU gardé pour l'une de ces clés ? Relu par la
+     * transaction finale de [ConversationEraser.erase] : un MMS arrivé pendant la suppression, dont le PDU est
+     * encore là, garde le parent. Un doute — dossier illisible, erreur — répond « oui » : garder la conversation se
+     * rattrape au prochain essai, la ressusciter ne se rattrape pas.
+     */
+    fun pdusGardesPresents(cles: Collection<String>): Boolean =
+        cles.isNotEmpty() && runCatching { com.filestech.sms.data.mms.PdusEnAttente(context).existePourCles(cles) }
+            .onFailure { Timber.w(it, "pdu gardes : presence illisible") }
+            .getOrDefault(true)
 }

@@ -152,4 +152,32 @@ class PdusEnAttenteTest {
 
         assertThat(service.aReprendre()).isTrue()
     }
+
+    /** Audit de cohérence du 2026-09-14 (C1) : la présence relue sous le verrou de la suppression d'une conversation. */
+    @Test
+    fun `seul un PDU de l'une des cles compte comme present`() {
+        val service = pdus()
+        val dossier = service.dossier.apply { mkdirs() }
+        val cle = "e".repeat(64)
+        File(dossier, PdusEnAttente.nom(1L, "aaaaaaaa", "f".repeat(64), null)).writeBytes(ByteArray(8))
+        File(dossier, "in-2-bbbbbbbb.pdu").writeBytes(ByteArray(8))
+
+        assertThat(service.existePourCles(listOf(cle))).isFalse()
+        assertThat(service.existePourCles(emptyList())).isFalse()
+
+        File(dossier, PdusEnAttente.nom(3L, "cccccccc", cle, 2)).writeBytes(ByteArray(8))
+        assertThat(service.existePourCles(listOf(cle))).isTrue()
+    }
+
+    @Test
+    fun `presence de PDU, dossier absent non, dossier illisible oui`() {
+        val cle = "e".repeat(64)
+        assertThat(pdus().existePourCles(listOf(cle))).isFalse()
+
+        val illisible = pdus()
+        // Un fichier à la place du dossier : `listFiles()` rend `null`, comme sur un dossier illisible.
+        illisible.dossier.writeBytes(ByteArray(1))
+
+        assertThat(illisible.existePourCles(listOf(cle))).isTrue()
+    }
 }

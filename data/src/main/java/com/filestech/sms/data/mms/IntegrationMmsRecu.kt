@@ -199,7 +199,8 @@ class EcrivainDePiecesSurDisque(private val context: Context) : IntegrationMmsRe
     override fun ecrire(partie: PartieMms): IncomingAttachment? {
         var temporaire: File? = null
         return try {
-            val dossier = File(context.filesDir, DOSSIER_PIECES).apply { mkdirs() }
+            // Racine durable des pièces, UNE constante pour les envois et les réceptions (audit de cohérence, C4).
+            val dossier = File(context.filesDir, OutgoingAttachmentStoreImpl.ATTACHMENTS_DIR).apply { mkdirs() }
             val nom = "in-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}." +
                 extension(partie.mime)
             val final = File(dossier, nom)
@@ -238,10 +239,5 @@ class EcrivainDePiecesSurDisque(private val context: Context) : IntegrationMmsRe
         "application/msword" -> "doc"
         "application/zip" -> "zip"
         else -> "bin"
-    }
-
-    private companion object {
-        /** Racine durable des pièces reçues, partagée avec les envois et le FileProvider. */
-        const val DOSSIER_PIECES = "mms_attachments"
     }
 }

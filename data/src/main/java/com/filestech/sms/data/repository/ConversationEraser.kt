@@ -181,12 +181,16 @@ class ConversationEraser @Inject constructor(
         // d'écriture : pour le coffre elle garde le parent, comme un message tardif ; ailleurs son
         // fichier suit la conversation, une fois la transaction validée.
         var cheminsTardifs: List<String> = emptyList()
-        // v1.28.9 (F17) — les clés des MMS arrivés pendant le balayage : sous `force` et en mode
-        // ordinaire, leur message part avec le parent, et leur PDU gardé doit le suivre après la
-        // validation — rejoué, il ressusciterait le message. Pour le coffre, le parent est conservé.
-        var clesTardives: List<String> = emptyList()
         val conservation = database.withTransaction {
-            clesTardives = messageDao.findTransactionKeysForConversation(id).filterNot { it in pdus.cles }
+            // v1.28.9 (F17, audit de cohérence du 2026-09-14, C1) — un MMS arrivé pendant la suppression dont le
+            // PDU gardé est ENCORE LÀ garde le parent, dans tous les modes. L'effacement préalable ne l'a pas vu ;
+            // effacé après la validation, un échec ne pouvait plus que se journaliser, et la reprise réécrivait le
+            // message supprimé. Le prochain essai l'efface avant les lignes, comme les autres. La présence se relit
+            // par un listage du dossier des PDU : la seule entrée-sortie tenue sous ce verrou, courte, sans
+            // suppression.
+            val pduTardif = messageDao.findTransactionKeysForConversation(id)
+                .filterNot { it in pdus.cles }
+                .let { cles -> cles.isNotEmpty() && fichiers.pdusGardesPresents(cles) }
             val tardif = mode != Mode.ORDINAIRE && messageDao.findByConversation(id).any { it.id !in connus }
             val programmesRestants = scheduledDao.findForConversation(id)
             cheminsTardifs = (
@@ -202,6 +206,7 @@ class ConversationEraser @Inject constructor(
                 // fichier deviendrait orphelin au premier effacement raté, sans plus aucun parent
                 // pour le retrouver — et le coffre relu vide se dirait complet.
                 cheminsTardifs.isNotEmpty() && mode != Mode.ORDINAIRE -> Conservation.PIECE_TARDIVE
+                pduTardif -> Conservation.PDU_TARDIF
                 else -> {
                     if (tardif) systemCopyGone = false
                     for (envoi in programmesRestants) scheduledDao.delete(envoi.id)
@@ -212,7 +217,7 @@ class ConversationEraser @Inject constructor(
         }
         conservation?.let { cause ->
             Timber.w("delete: %s during sweep of conversation %d, parent kept", cause, id)
-            // Un message tardif n'a jamais été présenté au fournisseur ; une pièce tardive est un
+            // Un message tardif n'a jamais été présenté au fournisseur ; une pièce ou un PDU tardif est un
             // dépendant pas encore traité. Un seul retour : `erase` est à la limite de detekt.
             return if (cause == Conservation.MESSAGE_TARDIF) {
                 Issue(systemCopyGone = false, localeComplete = true, conservee = true)
@@ -221,9 +226,7 @@ class ConversationEraser @Inject constructor(
             }
         }
         // Les lignes sont parties avec la conversation : plus aucune citation à écarter.
-        // v1.28.9 (F17) — et les PDU gardés des MMS arrivés pendant le balayage, partis avec elle.
-        val echecsTardifs = (if (cheminsTardifs.isEmpty()) 0 else fichiers.effacerSiPlusCites(cheminsTardifs)) +
-            fichiers.effacerPdusGardes(clesTardives)
+        val echecsTardifs = if (cheminsTardifs.isEmpty()) 0 else fichiers.effacerSiPlusCites(cheminsTardifs)
         if (echecsTardifs > 0) {
             Timber.w("delete: %d late file(s) of conversation %d not erased", echecsTardifs, id)
         }
@@ -383,8 +386,12 @@ class ConversationEraser @Inject constructor(
 
     private data class PdusGardes(val echecs: Int, val cles: Set<String>)
 
-    /** v1.28.9 (B5) — pourquoi la transaction finale d'[erase] a gardé le parent du coffre. */
-    private enum class Conservation { MESSAGE_TARDIF, PIECE_TARDIVE }
+    /**
+     * v1.28.9 (B5) — pourquoi la transaction finale d'[erase] a gardé le parent. [PDU_TARDIF] (audit de cohérence
+     * du 2026-09-14, C1) vaut dans tous les modes : un PDU gardé encore là ressusciterait le message effacé avec la
+     * conversation.
+     */
+    private enum class Conservation { MESSAGE_TARDIF, PIECE_TARDIVE, PDU_TARDIF }
 
     /**
      * v1.28.3 (F04) — efface les FICHIERS des pièces jointes, que la cascade Room laissait
