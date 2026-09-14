@@ -143,14 +143,28 @@ class PanicService @Inject constructor(
             echecs++
             Timber.w(it, "destroy key file")
         }
-        runCatching {
-            keystore.deleteKey(KeystoreManager.ALIAS_DB_MASTER)
-            keystore.deleteKey(KeystoreManager.ALIAS_VAULT_KEK)
-            keystore.deleteKey(KeystoreManager.ALIAS_SETTINGS_AEAD)
-            keystore.deleteKey(KeystoreManager.ALIAS_PANIC_DECOY)
-        }.onFailure {
-            echecs++
-            Timber.w(it, "delete keystore aliases")
+        // v1.28.9 (audit data-room du 2026-09-14, DR1) — chaque alias est RELU après sa suppression.
+        // `KeystoreManager.deleteKey` avale lui-même ses exceptions : le `runCatching` qui entourait les
+        // quatre appels ne pouvait voir aucun échec, et une clé qui résistait laissait la purge se dire
+        // complète. Un alias qui résiste n'empêche pas les suivants de partir.
+        // La clé de la porte biométrique part aussi, qui manquait à la liste : elle ne chiffre rien, mais sa
+        // seule présence dit qu'un verrou biométrique a existé — ce que « tout effacer » doit taire, comme
+        // l'empreinte du PIN du coffre (v1.28.6).
+        val aliasADetruire = listOf(
+            KeystoreManager.ALIAS_DB_MASTER,
+            KeystoreManager.ALIAS_VAULT_KEK,
+            KeystoreManager.ALIAS_SETTINGS_AEAD,
+            KeystoreManager.ALIAS_PANIC_DECOY,
+            KeystoreManager.ALIAS_BIOMETRIC_GATE,
+        )
+        for (alias in aliasADetruire) {
+            runCatching {
+                keystore.deleteKey(alias)
+                check(!keystore.containsAlias(alias)) { "alias toujours present apres suppression" }
+            }.onFailure {
+                echecs++
+                Timber.w(it, "delete keystore alias")
+            }
         }
         runCatching { context.deleteDatabase(AppDatabase.DATABASE_NAME) }
             .onFailure { Timber.w(it, "deleteDatabase") }

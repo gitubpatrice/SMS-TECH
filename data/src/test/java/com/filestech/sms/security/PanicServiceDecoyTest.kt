@@ -203,6 +203,9 @@ class PanicServiceDecoyTest {
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_VAULT_KEK) }
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_SETTINGS_AEAD) }
         verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_PANIC_DECOY) }
+        // v1.28.9 — la clé de la porte biométrique part aussi : sa seule présence dirait qu'un verrou
+        // biométrique a existé.
+        verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_BIOMETRIC_GATE) }
         // v1.28.6 — LE MAGASIN SECURISE PART EN ENTIER, et non par liste de cles nommees. Elle
         // en nommait huit sur dix-huit : le PIN DU COFFRE, sa temporisation, l'horodatage du
         // dernier deverrouillage et le jeton de notification n'y ont jamais ete ajoutes et
@@ -212,6 +215,28 @@ class PanicServiceDecoyTest {
         verify(exactly = 1) { notifications.cancelAll() }
         verify(exactly = 1) { pressePapiers.clear() }
         assertThat(settings.state.value).isEqualTo(AppSettings())
+    }
+
+    /**
+     * v1.28.9 (audit data-room du 2026-09-14, DR1) — **un alias qui survit à sa suppression est compté.**
+     *
+     * `KeystoreManager.deleteKey` avale ses propres exceptions : le `runCatching` qui entourait les appels
+     * ne voyait jamais d'échec, et une clé qui résistait laissait la purge se dire complète. Seule la
+     * relecture de l'alias le dit. Le mock rend ici ce que rendrait le Keystore après un refus silencieux :
+     * l'alias est toujours là. Contrôle positif : le test précédent exige un compte rendu complet.
+     */
+    @Test
+    fun `un alias Keystore qui survit a sa suppression compte en echec local`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns emptyList()
+        every { keystore.containsAlias(KeystoreManager.ALIAS_VAULT_KEK) } returns true
+
+        val residu = service(decoy = false).nukeEverything()
+
+        assertThat(residu.echecsLocaux).isEqualTo(1)
+        assertThat(residu.complet).isFalse()
+        // Un refus n'arrête pas la purge : les alias suivants sont tout de même présentés.
+        verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_SETTINGS_AEAD) }
+        verify(exactly = 1) { keystore.deleteKey(KeystoreManager.ALIAS_BIOMETRIC_GATE) }
     }
 
     /**
