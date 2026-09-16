@@ -851,7 +851,7 @@
     <string name="about_feat_panic_label">Code panique</string>
     <string name="about_feat_panic_desc">Second code qui ouvre l\'app en mode leurre — coffre invisible et inaccessible.</string>
     <string name="about_feat_emergency_label">Mode urgence</string>
-    <string name="about_feat_emergency_desc">Bouton maintenu 3 s sur la page Urgence → SMS d\'alerte préfixé ⚠️ à vos contacts Safety Call avec position GPS optionnelle. Accès rapide 112 / 15 / 17 / 18 + raccourcis dans la notification écran verrouillé.</string>
+    <string name="about_feat_emergency_desc">Bouton maintenu 3 s sur la page Urgence → SMS d\'alerte préfixé ⚠️ à vos contacts Safety Call avec position GPS optionnelle. Accès rapide aux numéros d\'urgence du pays où vous vous trouvez + raccourcis dans la notification écran verrouillé.</string>
     <string name="about_feat_biometric_label">Biométrie</string>
     <string name="about_feat_biometric_desc">Empreinte ou visage pour déverrouiller, avec PIN de secours obligatoire.</string>
     <string name="about_feat_reply_label">Réponse contextuelle</string>
@@ -896,8 +896,8 @@
     <string name="about_help_translate_step4">Si aucune n\'est installée, un message t\'invite à en installer une</string>
     <string name="about_help_emergency_title">Utiliser le mode urgence</string>
     <string name="about_help_emergency_step1">Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety Call</string>
-    <string name="about_help_emergency_step2">Page Urgence : appels directs 112 / 15 / 17 / 18 ; bouton rouge tenu 3 s → SMS aux proches</string>
-    <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis 112 + 17 sans déverrouiller</string>
+    <string name="about_help_emergency_step2">Page Urgence : appels directs vers les numéros d\'urgence de votre pays ; bouton rouge tenu 3 s → SMS aux proches</string>
+    <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis vers le 112 et la police sans déverrouiller</string>
     <string name="about_help_emergency_step4">« Je vais bien » dans la liste des conversations annule l\'alerte en cas de fausse manip</string>
     <string name="about_help_update_title">Vérifier une mise à jour</string>
     <string name="about_help_update_step1">Bouton \"Voir les mises à jour\" en haut de cette page</string>

@@ -860,7 +860,7 @@
     <string name="about_feat_panic_label">Panic code</string>
     <string name="about_feat_panic_desc">A second PIN opens the app in decoy mode — vault invisible and inaccessible.</string>
     <string name="about_feat_emergency_label">Emergency mode</string>
-    <string name="about_feat_emergency_desc">Hold the button 3 s on the Emergency page → alert SMS prefixed ⚠️ to your Safety Call contacts with optional GPS. Quick access 112 / 15 / 17 / 18 + lockscreen notification shortcuts.</string>
+    <string name="about_feat_emergency_desc">Hold the button 3 s on the Emergency page → alert SMS prefixed ⚠️ to your Safety Call contacts with optional GPS. Quick access to the emergency numbers of the country you are in + lockscreen notification shortcuts.</string>
     <string name="about_feat_biometric_label">Biometrics</string>
     <string name="about_feat_biometric_desc">Fingerprint or face to unlock, with a mandatory fallback PIN.</string>
     <string name="about_feat_reply_label">Contextual reply</string>
@@ -905,8 +905,8 @@
     <string name="about_help_translate_step4">If none is installed, a message invites you to install one</string>
     <string name="about_help_emergency_title">Use Emergency mode</string>
     <string name="about_help_emergency_step1">Settings → Emergency mode: enable + add at least one Safety Call contact</string>
-    <string name="about_help_emergency_step2">Emergency page: direct calls 112 / 15 / 17 / 18; red button held 3 s → SMS to relatives</string>
-    <string name="about_help_emergency_step3">Lockscreen notification (opt-in): shortcuts 112 + 17 without unlocking</string>
+    <string name="about_help_emergency_step2">Emergency page: direct calls to your country\'s emergency numbers; red button held 3 s → SMS to relatives</string>
+    <string name="about_help_emergency_step3">Lockscreen notification (opt-in): shortcuts to 112 and the police without unlocking</string>
     <string name="about_help_emergency_step4">\"I am OK\" in the conversation list cancels the alert in case of accidental trigger</string>
     <string name="about_help_update_title">Check for an update</string>
     <string name="about_help_update_step1">\"View updates\" button at the top of this page</string>
