@@ -115,6 +115,17 @@ sel_de() { # $1 = nom du relevé — les 16 octets de tête, que SQLCipher tire 
 
 empreinte_de() { md5sum "$TRAVAIL/$1.bin" | cut -d' ' -f1; }
 
+# ⚠️ `dumpsys package` écrit BEAUCOUP, et un `grep -m1` en aval sort au premier résultat puis ferme
+# le tuyau : `adb` reçoit alors SIGPIPE et meurt en 141, que `pipefail` transforme — à raison — en
+# échec du script. Mesuré sur le runner GitHub le 2026-09-16 : les deux installations réussissent,
+# puis « The process '/usr/bin/sh' failed with exit code 141 ». En local sous MSYS, le même
+# enchaînement passait : c'est exactement la panne qui ne se voit que sur la vraie CI.
+# Le relevé complet est donc écrit AVANT d'être filtré, et sert accessoirement de pièce à conviction.
+version_installee() {
+  "${ADB[@]}" shell dumpsys package "$PAQUET" | tr -d '\r' > "$TRAVAIL/dumpsys.txt"
+  grep -m1 -o 'versionCode=[0-9]*' "$TRAVAIL/dumpsys.txt" || echo "versionCode=inconnu"
+}
+
 # --------------------------------------------------------------------------------------------
 # 1. Table rase, puis la version PRÉCÉDENTE
 # --------------------------------------------------------------------------------------------
@@ -124,7 +135,7 @@ echo "::group::1. Installation de la version précédente"
 "${ADB[@]}" uninstall "$PAQUET" >/dev/null 2>&1 || true
 "${ADB[@]}" install -r "$APK_ANCIEN"
 "${ADB[@]}" install -r "$APK_ANCIEN_TEST"
-VERSION_ANCIENNE=$("${ADB[@]}" shell dumpsys package "$PAQUET" | tr -d '\r' | grep -m1 -o 'versionCode=[0-9]*')
+VERSION_ANCIENNE=$(version_installee)
 echo "  installée : $VERSION_ANCIENNE"
 echo "::endgroup::"
 
@@ -147,7 +158,7 @@ echo "::endgroup::"
 echo "::group::3. Mise à jour EN PLACE vers la révision courante"
 "${ADB[@]}" install -r "$APK_NOUVEAU"
 "${ADB[@]}" install -r "$APK_NOUVEAU_TEST"
-VERSION_NOUVELLE=$("${ADB[@]}" shell dumpsys package "$PAQUET" | tr -d '\r' | grep -m1 -o 'versionCode=[0-9]*')
+VERSION_NOUVELLE=$(version_installee)
 echo "  installée : $VERSION_NOUVELLE (était $VERSION_ANCIENNE)"
 
 # ⚠️ Ce contrôle porte sur les FICHIERS, surtout pas sur les `versionCode`. Sur une branche ou une
