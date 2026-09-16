@@ -390,6 +390,7 @@
 
     <string name="settings_section_locale">Language &amp; region</string>
     <string name="settings_language">App language</string>
+    <string name="settings_language_desc">Opens the Android per-app language screen. SMS Tech follows your system language unless you pick one here.</string>
 
     <string name="settings_section_conversations">Conversations</string>
     <string name="settings_show_avatars">Show avatars</string>

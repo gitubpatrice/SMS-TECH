@@ -43,6 +43,11 @@ RES = os.path.join(RACINE, "app", "src", "main", "res")
 RES_DEBUG = os.path.join(RACINE, "app", "src", "debug", "res")
 GRADLE = os.path.join(RACINE, "app", "build.gradle.kts")
 LOCALES_CONFIG = os.path.join(RES, "xml", "locales_config.xml")
+# Le test qui verifie les CORPS DE SMS de securite, langue par langue. Il porte sa propre liste
+# de langues ; ce script verifie qu'elle est complete, faute de quoi une langue ajoutee passerait
+# a cote de ses controles sans que rien ne le dise. Cf. la fonction verifier_test_des_sms.
+TEST_SMS = os.path.join(RACINE, "app", "src", "test", "java", "com", "filestech", "sms",
+                        "system", "safety", "SafetyMessageTextsTest.kt")
 
 # values-de, values-pt-rBR, values-b+sr+Latn - et surtout PAS values-night, values-v29,
 # values-land, values-sw600dp... qui sont des qualificateurs de configuration, pas des langues.
@@ -113,6 +118,37 @@ def langues_declarees_locales_config():
 def etiquette(dossier):
     """values-pt-rBR -> pt-rBR, la forme qu'attendent localeFilters et locales_config."""
     return dossier[len("values-"):]
+
+
+def verifier_test_des_sms(traduites):
+    """La liste de langues du test des corps de SMS doit couvrir TOUTES les langues livrees.
+
+    Les corps de SMS d'urgence et de Safety Call sont les textes qui PARTENT. Leurs contraintes
+    — pas de tiret cadratin, un segment, la relance nomme l'application — sont verifiees langue
+    par langue par SafetyMessageTextsTest, qui porte sa propre liste. Une langue ajoutee sans y
+    figurer serait livree sans qu'aucun de ces controles ne l'ait regardee, et la suite resterait
+    verte. C'est le genre de vert creux que ce depot connait ; on le ferme ici.
+    """
+    if not os.path.exists(TEST_SMS):
+        echec("SafetyMessageTextsTest",
+              "fichier introuvable (%s) : les corps de SMS ne sont plus verifies par langue"
+              % os.path.relpath(TEST_SMS, RACINE).replace(os.sep, "/"))
+        return
+    with open(TEST_SMS, encoding="utf-8") as f:
+        contenu = f.read()
+    m = re.search(r"val\s+LANGUES\s*=\s*listOf\(([^)]*)\)", contenu)
+    if not m:
+        echec("SafetyMessageTextsTest", "liste LANGUES introuvable - le controle serait aveugle")
+        return
+    listees = set(re.findall(r'"([^"]+)"', m.group(1)))
+    for lg in sorted(traduites - listees):
+        echec("SafetyMessageTextsTest",
+              "langue %s absente de LANGUES : ses corps de SMS d'urgence et de Safety Call "
+              "ne seraient verifies par personne" % lg)
+    for lg in sorted(listees - traduites):
+        echec("SafetyMessageTextsTest",
+              "langue %s listee dans LANGUES mais non traduite : le test mesurerait un repli "
+              "sur l'anglais en croyant mesurer %s" % (lg, lg))
 
 
 def verifier_langue(dossier, ref_chaines, ref_pluriels, gradle, config):
@@ -196,6 +232,7 @@ def main():
 
     # LA RECIPROQUE : une langue annoncee sans traduction derriere.
     traduites = {etiquette(d) for d in dossiers} | {"en"}
+    verifier_test_des_sms(traduites)
     for lg in sorted(gradle - traduites):
         echec(lg, "annoncee dans localeFilters mais aucun values-%s/strings.xml : "
                   "l'application offrirait une langue vide" % lg)

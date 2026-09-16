@@ -391,6 +391,7 @@
 
     <string name="settings_section_locale">Sprache &amp; Region</string>
     <string name="settings_language">App-Sprache</string>
+    <string name="settings_language_desc">Öffnet den Android-Bildschirm für die Sprache einzelner Apps. SMS Tech folgt Ihrer Systemsprache, solange Sie hier keine auswählen.</string>
 
     <string name="settings_section_conversations">Unterhaltungen</string>
     <string name="settings_show_avatars">Kontaktbilder anzeigen</string>

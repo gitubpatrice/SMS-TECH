@@ -380,6 +380,7 @@
 
     <string name="settings_section_locale">Langue &amp; région</string>
     <string name="settings_language">Langue de l\'application</string>
+    <string name="settings_language_desc">Ouvre l\'écran Android de langue par application. SMS Tech suit la langue de votre système tant que vous n\'en choisissez pas une ici.</string>
 
     <string name="settings_section_conversations">Conversations</string>
     <string name="settings_show_avatars">Afficher les avatars</string>

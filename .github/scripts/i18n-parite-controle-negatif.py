@@ -80,6 +80,17 @@ DEBUG = """<?xml version="1.0" encoding="utf-8"?>
 </resources>
 """
 
+# Le test qui verifie les corps de SMS de securite, langue par langue. Seule sa liste de langues
+# interesse le controle de parite : elle doit couvrir toutes les langues livrees.
+TEST_SMS = """package com.filestech.sms.system.safety
+
+class SafetyMessageTextsTest {
+    private companion object {
+        val LANGUES = listOf("en", "fr", "de")
+    }
+}
+"""
+
 base = None
 
 
@@ -115,6 +126,8 @@ def batir():
         # se declenche pas toute seule et ne masque pas le defaut que chaque cas vise.
         ecrire(os.path.join(res(), "values-" + langue, "strings.xml"), DE_SAIN)
         ecrire(os.path.join(res_debug(), "values-" + langue, "strings.xml"), DEBUG)
+    ecrire(chemin("app", "src", "test", "java", "com", "filestech", "sms", "system", "safety",
+                  "SafetyMessageTextsTest.kt"), TEST_SMS)
 
 
 def de(contenu):
@@ -190,6 +203,28 @@ def langue_annoncee_sans_traduction():
     return "offrirait une langue vide"
 
 
+def langue_absente_du_test_des_sms():
+    # Une langue livree mais absente de la liste du test : ses corps de SMS d'urgence ne
+    # seraient verifies par personne, et la suite resterait verte.
+    ecrire(chemin("app", "src", "test", "java", "com", "filestech", "sms", "system", "safety",
+                  "SafetyMessageTextsTest.kt"),
+           TEST_SMS.replace('"en", "fr", "de"', '"en", "fr"'))
+    return "langue de absente de LANGUES"
+
+
+def langue_du_test_non_traduite():
+    ecrire(chemin("app", "src", "test", "java", "com", "filestech", "sms", "system", "safety",
+                  "SafetyMessageTextsTest.kt"),
+           TEST_SMS.replace('"en", "fr", "de"', '"en", "fr", "de", "it"'))
+    return "langue it listee dans LANGUES mais non traduite"
+
+
+def test_des_sms_disparu():
+    os.remove(chemin("app", "src", "test", "java", "com", "filestech", "sms", "system", "safety",
+                     "SafetyMessageTextsTest.kt"))
+    return "les corps de SMS ne sont plus verifies par langue"
+
+
 CAS = [
     ("cle manquante", cle_manquante),
     ("cle en trop", cle_en_trop),
@@ -203,6 +238,9 @@ CAS = [
     ("geste 4 : jumeau debug absent", jumeau_debug_absent),
     ("geste 4 : jumeau debug sans app_name", jumeau_debug_sans_app_name),
     ("reciproque : langue annoncee sans traduction", langue_annoncee_sans_traduction),
+    ("corps de SMS : langue livree hors du test", langue_absente_du_test_des_sms),
+    ("corps de SMS : langue testee non traduite", langue_du_test_non_traduite),
+    ("corps de SMS : le test lui-meme a disparu", test_des_sms_disparu),
 ]
 
 

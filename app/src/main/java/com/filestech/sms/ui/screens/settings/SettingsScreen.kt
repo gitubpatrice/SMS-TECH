@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -82,6 +83,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
+import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
 import com.filestech.sms.ui.util.daySeparatorLabel
@@ -353,6 +355,29 @@ fun SettingsScreen(
                     value = state.appearance.amoledTrueBlack,
                     onChange = { v -> viewModel.update { it.copy(appearance = it.appearance.copy(amoledTrueBlack = v)) } },
                 )
+            }
+
+            // v1.28.12 — LA LANGUE DE L'APPLICATION, enfin atteignable.
+            //
+            // `settings_section_locale` et `settings_language` existaient dans les trois langues
+            // depuis longtemps et n'étaient branchées NULLE PART : des chaînes traduites que
+            // personne ne pouvait lire. Le sélecteur de langue par application existe désormais
+            // (`res/xml/locales_config.xml`), mais il vit dans les réglages d'Android, où
+            // personne ne va le chercher — le déclarer sans y mener, c'est l'offrir à moitié.
+            //
+            // Réservé à Android 13+ : en dessous, la page n'existe pas et l'intent n'ouvrirait
+            // rien. Une entrée qui ne fait rien est pire que pas d'entrée.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                SectionCard(
+                    title = stringResource(R.string.settings_section_locale),
+                    icon = Icons.Outlined.Language,
+                ) {
+                    NavigationRow(
+                        title = stringResource(R.string.settings_language),
+                        description = stringResource(R.string.settings_language_desc),
+                        onClick = { ouvrirLaLangueDeLApplication(ctx) },
+                    )
+                }
             }
 
             SectionCard(
