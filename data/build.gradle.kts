@@ -2,14 +2,13 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.filestech.sms.data"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
@@ -88,6 +87,8 @@ dependencies {
 
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)
+    // Gradle 9 ne fournit plus le lanceur de la plateforme JUnit (« Failed to load JUnit Platform »).
+    testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.junit.jupiter.params)
     testImplementation(libs.truth)
     // v1.27.2 — nécessaires pour tester les gardes de [VaultManager] en JVM : ses collaborateurs

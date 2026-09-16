@@ -1,20 +1,22 @@
 [versions]
-# Build
-agp = "8.13.2"
-kotlin = "2.3.20"
-ksp = "2.3.9"
+# Build — AGP 9 (Kotlin integre a AGP : plus de plugin `org.jetbrains.kotlin.android`).
+# Migre le 2026-09-16, sur le modele d'Agenda Tech, dont l'entree 1.1.1 (57) a passe le job
+# `fdroid build` de leur pipeline avec cette meme chaine — AGP 9.4, Gradle 9.7.1, compileSdk 37.
+agp = "9.4.0"
+# Kotlin plafonne SOUS 2.4.20 : CodeQL 2.27 refuse de compiler a partir de la (« Kotlin version
+# 2.4.20 is too recent »), mesure sur Agenda Tech. `codeql.yml` tourne aussi sur ce depot.
+kotlin = "2.4.10"
+ksp = "2.3.12"
 java = "17"
 
 # AndroidX / Compose
-compose-bom = "2026.06.00"
-# core-ktx/lifecycle plafonnés au dernier palier compatible AGP 8.13 / compileSdk 36.
-# core-ktx 1.19 et lifecycle 2.11 exigent AGP 9.1 + compileSdk 37 (hors périmètre).
-core-ktx = "1.18.0"
+compose-bom = "2026.09.00"
+core-ktx = "1.19.0"
 activity-compose = "1.13.0"
-lifecycle = "2.10.0"
+lifecycle = "2.11.0"
 navigation-compose = "2.9.8"
 datastore = "1.2.1"
-room = "2.8.4"
+room = "2.8.5"
 work = "2.11.2"
 biometric = "1.1.0"
 splashscreen = "1.2.0"
@@ -23,11 +25,12 @@ documentfile = "1.0.1"
 # (alpha 2021, 0 usage confirmé). Lib + alias [androidx-security-crypto] désormais inertes.
 # security-crypto = "1.1.0-alpha06"
 
-# Hilt — plafonné à la dernière version compatible AGP 8.x.
-# Hilt 2.58+ exige AGP 9.0.0+ ; on reste en AGP 8.13.2 (AGP 9 = saut majeur séparé).
-hilt = "2.58"
+# Hilt — 2.59+ exige AGP 9.0.0+, et c'etait LE mur de la migration : aucune version de Hilt ne
+# lisait les metadonnees Kotlin 2.4 en acceptant AGP 8 (mesure le 2026-09-08, quatre combinaisons).
+# AGP 9 leve exactement ce mur.
+hilt = "2.60.1"
 hilt-work = "1.4.0"
-hilt-navigation-compose = "1.3.0"
+hilt-navigation-compose = "1.4.0"
 
 # Coil
 coil = "2.7.0"
@@ -42,7 +45,7 @@ coroutines = "1.11.0"
 kotlinx-serialization = "1.11.0"
 
 # SQLCipher
-sqlcipher = "4.16.0"
+sqlcipher = "4.19.0"
 
 # Logging
 timber = "5.0.1"
@@ -55,6 +58,10 @@ timber = "5.0.1"
 # Tests
 junit = "4.13.2"
 junit5 = "5.11.3"
+# Gradle 9 ne fournit plus le lanceur de la plateforme JUnit : sans lui, la tache de test echoue
+# sur « Failed to load JUnit Platform » AVANT le premier test. La plateforme garde sa propre
+# numerotation tant qu'on reste en JUnit 5 — Jupiter 5.11.3 <-> plateforme 1.11.3.
+junit-platform = "1.11.3"
 mockk = "1.14.11"
 turbine = "1.2.0"
 truth = "1.4.5"
@@ -65,10 +72,13 @@ espresso = "3.6.1"
 
 # Quality
 detekt = "1.23.8"
-benchmark = "1.3.4"
+# baselineprofile/benchmark 1.5.0 : la 1.3.4 refuse AGP 9 (« Module `:app` is not a supported
+# android module », mesure le 2026-09-16). Le plugin et la bibliotheque macrobenchmark partagent
+# volontairement la meme reference — les desaccorder est une panne classique.
+benchmark = "1.5.0"
 profileinstaller = "1.4.1"
 uiautomator = "2.3.0"
-ktlint-gradle = "12.1.1"
+ktlint-gradle = "14.2.0"
 
 [libraries]
 # AndroidX core
@@ -159,6 +169,7 @@ junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params", vers
 # Robolectric sont en JUnit 4 (`@RunWith`, `@Rule`). Le moteur vintage exécute ces classes-là sous
 # la même plateforme, sans toucher aux ~40 fichiers Jupiter existants.
 junit-vintage-engine = { module = "org.junit.vintage:junit-vintage-engine", version.ref = "junit5" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 truth = { module = "com.google.truth:truth", version.ref = "truth" }
@@ -176,10 +187,8 @@ androidx-uiautomator = { module = "androidx.test.uiautomator:uiautomator", versi
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
