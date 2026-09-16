@@ -29,6 +29,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   requests and tags: Dependabot now moves SQLCipher and Room on its own, and nothing else checks
   that an existing encrypted database still opens.
 
+### Changed
+- Dependencies raised now that the AGP 9 ceilings are gone: documentfile 1.0.1 -> 1.1.0 (used by the
+  backup export and the attachment picker), Robolectric 4.16.1 -> 4.17, Espresso 3.6.1 -> 3.7.0,
+  uiautomator 2.3.0 -> 2.4.0. Verified as one change rather than four: 754 unit tests and the 212
+  instrumented ones pass, and the upgrade job proves an existing encrypted database still opens.
+
 ## [1.28.10] — 2026-09-16
 
 *Build-only release: no feature, no behaviour change. The toolchain moves, the app does not.*
