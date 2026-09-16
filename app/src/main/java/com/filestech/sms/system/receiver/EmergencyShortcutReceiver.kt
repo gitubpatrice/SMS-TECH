@@ -34,9 +34,9 @@ import timber.log.Timber
  * **Sécurité** :
  *  - `exported = false` dans le Manifest — uniquement le PendingIntent de
  *    SMS Tech peut déclencher ces actions, pas une autre app.
- *  - Les numéros ne peuvent PAS être détournés : ils sont codés en dur ici,
- *    jamais passés en extra modifiable, et re-filtrés par la liste blanche
- *    d'`EmergencyCallHelper`.
+ *  - Les numéros ne peuvent PAS être détournés : ils viennent d'un ensemble
+ *    FERMÉ connu à la compilation (`EmergencyNumbers`), jamais d'un extra
+ *    modifiable, et sont re-filtrés par la liste blanche d'`EmergencyCallHelper`.
  */
 @AndroidEntryPoint
 class EmergencyShortcutReceiver : BroadcastReceiver() {
@@ -45,7 +45,14 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
         when (intent.action) {
             // v1.26.1 (audit B5) — `ACTION_TRIGGER_EMERGENCY` retiree, cf. le KDoc de tete.
             ACTION_DIAL_112 -> handleDial(context, EMERGENCY_NUMBER_EU)
-            ACTION_DIAL_POLICE -> handleDial(context, EMERGENCY_NUMBER_POLICE_FR)
+            // v1.28.12 — le numéro de police dépend du PAYS OÙ LE TÉLÉPHONE EST ENREGISTRÉ :
+            // 17 en France, 110 en Allemagne, 091 en Espagne. Il n'est toujours pas passé en
+            // extra — il est résolu ici, à partir d'un ensemble fermé connu à la compilation,
+            // puis re-filtré par la liste blanche d'`EmergencyCallHelper`. Cf. [EmergencyNumbers].
+            ACTION_DIAL_POLICE -> handleDial(
+                context,
+                com.filestech.sms.system.emergency.EmergencyNumbers.police(context),
+            )
             else -> Timber.w("EmergencyShortcutReceiver: unknown action %s", intent.action)
         }
     }
@@ -61,10 +68,8 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        /** Numéro européen unifié pour les urgences (24/24). */
+        /** Numéro européen unifié pour les urgences (24/24). Le seul qui ne dépend pas du pays. */
         const val EMERGENCY_NUMBER_EU = "112"
-        /** Police nationale française (depuis France). */
-        const val EMERGENCY_NUMBER_POLICE_FR = "17"
 
         const val ACTION_DIAL_112 = "com.filestech.sms.SHORTCUT_DIAL_112"
         const val ACTION_DIAL_POLICE = "com.filestech.sms.SHORTCUT_DIAL_POLICE"

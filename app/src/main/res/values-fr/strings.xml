@@ -215,10 +215,12 @@
     <string name="settings_emergency_include_location_denied">Permission de localisation refusée. Inclusion GPS désactivée.</string>
     <!-- v1.14.7 — string emergency_topbar_warning_cd retirée (orpheline, jamais branchée). -->
     <!-- v1.14.1 — redesign page urgence complète : 4 tuiles couleurs + désactiver + tap-notif-ouvre-page -->
-    <string name="emergency_call_112_label">SOS européen</string>
-    <string name="emergency_call_15_label">SAMU (médical)</string>
-    <string name="emergency_call_17_label">Police</string>
-    <string name="emergency_call_18_label">Pompiers</string>
+    <!-- v1.28.12 — un libellé par SERVICE, plus par numéro : le même service est le 17 en
+         France, le 110 en Allemagne, le 091 en Espagne, et la tuile affiche déjà le numéro. -->
+    <string name="emergency_call_eu_label">Urgence européenne</string>
+    <string name="emergency_call_police_label">Police</string>
+    <string name="emergency_call_fire_label">Pompiers</string>
+    <string name="emergency_call_medical_label">Urgence médicale</string>
     <string name="emergency_section_call_title">Appeler directement</string>
     <string name="emergency_section_sms_title">Envoyer un SOS aux proches</string>
     <string name="emergency_section_other_title">Autres actions</string>
@@ -320,17 +322,18 @@
     <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112/17). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — raccourci urgence</string>
     <string name="emergency_shortcut_notif_text">Tapez pour ouvrir la page urgence, ou appeler le 112.</string>
-    <string name="emergency_shortcut_action_112">Appeler 112</string>
+    <!-- v1.28.12 — un seul libellé pour les deux actions rapides : le numéro de police change
+         de pays en pays, il ne peut donc plus être écrit dans la chaîne. -->
+    <string name="emergency_shortcut_action_dial">Appeler %1$s</string>
     <string name="settings_emergency_shortcut_title">Raccourci écran verrouillé</string>
     <string name="emergency_saved_enabled">Mode urgence activé</string>
     <string name="emergency_saved_disabled">Mode urgence désactivé</string>
     <string name="emergency_setup_unsaved_body">Le mode urgence n\'est pas encore enregistré. Quitter maintenant le laisserait dans son état précédent.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action URGENCE en un tap a été retirée. -->
     <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112/17), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
-    <string name="emergency_shortcut_no_app_to_dial">Aucune application pour composer le 112</string>
-    <string name="emergency_shortcut_action_police">Appeler 17</string>
-    <string name="settings_emergency_call_police_title">Action rapide Police 17 sur la notif lock-screen</string>
-    <string name="settings_emergency_call_police_desc">Ajoute une action rapide « Appeler 17 » sur la notification persistante d\'urgence. Le bouton 17 reste toujours visible dans la page Mode urgence in-app, quel que soit ce réglage. Désactivé par défaut.</string>
+    <string name="emergency_shortcut_no_app_to_dial">Aucune application pour passer l\'appel</string>
+    <string name="settings_emergency_call_police_title">Action rapide Police sur la notif lock-screen</string>
+    <string name="settings_emergency_call_police_desc">Ajoute une action rapide « Police » sur la notification persistante d\'urgence. Le numéro est celui du pays où votre téléphone est connecté. Le bouton Police reste toujours visible dans la page Mode urgence in-app, quel que soit ce réglage. Désactivé par défaut.</string>
 
     <!-- Backup / restore -->
     <string name="backup_explainer">La sauvegarde chiffrée utilise AES-256-GCM et PBKDF2-HMAC-SHA512. Choisissez une phrase de passe solide — sans elle le fichier est irrécupérable.</string>

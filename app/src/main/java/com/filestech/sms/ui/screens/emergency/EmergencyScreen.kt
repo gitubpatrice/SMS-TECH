@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.screens.emergency
 
 import android.Manifest
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyConfig
 import com.filestech.sms.domain.usecase.TriggerEmergencyUseCase
+import com.filestech.sms.system.emergency.EmergencyNumbers
 import com.filestech.sms.ui.components.EmergencyHoldButton
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
@@ -214,34 +216,24 @@ fun EmergencyScreen(
             )
             Spacer(Modifier.height(12.dp))
 
-            // 4 tuiles couleurs FR/EU + 1 tuile proches.
-            EmergencyCallTile(
-                number = "112",
-                label = stringResource(R.string.emergency_call_112_label),
-                containerColor = com.filestech.sms.ui.theme.BrandDanger,
-                onClick = { callEmergency("112") },
-            )
-            Spacer(Modifier.height(8.dp))
-            EmergencyCallTile(
-                number = "15",
-                label = stringResource(R.string.emergency_call_15_label),
-                containerColor = Color(0xFF00796B), // teal médical
-                onClick = { callEmergency("15") },
-            )
-            Spacer(Modifier.height(8.dp))
-            EmergencyCallTile(
-                number = "17",
-                label = stringResource(R.string.emergency_call_17_label),
-                containerColor = Color(0xFF1565C0), // navy police
-                onClick = { callEmergency("17") },
-            )
-            Spacer(Modifier.height(8.dp))
-            EmergencyCallTile(
-                number = "18",
-                label = stringResource(R.string.emergency_call_18_label),
-                containerColor = Color(0xFFE65100), // orange pompiers
-                onClick = { callEmergency("18") },
-            )
+            // v1.28.12 — les tuiles suivent le PAYS OÙ LE TÉLÉPHONE EST ENREGISTRÉ, et non la
+            // langue de l'application : un germanophone à Paris doit voir le 17, pas le 110.
+            // Le 112 y est toujours, et toujours en premier. Cf. [EmergencyNumbers].
+            //
+            // `remember` parce que la résolution interroge la téléphonie (IPC) : inutile de la
+            // repayer à chaque recomposition. Un changement de pays en cours de route est repris
+            // au retour sur l'écran, ce qui suffit — on ne traverse pas une frontière sans que
+            // l'écran soit quitté.
+            val numerosDUrgence = remember(ctx) { EmergencyNumbers.pour(ctx) }
+            numerosDUrgence.forEachIndexed { index, dial ->
+                if (index > 0) Spacer(Modifier.height(8.dp))
+                EmergencyCallTile(
+                    number = dial.number,
+                    label = stringResource(libelleDuService(dial.service)),
+                    containerColor = couleurDuService(dial.service),
+                    onClick = { callEmergency(dial.number) },
+                )
+            }
 
             // v1.14.1 — Bouton "Appeler un proche" : visible si au moins 1
             // contact SafetyCall configuré. Si 1 contact → call direct, si
@@ -432,6 +424,30 @@ private fun handleCallOutcome(
         com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome.INVALID_NUMBER ->
             scope.launch { snackbarHost.showError(osErrorMsg) }
     }
+}
+
+/**
+ * v1.28.12 — le libellé tient au SERVICE appelé, plus au numéro : le même service porte le 17
+ * en France, le 110 en Allemagne, le 091 en Espagne. Quatre libellés suffisent donc pour tous
+ * les pays de la table, là où il fallait une chaîne par numéro français.
+ */
+@StringRes
+private fun libelleDuService(service: EmergencyNumbers.Service): Int = when (service) {
+    EmergencyNumbers.Service.EUROPEAN -> R.string.emergency_call_eu_label
+    EmergencyNumbers.Service.POLICE -> R.string.emergency_call_police_label
+    EmergencyNumbers.Service.FIRE -> R.string.emergency_call_fire_label
+    EmergencyNumbers.Service.MEDICAL -> R.string.emergency_call_medical_label
+}
+
+/**
+ * Les couleurs d'origine, rattachées elles aussi au service et non plus au numéro français.
+ * Toutes vérifiées WCAG AA ≥ 4.5:1 contre blanc — voir [EmergencyCallTile].
+ */
+private fun couleurDuService(service: EmergencyNumbers.Service): Color = when (service) {
+    EmergencyNumbers.Service.EUROPEAN -> com.filestech.sms.ui.theme.BrandDanger
+    EmergencyNumbers.Service.MEDICAL -> Color(0xFF00796B) // teal médical
+    EmergencyNumbers.Service.POLICE -> Color(0xFF1565C0) // navy police
+    EmergencyNumbers.Service.FIRE -> Color(0xFFE65100) // orange pompiers
 }
 
 /**

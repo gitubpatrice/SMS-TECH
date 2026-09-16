@@ -154,15 +154,23 @@ class EmergencyShortcutNotifier @Inject constructor(
             // page in-app → hold 3s sur EmergencyHoldButton. Trois gestes
             // délibérés au lieu d'un mistap dangereux. Les actions DIAL_112
             // et DIAL_POLICE restent (ACTION_DIAL = composeur, user confirme).
+            // v1.28.12 — un seul libellé « Composer le %s » pour les deux actions : le numéro
+            // de police change de pays en pays, donc il ne peut plus être écrit dans la chaîne.
             .addAction(
                 R.drawable.ic_notification_message,
-                context.getString(R.string.emergency_shortcut_action_112),
+                context.getString(
+                    R.string.emergency_shortcut_action_dial,
+                    EmergencyShortcutReceiver.EMERGENCY_NUMBER_EU,
+                ),
                 dial112PI,
             )
         if (dialPolicePI != null) {
             builder.addAction(
                 R.drawable.ic_notification_message,
-                context.getString(R.string.emergency_shortcut_action_police),
+                context.getString(
+                    R.string.emergency_shortcut_action_dial,
+                    com.filestech.sms.system.emergency.EmergencyNumbers.police(context),
+                ),
                 dialPolicePI,
             )
         }

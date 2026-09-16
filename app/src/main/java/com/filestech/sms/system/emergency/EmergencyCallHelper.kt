@@ -19,9 +19,9 @@ import timber.log.Timber
  *    déclenché côté UI via un `EmergencyHoldButton` qui anti-pocket-dial.
  *
  * **Sécurité** :
- *  - **Whitelist stricte** des numéros : seuls "112" et "17" acceptés. Aucun
- *    paramètre numéro venant de DataStore, intent extra, ou autre source
- *    non-vérifiable. Si un numéro hors whitelist arrive, fail-safe + Timber.w.
+ *  - **Whitelist stricte** des numéros : seuls ceux de [EmergencyNumbers.NUMEROS_AUTORISES]
+ *    sont acceptés. Aucun paramètre numéro venant de DataStore, intent extra, ou autre
+ *    source non-vérifiable. Si un numéro hors whitelist arrive, fail-safe + Timber.w.
  *  - `Intent.FLAG_ACTIVITY_NEW_TASK` posé défensivement (le caller peut être
  *    BroadcastReceiver via EmergencyShortcutReceiver).
  *  - `try/catch` sur SecurityException + ActivityNotFoundException : pas de
@@ -32,22 +32,25 @@ import timber.log.Timber
  * **Hors scope** :
  *  - Pas d'enregistrement de l'appel (RECORD_AUDIO réservé voice MMS).
  *  - Pas de log persistant des appels (rien dans Room, juste Timber).
- *  - Pas de détection automatique du pays (numéros EU=112 + FR=17 hardcodés).
  */
 object EmergencyCallHelper {
 
     /**
-     * Numéros d'urgence autorisés. Hardcodés ici pour empêcher tout chemin
-     * d'attaque "intent extra → CALL n'importe quel numéro premium" depuis
-     * un caller mal intentionné (BroadcastReceiver exported par accident).
+     * Numéros d'urgence autorisés : l'ensemble FERMÉ de [EmergencyNumbers], c'est-à-dire tous
+     * les numéros de sa table, tous pays confondus. L'ensemble reste en dur dans le binaire
+     * pour empêcher le chemin d'attaque "intent extra → CALL n'importe quel numéro premium"
+     * depuis un caller mal intentionné (BroadcastReceiver exporté par accident).
      *
-     * v1.14.1 — ajout 15 (SAMU FR) et 18 (Pompiers FR). 112 reste le SOS
-     * EU unifié. Tous les numéros français sont 24/7/365 gratuits. Ils
-     * sont reconnus par l'OS Android comme "emergency numbers" et peuvent
-     * être composés même quand l'écran est verrouillé sur la plupart des
-     * devices (comportement OS standard).
+     * v1.14.1 — ajout 15 (SAMU FR) et 18 (Pompiers FR). 112 reste le SOS EU unifié.
+     * v1.28.12 — la liste n'est plus française : quelle tuile s'AFFICHE dépend du pays où le
+     * téléphone est enregistré ([EmergencyNumbers.pour]), mais ce que le helper accepte de
+     * composer reste cet ensemble fermé, connu à la compilation.
+     *
+     * Ces numéros sont reconnus par l'OS Android comme "emergency numbers" et peuvent être
+     * composés même quand l'écran est verrouillé sur la plupart des devices (comportement OS
+     * standard).
      */
-    private val ALLOWED_NUMBERS = setOf("15", "17", "18", "112")
+    private val ALLOWED_NUMBERS = EmergencyNumbers.NUMEROS_AUTORISES
 
     enum class CallOutcome {
         /** Appel placé (DIALER ouvert OU CALL_PHONE exécuté). */
