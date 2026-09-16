@@ -171,4 +171,52 @@ class RawKeyMigrationTest {
         assertThat(opensWith(passphrase)).isFalse()
         assertThat(opensWith(rawSpec)).isTrue()
     }
+
+    /** A healthy database exactly as Room has created them since v1.25.0: raw-keyed from birth. */
+    private fun seedRawKeyDb(rows: Int) {
+        dbFile.parentFile?.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(dbFile, rawSpec, null, null).use { db ->
+            db.execSQL("CREATE TABLE t (id INTEGER PRIMARY KEY, body TEXT)")
+            repeat(rows) { db.execSQL("INSERT INTO t (body) VALUES (?)", arrayOf<Any>("m$it")) }
+        }
+    }
+
+    private fun forgetRepairFlags() {
+        context.getSharedPreferences("db_repair", Context.MODE_PRIVATE)
+            .edit()
+            .remove("zero_key_repair_v1240_done_" + dbFile.name)
+            .remove("raw_key_v1250_done_" + dbFile.name)
+            .commit()
+    }
+
+    /**
+     * A healthy raw-keyed database must stay readable even when the repair flag is gone.
+     *
+     * The flag lives in `SharedPreferences` and was written with `apply()`, i.e. asynchronously. A
+     * process killed before that write lands — `adb install -r` does exactly this, and so does the
+     * system reclaiming an app moments after its first launch — loses it while the database itself
+     * is safely on disk.
+     *
+     * What used to happen then: `rekeyIfNeeded` probed the file with the **plain passphrase**, but
+     * every database created since v1.25.0 is encrypted with the **raw key** (`x'<hex>'`), so the
+     * probe was false by construction. The zero-key probe failed too, and the code concluded the
+     * database decrypted with nothing at all — refusing to open a file whose data was intact, at
+     * every launch, with no way out but reinstalling. Measured on an emulator: 5 checks out of 5
+     * passed with the flag present, 0 out of 5 with that single file removed.
+     *
+     * The flag is now an optimisation, not the only thing standing between a user and their
+     * messages. Its twin [LegacyZeroKeyRekey.ensureRawKeyed] always probed both forms — this is the
+     * same correction applied to the path that had been left behind.
+     */
+    @Test
+    fun rawKeyedDb_withoutRepairFlag_isNotDeclaredUnreadable() {
+        seedRawKeyDb(rows = 5)
+        forgetRepairFlags()
+
+        val result = LegacyZeroKeyRekey.rekeyIfNeeded(context, passphrase, dbFile)
+
+        assertThat(result).isEqualTo(LegacyZeroKeyRekey.Result.ALREADY_CORRECT)
+        assertThat(countWith(rawSpec)).isEqualTo(5)
+        assertThat(opensWith(rawSpec)).isTrue()
+    }
 }
