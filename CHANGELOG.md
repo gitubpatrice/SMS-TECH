@@ -3,7 +3,7 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
-## [Unreleased]
+## [1.28.11] — 2026-09-16
 
 ### Fixed
 - **A healthy encrypted database could be declared unreadable because one preferences file was
@@ -13,9 +13,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   written with `apply()`, i.e. asynchronously. A process killed before that write reached the disk
   lost the marker while the database itself was intact, and the app then refused to open the user's
   own messages and vault at every launch, with no way out but reinstalling. The probe now accepts
-  either form of the key, as its twin `ensureRawKeyed` always did, and the markers are committed
-  synchronously. Measured on an emulator: 5 checks out of 5 passed with the marker present, 0 out of
-  5 with that single file removed. Regression test:
+  either form of the key — the raw one first, as its twin `ensureRawKeyed` always did — and the
+  markers are committed synchronously. Measured on an emulator: 5 checks out of 5 passed with the
+  marker present, 0 out of 5 with that single file removed. Regression test:
   `RawKeyMigrationTest.rawKeyedDb_withoutRepairFlag_isNotDeclaredUnreadable`.
 
 ### Added

@@ -1,0 +1,3 @@
+A repair path could refuse to open a perfectly healthy encrypted database when a single preferences file went missing, leaving neither the messages nor the vault reachable, with no way back but reinstalling. Fixed, with a regression test.
+
+First release whose upgrade is checked by machine: a job installs the previous version, fills its encrypted database, installs this one over it, and reads everything back.

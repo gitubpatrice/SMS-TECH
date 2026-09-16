@@ -1,0 +1,3 @@
+Un chemin de réparation pouvait refuser d'ouvrir une base chiffrée parfaitement saine si un seul fichier de préférences disparaissait : ni les messages ni le coffre n'étaient plus accessibles, sans autre issue qu'une réinstallation. Corrigé, avec un test de régression.
+
+Première version dont la mise à jour est vérifiée par la machine : un contrôle installe la version précédente, remplit sa base chiffrée, installe celle-ci par-dessus et relit tout.
