@@ -61,6 +61,11 @@ updates:
         versions: [">= 2.4.20"]
       - dependency-name: "org.jetbrains.kotlin.*"
         versions: [">= 2.4.20"]
+      # Limite assumee de ce plafond : depuis AGP 9, une partie de la chaine Kotlin est apportee
+      # par AGP lui-meme, et ces deux regles ne la couvrent pas. Une montee d'AGP pourrait donc
+      # embarquer un Kotlin >= 2.4.20 sans etre bloquee ici. On NE plafonne PAS AGP pour autant :
+      # ce serait re-geler toute la chaine pour une contrainte non verifiee sur ce depot. Le jour
+      # ou une PR AGP echoue sur CodeQL, la cause sera connue d'avance.
     commit-message:
       prefix: "deps"
       include: "scope"

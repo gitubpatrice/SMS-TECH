@@ -153,6 +153,24 @@ class SystemProviderContractTest {
     @Test
     fun laDateDUnMmsEstEnSecondes() {
         // Aucune ecriture : on lit une ligne MMS reelle deja presente sur l'appareil.
+        //
+        // ⚠️ AGP 9 ETIQUETTE CE SAUT EN « FAILED » DANS LE RAPPORT, la ou AGP 8.13 ecrivait
+        // « SKIPPED ». Mesure le 2026-09-16 par A/B sur le MEME emulateur : sur `main` (AGP
+        // 8.13.2) les cinq tests de cette classe ressortent SKIPPED sans le role SMS, sur la
+        // chaine AGP 9.4 ils ressortent FAILED, avec `AssumptionViolatedException` en message.
+        //
+        // La CI NE VIRE PAS au rouge pour autant : son verdict vient du code de sortie de
+        // l'instrumentation, et le runner ne compte pas une assumption comme un echec (mesure :
+        // `test-result-exit-code.txt` = 0 avec cinq assumptions non tenues). Seul le RAPPORT
+        // televerse en artefact le montre en rouge. Ne pas partir en chasse d'une regression sur
+        // cette base : verifier d'abord si le message est une `AssumptionViolatedException`.
+        //
+        // Defaut d'outillage constate au passage, meme mesure : quand plusieurs assumptions
+        // tombent, le listener d'AGP 9 leve « NullPointerException: Element at index 1 is null »
+        // (`AndroidTestResultListener.executionFinished`), `test-result.pb` reste VIDE et tout le
+        // resultat de la suite est perdu. Un run filtre par `-Pandroid.testInstrumentationRunner
+        // Arguments.class=...` peut donc afficher BUILD SUCCESSFUL en ayant des tests en echec :
+        // compter les cas dans le XML, ne jamais se fier au seul code de retour.
         val probe = firstExistingMms()
         assumeTrue("aucun MMS sur cet appareil", probe != null)
         val (uri, rawDate) = probe!!
