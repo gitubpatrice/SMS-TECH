@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 import java.util.Locale
 
 /**
- * v1.28.12 — **les textes qui PARTENT, dans les trois langues, tels qu'ils sortiront.**
+ * v1.28.12 — **les textes qui PARTENT, dans chaque langue livrée, tels qu'ils sortiront.**
  *
  * Ce que ce fichier remplace
  * ---------------------------
@@ -38,7 +38,7 @@ class SafetyMessageTextsTest {
 
     private companion object {
         /** Les langues livrées. En ajouter une ici quand `values-XX/` apparaît. */
-        val LANGUES = listOf("en", "fr", "de", "it")
+        val LANGUES = listOf("en", "fr", "de", "it", "es")
 
         /** Une URL Maps réaliste : elle compte dans le budget de caractères du SMS. */
         const val URL_MAPS = "https://maps.google.com/?q=48.85661,2.35222"
@@ -182,7 +182,10 @@ class SafetyMessageTextsTest {
                 // alors pour une raison qui n'a rien à voir avec les SMS.
                 assertWithMessage(
                     "%s : %s segments pour « %s » (hors GSM-7 : %s)",
-                    l.langue, segments(texte), texte, hors,
+                    l.langue,
+                    segments(texte),
+                    texte,
+                    hors,
                 ).that(segments(texte)).isAtMost(SEGMENTS_MAX)
             }
         }

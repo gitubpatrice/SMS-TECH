@@ -66,6 +66,7 @@
     <string name="voice_confirm_body">La registrazione sarà inviata come MMS al destinatario.</string>
     <plurals name="thread_confirm_attachments_body">
         <item quantity="one">%1$d allegato sarà inviato come MMS.</item>
+        <item quantity="many">%1$d allegati saranno inviati in un unico MMS.</item>
         <item quantity="other">%1$d allegati saranno inviati in un unico MMS.</item>
     </plurals>
     <string name="settings_app_lock">Blocco app</string>
@@ -471,6 +472,7 @@
     <string name="settings_safety_call_im_ok_stops_relances">Safety Call disattivato. Non verrà inviato nessun altro messaggio.</string>
     <plurals name="settings_safety_call_triggered_state">
         <item quantity="one">Allarme inviato — %1$d messaggio su %2$d</item>
+        <item quantity="many">Allarme inviato — %1$d messaggi su %2$d</item>
         <item quantity="other">Allarme inviato — %1$d messaggi su %2$d</item>
     </plurals>
     <string name="settings_safety_call_triggered_hint">I richiami vengono inviati ogni 15 minuti. Tocchi «Sto bene» per fermarli.</string>
@@ -520,6 +522,7 @@
     <string name="safety_call_sequence_title">SMS Tech — allarme inviato</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d messaggio su %2$d inviato ai suoi contatti. Tocchi se sta bene: i richiami si fermeranno.</item>
+        <item quantity="many">%1$d messaggi su %2$d inviati ai suoi contatti. Tocchi se sta bene: i richiami si fermeranno.</item>
         <item quantity="other">%1$d messaggi su %2$d inviati ai suoi contatti. Tocchi se sta bene: i richiami si fermeranno.</item>
     </plurals>
     <string name="safety_call_sequence_title_sending">SMS Tech — invio dell\'allarme</string>
@@ -527,6 +530,7 @@
     <string name="safety_call_sequence_title_done">SMS Tech — allarme inviato, Safety Call disattivato</string>
     <plurals name="safety_call_sequence_body_done">
         <item quantity="one">%1$d messaggio su %2$d è stato inviato ai suoi contatti. Safety Call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
+        <item quantity="many">Tutti i %1$d messaggi sono stati inviati ai suoi contatti. Safety Call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
         <item quantity="other">Tutti i %1$d messaggi sono stati inviati ai suoi contatti. Safety Call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
     </plurals>
     <string name="safety_call_notif_action_rearm">Riattiva</string>
@@ -541,6 +545,7 @@
     <string name="safety_call_history_empty">Nessuno scatto registrato.</string>
     <plurals name="safety_call_history_count">
         <item quantity="one">%1$d messaggio su %2$d inviato</item>
+        <item quantity="many">%1$d messaggi su %2$d inviati</item>
         <item quantity="other">%1$d messaggi su %2$d inviati</item>
     </plurals>
     <string name="safety_call_history_recipients">Inviato a: %1$s</string>
@@ -688,6 +693,7 @@
     <string name="settings_nuke_residue_title">Eliminazione incompleta</string>
     <plurals name="settings_nuke_residue_body">
         <item quantity="one">%1$d conversazione è rimasta nell\'archivio messaggi del telefono: il sistema ha rifiutato di eliminarla e tornerà alla sincronizzazione successiva. Di solito la causa è che SMS Tech non è l\'app SMS predefinita.</item>
+        <item quantity="many">%1$d conversazioni sono rimaste nell\'archivio messaggi del telefono: il sistema ha rifiutato di eliminarle e torneranno alla sincronizzazione successiva. Di solito la causa è che SMS Tech non è l\'app SMS predefinita.</item>
         <item quantity="other">%1$d conversazioni sono rimaste nell\'archivio messaggi del telefono: il sistema ha rifiutato di eliminarle e torneranno alla sincronizzazione successiva. Di solito la causa è che SMS Tech non è l\'app SMS predefinita.</item>
     </plurals>
     <!-- v1.28.9 (septieme note d'Andrew, constat 2) — ne pas savoir n'est pas « rien a effacer ». -->
@@ -930,20 +936,24 @@
     <!-- v1.14.8 R4 — floating chip shown when new messages arrive while scrolled up. -->
     <plurals name="thread_unseen_messages">
         <item quantity="one">↓ %d nuovo messaggio</item>
+        <item quantity="many">↓ %d nuovi messaggi</item>
         <item quantity="other">↓ %d nuovi messaggi</item>
     </plurals>
 
     <!-- v1.13.0 — plurals for multi-selection counts -->
     <plurals name="conversations_selection_count">
         <item quantity="one">%d selezionata</item>
+        <item quantity="many">%d selezionate</item>
         <item quantity="other">%d selezionate</item>
     </plurals>
     <plurals name="vault_bulk_move_in_done">
         <item quantity="one">%d conversazione spostata nella cassaforte</item>
+        <item quantity="many">%d conversazioni spostate nella cassaforte</item>
         <item quantity="other">%d conversazioni spostate nella cassaforte</item>
     </plurals>
     <plurals name="vault_bulk_move_out_done">
         <item quantity="one">%d conversazione tolta dalla cassaforte</item>
+        <item quantity="many">%d conversazioni tolte dalla cassaforte</item>
         <item quantity="other">%d conversazioni tolte dalla cassaforte</item>
     </plurals>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
@@ -1023,10 +1033,12 @@
     <string name="safety_duration_less_than_hour">meno di un\'ora</string>
     <plurals name="safety_duration_hours">
         <item quantity="one">%1$d ora</item>
+        <item quantity="many">%1$d ore</item>
         <item quantity="other">%1$d ore</item>
     </plurals>
     <plurals name="safety_duration_days">
         <item quantity="one">%1$d giorno</item>
+        <item quantity="many">%1$d giorni</item>
         <item quantity="other">%1$d giorni</item>
     </plurals>
 </resources>

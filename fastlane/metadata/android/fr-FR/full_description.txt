@@ -18,7 +18,7 @@ SMS Tech est une application SMS / MMS pour Android, sans publicité ni traceur.
 <li>Export d'une conversation en PDF pour archive</li>
 <li>Sauvegarde locale chiffrée avec une passphrase distincte du PIN</li>
 <li>Thèmes — Clair / Sombre / AMOLED / "Dark Tech" ardoise bleutée</li>
-<li>Interface en anglais, en français, en allemand et en italien</li>
+<li>Interface en anglais, en français, en allemand, en italien et en espagnol</li>
 <li>Option dans Réglages → Envoi → "Confirmer avant envoi" pour exiger une confirmation avant tout SMS, MMS ou pièce jointe</li>
 </ul>
 

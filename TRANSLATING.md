@@ -1,7 +1,8 @@
 # Translating SMS Tech
 
-SMS Tech ships in **English** (source) and **French**. This page is for anyone adding or
-correcting a language — no Android knowledge required beyond editing an XML file.
+SMS Tech ships in **English** (the source), **French**, **German**, **Italian** and **Spanish**.
+This page is for anyone adding or correcting a language — no Android knowledge required beyond
+editing an XML file.
 
 > **Honesty first.** The German, Italian and Spanish translations were produced by the maintainer
 > with machine assistance and **have not been reviewed by a native speaker**. They are offered
@@ -19,14 +20,14 @@ correcting a language — no Android knowledge required beyond editing an XML fi
 | `app/src/debug/res/values-<lang>/strings.xml` | debug-build app name only (see below) |
 | `fastlane/metadata/android/<locale>/` | the F-Droid / store listing |
 
-There are **783 keys**: 773 `<string>` and 10 `<plurals>`. No string is marked
-`translatable="false"`, and the app has no hardcoded text — everything you see on screen comes
-from these files.
+There are **796 keys**: 784 `<string>` and 12 `<plurals>`. No string is marked
+`translatable="false"`, and the app has no hardcoded text — everything you see on screen, **and
+every SMS it sends**, comes from these files.
 
-## Adding a language: the four gestures
+## Adding a language: the five gestures
 
-They are **solidary** — doing three of the four ships a language that does not work. A CI check
-enforces all four (see *Continuous integration* below), so a partial change cannot be merged.
+They are **solidary** — doing four of the five ships a language that does not work. A CI check
+enforces all five (see *Continuous integration* below), so a partial change cannot be merged.
 
 1. **Translate** `app/src/main/res/values-<lang>/strings.xml`, starting from the English file.
 2. **Declare the locale** in `app/build.gradle.kts` → `androidResources { localeFilters }`.
@@ -37,6 +38,10 @@ enforces all four (see *Continuous integration* below), so a partial change cann
 4. **Create** `app/src/debug/res/values-<lang>/strings.xml` with just `app_name`, set to
    `SMS Tech Debug`. Without it, a debug build installed on a device in your language is named
    exactly like the release build, and the two become impossible to tell apart.
+5. **Add your language code** to `LANGUES` in
+   `app/src/test/java/com/filestech/sms/system/safety/SafetyMessageTextsTest.kt`. That test walks
+   the SMS the app actually sends, language by language, against the real resources. It carries
+   its own list, so a language missing from it ships with **none** of those checks applied to it.
 
 ## Rules that are not style preferences
 
@@ -64,30 +69,53 @@ Italian and Spanish also use `many`. If you are unsure, add the category the bui
 **Do not translate these**, they are names: `SMS Tech`, `Safety Call`, and protocol words that are
 the same everywhere in a phone's UI (`SMS`, `MMS`, `PIN`, `GPS`, `PDF`).
 
+## The strings that leave the phone
+
+The keys starting with `safety_sms_`, plus `emergency_i_am_ok_body`, are **not screen labels**.
+They are the SMS that go out when someone holds the emergency button for three seconds, or when
+Safety Call decides the phone has not been touched for long enough. Two rules apply to them that
+apply to nothing else:
+
+- **Two SMS segments, maximum.** A segment holds 160 characters in the GSM-7 alphabet, but only
+  **70** as soon as one single character falls outside it — and the emergency ones already spend a
+  segment on the Maps URL. Every extra segment is another SMS billed, and another chance of
+  arriving truncated in weak coverage, which is the exact situation these messages exist for.
+  This is measured, not advised: `SafetyMessageTextsTest` fails the build past two.
+- **Write your language correctly anyway.** Spanish `ubicación` and Polish `proszę` are outside
+  GSM-7 and *should* be: dropping the accents to save a segment would be worse than the segment.
+  The cap has room for that. What it does not have room for is a long sentence.
+
+An em dash (`—`) costs the whole message its GSM-7 encoding for nothing. Use a plain hyphen.
+The alert triangle `⚠️` at the start of the two urgent templates is deliberate and stays.
+
 ## Glossary — terms that must not drift
 
 A handful of words carry the app's meaning and appear in dozens of strings. Pick **one** word per
 concept in your language and use it everywhere. The two worst offenders are *vault* (69 strings)
 and *emergency* (45): a synonym used halfway through makes users think there are two features.
 
-| English | Occurrences | French | German |
-|---|---|---|---|
-| vault | 69 | Coffre-fort | Tresor |
-| emergency (mode) | 45 | mode urgence | Notfallmodus |
-| **EMERGENCY** (the big button) | — | URGENCE | NOTRUF |
-| Safety Call | 22 | *Safety call* (kept) | *Safety Call* (kept) |
-| app lock | 23 | verrouillage | App-Sperre |
-| decoy mode | 6 | mode leurre | Tarnmodus |
-| panic code | 8 | code panique | Panikcode |
-| passphrase | 14 | phrase de passe | Passphrase |
-| conversation | 47 | conversation | Unterhaltung |
-| attachment | — | pièce jointe | Anhang |
-| backup | 14 | sauvegarde | Sicherung |
+| English | Occurrences | French | German | Italian | Spanish |
+|---|---|---|---|---|---|
+| vault | 69 | Coffre-fort | Tresor | Cassaforte | Caja fuerte |
+| emergency (mode) | 45 | mode urgence | Notfallmodus | modalità emergenza | modo emergencia |
+| **EMERGENCY** (the big button) | — | URGENCE | NOTRUF | EMERGENZA | EMERGENCIA |
+| Safety Call | 22 | *Safety call* (kept) | *Safety Call* (kept) | *Safety Call* (kept) | *Safety Call* (kept) |
+| app lock | 23 | verrouillage | App-Sperre | blocco dell'app | bloqueo de la app |
+| decoy mode | 6 | mode leurre | Tarnmodus | modalità esca | modo señuelo |
+| panic code | 8 | code panique | Panikcode | codice di panico | código de pánico |
+| passphrase | 14 | phrase de passe | Passphrase | passphrase | frase de contraseña |
+| conversation | 47 | conversation | Unterhaltung | conversazione | conversación |
+| attachment | — | pièce jointe | Anhang | allegato | archivo adjunto |
+| backup | 14 | sauvegarde | Sicherung | backup | copia de seguridad |
 
-**Register**: French uses the formal *vous*, German the formal *Sie*. The app talks about
-emergencies, coercion and legal terms, and a casual register reads wrong there. Match the formality
-of your language's serious-software convention rather than copying English, which has no choice to
-make.
+**Register: the interface is formal, the SMS are not.** French uses *vous*, German *Sie*, Italian
+*Lei*, Spanish *usted*. The app talks about emergencies, coercion and legal terms, and a casual
+register reads wrong there. Match the formality of your language's serious-software convention
+rather than copying English, which has no choice to make.
+
+The `safety_sms_*` bodies are the exception, and it is not an inconsistency: **the speaker there is
+the user, writing to their own family**. All four languages use the familiar form in them — *tu*,
+*du*, *tu*, *tú*. Keep that split.
 
 **Strings that do not forgive an approximation.** Translate these slowly, and prefer a plain,
 unambiguous wording over an elegant one — someone may read them in a situation that matters:
@@ -115,11 +143,16 @@ translate. Two hard caps, counted in **bytes**, not characters — an accented l
 | `full_description.txt` | 4000 |
 | `changelogs/<versionCode>.txt` | **500** |
 
+Please end `full_description.txt` with the same short paragraph the German, Italian and
+Spanish listings carry: who wrote the translation, that no native speaker reviewed it, and
+where to report what reads wrong. A store page is read by people deciding whether to trust
+the app; a translation that hides its own provenance is a bad way to start.
+
 ## Continuous integration
 
 `.github/scripts/i18n-parite.sh` runs on every build. It **fails** — it does not warn — when a
 language drifts from the English source: a missing or extra key, a missing plural category, a
-format placeholder that changed, or one of the four gestures above left undone.
+format placeholder that changed, or one of the five gestures above left undone.
 
 This is deliberate. The app changes with every release, and a translation that can silently fall
 behind is worse than no translation, because it looks current. You can run it yourself before
@@ -131,5 +164,5 @@ pushing:
 
 ## Thank you
 
-Translating 783 strings is real work, and it is the difference between an app someone can use and
+Translating 796 strings is real work, and it is the difference between an app someone can use and
 one they close. It is appreciated.

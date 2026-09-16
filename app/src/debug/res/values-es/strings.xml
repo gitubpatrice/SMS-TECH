@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.28.12 — jumeau espagnol de `src/debug/res/values/strings.xml`.
+
+  Meme raison que les jumeaux francais, allemand et italien : sur un appareil en espagnol,
+  `src/main/res/values-es/strings.xml` redefinit `app_name` et l'emporte sur le `values/` du
+  source set debug — la qualification de langue prime sur le source set. Sans ce fichier, la
+  debug et la release porteraient le meme nom et la meme icone, et rien ne permettrait de les
+  distinguer sur l'ecran d'accueil.
+
+  Cf. le jumeau francais : une session de test entiere a deja ete menee sur la mauvaise
+  application faute de ce fichier.
+-->
+<resources>
+    <string name="app_name">SMS Tech (debug)</string>
+</resources>
