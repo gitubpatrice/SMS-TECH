@@ -299,15 +299,15 @@
     <string name="appearance_saved">Darstellung aktualisiert</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Betrugserkennung (offline)</string>
-    <string name="settings_smishing_detection_desc">Markiert verdächtige eingehende SMS (gekürzte Links, Dringlichkeitsformeln, Mehrwertnummern, täuschend ähnliche Domains). 100 % lokal, keine Cloud. Fehlalarme sind möglich.</string>
+    <string name="settings_smishing_detection_desc">Markiert verdächtige eingehende SMS (gekürzte Links, Dringlichkeitsformeln, Mehrwertnummern, täuschend ähnliche Domains). Die Nummern- und Domainlisten sind französisch. 100 % lokal, keine Cloud. Fehlalarme sind möglich.</string>
     <string name="smishing_banner_title">⚠️ Möglicherweise betrügerisch</string>
     <string name="smishing_banner_subtitle">Tippen, um den Grund zu sehen</string>
     <string name="smishing_dialog_title">Warum diese Warnung?</string>
     <string name="smishing_dialog_intro">SMS Tech hat in dieser Nachricht die folgenden verdächtigen Signale erkannt. Kein SMS-Inhalt wurde irgendwohin gesendet — alles wird lokal berechnet.</string>
     <string name="smishing_reason_url_shortener">Gekürzter Link (bit.ly, t.co, tinyurl…). Kurzlinks können das wahre Ziel verbergen — prüfen Sie es, bevor Sie tippen.</string>
     <string name="smishing_reason_urgency">Dringlichkeits- oder Druckformeln (dringend, läuft ab, hier klicken…). Eine gängige Social-Engineering-Taktik, um Panik auszulösen.</string>
-    <string name="smishing_reason_premium">Mehrwertdienst-Rufnummer (3xxx, 0899xxx, 081x…). Anrufe bei diesen Nummern sind teuer und oft Teil eines Betrugs.</string>
-    <string name="smishing_reason_typosquatting">Täuschend ähnliche Domain (z. B. "e1ster.de" statt "elster.de"). Geben Sie offizielle Adressen immer von Hand ein.</string>
+    <string name="smishing_reason_premium">Mehrwertdienst-Rufnummer im französischen Format (3xxx, 0899xxx, 081x…). Anrufe bei diesen Nummern sind teuer und oft Teil eines Betrugs.</string>
+    <string name="smishing_reason_typosquatting">Täuschend ähnliche Domain (z. B. „paypa1.com“ statt „paypal.com“). Die überwachten Seiten sind überwiegend französisch. Geben Sie offizielle Adressen immer von Hand ein.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Markenblau (Standard)</string>
@@ -327,7 +327,8 @@
     <!-- v1.12.0 — Emergency shortcut (lock-screen persistent notification) -->
     <string name="channel_emergency_shortcut_label">Notruf-Verknüpfung</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
-    <string name="channel_emergency_shortcut_desc">Stille dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112/17). Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen, und halten Sie dann 3 s, um den Alarm zu senden.</string>
+    <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
+    <string name="channel_emergency_shortcut_desc">Stille dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112 und die Polizeinummer Ihres Landes). Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen, und halten Sie dann 3 s, um den Alarm zu senden.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — Notruf-Verknüpfung</string>
     <string name="emergency_shortcut_notif_text">Tippen, um die Notrufseite zu öffnen, oder 112 wählen.</string>
     <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
@@ -338,7 +339,7 @@
     <string name="emergency_saved_disabled">Notfallmodus deaktiviert</string>
     <string name="emergency_setup_unsaved_body">Der Notfallmodus ist noch nicht gespeichert. Wenn Sie jetzt gehen, bleibt er in seinem bisherigen Zustand.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
-    <string name="settings_emergency_shortcut_desc">Zeigt eine dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112/17), die ohne Entsperren erreichbar ist. Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen. Standardmäßig aus.</string>
+    <string name="settings_emergency_shortcut_desc">Zeigt eine dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112 und die Polizeinummer Ihres Landes), die ohne Entsperren erreichbar ist. Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen. Standardmäßig aus.</string>
     <string name="emergency_shortcut_no_app_to_dial">Keine App installiert, um den Anruf zu tätigen</string>
     <string name="settings_emergency_call_police_title">Kurzaktion Polizei in der Sperrbildschirm-Benachrichtigung</string>
     <string name="settings_emergency_call_police_desc">Fügt der dauerhaften Notruf-Benachrichtigung auf dem Sperrbildschirm eine Kurzaktion "Polizei" hinzu. Die Nummer ist die des Landes, mit dem Ihr Telefon verbunden ist. Die Polizei-Schaltfläche ist auf der Notrufseite in der App unabhängig von dieser Einstellung immer sichtbar. Standardmäßig aus.</string>

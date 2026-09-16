@@ -9,7 +9,9 @@ import androidx.core.content.ContextCompat
 import timber.log.Timber
 
 /**
- * v1.14.0 — Helper centralisé pour les appels d'urgence 112 / 17.
+ * v1.14.0 — Helper centralisé pour les appels d'urgence.
+ * v1.28.12 — les numéros ne sont plus français : ils viennent de [EmergencyNumbers],
+ * selon le pays où le téléphone est enregistré.
  *
  * Deux flows possibles selon `EmergencyCallBehavior` :
  *  - `DIALER_ONLY` → [openDialer] : `ACTION_DIAL` ouvre le composeur pré-rempli,

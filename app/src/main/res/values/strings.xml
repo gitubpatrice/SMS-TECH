@@ -299,15 +299,15 @@
     <string name="appearance_saved">Appearance updated</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Scam detection (offline)</string>
-    <string name="settings_smishing_detection_desc">Flags suspicious incoming SMS (shortened URLs, urgency wording, premium-rate numbers, lookalike domains). 100% local, no cloud. May produce false positives.</string>
+    <string name="settings_smishing_detection_desc">Flags suspicious incoming SMS (shortened URLs, urgency wording, premium-rate numbers, lookalike domains). The number and domain lists are French. 100% local, no cloud. May produce false positives.</string>
     <string name="smishing_banner_title">⚠️ Possibly fraudulent</string>
     <string name="smishing_banner_subtitle">Tap to see why</string>
     <string name="smishing_dialog_title">Why this warning?</string>
     <string name="smishing_dialog_intro">SMS Tech detected the following suspicious signals in this message. No SMS content was sent anywhere — everything is computed locally.</string>
     <string name="smishing_reason_url_shortener">Shortened URL (bit.ly, t.co, tinyurl…). Shorteners can hide the real destination — verify before tapping.</string>
     <string name="smishing_reason_urgency">Urgency or pressure wording (urgent, expires, click here…). A common social-engineering tactic to trigger panic.</string>
-    <string name="smishing_reason_premium">Premium-rate phone number (3xxx, 0899xxx, 081x…). Calling these numbers is expensive and often part of a scam.</string>
-    <string name="smishing_reason_typosquatting">Look-alike domain (e.g. "1mpots.gouv.fr" instead of "impots.gouv.fr"). Always type official addresses by hand.</string>
+    <string name="smishing_reason_premium">Premium-rate phone number, French format (3xxx, 0899xxx, 081x…). Calling these numbers is expensive and often part of a scam.</string>
+    <string name="smishing_reason_typosquatting">Look-alike domain (e.g. "paypa1.com" instead of "paypal.com"). The watched sites are mostly French. Always type official addresses by hand.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Brand blue (default)</string>
@@ -327,7 +327,8 @@
     <!-- v1.12.0 — Emergency shortcut (lock-screen persistent notification) -->
     <string name="channel_emergency_shortcut_label">Emergency shortcut</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
-    <string name="channel_emergency_shortcut_desc">Silent persistent notification with quick-dial actions (112/17). Tap the body to open the Emergency screen, then hold 3 s to send the alert.</string>
+    <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
+    <string name="channel_emergency_shortcut_desc">Silent persistent notification with quick-dial actions (112 and the police number for your country). Tap the body to open the Emergency screen, then hold 3 s to send the alert.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — emergency shortcut</string>
     <string name="emergency_shortcut_notif_text">Tap to open the emergency page, or dial 112.</string>
     <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
@@ -338,7 +339,7 @@
     <string name="emergency_saved_disabled">Emergency mode disabled</string>
     <string name="emergency_setup_unsaved_body">Emergency mode is not saved yet. Leaving now would keep it in its previous state.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
-    <string name="settings_emergency_shortcut_desc">Show a persistent notification with quick-dial actions (112/17) accessible without unlocking. Tap the body to open the Emergency screen. Off by default.</string>
+    <string name="settings_emergency_shortcut_desc">Show a persistent notification with quick-dial actions (112 and the police number for your country) accessible without unlocking. Tap the body to open the Emergency screen. Off by default.</string>
     <string name="emergency_shortcut_no_app_to_dial">No app installed to place the call</string>
     <string name="settings_emergency_call_police_title">Police quick action in lock-screen notif</string>
     <string name="settings_emergency_call_police_desc">Add a police quick action to the persistent emergency lock-screen notification. The number is the one for the country your phone is connected to. The police button is always visible in the in-app Emergency page regardless of this setting. Off by default.</string>

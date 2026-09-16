@@ -232,11 +232,12 @@ data class SecuritySettings(
      */
     val emergencyShortcutEnabled: Boolean = false,
     /**
-     * v1.12.0 — Bouton "Appeler 17 (Police FR)" dans EmergencyScreen ET
-     * action 17 dans la notification raccourci lock-screen. Opt-in spécifique
-     * France — désactivé par défaut car le 112 (SOS européen) couvre déjà
-     * police + SAMU + pompiers pour tous les pays UE. Activer 17 = accès
-     * direct à la police nationale FR depuis l'écran verrouillé.
+     * v1.12.0 — action "police" dans la notification raccourci lock-screen.
+     * Désactivée par défaut : le 112 couvre déjà police + secours + pompiers
+     * dans toute l'UE, et une action de plus sur l'écran verrouillé se paie.
+     * v1.28.12 — le numéro n'est plus le 17 français mais celui du pays où le
+     * téléphone est enregistré ([EmergencyNumbers]), et ce réglage ne gouverne
+     * PLUS la tuile police de l'écran Urgence, qui suit le pays quoi qu'il arrive.
      */
     val emergencyCallPoliceEnabled: Boolean = false,
     /**

@@ -29,8 +29,9 @@ import javax.inject.Singleton
  *    hold-3s + drag detection. Pour déclencher URGENCE depuis lock-screen :
  *    tap le corps de la notif → page in-app → hold 3 s sur le gros bouton.
  *
- * **Actions actuelles** : 112 (toujours visible) + 17 Police FR (opt-in
- * `emergencyCallPoliceEnabled`). Les deux utilisent `ACTION_DIAL` (composeur
+ * **Actions actuelles** : 112 (toujours visible) + le numéro de police du
+ * PAYS où le téléphone est enregistré (opt-in `emergencyCallPoliceEnabled`,
+ * table dans `EmergencyNumbers`). Les deux utilisent `ACTION_DIAL` (composeur
  * pré-rempli, l'user confirme en appuyant sur le bouton vert du dialer —
  * pas d'auto-call, pas de permission CALL_PHONE).
  *
@@ -47,10 +48,11 @@ import javax.inject.Singleton
  *    action `ACTION_OPEN_EMERGENCY` (constante), `FLAG_IMMUTABLE`, et porte depuis
  *    la v1.26.1 le secret [NotificationIntentToken] : `MainActivity` etant expose,
  *    un Intent EXPLICITE d'une app tierce contournerait sinon tout intent-filter.
- *  - Quick actions 112 / 17 = broadcast vers `EmergencyShortcutReceiver`
+ *  - Quick actions 112 / police = broadcast vers `EmergencyShortcutReceiver`
  *    (`exported=false`). Aucune app tierce ne peut déclencher.
- *  - Numéros 112 et 17 hardcodés dans `EmergencyCallHelper.ALLOWED_NUMBERS`
- *    whitelist stricte.
+ *  - v1.28.12 : `EmergencyCallHelper.ALLOWED_NUMBERS` n'est plus une liste FR
+ *    en dur, mais l'union FERMÉE, connue à la compilation, de tous les numéros
+ *    de `EmergencyNumbers`. La whitelist reste stricte.
  *
  * **Cycle de vie** :
  *  - Posée par [MainApplication] au démarrage si `emergencyShortcutEnabled = true`.
@@ -74,9 +76,9 @@ class EmergencyShortcutNotifier @Inject constructor(
      * Affiche / met à jour la notification persistante. Idempotent — re-poste
      * la même notif avec le même ID = update sans clignotement.
      *
-     * @param policeEnabled si `true`, ajoute une 3ᵉ action "Appeler 17" pour
-     *   la police nationale FR (opt-in spécifique France). Max 3 actions
-     *   par notif Android — URGENCE + 112 + 17 saturé.
+     * @param policeEnabled si `true`, ajoute une 3ᵉ action qui compose le numéro
+     *   de police du pays où le téléphone est enregistré (v1.28.12 : ce n'est
+     *   plus le 17 français). Max 3 actions par notif Android.
      */
     suspend fun postShortcut(policeEnabled: Boolean = false) {
         if (!hasPostPermission()) {
@@ -93,7 +95,7 @@ class EmergencyShortcutNotifier @Inject constructor(
         // Solution : pour déclencher URGENCE depuis lock-screen, l'user tape
         // le CORPS de la notif → ouvre la page in-app (setContentIntent,
         // ACTION_OPEN_EMERGENCY) → hold 3s sur le gros bouton URGENCE. Trois
-        // gestes délibérés au lieu d'un mistap. Les 112/17 quick actions
+        // gestes délibérés au lieu d'un mistap. Les quick actions d'appel
         // restent (ACTION_DIAL ouvre composeur, user confirme dans dialer).
         val dial112PI = PendingIntent.getBroadcast(
             context,

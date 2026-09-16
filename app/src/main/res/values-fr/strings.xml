@@ -291,14 +291,14 @@
     <string name="appearance_saved">Apparence mise à jour</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Détection d\'arnaque (hors-ligne)</string>
-    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). 100 % local, aucun cloud. Peut produire des faux positifs.</string>
+    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). Les listes de numéros et de domaines sont françaises. 100 % local, aucun cloud. Peut produire des faux positifs.</string>
     <string name="smishing_banner_title">⚠️ Possiblement frauduleux</string>
     <string name="smishing_banner_subtitle">Toucher pour voir pourquoi</string>
     <string name="smishing_dialog_title">Pourquoi cet avertissement ?</string>
     <string name="smishing_dialog_intro">SMS Tech a détecté les signaux suspects ci-dessous dans ce message. Aucun contenu n\'a été envoyé ailleurs — tout est calculé localement.</string>
     <string name="smishing_reason_url_shortener">URL raccourcie (bit.ly, t.co, tinyurl…). Les raccourcisseurs peuvent masquer la vraie destination — vérifiez avant de cliquer.</string>
     <string name="smishing_reason_urgency">Mots d\'urgence ou de pression (urgent, expire, cliquez ici…). Tactique classique d\'ingénierie sociale pour pousser à la panique.</string>
-    <string name="smishing_reason_premium">Numéro surtaxé (3xxx, 0899xxx, 081x…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
+    <string name="smishing_reason_premium">Numéro surtaxé au format français (3xxx, 0899xxx, 081x…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
     <string name="smishing_reason_typosquatting">Domaine ressemblant à un officiel (ex. « 1mpots.gouv.fr » au lieu de « impots.gouv.fr »). Saisissez toujours les adresses officielles à la main.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
@@ -319,7 +319,8 @@
     <!-- v1.12.0 — Raccourci urgence (notification persistante visible écran verrouillé) -->
     <string name="channel_emergency_shortcut_label">Raccourci urgence</string>
     <!-- v1.14.8 audit P2 — texte aligné sur le comportement v1.14.2+ (action URGENCE retirée de la notif pour éviter les déclenchements accidentels). -->
-    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112/17). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
+    <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
+    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112 et le numéro de police de votre pays). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — raccourci urgence</string>
     <string name="emergency_shortcut_notif_text">Tapez pour ouvrir la page urgence, ou appeler le 112.</string>
     <!-- v1.28.12 — un seul libellé pour les deux actions rapides : le numéro de police change
@@ -330,7 +331,7 @@
     <string name="emergency_saved_disabled">Mode urgence désactivé</string>
     <string name="emergency_setup_unsaved_body">Le mode urgence n\'est pas encore enregistré. Quitter maintenant le laisserait dans son état précédent.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action URGENCE en un tap a été retirée. -->
-    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112/17), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
+    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112 et le numéro de police de votre pays), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
     <string name="emergency_shortcut_no_app_to_dial">Aucune application pour passer l\'appel</string>
     <string name="settings_emergency_call_police_title">Action rapide Police sur la notif lock-screen</string>
     <string name="settings_emergency_call_police_desc">Ajoute une action rapide « Police » sur la notification persistante d\'urgence. Le numéro est celui du pays où votre téléphone est connecté. Le bouton Police reste toujours visible dans la page Mode urgence in-app, quel que soit ce réglage. Désactivé par défaut.</string>
@@ -993,7 +994,7 @@
     <string name="safety_sms_location_unavailable">(position non disponible)</string>
 
     <string name="safety_sms_check_in">Bonjour. Je n\'ai pas accédé à mon téléphone depuis %1$s. Pourrais-tu m\'appeler ou passer pour vérifier que tout va bien ? Merci.</string>
-    <string name="safety_sms_urgent">Si tu reçois ce SMS, c\'est que je n\'ai pas pu utiliser mon téléphone depuis %1$s. Afin d\'être certain que tout va bien, appelle-moi STP.</string>
+    <string name="safety_sms_urgent">Si tu lis ce SMS, c\'est que je n\'ai pas pu utiliser mon téléphone depuis %1$s. Pour t\'assurer que tout va bien, appelle-moi STP.</string>
     <string name="safety_sms_follow_up">Message automatique : pas d\'activité sur mon téléphone depuis %1$s. Pourrais-tu m\'appeler pour t\'assurer que tout va bien ? Merci.</string>
 
     <!-- Relances. Chacune nomme l\'application et se suffit à elle-même : le message initial peut

@@ -3648,10 +3648,11 @@ private fun EmergencySection(
                     }
                 },
             )
-            // v1.12.0 — Toggle bouton Police FR 17 (FR-specific opt-in).
+            // v1.12.0 — Toggle de l'action police dans la notification d'urgence.
             // Audit fix S2 : disponible uniquement si le raccourci urgence est lui-même ON.
-            // Le toggle Police agit sur les actions de la notif persistante + l'écran
-            // Emergency : sans raccourci, il reste un orphelin qui dupliquerait juste 112.
+            // Sans raccourci, il resterait un orphelin qui dupliquerait juste 112.
+            // v1.28.12 — le numéro suit le pays du réseau, et la tuile police de l'écran
+            // Urgence ne dépend plus de ce réglage : elle s'affiche selon le pays.
             if (security.emergencyShortcutEnabled) {
                 ToggleRow(
                     title = stringResource(R.string.settings_emergency_call_police_title),
