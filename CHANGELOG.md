@@ -3,6 +3,34 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.10] — 2026-09-16
+
+*Build-only release: no feature, no behaviour change. The toolchain moves, the app does not.*
+
+### Changed
+- **Build chain migrated to AGP 9.4.0, Gradle 9.7.1, Kotlin 2.4.10, compileSdk 37** (targetSdk stays
+  35). KSP 2.3.12, Hilt 2.60.1, core-ktx 1.19, lifecycle 2.11, Compose BOM 2026.09, Room 2.8.5,
+  baselineprofile/benchmark 1.5.0.
+- **SQLCipher 4.16.0 → 4.19.0.** The encrypted vault had been pinned to 4.16.0 by a build-tool
+  ceiling, not by choice. An existing database is opened without being rewritten — verified on an
+  emulator and on a real device, `md5sum` of the database and its write-ahead log identical before
+  and after the upgrade.
+- `org.jetbrains.kotlin.android` is gone from the five modules (AGP 9 carries Kotlin itself), and
+  `kotlin-parcelize` with it — the repository contains no `@Parcelize`.
+- Eleven Dependabot `ignore` rules removed: they pinned Kotlin, Hilt, core-ktx, lifecycle, the Gradle
+  wrapper, the three AGP plugin ids, the Compose BOM and SQLCipher below every version requiring
+  AGP 9. Kept only a precautionary Kotlin ceiling below 2.4.20, where CodeQL refuses to compile.
+- CI now also runs on `build/**` branches.
+
+### Verified
+- 754 unit tests, 0 failures, 0 skipped — the exact count of 1.28.9, so the JUnit platform change
+  dropped no test silently. detekt, lint and CodeQL green.
+- Two clean builds of the same commit produce byte-identical APKs.
+- All 15 manifest-declared components survive R8, checked against the published 1.28.9 dex with a
+  negative control; the startup baseline profile is still embedded.
+- On a Galaxy S9 (Android 10) with the minified release build: SMS and MMS received with its
+  attachment displayed, SMS sent and delivered, vault in and out, no fatal exception.
+
 ## [1.28.9] — 2026-09-14
 
 *Septième note d'Andrew Pozdnakov sur la MR F-Droid !38458 : cinq constats, tous confirmés et corrigés.*
