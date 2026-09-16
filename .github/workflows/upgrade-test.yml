@@ -1,0 +1,139 @@
+name: Upgrade test
+
+# Prouve qu'une mise à jour EN PLACE — `install -r`, sans effacement — ne perd ni les messages, ni
+# le contenu du coffre, et ne re-chiffre pas la base.
+#
+# 🔴 Pourquoi ce job existe
+#
+# La v1.28.10 a retiré les ONZE règles `ignore` de Dependabot qui gelaient la chaîne de build. Les
+# montées de **SQLCipher** et de **Room** — les deux bibliothèques qui touchent aux données
+# stockées — arrivent donc désormais toutes seules, en PR, et la CI existante les déclarait vertes
+# sans jamais ouvrir une base chiffrée EXISTANTE. Le mode de défaillance visé n'est pas un
+# plantage : c'est une perte de données chez quelqu'un qui a seulement accepté une mise à jour, sur
+# une application dont `allowBackup=false` interdit tout autre exemplaire.
+#
+# Le contrôle a trouvé son premier défaut avant même d'être fusionné : cf. le test de régression
+# `RawKeyMigrationTest.rawKeyedDb_withoutRepairFlag_isNotDeclaredUnreadable`.
+#
+# ⚠️ Déclencheurs : les PR (c'est par là qu'arrive Dependabot) et les tags (une version ne se
+# publie pas sans ce contrôle). PAS sur chaque poussée de branche — le job construit DEUX versions
+# complètes et démarre un émulateur ; le payer à chaque commit le ferait désactiver pour son coût.
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upgrade:
+    name: In-place upgrade from the previous tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Les tags sont la matière première de ce job : sans l'historique complet, il n'y a pas
+          # de version précédente à construire.
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-upgrade-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: gradle-upgrade-${{ runner.os }}-
+
+      - name: Resolve the previous tag
+        id: precedent
+        run: |
+          set -euo pipefail
+          # Sur un tag, la version précédente est celle qu'atteint le PARENT du tag ; sur une
+          # branche ou une PR, c'est simplement le dernier tag joignable — celui que les
+          # utilisateurs ont installé.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            PRECEDENT=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^")
+          else
+            PRECEDENT=$(git describe --tags --abbrev=0 --match 'v*' HEAD)
+          fi
+          [ -n "$PRECEDENT" ] || { echo "::error::aucun tag précédent trouvé"; exit 1; }
+          echo "Version précédente : $PRECEDENT"
+          echo "tag=$PRECEDENT" >> "$GITHUB_OUTPUT"
+
+      - name: Build the previous tag in debug
+        run: |
+          set -euo pipefail
+          # En DEBUG, et c'est tout l'intérêt : l'APK de release publié n'est pas débogable, donc
+          # `run-as` n'y donne accès à rien et aucun test instrumenté ne peut y semer quoi que ce
+          # soit. La base est alors écrite par la chaîne de build de l'époque — SQLCipher compris —
+          # ce qui est le sujet même du contrôle.
+          git worktree add "$RUNNER_TEMP/precedent" "${{ steps.precedent.outputs.tag }}"
+          # Le paquet de test est COPIÉ depuis la révision courante : le tag précédent ne le
+          # contient évidemment pas. Il n'utilise que `AppDatabase`, Hilt et du SQL brut, donc il
+          # compile aussi bien des deux côtés ; si un jour il ne compile plus, l'échec est ici, et
+          # il est lisible.
+          cp -r app/src/androidTest/java/com/filestech/sms/upgrade \
+                "$RUNNER_TEMP/precedent/app/src/androidTest/java/com/filestech/sms/"
+          cd "$RUNNER_TEMP/precedent"
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+
+      - name: Build the current revision in debug
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the upgrade test
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          APK_ANCIEN: ${{ runner.temp }}/precedent/app/build/outputs/apk/debug/app-x86_64-debug.apk
+          APK_ANCIEN_TEST: ${{ runner.temp }}/precedent/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          APK_NOUVEAU: app/build/outputs/apk/debug/app-x86_64-debug.apk
+          APK_NOUVEAU_TEST: app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          TRAVAIL: ${{ runner.temp }}/releves
+        with:
+          api-level: 30
+          arch: x86_64
+          target: default
+          disable-animations: true
+          # Aucun rôle SMS n'est accordé ici, contrairement à la campagne instrumentée : ces deux
+          # tests n'écrivent que dans Room et n'approchent jamais `content://sms`.
+          #
+          # ⚠️ Ni `connectedDebugAndroidTest` ni aucune tâche Gradle : cette tâche DÉSINSTALLE le
+          # paquet en fin de course, ce qui effacerait le jeu d'essai entre le semis et sa
+          # relecture. Le script pilote `adb install -r` et `am instrument` lui-même.
+          script: |
+            chmod +x .github/scripts/upgrade-test.sh
+            .github/scripts/upgrade-test.sh
+
+      - name: Upload the instrumentation streams
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smstech-upgrade-streams
+          path: ${{ runner.temp }}/releves/*.txt
+          if-no-files-found: warn

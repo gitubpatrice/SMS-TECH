@@ -65,6 +65,14 @@ android {
         versionName = appVersionName
 
         testInstrumentationRunner = "com.filestech.sms.HiltTestRunner"
+
+        // Les deux moitiés du contrôle de mise à jour en place sont hors campagne : le semis n'a
+        // aucun lecteur ici, et la vérification n'a rien à lire — elle ÉCHOUERAIT sur une base
+        // vide, ce que son contrôle négatif exige justement d'elle. Le job dédié les lance une par
+        // une par `am instrument -e class …`, où cet argument ne s'applique pas.
+        // Cf. `com.filestech.sms.upgrade.UpgradeTest` et `.github/workflows/upgrade-test.yml`.
+        testInstrumentationRunnerArguments["notAnnotation"] = "com.filestech.sms.upgrade.UpgradeTest"
+
         vectorDrawables { useSupportLibrary = true }
 
         // Room schema export pour tests de migration

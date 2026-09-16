@@ -1,0 +1,5 @@
+# Les scripts shell sont exécutés par la CI sur un runner Linux. Un retour chariot en fin de ligne
+# y casse le script avec « $'\r': command not found », un message qui ne désigne jamais sa cause.
+# Le poste de développement est sous Windows avec `core.autocrlf=true`, qui les convertirait dans la
+# copie de travail et les casserait aussi pour quiconque les lance en local depuis Git Bash.
+*.sh text eol=lf

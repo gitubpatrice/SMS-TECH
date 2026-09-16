@@ -1,5 +1,6 @@
 package com.filestech.sms.data.local.db
 
+import android.annotation.SuppressLint
 import android.content.Context
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SQLiteNotADatabaseException
@@ -53,6 +54,13 @@ import java.io.File
  * SQLCipher a `byte[]` *passphrase*. The exported file would be unreadable by the app. Keeping
  * `changePassword(byte[])` guarantees both sides derive the key identically.
  */
+// `commit()` et non `apply()` sur TOUS les marqueurs de cette classe — lint le signale, c'est
+// délibéré. Un marqueur qui dit « cette réparation a eu lieu » et dont l'écriture est asynchrone ne
+// survit pas à la mort du processus : mesuré le 2026-09-16, `adb install -r` tue l'application
+// avant que `apply()` n'atteigne le disque, et le système en fait autant. Ces écritures n'ont lieu
+// que lorsque le marqueur manque — une fois par installation — et toute cette classe s'exécute hors
+// du fil principal, ce que [DatabaseFactory] vérifie et journalise.
+@SuppressLint("ApplySharedPref")
 object LegacyZeroKeyRekey {
 
     /** Outcome of the probe, for logging and tests. */
@@ -162,13 +170,32 @@ object LegacyZeroKeyRekey {
             // Nothing to repair: fresh install, or a truncated stub Room will recreate anyway.
             recoverInterruptedSwap(dbFile)
             if (!dbFile.exists() || dbFile.length() < MIN_SQLITE_SIZE) {
-                prefs.edit().putBoolean(doneKey(dbFile), true).apply()
+                prefs.edit().putBoolean(doneKey(dbFile), true).commit()
                 return Result.FRESH_INSTALL
             }
         }
 
-        if (canOpen(dbFile, passphrase)) {
-            prefs.edit().putBoolean(doneKey(dbFile), true).apply()
+        // 2026-09-16 — LES DEUX FORMES DE LA MÊME CLÉ, et non la seule passphrase.
+        // (Daté et non numéroté : le numéro de version qui portera ce correctif n'est pas décidé.)
+        //
+        // Depuis la v1.25.0, toute base est chiffrée en clé BRUTE (`x'<hex>'`, cf. [ensureRawKeyed]) :
+        // sonder avec la passphrase en clair y répond donc TOUJOURS non, et la clé nulle héritée
+        // aussi. Sur une base moderne parfaitement saine, la seule chose qui empêchait la conclusion
+        // « ne se déchiffre avec rien » était le marqueur mémorisé quelques lignes plus haut — un
+        // fichier de préférences, écrit par `apply()`, c'est-à-dire de façon ASYNCHRONE.
+        //
+        // Un processus tué avant que cette écriture n'atteigne le disque perdait donc le marqueur en
+        // laissant la base intacte, et l'application refusait ensuite d'ouvrir les données de
+        // l'utilisateur — à chaque lancement, sans autre issue qu'une réinstallation, coffre compris.
+        // Mesuré sur émulateur le 2026-09-16, en retirant ce seul fichier : 5 contrôles sur 5
+        // passaient avec lui, 0 sur 5 sans lui. `install -r` tue le processus, mais le système le
+        // fait aussi, et pour la même raison.
+        //
+        // Le jumeau [ensureRawKeyed] sondait les deux formes depuis toujours. C'est le même
+        // correctif, posé sur le chemin qui avait été oublié ; le marqueur redevient ce qu'il aurait
+        // dû rester, une économie de travail et non l'unique porte d'entrée des données.
+        if (canOpen(dbFile, passphrase) || canOpen(dbFile, rawKeySpecBytes(passphrase))) {
+            prefs.edit().putBoolean(doneKey(dbFile), true).commit()
             discardOld(dbFile)
             return Result.ALREADY_CORRECT
         }
@@ -223,7 +250,7 @@ object LegacyZeroKeyRekey {
                 SIDECAR_SUFFIXES.forEach { File(dbFile.absolutePath + it).delete() }
                 discardTemp(dbFile)
                 discardOld(dbFile)
-                prefs.edit().putBoolean(doneKey(dbFile), true).apply()
+                prefs.edit().putBoolean(doneKey(dbFile), true).commit()
                 return Result.ORPHANED_DISCARDED
             }
             // Doctrine (audit F18): a silent wipe is silent data loss. Surface, never delete.
@@ -247,7 +274,7 @@ object LegacyZeroKeyRekey {
         // Single exit for every failure path: the outcome is memoized in `failed`, so a later
         // request cannot re-run the rebuild — possibly from the main thread.
         failures[dbFile.absolutePath]?.let { throw it }
-        prefs.edit().putBoolean(doneKey(dbFile), true).apply()
+        prefs.edit().putBoolean(doneKey(dbFile), true).commit()
         Timber.i("LegacyZeroKeyRekey: database re-encrypted with the Keystore passphrase")
         return Result.REKEYED
     }
@@ -293,12 +320,12 @@ object LegacyZeroKeyRekey {
         // Fresh install: no file yet. Room will create it directly raw-keyed (the app opens with
         // the raw spec), so there is nothing to convert — just record completion.
         if (!dbFile.exists() || dbFile.length() < MIN_SQLITE_SIZE) {
-            prefs.edit().putBoolean(rawDoneKey(dbFile), true).apply()
+            prefs.edit().putBoolean(rawDoneKey(dbFile), true).commit()
             return Result.FRESH_INSTALL
         }
 
         if (canOpen(dbFile, rawKey)) {
-            prefs.edit().putBoolean(rawDoneKey(dbFile), true).apply()
+            prefs.edit().putBoolean(rawDoneKey(dbFile), true).commit()
             return Result.ALREADY_CORRECT
         }
 
@@ -321,7 +348,7 @@ object LegacyZeroKeyRekey {
         }
         // Single exit for every failure path (memoized, so a retry cannot re-run the conversion).
         failures[dbFile.absolutePath]?.let { throw it }
-        prefs.edit().putBoolean(rawDoneKey(dbFile), true).apply()
+        prefs.edit().putBoolean(rawDoneKey(dbFile), true).commit()
         Timber.i("LegacyZeroKeyRekey: ${dbFile.name} now raw-keyed — open is now near-instant")
         return Result.REKEYED
     }

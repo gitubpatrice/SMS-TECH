@@ -3,6 +3,32 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+- **A healthy encrypted database could be declared unreadable because one preferences file was
+  missing.** Since v1.25.0 every database is raw-keyed, but the zero-key repair probed it with the
+  plain passphrase only — a probe that is false by construction on any modern database. The sole
+  thing preventing the verdict "decrypts with nothing at all" was a `SharedPreferences` marker
+  written with `apply()`, i.e. asynchronously. A process killed before that write reached the disk
+  lost the marker while the database itself was intact, and the app then refused to open the user's
+  own messages and vault at every launch, with no way out but reinstalling. The probe now accepts
+  either form of the key, as its twin `ensureRawKeyed` always did, and the markers are committed
+  synchronously. Measured on an emulator: 5 checks out of 5 passed with the marker present, 0 out of
+  5 with that single file removed. Regression test:
+  `RawKeyMigrationTest.rawKeyedDb_withoutRepairFlag_isNotDeclaredUnreadable`.
+
+### Added
+- **CI job proving an in-place upgrade loses nothing** (`.github/workflows/upgrade-test.yml`). It
+  builds the previous tag in debug, seeds a fixture into the real encrypted database through the
+  production provisioning path, installs the current revision over it with `adb install -r`, and
+  requires every row — conversations, vault contents, attachment, scheduled message, blocked number,
+  full-text index — to be read back. The SQLCipher salt must be unchanged, which proves the database
+  was not re-encrypted. Two negative controls (corrupted file, wiped data) require the verification
+  to fail, and a positive witness proves the salt comparison is not vacuous. It runs on pull
+  requests and tags: Dependabot now moves SQLCipher and Room on its own, and nothing else checks
+  that an existing encrypted database still opens.
+
 ## [1.28.10] — 2026-09-16
 
 *Build-only release: no feature, no behaviour change. The toolchain moves, the app does not.*
