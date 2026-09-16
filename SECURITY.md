@@ -81,6 +81,41 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.28.11 — Un marqueur d'optimisation ne peut pas porter l'accès aux données
+
+**Versions affectées : 1.25.0 à 1.28.10.** Disponibilité des données, pas confidentialité : le
+chiffrement au repos, l'algorithme et le threat model sont inchangés. Aucun signalement reçu.
+
+Depuis la 1.25.0, la base est ouverte en **clé brute** (cf. l'entrée v1.25.0 plus bas). Or la
+réparation clé-nulle qui s'exécute juste avant, `LegacyZeroKeyRekey.rekeyIfNeeded`, sondait le
+fichier avec la **passphrase en clair** — une sonde fausse par construction sur toute base écrite
+depuis. La sonde de la clé nulle héritée échouait elle aussi, et le code concluait alors que la base
+« ne se déchiffre avec rien » : `Failure` levée, écran de réparation, **messages et coffre refusés à
+chaque lancement**, sans autre issue qu'une réinstallation — sur une application dont
+`allowBackup=false` ne laisse aucun autre exemplaire.
+
+La seule chose qui empêchait cette conclusion était le marqueur `shared_prefs/db_repair.xml`, écrit
+par `apply()`, c'est-à-dire de façon **asynchrone**. Un processus tué avant que cette écriture
+n'atteigne le disque perdait le marqueur en laissant la base intacte. `adb install -r` produit
+exactement cet enchaînement ; le système aussi, quand il récupère un processus peu après son premier
+lancement.
+
+**Mesure A/B**, même appareil, mêmes fichiers, mêmes APK : **5 contrôles sur 5 passent avec le
+marqueur, 0 sur 5 avec ce seul fichier retiré.**
+
+**Correctif.** La sonde accepte **les deux formes de la même clé**, la brute d'abord — comme son
+jumeau `ensureRawKeyed` l'a toujours fait. Le marqueur redevient une économie de travail et non
+l'unique porte d'entrée des données. Les marqueurs passent en `.commit()` : un marqueur de
+réparation dont l'écriture ne survit pas à la mort du processus ne remplit pas son office.
+
+**Ce que le défaut dit du reste.** C'est, une troisième fois, le motif du correctif posé sur un seul
+des deux chemins jumeaux (cf. v1.28.3). Il a été trouvé non par relecture mais par un contrôle
+d'intégration continue neuf, qui installe la version précédente, sème un jeu d'essai dans la vraie
+base chiffrée, installe la nouvelle par-dessus et exige que tout se relise — contrôles négatifs
+compris. Régression figée par
+`RawKeyMigrationTest.rawKeyedDb_withoutRepairFlag_isNotDeclaredUnreadable`, écrite ROUGE avant le
+correctif.
+
 ### v1.28.9 — Ce qui résiste est gardé et dit, jamais annoncé effacé
 
 Septième note d'Andrew Pozdnakov sur la MR F-Droid !38458 : cinq constats déduits du source 1.28.8, tous

@@ -194,7 +194,12 @@ object LegacyZeroKeyRekey {
         // Le jumeau [ensureRawKeyed] sondait les deux formes depuis toujours. C'est le même
         // correctif, posé sur le chemin qui avait été oublié ; le marqueur redevient ce qu'il aurait
         // dû rester, une économie de travail et non l'unique porte d'entrée des données.
-        if (canOpen(dbFile, passphrase) || canOpen(dbFile, rawKeySpecBytes(passphrase))) {
+        //
+        // La forme BRUTE est sondee en PREMIER, comme [ensureRawKeyed] le fait deja : c'est celle
+        // de la quasi-totalite du parc, et elle s'ouvre sans PBKDF2 (mesure dans ce fichier :
+        // 493 ms -> 2 ms). Sonder d'abord la passphrase ferait payer 256 000 iterations pour
+        // s'entendre repondre non, sur le chemin meme que ce correctif repare.
+        if (canOpen(dbFile, rawKeySpecBytes(passphrase)) || canOpen(dbFile, passphrase)) {
             prefs.edit().putBoolean(doneKey(dbFile), true).commit()
             discardOld(dbFile)
             return Result.ALREADY_CORRECT
