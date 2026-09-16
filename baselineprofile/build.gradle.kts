@@ -2,13 +2,12 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.test)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.baselineprofile)
 }
 
 android {
     namespace = "com.filestech.sms.baselineprofile"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28 // Baseline Profile generation requires API 28+

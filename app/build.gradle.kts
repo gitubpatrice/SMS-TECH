@@ -3,10 +3,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.baselineprofile)
@@ -54,10 +52,10 @@ android {
         includeInBundle = false
     }
     namespace = "com.filestech.sms"
-    // compileSdk 36 requis par les androidx récents (core-ktx 1.16+, lifecycle 2.11,
-    // compose-bom 2026.x, activity 1.13). targetSdk reste 35 : on compile contre
-    // l'API 36 sans opter dans les changements de comportement Android 16.
-    compileSdk = 36
+    // compileSdk 37 requis par les androidx récents (core-ktx 1.19, lifecycle 2.11,
+    // compose-bom 2026.09, SQLCipher 4.19). targetSdk reste 35 : on compile contre
+    // l'API 37 sans opter dans les changements de comportement des versions suivantes.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.filestech.sms"
@@ -319,6 +317,9 @@ dependencies {
     // JUnit 5 : la tâche passe au vert sans avoir rien exécuté. Le pire des échecs — un test qui
     // ne teste pas et ne le dit pas.
     testRuntimeOnly(libs.junit.vintage.engine)
+    // Gradle 9 ne fournit plus le lanceur de la plateforme JUnit. Sans lui, la tâche échoue sur
+    // « Failed to load JUnit Platform » AVANT le premier test — bruyamment, au moins.
+    testRuntimeOnly(libs.junit.platform.launcher)
 
     // Android tests
     androidTestImplementation(libs.androidx.test.ext.junit)

@@ -46,41 +46,26 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Mesure du 2026-09-08 : ces trois familles exigent toutes AGP >= 9.0 (et
-    # compileSdk 37), alors que le projet est en AGP 8.13.2. Le plafond est deja
-    # documente dans gradle/libs.versions.toml. Sans ces regles, Dependabot
-    # reproposait chaque semaine des PR condamnees a echouer — #12, #13 et #14
-    # ont ainsi vecu des mois en rouge sans que personne ne les regarde.
-    # A RETIRER le jour de la migration AGP 9 : ces regles la masqueraient.
+    # Les onze regles `ignore` posees les 2026-09-08 et 09-14 sont RETIREES : elles plafonnaient
+    # core-ktx, lifecycle, Kotlin, Hilt, le wrapper Gradle, les trois plugins AGP, le BOM Compose
+    # et SQLCipher parce que tous exigeaient AGP >= 9. La migration AGP 9.4 / Gradle 9.7.1 /
+    # compileSdk 37 du 2026-09-16 leve ce plafond, et les laisser MASQUERAIT desormais les
+    # montees de version — leur propre commentaire le disait.
     ignore:
-      - dependency-name: "androidx.core:core-ktx"
-        versions: [">= 1.19"]
-      - dependency-name: "androidx.lifecycle:*"
-        versions: [">= 2.11"]
+      # Seul plafond qui subsiste, et par precaution : CodeQL 2.27 refuse de compiler Kotlin
+      # >= 2.4.20 (« currently supports versions below 2.4.20 »), MESURE sur Agenda Tech (PR #14),
+      # dont le workflow CodeQL compile. Celui de ce depot tourne en `build-mode: none`, donc
+      # l'extracteur ne passe peut-etre pas par la : non verifie ici. Le projet est en 2.4.10, la
+      # regle ne coute rien, et la premiere PR CodeQL de ce depot tranchera.
       - dependency-name: "org.jetbrains.kotlin:*"
-        versions: [">= 2.4"]
-      - dependency-name: "com.google.dagger:*"
-        versions: [">= 2.59"]
-      # Nom releve sur la PR #14 elle-meme (trailer updated-dependencies), pas devine.
-      - dependency-name: "gradle-wrapper"
-        versions: [">= 9"]
-      # Mesure du 2026-09-14 sur les PR #28, #31 et #32, noms releves dans leurs trailers :
-      # AGP 9.4 exige Gradle 9.6 ; Compose 1.12 (BOM 2026.09) et SQLCipher 4.19 exigent
-      # compileSdk 37 ; les plugins Kotlin 2.4 butent sur le mur Hilt mesure le 2026-09-08
-      # (la regle `org.jetbrains.kotlin:*` ci-dessus ne couvre pas les identifiants de
-      # plugin, qui n'ont pas de deux-points). Meme sort : a retirer avec la migration AGP 9.
-      - dependency-name: "com.android.application"
-        versions: [">= 9"]
-      - dependency-name: "com.android.library"
-        versions: [">= 9"]
-      - dependency-name: "com.android.test"
-        versions: [">= 9"]
+        versions: [">= 2.4.20"]
       - dependency-name: "org.jetbrains.kotlin.*"
-        versions: [">= 2.4"]
-      - dependency-name: "androidx.compose:compose-bom"
-        versions: [">= 2026.09.00"]
-      - dependency-name: "net.zetetic:sqlcipher-android"
-        versions: [">= 4.19"]
+        versions: [">= 2.4.20"]
+      # Limite assumee de ce plafond : depuis AGP 9, une partie de la chaine Kotlin est apportee
+      # par AGP lui-meme, et ces deux regles ne la couvrent pas. Une montee d'AGP pourrait donc
+      # embarquer un Kotlin >= 2.4.20 sans etre bloquee ici. On NE plafonne PAS AGP pour autant :
+      # ce serait re-geler toute la chaine pour une contrainte non verifiee sur ce depot. Le jour
+      # ou une PR AGP echoue sur CodeQL, la cause sera connue d'avance.
     commit-message:
       prefix: "deps"
       include: "scope"

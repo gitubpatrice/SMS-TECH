@@ -104,7 +104,11 @@ class SplashScreenTest {
             AppSettings().let { it.copy(advanced = it.advanced.copy(splashShown = true)) },
         )
         var finished = 0
-        compose.setContent { SplashScreen(onFinished = { finished++ }, viewModel = SplashViewModel(settings)) }
+        // ViewModel construit HORS du composable, comme dans le test ci-dessus : dans le bloc
+        // `setContent`, il serait reconstruit a chaque recomposition. Lifecycle 2.11 ajoute la
+        // regle lint `ViewModelConstructorInComposable` qui le signale.
+        val viewModel = SplashViewModel(settings)
+        compose.setContent { SplashScreen(onFinished = { finished++ }, viewModel = viewModel) }
         compose.waitForIdle()
         assertThat(finished).isEqualTo(1)
 
