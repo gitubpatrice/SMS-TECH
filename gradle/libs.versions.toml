@@ -20,7 +20,7 @@ room = "2.8.5"
 work = "2.11.2"
 biometric = "1.1.0"
 splashscreen = "1.2.0"
-documentfile = "1.0.1"
+documentfile = "1.1.0"
 # v1.14.8 audit SEC-M4 — `androidx.security:security-crypto:1.1.0-alpha06` retiré
 # (alpha 2021, 0 usage confirmé). Lib + alias [androidx-security-crypto] désormais inertes.
 # security-crypto = "1.1.0-alpha06"
@@ -65,10 +65,10 @@ junit-platform = "1.11.3"
 mockk = "1.14.11"
 turbine = "1.2.0"
 truth = "1.4.5"
-robolectric = "4.16.1"
+robolectric = "4.17"
 androidx-test-ext = "1.2.1"
 androidx-test-runner = "1.7.0"
-espresso = "3.6.1"
+espresso = "3.7.0"
 
 # Quality
 detekt = "1.23.8"
@@ -77,7 +77,7 @@ detekt = "1.23.8"
 # volontairement la meme reference — les desaccorder est une panne classique.
 benchmark = "1.5.0"
 profileinstaller = "1.4.1"
-uiautomator = "2.3.0"
+uiautomator = "2.4.0"
 ktlint-gradle = "14.2.0"
 
 [libraries]
