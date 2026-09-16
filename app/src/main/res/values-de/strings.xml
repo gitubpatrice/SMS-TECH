@@ -474,7 +474,7 @@
         <item quantity="one">Alarm gesendet — %1$d Nachricht von %2$d</item>
         <item quantity="other">Alarm gesendet — %1$d Nachrichten von %2$d</item>
     </plurals>
-    <string name="settings_safety_call_triggered_hint">Folgenachrichten werden alle 15 Minuten gesendet. Tippen Sie auf „Mir geht es gut", um sie zu stoppen.</string>
+    <string name="settings_safety_call_triggered_hint">Folgenachrichten werden alle 15 Minuten gesendet. Tippen Sie auf „Mir geht es gut“, um sie zu stoppen.</string>
     <string name="settings_safety_call_triggered_state_sending">Alarm wird gesendet…</string>
     <string name="settings_safety_call_triggered_hint_done">Abfolge beendet: Safety Call hat sich selbst ausgeschaltet. Schalten Sie ihn wieder ein, um erneut geschützt zu sein.</string>
     <string name="settings_safety_call_armed_duration">Dauer: %1$s</string>
@@ -484,7 +484,7 @@
     <string name="settings_safety_call_armed_contacts_many">Kontakte: %1$s (+%2$d weitere)</string>
     <string name="settings_safety_call_armed_template">Vorlage: %1$s</string>
     <string name="settings_safety_call_armed_modify">Ändern</string>
-    <string name="settings_safety_call_armed_actions_hint">„Mir geht es gut" setzt den Zeitgeber zurück: die Frist beginnt wieder von vorn, und es wird keine Nachricht gesendet. „Ändern" öffnet die Einstellungen (Dauer, Kontakte, Nachricht).</string>
+    <string name="settings_safety_call_armed_actions_hint">„Mir geht es gut“ setzt den Zeitgeber zurück: die Frist beginnt wieder von vorn, und es wird keine Nachricht gesendet. „Ändern“ öffnet die Einstellungen (Dauer, Kontakte, Nachricht).</string>
     <string name="settings_safety_call_armed_im_ok_short">Alles gut</string>
     <string name="safety_call_setup_title">Safety Call</string>
     <string name="safety_call_setup_section_status">Status</string>
@@ -527,8 +527,8 @@
     <string name="safety_call_sequence_body_sending">Der Alarm wird an Ihre Kontakte gesendet. Tippen Sie, wenn alles in Ordnung ist: das Senden hört auf.</string>
     <string name="safety_call_sequence_title_done">SMS Tech — Alarm gesendet, Safety Call aus</string>
     <plurals name="safety_call_sequence_body_done">
-        <item quantity="one">%1$d von %2$d Nachricht wurde an Ihre Kontakte gesendet. Safety Call ist jetzt aus — tippen Sie auf „Wieder einschalten", um ihn erneut scharfzustellen.</item>
-        <item quantity="other">Alle %1$d Nachrichten wurden an Ihre Kontakte gesendet. Safety Call ist jetzt aus — tippen Sie auf „Wieder einschalten", um ihn erneut scharfzustellen.</item>
+        <item quantity="one">%1$d von %2$d Nachricht wurde an Ihre Kontakte gesendet. Safety Call ist jetzt aus — tippen Sie auf „Wieder einschalten“, um ihn erneut scharfzustellen.</item>
+        <item quantity="other">Alle %1$d Nachrichten wurden an Ihre Kontakte gesendet. Safety Call ist jetzt aus — tippen Sie auf „Wieder einschalten“, um ihn erneut scharfzustellen.</item>
     </plurals>
     <string name="safety_call_notif_action_rearm">Wieder einschalten</string>
     <!-- v1.27.4 — confirmation shown after the “Turn back on” action of the receipt notification.
@@ -694,7 +694,7 @@
     </plurals>
     <!-- v1.28.9 (septieme note d'Andrew, constat 2) — ne pas savoir n'est pas « rien a effacer ». -->
     <string name="settings_nuke_list_unreadable">Die Liste der Unterhaltungen konnte nicht gelesen werden: ihre Kopien im Nachrichtenspeicher des Telefons wurden nicht gelöscht und kommen bei der nächsten Synchronisierung zurück.</string>
-    <string name="settings_nuke_local_failure">Ein Teil der eigenen Daten von SMS Tech konnte nicht von diesem Telefon gelöscht werden. Führen Sie „Alle meine Daten löschen" erneut aus.</string>
+    <string name="settings_nuke_local_failure">Ein Teil der eigenen Daten von SMS Tech konnte nicht von diesem Telefon gelöscht werden. Führen Sie „Alle meine Daten löschen“ erneut aus.</string>
 
     <!-- About -->
     <string name="about_title">Über</string>
@@ -736,7 +736,7 @@
     <string name="channel_incoming_desc">Benachrichtigungen für SMS und MMS, die Sie empfangen.</string>
     <!-- v1.8.0 — silent channel for NotificationStyle.SILENT -->
     <string name="channel_incoming_silent_label">Eingehende Nachrichten (lautlos)</string>
-    <string name="channel_incoming_silent_desc">Benachrichtigungen, wenn SMS Tech auf „Lautlos" gestellt ist. Keine Einblendung, kein Ton.</string>
+    <string name="channel_incoming_silent_desc">Benachrichtigungen, wenn SMS Tech auf „Lautlos“ gestellt ist. Keine Einblendung, kein Ton.</string>
     <string name="channel_sent_label">Gesendete Nachrichten</string>
     <string name="channel_sent_desc">Status der Nachrichten, die Sie gesendet haben.</string>
     <string name="channel_failed_label">Fehlgeschlagene Nachrichten</string>
@@ -818,7 +818,7 @@
     <string name="scheduled_empty">Keine geplanten Nachrichten</string>
     <!-- v1.15.1 — Inline how-to shown alongside the empty state, so the user discovers
          the entry point even before reading AboutScreen. -->
-    <string name="scheduled_empty_explainer">So planen Sie eine SMS: öffnen Sie eine Unterhaltung, schreiben Sie Ihre Nachricht, dann ⋮ → „Planen…" → Datum und Uhrzeit wählen. Die SMS wird zu diesem Zeitpunkt automatisch gesendet, auch wenn die App geschlossen ist.</string>
+    <string name="scheduled_empty_explainer">So planen Sie eine SMS: öffnen Sie eine Unterhaltung, schreiben Sie Ihre Nachricht, dann ⋮ → „Planen…“ → Datum und Uhrzeit wählen. Die SMS wird zu diesem Zeitpunkt automatisch gesendet, auch wenn die App geschlossen ist.</string>
     <string name="scheduled_to">An: %1$s</string>
     <string name="scheduled_when">Geplant für: %1$s</string>
     <string name="scheduled_cancel_confirm_title">Diese geplante Nachricht abbrechen?</string>
