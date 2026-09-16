@@ -3,3 +3,7 @@
 # Le poste de développement est sous Windows avec `core.autocrlf=true`, qui les convertirait dans la
 # copie de travail et les casserait aussi pour quiconque les lance en local depuis Git Bash.
 *.sh text eol=lf
+
+# Meme raison pour les scripts Python de la CI : leur shebang est la premiere ligne, et
+# un retour chariot la transforme en interpreteur introuvable (env: 'python3\r').
+.github/scripts/*.py text eol=lf
