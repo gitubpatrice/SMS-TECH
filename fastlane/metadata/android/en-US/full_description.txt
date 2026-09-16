@@ -18,7 +18,7 @@ SMS Tech is an ad-free, tracker-free SMS / MMS app for Android. It replaces the 
 <li>Export a conversation as a PDF for archival</li>
 <li>Encrypted local backup using a passphrase distinct from your unlock PIN</li>
 <li>Themes — Light / Dark / AMOLED / "Dark Tech" slate-blue accent</li>
-<li>English, French and German UI</li>
+<li>English, French, German and Italian UI</li>
 <li>Confirmation toggle in Settings → Send → "Confirm before send" requires a confirmation dialog before any SMS, MMS or attachment is dispatched</li>
 </ul>
 

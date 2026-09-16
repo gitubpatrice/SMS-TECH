@@ -8,6 +8,7 @@ import com.filestech.sms.domain.emergency.EmergencyTemplate
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -37,13 +38,61 @@ class SafetyMessageTextsTest {
 
     private companion object {
         /** Les langues livrées. En ajouter une ici quand `values-XX/` apparaît. */
-        val LANGUES = listOf("en", "fr", "de")
+        val LANGUES = listOf("en", "fr", "de", "it")
 
         /** Une URL Maps réaliste : elle compte dans le budget de caractères du SMS. */
         const val URL_MAPS = "https://maps.google.com/?q=48.85661,2.35222"
 
         /** U+2014. Il bascule le message en UCS-2, donc 70 caractères par segment au lieu de 160. */
         const val TIRET_CADRATIN = "—"
+
+        /**
+         * L'alphabet GSM 03.38, table de base puis table d'échappement. **Un seul** caractère
+         * hors de cet ensemble bascule le message ENTIER en UCS-2 : 70 caractères par segment
+         * au lieu de 160.
+         */
+        const val GSM7 =
+            "@£\$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ" +
+                " !\"#¤%&'()*+,-./0123456789:;<=>?" +
+                "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§" +
+                "¿abcdefghijklmnopqrstuvwxyzäöñüà" +
+                "^{}\\[~]|€"
+
+        /** Ces sept-là coûtent DEUX septets : ils se paient un caractère d'échappement. */
+        const val GSM7_ECHAPPES = "^{}\\[~]|€"
+
+        /**
+         * Le plafond, et pourquoi il vaut 2 et pas 1.
+         *
+         * Ce qui nuit n'est pas l'alphabet, c'est le NOMBRE DE SEGMENTS : au-delà d'un, chaque
+         * segment supplémentaire est un SMS de plus à payer et une occasion de plus d'arriver
+         * tronqué en zone radio faible — la situation même que ces messages visent.
+         *
+         * Un ne suffirait pourtant pas, et le refuser serait refuser des langues entières :
+         *  - les deux messages pressants portent le triangle d'alerte, donc de l'UCS-2 assumé,
+         *    et l'URL de position à elle seule mange la moitié des 70 caractères ;
+         *  - l'espagnol écrit « ubicación », le polonais « proszę » : leur orthographe SORT de
+         *    GSM-7. Exiger un segment reviendrait à leur demander de s'écrire sans accents.
+         *
+         * Deux segments est donc le plafond utile. Il a de la marge pour une langue correcte,
+         * et il attrape quand même ce qui l'a motivé : le Safety Call FRANÇAIS, à 140
+         * caractères avec « reçois » et « être », partait en TROIS segments (v1.28.12).
+         */
+        const val SEGMENTS_MAX = 2
+    }
+
+    /**
+     * Le nombre de SMS que ce texte occupera réellement, calculé comme le fait Android :
+     * GSM-7 tant que tous les caractères y sont (160 seuls, 153 par segment concaténé),
+     * UCS-2 dès qu'un seul en sort (70 seuls, 67 par segment concaténé).
+     */
+    private fun segments(texte: String): Int {
+        val septets = texte.sumOf { if (it in GSM7_ECHAPPES) 2L else 1L }.toInt()
+        return if (texte.all { it in GSM7 }) {
+            if (septets <= 160) 1 else (septets + 152) / 153
+        } else {
+            if (texte.length <= 70) 1 else (texte.length + 66) / 67
+        }
     }
 
     private fun textesPour(langue: String): SafetyMessageTextsSousLangue {
@@ -101,6 +150,40 @@ class SafetyMessageTextsTest {
             EmergencyTemplate.entries.forEach { modele ->
                 assertThat(l.textes.emergencyBody(modele, URL_MAPS))
                     .doesNotContain(TIRET_CADRATIN)
+            }
+        }
+    }
+
+    @Test
+    fun `aucun message de securite ne depasse deux segments SMS`() {
+        // Le tiret cadratin n'était que le coupable le plus visible ; ce qui compte est le
+        // nombre de SMS réellement émis. Mesuré en v1.28.12 : « reçois » et « être »
+        // faisaient partir le Safety Call FRANÇAIS en TROIS segments au lieu d'un.
+        pourChaqueLangue { l ->
+            val tous = buildList {
+                EmergencyTemplate.entries.forEach { add(l.textes.emergencyBody(it, URL_MAPS)) }
+                listOf(
+                    SafetyCallTemplate.CHECK_IN,
+                    SafetyCallTemplate.URGENT,
+                    SafetyCallTemplate.FOLLOW_UP,
+                ).forEach {
+                    add(l.textes.safetyCallBody(it, SafetyCallConfig.TIMEOUT_48H_MS, ""))
+                }
+                for (index in 1..SafetyCallConfig.RELANCE_COUNT) {
+                    add(l.textes.safetyCallRelance(index))
+                }
+            }
+            tous.forEach { texte ->
+                // Nommer les caractères qui font basculer en UCS-2 : sans eux, le rapport dit
+                // « 3 au lieu de 2 » et laisse chercher lequel des 140 caractères est en cause.
+                val hors = texte.filterNot { it in GSM7 }.toSortedSet()
+                // Truth ne connaît que `%s` dans ses messages : un `%d` lui fait compter un
+                // paramètre de moins et lever IllegalArgumentException — le test rougirait
+                // alors pour une raison qui n'a rien à voir avec les SMS.
+                assertWithMessage(
+                    "%s : %s segments pour « %s » (hors GSM-7 : %s)",
+                    l.langue, segments(texte), texte, hors,
+                ).that(segments(texte)).isAtMost(SEGMENTS_MAX)
             }
         }
     }
