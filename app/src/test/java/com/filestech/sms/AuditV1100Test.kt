@@ -212,59 +212,20 @@ class AuditV1100Test {
         assertThat(names).containsExactly("NEED_HELP", "DANGER", "DISCREET")
     }
 
-    @Test fun `EmergencyTemplate NEED_HELP renders with URL when location provided`() {
-        val url = "https://maps.google.com/?q=48.85661,2.35222"
-        val body = EmergencyTemplate.NEED_HELP.renderBody(url)
-        assertThat(body).contains(url)
-        // v1.14.5 — emoji ⚠️ prepended pour visibilité notif côté destinataire.
-        // Garde-régression sur le prefix (⚠️ + URGENCE).
-        assertThat(body).startsWith("⚠️ URGENCE")
-        assertThat(body).contains("URGENCE")
-    }
-
-    @Test fun `EmergencyTemplate falls back to explicit mention when location is null`() {
-        // Garde-régression : un destinataire doit comprendre que l'absence
-        // d'URL est intentionnelle (permission refusée / GPS off), pas un bug.
-        val body = EmergencyTemplate.NEED_HELP.renderBody(null)
-        assertThat(body).contains(EmergencyTemplate.LOCATION_FALLBACK)
-        assertThat(body).doesNotContain("http")
-    }
-
-    @Test fun `EmergencyTemplate falls back to explicit mention when location is blank`() {
-        val body = EmergencyTemplate.DANGER.renderBody("")
-        assertThat(body).contains(EmergencyTemplate.LOCATION_FALLBACK)
-    }
-
-    @Test fun `EmergencyTemplate DANGER wording matches user request v1_10_0`() {
-        val body = EmergencyTemplate.DANGER.renderBody("https://maps.google.com/?q=0,0")
-        // Verbatim — l'user a validé ce wording pour le template DANGER.
-        assertThat(body).contains("DANGER")
-        assertThat(body).contains("situation critique")
-    }
-
-    // ──────────────── SEC-5 — GSM-7 single-segment guarantee ────────────────
-
-    @Test fun `EmergencyTemplate renders use GSM-7-safe chars (no em dash) (SEC-5)`() {
-        // U+2014 em dash forçait UCS-2 = 70 chars/segment → multi-segment
-        // → risque que le 2e PDU soit perdu en zone radio faible.
-        // Tous les templates doivent éviter U+2014.
-        val urlSample = "https://maps.google.com/?q=48.85661,2.35222"
-        EmergencyTemplate.entries.forEach { template ->
-            val body = template.renderBody(urlSample)
-            assertThat(body).doesNotContain("—")
-        }
-    }
-
-    @Test fun `EmergencyTemplate renders fit in single GSM-7 segment (160 chars cap)`() {
-        // Avec une URL Maps de ~40 chars, chaque template doit produire un
-        // body ≤ 160 chars (1 segment GSM-7). Cap absolu pour garantir
-        // l'arrivée en zone radio faible.
-        val urlSample = "https://maps.google.com/?q=48.85661,2.35222" // 44 chars
-        EmergencyTemplate.entries.forEach { template ->
-            val body = template.renderBody(urlSample)
-            assertThat(body.length).isAtMost(160)
-        }
-    }
+    /*
+     * v1.28.12 — LES GARDES SUR LE TEXTE ONT DÉMÉNAGÉ, ET SE SONT ÉLARGIES.
+     *
+     * Six tests vivaient ici : le rendu avec et sans position, le libellé validé pour DANGER, le
+     * préfixe ⚠️, l'absence de tiret cadratin, le cap à 160 caractères. Ils étaient justes, et
+     * ils ne regardaient **qu'une seule langue** — parce qu'il n'y en avait qu'une : les corps de
+     * SMS étaient écrits en français dans `EmergencyTemplate` et partaient en français à tout le
+     * monde, anglophones compris.
+     *
+     * Les mêmes garanties sont désormais vérifiées sur les RESSOURCES RÉELLES et **langue par
+     * langue**, à travers l'implémentation qui sert aussi à l'envoi :
+     * `com.filestech.sms.system.safety.SafetyMessageTextsTest`. Ce fichier-ci garde ce qui relève
+     * encore du domaine : la forme de l'énumération.
+     */
 
     // ──────────────── SEC-4 — anti-spam underflow fail-safe ────────────────
 

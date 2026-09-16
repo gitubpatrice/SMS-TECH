@@ -9,6 +9,8 @@ import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact
+import com.filestech.sms.domain.safetycall.SafetyCallDuration
+import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SentSmsRecorder
@@ -342,8 +344,52 @@ internal fun useCase(
     settings = settings,
     panicState = object : PanicStateProvider { override val isPanicDecoyActive = false },
     mirror = mirror,
+    textes = FakeSafetyMessageTexts(),
     io = io,
 )
+
+/**
+ * v1.28.12 — un double pour les textes, parce qu'ils viennent désormais des RESSOURCES.
+ *
+ * Ces tests-ci portent sur la SÉQUENCE : qui est alerté, quand, combien de fois, et ce qui
+ * désarme. Les mots, eux, se vérifient sur les vraies ressources et dans les trois langues, par
+ * `com.filestech.sms.system.safety.SafetyMessageTextsTest`.
+ *
+ * Deux comportements du vrai rendu sont reproduits ici parce que la séquence en dépend :
+ *  - un message personnalisé vide rend un corps **vide**, ce qui désarme au lieu d'envoyer du
+ *    blanc ;
+ *  - les relances diffèrent entre elles et du message initial.
+ */
+internal class FakeSafetyMessageTexts : com.filestech.sms.domain.safety.SafetyMessageTexts {
+
+    override fun emergencyBody(
+        template: com.filestech.sms.domain.emergency.EmergencyTemplate,
+        locationUrl: String?,
+    ): String = "URGENCE[${template.name}] ${locationUrl ?: "(sans position)"}"
+
+    override fun safetyCallBody(
+        template: SafetyCallTemplate,
+        timeoutMs: Long,
+        customMessage: String,
+    ): String = if (template == SafetyCallTemplate.CUSTOM) {
+        SafetyCallTemplate.injecterDuree(
+            SafetyCallTemplate.capCustom(customMessage),
+            durationLabel(timeoutMs),
+        )
+    } else {
+        "SAFETY[${template.name}] depuis ${durationLabel(timeoutMs)}"
+    }
+
+    override fun safetyCallRelance(index: Int): String =
+        "RELANCE[$index] ${SafetyCallTemplate.minutesDeRelance(index)} min"
+
+    override fun durationLabel(timeoutMs: Long): String =
+        when (val duree = SafetyCallDuration.of(timeoutMs)) {
+            SafetyCallDuration.LessThanAnHour -> "<1h"
+            is SafetyCallDuration.Hours -> "${duree.count}h"
+            is SafetyCallDuration.Days -> "${duree.count}j"
+        }
+}
 
 /**
  * Fait comme si quinze minutes venaient de s'écouler, en reculant `triggeredAt` d'un

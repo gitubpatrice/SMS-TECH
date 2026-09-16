@@ -67,6 +67,7 @@ import com.filestech.sms.R
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
+import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.theme.BrandBlue
@@ -530,7 +531,9 @@ private fun TemplateSection(
             ),
         ) {
             Text(
-                text = draft.template.render(draft.timeoutMs, draft.customMessage)
+                // v1.28.12 — MEME source que l'envoi (`TriggerSafetyCallUseCase`).
+                text = rememberSafetyMessageTexts()
+                    .safetyCallBody(draft.template, draft.timeoutMs, draft.customMessage)
                     .ifBlank { "—" },
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodyMedium,

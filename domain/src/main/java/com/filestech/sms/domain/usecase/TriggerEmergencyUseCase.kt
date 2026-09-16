@@ -5,6 +5,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.safety.SafetyMessageTexts
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.CoroutineDispatcher
@@ -49,6 +50,8 @@ class TriggerEmergencyUseCase @Inject constructor(
     private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
     private val location: LocationProvider,
+    // v1.28.12 — les corps de SMS, dans la langue de l'application.
+    private val textes: SafetyMessageTexts,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -102,7 +105,9 @@ class TriggerEmergencyUseCase @Inject constructor(
         }
         val hadLocation = locationUrl != null
 
-        val body = emergency.template.renderBody(locationUrl).trim()
+        // v1.28.12 — le texte vient des ressources, donc de la langue de l'application. Il
+        // venait d'une chaine francaise en dur, et partait donc en francais a tout le monde.
+        val body = textes.emergencyBody(emergency.template, locationUrl).trim()
         if (body.isBlank()) {
             Timber.w("TriggerEmergencyUseCase: rendered body is blank — aborting")
             return@withContext Result.EmptyBody

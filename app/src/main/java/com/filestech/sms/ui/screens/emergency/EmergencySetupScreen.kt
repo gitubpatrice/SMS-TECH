@@ -53,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyTemplate
+import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.theme.BrandBlue
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -290,7 +291,11 @@ fun EmergencySetupScreen(
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
-                                text = template.renderBody("https://maps.google.com/?q=48.85,2.35"),
+                                // v1.28.12 — MEME source que l'envoi, cf. rememberSafetyMessageTexts.
+                                text = rememberSafetyMessageTexts().emergencyBody(
+                                    template,
+                                    "https://maps.google.com/?q=48.85,2.35",
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

@@ -976,4 +976,55 @@
     <string name="settings_panic_code_no_pin">Set up an app lock first.</string>
     <string name="settings_pin_same_as_panic_code">This PIN is the same as your panic code. Choose another one, otherwise the app would always open in decoy mode and you could no longer reach your own session.</string>
     <string name="lock_wrong_code">Incorrect code</string>
+
+    <!-- ====================================================================================
+         v1.28.12 — THE TEXT THAT IS ACTUALLY SENT.
+
+         These are not screen labels. They are the SMS that leave the phone when someone holds
+         the emergency button for three seconds, or when Safety Call decides nobody has touched
+         the phone for long enough. Until now they were hardcoded in French and went out in
+         French to everyone, English users included.
+
+         Rules that are not style, and that hold in EVERY language:
+          - keep them short. 160 characters in GSM-7, 70 in UCS-2, and the Maps URL counts
+            against that budget;
+          - no em dash (U+2014). It switches the whole message to UCS-2, which halves the
+            segment size and risks losing the second part in weak coverage — precisely the
+            situation these messages exist for. A plain ASCII hyphen is enough;
+          - %1$s in the emergency bodies is the location, or an explicit mention when it is not
+            available, so the recipient knows the absence is deliberate and not a bug.
+         ==================================================================================== -->
+    <string name="safety_sms_emergency_need_help">⚠️ EMERGENCY - I need help. My location: %1$s</string>
+    <string name="safety_sms_emergency_danger">⚠️ DANGER - critical situation, contact me or come. Location: %1$s</string>
+    <!-- No ⚠️ on this one, deliberately: DISCREET exists to signal trouble without alarming, and
+         without giving the situation away to someone glancing at the screen. -->
+    <string name="safety_sms_emergency_discreet">Can you call me? I need help. Location: %1$s</string>
+    <string name="safety_sms_location_unavailable">(location unavailable)</string>
+
+    <string name="safety_sms_check_in">Hello. I have not used my phone for %1$s. Could you call me or come by to check that all is well? Thank you.</string>
+    <string name="safety_sms_urgent">If you get this SMS, I have not been able to use my phone for %1$s. To be sure all is well, please call me.</string>
+    <string name="safety_sms_follow_up">Automatic message: no activity on my phone for %1$s. Could you call me to make sure all is well? Thank you.</string>
+
+    <!-- Follow-ups. Each one names the app and stands on its own: the first message may never
+         have arrived, and an unsigned SMS in the middle of the night reads as phishing and gets
+         ignored. The last one says that it is the last, so that nobody waits for a message that
+         will never come instead of acting.
+
+         Lint flags "%1$d minutes" as a plural candidate here, and these are deliberately NOT
+         plurals: the value is the follow-up interval times the index, so 15, 30 or 45 — never 1.
+         Making them plurals would ask every translator to write a singular form that can never
+         appear on screen. -->
+    <string name="safety_sms_relance_first">SMS Tech automatic alert: still no activity on my phone, %1$d minutes later. Please try to reach me.</string>
+    <string name="safety_sms_relance_middle">SMS Tech automatic alert: %1$d minutes with no activity from me. If you cannot reach me, please tell someone close to me.</string>
+    <string name="safety_sms_relance_last">Last SMS Tech automatic alert: %1$d minutes with no activity. No further message will follow. Please check that I am all right.</string>
+
+    <string name="safety_duration_less_than_hour">less than an hour</string>
+    <plurals name="safety_duration_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="safety_duration_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
 </resources>

@@ -2747,8 +2747,10 @@ private fun SafetyCallArmedRecap(
     onModify: () -> Unit,
     onImOk: () -> Unit,
 ) {
-    val durationLabel = com.filestech.sms.domain.safetycall.SafetyCallTemplate
-        .formatDuration(config.timeoutMs)
+    // v1.28.12 — le libellé de durée vient des ressources : il était rendu en français en dur
+    // (« 24 heures », « 2 jours »), y compris sur un appareil en anglais.
+    val durationLabel = com.filestech.sms.system.safety.rememberSafetyMessageTexts()
+        .durationLabel(config.timeoutMs)
     // v1.27.2 — moment où le compte à rebours COURANT a démarré. Avec la durée et le restant
     // affichés juste en dessous, le bloc devient vérifiable de tête : départ + durée = échéance.
     //

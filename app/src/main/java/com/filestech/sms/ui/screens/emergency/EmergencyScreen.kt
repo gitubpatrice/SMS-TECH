@@ -47,6 +47,7 @@ import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyConfig
 import com.filestech.sms.domain.usecase.TriggerEmergencyUseCase
 import com.filestech.sms.system.emergency.EmergencyNumbers
+import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.EmergencyHoldButton
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
@@ -540,9 +541,13 @@ private fun MessagePreviewCard(
     config: EmergencyConfig,
     includeLocationGranted: Boolean,
 ) {
-    val previewBody = remember(config.template, includeLocationGranted) {
+    // v1.28.12 — MEME source que l'envoi (`TriggerEmergencyUseCase`) : un apercu qui mentirait
+    // sur le contenu d'un SMS d'urgence serait la pire occurrence du motif « correctif pose sur
+    // un seul des chemins jumeaux ».
+    val textes = rememberSafetyMessageTexts()
+    val previewBody = remember(config.template, includeLocationGranted, textes) {
         val sampleUrl = if (includeLocationGranted) "https://maps.google.com/?q=48.85661,2.35222" else null
-        config.template.renderBody(sampleUrl)
+        textes.emergencyBody(config.template, sampleUrl)
     }
     Card(
         colors = CardDefaults.cardColors(

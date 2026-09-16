@@ -140,48 +140,35 @@ class SafetyCallRelanceTest {
     }
 
     /**
-     * Les textes doivent **différer** : répéter le message initial mot pour mot ressemblerait à un
-     * défaut de l'application, pas à une insistance. Et le dernier doit s'annoncer comme tel, sans
-     * quoi un contact attendrait une suite qui ne viendra jamais au lieu d'agir.
+     * v1.28.12 — **ce qui se teste ici est le DÉLAI ANNONCÉ, plus le mot français.**
+     *
+     * Les textes eux-mêmes sont sortis du code vers les ressources : ils étaient écrits en
+     * français en dur et partaient donc en français à tout le monde. Les garanties de rédaction
+     * — chaque relance nomme l'application, se suffit à elle-même, la dernière s'annonce comme
+     * la dernière, et aucune ne porte de tiret cadratin — sont désormais vérifiées **dans toutes
+     * les langues à la fois** par `.github/scripts/i18n-parite.py`, ce qui est mieux que dans
+     * une seule.
+     *
+     * Reste ici la seule chose qui relève du domaine : **le nombre de minutes annoncé doit être
+     * le vrai**. Un message qui se trompe de délai ment à quelqu'un qui décide d'agir ou non
+     * sur sa foi.
      */
     @Test
-    fun `les textes de relance progressent et le dernier s'annonce`() {
-        val textes = (1..SafetyCallConfig.RELANCE_COUNT).map { SafetyCallTemplate.renderRelance(it) }
-
-        assertThat(textes.toSet()).hasSize(SafetyCallConfig.RELANCE_COUNT)
-        textes.forEach { assertThat(it).isNotEmpty() }
-        // Le délai annoncé dans le texte doit correspondre au délai réel, sinon le message ment.
-        assertThat(textes[0]).contains("15 minutes")
-        assertThat(textes[1]).contains("30 minutes")
-        assertThat(textes[2]).contains("45 minutes")
-        assertThat(textes.last()).contains("Dernière alerte")
-        // Aucune relance ne doit se faire passer pour le message initial.
-        val initial = SafetyCallTemplate.CHECK_IN.render(TIMEOUT)
-        assertThat(textes).doesNotContain(initial)
+    fun `le delai annonce par chaque relance est le vrai delai`() {
+        val attendus = listOf(15L, 30L, 45L)
+        for (index in 1..SafetyCallConfig.RELANCE_COUNT) {
+            assertThat(SafetyCallTemplate.minutesDeRelance(index)).isEqualTo(attendus[index - 1])
+        }
     }
 
-    /**
-     * v1.27.2 (relecture Gemini du 2026-08-05) — chaque relance doit **nommer l'application** et
-     * **se suffire à elle-même**.
-     *
-     * Nommer : un SMS reçu en pleine nuit disant « vérifie que je vais bien », sans émetteur
-     * identifiable, ressemble à du hameçonnage et se fait ignorer.
-     *
-     * Se suffire : le message initial peut ne jamais être arrivé — réseau coupé, ou processus tué
-     * entre la réservation du créneau et l'envoi. Une relance qui renvoie au message précédent
-     * serait alors incompréhensible pour le seul contact qui reçoit quelque chose.
-     */
     @Test
-    fun `chaque relance nomme l application et se suffit a elle-meme`() {
+    fun `le delai suit l intervalle configure, il n est pas ecrit en dur`() {
+        // Si RELANCE_INTERVAL_MS change un jour, les minutes annoncées doivent suivre. Un test
+        // qui vérifierait « 15, 30, 45 » sans lier à la constante resterait vert sur le défaut.
+        val intervalleEnMinutes = SafetyCallConfig.RELANCE_INTERVAL_MS / 60_000L
         for (index in 1..SafetyCallConfig.RELANCE_COUNT) {
-            val texte = SafetyCallTemplate.renderRelance(index)
-            assertThat(texte).contains("SMS Tech")
-            // « sans réponse de ma part » est faux — le contact n'a posé aucune question. Ce qui
-            // manque est de l'ACTIVITÉ sur le téléphone.
-            assertThat(texte).doesNotContain("sans réponse")
-            assertThat(texte).contains("activité")
-            // Aucun renvoi à un message que le contact n'a peut-être jamais reçu.
-            assertThat(texte).doesNotContain("relance")
+            assertThat(SafetyCallTemplate.minutesDeRelance(index))
+                .isEqualTo(index * intervalleEnMinutes)
         }
     }
 

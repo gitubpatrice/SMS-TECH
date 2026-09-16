@@ -972,4 +972,46 @@
     <string name="settings_panic_code_no_pin">Configurez d\'abord un verrouillage de l\'application.</string>
     <string name="settings_pin_same_as_panic_code">Ce PIN est identique à votre code panique. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre et vous ne pourriez plus atteindre votre propre session.</string>
     <string name="lock_wrong_code">Code incorrect</string>
+
+    <!-- ====================================================================================
+         v1.28.12 — LE TEXTE QUI PART VRAIMENT.
+
+         Ces chaînes reprennent MOT POUR MOT celles qui étaient écrites en dur dans
+         `domain/…/EmergencyTemplate.kt` et `SafetyCallTemplate.kt` depuis la v1.10.0 : rien ne
+         change pour un utilisateur francophone. Ce qui change, c'est que les autres langues ne
+         reçoivent plus du français.
+
+         Contraintes à tenir (voir le commentaire du fichier anglais) : court, pas de tiret
+         cadratin U+2014, et l'URL Maps compte dans le budget de caractères.
+         ==================================================================================== -->
+    <string name="safety_sms_emergency_need_help">⚠️ URGENCE - j\'ai besoin d\'aide. Ma position : %1$s</string>
+    <string name="safety_sms_emergency_danger">⚠️ DANGER - situation critique, contacte-moi ou viens. Position : %1$s</string>
+    <!-- Pas d\'emoji ⚠️ ici, volontairement : DISCREET sert à signaler un malaise sans alarmer,
+         et sans se trahir devant quelqu\'un qui regarde l\'écran. -->
+    <string name="safety_sms_emergency_discreet">Peux-tu m\'appeler ? J\'ai besoin d\'aide. Position : %1$s</string>
+    <string name="safety_sms_location_unavailable">(position non disponible)</string>
+
+    <string name="safety_sms_check_in">Bonjour. Je n\'ai pas accédé à mon téléphone depuis %1$s. Pourrais-tu m\'appeler ou passer pour vérifier que tout va bien ? Merci.</string>
+    <string name="safety_sms_urgent">Si tu reçois ce SMS, c\'est que je n\'ai pas pu utiliser mon téléphone depuis %1$s. Afin d\'être certain que tout va bien, appelle-moi STP.</string>
+    <string name="safety_sms_follow_up">Message automatique : pas d\'activité sur mon téléphone depuis %1$s. Pourrais-tu m\'appeler pour t\'assurer que tout va bien ? Merci.</string>
+
+    <!-- Relances. Chacune nomme l\'application et se suffit à elle-même : le message initial peut
+         n\'être jamais arrivé, et un SMS anonyme reçu en pleine nuit ressemble à du hameçonnage et
+         se fait ignorer. La dernière s\'annonce comme la dernière, sinon un contact attend une
+         suite qui ne viendra jamais au lieu d\'agir. -->
+    <string name="safety_sms_relance_first">Alerte automatique SMS Tech : toujours aucune activité sur mon téléphone, %1$d minutes plus tard. Merci d\'essayer de me joindre.</string>
+    <string name="safety_sms_relance_middle">Alerte automatique SMS Tech : %1$d minutes sans aucune activité de ma part. Si tu ne parviens pas à me joindre, préviens un proche.</string>
+    <string name="safety_sms_relance_last">Dernière alerte automatique SMS Tech : %1$d minutes sans activité. Plus aucun message ne suivra. Merci de vérifier que je vais bien.</string>
+
+    <string name="safety_duration_less_than_hour">moins d\'une heure</string>
+    <plurals name="safety_duration_hours">
+        <item quantity="one">%1$d heure</item>
+        <item quantity="many">%1$d heures</item>
+        <item quantity="other">%1$d heures</item>
+    </plurals>
+    <plurals name="safety_duration_days">
+        <item quantity="one">%1$d jour</item>
+        <item quantity="many">%1$d jours</item>
+        <item quantity="other">%1$d jours</item>
+    </plurals>
 </resources>

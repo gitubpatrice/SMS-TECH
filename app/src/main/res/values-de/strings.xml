@@ -981,4 +981,36 @@
     <string name="settings_panic_code_no_pin">Richten Sie zuerst eine App-Sperre ein.</string>
     <string name="settings_pin_same_as_panic_code">Diese PIN ist dieselbe wie Ihr Panikcode. Wählen Sie eine andere, sonst würde die App immer im Tarnmodus öffnen und Sie kämen nicht mehr in Ihre eigene Sitzung.</string>
     <string name="lock_wrong_code">Falscher Code</string>
+
+    <!-- ====================================================================================
+         v1.28.12 — THE TEXT THAT IS ACTUALLY SENT. See the English file for the rules: short,
+         no em dash (U+2014), and the Maps URL counts against the character budget.
+         ==================================================================================== -->
+    <string name="safety_sms_emergency_need_help">⚠️ NOTFALL - ich brauche Hilfe. Mein Standort: %1$s</string>
+    <string name="safety_sms_emergency_danger">⚠️ GEFAHR - kritische Lage, melde dich oder komm. Standort: %1$s</string>
+    <!-- Kein ⚠️ hier, mit Absicht: DISCREET soll Not melden, ohne zu alarmieren und ohne die
+         Lage jemandem zu verraten, der auf den Bildschirm schaut. -->
+    <string name="safety_sms_emergency_discreet">Kannst du mich anrufen? Ich brauche Hilfe. Standort: %1$s</string>
+    <string name="safety_sms_location_unavailable">(Standort nicht verfügbar)</string>
+
+    <string name="safety_sms_check_in">Hallo. Ich habe mein Telefon seit %1$s nicht benutzt. Kannst du mich anrufen oder vorbeikommen, um nachzusehen, ob alles in Ordnung ist? Danke.</string>
+    <string name="safety_sms_urgent">Wenn du diese SMS bekommst, konnte ich mein Telefon seit %1$s nicht benutzen. Um sicherzugehen, dass alles in Ordnung ist, ruf mich bitte an.</string>
+    <string name="safety_sms_follow_up">Automatische Nachricht: seit %1$s keine Aktivität auf meinem Telefon. Kannst du mich anrufen, um sicherzugehen, dass alles in Ordnung ist? Danke.</string>
+
+    <!-- Folgemeldungen. Jede nennt die App und steht für sich allein: die erste Nachricht ist
+         vielleicht nie angekommen, und eine SMS ohne Absender mitten in der Nacht wirkt wie
+         Betrug und wird ignoriert. Die letzte sagt, dass sie die letzte ist. -->
+    <string name="safety_sms_relance_first">Automatischer Alarm von SMS Tech: %1$d Minuten später immer noch keine Aktivität auf meinem Telefon. Bitte versuche, mich zu erreichen.</string>
+    <string name="safety_sms_relance_middle">Automatischer Alarm von SMS Tech: %1$d Minuten ohne jede Aktivität von mir. Wenn du mich nicht erreichst, sag bitte einer nahestehenden Person Bescheid.</string>
+    <string name="safety_sms_relance_last">Letzter automatischer Alarm von SMS Tech: %1$d Minuten ohne Aktivität. Es folgt keine weitere Nachricht. Bitte sieh nach, ob es mir gut geht.</string>
+
+    <string name="safety_duration_less_than_hour">weniger als eine Stunde</string>
+    <plurals name="safety_duration_hours">
+        <item quantity="one">%1$d Stunde</item>
+        <item quantity="other">%1$d Stunden</item>
+    </plurals>
+    <plurals name="safety_duration_days">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
 </resources>
