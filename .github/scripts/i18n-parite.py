@@ -52,7 +52,10 @@ TEST_SMS = os.path.join(RACINE, "app", "src", "test", "java", "com", "filestech"
 # values-de, values-pt-rBR, values-b+sr+Latn - et surtout PAS values-night, values-v29,
 # values-land, values-sw600dp... qui sont des qualificateurs de configuration, pas des langues.
 LANGUE = re.compile(r"^values-(?:(b\+[A-Za-z+]+)|([a-z]{2,3})(?:-r([A-Z]{2}))?)$")
-PARAMETRE = re.compile(r"%(\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?([a-zA-Z])")
+# Seules les conversions Java reelles : « 100% private » n'est pas un parametre %p, et
+# le drapeau ESPACE est volontairement absent de la classe - « 100 % des » n'en est pas
+# un non plus. Un %1$p malformé compte alors comme parametre PERDU, ce qui est exact.
+PARAMETRE = re.compile(r"%(\d+\$)?[-#+0,(]*\d*(?:\.\d+)?([bBhHsScCdoxXeEfgGaAtTn])")
 
 erreurs = []
 

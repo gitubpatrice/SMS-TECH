@@ -36,6 +36,7 @@ EN = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SMS Tech</string>
     <string name="salut">Hello</string>
+    <string name="promesse">100% private — zero tracking</string>
     <string name="envoye">Sent to %1$s at %2$s</string>
     <plurals name="messages">
         <item quantity="one">%1$d message</item>
@@ -51,6 +52,7 @@ DE_SAIN = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SMS Tech</string>
     <string name="salut">Hallo</string>
+    <string name="promesse">100 % datenschutzfreundlich — null Tracking</string>
     <string name="envoye">Am %2$s an %1$s gesendet</string>
     <plurals name="messages">
         <item quantity="one">%1$d Nachricht</item>
@@ -163,6 +165,16 @@ def parametre_invente():
     return "parametres de format divergents sur envoye"
 
 
+def parametre_malforme():
+    """Un %1$p n'est pas une conversion Java : le parametre est PERDU, pas traduit.
+
+    Ce cas garde le resserrement du motif : en n'acceptant plus n'importe quelle lettre,
+    le controle doit continuer de voir la DISPARITION d'un vrai parametre.
+    """
+    de(DE_SAIN.replace("Am %2$s an %1$s gesendet", "Am %2$s an %1$p gesendet"))
+    return "parametres de format divergents sur envoye"
+
+
 def parametre_invente_dans_pluriel():
     de(DE_SAIN.replace('<item quantity="other">%1$d Nachrichten</item>',
                        '<item quantity="other">%1$d von %2$d Nachrichten</item>'))
@@ -231,6 +243,7 @@ CAS = [
     ("cle en double", cle_en_double),
     ("parametre de format PERDU", parametre_perdu),
     ("parametre de format INVENTE", parametre_invente),
+    ("parametre de format MALFORME (%1$p)", parametre_malforme),
     ("parametre invente dans un pluriel", parametre_invente_dans_pluriel),
     ("quantite de pluriel manquante", quantite_manquante),
     ("geste 2 : absente de localeFilters", absente_de_localefilters),
