@@ -176,6 +176,39 @@ PLAFONDS_FASTLANE = {
 }
 
 
+def verifier_fins_de_ligne(dossiers):
+    """Aucun strings.xml ne doit porter de \\r\\r\\n, ni melanger les conventions.
+
+    Pourquoi ce garde existe : values-es a ete commit\u00e9 avec un \\r\\r\\n a chaque ligne
+    (2026-09-17, commit 2e8991b), et values-it avec deux lignes dans le meme cas. Rien
+    ne l'a signal\u00e9 : l'application compilait, la parite passait, les tests aussi. Le
+    prix est venu a la relecture suivante — un double retour chariot compte pour DEUX
+    fins de ligne en mode texte, si bien que reecrire le fichier doublait son
+    interlignage et rendait le diff illisible.
+
+    Le depot stocke ces fichiers en LF (`core.autocrlf` s'occupe du poste Windows).
+    On refuse donc le \\r\\r\\n partout, et le melange LF/CRLF dans un meme fichier.
+    """
+    for dossier in ["values"] + list(dossiers):
+        chemin = os.path.join(RES, dossier, "strings.xml")
+        if not os.path.exists(chemin):
+            continue
+        # `etiquette("values")` rendrait une chaine vide : la source anglaise se nomme "en".
+        langue = "en" if dossier == "values" else etiquette(dossier)
+        octets = open(chemin, "rb").read()
+        if b"\r\r\n" in octets:
+            echec(langue,
+                  "strings.xml porte des fins de ligne \\r\\r\\n (%d) : un outil y a ajoute "
+                  "un retour chariot de trop" % octets.count(b"\r\r\n"))
+            continue
+        crlf = octets.count(b"\r\n")
+        lf = octets.count(b"\n")
+        if crlf and crlf != lf:
+            echec(langue,
+                  "strings.xml melange CRLF (%d) et LF (%d) : une seule convention par "
+                  "fichier" % (crlf, lf - crlf))
+
+
 def verifier_fastlane():
     """Les plafonds des fiches de store, comptes en OCTETS.
 
@@ -353,6 +386,7 @@ def main():
         echec(lg, "annoncee dans locales_config.xml mais aucun values-%s/strings.xml : "
                   "le selecteur proposerait une langue vide" % lg)
 
+    verifier_fins_de_ligne(dossiers)
     verifier_fastlane()
 
     print()

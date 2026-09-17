@@ -329,7 +329,7 @@
     <string name="channel_emergency_shortcut_label">Notruf-Verknüpfung</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
     <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
-    <string name="channel_emergency_shortcut_desc">Stille dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112 und die Polizeinummer Ihres Landes). Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen, und halten Sie dann 3 s, um den Alarm zu senden.</string>
+    <string name="channel_emergency_shortcut_desc">Stille dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112 und die landeseigene Notrufnummer). Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen, und halten Sie dann 3 s, um den Alarm zu senden.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — Notruf-Verknüpfung</string>
     <string name="emergency_shortcut_notif_text">Tippen, um die Notrufseite zu öffnen, oder 112 wählen.</string>
     <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
@@ -340,10 +340,10 @@
     <string name="emergency_saved_disabled">Notfallmodus deaktiviert</string>
     <string name="emergency_setup_unsaved_body">Der Notfallmodus ist noch nicht gespeichert. Wenn Sie jetzt gehen, bleibt er in seinem bisherigen Zustand.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
-    <string name="settings_emergency_shortcut_desc">Zeigt eine dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112 und die Polizeinummer Ihres Landes), die ohne Entsperren erreichbar ist. Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen. Standardmäßig aus.</string>
+    <string name="settings_emergency_shortcut_desc">Zeigt eine dauerhafte Benachrichtigung mit Kurzwahl-Aktionen (112 und die landeseigene Notrufnummer), die ohne Entsperren erreichbar ist. Tippen Sie auf den Text, um den Notruf-Bildschirm zu öffnen. Standardmäßig aus.</string>
     <string name="emergency_shortcut_no_app_to_dial">Keine App installiert, um den Anruf zu tätigen</string>
-    <string name="settings_emergency_call_police_title">Kurzaktion Polizei in der Sperrbildschirm-Benachrichtigung</string>
-    <string name="settings_emergency_call_police_desc">Fügt der dauerhaften Notruf-Benachrichtigung auf dem Sperrbildschirm eine Kurzaktion "Polizei" hinzu. Die Nummer ist die des Landes, mit dem Ihr Telefon verbunden ist. Die Polizei-Schaltfläche ist auf der Notrufseite in der App unabhängig von dieser Einstellung immer sichtbar. Standardmäßig aus.</string>
+    <string name="settings_emergency_call_police_title">Landeseigene Notrufnummer in der Sperrbildschirm-Benachrichtigung</string>
+    <string name="settings_emergency_call_police_desc">Fügt der dauerhaften Notruf-Benachrichtigung auf dem Sperrbildschirm die landeseigene Notrufnummer als zweite Kurzaktion hinzu: in den meisten Ländern die Polizei, im Vereinigten Königreich und in Irland die allgemeine Notrufleitung. Sie entfällt, wenn das Land keine eigene Nummer hat. Die Notrufseite in der App zeigt unabhängig von dieser Einstellung immer alle Nummern. Standardmäßig aus.</string>
 
 
     <!-- Backup / restore dialogs -->
@@ -571,7 +571,7 @@
     <string name="emergency_title">Notfallmodus</string>
     <string name="emergency_setup_title">Notfallmodus einrichten</string>
     <string name="emergency_button_label">NOTFALL</string>
-    <string name="emergency_button_hint_hold_3s">Notruf — zum Senden 3 Sekunden halten</string>
+    <string name="emergency_button_hint_hold_3s">Notfall — zum Senden 3 Sekunden halten</string>
     <string name="emergency_preview_title">Nachricht, die gesendet wird</string>
     <string name="emergency_status_disabled">Der Notfallmodus ist deaktiviert. Schalten Sie ihn in den Einstellungen ein.</string>
     <string name="emergency_status_no_contacts">Keine Notfallkontakte eingerichtet. Fügen Sie welche in den Safety-Call-Einstellungen hinzu.</string>
@@ -917,7 +917,7 @@
     <string name="about_help_emergency_title">Den Notfallmodus verwenden</string>
     <string name="about_help_emergency_step1">Einstellungen → Notfallmodus: aktivieren und mindestens einen Safety-Call-Kontakt hinzufügen</string>
     <string name="about_help_emergency_step2">Notrufseite: Direktanrufe zu den Notrufnummern Ihres Landes; rote Schaltfläche 3 s halten → SMS an Angehörige</string>
-    <string name="about_help_emergency_step3">Benachrichtigung auf dem Sperrbildschirm (auf Wunsch): Verknüpfungen zu 112 und zur Polizei, ohne zu entsperren</string>
+    <string name="about_help_emergency_step3">Benachrichtigung auf dem Sperrbildschirm (auf Wunsch): Verknüpfungen zu 112 und zur landeseigenen Notrufnummer, ohne zu entsperren</string>
     <string name="about_help_emergency_step4">\"Mir geht es gut\" in der Liste der Unterhaltungen bricht den Alarm bei versehentlicher Auslösung ab</string>
     <string name="about_help_update_title">Nach einer Aktualisierung suchen</string>
     <string name="about_help_update_step1">Schaltfläche \"Aktualisierungen ansehen\" oben auf dieser Seite</string>

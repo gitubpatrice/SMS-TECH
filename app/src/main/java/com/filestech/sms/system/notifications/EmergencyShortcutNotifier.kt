@@ -183,22 +183,41 @@ class EmergencyShortcutNotifier @Inject constructor(
             // v1.28.12 bis — le libellé nomme le service RÉELLEMENT composé dans CE pays.
             // Au Royaume-Uni et en Irlande il n'existe pas de ligne de police distincte : le
             // 999 est la ligne d'urgence générale, et l'étiqueter « Police » serait faux. Le
-            // repli du numéro et le choix du libellé lisent la MÊME fonction, donc ils ne
-            // peuvent pas diverger. Reste le cas où l'utilisateur change de pays entre la pose
-            // et le tap : le numéro suit (il est résolu au tap), le libellé non — c'est le
-            // résidu déjà assumé au-dessus, et il nomme désormais un service voisin plutôt
-            // qu'un service absent du pays.
+            // repli du numéro et le choix du libellé lisent la MÊME fonction.
+            //
+            // ⚠️ v1.28.12 ter — « ils ne peuvent donc pas diverger » était écrit ici, et c'était
+            // TROP FORT. Ils lisent la même fonction, mais pas au même moment : le libellé est
+            // fixé à la POSE, le numéro est résolu au TAP. Deux choses peuvent bouger entre les
+            // deux, et cette notification vit des jours :
+            //
+            //   - le pays, si l'utilisateur voyage — résidu déjà assumé plus haut ;
+            //   - le VERDICT DE L'OS sur un numéro national, qui dépend du réseau courant. SIM
+            //     retirée ou hors couverture, `isEmergencyNumber("17")` peut répondre non : le
+            //     17 sort de la liste, `raccourciDans` retombe sur le 112, et l'action reste
+            //     étiquetée « Police ».
+            //
+            // Ce résidu-là n'est pas rattrapable depuis une notification persistante, et il
+            // dégrade TOUJOURS vers le 112 — un numéro qui n'est jamais faux, et le seul qui
+            // fonctionne précisément dans les conditions qui provoquent la divergence. On le
+            // dit plutôt que de le nier.
             val raccourci = EmergencyNumbers.raccourciForcesDeLOrdre(context)
-            val libelleDuRaccourci = if (raccourci.service == EmergencyNumbers.Service.POLICE) {
-                R.string.emergency_call_police_label
-            } else {
-                R.string.emergency_call_national_label
+            // v1.28.12 ter (audit S10) — dans un pays que la table ne couvre pas, le raccourci
+            // retombe sur le 112, et la notification affichait alors DEUX actions identiques :
+            // « Composer le 112 » et « Urgence nationale », toutes deux vers le 112. La seconde
+            // n'apportait rien et nommait un service que le pays n'a pas. Quand le raccourci EST
+            // le numéro européen, il n'y a pas de second numéro à proposer.
+            if (raccourci.service != EmergencyNumbers.Service.EUROPEAN) {
+                val libelleDuRaccourci = if (raccourci.service == EmergencyNumbers.Service.POLICE) {
+                    R.string.emergency_call_police_label
+                } else {
+                    R.string.emergency_call_national_label
+                }
+                builder.addAction(
+                    R.drawable.ic_notification_message,
+                    context.getString(libelleDuRaccourci),
+                    dialPolicePI,
+                )
             }
-            builder.addAction(
-                R.drawable.ic_notification_message,
-                context.getString(libelleDuRaccourci),
-                dialPolicePI,
-            )
         }
 
         // Audit lint v1.14.8 — `@SuppressLint("MissingPermission")` justifié : `hasPostPermission()`

@@ -119,6 +119,13 @@ def ecrire(chemin, contenu):
         f.write(contenu)
 
 
+def ecrire_octets(chemin_, octets):
+    """Ecrit SANS traduction de fin de ligne — le mode texte de Windows la reecrirait."""
+    os.makedirs(os.path.dirname(chemin_), exist_ok=True)
+    with open(chemin_, "wb") as f:
+        f.write(octets)
+
+
 def chemin(*morceaux):
     return os.path.join(base, *morceaux)
 
@@ -324,6 +331,27 @@ def categorie_cldr_inutile():
     return "categorie CLDR INUTILE en de"
 
 
+def fins_de_ligne_doublees():
+    """Le defaut REEL de values-es (commit 2e8991b) : un \\r de trop a chaque ligne.
+
+    Rien ne le signalait — la compilation, la parite et les tests passaient tous. Il ne
+    s'est vu qu'a la relecture suivante, quand reecrire le fichier a double son
+    interlignage : en mode texte, \\r\\r\\n compte pour DEUX fins de ligne.
+    """
+    ecrire_octets(os.path.join(res(), "values-de", "strings.xml"),
+                  DE_SAIN.encode("utf-8").replace(b"\n", b"\r\r\n"))
+    return "porte des fins de ligne"
+
+
+def fins_de_ligne_melangees():
+    """Deux conventions dans un meme fichier : la moitie en CRLF, la moitie en LF."""
+    octets = DE_SAIN.encode("utf-8")
+    coupe = octets.index(b"\n", len(octets) // 2) + 1
+    ecrire_octets(os.path.join(res(), "values-de", "strings.xml"),
+                  octets[:coupe].replace(b"\n", b"\r\n") + octets[coupe:])
+    return "melange CRLF"
+
+
 CAS = [
     ("cle manquante", cle_manquante),
     ("cle en trop", cle_en_trop),
@@ -346,6 +374,8 @@ CAS = [
     ("fiche de store : changelog de la version absent", changelog_de_la_version_absent),
     ("pluriel : categorie CLDR de la LANGUE manquante", categorie_cldr_de_la_langue_manquante),
     ("pluriel : categorie CLDR inutile", categorie_cldr_inutile),
+    ("fins de ligne : un retour chariot de trop", fins_de_ligne_doublees),
+    ("fins de ligne : deux conventions dans un fichier", fins_de_ligne_melangees),
 ]
 
 

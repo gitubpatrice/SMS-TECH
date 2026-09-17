@@ -330,7 +330,7 @@
     <string name="channel_emergency_shortcut_label">Scorciatoia di emergenza</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
     <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
-    <string name="channel_emergency_shortcut_desc">Notifica permanente silenziosa con scorciatoie di chiamata (112 e il numero della polizia del suo paese). Tocchi il corpo per aprire la schermata di emergenza, poi tenga premuto 3 s per inviare l\'allarme.</string>
+    <string name="channel_emergency_shortcut_desc">Notifica permanente silenziosa con scorciatoie di chiamata (112 e il numero di emergenza proprio del suo paese). Tocchi il corpo per aprire la schermata di emergenza, poi tenga premuto 3 s per inviare l\'allarme.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — scorciatoia di emergenza</string>
     <string name="emergency_shortcut_notif_text">Tocchi per aprire la pagina di emergenza, o chiami il 112.</string>
     <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
@@ -341,10 +341,10 @@
     <string name="emergency_saved_disabled">Modalità emergenza disattivata</string>
     <string name="emergency_setup_unsaved_body">La modalità emergenza non è ancora salvata. Uscendo adesso resterebbe nello stato precedente.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
-    <string name="settings_emergency_shortcut_desc">Mostra una notifica permanente con scorciatoie di chiamata (112 e il numero della polizia del suo paese), raggiungibile senza sbloccare. Tocchi il corpo per aprire la schermata di emergenza. Disattivata per impostazione predefinita.</string>
+    <string name="settings_emergency_shortcut_desc">Mostra una notifica permanente con scorciatoie di chiamata (112 e il numero di emergenza proprio del suo paese), raggiungibile senza sbloccare. Tocchi il corpo per aprire la schermata di emergenza. Disattivata per impostazione predefinita.</string>
     <string name="emergency_shortcut_no_app_to_dial">Nessuna app installata per effettuare la chiamata</string>
-    <string name="settings_emergency_call_police_title">Azione rapida Polizia nella notifica di blocco</string>
-    <string name="settings_emergency_call_police_desc">Aggiunge un\'azione rapida Polizia alla notifica di emergenza permanente sulla schermata di blocco. Il numero è quello del paese a cui il telefono è collegato. Il pulsante Polizia resta sempre visibile nella pagina Emergenza dell\'app, indipendentemente da questa impostazione. Disattivata per impostazione predefinita.</string>
+    <string name="settings_emergency_call_police_title">Numero di emergenza locale nella notifica di blocco</string>
+    <string name="settings_emergency_call_police_desc">Aggiunge il numero di emergenza proprio del suo paese come seconda azione rapida alla notifica di emergenza permanente sulla schermata di blocco: la polizia nella maggior parte dei paesi, la linea generale di emergenza nel Regno Unito e in Irlanda. Viene omesso quando il paese non ha un numero proprio. La pagina Emergenza dell\'app mostra sempre tutti i numeri, indipendentemente da questa impostazione. Disattivata per impostazione predefinita.</string>
 
     <!-- Backup / restore dialogs -->
     <string name="backup_explainer">Il backup cifrato usa AES-256-GCM con derivazione della chiave PBKDF2-HMAC-SHA512. Scelga una passphrase robusta — senza di essa il file non è recuperabile.</string>
@@ -522,8 +522,8 @@
     <string name="safety_call_warning_body_hours">Safety call scatterà tra circa %1$d ore. Tocchi per azzerare il timer.</string>
     <string name="safety_call_warning_body_imminent">Safety call scatterà tra meno di 2 ore. Tocchi per azzerarlo adesso.</string>
     <string name="safety_call_cannot_send_title">Il Safety call non può inviare</string>
-    <string name="safety_call_cannot_send_body">SMS Tech non è la sua app SMS predefinita: l\'allarme non partirebbe. I suoi contatti non sarebbero avvisati. Tocchi per correggere.</string>
-    <string name="safety_role_missing_title">Questa protezione non può inviare</string>
+    <string name="safety_call_cannot_send_body">SMS Tech non è la sua app SMS predefinita: l\'allarme non partirebbe. I suoi contatti non sarebbero avvisati. Tocchi per correggere.</string>
+    <string name="safety_role_missing_title">Questa protezione non può inviare</string>
     <string name="safety_role_missing_body">SMS Tech non è la sua app SMS predefinita. Può attivarla, ma all\'attivazione non partirà nulla e nessuno sarà avvisato.</string>
     <string name="safety_call_sequence_title">SMS Tech — allarme inviato</string>
     <plurals name="safety_call_sequence_body">
@@ -918,7 +918,7 @@
     <string name="about_help_emergency_title">Usare la modalità emergenza</string>
     <string name="about_help_emergency_step1">Impostazioni → Modalità emergenza: la attivi e aggiunga almeno un contatto Safety call</string>
     <string name="about_help_emergency_step2">Pagina Emergenza: chiamate dirette ai numeri di emergenza del suo paese; pulsante rosso tenuto premuto 3 s → SMS ai suoi cari</string>
-    <string name="about_help_emergency_step3">Notifica sulla schermata di blocco (facoltativa): scorciatoie al 112 e alla polizia senza sbloccare</string>
+    <string name="about_help_emergency_step3">Notifica sulla schermata di blocco (facoltativa): scorciatoie al 112 e al numero di emergenza proprio del suo paese, senza sbloccare</string>
     <string name="about_help_emergency_step4">«Sto bene» nell\'elenco delle conversazioni annulla l\'allarme in caso di attivazione accidentale</string>
     <string name="about_help_update_title">Cercare un aggiornamento</string>
     <string name="about_help_update_step1">Pulsante «Vedi gli aggiornamenti» in cima a questa pagina</string>
