@@ -214,7 +214,7 @@
     <string name="emergency_i_am_ok_confirm_body">Azzera il tempo di attesa dell\'emergenza e invia, se lo desidera, un breve SMS ai suoi contatti Safety call perché sappiano che si trattava di un falso allarme. Può disattivare l\'SMS nelle Impostazioni.</string>
     <string name="emergency_i_am_ok_done">Messaggio «Sto bene» inviato.</string>
     <string name="emergency_i_am_ok_reset_only">Tempo di attesa azzerato. Nessun SMS inviato.</string>
-    <string name="emergency_i_am_ok_send_failed">Tempo di attesa azzerato, ma nessun contatto ha ricevuto l\'SMS. Riprovi o li avvisi di persona.</string>
+    <string name="emergency_i_am_ok_send_failed">Tempo di attesa azzerato, ma nessun contatto ha ricevuto l\'SMS. Riprovi o li contatti manualmente.</string>
     <string name="settings_send_i_am_ok_sms_title">Inviare l\'SMS «Sto bene» all\'azzeramento</string>
     <string name="settings_send_i_am_ok_sms_desc">Quando tocca «Sto bene» dopo un falso allarme, invia anche un breve SMS ai suoi contatti Safety call che segnala il falso allarme.</string>
     <!-- v1.14.5 — strings emergency_dry_run_* removed (button "Test without sending" deleted). -->
@@ -524,7 +524,7 @@
     <string name="safety_call_cannot_send_title">Il Safety call non può inviare</string>
     <string name="safety_call_cannot_send_body">SMS Tech non è la sua app SMS predefinita: l\'allarme non partirebbe. I suoi contatti non sarebbero avvisati. Tocchi per correggere.</string>
     <string name="safety_role_missing_title">Questa protezione non può inviare</string>
-    <string name="safety_role_missing_body">SMS Tech non è la sua app SMS predefinita. Può attivarla, ma all\'attivazione non partirà nulla e nessuno sarà avvisato.</string>
+    <string name="safety_role_missing_body">SMS Tech non è la sua app SMS predefinita. Può attivarla, ma quando scatterà non partirà nulla e nessuno sarà avvisato.</string>
     <string name="safety_call_sequence_title">SMS Tech — allarme inviato</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d messaggio su %2$d inviato ai suoi contatti. Tocchi se sta bene: i richiami si fermeranno.</item>
@@ -559,7 +559,7 @@
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Modalità emergenza</string>
     <string name="settings_emergency_title">Modalità emergenza</string>
-    <string name="settings_emergency_desc">Un pulsante da tenere premuto 3 s invia un SMS ai suoi contatti di emergenza con la sua posizione attuale. Distinta da Safety call, che è automatico e scatta sull\'inattività. Disattivata per impostazione predefinita.</string>
+    <string name="settings_emergency_desc">Un pulsante da tenere premuto 3 s invia un SMS ai suoi contatti di emergenza, con la sua posizione attuale se l\'ha attivata ed è disponibile. Distinta da Safety call, che è automatico e scatta sull\'inattività. Disattivata per impostazione predefinita.</string>
     <string name="settings_emergency_disabled">Disattivata</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Attiva</string>
@@ -584,7 +584,7 @@
     <string name="emergency_triggered_no_location">Emergenza inviata a %1$d contatto/i — posizione non disponibile.</string>
     <string name="emergency_triggered_all_failed">Invio dell\'emergenza non riuscito (%1$d). Controlli quale sia la sua app SMS predefinita.</string>
     <string name="emergency_setup_enable_title">Attiva la modalità emergenza</string>
-    <string name="emergency_setup_enable_desc">Quando è attiva, un pulsante di emergenza compare nella schermata dedicata. Lo tenga premuto 3 s per inviare un SMS con la sua posizione ai suoi contatti di emergenza.</string>
+    <string name="emergency_setup_enable_desc">Quando è attiva, un pulsante di emergenza compare nella schermata dedicata. Lo tenga premuto 3 s per inviare un SMS ai suoi contatti di emergenza, con la sua posizione se è attivata e disponibile.</string>
     <string name="emergency_setup_template_title">Modello di messaggio</string>
     <string name="emergency_setup_template_need_help">Ho bisogno di aiuto</string>
     <string name="emergency_setup_template_danger">Pericolo</string>
@@ -872,7 +872,7 @@
     <string name="about_feat_panic_label">Codice esca</string>
     <string name="about_feat_panic_desc">Un secondo PIN apre l\'app in modalità esca — cassaforte invisibile e inaccessibile.</string>
     <string name="about_feat_emergency_label">Modalità emergenza</string>
-    <string name="about_feat_emergency_desc">Tenga premuto il pulsante 3 s nella pagina Emergenza → SMS di allarme con il prefisso ⚠️ ai suoi contatti Safety call, con GPS facoltativo. Accesso rapido ai numeri di emergenza del paese in cui si trova + scorciatoie nella notifica sulla schermata di blocco.</string>
+    <string name="about_feat_emergency_desc">Tenga premuto il pulsante 3 s nella pagina Emergenza → SMS di allarme ai suoi contatti Safety call, con GPS facoltativo; il prefisso ⚠️ è su tutti i modelli tranne quello discreto. Accesso rapido ai numeri di emergenza del paese in cui si trova + scorciatoie nella notifica sulla schermata di blocco.</string>
     <string name="about_feat_biometric_label">Biometria</string>
     <string name="about_feat_biometric_desc">Impronta o volto per sbloccare, con un PIN di riserva obbligatorio.</string>
     <string name="about_feat_reply_label">Risposta contestuale</string>
@@ -907,7 +907,7 @@
     <string name="about_help_vault_step2">Sblocco: PIN, passphrase o biometria secondo la sua impostazione</string>
     <string name="about_help_vault_step3">Impostazioni → Sicurezza per configurare la cassaforte</string>
     <string name="about_help_block_title">Bloccare un numero</string>
-    <string name="about_help_block_step1">In una conversazione: menu ⋮ → Blocca (= blocca ed elimina la conversazione)</string>
+    <string name="about_help_block_step1">In una conversazione: menu ⋮ → Blocca (= blocca tutti i numeri; la conversazione viene conservata, sotto «Bloccati»)</string>
     <string name="about_help_block_step2">Tenga premuta una conversazione nell\'elenco → Blocca (conserva la cronologia)</string>
     <string name="about_help_block_step3">Il numero viene aggiunto all\'elenco dei bloccati di sistema, condiviso con l\'app Telefono</string>
     <string name="about_help_translate_title">Tradurre un messaggio ricevuto</string>
@@ -919,7 +919,7 @@
     <string name="about_help_emergency_step1">Impostazioni → Modalità emergenza: la attivi e aggiunga almeno un contatto Safety call</string>
     <string name="about_help_emergency_step2">Pagina Emergenza: chiamate dirette ai numeri di emergenza del suo paese; pulsante rosso tenuto premuto 3 s → SMS ai suoi cari</string>
     <string name="about_help_emergency_step3">Notifica sulla schermata di blocco (facoltativa): scorciatoie al 112 e, se esiste, al numero di emergenza proprio del suo paese, senza sbloccare</string>
-    <string name="about_help_emergency_step4">«Sto bene» nell\'elenco delle conversazioni annulla l\'allarme in caso di attivazione accidentale</string>
+    <string name="about_help_emergency_step4">«Sto bene» nell\'elenco delle conversazioni azzera il tempo di attesa e, se non ha disattivato l\'SMS, avvisa i suoi contatti che era un falso allarme</string>
     <string name="about_help_update_title">Cercare un aggiornamento</string>
     <string name="about_help_update_step1">Pulsante «Vedi gli aggiornamenti» in cima a questa pagina</string>
     <string name="about_help_update_step2">Apre la pagina GitHub Releases di SMS Tech</string>

@@ -214,7 +214,7 @@
     <string name="emergency_i_am_ok_confirm_body">Reinicia el tiempo de espera de la emergencia y envía, si lo desea, un SMS breve a sus contactos de Safety call para que sepan que fue una falsa alarma. Puede desactivar el SMS en los Ajustes.</string>
     <string name="emergency_i_am_ok_done">Mensaje «Estoy bien» enviado.</string>
     <string name="emergency_i_am_ok_reset_only">Tiempo de espera reiniciado. No se ha enviado ningún SMS.</string>
-    <string name="emergency_i_am_ok_send_failed">Tiempo de espera reiniciado, pero ningún contacto ha recibido el SMS. Vuelva a intentarlo o avíseles en persona.</string>
+    <string name="emergency_i_am_ok_send_failed">Tiempo de espera reiniciado, pero ningún contacto ha recibido el SMS. Vuelva a intentarlo o contacte con ellos manualmente.</string>
     <string name="settings_send_i_am_ok_sms_title">Enviar el SMS «Estoy bien» al reiniciar</string>
     <string name="settings_send_i_am_ok_sms_desc">Cuando toque «Estoy bien» después de una falsa alarma, envía además un SMS breve a sus contactos de Safety call indicando que fue una falsa alarma.</string>
     <!-- v1.14.5 — strings emergency_dry_run_* removed (button "Test without sending" deleted). -->
@@ -559,7 +559,7 @@
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Modo emergencia</string>
     <string name="settings_emergency_title">Modo emergencia</string>
-    <string name="settings_emergency_desc">Un botón que se mantiene pulsado 3 s envía un SMS a sus contactos de emergencia con su ubicación actual. Distinto de Safety call, que es automático y se dispara por inactividad. Desactivado de forma predeterminada.</string>
+    <string name="settings_emergency_desc">Un botón que se mantiene pulsado 3 s envía un SMS a sus contactos de emergencia, con su ubicación actual si la ha activado y está disponible. Distinto de Safety call, que es automático y se dispara por inactividad. Desactivado de forma predeterminada.</string>
     <string name="settings_emergency_disabled">Desactivado</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Activo</string>
@@ -584,7 +584,7 @@
     <string name="emergency_triggered_no_location">Emergencia enviada a %1$d contacto(s) — ubicación no disponible.</string>
     <string name="emergency_triggered_all_failed">El envío de la emergencia ha fallado (%1$d). Compruebe cuál es su app de SMS predeterminada.</string>
     <string name="emergency_setup_enable_title">Activar el modo emergencia</string>
-    <string name="emergency_setup_enable_desc">Cuando está activo, aparece un botón de emergencia en la pantalla dedicada. Manténgalo pulsado 3 s para enviar un SMS con su ubicación a sus contactos de emergencia.</string>
+    <string name="emergency_setup_enable_desc">Cuando está activo, aparece un botón de emergencia en la pantalla dedicada. Manténgalo pulsado 3 s para enviar un SMS a sus contactos de emergencia, con su ubicación si está activada y disponible.</string>
     <string name="emergency_setup_template_title">Plantilla del mensaje</string>
     <string name="emergency_setup_template_need_help">Necesito ayuda</string>
     <string name="emergency_setup_template_danger">Peligro</string>
@@ -872,7 +872,7 @@
     <string name="about_feat_panic_label">Código de pánico</string>
     <string name="about_feat_panic_desc">Un segundo PIN abre la app en modo señuelo — la caja fuerte queda invisible e inaccesible.</string>
     <string name="about_feat_emergency_label">Modo emergencia</string>
-    <string name="about_feat_emergency_desc">Mantenga pulsado el botón 3 s en la página de Emergencia → SMS de alerta con el prefijo ⚠️ a sus contactos de Safety call, con GPS opcional. Acceso rápido a los números de emergencia del país en el que se encuentra y accesos directos en la notificación de la pantalla de bloqueo.</string>
+    <string name="about_feat_emergency_desc">Mantenga pulsado el botón 3 s en la página de Emergencia → SMS de alerta a sus contactos de Safety call, con GPS opcional; el prefijo ⚠️ está en todas las plantillas salvo la discreta. Acceso rápido a los números de emergencia del país en el que se encuentra y accesos directos en la notificación de la pantalla de bloqueo.</string>
     <string name="about_feat_biometric_label">Biometría</string>
     <string name="about_feat_biometric_desc">Huella o rostro para desbloquear, con un PIN de reserva obligatorio.</string>
     <string name="about_feat_reply_label">Respuesta contextual</string>
@@ -907,7 +907,7 @@
     <string name="about_help_vault_step2">Desbloqueo: PIN, frase de contraseña o biometría según su ajuste</string>
     <string name="about_help_vault_step3">Ajustes → Seguridad para configurar la caja fuerte</string>
     <string name="about_help_block_title">Bloquear un número</string>
-    <string name="about_help_block_step1">En una conversación: menú ⋮ → Bloquear (= bloquea y elimina la conversación)</string>
+    <string name="about_help_block_step1">En una conversación: menú ⋮ → Bloquear (= bloquea todos los números; la conversación se conserva, bajo «Bloqueados»)</string>
     <string name="about_help_block_step2">Mantenga pulsada una conversación en la lista → Bloquear (conserva el historial)</string>
     <string name="about_help_block_step3">El número se añade a la lista de bloqueados del sistema, compartida con la app Teléfono</string>
     <string name="about_help_translate_title">Traducir un mensaje recibido</string>
@@ -919,7 +919,7 @@
     <string name="about_help_emergency_step1">Ajustes → Modo emergencia: actívelo y añada al menos un contacto de Safety call</string>
     <string name="about_help_emergency_step2">Página de Emergencia: llamadas directas a los números de emergencia de su país; botón rojo mantenido 3 s → SMS a sus seres queridos</string>
     <string name="about_help_emergency_step3">Notificación en la pantalla de bloqueo (opcional): accesos directos al 112 y, si existe, al número de emergencia propio de su país, sin desbloquear</string>
-    <string name="about_help_emergency_step4">«Estoy bien» en la lista de conversaciones cancela la alerta en caso de activación accidental</string>
+    <string name="about_help_emergency_step4">«Estoy bien» en la lista de conversaciones reinicia el tiempo de espera y, si no ha desactivado el SMS, avisa a sus contactos de que era una falsa alarma</string>
     <string name="about_help_update_title">Buscar una actualización</string>
     <string name="about_help_update_step1">Botón «Ver las actualizaciones» arriba de esta página</string>
     <string name="about_help_update_step2">Abre la página de GitHub Releases de SMS Tech</string>

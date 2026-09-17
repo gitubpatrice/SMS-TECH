@@ -554,7 +554,7 @@
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Emergency mode</string>
     <string name="settings_emergency_title">Emergency mode</string>
-    <string name="settings_emergency_desc">A hold-3s button sends an SMS to your emergency contacts with your current location. Distinct from Safety call (which is automatic on inactivity). Disabled by default.</string>
+    <string name="settings_emergency_desc">A hold-3s button sends an SMS to your emergency contacts, with your current location if you enabled it and it is available. Distinct from Safety call (which is automatic on inactivity). Disabled by default.</string>
     <string name="settings_emergency_disabled">Disabled</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Enabled</string>
@@ -579,7 +579,7 @@
     <string name="emergency_triggered_no_location">Emergency sent to %1$d contact(s) — location unavailable.</string>
     <string name="emergency_triggered_all_failed">Emergency send failed (%1$d). Check your default SMS app.</string>
     <string name="emergency_setup_enable_title">Enable emergency mode</string>
-    <string name="emergency_setup_enable_desc">When on, an emergency button appears in the dedicated screen. Hold 3s to send an SMS with your location to your emergency contacts.</string>
+    <string name="emergency_setup_enable_desc">When on, an emergency button appears in the dedicated screen. Hold 3s to send an SMS to your emergency contacts, with your location if enabled and available.</string>
     <string name="emergency_setup_template_title">Message template</string>
     <string name="emergency_setup_template_need_help">I need help</string>
     <string name="emergency_setup_template_danger">Danger</string>
@@ -866,7 +866,7 @@
     <string name="about_feat_panic_label">Panic code</string>
     <string name="about_feat_panic_desc">A second PIN opens the app in decoy mode — vault invisible and inaccessible.</string>
     <string name="about_feat_emergency_label">Emergency mode</string>
-    <string name="about_feat_emergency_desc">Hold the button 3 s on the Emergency page → alert SMS prefixed ⚠️ to your Safety call contacts with optional GPS. Quick access to the emergency numbers of the country you are in + lockscreen notification shortcuts.</string>
+    <string name="about_feat_emergency_desc">Hold the button 3 s on the Emergency page → alert SMS to your Safety call contacts with optional GPS; the ⚠️ prefix is on every template except the discreet one. Quick access to the emergency numbers of the country you are in + lockscreen notification shortcuts.</string>
     <string name="about_feat_biometric_label">Biometrics</string>
     <string name="about_feat_biometric_desc">Fingerprint or face to unlock, with a mandatory fallback PIN.</string>
     <string name="about_feat_reply_label">Contextual reply</string>
@@ -901,7 +901,7 @@
     <string name="about_help_vault_step2">Unlock: PIN, passphrase or biometrics depending on your setting</string>
     <string name="about_help_vault_step3">Settings → Security to configure the vault</string>
     <string name="about_help_block_title">Block a number</string>
-    <string name="about_help_block_step1">In a conversation: menu ⋮ → Block (= blocks + deletes the conv)</string>
+    <string name="about_help_block_step1">In a conversation: menu ⋮ → Block (= blocks every number; the conversation is kept, under \"Blocked\")</string>
     <string name="about_help_block_step2">Long-press a conversation in the list → Block (keeps history)</string>
     <string name="about_help_block_step3">The number is added to the system blocklist, shared with the Phone app</string>
     <string name="about_help_translate_title">Translate a received message</string>
@@ -913,7 +913,7 @@
     <string name="about_help_emergency_step1">Settings → Emergency mode: enable + add at least one Safety call contact</string>
     <string name="about_help_emergency_step2">Emergency page: direct calls to your country\'s emergency numbers; red button held 3 s → SMS to relatives</string>
     <string name="about_help_emergency_step3">Lockscreen notification (opt-in): shortcuts to 112 and, where there is one, to the emergency number for your country, without unlocking</string>
-    <string name="about_help_emergency_step4">\"I am OK\" in the conversation list cancels the alert in case of accidental trigger</string>
+    <string name="about_help_emergency_step4">\"I am OK\" in the conversation list resets the cooldown and, unless you turned the SMS off, tells your contacts it was a false alert</string>
     <string name="about_help_update_title">Check for an update</string>
     <string name="about_help_update_step1">\"View updates\" button at the top of this page</string>
     <string name="about_help_update_step2">Opens the SMS Tech GitHub Releases page</string>

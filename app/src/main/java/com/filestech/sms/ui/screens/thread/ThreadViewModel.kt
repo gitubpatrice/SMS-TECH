@@ -1668,11 +1668,19 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
-     * Blocks every address of the current conversation AND deletes the conversation locally.
-     * v1.2.5 fix: previously only the block call ran — the conversation stayed in the list
-     * showing past history of the now-blocked number, which is not what the user expects when
-     * they explicitly tap "Block" from inside a conversation. The list-level Block action
-     * stays unchanged (block-only) so users keeping history have a path.
+     * Blocks every address of the current conversation. **The conversation is KEPT**, grouped
+     * under « Bloqués » in the list.
+     *
+     * ⚠️ v1.28.12 (relecture externe du 2026-09-17) — cette première ligne disait
+     * « AND deletes the conversation locally », ce qui n'est plus vrai depuis la v1.25.3 : la
+     * suppression a été retirée trois paragraphes plus bas, et la phrase d'ouverture est
+     * restée. Elle avait été recopiée dans l'aide de l'application
+     * (`about_help_block_step1`), qui promettait donc à l'utilisateur que son historique
+     * était effacé alors qu'il ne l'était pas — sur une application qui porte un coffre et
+     * une session leurre, c'est une promesse qu'on ne fait pas à tort.
+     *
+     * Le KDoc d'origine (v1.2.5) décrivait le comportement inverse, et il est conservé en
+     * dessous parce qu'il explique l'aller-retour.
      *
      * v1.25.3 (audit H15) — l'`Outcome` de [BlockNumberUseCase] était purement ignoré et la
      * boucle n'isolait pas ses erreurs. Deux conséquences : une `SecurityException` du

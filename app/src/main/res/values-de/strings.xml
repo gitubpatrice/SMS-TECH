@@ -218,8 +218,8 @@
     <string name="settings_send_i_am_ok_sms_desc">Wenn Sie nach einem Fehlalarm auf "Mir geht es gut" tippen, wird zusätzlich eine kurze SMS an Ihre Safety-Call-Kontakte gesendet, die mitteilt, dass es ein Fehlalarm war.</string>
     <!-- v1.14.5 — strings emergency_dry_run_* removed (button "Test without sending" deleted). -->
     <!-- v1.14.5 — Settings → Mode urgence : ToggleRow direct accès GPS opt-in -->
-    <string name="settings_emergency_include_location_title">GPS in die Notruf-SMS aufnehmen</string>
-    <string name="settings_emergency_include_location_desc">Fügt dem Text der Notruf-SMS einen Google-Maps-Link mit Ihrem aktuellen Standort hinzu. Erfordert die Standortberechtigung. Wird sie verweigert, wird die SMS ohne Koordinaten gesendet.</string>
+    <string name="settings_emergency_include_location_title">GPS in die Notfall-SMS aufnehmen</string>
+    <string name="settings_emergency_include_location_desc">Fügt dem Text der Notfall-SMS einen Google-Maps-Link mit Ihrem aktuellen Standort hinzu. Erfordert die Standortberechtigung. Wird sie verweigert, wird die SMS ohne Koordinaten gesendet.</string>
     <string name="settings_emergency_include_location_denied">Standortberechtigung verweigert. GPS-Übernahme deaktiviert.</string>
     <!-- v1.14.7 — string emergency_topbar_warning_cd retirée (orpheline, prévue pour un indicateur visuel jamais branché). -->
     <!-- v1.14.1 — full-page emergency redesign : 4 colored call tiles + disable + open-from-notif -->
@@ -556,7 +556,7 @@
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Notfallmodus</string>
     <string name="settings_emergency_title">Notfallmodus</string>
-    <string name="settings_emergency_desc">Eine Schaltfläche, die 3 s gehalten wird, sendet eine SMS mit Ihrem aktuellen Standort an Ihre Notfallkontakte. Unterscheidet sich von Safety call (der bei Untätigkeit automatisch auslöst). Standardmäßig deaktiviert.</string>
+    <string name="settings_emergency_desc">Eine Schaltfläche, die 3 s gehalten wird, sendet eine SMS an Ihre Notfallkontakte – mit Ihrem aktuellen Standort, sofern aktiviert und verfügbar. Unterscheidet sich von Safety call (der bei Untätigkeit automatisch auslöst). Standardmäßig deaktiviert.</string>
     <string name="settings_emergency_disabled">Deaktiviert</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Aktiv</string>
@@ -577,18 +577,18 @@
     <string name="emergency_status_no_contacts">Keine Notfallkontakte eingerichtet. Fügen Sie welche in den Safety-Call-Einstellungen hinzu.</string>
     <string name="emergency_status_cooldown">Gerade gesendet. In einer Minute wieder verfügbar.</string>
     <string name="emergency_status_ready">Halten Sie die Schaltfläche 3 Sekunden, um Ihre Kontakte zu alarmieren.</string>
-    <string name="emergency_triggered_ok">Notruf an %1$d Kontakt(e) gesendet.</string>
-    <string name="emergency_triggered_no_location">Notruf an %1$d Kontakt(e) gesendet — Standort nicht verfügbar.</string>
-    <string name="emergency_triggered_all_failed">Senden des Notrufs fehlgeschlagen (%1$d). Prüfen Sie Ihre Standard-SMS-App.</string>
+    <string name="emergency_triggered_ok">Notfall-SMS an %1$d Kontakt(e) gesendet.</string>
+    <string name="emergency_triggered_no_location">Notfall-SMS an %1$d Kontakt(e) gesendet — Standort nicht verfügbar.</string>
+    <string name="emergency_triggered_all_failed">Senden der Notfall-SMS fehlgeschlagen (%1$d). Prüfen Sie Ihre Standard-SMS-App.</string>
     <string name="emergency_setup_enable_title">Notfallmodus aktivieren</string>
-    <string name="emergency_setup_enable_desc">Wenn aktiviert, erscheint eine Notruf-Schaltfläche auf dem dafür vorgesehenen Bildschirm. 3 s halten, um eine SMS mit Ihrem Standort an Ihre Notfallkontakte zu senden.</string>
+    <string name="emergency_setup_enable_desc">Wenn aktiviert, erscheint eine Notfall-Schaltfläche auf dem dafür vorgesehenen Bildschirm. 3 s halten, um eine SMS an Ihre Notfallkontakte zu senden – mit Ihrem Standort, sofern aktiviert und verfügbar.</string>
     <string name="emergency_setup_template_title">Nachrichtenvorlage</string>
     <string name="emergency_setup_template_need_help">Ich brauche Hilfe</string>
     <string name="emergency_setup_template_danger">Gefahr</string>
     <string name="emergency_setup_template_discreet">Unauffällig</string>
     <string name="emergency_setup_location_title">Standort einschließen</string>
     <string name="emergency_setup_location_desc">Fügt der SMS eine Google-Maps-Adresse hinzu. Erfordert die Standortberechtigung. Wenn ausgeschaltet (oder die Berechtigung verweigert), wird die SMS ohne Koordinaten gesendet.</string>
-    <string name="emergency_setup_location_permission_warning">Standortberechtigung nicht erteilt. Die Notruf-SMS wird ohne Koordinaten gesendet. Erteilen Sie die Berechtigung in den Android-Einstellungen, um das zu ändern.</string>
+    <string name="emergency_setup_location_permission_warning">Standortberechtigung nicht erteilt. Die Notfall-SMS wird ohne Koordinaten gesendet. Erteilen Sie die Berechtigung in den Android-Einstellungen, um das zu ändern.</string>
     <string name="emergency_setup_contacts_title">Notfallkontakte</string>
     <string name="emergency_setup_contacts_empty">Keine Kontakte eingerichtet.</string>
     <string name="emergency_setup_contacts_count">%1$d Kontakt(e) eingerichtet.</string>
@@ -871,7 +871,7 @@
     <string name="about_feat_panic_label">Panikcode</string>
     <string name="about_feat_panic_desc">Eine zweite PIN öffnet die App im Tarnmodus — der Tresor ist unsichtbar und unzugänglich.</string>
     <string name="about_feat_emergency_label">Notfallmodus</string>
-    <string name="about_feat_emergency_desc">Die Schaltfläche auf der Notrufseite 3 s halten → Alarm-SMS mit dem Präfix ⚠️ an Ihre Safety-Call-Kontakte, auf Wunsch mit GPS. Schnellzugriff auf die Notrufnummern des Landes, in dem Sie sich befinden, plus Verknüpfungen in der Benachrichtigung des Sperrbildschirms.</string>
+    <string name="about_feat_emergency_desc">Die Schaltfläche auf der Notrufseite 3 s halten → Alarm-SMS an Ihre Safety-Call-Kontakte, auf Wunsch mit GPS; das Präfix ⚠️ tragen alle Vorlagen außer der diskreten. Schnellzugriff auf die Notrufnummern des Landes, in dem Sie sich befinden, plus Verknüpfungen in der Benachrichtigung des Sperrbildschirms.</string>
     <string name="about_feat_biometric_label">Biometrie</string>
     <string name="about_feat_biometric_desc">Fingerabdruck oder Gesicht zum Entsperren, mit zwingender PIN als Rückfallebene.</string>
     <string name="about_feat_reply_label">Antwort mit Bezug</string>
@@ -906,7 +906,7 @@
     <string name="about_help_vault_step2">Entsperren: PIN, Passwort oder Biometrie, je nach Ihrer Einstellung</string>
     <string name="about_help_vault_step3">Einstellungen → Sicherheit, um den Tresor einzurichten</string>
     <string name="about_help_block_title">Eine Nummer blockieren</string>
-    <string name="about_help_block_step1">In einer Unterhaltung: Menü ⋮ → Blockieren (= blockiert und löscht die Unterhaltung)</string>
+    <string name="about_help_block_step1">In einer Unterhaltung: Menü ⋮ → Blockieren (= blockiert alle Nummern; die Unterhaltung bleibt erhalten, unter „Blockiert“)</string>
     <string name="about_help_block_step2">Eine Unterhaltung in der Liste lange drücken → Blockieren (behält den Verlauf)</string>
     <string name="about_help_block_step3">Die Nummer wird der System-Blockliste hinzugefügt, die mit der Telefon-App geteilt wird</string>
     <string name="about_help_translate_title">Eine empfangene Nachricht übersetzen</string>
@@ -918,7 +918,7 @@
     <string name="about_help_emergency_step1">Einstellungen → Notfallmodus: aktivieren und mindestens einen Safety-Call-Kontakt hinzufügen</string>
     <string name="about_help_emergency_step2">Notrufseite: Direktanrufe zu den Notrufnummern Ihres Landes; rote Schaltfläche 3 s halten → SMS an Angehörige</string>
     <string name="about_help_emergency_step3">Benachrichtigung auf dem Sperrbildschirm (auf Wunsch): Verknüpfungen zu 112 und, sofern vorhanden, zur landeseigenen Notrufnummer, ohne zu entsperren</string>
-    <string name="about_help_emergency_step4">\"Mir geht es gut\" in der Liste der Unterhaltungen bricht den Alarm bei versehentlicher Auslösung ab</string>
+    <string name="about_help_emergency_step4">\"Mir geht es gut\" in der Liste der Unterhaltungen setzt die Sperrzeit zurück und teilt Ihren Kontakten mit, dass es ein Fehlalarm war – sofern Sie die SMS nicht abgeschaltet haben</string>
     <string name="about_help_update_title">Nach einer Aktualisierung suchen</string>
     <string name="about_help_update_step1">Schaltfläche \"Aktualisierungen ansehen\" oben auf dieser Seite</string>
     <string name="about_help_update_step2">Öffnet die GitHub-Releases-Seite von SMS Tech</string>
