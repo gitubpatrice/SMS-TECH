@@ -87,6 +87,7 @@ import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
 import com.filestech.sms.ui.util.daySeparatorLabel
+import com.filestech.sms.ui.util.libelleDeDuree
 import com.filestech.sms.ui.util.rememberChatFormatters
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -2804,17 +2805,16 @@ private fun SafetyCallArmedRecap(
         remainingMs < 2 * 3_600_000L ->
             stringResource(R.string.settings_safety_call_armed_remaining_imminent)
         else -> {
-            val hours = (remainingMs / 3_600_000L).toInt()
-            val niceHours = if (hours >= 24) {
-                val days = hours / 24
-                val rem = hours % 24
-                if (rem == 0) {
-                    if (days == 1) "1 jour" else "$days jours"
-                } else "$days j ${rem} h"
-            } else {
-                "$hours h"
-            }
-            stringResource(R.string.settings_safety_call_armed_remaining, niceHours)
+            // v1.28.12 — le libellé passe par [libelleDeDuree], donc par les pluriels des
+            // cinq langues. Il était construit ICI, à la main, en français, puis injecté
+            // dans un cadre traduit : un lecteur allemand lisait « Noch 3 jours ». Les
+            // pluriels existaient pourtant déjà et étaient bien employés deux fichiers
+            // plus loin. Relevé par deux audits indépendants le 2026-09-17.
+            val heures = (remainingMs / 3_600_000L).toInt()
+            stringResource(
+                R.string.settings_safety_call_armed_remaining,
+                libelleDeDuree(heures),
+            )
         }
     }
     val contactsLabel = run {

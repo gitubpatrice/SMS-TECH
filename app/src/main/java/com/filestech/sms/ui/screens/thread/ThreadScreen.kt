@@ -145,14 +145,11 @@ import kotlin.math.max
 // v1.2.3 audit U21: BrandDanger is defined once in `com.filestech.sms.ui.theme.Color`.
 // References below resolve via the file-level import.
 
-/** Compact human-readable file size — "284 KB", "1.2 MB", etc. Used by the attachment dialog. */
-private fun formatFileSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return "%.0f KB".format(kb)
-    val mb = kb / 1024.0
-    return "%.1f MB".format(mb)
-}
+// v1.28.12 — `formatFileSize` retirée : plus aucun appelant, et son KDoc affirmait encore
+// « Used by the attachment dialog ». Elle écrivait ses unités en dur en ANGLAIS, tandis que
+// son jumeau de `MediaAttachmentBubble` les écrivait en dur en FRANÇAIS — deux langues et
+// deux conventions décimales pour la même taille, sur deux écrans voisins. Les deux passent
+// désormais par le formateur de la plateforme, qui suit la langue de l'application.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

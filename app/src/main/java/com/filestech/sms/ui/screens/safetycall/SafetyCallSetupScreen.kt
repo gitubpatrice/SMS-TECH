@@ -72,6 +72,7 @@ import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.theme.BrandBlue
 import com.filestech.sms.ui.theme.BrandWarning
+import com.filestech.sms.ui.util.libelleDeDuree
 import java.text.DateFormat
 import java.util.Date
 
@@ -798,15 +799,16 @@ private fun CustomDurationDialog(
             R.string.safety_call_setup_duration_custom_format,
             0,
         )
-        parsed >= 24 -> {
-            val days = parsed / 24
-            val rem = parsed % 24
-            if (rem == 0) {
-                if (days == 1) "$parsed h ≈ 1 jour" else "$parsed h ≈ $days jours"
-            } else {
-                "$parsed h ≈ $days j ${rem} h"
-            }
-        }
+        // v1.28.12 — l'aperçu passe par [libelleDeDuree] et par le format d'heure déjà
+        // traduit. Il était écrit ici à la main, en français : un Italien qui saisissait
+        // 96 lisait « 96 h ≈ 4 jours ». Même défaut, même jour, même correctif que dans
+        // l'écran des réglages — et c'est parce qu'ils étaient écrits deux fois qu'ils
+        // ont divergé de leurs traductions deux fois.
+        parsed >= 24 -> stringResource(
+            R.string.safety_call_setup_duration_approx,
+            stringResource(R.string.safety_call_setup_duration_custom_format, parsed),
+            libelleDeDuree(parsed),
+        )
         else -> stringResource(
             R.string.safety_call_setup_duration_custom_format,
             parsed,

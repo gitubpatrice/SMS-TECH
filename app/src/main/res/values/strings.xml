@@ -300,7 +300,7 @@
     <string name="appearance_saved">Appearance updated</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Scam detection (offline)</string>
-    <string name="settings_smishing_detection_desc">Flags suspicious incoming SMS (shortened URLs, urgency wording, premium-rate numbers, lookalike domains). It covers France, Germany, Italy and Spain. 100% local, no cloud. May produce false positives.</string>
+    <string name="settings_smishing_detection_desc">Flags suspicious incoming SMS (shortened URLs, urgency wording, premium-rate numbers, lookalike domains). It covers France, Germany, Italy, Spain, the United Kingdom and Ireland. 100% local, no cloud. May produce false positives.</string>
     <string name="smishing_banner_title">⚠️ Possibly fraudulent</string>
     <string name="smishing_banner_subtitle">Tap to see why</string>
     <string name="smishing_dialog_title">Why this warning?</string>
@@ -308,7 +308,7 @@
     <string name="smishing_reason_url_shortener">Shortened URL (bit.ly, t.co, tinyurl…). Shorteners can hide the real destination — verify before tapping.</string>
     <string name="smishing_reason_urgency">Urgency or pressure wording (urgent, expires, click here…). A common social-engineering tactic to trigger panic.</string>
     <string name="smishing_reason_premium">Premium-rate phone number (3xxx or 0899 in France, 0900 in Germany, 899 in Italy, 806 in Spain…). Calling these numbers is expensive and often part of a scam.</string>
-    <string name="smishing_reason_typosquatting">Look-alike domain (e.g. "paypa1.com" instead of "paypal.com"). The watched sites are the official ones of France, Germany, Italy and Spain. Always type official addresses by hand.</string>
+    <string name="smishing_reason_typosquatting">Look-alike domain (e.g. "paypa1.com" instead of "paypal.com"). The watched sites are the official ones of France, Germany, Italy, Spain, the United Kingdom and Ireland. Always type official addresses by hand.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Brand blue (default)</string>
@@ -445,7 +445,7 @@
          Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
     <string name="settings_reaction_format_title">Reaction format</string>
     <string name="settings_reaction_format_fr">Readable French</string>
-    <string name="settings_reaction_format_fr_hint">"J\'ai réagi par ❤️ à : «preview»". Natural and understandable for any French-speaking Android recipient. Decoded by SMS Tech as a native reaction badge.</string>
+    <string name="settings_reaction_format_fr_hint">"Réagi par ❤️ à votre message : «preview»". Natural and understandable for any French-speaking Android recipient. Decoded by SMS Tech as a native reaction badge.</string>
     <string name="settings_reaction_format_en">Tapback (iMessage compat)</string>
     <string name="settings_reaction_format_en_hint">"Reacted ❤️ to «preview»". Detected automatically by iMessage (iPhone) and recent Google Messages as a native reaction bubble. Less natural for French recipients.</string>
     <string name="settings_reaction_format_emoji">Emoji only</string>
@@ -455,7 +455,7 @@
     <string name="settings_reaction_format_emoji_quote_hint">"❤️ «your message»". Compact and context-preserving. Recipient sees emoji followed by the quoted original message.</string>
     <!-- v1.8.1 — sender display name -->
     <string name="settings_sender_name_title">Your display name</string>
-    <string name="settings_sender_name_desc">Included in outgoing reaction SMS to help the recipient identify the author. Leave empty to use your Android profile name (or fall back to anonymous "Reacted ❤️…").</string>
+    <string name="settings_sender_name_desc">Included in outgoing reaction SMS to help the recipient identify the author. Leave empty to use your Android profile name (or fall back to anonymous "Réagi par ❤️…").</string>
     <string name="settings_sender_name_label">Display name (max 40)</string>
     <string name="settings_sender_name_auto">Auto-detect from Android profile</string>
 
@@ -498,6 +498,8 @@
     <string name="safety_call_setup_duration_72h">72 hours</string>
     <string name="safety_call_setup_duration_custom">Custom</string>
     <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="attachment_generic_name">Attachment</string>
+    <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">In hours · 168 h = 1 week · max 720 h (30 days)</string>
     <string name="safety_call_setup_add_contact">Add a contact</string>
     <string name="safety_call_setup_contact_name_label">Name (optional)</string>
@@ -739,7 +741,7 @@
     <string name="channel_sent_desc">Status of messages you sent.</string>
     <string name="channel_failed_label">Failed messages</string>
     <string name="channel_failed_desc">Errors and retry suggestions.</string>
-    <string name="channel_keep_alive_label">Resilient mode</string>
+    <string name="channel_keep_alive_label">Resistant mode</string>
     <string name="channel_keep_alive_desc">Keeps SMS Tech running on phones whose manufacturer shuts down background apps.</string>
     <string name="channel_safety_call_warning_label">Safety call warning</string>
     <string name="channel_safety_call_warning_desc">Reminder before automatic SMS to your emergency contacts.</string>
@@ -1030,4 +1032,5 @@
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
     </plurals>
+    <string name="duration_days_hours">%1$d d %2$d h</string>
 </resources>

@@ -83,9 +83,9 @@
          suppression a été retirée plutôt que simplement documentée. -->
     <string name="conversation_block_confirm_title">Bloquer cette conversation ?</string>
     <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. La conversation reste dans votre liste, signalée comme bloquée, et rien n\'est supprimé. Vous pourrez la débloquer à tout moment.</string>
-    <string name="conversations_section_blocked">Bloqués</string>
+    <string name="conversations_section_blocked">Bloquées</string>
     <string name="conversations_section_messages">Messages</string>
-    <string name="conversation_blocked_label">Bloqué</string>
+    <string name="conversation_blocked_label">Bloquée</string>
     <string name="settings_purge_blocked">Purger les conversations bloquées</string>
     <string name="settings_purge_blocked_desc">Supprime définitivement toutes les conversations dont les participants sont sur la liste de blocage système.</string>
     <string name="settings_purge_blocked_result">%1$d conversation(s) supprimée(s)</string>
@@ -191,7 +191,7 @@
     <!-- v1.13.0 — sélection multiple bulk move to/from vault -->
     <string name="bulk_vault_move_in">Déplacer dans le coffre</string>
     <string name="bulk_vault_move_out">Sortir du coffre</string>
-    <string name="selected">Sélectionné</string>
+    <string name="selected">Sélectionnée</string>
     <!-- v1.13.1 — entrée mode sélection multiple depuis l'ActionsSheet long-press -->
     <string name="bulk_select_multiple">Sélectionner plusieurs</string>
     <!-- v1.14.0 — comportement boutons d'appel d'urgence + outcomes -->
@@ -292,7 +292,7 @@
     <string name="appearance_saved">Apparence mise à jour</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Détection d\'arnaque (hors-ligne)</string>
-    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). Couvre la France, l\'Allemagne, l\'Italie et l\'Espagne. 100 % local, aucun cloud. Peut produire des faux positifs.</string>
+    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). Couvre la France, l\'Allemagne, l\'Italie, l\'Espagne, le Royaume-Uni et l\'Irlande. 100 % local, aucun cloud. Peut produire des faux positifs.</string>
     <string name="smishing_banner_title">⚠️ Possiblement frauduleux</string>
     <string name="smishing_banner_subtitle">Toucher pour voir pourquoi</string>
     <string name="smishing_dialog_title">Pourquoi cet avertissement ?</string>
@@ -300,7 +300,7 @@
     <string name="smishing_reason_url_shortener">URL raccourcie (bit.ly, t.co, tinyurl…). Les raccourcisseurs peuvent masquer la vraie destination — vérifiez avant de cliquer.</string>
     <string name="smishing_reason_urgency">Mots d\'urgence ou de pression (urgent, expire, cliquez ici…). Tactique classique d\'ingénierie sociale pour pousser à la panique.</string>
     <string name="smishing_reason_premium">Numéro surtaxé (3xxx ou 0899 en France, 0900 en Allemagne, 899 en Italie, 806 en Espagne…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
-    <string name="smishing_reason_typosquatting">Domaine ressemblant à un officiel (ex. « 1mpots.gouv.fr » au lieu de « impots.gouv.fr »). Saisissez toujours les adresses officielles à la main.</string>
+    <string name="smishing_reason_typosquatting">Domaine ressemblant à un officiel (ex. « 1mpots.gouv.fr » au lieu de « impots.gouv.fr »). Les sites surveillés sont les sites officiels de la France, de l\'Allemagne, de l\'Italie, de l\'Espagne, du Royaume-Uni et de l\'Irlande. Saisissez toujours les adresses officielles à la main.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Bleu marque (par défaut)</string>
@@ -434,7 +434,7 @@
     <!-- v1.8.0 — bug 5 fix : 3 options en un coup d\'œil. -->
     <string name="settings_reaction_format_title">Format des réactions</string>
     <string name="settings_reaction_format_fr">Français lisible</string>
-    <string name="settings_reaction_format_fr_hint">« J\'ai réagi par ❤️ à : «aperçu» ». Naturel et compréhensible pour tout destinataire francophone Android. Décodé par SMS Tech comme un badge de réaction natif.</string>
+    <string name="settings_reaction_format_fr_hint">« Réagi par ❤️ à votre message : «aperçu» ». Naturel et compréhensible pour tout destinataire francophone Android. Décodé par SMS Tech comme un badge de réaction natif.</string>
     <string name="settings_reaction_format_en">Tapback (compat iMessage)</string>
     <string name="settings_reaction_format_en_hint">« Reacted ❤️ to «aperçu» ». Détecté automatiquement par iMessage (iPhone) et Google Messages récents comme une bulle réaction native. Moins naturel pour les destinataires francophones.</string>
     <string name="settings_reaction_format_emoji">Emoji seul</string>
@@ -490,6 +490,8 @@
     <string name="safety_call_setup_duration_72h">72 heures</string>
     <string name="safety_call_setup_duration_custom">Personnalisée</string>
     <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="attachment_generic_name">Pièce jointe</string>
+    <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">En heures · 168 h = 1 semaine · max 720 h (30 jours)</string>
     <string name="safety_call_setup_add_contact">Ajouter un contact</string>
     <string name="safety_call_setup_contact_name_label">Nom (facultatif)</string>
@@ -660,7 +662,7 @@
     <string name="settings_flag_secure_desc">Cache le contenu des conversations dans le sélecteur de tâches Android et bloque les captures / enregistrements d\'écran tant que l\'application est ouverte.</string>
     <string name="settings_lock_vault_on_leave">Verrouiller le coffre à la sortie</string>
     <string name="settings_lock_vault_on_leave_desc">Verrouille automatiquement le coffre chiffré dès que l\'application passe en arrière-plan. Une nouvelle authentification sera nécessaire au retour.</string>
-    <string name="settings_panic_code">PIN de secours (mode panique)</string>
+    <string name="settings_panic_code">PIN leurre (mode panique)</string>
 
     <string name="settings_section_blocking">Blocage</string>
     <string name="settings_block_unknown">Bloquer les numéros inconnus</string>
@@ -790,7 +792,7 @@
     <string name="backup_passphrase_min_length">Minimum %1$d caractères</string>
 
     <!-- v1.15.2 — Restore d'une sauvegarde chiffrée .smsbk. -->
-    <string name="backup_restore_explainer">Choisis un fichier .smsbk puis saisis sa passphrase. Les conversations avec les mêmes destinataires sont fusionnées avec les tiennes ; les messages existants sont conservés (pas de doublons).</string>
+    <string name="backup_restore_explainer">Choisissez un fichier .smsbk puis saisissez sa passphrase. Les conversations avec les mêmes destinataires sont fusionnées avec les vôtres ; les messages existants sont conservés (pas de doublons).</string>
     <string name="backup_restore_pick_file">Choisir un fichier .smsbk</string>
     <string name="backup_restore_passphrase_title">Passphrase de restauration</string>
     <string name="backup_restore_passphrase_field">Passphrase</string>
@@ -832,7 +834,7 @@
     <string name="thread_schedule_date_title">Choisir une date</string>
     <string name="thread_schedule_time_title">Choisir une heure</string>
     <string name="thread_schedule_invalid_past">La date choisie est dans le passé</string>
-    <string name="thread_schedule_empty_body">Tape un message avant de programmer</string>
+    <string name="thread_schedule_empty_body">Saisissez un message avant de programmer</string>
     <string name="thread_schedule_success">Message programmé</string>
     <string name="thread_schedule_failed">Échec de la programmation</string>
 
@@ -882,7 +884,7 @@
     <string name="about_help_default_step2">Ou Réglages Android → Apps par défaut → SMS → SMS Tech</string>
     <string name="about_help_voice_title">Envoyer un message vocal</string>
     <string name="about_help_voice_step1">Appui long sur le micro à droite du composer</string>
-    <string name="about_help_voice_step2">Parle, puis relâche pour envoyer (slide à gauche = annuler)</string>
+    <string name="about_help_voice_step2">Parlez, puis relâchez pour envoyer (glissez à gauche = annuler)</string>
     <string name="about_help_voice_step3">Cap 60 s — au-delà l\'enregistrement s\'arrête automatiquement</string>
     <string name="about_help_vault_title">Mettre une conversation au coffre</string>
     <string name="about_help_vault_step1">Long press sur la conversation dans la liste → \"Coffre\"</string>
@@ -895,8 +897,8 @@
     <string name="about_help_translate_title">Traduire un message reçu</string>
     <string name="about_help_translate_step1">Long press sur la bulle → \"Traduire\"</string>
     <string name="about_help_translate_step2">Un sélecteur s\'ouvre avec toutes les apps de traduction installées</string>
-    <string name="about_help_translate_step3">Choisis Google Translate, DeepL, Aves Translate (FLOSS) ou autre</string>
-    <string name="about_help_translate_step4">Si aucune n\'est installée, un message t\'invite à en installer une</string>
+    <string name="about_help_translate_step3">Choisissez Google Translate, DeepL, Aves Translate (FLOSS) ou autre</string>
+    <string name="about_help_translate_step4">Si aucune n\'est installée, un message vous invite à en installer une</string>
     <string name="about_help_emergency_title">Utiliser le mode urgence</string>
     <string name="about_help_emergency_step1">Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety Call</string>
     <string name="about_help_emergency_step2">Page Urgence : appels directs vers les numéros d\'urgence de votre pays ; bouton rouge tenu 3 s → SMS aux proches</string>
@@ -1017,4 +1019,5 @@
         <item quantity="many">%1$d jours</item>
         <item quantity="other">%1$d jours</item>
     </plurals>
+    <string name="duration_days_hours">%1$d j %2$d h</string>
 </resources>

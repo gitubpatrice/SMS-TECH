@@ -1,8 +1,12 @@
 package com.filestech.sms.settings
 
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.domain.model.ReactionFormat
 import com.filestech.sms.domain.settings.PreviewMode
+import com.filestech.sms.domain.settings.SendingSettings
 import com.filestech.sms.testing.magasinDeTest
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -188,6 +192,59 @@ class SettingsHydrationTest {
                 .isEqualTo(PreviewMode.WHEN_UNLOCKED)
 
             scope.cancel()
+        }
+    }
+
+    /**
+     * v1.28.12 — **une installation NEUVE doit lire le défaut DÉCLARÉ.**
+     *
+     * L'hydratation construit `SendingSettings(...)` en passant chaque champ explicitement :
+     * le défaut écrit sur la data-class n'est donc jamais atteint, et rien ne garantissait
+     * que les deux disent la même chose. Ils ne la disaient plus. La v1.14.4 avait changé
+     * le format de réaction par défaut en `EMOJI_WITH_QUOTE` à la demande de l'utilisateur,
+     * sur la déclaration seulement : **le changement n'a pris effet sur aucune
+     * installation**, et toute installation neuve envoyait des réactions écrites en
+     * français, quelle que soit la langue de l'application.
+     *
+     * Deux assertions, et il en faut deux : la première interdit aux deux endroits de
+     * diverger à nouveau, la seconde fige la valeur elle-même, pour qu'un changement
+     * silencieux du défaut déclaré ne passe pas non plus.
+     */
+    @Test
+    fun uneInstallationNeuveLitLeDefautDeclare() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+                val neuf = withTimeout(TIMEOUT_MS) { depot.hydratedOrNull() }
+                assertThat(neuf?.sending?.reactionFormat)
+                    .isEqualTo(SendingSettings().reactionFormat)
+                assertThat(neuf?.sending?.reactionFormat)
+                    .isEqualTo(ReactionFormat.EMOJI_WITH_QUOTE)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
+    /**
+     * Le contrôle négatif du test précédent : une installation qui vient de la v1.7.x porte
+     * la clé héritée `send.reactions.emojiOnly` et GARDE son choix. Sans lui, un correctif
+     * qui rendrait le défaut déclaré à tout le monde — y compris à ceux qui avaient choisi
+     * autre chose — passerait le test ci-dessus sans rien signaler.
+     */
+    @Test
+    fun uneInstallationVenueDeLa17xGardeSonChoix() {
+        runBlocking {
+            magasin.edit { it[booleanPreferencesKey("send.reactions.emojiOnly")] = false }
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+                val ancien = withTimeout(TIMEOUT_MS) { depot.hydratedOrNull() }
+                assertThat(ancien?.sending?.reactionFormat).isEqualTo(ReactionFormat.TAPBACK_EN)
+            } finally {
+                portee.cancel()
+            }
         }
     }
 }

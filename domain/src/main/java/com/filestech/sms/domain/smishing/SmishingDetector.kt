@@ -446,13 +446,26 @@ object SmishingDetector {
      * toujours vus.
      *
      * `free` est un mot anglais courant, `orange` une couleur, `bahn` un chemin de fer,
-     * `ants` des fourmis, `poste` un poste ou un bureau de poste, `amazon` un fleuve.
-     * `free-mobile.fr` et `orange-pro.fr` sont en outre de VRAIS domaines de ces
-     * opérateurs. Fermer cette règle sur eux coûte quelques vraies détections
-     * (`secure-orange.fr` n'est plus vu) et c'est le bon sens du compromis : voir
-     * l'en-tête du fichier, un bandeau rouge sur un SMS légitime coûte plus cher.
+     * `ants` des fourmis, `poste` un poste ou un bureau de poste, `amazon` un fleuve,
+     * `revenue` un revenu, `santander` une ville espagnole — `playa-santander.es` et
+     * `ad-revenue.com` n'ont rien à se reprocher. `free-mobile.fr` et `orange-pro.fr`
+     * sont en outre de VRAIS domaines de ces opérateurs.
+     *
+     * Fermer cette règle sur eux coûte quelques vraies détections (`secure-orange.fr`
+     * n'est plus vu) et c'est le bon sens du compromis : voir l'en-tête du fichier, un
+     * bandeau rouge sur un SMS légitime coûte plus cher qu'une arnaque ratée. Les huit
+     * restent protégés par la faute de frappe et par le nom exact sur un TLD à bas coût.
      */
-    private val LABELS_TROP_COMMUNS = setOf("free", "orange", "poste", "amazon", "bahn", "ants")
+    private val LABELS_TROP_COMMUNS = setOf(
+        "free",
+        "orange",
+        "poste",
+        "amazon",
+        "bahn",
+        "ants",
+        "revenue",
+        "santander",
+    )
 
     /**
      * Les domaines de tête à bas coût, ceux que les campagnes achètent par milliers.
@@ -566,17 +579,18 @@ object SmishingDetector {
      * « última oportunidad » — et affichait un bandeau rouge sur un SMS commercial
      * parfaitement légitime. Relevé par un audit de sécurité le 2026-09-17.
      *
-     * Deux gardes, pas une, parce qu'une seule ne suffit pas :
-     *  - le nom officiel en PREMIER ferme `duty-free`, `tax-free`, `auto-bahn`,
-     *    `la-poste`, `shop-amazon` — c'est aussi la forme que prennent réellement les
-     *    campagnes (`inps-sicurezza`, `hmrc-refund`, `correos-es`) ;
-     *  - [LABELS_TROP_COMMUNS] ferme l'autre sens, `free-mobile.fr` et `orange-pro.fr`,
-     *    qui sont les VRAIS domaines de ces opérateurs et resteraient signalés sinon.
+     * La garde est [LABELS_TROP_COMMUNS], et elle suffit — ce que seul un contrôle négatif
+     * a établi. Le premier correctif exigeait EN PLUS le nom officiel en premier segment,
+     * au motif que les campagnes réelles l'écrivent ainsi (`inps-sicurezza`, `hmrc-refund`,
+     * `correos-es`). Mutation faite, aucun test ne rougissait : la liste fermait déjà tous
+     * les cas. Cette garde ne travaillait donc pas — et en y regardant, elle travaillait à
+     * l'envers, puisqu'elle aurait perdu `mon-impots.fr` et `espace-ameli.fr`, qui sont des
+     * formes d'usurpation au moins aussi plausibles que l'autre sens. Retirée.
      */
     fun porteLeNomOfficiel(label: String, nomOfficiel: String): Boolean =
         nomOfficiel !in LABELS_TROP_COMMUNS &&
             label.contains('-') &&
-            label.substringBefore('-') == nomOfficiel
+            label.split('-').any { it == nomOfficiel }
 
     /**
      * Distance de Levenshtein bornée — retourne true si la distance entre

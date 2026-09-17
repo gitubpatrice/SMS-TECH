@@ -200,7 +200,7 @@
     <!-- v1.13.0 — multi-selection bulk move to/from vault -->
     <string name="bulk_vault_move_in">Mover a la caja fuerte</string>
     <string name="bulk_vault_move_out">Sacar de la caja fuerte</string>
-    <string name="selected">Seleccionadas</string>
+    <string name="selected">Seleccionada</string>
     <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
     <string name="bulk_select_multiple">Selección múltiple</string>
     <!-- v1.14.0 — emergency call behavior + outcomes -->
@@ -301,7 +301,7 @@
     <string name="appearance_saved">Apariencia actualizada</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Detección de estafas (sin conexión)</string>
-    <string name="settings_smishing_detection_desc">Señala los SMS entrantes sospechosos (enlaces acortados, expresiones de urgencia, números de tarificación adicional, dominios que imitan a los verdaderos). Cubre Francia, Alemania, Italia y España. 100% local, sin nube. Puede producir falsos positivos.</string>
+    <string name="settings_smishing_detection_desc">Señala los SMS entrantes sospechosos (enlaces acortados, expresiones de urgencia, números de tarificación adicional, dominios que imitan a los verdaderos). Cubre Francia, Alemania, Italia, España, el Reino Unido e Irlanda. 100% local, sin nube. Puede producir falsos positivos.</string>
     <string name="smishing_banner_title">⚠️ Posiblemente fraudulento</string>
     <string name="smishing_banner_subtitle">Toque para ver por qué</string>
     <string name="smishing_dialog_title">¿Por qué este aviso?</string>
@@ -309,7 +309,7 @@
     <string name="smishing_reason_url_shortener">Enlace acortado (bit.ly, t.co, tinyurl…). Los acortadores pueden ocultar el destino real: compruébelo antes de tocar.</string>
     <string name="smishing_reason_urgency">Expresiones de urgencia o de presión (urgente, caduca, haga clic aquí…). Una táctica clásica de ingeniería social para provocar pánico.</string>
     <string name="smishing_reason_premium">Número de tarificación adicional (3xxx o 0899 en Francia, 0900 en Alemania, 899 en Italia, 806 en España…). Llamar a estos números es caro y suele formar parte de una estafa.</string>
-    <string name="smishing_reason_typosquatting">Dominio que imita a uno verdadero (p. ej. «correros.es» en lugar de «correos.es»). Los sitios vigilados son los oficiales de Francia, Alemania, Italia y España. Escriba siempre a mano las direcciones oficiales.</string>
+    <string name="smishing_reason_typosquatting">Dominio que imita a uno verdadero (p. ej. «correros.es» en lugar de «correos.es»). Los sitios vigilados son los oficiales de Francia, Alemania, Italia, España, el Reino Unido e Irlanda. Escriba siempre a mano las direcciones oficiales.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Azul de la marca (predeterminado)</string>
@@ -446,7 +446,7 @@
          Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
     <string name="settings_reaction_format_title">Formato de las reacciones</string>
     <string name="settings_reaction_format_fr">Francés legible</string>
-    <string name="settings_reaction_format_fr_hint">\"J\'ai réagi par ❤️ à : «preview»\". Natural y comprensible para cualquier destinatario Android de habla francesa. SMS Tech lo descodifica como una reacción nativa.</string>
+    <string name="settings_reaction_format_fr_hint">\"Réagi par ❤️ à votre message : «preview»\". Natural y comprensible para cualquier destinatario Android de habla francesa. SMS Tech lo descodifica como una reacción nativa.</string>
     <string name="settings_reaction_format_en">Tapback (compatible con iMessage)</string>
     <string name="settings_reaction_format_en_hint">\"Reacted ❤️ to «preview»\". Lo detectan automáticamente iMessage (iPhone) y las versiones recientes de Google Mensajes como un globo de reacción nativo. Menos natural para los destinatarios de habla francesa.</string>
     <string name="settings_reaction_format_emoji">Solo el emoji</string>
@@ -456,7 +456,7 @@
     <string name="settings_reaction_format_emoji_quote_hint">\"❤️ «su mensaje»\". Compacto y conserva el contexto. El destinatario ve el emoji seguido del mensaje original citado.</string>
     <!-- v1.8.1 — sender display name -->
     <string name="settings_sender_name_title">Su nombre visible</string>
-    <string name="settings_sender_name_desc">Se incluye en los SMS de reacción salientes para ayudar al destinatario a identificar al autor. Déjelo vacío para usar el nombre de su perfil de Android (o, en su defecto, el anónimo \"Reacted ❤️…\").</string>
+    <string name="settings_sender_name_desc">Se incluye en los SMS de reacción salientes para ayudar al destinatario a identificar al autor. Déjelo vacío para usar el nombre de su perfil de Android (o, en su defecto, el anónimo \"Réagi par ❤️…\").</string>
     <string name="settings_sender_name_label">Nombre visible (máx. 40)</string>
     <string name="settings_sender_name_auto">Detectar desde el perfil de Android</string>
 
@@ -500,6 +500,8 @@
     <string name="safety_call_setup_duration_72h">72 horas</string>
     <string name="safety_call_setup_duration_custom">Personalizada</string>
     <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="attachment_generic_name">Archivo adjunto</string>
+    <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">En horas · 168 h = 1 semana · máx. 720 h (30 días)</string>
     <string name="safety_call_setup_add_contact">Añadir un contacto</string>
     <string name="safety_call_setup_contact_name_label">Nombre (opcional)</string>
@@ -1042,4 +1044,5 @@
         <item quantity="many">%1$d días</item>
         <item quantity="other">%1$d días</item>
     </plurals>
+    <string name="duration_days_hours">%1$d d %2$d h</string>
 </resources>

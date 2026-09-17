@@ -1017,7 +1017,14 @@ class ThreadViewModel @Inject constructor(
             // Resolve the user-facing name via OpenableColumns when possible — Android's
             // PickVisualMedia / OpenDocument both expose it. Falls back to the cached filename
             // (auto-generated, so always visually ugly, hence the lookup).
-            val displayName = carte?.nomDeFichier ?: resolveDisplayName(uri) ?: "Pièce jointe"
+            // v1.28.12 — le nom de repli passe par `strings.xml`. Il était écrit en dur, en
+            // français : « Pièce jointe » s'affichait en légende du chip ET comme
+            // `contentDescription`, donc lu par TalkBack, quelle que soit la langue de
+            // l'application. Le `context` est celui de l'application, et la langue par
+            // application s'applique au processus : il rend bien la langue choisie.
+            val displayName = carte?.nomDeFichier
+                ?: resolveDisplayName(uri)
+                ?: context.getString(com.filestech.sms.R.string.attachment_generic_name)
             val file = copyAttachmentToCache(source, mime)
             if (file == null) {
                 _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))

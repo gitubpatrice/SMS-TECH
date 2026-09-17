@@ -244,13 +244,28 @@ class SettingsRepository(
                 //  - reactionEmojiOnly=false → TAPBACK_EN (préserve l'ancien défaut
                 //    "Reacted X to «…»" — l'user avait peut-être beaucoup de contacts
                 //    iPhone et compte sur le parsing Tapback)
-                //  - aucune clé présente (fresh install) → READABLE_FR (nouveau défaut)
+                //  - aucune clé présente (fresh install) → le défaut déclaré par AppSettings
+                //
+                // ⚠️ v1.28.12 — cette branche rendait `READABLE_FR`, et c'est le chemin
+                // RÉELLEMENT emprunté : `toAppSettings()` passe chaque champ explicitement,
+                // donc le défaut écrit sur la data-class n'est jamais atteint. La v1.14.4
+                // avait changé ce défaut en `EMOJI_WITH_QUOTE` à la demande de l'utilisateur
+                // — sur la déclaration seulement. Le changement n'a donc pris effet sur
+                // AUCUNE installation, et toute installation neuve envoyait des réactions
+                // en FRANÇAIS : « Réagi par ❤️ à votre message : «Wie geht's?» » à un
+                // destinataire allemand. Collant, en outre : `update{}` réécrit toutes les
+                // clés, donc au premier réglage modifié la valeur se gravait sur le disque.
+                //
+                // Relevé par un audit de contenu le 2026-09-17. Les installations qui
+                // viennent de la v1.7.x portent `reactionEmojiOnly` et prennent les deux
+                // branches au-dessus : seules les installations NEUVES changent, ce qui est
+                // exactement ce que la v1.14.4 voulait.
                 reactionFormat = p[K.reactionFormat]?.let {
                     runCatching { ReactionFormat.valueOf(it) }.getOrNull()
                 } ?: when {
                     p[K.reactionEmojiOnly] == true -> ReactionFormat.EMOJI_ONLY
                     p[K.reactionEmojiOnly] == false -> ReactionFormat.TAPBACK_EN
-                    else -> ReactionFormat.READABLE_FR
+                    else -> SendingSettings().reactionFormat
                 },
                 senderDisplayName = p[K.senderDisplayName]?.takeIf { it.isNotBlank() },
                 defaultRegionIso = p[K.defaultRegion]?.takeIf { it.isNotBlank() },

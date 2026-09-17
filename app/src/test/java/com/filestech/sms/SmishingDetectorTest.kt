@@ -513,10 +513,18 @@ class SmishingDetectorTest {
         assertThat(SmishingDetector.porteLeNomOfficiel("inps-sicurezza", "inps")).isTrue()
         assertThat(SmishingDetector.porteLeNomOfficiel("hmrc-refund", "hmrc")).isTrue()
         assertThat(SmishingDetector.porteLeNomOfficiel("correos-es", "correos")).isTrue()
-        // Et les deux gardes, chacune isolee de l'autre :
+        // Le nom officiel en SECOND segment compte aussi : `mon-impots.fr` et
+        // `espace-ameli.fr` sont des formes d'usurpation au moins aussi plausibles que
+        // `impots-mon.fr`. Un premier correctif exigeait le nom en premier ; le controle
+        // negatif a montre que cette garde ne mesurait rien, et qu'elle perdait ces deux-la.
+        assertThat(SmishingDetector.porteLeNomOfficiel("mon-impots", "impots")).isTrue()
+        assertThat(SmishingDetector.porteLeNomOfficiel("espace-ameli", "ameli")).isTrue()
+        // Et la garde qui reste, celle qui travaille vraiment :
         assertThat(SmishingDetector.porteLeNomOfficiel("duty-free", "free")).isFalse()
         assertThat(SmishingDetector.porteLeNomOfficiel("free-mobile", "free")).isFalse()
-        assertThat(SmishingDetector.porteLeNomOfficiel("mon-inps", "inps")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("ad-revenue", "revenue")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("playa-santander", "santander")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("mi-correo", "correos")).isFalse()
     }
 
     @Test fun `un nom officiel COURT sur un domaine jetable est signale`() {
@@ -562,11 +570,12 @@ class SmishingDetectorTest {
     @Test fun `un numero surtaxe ecrit avec des espaces insecables est reconnu`() {
         // `\s` de Java ne contient NI U+00A0 NI U+202F, que les claviers et traitements de
         // texte posent entre les groupes d'un numero francais. `\p{Zs}` les couvre.
-        val insecable = " "
-        val fineInsecable = " "
+        // Concatene plutot qu'interpole : « $insecable99 » se lirait comme l'identifiant
+        // `insecable99`, et des accolades a cet endroit sont refusees par detekt ailleurs.
+        val groupes = listOf("08", "99", "12", "34", "56")
         val numeros = listOf(
-            "Rappelez le 08${insecable}99${insecable}12${insecable}34${insecable}56",
-            "Rappelez le 08${fineInsecable}99${fineInsecable}12${fineInsecable}34${fineInsecable}56",
+            "Rappelez le " + groupes.joinToString(INSECABLE),
+            "Rappelez le " + groupes.joinToString(FINE_INSECABLE),
         )
         for (body in numeros) {
             assertThat(SmishingDetector.analyze(body).reasons)
@@ -578,9 +587,17 @@ class SmishingDetectorTest {
         // Le controle negatif du test precedent : elargir la classe de separateurs ne doit
         // pas ramener le faux positif « 32 - 11 » corrige le meme jour. L'espace qui
         // precede le tiret n'est pas suivi d'un chiffre, quelle que soit sa forme.
-        val insecable = " "
-        val body = "Urgent : résultat du match, 32${insecable}-${insecable}11. Compte rendu demain."
+        val body = "Urgent : résultat du match, 32" + INSECABLE + "-" + INSECABLE +
+            "11. Compte rendu demain."
         assertThat(SmishingDetector.analyze(body).reasons)
             .doesNotContain(SmishingReason.PremiumNumber)
+    }
+
+    private companion object {
+        /** U+00A0, l'espace insecable ordinaire. */
+        const val INSECABLE = " "
+
+        /** U+202F, la fine insecable — celle des claviers francais entre groupes de chiffres. */
+        const val FINE_INSECABLE = " "
     }
 }

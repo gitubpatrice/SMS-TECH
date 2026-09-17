@@ -45,7 +45,7 @@
     <string name="phone_action_no_contacts">Nessuna app Contatti disponibile su questo dispositivo.</string>
     <!-- v1.3.11 (F5) — forward sheet -->
     <string name="forward_sheet_title">Inoltra a…</string>
-    <string name="forward_search_placeholder">Cerca una conversazione</string>
+    <string name="forward_search_placeholder">Cerchi una conversazione</string>
     <string name="forward_new_contact">Nuovo destinatario</string>
     <string name="forward_existing_conversation">Conversazioni esistenti</string>
     <string name="forward_no_conversation">Nessun\'altra conversazione a cui inoltrare.</string>
@@ -200,7 +200,7 @@
     <!-- v1.13.0 — multi-selection bulk move to/from vault -->
     <string name="bulk_vault_move_in">Sposta nella cassaforte</string>
     <string name="bulk_vault_move_out">Togli dalla cassaforte</string>
-    <string name="selected">Selezionati</string>
+    <string name="selected">Selezionata</string>
     <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
     <string name="bulk_select_multiple">Selezione multipla</string>
     <!-- v1.14.0 — emergency call behavior + outcomes -->
@@ -301,7 +301,7 @@
     <string name="appearance_saved">Aspetto aggiornato</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Rilevamento truffe (offline)</string>
-    <string name="settings_smishing_detection_desc">Segnala gli SMS in arrivo sospetti (link accorciati, toni di urgenza, numeri a sovrapprezzo, domini che imitano quelli veri). Copre Francia, Germania, Italia e Spagna. 100% locale, nessun cloud. Può produrre falsi positivi.</string>
+    <string name="settings_smishing_detection_desc">Segnala gli SMS in arrivo sospetti (link accorciati, toni di urgenza, numeri a sovrapprezzo, domini che imitano quelli veri). Copre Francia, Germania, Italia, Spagna, Regno Unito e Irlanda. 100% locale, nessun cloud. Può produrre falsi positivi.</string>
     <string name="smishing_banner_title">⚠️ Forse fraudolento</string>
     <string name="smishing_banner_subtitle">Tocchi per sapere perché</string>
     <string name="smishing_dialog_title">Perché questo avviso?</string>
@@ -309,7 +309,7 @@
     <string name="smishing_reason_url_shortener">Link accorciato (bit.ly, t.co, tinyurl…). Gli accorciatori possono nascondere la vera destinazione: verifichi prima di toccare.</string>
     <string name="smishing_reason_urgency">Toni di urgenza o di pressione (urgente, scade, clicchi qui…). Una tattica classica di ingegneria sociale per suscitare panico.</string>
     <string name="smishing_reason_premium">Numero a sovrapprezzo (3xxx o 0899 in Francia, 0900 in Germania, 899 in Italia, 806 in Spagna…). Chiamare questi numeri costa caro e fa spesso parte di una truffa.</string>
-    <string name="smishing_reason_typosquatting">Dominio che imita uno vero (es. «agenziaentrata.gov.it» invece di «agenziaentrate.gov.it»). I siti sorvegliati sono quelli ufficiali di Francia, Germania, Italia e Spagna. Digiti sempre a mano gli indirizzi ufficiali.</string>
+    <string name="smishing_reason_typosquatting">Dominio che imita uno vero (es. «agenziaentrata.gov.it» invece di «agenziaentrate.gov.it»). I siti sorvegliati sono quelli ufficiali di Francia, Germania, Italia, Spagna, Regno Unito e Irlanda. Digiti sempre a mano gli indirizzi ufficiali.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Blu del marchio (predefinito)</string>
@@ -446,7 +446,7 @@
          Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
     <string name="settings_reaction_format_title">Formato delle reazioni</string>
     <string name="settings_reaction_format_fr">Francese leggibile</string>
-    <string name="settings_reaction_format_fr_hint">\"J\'ai réagi par ❤️ à : «preview»\". Naturale e comprensibile per qualsiasi destinatario Android di lingua francese. SMS Tech lo decodifica come una reazione nativa.</string>
+    <string name="settings_reaction_format_fr_hint">\"Réagi par ❤️ à votre message : «preview»\". Naturale e comprensibile per qualsiasi destinatario Android di lingua francese. SMS Tech lo decodifica come una reazione nativa.</string>
     <string name="settings_reaction_format_en">Tapback (compatibile iMessage)</string>
     <string name="settings_reaction_format_en_hint">\"Reacted ❤️ to «preview»\". Riconosciuto automaticamente da iMessage (iPhone) e dalle versioni recenti di Google Messaggi come una bolla di reazione nativa. Meno naturale per i destinatari di lingua francese.</string>
     <string name="settings_reaction_format_emoji">Solo emoji</string>
@@ -456,7 +456,7 @@
     <string name="settings_reaction_format_emoji_quote_hint">\"❤️ «il suo messaggio»\". Compatto e conserva il contesto. Il destinatario vede l\'emoji seguita dal messaggio originale citato.</string>
     <!-- v1.8.1 — sender display name -->
     <string name="settings_sender_name_title">Il suo nome visualizzato</string>
-    <string name="settings_sender_name_desc">Incluso negli SMS di reazione in uscita per aiutare il destinatario a identificare l\'autore. Lo lasci vuoto per usare il nome del suo profilo Android (o, in mancanza, l\'anonimo \"Reacted ❤️…\").</string>
+    <string name="settings_sender_name_desc">Incluso negli SMS di reazione in uscita per aiutare il destinatario a identificare l\'autore. Lo lasci vuoto per usare il nome del suo profilo Android (o, in mancanza, l\'anonimo \"Réagi par ❤️…\").</string>
     <string name="settings_sender_name_label">Nome visualizzato (max 40)</string>
     <string name="settings_sender_name_auto">Rileva dal profilo Android</string>
 
@@ -500,6 +500,8 @@
     <string name="safety_call_setup_duration_72h">72 ore</string>
     <string name="safety_call_setup_duration_custom">Personalizzata</string>
     <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="attachment_generic_name">Allegato</string>
+    <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">In ore · 168 h = 1 settimana · max 720 h (30 giorni)</string>
     <string name="safety_call_setup_add_contact">Aggiungi un contatto</string>
     <string name="safety_call_setup_contact_name_label">Nome (facoltativo)</string>
@@ -685,7 +687,7 @@
     <string name="settings_set_default">Imposta come predefinita</string>
     <string name="settings_is_default">SMS Tech è l\'app SMS predefinita.</string>
     <string name="settings_app_log">Registro dell\'app</string>
-    <string name="settings_reset_all">Ripristina tutte le impostazioni</string>
+    <string name="settings_reset_all">Reimposta tutte le impostazioni</string>
     <string name="settings_nuke_data">Elimina tutti i miei dati</string>
     <string name="settings_nuke_confirm">Tutte le conversazioni saranno cancellate in SMS Tech E nell\'archivio messaggi del telefono, insieme agli allegati, agli invii programmati e a ogni impostazione. Anche la cassaforte viene cancellata. L\'operazione è irreversibile e alla sincronizzazione successiva non torna nulla.</string>
     <string name="settings_nuke_confirm_not_default">⚠️ SMS Tech non è la sua app SMS predefinita: il sistema rifiuterà di eliminare i messaggi del telefono. Resteranno al loro posto e torneranno alla sincronizzazione successiva. Saranno cancellati solo i dati propri di SMS Tech.</string>
@@ -1042,4 +1044,5 @@
         <item quantity="many">%1$d giorni</item>
         <item quantity="other">%1$d giorni</item>
     </plurals>
+    <string name="duration_days_hours">%1$d g %2$d h</string>
 </resources>
