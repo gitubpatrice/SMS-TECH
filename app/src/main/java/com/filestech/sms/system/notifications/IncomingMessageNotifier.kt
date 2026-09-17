@@ -225,9 +225,9 @@ class IncomingMessageNotifier @Inject constructor(
             // summary à gérer.
             .also { b ->
                 if (notifSettings.inlineReply) {
-                    b.addAction(buildReplyAction(address, messageId, notificationId))
+                    b.addAction(buildReplyAction(address, messageId, notificationId, conversationId))
                 }
-                b.addAction(buildMarkReadAction(address, messageId, notificationId))
+                b.addAction(buildMarkReadAction(address, messageId, notificationId, conversationId))
                 if (isActiveConversation) {
                     b.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)
                 }
@@ -293,6 +293,7 @@ class IncomingMessageNotifier @Inject constructor(
         address: String,
         messageId: Long,
         notificationId: Int,
+        conversationId: Long,
     ): NotificationCompat.Action {
         val remoteInput = RemoteInput.Builder(KEY_REPLY)
             .setLabel(context.getString(R.string.notif_reply_label))
@@ -308,6 +309,14 @@ class IncomingMessageNotifier @Inject constructor(
             putExtra(NotificationActionReceiver.EXTRA_ADDRESS, address)
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            // ⚠️ v1.28.12 — la CONVERSATION, pas seulement l'expéditeur. L'intent d'OUVERTURE
+            // le porte depuis la v1.8.0 (« bug 4 fix ») ; ses deux jumeaux d'action ne l'ont
+            // jamais reçu, et ils résolvaient donc la conversation par l'ADRESSE. Sur un MMS
+            // de groupe, la notification est posée pour le GROUPE : répondre partait au seul
+            // expéditeur, la ligne miroir s'écrivait dans un fil 1-à-1, la notification —
+            // étiquetée par l'id du groupe — ne se fermait pas, et « marquer comme lu » pouvait
+            // CRÉER une conversation vide. Relevé par un audit de motifs le 2026-09-17.
+            putExtra(NotificationActionReceiver.EXTRA_CONVERSATION_ID, conversationId)
         }
         val pi = PendingIntent.getBroadcast(
             context,
@@ -326,6 +335,7 @@ class IncomingMessageNotifier @Inject constructor(
         address: String,
         messageId: Long,
         notificationId: Int,
+        conversationId: Long,
     ): NotificationCompat.Action {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             component = ComponentName(context, NotificationActionReceiver::class.java)
@@ -336,6 +346,14 @@ class IncomingMessageNotifier @Inject constructor(
             putExtra(NotificationActionReceiver.EXTRA_ADDRESS, address)
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            // ⚠️ v1.28.12 — la CONVERSATION, pas seulement l'expéditeur. L'intent d'OUVERTURE
+            // le porte depuis la v1.8.0 (« bug 4 fix ») ; ses deux jumeaux d'action ne l'ont
+            // jamais reçu, et ils résolvaient donc la conversation par l'ADRESSE. Sur un MMS
+            // de groupe, la notification est posée pour le GROUPE : répondre partait au seul
+            // expéditeur, la ligne miroir s'écrivait dans un fil 1-à-1, la notification —
+            // étiquetée par l'id du groupe — ne se fermait pas, et « marquer comme lu » pouvait
+            // CRÉER une conversation vide. Relevé par un audit de motifs le 2026-09-17.
+            putExtra(NotificationActionReceiver.EXTRA_CONVERSATION_ID, conversationId)
         }
         val pi = PendingIntent.getBroadcast(
             context,
