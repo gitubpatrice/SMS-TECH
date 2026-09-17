@@ -226,6 +226,7 @@
     <!-- v1.28.12 — one label per SERVICE, not per number. The same service is 17 in France,
          110 in Germany, 091 in Spain, and the tile already shows the number itself. -->
     <string name="emergency_call_eu_label">Euro-Notruf</string>
+    <string name="emergency_call_national_label">Nationaler Notruf</string>
     <string name="emergency_call_police_label">Polizei</string>
     <string name="emergency_call_fire_label">Feuerwehr</string>
     <string name="emergency_call_medical_label">Rettungsdienst</string>
@@ -299,15 +300,15 @@
     <string name="appearance_saved">Darstellung aktualisiert</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Betrugserkennung (offline)</string>
-    <string name="settings_smishing_detection_desc">Markiert verdächtige eingehende SMS (gekürzte Links, Dringlichkeitsformeln, Mehrwertnummern, täuschend ähnliche Domains). Die Nummern- und Domainlisten sind französisch. 100 % lokal, keine Cloud. Fehlalarme sind möglich.</string>
+    <string name="settings_smishing_detection_desc">Markiert verdächtige eingehende SMS (gekürzte Links, Dringlichkeitsformeln, Mehrwertnummern, täuschend ähnliche Domains). Abgedeckt sind Frankreich, Deutschland, Italien und Spanien. 100 % lokal, keine Cloud. Fehlalarme sind möglich.</string>
     <string name="smishing_banner_title">⚠️ Möglicherweise betrügerisch</string>
     <string name="smishing_banner_subtitle">Tippen, um den Grund zu sehen</string>
     <string name="smishing_dialog_title">Warum diese Warnung?</string>
     <string name="smishing_dialog_intro">SMS Tech hat in dieser Nachricht die folgenden verdächtigen Signale erkannt. Kein SMS-Inhalt wurde irgendwohin gesendet — alles wird lokal berechnet.</string>
     <string name="smishing_reason_url_shortener">Gekürzter Link (bit.ly, t.co, tinyurl…). Kurzlinks können das wahre Ziel verbergen — prüfen Sie es, bevor Sie tippen.</string>
     <string name="smishing_reason_urgency">Dringlichkeits- oder Druckformeln (dringend, läuft ab, hier klicken…). Eine gängige Social-Engineering-Taktik, um Panik auszulösen.</string>
-    <string name="smishing_reason_premium">Mehrwertdienst-Rufnummer im französischen Format (3xxx, 0899xxx, 081x…). Anrufe bei diesen Nummern sind teuer und oft Teil eines Betrugs.</string>
-    <string name="smishing_reason_typosquatting">Täuschend ähnliche Domain (z. B. „paypa1.com“ statt „paypal.com“). Die überwachten Seiten sind überwiegend französisch. Geben Sie offizielle Adressen immer von Hand ein.</string>
+    <string name="smishing_reason_premium">Mehrwertdienst-Rufnummer (0900 in Deutschland, 3xxx oder 0899 in Frankreich, 899 in Italien, 806 in Spanien…). Anrufe bei diesen Nummern sind teuer und oft Teil eines Betrugs.</string>
+    <string name="smishing_reason_typosquatting">Täuschend ähnliche Domain (z. B. „e1ster.de“ statt „elster.de“). Überwacht werden die offiziellen Seiten Frankreichs, Deutschlands, Italiens und Spaniens. Geben Sie offizielle Adressen immer von Hand ein.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Markenblau (Standard)</string>

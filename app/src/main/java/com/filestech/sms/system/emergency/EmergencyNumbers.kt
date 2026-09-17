@@ -55,8 +55,16 @@ import timber.log.Timber
  */
 object EmergencyNumbers {
 
-    /** Le service appelé, qui porte le libellé. Le NUMÉRO, lui, dépend du pays. */
-    enum class Service { EUROPEAN, POLICE, FIRE, MEDICAL }
+    /**
+     * Le service appelé, qui porte le libellé. Le NUMÉRO, lui, dépend du pays.
+     *
+     * [NATIONAL] est le numéro d'urgence GÉNÉRAL d'un pays, celui qu'on y a appris par cœur :
+     * le 999 britannique et irlandais. Il n'appelle pas un service en particulier — il appelle
+     * le standard, qui demande ensuite lequel. Il a sa propre valeur parce que l'étiqueter
+     * POLICE annonçait ce qu'il ne fait pas, et le retirer aurait privé ces pays du seul numéro
+     * que leurs habitants connaissent.
+     */
+    enum class Service { EUROPEAN, NATIONAL, POLICE, FIRE, MEDICAL }
 
     data class Dial(val service: Service, val number: String)
 
@@ -89,19 +97,20 @@ object EmergencyNumbers {
         "lu" to listOf(EU, Dial(Service.POLICE, "113")),
         // Portugal — 112 unique.
         "pt" to listOf(EU),
-        // Royaume-Uni et Irlande — 112 SEUL, délibérément.
+        // Royaume-Uni et Irlande — 999, le numéro que tout le monde y connaît, sous [NATIONAL].
         //
-        // Le 999 y figurait, étiqueté POLICE. Une vérification externe (2026-09-17) a montré que
-        // c'était une erreur de CLASSIFICATION : le 999 n'est pas la ligne de la police, c'est le
-        // numéro d'urgence GÉNÉRAL britannique et irlandais, strictement équivalent au 112 — même
-        // standard, mêmes opérateurs, qui demandent ensuite quel service on veut. Une tuile
-        // « Police » qui compose le standard toutes urgences annonce donc ce qu'elle ne fait pas.
+        // Il a d'abord été étiqueté POLICE : une vérification externe (2026-09-17) a montré que
+        // c'était faux. Le 999 n'est pas la ligne de la police, c'est le numéro d'urgence GÉNÉRAL,
+        // strictement équivalent au 112 — même standard, mêmes opérateurs, qui demandent ensuite
+        // quel service on veut. (Le numéro spécifique de la police britannique est le 101, et il
+        // n'a rien à faire ici : il est NON URGENT.)
         //
-        // Comme les deux numéros aboutissent au même endroit, retirer le 999 ne coûte aucune
-        // capacité d'appel : il ne retire qu'un libellé faux. (Le vrai numéro spécifique de la
-        // police au Royaume-Uni est le 101, et il n'a rien à faire ici : il est NON URGENT.)
-        "gb" to listOf(EU),
-        "ie" to listOf(EU),
+        // Il a ensuite été retiré, puisque le 112 aboutit au même endroit. C'était une erreur de
+        // sens inverse : un Britannique cherche le 999, pas le 112, et une table « par pays » qui
+        // n'affiche rien de national au Royaume-Uni ne fait pas son travail. Il revient donc,
+        // avec un libellé qui dit ce qu'il fait.
+        "gb" to listOf(EU, Dial(Service.NATIONAL, "999")),
+        "ie" to listOf(EU, Dial(Service.NATIONAL, "999")),
     )
 
     /** Ce que voit un appareil sans téléphonie, sans SIM ou dans un pays non listé. */

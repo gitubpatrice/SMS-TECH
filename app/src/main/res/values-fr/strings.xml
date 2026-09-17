@@ -218,6 +218,7 @@
     <!-- v1.28.12 — un libellé par SERVICE, plus par numéro : le même service est le 17 en
          France, le 110 en Allemagne, le 091 en Espagne, et la tuile affiche déjà le numéro. -->
     <string name="emergency_call_eu_label">Urgence européenne</string>
+    <string name="emergency_call_national_label">Urgence nationale</string>
     <string name="emergency_call_police_label">Police</string>
     <string name="emergency_call_fire_label">Pompiers</string>
     <string name="emergency_call_medical_label">Urgence médicale</string>
@@ -291,14 +292,14 @@
     <string name="appearance_saved">Apparence mise à jour</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Détection d\'arnaque (hors-ligne)</string>
-    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). Les listes de numéros et de domaines sont françaises. 100 % local, aucun cloud. Peut produire des faux positifs.</string>
+    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). Couvre la France, l\'Allemagne, l\'Italie et l\'Espagne. 100 % local, aucun cloud. Peut produire des faux positifs.</string>
     <string name="smishing_banner_title">⚠️ Possiblement frauduleux</string>
     <string name="smishing_banner_subtitle">Toucher pour voir pourquoi</string>
     <string name="smishing_dialog_title">Pourquoi cet avertissement ?</string>
     <string name="smishing_dialog_intro">SMS Tech a détecté les signaux suspects ci-dessous dans ce message. Aucun contenu n\'a été envoyé ailleurs — tout est calculé localement.</string>
     <string name="smishing_reason_url_shortener">URL raccourcie (bit.ly, t.co, tinyurl…). Les raccourcisseurs peuvent masquer la vraie destination — vérifiez avant de cliquer.</string>
     <string name="smishing_reason_urgency">Mots d\'urgence ou de pression (urgent, expire, cliquez ici…). Tactique classique d\'ingénierie sociale pour pousser à la panique.</string>
-    <string name="smishing_reason_premium">Numéro surtaxé au format français (3xxx, 0899xxx, 081x…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
+    <string name="smishing_reason_premium">Numéro surtaxé (3xxx ou 0899 en France, 0900 en Allemagne, 899 en Italie, 806 en Espagne…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
     <string name="smishing_reason_typosquatting">Domaine ressemblant à un officiel (ex. « 1mpots.gouv.fr » au lieu de « impots.gouv.fr »). Saisissez toujours les adresses officielles à la main.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->

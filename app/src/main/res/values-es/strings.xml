@@ -227,6 +227,7 @@
     <!-- v1.28.12 — one label per SERVICE, not per number. The same service is 17 in France,
          110 in Germany, 091 in Spain, and the tile already shows the number itself. -->
     <string name="emergency_call_eu_label">Emergencia europea</string>
+    <string name="emergency_call_national_label">Emergencia nacional</string>
     <string name="emergency_call_police_label">Policía</string>
     <string name="emergency_call_fire_label">Bomberos</string>
     <string name="emergency_call_medical_label">Emergencia sanitaria</string>
@@ -300,15 +301,15 @@
     <string name="appearance_saved">Apariencia actualizada</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Detección de estafas (sin conexión)</string>
-    <string name="settings_smishing_detection_desc">Señala los SMS entrantes sospechosos (enlaces acortados, expresiones de urgencia, números de tarificación adicional, dominios que imitan a los verdaderos). Las listas de números y de dominios son francesas. 100% local, sin nube. Puede producir falsos positivos.</string>
+    <string name="settings_smishing_detection_desc">Señala los SMS entrantes sospechosos (enlaces acortados, expresiones de urgencia, números de tarificación adicional, dominios que imitan a los verdaderos). Cubre Francia, Alemania, Italia y España. 100% local, sin nube. Puede producir falsos positivos.</string>
     <string name="smishing_banner_title">⚠️ Posiblemente fraudulento</string>
     <string name="smishing_banner_subtitle">Toque para ver por qué</string>
     <string name="smishing_dialog_title">¿Por qué este aviso?</string>
     <string name="smishing_dialog_intro">SMS Tech ha detectado en este mensaje las siguientes señales sospechosas. No se ha enviado ningún contenido de SMS a ninguna parte — todo se calcula localmente.</string>
     <string name="smishing_reason_url_shortener">Enlace acortado (bit.ly, t.co, tinyurl…). Los acortadores pueden ocultar el destino real: compruébelo antes de tocar.</string>
     <string name="smishing_reason_urgency">Expresiones de urgencia o de presión (urgente, caduca, haga clic aquí…). Una táctica clásica de ingeniería social para provocar pánico.</string>
-    <string name="smishing_reason_premium">Número de tarificación adicional en formato francés (3xxx, 0899xxx, 081x…). Llamar a estos números es caro y suele formar parte de una estafa.</string>
-    <string name="smishing_reason_typosquatting">Dominio que imita a uno verdadero (p. ej. «paypa1.com» en lugar de «paypal.com»). Los sitios vigilados son en su mayoría franceses. Escriba siempre a mano las direcciones oficiales.</string>
+    <string name="smishing_reason_premium">Número de tarificación adicional (3xxx o 0899 en Francia, 0900 en Alemania, 899 en Italia, 806 en España…). Llamar a estos números es caro y suele formar parte de una estafa.</string>
+    <string name="smishing_reason_typosquatting">Dominio que imita a uno verdadero (p. ej. «correros.es» en lugar de «correos.es»). Los sitios vigilados son los oficiales de Francia, Alemania, Italia y España. Escriba siempre a mano las direcciones oficiales.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Azul de la marca (predeterminado)</string>

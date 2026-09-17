@@ -227,6 +227,7 @@
     <!-- v1.28.12 — one label per SERVICE, not per number. The same service is 17 in France,
          110 in Germany, 091 in Spain, and the tile already shows the number itself. -->
     <string name="emergency_call_eu_label">Emergenza europea</string>
+    <string name="emergency_call_national_label">Emergenza nazionale</string>
     <string name="emergency_call_police_label">Polizia</string>
     <string name="emergency_call_fire_label">Vigili del fuoco</string>
     <string name="emergency_call_medical_label">Emergenza sanitaria</string>
@@ -300,15 +301,15 @@
     <string name="appearance_saved">Aspetto aggiornato</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Rilevamento truffe (offline)</string>
-    <string name="settings_smishing_detection_desc">Segnala gli SMS in arrivo sospetti (link accorciati, toni di urgenza, numeri a sovrapprezzo, domini che imitano quelli veri). Gli elenchi di numeri e di domini sono francesi. 100% locale, nessun cloud. Può produrre falsi positivi.</string>
+    <string name="settings_smishing_detection_desc">Segnala gli SMS in arrivo sospetti (link accorciati, toni di urgenza, numeri a sovrapprezzo, domini che imitano quelli veri). Copre Francia, Germania, Italia e Spagna. 100% locale, nessun cloud. Può produrre falsi positivi.</string>
     <string name="smishing_banner_title">⚠️ Forse fraudolento</string>
     <string name="smishing_banner_subtitle">Tocchi per sapere perché</string>
     <string name="smishing_dialog_title">Perché questo avviso?</string>
     <string name="smishing_dialog_intro">SMS Tech ha rilevato in questo messaggio i seguenti segnali sospetti. Nessun contenuto degli SMS è stato inviato da nessuna parte — tutto è calcolato in locale.</string>
     <string name="smishing_reason_url_shortener">Link accorciato (bit.ly, t.co, tinyurl…). Gli accorciatori possono nascondere la vera destinazione: verifichi prima di toccare.</string>
     <string name="smishing_reason_urgency">Toni di urgenza o di pressione (urgente, scade, clicchi qui…). Una tattica classica di ingegneria sociale per suscitare panico.</string>
-    <string name="smishing_reason_premium">Numero a sovrapprezzo in formato francese (3xxx, 0899xxx, 081x…). Chiamare questi numeri costa caro e fa spesso parte di una truffa.</string>
-    <string name="smishing_reason_typosquatting">Dominio che imita uno vero (es. «paypa1.com» invece di «paypal.com»). I siti sorvegliati sono per lo più francesi. Digiti sempre a mano gli indirizzi ufficiali.</string>
+    <string name="smishing_reason_premium">Numero a sovrapprezzo (3xxx o 0899 in Francia, 0900 in Germania, 899 in Italia, 806 in Spagna…). Chiamare questi numeri costa caro e fa spesso parte di una truffa.</string>
+    <string name="smishing_reason_typosquatting">Dominio che imita uno vero (es. «agenziaentrata.gov.it» invece di «agenziaentrate.gov.it»). I siti sorvegliati sono quelli ufficiali di Francia, Germania, Italia e Spagna. Digiti sempre a mano gli indirizzi ufficiali.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Blu del marchio (predefinito)</string>

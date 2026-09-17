@@ -435,6 +435,7 @@ private fun handleCallOutcome(
 @StringRes
 private fun libelleDuService(service: EmergencyNumbers.Service): Int = when (service) {
     EmergencyNumbers.Service.EUROPEAN -> R.string.emergency_call_eu_label
+    EmergencyNumbers.Service.NATIONAL -> R.string.emergency_call_national_label
     EmergencyNumbers.Service.POLICE -> R.string.emergency_call_police_label
     EmergencyNumbers.Service.FIRE -> R.string.emergency_call_fire_label
     EmergencyNumbers.Service.MEDICAL -> R.string.emergency_call_medical_label
@@ -446,6 +447,9 @@ private fun libelleDuService(service: EmergencyNumbers.Service): Int = when (ser
  */
 private fun couleurDuService(service: EmergencyNumbers.Service): Color = when (service) {
     EmergencyNumbers.Service.EUROPEAN -> com.filestech.sms.ui.theme.BrandDanger
+    // Le numéro d'urgence général d'un pays fait la même chose que le 112 : même couleur,
+    // parce qu'une couleur différente laisserait croire à un service différent.
+    EmergencyNumbers.Service.NATIONAL -> com.filestech.sms.ui.theme.BrandDanger
     EmergencyNumbers.Service.MEDICAL -> Color(0xFF00796B) // teal médical
     EmergencyNumbers.Service.POLICE -> Color(0xFF1565C0) // navy police
     EmergencyNumbers.Service.FIRE -> Color(0xFFE65100) // orange pompiers

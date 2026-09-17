@@ -141,15 +141,34 @@ class EmergencyNumbersTest {
         assertThat(portugal.map { it.number }).containsExactly("112")
     }
 
-    @Test fun `Royaume-Uni et Irlande - 112 SEUL, le 999 n est pas la police`() {
+    @Test fun `Royaume-Uni et Irlande - le 999 est NATIONAL, jamais POLICE`() {
         // Verification externe du 2026-09-17 : le 999 britannique et irlandais n'est pas la ligne
-        // de la police, c'est le numero d'urgence GENERAL, strictement equivalent au 112 (meme
-        // standard, memes operateurs). L'etiqueter POLICE annoncait ce qu'il ne fait pas ; comme
-        // les deux aboutissent au meme endroit, le retirer n'ote aucune capacite d'appel.
+        // de la police, c'est le numero d'urgence GENERAL (le numero specifique de la police y est
+        // le 101, et il est NON URGENT). Il reste dans la table parce qu'un Britannique cherche le
+        // 999 : une table « par pays » qui n'afficherait rien de national au Royaume-Uni ne ferait
+        // pas son travail. C'est le LIBELLE qui etait faux, pas le numero.
         for (pays in listOf("gb", "ie")) {
-            assertThat(EmergencyNumbers.pourLePays(pays).map { it.number }).containsExactly("112")
+            val dials = EmergencyNumbers.pourLePays(pays)
+            assertThat(dials.map { it.number }).containsExactly("112", "999").inOrder()
+            assertThat(numeroDe(pays, EmergencyNumbers.Service.NATIONAL)).isEqualTo("999")
+            assertThat(numeroDe(pays, EmergencyNumbers.Service.POLICE)).isNull()
         }
-        assertThat(EmergencyNumbers.NUMEROS_AUTORISES).doesNotContain("999")
+    }
+
+    @Test fun `aucun pays ne melange NATIONAL et un service precis`() {
+        // NATIONAL veut dire « le standard toutes urgences ». Un pays qui aurait a la fois un
+        // numero general ET des numeros par service afficherait deux promesses contradictoires :
+        // soit on sait a qui l'on parle, soit on ne le sait pas.
+        for (pays in EmergencyNumbers.PAYS_COUVERTS) {
+            val services = EmergencyNumbers.pourLePays(pays).map { it.service }.toSet()
+            if (EmergencyNumbers.Service.NATIONAL in services) {
+                assertThat(services).containsNoneOf(
+                    EmergencyNumbers.Service.POLICE,
+                    EmergencyNumbers.Service.FIRE,
+                    EmergencyNumbers.Service.MEDICAL,
+                )
+            }
+        }
     }
 
     // ──────────────── Le filet de l'OS, et ce qu'il n'a pas le droit de retirer ────────────────
