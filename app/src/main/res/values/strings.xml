@@ -329,7 +329,7 @@
     <string name="channel_emergency_shortcut_label">Emergency shortcut</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
     <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
-    <string name="channel_emergency_shortcut_desc">Silent persistent notification with quick-dial actions (112 and the emergency number for your country). Tap the body to open the Emergency screen, then hold 3 s to send the alert.</string>
+    <string name="channel_emergency_shortcut_desc">Silent persistent notification with quick-dial actions (112 and, where there is one, the emergency number for your country). Tap the body to open the Emergency screen, then hold 3 s to send the alert.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — emergency shortcut</string>
     <string name="emergency_shortcut_notif_text">Tap to open the emergency page, or dial 112.</string>
     <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
@@ -340,7 +340,7 @@
     <string name="emergency_saved_disabled">Emergency mode disabled</string>
     <string name="emergency_setup_unsaved_body">Emergency mode is not saved yet. Leaving now would keep it in its previous state.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
-    <string name="settings_emergency_shortcut_desc">Show a persistent notification with quick-dial actions (112 and the emergency number for your country) accessible without unlocking. Tap the body to open the Emergency screen. Off by default.</string>
+    <string name="settings_emergency_shortcut_desc">Show a persistent notification with quick-dial actions (112 and, where there is one, the emergency number for your country) accessible without unlocking. Tap the body to open the Emergency screen. Off by default.</string>
     <string name="emergency_shortcut_no_app_to_dial">No app installed to place the call</string>
     <string name="settings_emergency_call_police_title">Local emergency number in lock-screen notif</string>
     <string name="settings_emergency_call_police_desc">Add the emergency number for your country as a second quick action on the persistent lock-screen notification: the police in most countries, the general emergency line in the UK and Ireland. It is left out where the country has no number of its own. The in-app Emergency page always shows every number regardless of this setting. Off by default.</string>
@@ -912,7 +912,7 @@
     <string name="about_help_emergency_title">Use Emergency mode</string>
     <string name="about_help_emergency_step1">Settings → Emergency mode: enable + add at least one Safety call contact</string>
     <string name="about_help_emergency_step2">Emergency page: direct calls to your country\'s emergency numbers; red button held 3 s → SMS to relatives</string>
-    <string name="about_help_emergency_step3">Lockscreen notification (opt-in): shortcuts to 112 and to the emergency number for your country, without unlocking</string>
+    <string name="about_help_emergency_step3">Lockscreen notification (opt-in): shortcuts to 112 and, where there is one, to the emergency number for your country, without unlocking</string>
     <string name="about_help_emergency_step4">\"I am OK\" in the conversation list cancels the alert in case of accidental trigger</string>
     <string name="about_help_update_title">Check for an update</string>
     <string name="about_help_update_step1">\"View updates\" button at the top of this page</string>

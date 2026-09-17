@@ -194,12 +194,25 @@ class EmergencyShortcutNotifier @Inject constructor(
             //   - le VERDICT DE L'OS sur un numéro national, qui dépend du réseau courant. SIM
             //     retirée ou hors couverture, `isEmergencyNumber("17")` peut répondre non : le
             //     17 sort de la liste, `raccourciDans` retombe sur le 112, et l'action reste
-            //     étiquetée « Police ».
+            //     étiquetée « Police » ;
+            //   - la SOUSCRIPTION ACTIVE, sans bouger d'un mètre : basculer sur une autre eSIM,
+            //     changer la SIM voix par défaut ou en retirer une change ce que
+            //     `networkCountryIso` répond. Relevé par une relecture externe le 2026-09-17 ;
+            //   - la LANGUE de l'application : le libellé est résolu à la pose, donc changer de
+            //     langue laisse l'ancienne affichée sur cette notification jusqu'à la prochaine
+            //     pose. Cosmétique, mais c'est la même cause.
             //
-            // Ce résidu-là n'est pas rattrapable depuis une notification persistante, et il
-            // dégrade TOUJOURS vers le 112 — un numéro qui n'est jamais faux, et le seul qui
+            // Ces résidus ne sont pas rattrapables depuis une notification persistante, et ils
+            // dégradent TOUJOURS vers le 112 — un numéro qui n'est jamais faux, et le seul qui
             // fonctionne précisément dans les conditions qui provoquent la divergence. On le
             // dit plutôt que de le nier.
+            //
+            // ⚠️ Ce qui repose réellement la notification, puisqu'une relecture externe s'est
+            // trompée dessus faute d'avoir le fichier : [com.filestech.sms.MainApplication]
+            // combine `emergencyShortcutEnabled`, `emergencyCallPoliceEnabled` et
+            // `appLock.state is PanicDecoy`, en `distinctUntilChanged`. La SORTIE de session
+            // leurre repose donc bien la notification — ce n'est pas un jumeau oublié. Ce qui
+            // n'y figure pas, ce sont le réseau, la souscription et la langue, listés ci-dessus.
             val raccourci = EmergencyNumbers.raccourciForcesDeLOrdre(context)
             // v1.28.12 ter (audit S10) — dans un pays que la table ne couvre pas, le raccourci
             // retombe sur le 112, et la notification affichait alors DEUX actions identiques :

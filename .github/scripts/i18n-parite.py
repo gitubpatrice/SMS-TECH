@@ -186,8 +186,11 @@ def verifier_fins_de_ligne(dossiers):
     fins de ligne en mode texte, si bien que reecrire le fichier doublait son
     interlignage et rendait le diff illisible.
 
-    Le depot stocke ces fichiers en LF (`core.autocrlf` s'occupe du poste Windows).
-    On refuse donc le \\r\\r\\n partout, et le melange LF/CRLF dans un meme fichier.
+    Ce garde ne verifie PAS que le fichier est en LF, et ce n'est pas un oubli : sur le
+    poste Windows `core.autocrlf` rend une copie de travail en CRLF, alors que le depot,
+    lui, stocke du LF. Exiger l'un ferait rougir l'autre. Ce qui est refuse est ce qui est
+    faux dans les DEUX cas : le \\r\\r\\n, et le melange des deux conventions dans un
+    meme fichier.
     """
     for dossier in ["values"] + list(dossiers):
         chemin = os.path.join(RES, dossier, "strings.xml")

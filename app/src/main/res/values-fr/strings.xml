@@ -321,7 +321,7 @@
     <string name="channel_emergency_shortcut_label">Raccourci urgence</string>
     <!-- v1.14.8 audit P2 — texte aligné sur le comportement v1.14.2+ (action URGENCE retirée de la notif pour éviter les déclenchements accidentels). -->
     <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
-    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112 et le numéro d\'urgence propre à votre pays). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
+    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112 et, le cas échéant, le numéro d\'urgence propre à votre pays). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — raccourci urgence</string>
     <string name="emergency_shortcut_notif_text">Tapez pour ouvrir la page urgence, ou appeler le 112.</string>
     <!-- v1.28.12 — un seul libellé pour les deux actions rapides : le numéro de police change
@@ -332,7 +332,7 @@
     <string name="emergency_saved_disabled">Mode urgence désactivé</string>
     <string name="emergency_setup_unsaved_body">Le mode urgence n\'est pas encore enregistré. Quitter maintenant le laisserait dans son état précédent.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action URGENCE en un tap a été retirée. -->
-    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112 et le numéro d\'urgence propre à votre pays), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
+    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112 et, le cas échéant, le numéro d\'urgence propre à votre pays), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
     <string name="emergency_shortcut_no_app_to_dial">Aucune application pour passer l\'appel</string>
     <string name="settings_emergency_call_police_title">Numéro d\'urgence local sur la notif lock-screen</string>
     <string name="settings_emergency_call_police_desc">Ajoute le numéro d\'urgence propre à votre pays comme seconde action rapide sur la notification persistante : la police dans la plupart des pays, la ligne d\'urgence générale au Royaume-Uni et en Irlande. Il est omis là où le pays n\'a pas de numéro propre. La page Mode urgence in-app affiche toujours tous les numéros, quel que soit ce réglage. Désactivé par défaut.</string>
@@ -903,7 +903,7 @@
     <string name="about_help_emergency_title">Utiliser le mode urgence</string>
     <string name="about_help_emergency_step1">Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety call</string>
     <string name="about_help_emergency_step2">Page Urgence : appels directs vers les numéros d\'urgence de votre pays ; bouton rouge tenu 3 s → SMS aux proches</string>
-    <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis vers le 112 et vers le numéro d\'urgence propre à votre pays, sans déverrouiller</string>
+    <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis vers le 112 et, le cas échéant, vers le numéro d\'urgence propre à votre pays, sans déverrouiller</string>
     <string name="about_help_emergency_step4">« Je vais bien » dans la liste des conversations annule l\'alerte en cas de fausse manip</string>
     <string name="about_help_update_title">Vérifier une mise à jour</string>
     <string name="about_help_update_step1">Bouton \"Voir les mises à jour\" en haut de cette page</string>

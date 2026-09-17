@@ -505,10 +505,18 @@ class SettingsRepository(
          *
          * Toute clé retirée à l'avenir se pose ICI, et nulle part ailleurs : c'est le seul
          * endroit qui garantit qu'elle finisse par disparaître des installations existantes.
+         *
+         * ⚠️ **Et cette phrase a été fausse dès le jour où elle a été écrite.**
+         * `advanced.isDefault` avait été retirée quelques heures plus tôt, dans le même lot, et
+         * elle n'a pas été posée ici : la correction S9 reproduisait donc le défaut qu'elle
+         * fermait, sur la clé d'à côté. Relevé par DEUX relectures externes indépendantes le
+         * 2026-09-17, et c'est le motif le plus fréquent de ce dépôt : une règle posée sur un
+         * seul de deux jumeaux.
          */
         val CLES_RETIREES: List<androidx.datastore.preferences.core.Preferences.Key<*>> = listOf(
             stringPreferencesKey("locale.tag"),
             stringPreferencesKey("locale.firstDay"),
+            booleanPreferencesKey("advanced.isDefault"),
         )
 
         val sortMode = stringPreferencesKey("conv.sort")

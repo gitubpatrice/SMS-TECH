@@ -295,21 +295,28 @@ object SmishingDetector {
      * référence de commande. Relevé par deux relectures externes le 2026-09-17. Un vrai
      * numéro est entouré d'espaces ou de ponctuation, jamais de lettres.
      *
-     * ⚠️ **Le TIRET, lui, ne fait plus frontière ici — il la faisait, et c'était une porte de
-     * sortie.** « Rappelez le -0899123456 » n'était pas signalé : un seul caractère collé
-     * devant le numéro suffisait à neutraliser l'heuristique 3, et le même tour marchait
-     * derrière. Or ces motifs-ci lisent le corps COMPACTÉ, où tout tiret placé entre deux
-     * chiffres a déjà disparu (cf. [SEPARATEUR_DE_NUMERO]) : un tiret qui subsiste à côté d'un
-     * numéro long est de la ponctuation, pas un séparateur de groupes. Il n'avait donc rien à
-     * y garder — la référence « AB08-99-123-456CD » est fermée par la LETTRE, pas par le
-     * tiret. Les numéros COURTS, eux, se lisent sur le corps BRUT et en ont toujours besoin :
-     * cf. [BORD_GAUCHE_COURT], et le test « G-3211 » qui en dépend.
+     * ⚠️ **Le TIRET ne fait plus frontière à lui seul — il la faisait, et c'était une porte de
+     * sortie.** « Rappelez le -0899123456 » n'était pas signalé : un caractère collé devant le
+     * numéro suffisait à neutraliser l'heuristique 3, et le même tour marchait derrière.
      *
-     * Les deux côtés sont corrigés ensemble : n'en fermer qu'un laisserait un jumeau ouvert,
-     * et c'est le défaut qui revient le plus souvent dans ce dépôt.
+     * ⚠️ **Mais le retirer purement et simplement a ouvert un faux positif, releve le même jour
+     * par DEUX relectures externes** : « commande Réf-0899123456 », « Facture INV-0899123456 ».
+     * Le regard arrière ne voyait qu'UN caractère — le tiret — et la lettre qui le précède
+     * restait hors de portee. Le commentaire de la premiere version affirmait que « la
+     * référence AB08-99-123-456CD est fermée par la LETTRE » : vrai pour CETTE forme-là, où la
+     * lettre touche le chiffre, faux dès qu'un tiret s'intercale.
+     *
+     * La règle exacte est donc : **ni lettre, ni chiffre collé ; ni tiret PRÉCÉDÉ d'une lettre
+     * ou d'un chiffre.** « Réf-0899… » est fermé, « le -0899… » et un numéro en tête de
+     * message restent ouverts. Symétrique à droite, pour ne pas laisser de jumeau.
+     *
+     * Les numéros COURTS, eux, se lisent sur le corps BRUT et gardent la garde SIMPLE : un tiret
+     * y sépare vraiment les groupes d'une référence (« 12-3456-78 »). Cf. [BORD_GAUCHE_COURT].
      */
-    private const val BORD_GAUCHE = """(?<![\p{L}\p{N}])"""
-    private const val BORD_DROIT = """(?![\p{L}\p{N}])"""
+    private const val BORD_GAUCHE =
+        """(?<![\p{L}\p{N}])(?<![\p{L}\p{N}]-)"""
+    private const val BORD_DROIT =
+        """(?![\p{L}\p{N}])(?!-[\p{L}\p{N}])"""
 
     /**
      * Les numéros COURTS, cherchés sur le texte BRUT — voir [containsPremiumNumber].
@@ -373,24 +380,30 @@ object SmishingDetector {
         // L'application est livrée EN ANGLAIS d'abord, et n'avait aucune liste pour les
         // pays anglophones : un utilisateur britannique n'était protégé par rien.
         //
-        // ⚠️ **Le motif 09xx a été RÉTRÉCI à 090x, et le 084x / 087x RETIRÉ.** Toutes les
-        // listes s'appliquent à tout le monde — c'est la décision, et elle tient — mais le
-        // numéro britannique non géographique de onze chiffres a la forme EXACTE du fixe
-        // allemand : 0911 Nuremberg, 0921 Bayreuth, 0981 Ansbach, 0841 Ingolstadt, 0871
-        // Landshut, suivis de sept chiffres. `09\d{9}` et `08[47]\d{8}` posaient donc un
-        // bandeau rouge sur le SMS d'un commerçant nurembergeois dès qu'un mot d'urgence
-        // traînait dans le message. Aucun chiffre ne distingue les deux écritures : c'est le
-        // pays qui les sépare, et l'anti-smishing ne s'appuie délibérément pas dessus.
+        // ⚠️ **AUCUN motif britannique n'a survécu, et c'est mesuré, pas supposé.**
         //
-        // Arbitré comme le 118xx allemand et le 892xxx italien, pour la même raison : mieux
-        // vaut rater une arnaque que coller un bandeau rouge sur un SMS légitime.
+        // Première écriture : `09\d{9}` et `08[47]\d{8}`. Ils décrivent mot pour mot le fixe
+        // allemand — 0911 Nuremberg, 0921 Bayreuth, 0981 Ansbach, 0841 Ingolstadt, 0871 Landshut,
+        // suivis de sept chiffres — donc un bandeau rouge sur le SMS d'un commerçant nurembergeois
+        // dès qu'un mot d'urgence traîne dans le message.
         //
-        // Reste couvert : 090x, la plus grosse part du premium britannique (11 chiffres —
-        // le 09 français en fait 10, et n'entre donc pas dans ce motif).
-        // N'est plus couvert, et c'est dit : 091x, 098x, 084x, 087x.
-        // Angle mort assumé : le 0906 est à la fois premium britannique et l'indicatif de
-        // Donauwörth.
-        Regex(BORD_GAUCHE + """090\d{8}""" + BORD_DROIT),
+        // Deuxième écriture : rétrécie à `090\d{8}`, en n'assumant qu'un seul angle mort, le 0906
+        // de Donauwörth. **Deux relectures externes indépendantes l'ont démolie le même jour**, et
+        // elles avaient raison : `090` est l'indicatif géographique de **Messine**, en Sicile —
+        // « confermi l'appuntamento allo 090 12345678 » — et l'Allemagne en compte toute une
+        // famille de plus (09071 Dillingen, 09081 Nördlingen, 09090 Rain, 09091 Monheim).
+        //
+        // Aucun chiffre ne sépare un 09xx britannique surtaxé d'un 09xx allemand ou italien
+        // géographique : seul le PAYS les distingue, et l'anti-smishing applique délibérément
+        // toutes les listes à tout le monde. La collision n'est donc pas un accident de motif,
+        // elle est structurelle, et un troisième rétrécissement ne ferait que déplacer la ville.
+        //
+        // Arbitré comme le 118xx allemand et le 892xxx italien, pour la même raison écrite en
+        // tête de ce fichier : mieux vaut rater une arnaque que coller un bandeau rouge sur un
+        // SMS légitime. **Ce que cela coûte, et il faut le dire : un utilisateur britannique ou
+        // irlandais n'a AUCUNE couverture sur les numéros surtaxés** — ni 09xx, ni 084x, ni 087x.
+        // Les trois autres heuristiques (mots d'urgence, raccourcisseurs, domaines usurpés) le
+        // couvrent toujours, et il en faut deux pour afficher quoi que ce soit.
     )
 
     /**

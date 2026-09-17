@@ -85,16 +85,19 @@ class SettingsHydrationTest {
     private companion object {
         const val TIMEOUT_MS = 10_000L
 
-        /** Les deux cles d'une version precedente, telles qu'elles sont ecrites sur le disque. */
+        /** Les trois cles d'une version precedente, telles qu'elles sont ecrites sur le disque. */
         val TAG_DE_LANGUE = stringPreferencesKey("locale.tag")
         val PREMIER_JOUR = stringPreferencesKey("locale.firstDay")
+        val ROLE_SMS = booleanPreferencesKey("advanced.isDefault")
     }
 
     /**
      * v1.28.12 (audit S9) — **deux cles retirees survivaient a « Supprimer toutes mes donnees ».**
      *
-     * `locale.tag` et `locale.firstDay` ont ete retires avec les champs qu'ils portaient, mais ils
-     * restaient ecrits sur le disque des installations anterieures. Or `PanicService.nukeEverything`
+     * `locale.tag`, `locale.firstDay` et `advanced.isDefault` ont ete retirees avec les champs
+     * qu'elles portaient, mais elles restaient ecrites sur le disque des installations
+     * anterieures. La TROISIEME a ete oubliee le jour meme ou les deux premieres ont ete
+     * corrigees, et deux relectures externes l'ont trouvee : c'est pour ca qu'elle est ici. Or `PanicService.nukeEverything`
      * REECRIT les reglages par-dessus (`update { AppSettings() }`) au lieu de vider le magasin :
      * une cle que l'ecriture ne nomme pas n'est jamais touchee. Le tag de langue choisi par
      * l'utilisateur survivait donc a une purge qui se dit complete.
@@ -111,10 +114,12 @@ class SettingsHydrationTest {
                 magasin.edit { prefs ->
                     prefs[TAG_DE_LANGUE] = "de"
                     prefs[PREMIER_JOUR] = "MONDAY"
+                    prefs[ROLE_SMS] = true
                 }
                 val avant = magasin.data.first()
                 assertThat(avant[TAG_DE_LANGUE]).isEqualTo("de")
                 assertThat(avant[PREMIER_JOUR]).isEqualTo("MONDAY")
+                assertThat(avant[ROLE_SMS]).isTrue()
 
                 // Ce que fait « Supprimer toutes mes donnees ».
                 SettingsRepository(magasin, portee).update { AppSettings() }
@@ -122,6 +127,7 @@ class SettingsHydrationTest {
                 val apres = magasin.data.first()
                 assertThat(apres[TAG_DE_LANGUE]).isNull()
                 assertThat(apres[PREMIER_JOUR]).isNull()
+                assertThat(apres[ROLE_SMS]).isNull()
             } finally {
                 portee.cancel()
             }

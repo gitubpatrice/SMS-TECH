@@ -330,7 +330,7 @@
     <string name="channel_emergency_shortcut_label">Acceso directo de emergencia</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
     <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
-    <string name="channel_emergency_shortcut_desc">Notificación permanente silenciosa con accesos directos de llamada (112 y el número de emergencia propio de su país). Toque el cuerpo para abrir la pantalla de emergencia y, después, mantenga pulsado 3 s para enviar la alerta.</string>
+    <string name="channel_emergency_shortcut_desc">Notificación permanente silenciosa con accesos directos de llamada (112 y, si existe, el número de emergencia propio de su país). Toque el cuerpo para abrir la pantalla de emergencia y, después, mantenga pulsado 3 s para enviar la alerta.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — acceso directo de emergencia</string>
     <string name="emergency_shortcut_notif_text">Toque para abrir la página de emergencia, o llame al 112.</string>
     <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
@@ -341,7 +341,7 @@
     <string name="emergency_saved_disabled">Modo emergencia desactivado</string>
     <string name="emergency_setup_unsaved_body">El modo emergencia todavía no está guardado. Si sale ahora, se quedaría en su estado anterior.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
-    <string name="settings_emergency_shortcut_desc">Muestra una notificación permanente con accesos directos de llamada (112 y el número de emergencia propio de su país), accesible sin desbloquear. Toque el cuerpo para abrir la pantalla de emergencia. Desactivado de forma predeterminada.</string>
+    <string name="settings_emergency_shortcut_desc">Muestra una notificación permanente con accesos directos de llamada (112 y, si existe, el número de emergencia propio de su país), accesible sin desbloquear. Toque el cuerpo para abrir la pantalla de emergencia. Desactivado de forma predeterminada.</string>
     <string name="emergency_shortcut_no_app_to_dial">No hay ninguna app instalada para hacer la llamada</string>
     <string name="settings_emergency_call_police_title">Número de emergencia local en la notificación de bloqueo</string>
     <string name="settings_emergency_call_police_desc">Añade el número de emergencia propio de su país como segunda acción rápida en la notificación permanente de la pantalla de bloqueo: la policía en la mayoría de los países, la línea general de emergencias en el Reino Unido e Irlanda. Se omite cuando el país no tiene un número propio. La página de Emergencia de la app siempre muestra todos los números, independientemente de este ajuste. Desactivado de forma predeterminada.</string>
@@ -918,7 +918,7 @@
     <string name="about_help_emergency_title">Usar el modo emergencia</string>
     <string name="about_help_emergency_step1">Ajustes → Modo emergencia: actívelo y añada al menos un contacto de Safety call</string>
     <string name="about_help_emergency_step2">Página de Emergencia: llamadas directas a los números de emergencia de su país; botón rojo mantenido 3 s → SMS a sus seres queridos</string>
-    <string name="about_help_emergency_step3">Notificación en la pantalla de bloqueo (opcional): accesos directos al 112 y al número de emergencia propio de su país, sin desbloquear</string>
+    <string name="about_help_emergency_step3">Notificación en la pantalla de bloqueo (opcional): accesos directos al 112 y, si existe, al número de emergencia propio de su país, sin desbloquear</string>
     <string name="about_help_emergency_step4">«Estoy bien» en la lista de conversaciones cancela la alerta en caso de activación accidental</string>
     <string name="about_help_update_title">Buscar una actualización</string>
     <string name="about_help_update_step1">Botón «Ver las actualizaciones» arriba de esta página</string>

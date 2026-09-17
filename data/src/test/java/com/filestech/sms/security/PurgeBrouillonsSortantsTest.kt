@@ -1,9 +1,8 @@
 package com.filestech.sms.security
 
+import com.filestech.sms.domain.settings.LockMode
 import com.google.common.truth.Truth.assertThat
-import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -31,7 +30,7 @@ class PurgeBrouillonsSortantsTest {
         val frais = fichier(dir, "frais.jpg", maintenant - 60_000L)
         val abandonne = fichier(dir, "abandonne.jpg", maintenant - DRAFT_MAX_AGE_MS - 1L)
 
-        val supprimes = purgerBrouillonsSortants(dir, verrouEngage = false, nowMs = maintenant)
+        val supprimes = purgerBrouillonsSortants(dir, verrouArme = false, nowMs = maintenant)
 
         assertThat(supprimes).isEqualTo(1)
         assertThat(frais.exists()).isTrue()
@@ -44,7 +43,7 @@ class PurgeBrouillonsSortantsTest {
         val frais = fichier(dir, "frais.jpg", maintenant - 60_000L)
         val abandonne = fichier(dir, "abandonne.jpg", maintenant - DRAFT_MAX_AGE_MS - 1L)
 
-        val supprimes = purgerBrouillonsSortants(dir, verrouEngage = true, nowMs = maintenant)
+        val supprimes = purgerBrouillonsSortants(dir, verrouArme = true, nowMs = maintenant)
 
         assertThat(supprimes).isEqualTo(2)
         assertThat(frais.exists()).isFalse()
@@ -60,7 +59,7 @@ class PurgeBrouillonsSortantsTest {
         val maintenant = 1_800_000_000_000L
         val pile = fichier(dir, "pile.jpg", maintenant - DRAFT_MAX_AGE_MS)
 
-        val supprimes = purgerBrouillonsSortants(dir, verrouEngage = false, nowMs = maintenant)
+        val supprimes = purgerBrouillonsSortants(dir, verrouArme = false, nowMs = maintenant)
 
         assertThat(supprimes).isEqualTo(0)
         assertThat(pile.exists()).isTrue()
@@ -78,7 +77,7 @@ class PurgeBrouillonsSortantsTest {
         fichier(sous, "part.tmp", maintenant - DRAFT_MAX_AGE_MS - 1L)
         assertThat(sous.setLastModified(maintenant - DRAFT_MAX_AGE_MS - 1L)).isTrue()
 
-        val supprimes = purgerBrouillonsSortants(dir, verrouEngage = false, nowMs = maintenant)
+        val supprimes = purgerBrouillonsSortants(dir, verrouArme = false, nowMs = maintenant)
 
         assertThat(supprimes).isEqualTo(1)
         assertThat(sous.exists()).isFalse()
@@ -88,40 +87,41 @@ class PurgeBrouillonsSortantsTest {
     fun `un dossier absent ne leve pas`(@TempDir dir: File) {
         val absent = File(dir, "jamais-cree")
 
-        assertThat(purgerBrouillonsSortants(absent, verrouEngage = true, nowMs = 1L)).isEqualTo(0)
-        assertThat(purgerBrouillonsSortants(absent, verrouEngage = false, nowMs = 1L)).isEqualTo(0)
+        assertThat(purgerBrouillonsSortants(absent, verrouArme = true, nowMs = 1L)).isEqualTo(0)
+        assertThat(purgerBrouillonsSortants(absent, verrouArme = false, nowMs = 1L)).isEqualTo(0)
     }
 
-    // ──────────── Le câblage : « le verrou a-t-il mordu ? » ────────────
+    // ──────────── Le câblage : « un verrou est-il armé ? » ────────────
 
     /**
      * Le premier contrôle négatif a montré que l'inversion de cette lecture passait VERTE :
      * la décision était juste, mais personne ne vérifiait qu'on la lisait dans le bon sens.
-     * Cinq états, cinq réponses — et `isOpenForUi` appelle l'implémentation réelle, comme dans
-     * [VaultGuardsTest] : la dupliquer ici rendrait le test complaisant.
+     *
+     * v1.28.12 ter — le prédicat ne lit plus l'ÉTAT du verrou mais le RÉGLAGE, et les deux
+     * relectures externes ont dit pourquoi : en « prochain lancement seulement » l'état reste
+     * ouvert alors que le verrou mordra, et à froid il vaut `Locked` alors qu'il n'y a peut-être
+     * aucun verrou. **Le test énumère les QUATRE modes** : un mode ajouté demain ne compilera
+     * pas ici sans qu'on ait tranché son cas.
      */
     @Test
-    fun `seuls Locked et LockedOut comptent comme un verrou qui a mordu`() {
-        assertThat(observateur(AppLockManager.LockState.Locked).verrouAMordu()).isTrue()
-        assertThat(observateur(AppLockManager.LockState.LockedOut(until = 1L)).verrouAMordu()).isTrue()
-        assertThat(observateur(AppLockManager.LockState.Disabled).verrouAMordu()).isFalse()
-        assertThat(observateur(AppLockManager.LockState.Unlocked).verrouAMordu()).isFalse()
-        assertThat(observateur(AppLockManager.LockState.PanicDecoy).verrouAMordu()).isFalse()
+    fun `tout mode de verrouillage sauf OFF compte comme un verrou arme`() {
+        val observateur = observateur()
+        for (mode in LockMode.entries) {
+            assertThat(observateur.verrouArme(mode)).isEqualTo(mode != LockMode.OFF)
+        }
+        // Le test ci-dessus serait vert sur une enumeration vide : on compte.
+        assertThat(LockMode.entries).hasSize(4)
+        assertThat(observateur.verrouArme(LockMode.OFF)).isFalse()
+        assertThat(observateur.verrouArme(LockMode.PIN)).isTrue()
     }
 
-    private fun observateur(etat: AppLockManager.LockState): AutoLockObserver {
-        val appLock = mockk<AppLockManager>().also { m ->
-            every { m.state } returns MutableStateFlow(etat)
-            every { m.isOpenForUi(any()) } answers { callOriginal() }
-        }
-        return AutoLockObserver(
-            context = mockk(relaxed = true),
-            appLock = appLock,
-            vaultLazy = mockk(relaxed = true),
-            settings = mockk(relaxed = true),
-            scope = mockk(relaxed = true),
-        )
-    }
+    private fun observateur(): AutoLockObserver = AutoLockObserver(
+        context = mockk(relaxed = true),
+        appLock = mockk(relaxed = true),
+        vaultLazy = mockk(relaxed = true),
+        settings = mockk(relaxed = true),
+        scope = mockk(relaxed = true),
+    )
 
     /**
      * `setLastModified` peut échouer en silence selon le système de fichiers. On l'affirme, sinon
