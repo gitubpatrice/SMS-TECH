@@ -507,6 +507,109 @@ class SmishingDetectorTest {
         }
     }
 
+    // ──── Suites des deux relectures externes du 2026-09-17 (troisieme passe) ────
+
+    @Test fun `un montant avec separateur de milliers n est pas un numero surtaxe`() {
+        // Le numero court francais fait QUATRE chiffres. Compacter avant de chercher
+        // transformait « 3 211 € » en 3211, et « 35.50 euros » en 3550 : TOUT prix entre
+        // 32,00 et 36,99 affichait un bandeau. Les quatre langues latines separent les
+        // milliers par une espace insecable ou un point.
+        val legitimes = listOf(
+            "Paiement reçu : 3${INSECABLE}211 €. Facture : https://bit.ly/3Facture",
+            "Paiement reçu : 3${FINE_INSECABLE}211 €. Facture : https://bit.ly/3Facture",
+            "Última oportunidad: usa tus 3.211 puntos antes del domingo.",
+            "Votre abonnement expire demain. Reste à payer : 35.50 euros.",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test fun `un code ou une reference alphanumerique n est pas un numero surtaxe`() {
+        // Les frontieres ne regardaient que les CHIFFRES : une lettre collee au numero
+        // passait. Un code de validation et une reference de commande sont parmi les SMS
+        // les plus courants qui soient.
+        val legitimes = listOf(
+            "Action immédiate : G-3211 est votre code de validation",
+            "Action requise : confirmez la commande réf. AB08-99-123-456CD.",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test fun `un vrai numero surtaxe reste reconnu, court ou long`() {
+        // Le temoin positif des deux tests precedents : sans lui, un detecteur qui aurait
+        // simplement cesse de regarder les numeros les passerait tous les deux.
+        val arnaques = listOf(
+            "URGENT : envoyez STOP au 3211 pour arreter le prelevement",
+            "URGENT : rappelez le 0899 12 34 56 immédiatement",
+        )
+        for (body in arnaques) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .contains(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test fun `un mot ordinaire proche d un nom officiel n est pas une usurpation`() {
+        // Onze mots innocents sur onze essayes etaient signales : la tolerance de
+        // Levenshtein s'appliquait sans egard au fait que le label soit un MOT.
+        val legitimes = listOf(
+            "Action requise : connectez-vous sur france.com",
+            "Colis en attente, suivi sur ma-porte.fr",
+            "Click here to view your booking: https://www.engine.com/",
+            "Limited time offer: https://www.avenue.com/",
+            "Dernière chance : catalogue sur imports.example",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.TyposquattedDomain)
+        }
+    }
+
+    @Test fun `une usurpation par CHIFFRE reste vue, elle`() {
+        // Le temoin positif du test precedent, et la raison d'etre des deux voies : une
+        // vraie usurpation substitue un chiffre a une lettre, ce qu'aucun mot ne fait.
+        val usurpations = listOf(
+            "Vous avez des impôts impayés : https://1mpots.gouv.fr/payer",
+            "Votre attestation : https://amel1.fr/connexion",
+            "Ihre Steuererklärung: https://e1ster.de/login",
+        )
+        for (body in usurpations) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .contains(SmishingReason.TyposquattedDomain)
+        }
+    }
+
+    @Test fun `une banque regionale allemande n est pas une usurpation`() {
+        // L'Allemagne compte des CENTAINES de caisses d'epargne et de banques populaires
+        // regionales sur ce modele. La regle de concatenation les signalait toutes.
+        val legitimes = listOf(
+            "Sparkasse KölnBonn: Bitte bestätigen Sie Ihre neue Mobilnummer unter " +
+                "https://www.sparkasse-koelnbonn.de/online-banking",
+            "Volksbank Stuttgart: Bitte bestätigen Sie Ihre Daten unter " +
+                "https://www.volksbank-stuttgart.de/",
+            "PayPal Community: verify your email settings at https://www.paypal-community.com/",
+            "ENGIE Home Services : confirmez votre rendez-vous sur https://www.engie-homeservices.fr/",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.TyposquattedDomain)
+        }
+    }
+
+    @Test fun `le vrai domaine du Credit Agricole n est pas une usurpation de lui-meme`() {
+        // Le domaine canonique de la banque porte un TIRET, et il etait absent de la liste
+        // officielle : a distance 1 de `creditagricole`, il etait donc signale. Un SMS de
+        // la banque, vers le site de la banque, avec un bandeau rouge dessus.
+        val body = "Crédit Agricole : action requise pour finaliser votre souscription " +
+            "sur https://www.credit-agricole.fr/"
+        assertThat(SmishingDetector.analyze(body).reasons)
+            .doesNotContain(SmishingReason.TyposquattedDomain)
+    }
+
     @Test fun `le nom officiel en PREMIER segment reste signale`() {
         // Le temoin positif du test precedent. C'est la forme que prennent reellement les
         // campagnes, et les quatre assertions d'origine la respectent deja.
@@ -519,12 +622,18 @@ class SmishingDetectorTest {
         // negatif a montre que cette garde ne mesurait rien, et qu'elle perdait ces deux-la.
         assertThat(SmishingDetector.porteLeNomOfficiel("mon-impots", "impots")).isTrue()
         assertThat(SmishingDetector.porteLeNomOfficiel("espace-ameli", "ameli")).isTrue()
-        // Et la garde qui reste, celle qui travaille vraiment :
+        // Et la garde : la regle ne vaut QUE pour les organismes qui publient un seul
+        // domaine et ne le declinent pas. Une marque commerciale a de vrais domaines a
+        // tiret — c'est ce qui signalait toutes les caisses d'epargne allemandes.
         assertThat(SmishingDetector.porteLeNomOfficiel("duty-free", "free")).isFalse()
         assertThat(SmishingDetector.porteLeNomOfficiel("free-mobile", "free")).isFalse()
         assertThat(SmishingDetector.porteLeNomOfficiel("ad-revenue", "revenue")).isFalse()
         assertThat(SmishingDetector.porteLeNomOfficiel("playa-santander", "santander")).isFalse()
         assertThat(SmishingDetector.porteLeNomOfficiel("mi-correo", "correos")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("sparkasse-koelnbonn", "sparkasse")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("volksbank-stuttgart", "volksbank")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("paypal-community", "paypal")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("engie-homeservices", "engie")).isFalse()
     }
 
     @Test fun `un nom officiel COURT sur un domaine jetable est signale`() {
@@ -556,15 +665,25 @@ class SmishingDetectorTest {
         }
     }
 
-    @Test fun `iban revient, avec la frontiere de mot qui le rendait sur`() {
-        // `iban` avait ete retire avec `rib` au motif qu'il vit dans « Taliban » — alors
-        // que le mecanisme a frontiere de mot etait ecrit dans le MEME commit et n'avait
-        // pas ete applique. Une demande d'IBAN par SMS est le smishing bancaire canonique.
-        assertThat(SmishingDetector.analyze("Communiquez votre IBAN sous 24h : https://bit.ly/xk2").reasons)
-            .contains(SmishingReason.UrgencyKeyword)
-        // Et son controle negatif, la raison meme du retrait initial :
-        assertThat(SmishingDetector.analyze("Reportage sur les Talibans : https://bit.ly/doc").reasons)
-            .doesNotContain(SmishingReason.UrgencyKeyword)
+    @Test fun `iban reste dehors parce qu il est un mot espagnol courant`() {
+        // `iban` a ete remis dans les mots d'urgence le 2026-09-17, avec une frontiere de
+        // mot qui reglait bien sa collision avec « Taliban » — puis RETIRE le meme jour.
+        // Le raisonnement etait mene sur une application francaise ; elle parle cinq
+        // langues. En ESPAGNOL, « iban » est l'imparfait du verbe `ir`. Une frontiere de mot
+        // protege d'une sous-chaine, pas d'un homographe dans une autre langue.
+        //
+        // ⚠️ Les phrases ci-dessous n'emploient AUCUN autre mot de la liste. La premiere
+        // ecriture de ce test disait « por favor confirme sus datos », qui est lui-meme un
+        // mot d'urgence espagnol legitime : le test rougissait pour la mauvaise raison, et
+        // il serait reste rouge meme apres correction du code.
+        val legitimes = listOf(
+            "Tus entradas iban a llegar hoy. Descárgalas: https://bit.ly/3AbC9",
+            "Los paquetes iban en el coche del repartidor.",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.UrgencyKeyword)
+        }
     }
 
     @Test fun `un numero surtaxe ecrit avec des espaces insecables est reconnu`() {

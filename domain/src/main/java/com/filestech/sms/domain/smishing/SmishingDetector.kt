@@ -251,7 +251,15 @@ object SmishingDetector {
      * pour cela que ces mots ont leur propre mécanisme plutôt qu'un `\b` posé partout : sur
      * `dringend` ou `inkasso`, la sous-chaîne est VOULUE (`dringende`, `Inkassobüro`).
      */
-    private val MOTS_URGENCE_A_FRONTIERE = listOf("amende", "act now", "iban").map { mot ->
+    // ⚠️ `iban` a été remis ici le 2026-09-17, puis RETIRÉ le même jour. La frontière de
+    // mot réglait bien sa collision avec « Taliban » — mais le raisonnement était mené sur
+    // une application française, et elle parle cinq langues. **En espagnol, « iban » est
+    // l'imparfait du verbe `ir`** : « Los paquetes iban en el coche » veut dire « les colis
+    // étaient dans la voiture ». Avec n'importe quel second indice, un SMS espagnol
+    // parfaitement banal recevait un bandeau rouge. Trouvé par deux relectures externes
+    // indépendantes. Une frontière de mot protège d'une SOUS-CHAÎNE, pas d'un HOMOGRAPHE
+    // dans une autre langue — et c'est précisément ce que ce chantier doit apprendre à voir.
+    private val MOTS_URGENCE_A_FRONTIERE = listOf("amende", "act now").map { mot ->
         Regex("""\b${Regex.escape(mot)}s?\b""")
     }
 
@@ -277,24 +285,42 @@ object SmishingDetector {
      * comme séparateurs visuels (le regex normalise via `replace` avant
      * le match).
      */
+    /**
+     * La frontière commune à tous les motifs : ni chiffre, ni LETTRE, ni tiret de part et
+     * d'autre.
+     *
+     * ⚠️ Elle ne regardait que les chiffres, et les lettres passaient donc au travers :
+     * « Action immédiate : G-3211 est votre code de validation » et
+     * « commande réf. AB08-99-123-456CD » réunissaient un mot d'urgence et un faux numéro
+     * surtaxé, sur deux des SMS les plus courants qui soient — un code de validation et une
+     * référence de commande. Relevé par deux relectures externes le 2026-09-17. Un vrai
+     * numéro est entouré d'espaces ou de ponctuation, jamais de lettres.
+     */
+    private const val BORD_GAUCHE = """(?<![\p{L}\p{N}\-])"""
+    private const val BORD_DROIT = """(?![\p{L}\p{N}\-])"""
+
+    /**
+     * Les numéros COURTS, cherchés sur le texte BRUT — voir [containsPremiumNumber].
+     * Numéros courts surtaxés français, 3200-3699, quatre chiffres.
+     */
+    private val MOTIFS_COURTS = listOf(
+        Regex(BORD_GAUCHE + """3[2-6]\d{2}""" + BORD_DROIT),
+    )
+
     private val PREMIUM_PATTERNS = listOf(
         // ───────────────────────────────── FRANCE ─────────────────────────────────
-        // Numéros courts surtaxés (3200-3699, 4 chiffres). Border non-digit
-        // suffisant — un texte normal qui contient "3211" sera flaggé. Lookaround
-        // sur non-digit pour ne pas se faire piéger par un numéro plus long.
-        Regex("""(?<!\d)3[2-6]\d{2}(?!\d)"""),
         // 0899 xxx xxx — toujours surtaxé.
-        Regex("""(?<!\d)0899\d{6}(?!\d)"""),
+        Regex(BORD_GAUCHE + """0899\d{6}""" + BORD_DROIT),
         // 081x / 088x / 089x — surtaxés (catégories ≥ 0,80 €/min).
-        Regex("""(?<!\d)08(?:1[0-9]|8[0-9]|9[0-9])\d{6}(?!\d)"""),
+        Regex(BORD_GAUCHE + """08(?:1[0-9]|8[0-9]|9[0-9])\d{6}""" + BORD_DROIT),
         // ──────────────────────────────── ALLEMAGNE ───────────────────────────────
         // v1.28.12 — ajoutés avec l'allemand, l'italien et l'espagnol.
         // 0900 = la seule plage premium allemande, 0137 = trafic de masse (votes,
         // jeux) souvent utilisée en arnaque. Le 118xx (renseignements) est
         // VOLONTAIREMENT absent : cinq chiffres seulement, il se confondrait avec
         // un montant ou une référence dans un SMS parfaitement légitime.
-        Regex("""(?<!\d)0900\d{6,7}(?!\d)"""),
-        Regex("""(?<!\d)0137\d{6,7}(?!\d)"""),
+        Regex(BORD_GAUCHE + """0900\d{6,7}""" + BORD_DROIT),
+        Regex(BORD_GAUCHE + """0137\d{6,7}""" + BORD_DROIT),
         // ───────────────────────────────── ITALIE ─────────────────────────────────
         // 899 et 895 = les plages les plus chères, neuf chiffres.
         //
@@ -302,17 +328,17 @@ object SmishingDetector {
         // six chiffres, c'est exactement le format d'un code de vérification. « Il tuo
         // codice è 892456 » aurait affiché un bandeau d'arnaque sur le SMS le plus banal
         // et le plus quotidien qui soit. Relevé par une relecture externe le 2026-09-17.
-        Regex("""(?<!\d)89[59]\d{6}(?!\d)"""),
+        Regex(BORD_GAUCHE + """89[59]\d{6}""" + BORD_DROIT),
         // ───────────────────────────────── ESPAGNE ────────────────────────────────
         // 803 (adultes), 806 (loisirs), 807 (services), 905/907 (appels de masse).
-        Regex("""(?<!\d)80[367]\d{6}(?!\d)"""),
-        Regex("""(?<!\d)90[57]\d{6}(?!\d)"""),
+        Regex(BORD_GAUCHE + """80[367]\d{6}""" + BORD_DROIT),
+        Regex(BORD_GAUCHE + """90[57]\d{6}""" + BORD_DROIT),
         // ────────────────────────── ROYAUME-UNI ET IRLANDE ────────────────────────
         // L'application est livrée EN ANGLAIS d'abord, et n'avait aucune liste pour les
         // pays anglophones : un utilisateur britannique n'était protégé par rien.
         // 09xx = premium (11 chiffres), 084x / 087x = coûts majorés (11 chiffres).
-        Regex("""(?<!\d)09\d{9}(?!\d)"""),
-        Regex("""(?<!\d)08[47]\d{8}(?!\d)"""),
+        Regex(BORD_GAUCHE + """09\d{9}""" + BORD_DROIT),
+        Regex(BORD_GAUCHE + """08[47]\d{8}""" + BORD_DROIT),
     )
 
     /**
@@ -347,11 +373,28 @@ object SmishingDetector {
      */
     private val SEPARATEUR_DE_NUMERO = Regex("""(?<=\d)[\p{Zs}.\-](?=\d)""")
 
+    /**
+     * ⚠️ **Les numéros COURTS se lisent sur le corps BRUT, les longs sur le corps compacté.**
+     * Ce n'est pas une subtilité, c'est ce qui sépare un bandeau juste d'un bandeau sur la
+     * facture de quelqu'un.
+     *
+     * Le numéro court français fait QUATRE chiffres (`3[2-6]\d{2}`). Or le français,
+     * l'allemand, l'italien et l'espagnol séparent les milliers — par une espace insécable,
+     * une fine insécable ou un point. Compacter avant de chercher transformait donc
+     * « Paiement reçu : 3 211 € » en `3211`, et « usa tus 3.211 puntos » de même : un
+     * numéro court surtaxé, sur un SMS de banque ou de programme de fidélité. Pire encore,
+     * « Reste à payer : 35.50 euros » donnait `3550` — **tout prix entre 32,00 et 36,99**
+     * affichait un bandeau. Relevé par deux relectures externes le 2026-09-17, et le défaut
+     * existait déjà avec le point avant que l'espace insécable ne soit ajoutée.
+     *
+     * Un code court ne s'écrit jamais avec des séparateurs : « Envoyez STOP au 3211 ». Le
+     * lire sur le texte brut ne perd donc rien et ferme la classe entière. Les numéros longs,
+     * eux, sont couramment écrits « 08 99 12 34 56 » et ont besoin du compactage.
+     */
     private fun containsPremiumNumber(body: String): Boolean {
-        // Les frontières (?<!\d)/(?!\d) des motifs gèrent les caractères adjacents non
-        // numériques (lettres incluses), ce que `\b` ne ferait pas après compaction.
         val compact = body.replace(SEPARATEUR_DE_NUMERO, "")
-        return PREMIUM_PATTERNS.any { it.containsMatchIn(compact) }
+        return MOTIFS_COURTS.any { it.containsMatchIn(body) } ||
+            PREMIUM_PATTERNS.any { it.containsMatchIn(compact) }
     }
 
     // ──────────────── Heuristique 4 : typosquatting de domaines officiels ────────────────
@@ -401,7 +444,12 @@ object SmishingDetector {
         "amazon.fr", "amazon.com",
         "edf.fr", "engie.fr",
         "orange.fr", "sfr.fr", "free.fr", "bouyguestelecom.fr",
-        "crediagricole.fr", "creditagricole.fr", "bnpparibas.fr", "societegenerale.fr",
+        "crediagricole.fr", "creditagricole.fr",
+        // ⚠️ Le domaine canonique de la banque porte un TIRET. Absent de cette liste, il
+        // etait a distance 1 de `creditagricole` et donc signale comme usurpation — le
+        // vrai site de la banque, sur un SMS de la banque. Releve par une relecture
+        // externe le 2026-09-17.
+        "credit-agricole.fr", "bnpparibas.fr", "societegenerale.fr",
         "labanquepostale.fr", "caisse-epargne.fr", "cic.fr", "lcl.fr", "boursorama.com",
         // ──────────────────────────────── ALLEMAGNE ───────────────────────────────
         // v1.28.12 — ajoutés avec les trois langues.
@@ -447,14 +495,19 @@ object SmishingDetector {
      *
      * `free` est un mot anglais courant, `orange` une couleur, `bahn` un chemin de fer,
      * `ants` des fourmis, `poste` un poste ou un bureau de poste, `amazon` un fleuve,
-     * `revenue` un revenu, `santander` une ville espagnole — `playa-santander.es` et
-     * `ad-revenue.com` n'ont rien à se reprocher. `free-mobile.fr` et `orange-pro.fr`
-     * sont en outre de VRAIS domaines de ces opérateurs.
+     * `revenue` un revenu, `santander` une ville espagnole, `engie` est à une lettre de
+     * `engine`, `elster` une pie et deux rivières allemandes, `impots` un nom commun.
      *
-     * Fermer cette règle sur eux coûte quelques vraies détections (`secure-orange.fr`
-     * n'est plus vu) et c'est le bon sens du compromis : voir l'en-tête du fichier, un
-     * bandeau rouge sur un SMS légitime coûte plus cher qu'une arnaque ratée. Les huit
-     * restent protégés par la faute de frappe et par le nom exact sur un TLD à bas coût.
+     * Mesuré le 2026-09-17, sur les motifs réels : `france.com` était lu comme une
+     * usurpation d'`orange`, `ma-porte.fr` comme `poste`, `engine.com` comme `engie`,
+     * `avenue.com` comme `revenue`, `imports.example` comme `impots`, `easter` comme
+     * `elster`, `barn` comme `bahn`, `tree` comme `free`, `arts` comme `ants`. Onze mots
+     * innocents sur onze essayés. Avec n'importe quel second indice — et « action requise »
+     * en est un — c'était un bandeau rouge.
+     *
+     * Fermer ces onze coûte quelques vraies détections et c'est le bon sens du compromis :
+     * voir l'en-tête du fichier. Elles restent couvertes par la voie HOMOGLYPHE ci-dessous
+     * et par le nom exact sur un domaine de tête à bas coût.
      */
     private val LABELS_TROP_COMMUNS = setOf(
         "free",
@@ -465,6 +518,39 @@ object SmishingDetector {
         "ants",
         "revenue",
         "santander",
+        "engie",
+        "elster",
+        "impots",
+    )
+
+    /**
+     * Les organismes pour lesquels un nom officiel collé à un mot par un tiret est un
+     * signal FIABLE d'usurpation — voir [porteLeNomOfficiel].
+     *
+     * Le critère d'entrée est vérifiable et volontairement étroit : un organisme qui
+     * publie UN domaine et ne le décline pas. Administrations fiscales, sécurité sociale,
+     * opérateurs postaux. Une marque commerciale n'y a pas sa place, parce qu'elle a des
+     * filiales, des espaces communautaires et des implantations régionales — et donc de
+     * vrais domaines à tiret.
+     *
+     * Ajouter un nom ici demande de vérifier qu'il n'existe aucun domaine officiel de la
+     * forme `<nom>-<mot>` ni `<mot>-<nom>`. Ce n'est pas une formalité : c'est ce contrôle
+     * qui n'avait pas été fait pour `sparkasse` et `volksbank`.
+     */
+    private val CONCATENATION_FIABLE = setOf(
+        "ameli",
+        "impots",
+        "colissimo",
+        "chronopost",
+        "laposte",
+        "labanquepostale",
+        "inps",
+        "agenziaentrate",
+        "posteitaliane",
+        "agenciatributaria",
+        "correos",
+        "hmrc",
+        "dvla",
     )
 
     /**
@@ -515,10 +601,41 @@ object SmishingDetector {
             ) {
                 return true
             }
-            val labels = tousLesLabels.filter { it.length >= 4 }
+            // Un label de trois lettres n'entre en comparaison floue que s'il porte un
+            // chiffre (`dh1`, `sf4`) : sans cela, trois lettres sont trop peu pour que la
+            // distance veuille dire quoi que ce soit.
+            // ⚠️ Un label qui EST lui-même un nom officiel n'est pas une usurpation d'un
+            // autre nom officiel. Sans cette ligne, `www.credit-agricole.fr` — le domaine
+            // canonique de la banque — restait signalé : la sortie anticipée ci-dessus
+            // compare l'hôte ENTIER, et le `www.` la manquait, puis `credit-agricole` se
+            // retrouvait à distance 1 de `creditagricole`. Un SMS de la banque, vers le
+            // site de la banque, avec un bandeau rouge dessus. Relevé le 2026-09-17.
+            //
+            // Le nom exact sur un domaine de tête à bas coût est traité AU-DESSUS, donc
+            // `paypal.top` reste vu : cette ligne ne l'affaiblit pas.
+            val labels = tousLesLabels
+                .filter { it !in LABELS_OFFICIELS }
+                .filter { it.length >= 4 || it.any(Char::isDigit) }
             val suspicious = labels.any { label ->
+                // ⚠️ **La voie HOMOGLYPHE et la voie MOT, et la différence entre les deux
+                // est ce qui sépare `1mpots` de `imports`.**
+                //
+                // Une vraie usurpation par faute de frappe substitue un CHIFFRE à une
+                // lettre : `paypa1`, `1mpots`, `e1ster`, `p0ste`, `0range`, `amel1`. C'est
+                // la technique dominante, parce qu'elle se voit mal dans un SMS.
+                //
+                // Un label fait uniquement de lettres, à distance 1 ou 2 d'un nom officiel,
+                // est bien plus souvent un AUTRE MOT : `france` contre `orange`, `porte`
+                // contre `poste`, `engine` contre `engie`, `imports` contre `impots`. Onze
+                // mots innocents sur onze essayés, mesurés le 2026-09-17.
+                //
+                // On garde donc la comparaison floue entière pour les labels qui portent un
+                // chiffre, et on écarte [LABELS_TROP_COMMUNS] pour ceux qui n'en portent
+                // pas. `1mpots.gouv.fr` reste vu, `imports.example` ne l'est plus.
+                val porteUnChiffre = label.any(Char::isDigit)
                 LABELS_OFFICIELS.any { official ->
-                    if (official.length < 4 || official == label) return@any false
+                    if (official.length < 3 || official == label) return@any false
+                    if (!porteUnChiffre && official in LABELS_TROP_COMMUNS) return@any false
                     // Deux formes d'usurpation, la seconde échappant à la première :
                     // la faute de frappe (`paypa1`), et le nom exact augmenté
                     // (`inps-sicurezza`).
@@ -579,16 +696,34 @@ object SmishingDetector {
      * « última oportunidad » — et affichait un bandeau rouge sur un SMS commercial
      * parfaitement légitime. Relevé par un audit de sécurité le 2026-09-17.
      *
-     * La garde est [LABELS_TROP_COMMUNS], et elle suffit — ce que seul un contrôle négatif
-     * a établi. Le premier correctif exigeait EN PLUS le nom officiel en premier segment,
-     * au motif que les campagnes réelles l'écrivent ainsi (`inps-sicurezza`, `hmrc-refund`,
-     * `correos-es`). Mutation faite, aucun test ne rougissait : la liste fermait déjà tous
-     * les cas. Cette garde ne travaillait donc pas — et en y regardant, elle travaillait à
-     * l'envers, puisqu'elle aurait perdu `mon-impots.fr` et `espace-ameli.fr`, qui sont des
-     * formes d'usurpation au moins aussi plausibles que l'autre sens. Retirée.
+     * ⚠️ **Cette règle est une liste d'INCLUSION, et deux tentatives d'exclusion ont
+     * échoué avant d'en arriver là.** Le raisonnement mérite d'être gardé, parce qu'il vaut
+     * pour toute heuristique de ce fichier.
+     *
+     * Première tentative : exiger le nom officiel en PREMIER segment. Le contrôle négatif
+     * a montré qu'elle ne mesurait rien, et qu'elle perdait `mon-impots.fr`.
+     *
+     * Deuxième tentative : une liste des noms officiels qui sont aussi des mots ordinaires.
+     * Deux relectures externes ont montré qu'elle ne pouvait pas suffire — le problème
+     * n'est pas le vocabulaire, c'est que **les grandes marques ont de vrais domaines à
+     * tiret** : `sparkasse-koelnbonn.de`, `volksbank-stuttgart.de`, `paypal-community.com`,
+     * `engie-homeservices.fr`. L'Allemagne compte des CENTAINES de caisses d'épargne
+     * régionales sur ce modèle : la règle aurait posé un bandeau rouge sur les SMS
+     * bancaires les plus ordinaires du pays, c'est-à-dire exactement ce que l'en-tête de ce
+     * fichier interdit.
+     *
+     * Une liste d'exclusion suppose qu'on puisse énumérer les exceptions. On ne peut pas :
+     * toute marque ayant des filiales, des espaces communautaires ou des implantations
+     * régionales en produit. La liste d'inclusion, elle, suppose seulement qu'on puisse
+     * nommer les organismes qui publient UN domaine et n'en déclinent pas — administrations
+     * fiscales, sécurité sociale, opérateurs postaux. C'est vérifiable, et c'est court.
+     *
+     * Le coût est écrit : `sparkasse-sicherheit.de` et `paypal-securite.com` ne sont plus
+     * vus par cette règle. Ils restent couverts par la faute de frappe et par le nom exact
+     * sur un domaine de tête à bas coût.
      */
     fun porteLeNomOfficiel(label: String, nomOfficiel: String): Boolean =
-        nomOfficiel !in LABELS_TROP_COMMUNS &&
+        nomOfficiel in CONCATENATION_FIABLE &&
             label.contains('-') &&
             label.split('-').any { it == nomOfficiel }
 
