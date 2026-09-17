@@ -511,6 +511,10 @@
     <string name="safety_call_warning_title">SMS Tech — confirmez que vous allez bien</string>
     <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Appuyez pour réinitialiser le minuteur.</string>
     <string name="safety_call_warning_body_imminent">Le Safety call se déclenchera dans moins de 2 heures. Appuyez pour réinitialiser maintenant.</string>
+    <string name="safety_call_cannot_send_title">Le Safety call ne peut pas envoyer</string>
+    <string name="safety_call_cannot_send_body">SMS Tech n\'est pas votre application SMS par défaut : l\'alerte ne partirait pas. Vos contacts ne seraient pas prévenus. Touchez pour corriger.</string>
+    <string name="safety_role_missing_title">Cette protection ne peut pas envoyer</string>
+    <string name="safety_role_missing_body">SMS Tech n\'est pas votre application SMS par défaut. Vous pouvez l\'activer, mais rien ne partira au déclenchement, et personne ne sera prévenu.</string>
     <string name="safety_call_sequence_title">SMS Tech — alerte envoyée</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d message sur %2$d envoyé à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</item>

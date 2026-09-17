@@ -521,6 +521,10 @@
     <string name="safety_call_warning_title">SMS Tech — confermi che sta bene</string>
     <string name="safety_call_warning_body_hours">Safety call scatterà tra circa %1$d ore. Tocchi per azzerare il timer.</string>
     <string name="safety_call_warning_body_imminent">Safety call scatterà tra meno di 2 ore. Tocchi per azzerarlo adesso.</string>
+    <string name="safety_call_cannot_send_title">Il Safety call non può inviare</string>
+    <string name="safety_call_cannot_send_body">SMS Tech non è la sua app SMS predefinita: l\'allarme non partirebbe. I suoi contatti non sarebbero avvisati. Tocchi per correggere.</string>
+    <string name="safety_role_missing_title">Questa protezione non può inviare</string>
+    <string name="safety_role_missing_body">SMS Tech non è la sua app SMS predefinita. Può attivarla, ma all\'attivazione non partirà nulla e nessuno sarà avvisato.</string>
     <string name="safety_call_sequence_title">SMS Tech — allarme inviato</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d messaggio su %2$d inviato ai suoi contatti. Tocchi se sta bene: i richiami si fermeranno.</item>

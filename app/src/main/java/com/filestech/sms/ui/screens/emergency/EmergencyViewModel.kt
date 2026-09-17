@@ -38,6 +38,12 @@ import javax.inject.Inject
 @HiltViewModel
 class EmergencyViewModel @Inject constructor(
     private val settings: SettingsRepository,
+    /**
+     * v1.28.12 — pour dire, SUR L'ECRAN D'ARMEMENT, que rien ne partira sans le role
+     * d'application SMS par defaut. Meme defaut que sur l'ecran du Safety call : on pouvait
+     * armer le mode urgence et n'etre protege par rien, sans qu'aucun ecran ne le dise.
+     */
+    val defaultAppManager: com.filestech.sms.data.sms.DefaultSmsAppManager,
     private val triggerEmergency: TriggerEmergencyUseCase,
     /**
      * v1.26.1 (audit H10) — le déclenchement d'urgence tourne sur la portée de l'APPLICATION,

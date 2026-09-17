@@ -49,6 +49,12 @@ import javax.inject.Inject
 class SafetyCallSetupViewModel @Inject constructor(
     private val settings: SettingsRepository,
     @ApplicationContext private val context: Context,
+    /**
+     * v1.28.12 — pour dire, SUR L'ÉCRAN D'ARMEMENT, que rien ne partira sans le rôle
+     * d'application SMS par défaut. Cet écran l'ignorait : on pouvait armer un homme-mort,
+     * voir « activé » et un compte à rebours, et n'être protégé par rien.
+     */
+    val defaultAppManager: com.filestech.sms.data.sms.DefaultSmsAppManager,
 ) : ViewModel() {
 
     /**

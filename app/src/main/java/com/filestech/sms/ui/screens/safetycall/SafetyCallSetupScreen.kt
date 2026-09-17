@@ -68,6 +68,7 @@ import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
+import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.theme.BrandBlue
@@ -108,6 +109,12 @@ fun SafetyCallSetupScreen(
     var addContactDialogOpen by remember { mutableStateOf(false) }
     var customDurationDialogOpen by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+
+    // v1.28.12 — le retour du sélecteur système ne porte rien d'utile : c'est le `ON_RESUME`
+    // de [BanniereRoleSmsManquant] qui relit l'état du rôle et fait disparaître la bannière.
+    val lanceurRoleSms = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { }
 
     /*
      * v1.25.5 — quitter sans enregistrer ne doit plus jeter la saisie en silence.
@@ -205,6 +212,16 @@ fun SafetyCallSetupScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // v1.28.12 — AVANT tout le reste : sans le rôle d'application SMS par défaut, rien
+            // ne partira à l'échéance. L'écran l'ignorait entièrement, et l'utilisateur pouvait
+            // armer une protection inerte en croyant être couvert.
+            BanniereRoleSmsManquant(
+                aLeRole = { viewModel.defaultAppManager.isDefault() },
+                onCorriger = {
+                    viewModel.defaultAppManager.buildChangeDefaultIntent()
+                        ?.let { lanceurRoleSms.launch(it) }
+                },
+            )
             StatusSection(
                 draft = draft,
                 savedEnabled = savedEnabled,

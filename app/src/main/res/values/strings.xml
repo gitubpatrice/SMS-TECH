@@ -519,6 +519,10 @@
     <string name="safety_call_warning_title">SMS Tech — confirm you\'re OK</string>
     <string name="safety_call_warning_body_hours">Safety call will trigger in about %1$d hours. Tap to reset the timer.</string>
     <string name="safety_call_warning_body_imminent">Safety call will trigger in less than 2 hours. Tap to reset now.</string>
+    <string name="safety_call_cannot_send_title">Safety call cannot send</string>
+    <string name="safety_call_cannot_send_body">SMS Tech is not your default SMS app, so the alert would not be sent. Your contacts will not be warned. Tap to fix it.</string>
+    <string name="safety_role_missing_title">This protection cannot send</string>
+    <string name="safety_role_missing_body">SMS Tech is not your default SMS app. You can arm this, but nothing will be sent when it fires, and no one will be warned.</string>
     <string name="safety_call_sequence_title">SMS Tech — alert sent</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d of %2$d message sent to your contacts. Tap if you\'re OK: the follow-ups will stop.</item>

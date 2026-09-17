@@ -521,6 +521,10 @@
     <string name="safety_call_warning_title">SMS Tech — bestätigen Sie, dass alles in Ordnung ist</string>
     <string name="safety_call_warning_body_hours">Safety call löst in etwa %1$d Stunden aus. Tippen Sie, um den Zeitgeber zurückzusetzen.</string>
     <string name="safety_call_warning_body_imminent">Safety call löst in weniger als 2 Stunden aus. Tippen Sie, um jetzt zurückzusetzen.</string>
+    <string name="safety_call_cannot_send_title">Safety call kann nicht senden</string>
+    <string name="safety_call_cannot_send_body">SMS Tech ist nicht Ihre Standard-SMS-App, daher würde die Warnung nicht gesendet. Ihre Kontakte würden nicht benachrichtigt. Zum Beheben tippen.</string>
+    <string name="safety_role_missing_title">Dieser Schutz kann nicht senden</string>
+    <string name="safety_role_missing_body">SMS Tech ist nicht Ihre Standard-SMS-App. Sie können dies aktivieren, aber bei Auslösung wird nichts gesendet und niemand benachrichtigt.</string>
     <string name="safety_call_sequence_title">SMS Tech — Alarm gesendet</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d von %2$d Nachricht an Ihre Kontakte gesendet. Tippen Sie, wenn alles in Ordnung ist: die Folgenachrichten hören auf.</item>

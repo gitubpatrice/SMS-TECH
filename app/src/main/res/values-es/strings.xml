@@ -1,1045 +1,1049 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="es">
-
-    <!-- Core -->
-    <string name="app_name">SMS Tech</string>
-
-    <!-- v1.3.7 — First-launch splash screen (animated logo + tagline). -->
-    <string name="splash_tagline">La app que no lee sus mensajes y respeta su privacidad.</string>
-    <string name="splash_logo_content_description">Logotipo de SMS Tech</string>
-    <string name="splash_skip_hint">Toque la pantalla para continuar</string>
-    <string name="splash_skip_label">Omitir la pantalla de inicio</string>
-
-    <!-- v1.3.10 — Foreground KeepAliveService (opt-in mode for aggressive OEM ROMs). -->
-    <string name="keep_alive_notification_title">SMS Tech está activa</string>
-    <string name="keep_alive_notification_text">Necesaria para recibir SMS / MMS de forma fiable en su teléfono.</string>
-    <string name="settings_keep_alive_title">Modo resistente (Xiaomi / Huawei…)</string>
-    <string name="settings_keep_alive_desc">Mantiene SMS Tech activa en segundo plano mediante una notificación permanente en la barra de estado (obligación de Android para cualquier servicio en primer plano: no se puede descartar mientras el interruptor esté activado). Útil en las ROM agresivas (Xiaomi MIUI/HyperOS, Huawei EMUI/HarmonyOS, Honor MagicOS, Oppo/Realme/OnePlus ColorOS, Vivo/iQOO FunTouch, Meizu Flyme, ASUS Zen UI), que de lo contrario cierran las apps de SMS de terceros y bloquean los MMS y las notificaciones. Inútil en Pixel, Samsung Galaxy, Sony, Fairphone, Motorola, Nokia, Nothing Phone: en estos, déjelo desactivado.</string>
-
-
-    <!-- Common -->
-    <string name="action_send">Enviar</string>
-    <string name="action_cancel">Cancelar</string>
-    <string name="action_confirm">Confirmar</string>
-    <string name="action_save">Guardar</string>
-    <string name="action_delete">Eliminar</string>
-    <string name="action_archive">Archivar</string>
-    <string name="action_unarchive">Desarchivar</string>
-    <string name="action_pin">Fijar arriba</string>
-    <string name="action_unpin">Dejar de fijar</string>
-    <string name="action_mute">Silenciar</string>
-    <string name="action_unmute">Reactivar el sonido</string>
-    <string name="action_block">Bloquear</string>
-    <string name="action_unblock">Desbloquear</string>
-    <string name="action_more">Más</string>
-    <string name="action_message_actions">Acciones del mensaje</string>
-    <string name="action_reply">Responder</string>
-    <string name="action_translate">Traducir</string>
-    <!-- v1.3.11 (F3) — `action_copy` / `action_forward` already defined below (line 91-92);
-         only the toast string is new. -->
-    <string name="toast_copied">Mensaje copiado</string>
-    <!-- v1.3.11 (F4) — phone number actions dialog -->
-    <string name="phone_action_subtitle">Elija una acción para este número de teléfono.</string>
-    <string name="phone_action_call">Llamar</string>
-    <string name="phone_action_add_contact">Añadir a los contactos</string>
-    <string name="phone_action_no_dialer">No hay ninguna app de teléfono en este dispositivo.</string>
-    <string name="phone_action_no_contacts">No hay ninguna app de Contactos en este dispositivo.</string>
-    <!-- v1.3.11 (F5) — forward sheet -->
-    <string name="forward_sheet_title">Reenviar a…</string>
-    <string name="forward_search_placeholder">Busque una conversación</string>
-    <string name="forward_new_contact">Nuevo destinatario</string>
-    <string name="forward_existing_conversation">Conversaciones existentes</string>
-    <string name="forward_no_conversation">No hay otra conversación a la que reenviar.</string>
-    <string name="thread_reply_deleted">Mensaje original eliminado</string>
-    <string name="action_cancel_reply">Cancelar la respuesta</string>
-    <!-- v1.7.1 — translation feature delegated to the system app via
-         ACTION_PROCESS_TEXT (replaces in-app ML Kit removed in v1.7.0).
-         Shown if no app on the device declares the intent. -->
-    <string name="snack_no_translate_app">No hay ninguna app de traducción instalada</string>
-    <string name="chat_you">Yo</string>
-    <string name="attach_photo">Foto</string>
-    <string name="attach_video">Vídeo</string>
-    <string name="attach_file">Archivo</string>
-    <string name="attach_contact">Contacto</string>
-    <string name="attach_sheet_title">Añadir a su mensaje</string>
-    <string name="attach_sheet_subtitle">Se envía como MMS</string>
-    <string name="voice_confirm_title">¿Enviar este mensaje de voz?</string>
-    <string name="voice_confirm_body">La grabación se enviará al destinatario como un MMS.</string>
-    <plurals name="thread_confirm_attachments_body">
-        <item quantity="one">%1$d archivo adjunto se enviará como un MMS.</item>
-        <item quantity="many">%1$d archivos adjuntos se enviarán en un único MMS.</item>
-        <item quantity="other">%1$d archivos adjuntos se enviarán en un único MMS.</item>
-    </plurals>
-    <string name="settings_app_lock">Bloqueo de la app</string>
-    <string name="lock_mode_off">Ninguno</string>
-    <string name="lock_mode_pin">PIN</string>
-    <string name="pin_setup_title">Establezca un PIN</string>
-    <string name="pin_setup_field">PIN (de 4 a 12 dígitos)</string>
-    <string name="pin_setup_confirm">Confirme el PIN</string>
-    <string name="pin_setup_mismatch">Los PIN no coinciden</string>
-    <string name="pin_setup_too_short">Mínimo 4 dígitos</string>
-    <string name="pin_setup_digits_only">Solo dígitos</string>
-    <string name="lock_mode_dialog_title">Elija el modo de bloqueo</string>
-    <string name="conversation_actions_title">Acciones de la conversación</string>
-    <!-- v1.25.3 — blocking no longer deletes anything. The dialog used to promise blocking only
-         while the action ALSO wiped the conversation from Room and from the system SMS database;
-         the deletion has been removed rather than merely documented. -->
-    <string name="conversation_block_confirm_title">¿Bloquear esta conversación?</string>
-    <string name="conversation_block_confirm_body">Se bloquearán todos los números de esta conversación. La conversación permanece en su lista, marcada como bloqueada, y no se elimina nada. Puede desbloquearla en cualquier momento.</string>
-    <string name="conversations_section_blocked">Bloqueadas</string>
-    <string name="conversations_section_messages">Mensajes</string>
-    <string name="conversation_blocked_label">Bloqueada</string>
-    <string name="settings_purge_blocked">Eliminar las conversaciones bloqueadas</string>
-    <string name="settings_purge_blocked_desc">Elimina definitivamente toda conversación cuyos participantes estén todos en la lista de bloqueados del sistema.</string>
-    <string name="settings_purge_blocked_result">%1$d conversación(es) eliminadas</string>
-    <string name="settings_purge_blocked_none">No hay ninguna conversación bloqueada que eliminar</string>
-    <string name="lock_mode_biometric">Biometría + PIN de reserva</string>
-    <string name="lock_biometric_title">Desbloquear SMS Tech</string>
-    <string name="lock_biometric_subtitle">Use su huella o su rostro</string>
-    <string name="lock_use_pin">Usar el PIN</string>
-    <string name="lock_biometric_unavailable">La biometría no está disponible en este dispositivo: establezca antes un PIN</string>
-    <string name="sort_section">Ordenar las conversaciones</string>
-    <string name="sort_date">Las más recientes primero</string>
-    <string name="sort_unread">No leídas primero</string>
-    <string name="action_back">Atrás</string>
-    <string name="action_copy">Copiar</string>
-    <string name="action_forward">Reenviar</string>
-    <string name="action_select_text">Seleccionar texto</string>
-    <string name="action_retry">Reintentar</string>
-    <string name="action_close">Cerrar</string>
-    <string name="action_continue">Continuar</string>
-    <string name="action_export_pdf">Exportar a PDF</string>
-    <string name="action_attach">Adjuntar</string>
-    <string name="action_schedule">Programar</string>
-    <string name="action_new_message">Mensaje nuevo</string>
-    <!-- v1.28.3 — named groups -->
-    <string name="action_new_group">Grupo nuevo</string>
-    <string name="action_rename_group">Cambiar el nombre del grupo…</string>
-    <string name="rename_group_title">Nombre del grupo</string>
-    <string name="rename_group_placeholder">Familia, senderismo…</string>
-    <string name="rename_group_hint">Este nombre se queda en este teléfono. Los miembros siguen viendo su número.</string>
-    <string name="group_renamed">Nombre del grupo cambiado</string>
-    <string name="group_avatar_cd">Grupo</string>
-    <string name="action_call">Llamar</string>
-    <string name="conversations_search_hint">Busque un número, un contacto, un mensaje…</string>
-    <string name="conversations_no_match">Ninguna conversación coincide.</string>
-    <string name="thread_create_contact">Crear un contacto</string>
-    <string name="thread_update_contact">Actualizar un contacto</string>
-    <string name="action_create_contact">Crear contacto</string>
-    <string name="action_details">Detalles de la conversación</string>
-
-    <string name="thread_details_messages">%1$d mensajes</string>
-    <string name="thread_details_first">Primer mensaje: %1$s</string>
-    <string name="thread_details_last">Último mensaje: %1$s</string>
-    <string name="thread_details_participants">Participantes: %1$d</string>
-    <string name="thread_details_number">Número: %1$s</string>
-
-    <!-- Tabs / sections -->
-    <string name="tab_archived">Archivadas</string>
-    <string name="tab_vault">Caja fuerte</string>
-
-
-    <!-- Conversations list -->
-    <string name="conversations_empty_title">Todavía no hay conversaciones</string>
-    <string name="conversations_empty_body">En cuanto reciba o envíe un mensaje, aparecerá aquí.</string>
-    <string name="conversations_archived_empty">No hay conversaciones archivadas.</string>
-    <string name="conversations_importing_title">Importando sus mensajes</string>
-    <string name="conversations_importing_body">Leyendo los SMS que ya tiene: esto ocurre una sola vez.</string>
-    <string name="conversations_importing_count">%1$d mensajes importados…</string>
-    <string name="conversations_delete_confirm_title">¿Eliminar esta conversación?</string>
-    <string name="conversations_delete_confirm_body">Todos los mensajes de esta conversación se borrarán definitivamente de este dispositivo. Las demás conversaciones no se ven afectadas.</string>
-    <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
-    <string name="conversations_delete_vault_kept_system">Esta conversación de la caja fuerte no se ha eliminado: no se ha podido quitar su copia del almacén de mensajes del teléfono, y habría vuelto fuera de la caja fuerte en la siguiente sincronización. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo. Si sigue fallando, saque antes la conversación de la caja fuerte: puede que entonces reaparezca en la lista principal.</string>
-    <string name="conversations_delete_kept_local">La conversación no se ha eliminado: una parte no ha podido quitarse de este teléfono. Vuelva a intentarlo.</string>
-    <string name="conversations_draft_prefix">Borrador: %1$s</string>
-    <string name="conversations_preview_attachment">Archivo adjunto</string>
-
-    <!-- Thread -->
-    <string name="thread_compose_placeholder">Escriba un mensaje…</string>
-    <string name="thread_segments_indicator">%1$d / %2$d • %3$d seg.</string>
-    <string name="thread_status_pending">Enviando…</string>
-    <string name="thread_status_sent">Enviado</string>
-    <string name="thread_status_delivered">Entregado</string>
-    <string name="thread_status_failed">Fallido — toque para reintentar</string>
-    <string name="date_today">Hoy</string>
-    <string name="date_yesterday">Ayer</string>
-    <string name="thread_confirm_delete_message">¿Eliminar este mensaje? Esta acción no se puede deshacer.</string>
-    <string name="thread_export_success">PDF guardado (%1$d páginas)</string>
-
-    <!-- Voice MMS composer -->
-    <string name="voice_action_record">Grabar un mensaje de voz</string>
-    <string name="voice_action_stop">Detener la grabación</string>
-    <string name="voice_action_cancel">Cancelar la grabación</string>
-    <string name="voice_action_discard">Descartar la grabación</string>
-    <string name="voice_action_send">Enviar el mensaje de voz</string>
-    <string name="voice_action_play">Reproducir</string>
-    <string name="voice_action_pause">Pausa</string>
-    <string name="voice_permission_denied">Permiso de micrófono denegado. Abra los Ajustes para concederlo.</string>
-
-    <!-- Compose -->
-    <string name="compose_to_label">Para:</string>
-    <string name="compose_search_contact">Busque un contacto o un número de teléfono</string>
-    <string name="compose_use_this_number">Usar este número</string>
-    <string name="compose_add_to_group">Añadir al grupo</string>
-
-    <!-- Blocked numbers -->
-    <string name="blocked_title">Números bloqueados</string>
-    <string name="blocked_empty">Ningún número bloqueado.</string>
-    <string name="blocked_add">Añadir un número</string>
-
-    <!-- Vault -->
-    <string name="vault_title">Caja fuerte segura</string>
-    <string name="vault_empty">La caja fuerte está vacía.</string>
-    <string name="vault_move_in">Mover a la caja fuerte</string>
-    <string name="vault_move_out">Sacar de la caja fuerte</string>
-    <!-- v1.11.0 — feedback snackbar (Vault polish) -->
-    <string name="vault_move_in_done">Conversación movida a la caja fuerte</string>
-    <string name="vault_move_in_failed">No se ha podido mover esta conversación</string>
-    <string name="vault_move_out_done">Conversación sacada de la caja fuerte</string>
-    <string name="vault_move_out_failed">No se ha podido mover esta conversación</string>
-    <!-- v1.13.0 — multi-selection bulk move to/from vault -->
-    <string name="bulk_vault_move_in">Mover a la caja fuerte</string>
-    <string name="bulk_vault_move_out">Sacar de la caja fuerte</string>
-    <string name="selected">Seleccionada</string>
-    <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
-    <string name="bulk_select_multiple">Selección múltiple</string>
-    <!-- v1.14.0 — emergency call behavior + outcomes -->
-    <string name="emergency_call_permission_denied">Permiso de llamada denegado. Se recurre a la app de teléfono.</string>
-    <string name="emergency_call_os_error">No se ha podido iniciar la llamada.</string>
-    <!-- v1.14.0 — kill-switch "Je vais bien" (false-alarm reset) -->
-    <string name="emergency_i_am_ok_body">Falsa alarma. Estoy bien. No te preocupes, no hay nada que hacer.</string>
-    <string name="emergency_i_am_ok_chip_title">Emergencia activada hace poco</string>
-    <string name="emergency_i_am_ok_chip_action">Estoy bien</string>
-    <string name="emergency_i_am_ok_confirm_title">¿Enviar el mensaje «Estoy bien»?</string>
-    <string name="emergency_i_am_ok_confirm_body">Reinicia el tiempo de espera de la emergencia y envía, si lo desea, un SMS breve a sus contactos de Safety call para que sepan que fue una falsa alarma. Puede desactivar el SMS en los Ajustes.</string>
-    <string name="emergency_i_am_ok_done">Mensaje «Estoy bien» enviado.</string>
-    <string name="emergency_i_am_ok_reset_only">Tiempo de espera reiniciado. No se ha enviado ningún SMS.</string>
-    <string name="emergency_i_am_ok_send_failed">Tiempo de espera reiniciado, pero ningún contacto ha recibido el SMS. Vuelva a intentarlo o avíseles en persona.</string>
-    <string name="settings_send_i_am_ok_sms_title">Enviar el SMS «Estoy bien» al reiniciar</string>
-    <string name="settings_send_i_am_ok_sms_desc">Cuando toque «Estoy bien» después de una falsa alarma, envía además un SMS breve a sus contactos de Safety call indicando que fue una falsa alarma.</string>
-    <!-- v1.14.5 — strings emergency_dry_run_* removed (button "Test without sending" deleted). -->
-    <!-- v1.14.5 — Settings → Mode urgence : ToggleRow direct accès GPS opt-in -->
-    <string name="settings_emergency_include_location_title">Incluir el GPS en los SMS de emergencia</string>
-    <string name="settings_emergency_include_location_desc">Añade al texto del SMS de emergencia un enlace de Google Maps con su ubicación actual. Requiere el permiso de ubicación. Si lo rechaza, el SMS se envía sin coordenadas.</string>
-    <string name="settings_emergency_include_location_denied">Permiso de ubicación denegado. Inclusión del GPS desactivada.</string>
-    <!-- v1.14.7 — string emergency_topbar_warning_cd retirée (orpheline, prévue pour un indicateur visuel jamais branché). -->
-    <!-- v1.14.1 — full-page emergency redesign : 4 colored call tiles + disable + open-from-notif -->
-    <!-- v1.28.12 — one label per SERVICE, not per number. The same service is 17 in France,
-         110 in Germany, 091 in Spain, and the tile already shows the number itself. -->
-    <string name="emergency_call_eu_label">Emergencia europea</string>
-    <string name="emergency_call_national_label">Emergencia nacional</string>
-    <string name="emergency_call_police_label">Policía</string>
-    <string name="emergency_call_fire_label">Bomberos</string>
-    <string name="emergency_call_medical_label">Emergencia sanitaria</string>
-    <string name="emergency_section_call_title">Llamar directamente</string>
-    <string name="emergency_section_sms_title">Enviar un SMS de SOS</string>
-    <string name="emergency_section_other_title">Otras acciones</string>
-    <string name="emergency_disable_button">Desactivar el modo emergencia</string>
-    <string name="emergency_disable_confirm_title">¿Desactivar el modo emergencia?</string>
-    <string name="emergency_disable_confirm_body">El botón grande de EMERGENCIA y el acceso directo de la pantalla de bloqueo dejarán de funcionar hasta que los reactive en los Ajustes. Siempre podrá volver a esta página más tarde.</string>
-    <string name="emergency_disable_done">Modo emergencia desactivado.</string>
-    <string name="emergency_call_close_label">Llamar a un ser querido</string>
-    <string name="emergency_call_close_picker_title">¿A quién desea llamar?</string>
-    <!-- v1.13.0 — distinct vault PIN/pass (second-factor) -->
-    <string name="pin_entry_label">PIN o contraseña</string>
-    <string name="pin_error_invalid">PIN o contraseña incorrectos</string>
-    <string name="vault_pin_dialog_title">Segundo factor de la caja fuerte</string>
-    <string name="vault_pin_dialog_subtitle">Introduzca el PIN o la contraseña que protege la caja fuerte. Si está disponible, también puede usar la biometría.</string>
-    <string name="vault_pin_dialog_unlock">Desbloquear</string>
-    <string name="vault_use_biometric">Usar la biometría</string>
-    <string name="settings_vault_pin_title">PIN o contraseña propios para la caja fuerte</string>
-    <string name="settings_vault_pin_desc">Cuando está activado, abrir la caja fuerte pide un PIN o una contraseña propios (y, si lo desea, la biometría) aunque la app ya esté desbloqueada. La credencial se somete a hash por separado del PIN de la app.</string>
-    <string name="settings_vault_pin_set_title">Establecer el PIN de la caja fuerte</string>
-    <string name="settings_vault_pin_set_subtitle">Elija un PIN distinto del PIN de la app.</string>
-    <string name="settings_vault_pin_confirm_title">Confirme el PIN de la caja fuerte</string>
-    <string name="settings_vault_pin_change">Cambiar el PIN de la caja fuerte</string>
-    <string name="settings_vault_pin_mismatch">Los PIN no coinciden. Vuelva a intentarlo.</string>
-    <string name="settings_vault_pin_too_short">El PIN debe tener al menos 4 caracteres.</string>
-    <string name="settings_vault_pin_same_as_app">Elija un PIN distinto del PIN de la app.</string>
-    <string name="settings_vault_pin_saved">PIN de la caja fuerte guardado.</string>
-    <string name="settings_vault_pin_cleared">PIN de la caja fuerte eliminado.</string>
-    <!-- v1.25.3 (audit M24) — the confirm dialog reused the feature description as its body. -->
-    <!-- v1.27.10 (external review !38458) — removing the vault PIN now requires the vault PIN. -->
-    <string name="settings_vault_pin_clear_confirm_title">¿Eliminar el PIN de la caja fuerte?</string>
-    <string name="settings_vault_pin_clear_confirm_body">Introduzca el PIN de la caja fuerte para eliminarlo. La caja fuerte se abrirá entonces en cuanto la app esté desbloqueada. Sus conversaciones se conservan y siguen ocultas en la lista principal.</string>
-    <!-- v1.27.10 — vault PIN replacement now asks for the one in place. -->
-    <string name="settings_vault_pin_current_label">PIN actual de la caja fuerte</string>
-    <string name="settings_vault_pin_new_label">Nuevo PIN o nueva contraseña</string>
-    <!-- v1.27.10 — the way out when the vault PIN is lost. It destroys, on purpose: a way out
-         that asked for nothing more than the app PIN would be the very bypass we closed. -->
-    <string name="settings_vault_pin_forgot_title">¿Ha olvidado el PIN de la caja fuerte?</string>
-    <string name="settings_vault_pin_forgot_desc">Vacía la caja fuerte y elimina su PIN. La única forma de volver a entrar sin el PIN — y destruye lo que abre.</string>
-    <string name="settings_vault_pin_forgot_confirm_title">¿Vaciar la caja fuerte y eliminar su PIN?</string>
-    <string name="settings_vault_pin_forgot_confirm_body">Se elimina toda conversación de la caja fuerte, mensajes incluidos, de este teléfono y del almacén de mensajes del sistema. No se recupera nada: es el precio de volver a entrar sin el PIN. Las conversaciones que están fuera de la caja fuerte no se tocan. Esta acción no se puede deshacer.</string>
-    <string name="settings_vault_pin_forgot_confirm_action">Vaciar y eliminar</string>
-    <string name="settings_vault_pin_forgot_done">Caja fuerte vaciada: %1$d conversación(es) eliminadas. Su PIN se ha eliminado.</string>
-    <string name="settings_vault_pin_forgot_incomplete">Limpieza incompleta: %1$d conversación(es) eliminadas, quedan %2$d. El PIN de la caja fuerte NO se ha eliminado. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo.</string>
-    <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
-    <string name="settings_vault_pin_forgot_local_failure">%1$d conversación(es) eliminadas, pero %2$d no han podido quitarse de este teléfono. El PIN se mantiene: eliminarlo abriría una caja fuerte que sigue llena. Libere espacio y vuelva a intentarlo.</string>
-    <string name="settings_vault_pin_forgot_residue">Caja fuerte vaciada y PIN eliminado. Pero %2$d conversación(es) han dejado su copia en el almacén de mensajes del teléfono: siguen siendo legibles para otra app de mensajería. %1$d conversación(es) se han eliminado por completo.</string>
-    <string name="settings_vault_pin_force_title">¿Vaciarla de todos modos?</string>
-    <string name="settings_vault_pin_force_body">La copia de %1$d conversación(es) no ha podido quitarse del almacén de mensajes del teléfono, y volver a intentarlo dará el mismo resultado. SMS Tech puede vaciar la caja fuerte y eliminar el PIN igualmente: recupera el acceso, pero esas copias se quedan en el teléfono y siguen siendo legibles para otra app de mensajería. Esta acción no se puede deshacer.</string>
-    <string name="settings_vault_pin_force_action">Vaciar y eliminar el PIN</string>
-    <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
-    <string name="settings_lock_clear_confirm_title">¿Desactivar el bloqueo de la app?</string>
-    <string name="settings_lock_clear_confirm_body">Su PIN se eliminará y SMS Tech se abrirá sin pedir nada. El desbloqueo biométrico también se desactiva. Esta acción no se puede deshacer.</string>
-    <string name="settings_lock_clear_confirm_action">Desactivar</string>
-    <string name="action_disable">Desactivar</string>
-    <string name="vault_actions_title">Acciones de la caja fuerte</string>
-    <string name="vault_biometric_title">Desbloquear la caja fuerte</string>
-    <string name="vault_biometric_unavailable_title">Caja fuerte no disponible</string>
-    <string name="vault_biometric_unavailable_body">La biometría es el único segundo factor configurado para esta caja fuerte, y ahora mismo no está disponible. Establezca en los Ajustes un código propio de la caja fuerte para abrirla sin biometría.</string>
-    <string name="vault_biometric_subtitle">Confirme su identidad para abrir la carpeta privada.</string>
-    <string name="vault_biometric_pending">Esperando la huella…</string>
-    <!-- v1.11.0 — Sujet 5 apparence par contact -->
-    <string name="thread_overflow_appearance">Apariencia…</string>
-    <string name="appearance_dialog_title">Apariencia de la conversación</string>
-    <string name="appearance_section_bubble_color">Color del globo enviado</string>
-    <string name="appearance_section_avatar">Imagen del contacto</string>
-    <string name="appearance_pick_avatar">Elegir de la galería</string>
-    <string name="appearance_reset_avatar">Usar la imagen predeterminada</string>
-    <string name="appearance_saved">Apariencia actualizada</string>
-    <!-- v1.11.0 — Sujet 3 anti-smishing -->
-    <string name="settings_smishing_detection">Detección de estafas (sin conexión)</string>
-    <string name="settings_smishing_detection_desc">Señala los SMS entrantes sospechosos (enlaces acortados, expresiones de urgencia, números de tarificación adicional, dominios que imitan a los verdaderos). Cubre Francia, Alemania, Italia, España, el Reino Unido e Irlanda. 100% local, sin nube. Puede producir falsos positivos.</string>
-    <string name="smishing_banner_title">⚠️ Posiblemente fraudulento</string>
-    <string name="smishing_banner_subtitle">Toque para ver por qué</string>
-    <string name="smishing_dialog_title">¿Por qué este aviso?</string>
-    <string name="smishing_dialog_intro">SMS Tech ha detectado en este mensaje las siguientes señales sospechosas. No se ha enviado ningún contenido de SMS a ninguna parte — todo se calcula localmente.</string>
-    <string name="smishing_reason_url_shortener">Enlace acortado (bit.ly, t.co, tinyurl…). Los acortadores pueden ocultar el destino real: compruébelo antes de tocar.</string>
-    <string name="smishing_reason_urgency">Expresiones de urgencia o de presión (urgente, caduca, haga clic aquí…). Una táctica clásica de ingeniería social para provocar pánico.</string>
-    <string name="smishing_reason_premium">Número de tarificación adicional (3xxx o 0899 en Francia, 0900 en Alemania, 899 en Italia, 806 en España…). Llamar a estos números es caro y suele formar parte de una estafa.</string>
-    <string name="smishing_reason_typosquatting">Dominio que imita a uno verdadero (p. ej. «correros.es» en lugar de «correos.es»). Los sitios vigilados son los oficiales de Francia, Alemania, Italia, España, el Reino Unido e Irlanda. Escriba siempre a mano las direcciones oficiales.</string>
-    <string name="smishing_dialog_dismiss">OK</string>
-    <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
-    <string name="appearance_color_brand_blue">Azul de la marca (predeterminado)</string>
-    <string name="appearance_color_navy">Azul marino</string>
-    <string name="appearance_color_sky_blue">Azul cielo</string>
-    <string name="appearance_color_deep_indigo">Índigo intenso</string>
-    <!-- v1.19.0 — mauve (ProtonMail-like) + raspberry added; greens/brown/dupes removed -->
-    <string name="appearance_color_mauve">Malva</string>
-    <string name="appearance_color_deep_purple">Morado intenso</string>
-    <string name="appearance_color_framboise">Frambuesa</string>
-    <string name="appearance_color_brand_red">Rojo de la marca</string>
-    <string name="appearance_color_burnt_orange">Naranja quemado</string>
-    <string name="appearance_color_slate_blue_grey">Gris azulado pizarra</string>
-    <string name="appearance_color_selected">seleccionado</string>
-    <!-- v1.12.0 — vault move with locked session -->
-    <string name="error_session_locked">Desbloquee la app para mover esta conversación</string>
-    <!-- v1.12.0 — Emergency shortcut (lock-screen persistent notification) -->
-    <string name="channel_emergency_shortcut_label">Acceso directo de emergencia</string>
-    <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
-    <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
-    <string name="channel_emergency_shortcut_desc">Notificación permanente silenciosa con accesos directos de llamada (112 y el número de la policía de su país). Toque el cuerpo para abrir la pantalla de emergencia y, después, mantenga pulsado 3 s para enviar la alerta.</string>
-    <string name="emergency_shortcut_notif_title">SMS Tech — acceso directo de emergencia</string>
-    <string name="emergency_shortcut_notif_text">Toque para abrir la página de emergencia, o llame al 112.</string>
-    <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
-         country, so it can no longer be written into the string. -->
-    <string name="emergency_shortcut_action_dial">Llamar al %1$s</string>
-    <string name="settings_emergency_shortcut_title">Acceso directo en la pantalla de bloqueo</string>
-    <string name="emergency_saved_enabled">Modo emergencia activado</string>
-    <string name="emergency_saved_disabled">Modo emergencia desactivado</string>
-    <string name="emergency_setup_unsaved_body">El modo emergencia todavía no está guardado. Si sale ahora, se quedaría en su estado anterior.</string>
-    <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
-    <string name="settings_emergency_shortcut_desc">Muestra una notificación permanente con accesos directos de llamada (112 y el número de la policía de su país), accesible sin desbloquear. Toque el cuerpo para abrir la pantalla de emergencia. Desactivado de forma predeterminada.</string>
-    <string name="emergency_shortcut_no_app_to_dial">No hay ninguna app instalada para hacer la llamada</string>
-    <string name="settings_emergency_call_police_title">Acción rápida de Policía en la notificación de bloqueo</string>
-    <string name="settings_emergency_call_police_desc">Añade una acción rápida de Policía a la notificación permanente de emergencia de la pantalla de bloqueo. El número es el del país al que está conectado su teléfono. El botón de Policía siempre está visible en la página de Emergencia de la app, independientemente de este ajuste. Desactivado de forma predeterminada.</string>
-
-    <!-- Backup / restore dialogs -->
-    <string name="backup_explainer">La copia de seguridad cifrada usa AES-256-GCM con derivación de clave PBKDF2-HMAC-SHA512. Elija una frase de contraseña robusta — sin ella el archivo no se puede recuperar.</string>
-    <string name="backup_passphrase_title">Frase de contraseña de la copia</string>
-    <string name="backup_passphrase_explain">Elija una frase de contraseña para cifrar la copia de seguridad. Al menos 8 caracteres. Guárdela bien — no hay ninguna recuperación.</string>
-    <string name="backup_passphrase">Frase de contraseña</string>
-    <string name="backup_passphrase_repeat">Repita la frase de contraseña</string>
-    <string name="backup_passphrase_mismatch">Las frases de contraseña no coinciden.</string>
-    <string name="backup_export_success">Copia de seguridad guardada.</string>
-    <string name="backup_export_failed">La copia de seguridad ha fallado.</string>
-    <string name="backup_export_vault_locked">Caja fuerte bloqueada — ábrala antes para que la copia pueda incluirla.</string>
-    <string name="backup_vault_pin_title">Se necesita el PIN de la caja fuerte</string>
-    <string name="backup_vault_pin_body">Una copia de seguridad incluye su caja fuerte, por eso pide su PIN antes de crearse.</string>
-    <string name="backup_vault_biometric_title">Para la copia se necesita el PIN de la caja fuerte</string>
-    <string name="backup_vault_biometric_body">Su caja fuerte está protegida solo con biometría, que no se puede solicitar desde esta pantalla. Establezca un PIN de la caja fuerte en Ajustes — Seguridad: la copia se lo pedirá aquí.</string>
-
-    <!-- Migration -->
-    <string name="migration_title">Importar los SMS existentes</string>
-    <string name="migration_body">Lee del proveedor de SMS del sistema y refleja los mensajes en la base de datos cifrada. SMS Tech ya debe ser la app de SMS predeterminada.</string>
-    <string name="migration_run">Iniciar la importación</string>
-    <string name="migration_rerun">Volver a ejecutar</string>
-    <string name="migration_imported">Importados: %1$d</string>
-    <!-- v1.25.3 (audit M10) — an import failure used to leave a progress bar spinning forever. -->
-    <string name="migration_failed">La importación se ha detenido por un error. Los mensajes ya importados se han conservado — puede volver a ejecutarla.</string>
-
-    <!-- About -->
-    <string name="about_easter_egg">✨ Gracias a quienes cuidan su privacidad. ✨</string>
-
-    <!-- Lock screen -->
-    <string name="lock_title">SMS Tech está bloqueada</string>
-    <string name="lock_pin_hint">Introduzca su PIN</string>
-    <string name="lock_lockout_message">Demasiados intentos. Vuelva a intentarlo en %1$d s.</string>
-
-    <!-- Settings -->
-    <string name="settings_title">Ajustes</string>
-
-    <string name="settings_section_appearance">Apariencia</string>
-    <string name="settings_theme_system">Sistema</string>
-    <string name="settings_theme_light">Claro</string>
-    <string name="settings_theme_dark">Oscuro</string>
-    <string name="settings_theme_dark_tech">Dark Tech</string>
-    <string name="settings_theme_dark_tech_desc">Paleta oscura pensada para quien programa. Tiene prioridad sobre los colores dinámicos y sobre AMOLED.</string>
-    <string name="settings_dynamic_colors">Colores dinámicos (Android 12+)</string>
-    <string name="settings_amoled">Negro absoluto AMOLED</string>
-
-    <string name="settings_section_locale">Idioma y región</string>
-    <string name="settings_language">Idioma de la app</string>
-    <string name="settings_language_desc">Abre la pantalla de Android del idioma por app. SMS Tech sigue el idioma del sistema, salvo que elija uno aquí.</string>
-
-    <string name="settings_section_conversations">Conversaciones</string>
-    <string name="settings_show_avatars">Mostrar los avatares</string>
-    <string name="settings_signature">Firma automática</string>
-
-    <string name="settings_section_sending">Envío</string>
-    <string name="settings_default_region_title">País predeterminado</string>
-    <string name="settings_default_region_auto">Automático (país de la SIM)</string>
-    <string name="settings_default_region_auto_hint">Usa el país de la SIM para convertir los números nacionales (06…) al formato internacional antes de enviar. Elija un país si sus contactos están guardados en el formato nacional de otro país — por ejemplo, los números franceses 06… en una SIM extranjera no se entregan de otro modo.</string>
-    <string name="settings_confirm_broadcast">Pedir confirmación antes de enviar</string>
-    <string name="settings_confirm_send_title">¿Enviar este mensaje?</string>
-    <string name="settings_delivery_reports">Informes de entrega</string>
-    <string name="settings_group_mms">MMS de grupo</string>
-    <string name="settings_group_mms_hint">Un solo MMS para todos, y cada respuesta vuelve al grupo. Los mensajes enviados desde un grupo salen entonces siempre como MMS, texto incluido. Configure «Mi número de teléfono» para que los mensajes de grupo recibidos puedan dejarle fuera de la lista de miembros.</string>
-    <string name="settings_my_number">Mi número de teléfono</string>
-    <string name="settings_my_number_dialog_title">Su número de teléfono</string>
-    <string name="settings_my_number_dialog_body">Opcional. Si se configura, este número sustituye al marcador AOSP «insert-address-token» en la dirección del remitente de los MMS salientes, para que las demás apps de SMS le muestren correctamente.</string>
-    <string name="settings_my_number_placeholder">+34 6XX XXX XXX</string>
-    <string name="settings_my_number_detect">Detectar automáticamente desde la SIM</string>
-    <string name="settings_my_number_not_set">Sin configurar</string>
-    <string name="settings_my_number_detect_failed">No se puede leer el número de la SIM — introdúzcalo a mano</string>
-    <string name="settings_my_number_detect_no_perm">Permiso de números de teléfono no concedido — introdúzcalo a mano</string>
-    <string name="settings_my_number_invalid">Debe ser un número de teléfono válido (+ y dígitos)</string>
-
-    <string name="settings_auto_delete_title">Limpieza del historial</string>
-    <string name="settings_auto_delete_desc">Elimina los SMS, MMS y mensajes de voz más antiguos que la edad elegida. La limpieza automática se ejecuta como mucho una vez al mes; también puede lanzar una limpieza manual en cualquier momento. Los mensajes destacados no se eliminan nunca.</string>
-    <string name="settings_auto_delete_explainer">Lo automático ocurre una vez al mes. Los mensajes destacados no se eliminan nunca.</string>
-    <string name="settings_auto_delete_off">Desactivada — no elimina nada</string>
-    <string name="settings_auto_delete_30">Eliminar los mensajes de más de 30 días</string>
-    <string name="settings_auto_delete_60">Eliminar los mensajes de más de 60 días</string>
-    <string name="settings_auto_delete_180">Eliminar los mensajes de más de 180 días</string>
-    <string name="settings_auto_delete_status_off">Desactivada</string>
-    <string name="settings_auto_delete_status_30">Elimina los mensajes de más de 30 días</string>
-    <string name="settings_auto_delete_status_60">Elimina los mensajes de más de 60 días</string>
-    <string name="settings_auto_delete_status_180">Elimina los mensajes de más de 180 días</string>
-    <string name="settings_auto_delete_status_n_days">Elimina los mensajes de más de %1$d días</string>
-    <string name="settings_auto_delete_purge_now">Limpiar ahora</string>
-    <string name="settings_auto_delete_purge_now_disabled">Elija una duración para activarlo</string>
-    <string name="settings_auto_delete_purge_confirm_title">Confirme la limpieza</string>
-    <string name="settings_auto_delete_purge_confirm_zero">No hay mensajes que eliminar para esta duración.</string>
-    <string name="settings_auto_delete_purge_confirm_body">%1$d mensaje(s) de más de %2$d días se eliminarán del teléfono, no solo de SMS Tech. Los mensajes destacados se conservan. Esta acción no se puede deshacer.</string>
-    <string name="settings_auto_delete_purge_done">%1$d mensaje(s) eliminados.</string>
-    <string name="action_delete_now">Eliminar</string>
-    <string name="settings_resync_title">Volver a sincronizar desde el teléfono</string>
-    <string name="settings_resync_desc">Vuelve a importar todos los SMS del sistema Android. Útil cuando faltan en la app mensajes que sí están en el teléfono. No devuelve lo que usted eliminó: eliminar quita también la copia del teléfono. Sin duplicados.</string>
-    <string name="settings_resync_started">Sincronización iniciada en segundo plano.</string>
-    <string name="settings_send_reactions_title">Enviar mis reacciones al destinatario</string>
-    <string name="settings_send_reactions_desc">Cuando publica una reacción con emoji (corazón, pulgar arriba…), se envía al destinatario un SMS que contiene solo el emoji. Cuenta como un SMS normal, a la tarifa de su plan. Quitar o cambiar una reacción no reenvía nada.</string>
-    <!-- v1.8.0 — bug 5 fix : 3 options at a glance.
-         Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
-    <string name="settings_reaction_format_title">Formato de las reacciones</string>
-    <string name="settings_reaction_format_fr">Francés legible</string>
-    <string name="settings_reaction_format_fr_hint">\"Réagi par ❤️ à votre message : «preview»\". Natural y comprensible para cualquier destinatario Android de habla francesa. SMS Tech lo descodifica como una reacción nativa.</string>
-    <string name="settings_reaction_format_en">Tapback (compatible con iMessage)</string>
-    <string name="settings_reaction_format_en_hint">\"Reacted ❤️ to «preview»\". Lo detectan automáticamente iMessage (iPhone) y las versiones recientes de Google Mensajes como un globo de reacción nativo. Menos natural para los destinatarios de habla francesa.</string>
-    <string name="settings_reaction_format_emoji">Solo el emoji</string>
-    <string name="settings_reaction_format_emoji_hint">\"❤️\" a secas. Más limpio en las apps de SMS antiguas, pero el destinatario pierde todo el contexto — no puede saber a qué mensaje ha reaccionado.</string>
-    <!-- v1.9.0 — compact emoji + quote -->
-    <string name="settings_reaction_format_emoji_quote">Emoji + cita (predeterminado)</string>
-    <string name="settings_reaction_format_emoji_quote_hint">\"❤️ «su mensaje»\". Compacto y conserva el contexto. El destinatario ve el emoji seguido del mensaje original citado.</string>
-    <!-- v1.8.1 — sender display name -->
-    <string name="settings_sender_name_title">Su nombre visible</string>
-    <string name="settings_sender_name_desc">Se incluye en los SMS de reacción salientes para ayudar al destinatario a identificar al autor. Déjelo vacío para usar el nombre de su perfil de Android (o, en su defecto, el anónimo \"Réagi par ❤️…\").</string>
-    <string name="settings_sender_name_label">Nombre visible (máx. 40)</string>
-    <string name="settings_sender_name_auto">Detectar desde el perfil de Android</string>
-
-    <!-- v1.9.0 — Safety call -->
-    <string name="settings_section_safety_call">Safety call</string>
-    <string name="settings_safety_call_title">Safety call</string>
-    <string name="settings_safety_call_desc">Envía un SMS automático a sus contactos de emergencia si no abre SMS Tech durante una duración configurada. Pensado para viajes en solitario, vida aislada, oficios de riesgo.</string>
-    <string name="settings_safety_call_disabled">Desactivado</string>
-    <string name="settings_safety_call_disabled_after_alert">Desactivado — se ha lanzado una alerta</string>
-    <string name="settings_safety_call_im_ok_snack">Temporizador reiniciado.</string>
-    <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
-    <string name="settings_safety_call_armed_chip">Activo</string>
-    <string name="settings_safety_call_armed_started">Temporizador iniciado: %1$s a las %2$s</string>
-    <string name="settings_safety_call_im_ok_stops_relances">Safety call desactivado. No se enviará ningún otro mensaje.</string>
-    <plurals name="settings_safety_call_triggered_state">
-        <item quantity="one">Alerta enviada — %1$d mensaje de %2$d</item>
-        <item quantity="many">Alerta enviada — %1$d mensajes de %2$d</item>
-        <item quantity="other">Alerta enviada — %1$d mensajes de %2$d</item>
-    </plurals>
-    <string name="settings_safety_call_triggered_hint">Los recordatorios se envían cada 15 minutos. Toque «Estoy bien» para pararlos.</string>
-    <string name="settings_safety_call_triggered_state_sending">Enviando la alerta…</string>
-    <string name="settings_safety_call_triggered_hint_done">Secuencia completada: Safety call se ha desactivado solo. Vuelva a activarlo para estar protegido de nuevo.</string>
-    <string name="settings_safety_call_armed_duration">Duración: %1$s</string>
-    <string name="settings_safety_call_armed_remaining">Queda: %1$s antes de dispararse</string>
-    <string name="settings_safety_call_armed_remaining_imminent">Menos de 2 h antes de dispararse</string>
-    <string name="settings_safety_call_armed_contacts_one">Contacto: %1$s</string>
-    <string name="settings_safety_call_armed_contacts_many">Contactos: %1$s (+%2$d más)</string>
-    <string name="settings_safety_call_armed_template">Plantilla: %1$s</string>
-    <string name="settings_safety_call_armed_modify">Modificar</string>
-    <string name="settings_safety_call_armed_actions_hint">«Estoy bien» reinicia el temporizador: la cuenta atrás vuelve a empezar desde la duración completa y no se envía ningún mensaje. «Modificar» abre los ajustes (duración, contactos, mensaje).</string>
-    <string name="settings_safety_call_armed_im_ok_short">Estoy bien</string>
-    <string name="safety_call_setup_title">Safety call</string>
-    <string name="safety_call_setup_section_status">Estado</string>
-    <string name="safety_call_setup_section_duration">Duración</string>
-    <string name="safety_call_setup_section_contacts">Contactos de emergencia (máx. 4)</string>
-    <string name="safety_call_setup_section_template">Mensaje</string>
-    <string name="safety_call_setup_toggle_enable">Activar Safety call</string>
-    <string name="safety_call_setup_toggle_desc">Cuando está activo, abrir SMS Tech reinicia el temporizador. Si no la abre dentro de la duración elegida, sus contactos reciben un SMS automático.</string>
-    <string name="safety_call_setup_duration_24h">24 horas</string>
-    <string name="safety_call_setup_duration_48h">48 horas</string>
-    <string name="safety_call_setup_duration_72h">72 horas</string>
-    <string name="safety_call_setup_duration_custom">Personalizada</string>
-    <string name="safety_call_setup_duration_custom_format">%1$d h</string>
-    <string name="attachment_generic_name">Archivo adjunto</string>
-    <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
-    <string name="safety_call_setup_duration_custom_hint">En horas · 168 h = 1 semana · máx. 720 h (30 días)</string>
-    <string name="safety_call_setup_add_contact">Añadir un contacto</string>
-    <string name="safety_call_setup_contact_name_label">Nombre (opcional)</string>
-    <string name="safety_call_setup_contact_phone_label">Número de teléfono</string>
-    <string name="safety_call_setup_contact_invalid">Número de teléfono no válido.</string>
-    <string name="safety_call_setup_contact_max_reached">Máximo 4 contactos.</string>
-    <string name="safety_call_setup_remove_contact">Quitar</string>
-    <string name="safety_call_setup_template_check_in">Señal de vida (predeterminada)</string>
-    <string name="safety_call_setup_template_urgent">Urgente</string>
-    <string name="safety_call_setup_template_follow_up">Recordatorio</string>
-    <string name="safety_call_setup_template_custom">Personalizado</string>
-    <string name="safety_call_setup_template_custom_label">Su mensaje (máx. 140 caracteres)</string>
-    <string name="safety_call_setup_template_preview">Vista previa</string>
-    <string name="safety_call_setup_save">Guardar</string>
-    <string name="safety_call_setup_save_validation_no_contacts">Añada al menos un contacto antes de activarlo.</string>
-    <string name="safety_call_setup_shared_with_emergency">Estos contactos los usa también el modo emergencia, que sigue activo. Vaciar la lista lo dejaría sin nadie a quien avisar. Desactive antes el modo emergencia, o conserve al menos un contacto.</string>
-    <string name="safety_call_setup_save_validation_custom_empty">El mensaje personalizado no puede estar vacío.</string>
-    <string name="safety_call_warning_title">SMS Tech — confirme que está bien</string>
-    <string name="safety_call_warning_body_hours">Safety call se disparará dentro de unas %1$d horas. Toque para reiniciar el temporizador.</string>
-    <string name="safety_call_warning_body_imminent">Safety call se disparará en menos de 2 horas. Toque para reiniciarlo ahora.</string>
-    <string name="safety_call_sequence_title">SMS Tech — alerta enviada</string>
-    <plurals name="safety_call_sequence_body">
-        <item quantity="one">%1$d mensaje de %2$d enviado a sus contactos. Toque si está bien: los recordatorios se detendrán.</item>
-        <item quantity="many">%1$d mensajes de %2$d enviados a sus contactos. Toque si está bien: los recordatorios se detendrán.</item>
-        <item quantity="other">%1$d mensajes de %2$d enviados a sus contactos. Toque si está bien: los recordatorios se detendrán.</item>
-    </plurals>
-    <string name="safety_call_sequence_title_sending">SMS Tech — enviando la alerta</string>
-    <string name="safety_call_sequence_body_sending">La alerta se está enviando a sus contactos. Toque si está bien: el envío se detendrá.</string>
-    <string name="safety_call_sequence_title_done">SMS Tech — alerta enviada, Safety call desactivado</string>
-    <plurals name="safety_call_sequence_body_done">
-        <item quantity="one">%1$d mensaje de %2$d se ha enviado a sus contactos. Safety call está ahora desactivado — toque «Volver a activar» para armarlo de nuevo.</item>
-        <item quantity="many">Los %1$d mensajes se han enviado a sus contactos. Safety call está ahora desactivado — toque «Volver a activar» para armarlo de nuevo.</item>
-        <item quantity="other">Los %1$d mensajes se han enviado a sus contactos. Safety call está ahora desactivado — toque «Volver a activar» para armarlo de nuevo.</item>
-    </plurals>
-    <string name="safety_call_notif_action_rearm">Volver a activar</string>
-    <!-- v1.27.4 — confirmation shown after the “Turn back on” action of the receipt notification.
-         The two other confirmations reuse the Settings wording (settings_safety_call_im_ok_snack /
-         settings_safety_call_im_ok_stops_relances) on purpose: the same gesture must read the same
-         way wherever it is made. -->
-    <string name="safety_call_ack_rearmed">Safety call vuelve a estar activo. El temporizador empieza de nuevo.</string>
-    <string name="safety_call_reset_warning_title">El temporizador se reinicia cuando abre SMS Tech</string>
-    <string name="safety_call_reset_warning_body">Una vez activo Safety call, el temporizador se reinicia en cuanto abre esta app y la desbloquea. Usar el teléfono para cualquier otra cosa no cambia nada: si no abre SMS Tech dentro del plazo elegido, la alerta sale hacia sus contactos.</string>
-    <string name="safety_call_history_title">Historial de activaciones</string>
-    <string name="safety_call_history_empty">No hay ninguna activación registrada.</string>
-    <plurals name="safety_call_history_count">
-        <item quantity="one">%1$d mensaje de %2$d enviado</item>
-        <item quantity="many">%1$d mensajes de %2$d enviados</item>
-        <item quantity="other">%1$d mensajes de %2$d enviados</item>
-    </plurals>
-    <string name="safety_call_history_recipients">Dirigida a: %1$s</string>
-    <string name="safety_call_history_stopped">Secuencia detenida — usted confirmó que estaba bien.</string>
-    <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
-    <string name="settings_section_emergency">Modo emergencia</string>
-    <string name="settings_emergency_title">Modo emergencia</string>
-    <string name="settings_emergency_desc">Un botón que se mantiene pulsado 3 s envía un SMS a sus contactos de emergencia con su ubicación actual. Distinto de Safety call, que es automático y se dispara por inactividad. Desactivado de forma predeterminada.</string>
-    <string name="settings_emergency_disabled">Desactivado</string>
-    <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
-    <string name="settings_emergency_armed_chip">Activo</string>
-    <string name="settings_emergency_armed_template">Plantilla: %1$s</string>
-    <string name="settings_emergency_armed_location">Ubicación GPS incluida</string>
-    <string name="settings_emergency_armed_no_location">Sin ubicación GPS</string>
-    <string name="settings_emergency_armed_contacts_one">Contactos: %1$s</string>
-    <string name="settings_emergency_armed_contacts_many">Contactos: %1$s +%2$d más</string>
-    <string name="settings_emergency_armed_no_contacts">No hay contactos configurados</string>
-    <string name="settings_emergency_armed_modify">Editar</string>
-    <string name="settings_emergency_armed_open">Abrir</string>
-    <string name="emergency_title">Modo emergencia</string>
-    <string name="emergency_setup_title">Configuración del modo emergencia</string>
-    <string name="emergency_button_label">EMERGENCIA</string>
-    <string name="emergency_button_hint_hold_3s">Emergencia — mantenga pulsado 3 segundos para enviar</string>
-    <string name="emergency_preview_title">Mensaje que se enviará</string>
-    <string name="emergency_status_disabled">El modo emergencia está desactivado. Actívelo en los ajustes.</string>
-    <string name="emergency_status_no_contacts">No hay contactos de emergencia configurados. Añada alguno en los ajustes de Safety call.</string>
-    <string name="emergency_status_cooldown">Recién enviado. Disponible de nuevo dentro de un minuto.</string>
-    <string name="emergency_status_ready">Mantenga pulsado el botón 3 segundos para avisar a sus contactos.</string>
-    <string name="emergency_triggered_ok">Emergencia enviada a %1$d contacto(s).</string>
-    <string name="emergency_triggered_no_location">Emergencia enviada a %1$d contacto(s) — ubicación no disponible.</string>
-    <string name="emergency_triggered_all_failed">El envío de la emergencia ha fallado (%1$d). Compruebe cuál es su app de SMS predeterminada.</string>
-    <string name="emergency_setup_enable_title">Activar el modo emergencia</string>
-    <string name="emergency_setup_enable_desc">Cuando está activo, aparece un botón de emergencia en la pantalla dedicada. Manténgalo pulsado 3 s para enviar un SMS con su ubicación a sus contactos de emergencia.</string>
-    <string name="emergency_setup_template_title">Plantilla del mensaje</string>
-    <string name="emergency_setup_template_need_help">Necesito ayuda</string>
-    <string name="emergency_setup_template_danger">Peligro</string>
-    <string name="emergency_setup_template_discreet">Discreto</string>
-    <string name="emergency_setup_location_title">Incluir la ubicación</string>
-    <string name="emergency_setup_location_desc">Añade al SMS una dirección de Google Maps. Requiere el permiso de ubicación. Si está desactivada (o el permiso denegado), el SMS se envía sin coordenadas.</string>
-    <string name="emergency_setup_location_permission_warning">Permiso de ubicación no concedido. El SMS de emergencia se enviará sin coordenadas. Concédalo en los ajustes de Android para resolverlo.</string>
-    <string name="emergency_setup_contacts_title">Contactos de emergencia</string>
-    <string name="emergency_setup_contacts_empty">No hay contactos configurados.</string>
-    <string name="emergency_setup_contacts_count">%1$d contacto(s) configurados.</string>
-    <string name="emergency_setup_contacts_cta">Gestionar los contactos</string>
-    <string name="action_edit">Editar</string>
-    <string name="snack_generic_error">Algo ha ido mal.</string>
-    <string name="reaction_send_confirm_title">¿Enviar la reacción?</string>
-    <string name="reaction_send_confirm_body">Se enviará al destinatario un SMS que contiene solo este emoji. Cuenta como un SMS normal (tarifa de su plan). Puede desactivarlo en Ajustes → Envío.</string>
-    <string name="reaction_send_confirm_never_ask">No preguntar más, enviar directamente</string>
-    <string name="reaction_send_confirm_fallback_recipient">este contacto</string>
-    <string name="attachment_image_label">Imagen</string>
-    <string name="attachment_video_label">Vídeo</string>
-    <string name="attachment_file_label">Archivo</string>
-    <string name="bubble_mms_parts_missing">Archivo adjunto no restaurado</string>
-    <string name="bubble_sender_self">Yo</string>
-    <string name="attachment_remove_label">Quitar el archivo adjunto</string>
-
-    <string name="action_react">Reaccionar</string>
-    <string name="settings_auto_lock_delay">Retardo del bloqueo automático</string>
-    <string name="settings_auto_lock_delay_dialog_title">Bloquear la app después de…</string>
-    <string name="auto_lock_immediate">Inmediatamente</string>
-    <string name="auto_lock_15s">15 segundos</string>
-    <string name="auto_lock_1m">1 minuto</string>
-    <string name="auto_lock_5m">5 minutos</string>
-    <string name="auto_lock_next_launch">Solo en el próximo inicio</string>
-    <string name="settings_signature_none">Sin configurar</string>
-    <string name="settings_signature_dialog_body">Se añade al final de cada SMS que envía, tras una línea de separación. Que sea corta: una firma larga puede partir el mensaje en varios SMS, cada uno facturado por separado.</string>
-    <string name="settings_signature_placeholder">p. ej. Pat</string>
-    <string name="action_star">Destacar</string>
-    <string name="action_unstar">Quitar de destacados</string>
-    <string name="reaction_picker_other">Otro emoji</string>
-    <string name="reaction_picker_other_title">Emoji personalizado</string>
-    <string name="reaction_picker_other_body">Escriba o pegue un emoji</string>
-    <string name="reaction_picker_other_hint">😀</string>
-    <!-- v1.5.0 — multi-emoji picker validate button -->
-    <string name="reaction_picker_validate_empty">Seleccione uno o varios emojis</string>
-    <string name="reaction_picker_validate_count">Enviar la reacción %1$s</string>
-    <!-- v1.6.0 — a11y reaction badge (TalkBack) -->
-    <string name="reaction_badge_content_description">Reacción %1$s</string>
-    <string name="reaction_badge_remove_action">Quitar la reacción</string>
-    <!-- v1.6.1 — body of the system notification fired when someone reacts to our message -->
-    <string name="reaction_notif_body_with_preview">Ha reaccionado %1$s a: %2$s</string>
-    <string name="reaction_notif_body_no_preview">Ha reaccionado %1$s a su mensaje</string>
-    <!-- v1.6.1 — snackbar shown when PDF export fails (audit QUAL-07 i18n fix) -->
-    <string name="snack_pdf_export_failed">La exportación a PDF ha fallado</string>
-
-    <!-- v1.8.0 — confirmation dialogs + "Mark all as read" action in overflow menu -->
-    <string name="action_mark_all_read">Marcar todo como leído</string>
-    <string name="mark_all_read_confirm_body">Se borrarán todos los indicadores de no leído actuales. Los mensajes nuevos volverán a mostrar su indicador con normalidad.</string>
-    <string name="settings_resync_confirm_title">¿Volver a sincronizar desde el teléfono?</string>
-    <string name="settings_resync_confirm_body">Vuelve a importar los mensajes del proveedor de SMS/MMS del sistema. Los mensajes existentes se quedan (sin duplicar, gracias al identificador único); los mensajes eliminados antes pueden reaparecer si todavía están en la base de datos del sistema. ¿Continuar?</string>
-    <string name="settings_reset_all_confirm_title">¿Restablecer todos los ajustes?</string>
-    <string name="settings_reset_all_confirm_body">Todas sus preferencias (tema, notificaciones, envío, etc.) volverán a sus valores predeterminados. Sus conversaciones, sus mensajes y sus ajustes de seguridad (bloqueo, PIN de la caja fuerte, código señuelo) NO se ven afectados.</string>
-    <string name="settings_purge_blocked_confirm_title">¿Eliminar las conversaciones bloqueadas?</string>
-    <string name="settings_purge_blocked_confirm_body">Elimina toda conversación cuyos participantes estén todos en la lista de bloqueados. También las quita del proveedor de SMS del sistema. Irreversible.</string>
-
-    <string name="settings_section_notifications">Notificaciones</string>
-    <string name="settings_notifications_enabled">Activar las notificaciones</string>
-    <string name="settings_inline_reply">Responder desde la notificación</string>
-
-    <!-- v1.8.0 — bug 3 fix: exposes PreviewMode + NotificationStyle in the UI. -->
-    <string name="settings_notif_preview">Vista previa en la pantalla de bloqueo</string>
-    <string name="settings_notif_preview_always">Mostrar siempre el nombre y el contenido</string>
-    <string name="settings_notif_preview_unlocked">Solo después de desbloquear</string>
-    <string name="settings_notif_preview_unlocked_hint">En la pantalla de bloqueo aparecen el nombre del remitente y un texto oculto; el contenido completo aparece una vez desbloqueado.</string>
-    <string name="settings_notif_preview_never">Nunca en la pantalla de bloqueo</string>
-    <string name="settings_notif_preview_never_hint">Reproduce el sonido pero no aparece nada en la pantalla de bloqueo — completamente invisible hasta que desbloquee y abra la app.</string>
-    <string name="settings_notif_style">Estilo de las notificaciones</string>
-    <string name="settings_notif_style_heads_up">En primer plano (predeterminado)</string>
-    <string name="settings_notif_style_heads_up_hint">El aviso aparece sobre la pantalla actual con sonido y luego se queda en el panel de notificaciones.</string>
-    <string name="settings_notif_style_banner">Solo aviso</string>
-    <string name="settings_notif_style_banner_hint">Sin ventana emergente, sin sonido. Solo un icono en el panel.</string>
-    <string name="settings_notif_style_silent">Silenciosas</string>
-    <string name="settings_notif_style_silent_hint">Se encaminan por un canal de baja importancia. El sistema quita el sonido y la aparición en primer plano.</string>
-    <string name="settings_notif_open_system">Abrir los ajustes de notificación del sistema</string>
-    <string name="settings_notif_open_system_desc">Compruebe o corrija permisos, canales y sonido a nivel del sistema.</string>
-
-    <string name="settings_section_security">Seguridad y privacidad</string>
-    <string name="settings_flag_secure">Ocultar la vista previa en Recientes</string>
-    <string name="settings_flag_secure_desc">Oculta la miniatura de la conversación en el selector de apps del sistema y bloquea las capturas y la grabación de pantalla mientras la app está abierta.</string>
-    <string name="settings_lock_vault_on_leave">Bloquear la caja fuerte al salir</string>
-    <string name="settings_lock_vault_on_leave_desc">Bloquea automáticamente la caja fuerte cifrada en cuanto la app pasa a segundo plano. Al volver tendrá que desbloquearla de nuevo.</string>
-    <string name="settings_panic_code">PIN señuelo (modo pánico)</string>
-
-    <string name="settings_section_blocking">Bloqueo</string>
-    <string name="settings_block_unknown">Bloquear los números desconocidos</string>
-    <string name="settings_manage_blocked">Gestionar la lista de bloqueados</string>
-
-    <string name="settings_section_backup">Copia de seguridad</string>
-    <string name="settings_backup_now">Hacer una copia ahora</string>
-    <string name="settings_restore">Restaurar desde un archivo</string>
-
-    <string name="settings_section_advanced">Avanzado</string>
-    <string name="settings_default_sms_app">App de SMS predeterminada</string>
-    <string name="settings_set_default">Establecer como predeterminada</string>
-    <string name="settings_is_default">SMS Tech es la app de SMS predeterminada.</string>
-    <string name="settings_reset_all">Restablecer todos los ajustes</string>
-    <string name="settings_nuke_data">Eliminar todos mis datos</string>
-    <string name="settings_nuke_confirm">Se borrarán todas las conversaciones en SMS Tech Y en el almacén de mensajes del teléfono, junto con los archivos adjuntos, los envíos programados y todos los ajustes. La caja fuerte también se borra. Esta acción no se puede deshacer, y en la siguiente sincronización no vuelve nada.</string>
-    <string name="settings_nuke_confirm_not_default">⚠️ SMS Tech no es su app de SMS predeterminada: el sistema se negará a eliminar los mensajes del teléfono. Se quedarán donde están y volverán en la siguiente sincronización. Solo se borrarán los datos propios de SMS Tech.</string>
-    <string name="settings_nuke_done_title">Datos borrados</string>
-    <string name="settings_nuke_done_body">Las conversaciones y los ajustes se han borrado, tanto en SMS Tech como en el almacén de mensajes del teléfono. En la siguiente sincronización no volverá nada. SMS Tech va a reiniciarse.</string>
-    <string name="settings_nuke_residue_title">Eliminación incompleta</string>
-    <plurals name="settings_nuke_residue_body">
-        <item quantity="one">%1$d conversación se ha quedado en el almacén de mensajes del teléfono: el sistema se negó a eliminarla y volverá en la siguiente sincronización. La causa habitual es que SMS Tech no sea la app de SMS predeterminada.</item>
-        <item quantity="many">%1$d conversaciones se han quedado en el almacén de mensajes del teléfono: el sistema se negó a eliminarlas y volverán en la siguiente sincronización. La causa habitual es que SMS Tech no sea la app de SMS predeterminada.</item>
-        <item quantity="other">%1$d conversaciones se han quedado en el almacén de mensajes del teléfono: el sistema se negó a eliminarlas y volverán en la siguiente sincronización. La causa habitual es que SMS Tech no sea la app de SMS predeterminada.</item>
-    </plurals>
-    <!-- v1.28.9 (septieme note d'Andrew, constat 2) — ne pas savoir n'est pas « rien a effacer ». -->
-    <string name="settings_nuke_list_unreadable">No se ha podido leer la lista de conversaciones: sus copias en el almacén de mensajes del teléfono no se han eliminado y volverán en la siguiente sincronización.</string>
-    <string name="settings_nuke_local_failure">Una parte de los datos propios de SMS Tech no ha podido borrarse de este teléfono. Ejecute de nuevo «Eliminar todos mis datos».</string>
-
-    <!-- About -->
-    <string name="about_title">Acerca de</string>
-    <string name="about_tagline_short">SMS y MMS modernos y privados para Android.</string>
-    <!-- v1.25.3 (audit C7) — section titles were hardcoded in French in AboutScreen.kt. -->
-    <string name="about_section_privacy">Privacidad</string>
-    <string name="about_section_features">Funciones</string>
-    <string name="about_section_author">Autor</string>
-    <string name="about_section_help">Ayuda rápida</string>
-    <string name="about_section_links">Enlaces</string>
-    <string name="about_check_updates">Ver las actualizaciones</string>
-    <string name="about_privacy_headline">100% privada — cero rastreo</string>
-    <string name="about_author_role">Desarrollador</string>
-    <!-- v1.25.3 (audit H20) — permission rationales were hardcoded in English. The permission
-         names themselves stay untranslated: they are the Android identifiers, verbatim. -->
-    <string name="about_perm_sms">Necesario para cualquier app de SMS.</string>
-    <string name="about_perm_mms">Recibir los MMS entrantes.</string>
-    <string name="about_perm_contacts">Mostrar los nombres de los contactos en lugar de los números a secas.</string>
-    <string name="about_perm_phone_state">Compatibilidad multi-SIM (enviar desde la SIM correcta).</string>
-    <string name="about_perm_notifications">Mostrar las notificaciones de mensajes nuevos.</string>
-    <string name="about_perm_biometric">Desbloqueo biométrico opcional.</string>
-    <string name="about_perm_internet">Transporte de los MMS por el MMSC de su operador. Sin analítica.</string>
-    <string name="about_perm_record_audio">Grabar mensajes de audio adjuntos a los MMS salientes.</string>
-    <string name="about_perm_foreground_service">Migración o copia de seguridad de larga duración.</string>
-    <string name="about_permissions_title">Permisos que usamos</string>
-    <string name="about_security_title">Seguridad y límites</string>
-    <string name="about_security_body">Los SMS y los MMS viajan sin cifrar por la red del operador: es un límite del protocolo, no una elección. SMS Tech solo protege lo que está guardado en su dispositivo. Para mensajería cifrada de extremo a extremo, use Signal o Matrix.</string>
-    <string name="about_credits_body">Creada por %1$s. Interfaz inspirada en los principios de movimiento de Material 3. Desarrollada con Kotlin, Compose, Hilt, Room y SQLCipher.</string>
-    <string name="about_legal_body">© %1$s %2$s. Publicada bajo la licencia Apache 2.0.</string>
-    <string name="about_source_code">Código fuente</string>
-    <string name="about_report_issue">Informar de un problema</string>
-    <string name="about_website">Sitio web</string>
-    <string name="about_license">Licencia</string>
-    <string name="about_privacy">Política de privacidad</string>
-
-    <!-- Notification channels -->
-    <string name="channel_incoming_label">Mensajes entrantes</string>
-    <string name="channel_incoming_desc">Notificaciones de los SMS y MMS que recibe.</string>
-    <!-- v1.8.0 — silent channel for NotificationStyle.SILENT -->
-    <string name="channel_incoming_silent_label">Mensajes entrantes (silenciosos)</string>
-    <string name="channel_incoming_silent_desc">Notificaciones cuando SMS Tech está en modo «Silenciosas». Sin aparición en primer plano, sin sonido.</string>
-    <string name="channel_sent_label">Mensajes enviados</string>
-    <string name="channel_sent_desc">Estado de los mensajes que ha enviado.</string>
-    <string name="channel_failed_label">Mensajes fallidos</string>
-    <string name="channel_failed_desc">Errores y sugerencias para reintentar.</string>
-    <string name="channel_keep_alive_label">Modo resistente</string>
-    <string name="channel_keep_alive_desc">Mantiene SMS Tech en marcha en los teléfonos cuyo fabricante cierra las apps en segundo plano.</string>
-    <string name="channel_safety_call_warning_label">Aviso de Safety call</string>
-    <string name="channel_safety_call_warning_desc">Recordatorio antes del SMS automático a sus contactos de emergencia.</string>
-    <string name="channel_safety_call_receipt_label">Alerta de Safety call terminada</string>
-    <string name="channel_safety_call_receipt_desc">Registro silencioso de una alerta ya enviada. No emite ningún sonido.</string>
-
-    <!-- Notification actions -->
-    <string name="notif_reply_label">Responder</string>
-    <string name="notif_mark_read_label">Marcar como leído</string>
-    <string name="notif_preview_hidden_content">Mensaje nuevo</string>
-
-    <!-- PDF export -->
-    <string name="pdf_header_subtitle">Exportado el %1$s • %2$d participante(s)</string>
-    <string name="pdf_footer">Página %1$d — SMS Tech</string>
-
-    <!-- Errors -->
-    <string name="error_not_default_app">SMS Tech todavía no es la app de SMS predeterminada.</string>
-    <string name="error_send_failed">No se ha podido enviar el mensaje.</string>
-    <!-- v1.28.3 — un SMS sortant qui echoue le disait a personne. -->
-    <string name="send_failure_notification_title">Mensaje no enviado</string>
-    <string name="send_failure_notification_body">No se ha podido enviar su mensaje a %1$s.</string>
-    <string name="send_failure_notification_unknown_recipient">un contacto</string>
-    <!-- v1.28.3 — la sauvegarde ne transporte aucune piece jointe ; on le dit au lieu de le taire. -->
-    <string name="backup_restore_without_attachments">%1$d de ellos han vuelto sin su archivo adjunto, que las copias de seguridad no transportan.</string>
-    <!-- v1.28.5 — vault conversations restored on a device with no second factor. -->
-    <string name="backup_restore_vault_without_factor">Las conversaciones de la caja fuerte se han restaurado, pero aquí no hay ningún código de caja fuerte ni biometría configurados: establezca uno en los Ajustes para protegerlas.</string>
-    <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
-    <string name="settings_lock_downgrade_vault_refused">Ahora mismo la biometría es el único segundo factor que protege su caja fuerte. Establezca antes un código de la caja fuerte y entonces podrá cambiar esto.</string>
-    <!-- v1.28.5 — the vault state could not be read: the guard refuses rather than assume. -->
-    <string name="settings_lock_downgrade_vault_unverifiable">No se ha podido comprobar ahora mismo el estado de la caja fuerte. El bloqueo se mantiene; vuelva a intentarlo en un momento.</string>
-    <string name="error_send_recipient_blocked">No enviado: usted ha bloqueado este número. Desbloquéelo para volver a enviar.</string>
-    <string name="error_retry_group_echo">Esta es la copia que se conserva en el grupo. Vuelva a enviarla desde la conversación de cada miembro.</string>
-    <string name="error_retry_mms_unsupported">Este MMS no se puede reenviar desde aquí. Envíelo de nuevo desde la ventana de escritura.</string>
-    <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
-    <string name="send_partial">Enviado a %1$d destinatario(s); no se ha podido alcanzar a %2$d.</string>
-    <string name="send_partial_blocked">Enviado a %1$d destinatario(s); %2$d omitidos porque usted los ha bloqueado.</string>
-
-    <!-- v1.14.8 ARCH-M2 — thread snackbars (i18n) — extracted from hardcoded VM strings. -->
-    <string name="snack_thread_max_duration">Límite alcanzado: %1$d s</string>
-    <string name="snack_thread_attach_sent">Archivo adjunto enviado</string>
-    <string name="snack_thread_attach_copy_failed">No se puede leer el archivo adjunto</string>
-    <string name="snack_thread_attach_cap_reached">Límite del MMS alcanzado (280 KB). Quite un archivo adjunto o acorte el texto.</string>
-    <string name="snack_thread_voice_sent">Mensaje de voz enviado</string>
-    <string name="snack_thread_numbers_blocked">Número(s) bloqueados</string>
-    <!-- v1.25.3 (audit M21) — the trash icon used to unblock instantly on a single tap. -->
-    <string name="blocked_unblock_confirm_title">¿Desbloquear este número?</string>
-    <string name="blocked_unblock_confirm_body">%1$s podrá volver a escribirle. Puede bloquearlo de nuevo en cualquier momento.</string>
-    <!-- v1.25.3 (audit H15/H16) — blocking used to report success even when it had failed. -->
-    <string name="snack_block_failed">El bloqueo ha fallado — el número no se ha bloqueado. La conversación se ha conservado.</string>
-    <!-- v1.25.3 (audit SEC3) — a partial block used to be reported as a full success, and the
-         conversation was deleted even though one participant could still reach the user. -->
-    <string name="snack_block_partial">Solo se han podido bloquear %1$d de %2$d números. La conversación se ha conservado para que no la pierda.</string>
-
-    <!-- v1.15.2 — Common a11y + UX strings for passphrase fields. -->
-    <string name="action_show_password">Mostrar la frase de contraseña</string>
-    <string name="action_hide_password">Ocultar la frase de contraseña</string>
-    <string name="backup_passphrase_min_length">Mínimo %1$d caracteres</string>
-
-    <!-- v1.15.2 — Backup restore (encrypted .smsbk). -->
-    <string name="backup_restore_explainer">Elija un archivo .smsbk y luego introduzca su frase de contraseña. Las conversaciones con los mismos destinatarios se fusionan con las actuales; los mensajes existentes se conservan (sin duplicados).</string>
-    <string name="backup_restore_pick_file">Elegir un archivo .smsbk</string>
-    <string name="backup_restore_passphrase_title">Frase de contraseña de la restauración</string>
-    <string name="backup_restore_passphrase_field">Frase de contraseña</string>
-    <string name="backup_restore_action">Restaurar</string>
-    <string name="backup_restore_in_progress">Restaurando…</string>
-    <string name="backup_restore_success">%1$d conversaciones (%2$d nuevas), %3$d mensajes importados (%4$d ya presentes)</string>
-    <string name="backup_restore_failed_wrong_pass">Frase de contraseña incorrecta o archivo dañado</string>
-    <string name="backup_restore_failed_format">No es un archivo de copia de seguridad de SMS Tech válido</string>
-    <string name="backup_restore_failed_storage">No se ha podido leer el archivo</string>
-
-    <!-- v1.15.1 — Scheduled messages screen + Thread schedule flow. -->
-    <string name="settings_section_scheduled">Mensajes programados</string>
-    <string name="scheduled_title">Mensajes programados</string>
-    <string name="scheduled_empty">No hay mensajes programados</string>
-    <!-- v1.15.1 — Inline how-to shown alongside the empty state, so the user discovers
-         the entry point even before reading AboutScreen. -->
-    <string name="scheduled_empty_explainer">Para programar un SMS: abra una conversación, escriba su mensaje y luego ⋮ → «Programar…» → elija fecha y hora. El SMS se enviará automáticamente en ese momento, aunque la app esté cerrada.</string>
-    <string name="scheduled_to">Para: %1$s</string>
-    <string name="scheduled_when">Programado para: %1$s</string>
-    <string name="scheduled_cancel_confirm_title">¿Cancelar este mensaje programado?</string>
-    <string name="scheduled_cancel_confirm_body">No se enviará. Esta acción no se puede deshacer.</string>
-    <string name="scheduled_cancel_confirm_action">Cancelar el envío</string>
-    <!-- v1.25.3 (audit H6) — failed sends were dropped from the list entirely. -->
-    <string name="scheduled_section_pending">Esperando a ser enviados</string>
-    <string name="scheduled_section_failed">Fallidos</string>
-    <string name="scheduled_failed_explainer">El envío ha fallado tras varios intentos. Vuelva a intentarlo, o quítelo de esta lista.</string>
-    <string name="scheduled_failed_when">Estaba previsto para: %1$s</string>
-    <string name="scheduled_delete_confirm_title">¿Quitar este mensaje?</string>
-    <string name="scheduled_delete_confirm_body">Se quitará de esta lista y no se enviará. Esta acción no se puede deshacer.</string>
-    <string name="scheduled_retried">Enviando de nuevo…</string>
-    <!-- v1.28.3 (F20) — un envoi revendiqué puis abandonné : issue réellement inconnue. -->
-    <string name="scheduled_section_failed_or_interrupted">Fallidos o interrumpidos</string>
-    <string name="scheduled_interrupted_explainer">Un mensaje interrumpido puede haberse enviado o no — no hay forma de saberlo. Enviarlo de nuevo podría entregarlo dos veces.</string>
-    <string name="scheduled_interrupted_when">Envío interrumpido, estaba previsto para: %1$s</string>
-    <string name="scheduled_cancel_too_late">Demasiado tarde para cancelar: este mensaje ya se está enviando.</string>
-    <string name="settings_scheduled_messages">Mensajes programados</string>
-    <string name="settings_scheduled_messages_desc">Vea y gestione los SMS programados</string>
-    <string name="thread_schedule_action">Programar…</string>
-    <string name="thread_schedule_date_title">Elija una fecha</string>
-    <string name="thread_schedule_time_title">Elija una hora</string>
-    <string name="thread_schedule_invalid_past">La fecha elegida está en el pasado</string>
-    <string name="thread_schedule_empty_body">Escriba un mensaje antes de programarlo</string>
-    <string name="thread_schedule_success">Mensaje programado</string>
-    <string name="thread_schedule_failed">No se ha podido programar el mensaje</string>
-
-    <!-- v1.14.9 audit I18N-M3 — AboutScreen strings extracted from hardcoded FR to support EN locale. -->
-
-    <!-- Privacy badges (4) -->
-    <string name="about_badge_no_ads">Sin publicidad</string>
-    <string name="about_badge_no_tracker">Sin rastreadores</string>
-    <string name="about_badge_no_collection">Sin recogida de datos</string>
-    <string name="about_badge_no_sharing">Cero compartición</string>
-
-    <!-- Features (15) -->
-    <string name="about_feat_sms_label">SMS y MMS</string>
-    <string name="about_feat_sms_desc">App de SMS predeterminada para Android 8 → 15+. Importación completa del historial, sin duplicados.</string>
-    <string name="about_feat_voice_label">Mensajes de voz</string>
-    <string name="about_feat_voice_desc">Pulsar y hablar, por MMS. Limitado a 60 s / 300 KB por compatibilidad con todos los operadores franceses.</string>
-    <string name="about_feat_vault_label">Caja fuerte cifrada</string>
-    <string name="about_feat_vault_desc">Conversaciones sensibles en una caja fuerte SQLCipher, con la clave protegida por el Keystore de Android.</string>
-    <string name="about_feat_panic_label">Código de pánico</string>
-    <string name="about_feat_panic_desc">Un segundo PIN abre la app en modo señuelo — la caja fuerte queda invisible e inaccesible.</string>
-    <string name="about_feat_emergency_label">Modo emergencia</string>
-    <string name="about_feat_emergency_desc">Mantenga pulsado el botón 3 s en la página de Emergencia → SMS de alerta con el prefijo ⚠️ a sus contactos de Safety call, con GPS opcional. Acceso rápido a los números de emergencia del país en el que se encuentra y accesos directos en la notificación de la pantalla de bloqueo.</string>
-    <string name="about_feat_biometric_label">Biometría</string>
-    <string name="about_feat_biometric_desc">Huella o rostro para desbloquear, con un PIN de reserva obligatorio.</string>
-    <string name="about_feat_reply_label">Respuesta contextual</string>
-    <string name="about_feat_reply_desc">Mini-ficha sobre la ventana de escritura + globo de respuesta con cita en la conversación.</string>
-    <string name="about_feat_translate_label">Traducción delegada</string>
-    <string name="about_feat_translate_desc">Pulsación larga → «Traducir» delega en la app de traducción que tenga instalada (Google Traductor, DeepL, Aves Translate FLOSS…) mediante un Intent del sistema. No se incluye ningún modelo.</string>
-    <string name="about_feat_block_label">Bloqueo sincronizado</string>
-    <string name="about_feat_block_desc">Importación automática de los números bloqueados en Teléfono / Samsung Messages. Limpieza retroactiva.</string>
-    <string name="about_feat_search_label">Búsqueda FTS</string>
-    <string name="about_feat_search_desc">Búsqueda de texto completo SQLite FTS4 en los textos, los números y los nombres de los contactos.</string>
-    <string name="about_feat_pdf_label">Exportación a PDF</string>
-    <string name="about_feat_pdf_desc">Exporte una conversación a PDF (fecha, remitente, texto) para archivo o prueba.</string>
-    <string name="about_feat_backup_label">Copia de seguridad cifrada</string>
-    <string name="about_feat_backup_desc">Copia local AES-256-GCM con una frase de contraseña distinta del PIN.</string>
-    <string name="about_feat_themes_label">Temas</string>
-    <string name="about_feat_themes_desc">Claro, oscuro, AMOLED, Dark Tech (azul pizarra + acento azul). Esquinas redondeadas personalizables.</string>
-    <string name="about_feat_ui_label">Interfaz fluida</string>
-    <string name="about_feat_ui_desc">Compose + recomposición aislada por globo. Ordenación de las conversaciones en el menú de tres puntos.</string>
-    <string name="about_feat_noads_label">Cero publicidad, cero rastreadores</string>
-    <string name="about_feat_noads_desc">Sin analítica. Única conexión de red: el MMSC del operador para el transporte de los MMS.</string>
-
-    <!-- Help recipes (7 titles + steps) -->
-    <string name="about_help_default_title">Establecerla como app de SMS predeterminada</string>
-    <string name="about_help_default_step1">Botón azul «Establecer como predeterminada» arriba de la lista de conversaciones</string>
-    <string name="about_help_default_step2">O Ajustes de Android → Apps predeterminadas → SMS → SMS Tech</string>
-    <string name="about_help_voice_title">Enviar un mensaje de voz</string>
-    <string name="about_help_voice_step1">Mantenga pulsado el micrófono a la derecha de la ventana de escritura</string>
-    <string name="about_help_voice_step2">Hable y luego suelte para enviar (deslice a la izquierda para cancelar)</string>
-    <string name="about_help_voice_step3">Límite de 60 s — más allá, la grabación se detiene sola</string>
-    <string name="about_help_vault_title">Mover una conversación a la caja fuerte</string>
-    <string name="about_help_vault_step1">Mantenga pulsada la conversación en la lista → «Caja fuerte»</string>
-    <string name="about_help_vault_step2">Desbloqueo: PIN, frase de contraseña o biometría según su ajuste</string>
-    <string name="about_help_vault_step3">Ajustes → Seguridad para configurar la caja fuerte</string>
-    <string name="about_help_block_title">Bloquear un número</string>
-    <string name="about_help_block_step1">En una conversación: menú ⋮ → Bloquear (= bloquea y elimina la conversación)</string>
-    <string name="about_help_block_step2">Mantenga pulsada una conversación en la lista → Bloquear (conserva el historial)</string>
-    <string name="about_help_block_step3">El número se añade a la lista de bloqueados del sistema, compartida con la app Teléfono</string>
-    <string name="about_help_translate_title">Traducir un mensaje recibido</string>
-    <string name="about_help_translate_step1">Mantenga pulsado el globo → «Traducir»</string>
-    <string name="about_help_translate_step2">Se abre una lista con todas las apps de traducción instaladas</string>
-    <string name="about_help_translate_step3">Elija Google Traductor, DeepL, Aves Translate (FLOSS) u otra</string>
-    <string name="about_help_translate_step4">Si no tiene ninguna, un mensaje le invita a instalar una</string>
-    <string name="about_help_emergency_title">Usar el modo emergencia</string>
-    <string name="about_help_emergency_step1">Ajustes → Modo emergencia: actívelo y añada al menos un contacto de Safety call</string>
-    <string name="about_help_emergency_step2">Página de Emergencia: llamadas directas a los números de emergencia de su país; botón rojo mantenido 3 s → SMS a sus seres queridos</string>
-    <string name="about_help_emergency_step3">Notificación en la pantalla de bloqueo (opcional): accesos directos al 112 y a la policía sin desbloquear</string>
-    <string name="about_help_emergency_step4">«Estoy bien» en la lista de conversaciones cancela la alerta en caso de activación accidental</string>
-    <string name="about_help_update_title">Buscar una actualización</string>
-    <string name="about_help_update_step1">Botón «Ver las actualizaciones» arriba de esta página</string>
-    <string name="about_help_update_step2">Abre la página de GitHub Releases de SMS Tech</string>
-    <string name="about_help_update_step3">La app nunca intenta actualizarse sola sin su consentimiento</string>
-
-    <!-- v1.14.8 R1/R2 — incoming MMS failure notification (size cap or MMSC error). -->
-    <string name="mms_failure_notification_title">MMS no recibido</string>
-    <string name="mms_failure_notification_body_too_large">Mensaje de %1$s demasiado grande (%2$d KB). Toque para abrir los ajustes de MMS.</string>
-    <string name="mms_failure_notification_body_download_failed">No se ha podido descargar el MMS de %1$s. Compruebe la cobertura y reintente.</string>
-    <string name="mms_failure_notification_body_unknown_sender">un contacto desconocido</string>
-
-    <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->
-    <string name="thread_retry_watchdog_title">¿Reenviar este mensaje?</string>
-    <string name="thread_retry_watchdog_body">Puede que el intento anterior ya haya llegado al destinatario. Reenviarlo podría crear un duplicado.</string>
-    <string name="thread_retry_watchdog_confirm">Reenviar de todos modos</string>
-    <string name="thread_retry_watchdog_cancel">Cancelar</string>
-
-    <!-- v1.14.8 R4 — floating chip shown when new messages arrive while scrolled up. -->
-    <plurals name="thread_unseen_messages">
-        <item quantity="one">↓ %d mensaje nuevo</item>
-        <item quantity="many">↓ %d mensajes nuevos</item>
-        <item quantity="other">↓ %d mensajes nuevos</item>
-    </plurals>
-
-    <!-- v1.13.0 — plurals for multi-selection counts -->
-    <plurals name="conversations_selection_count">
-        <item quantity="one">%d seleccionada</item>
-        <item quantity="many">%d seleccionadas</item>
-        <item quantity="other">%d seleccionadas</item>
-    </plurals>
-    <plurals name="vault_bulk_move_in_done">
-        <item quantity="one">%d conversación movida a la caja fuerte</item>
-        <item quantity="many">%d conversaciones movidas a la caja fuerte</item>
-        <item quantity="other">%d conversaciones movidas a la caja fuerte</item>
-    </plurals>
-    <plurals name="vault_bulk_move_out_done">
-        <item quantity="one">%d conversación sacada de la caja fuerte</item>
-        <item quantity="many">%d conversaciones sacadas de la caja fuerte</item>
-        <item quantity="other">%d conversaciones sacadas de la caja fuerte</item>
-    </plurals>
-    <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
-    <string name="thread_load_older">Cargar los mensajes más antiguos</string>
-    <string name="thread_load_older_remaining">Cargar los mensajes más antiguos (%1$d)</string>
-    <!-- v1.24.0 : ecran de recuperation quand la base ne peut pas etre ouverte -->
-    <string name="db_recovery_title">SMS Tech no puede abrir su base de datos</string>
-    <string name="db_recovery_body">Sus mensajes siguen en este dispositivo — Android guarda su propia copia y SMS Tech no ha eliminado nada. Ahora mismo solo es ilegible la base de datos cifrada propia de SMS Tech.</string>
-    <string name="db_recovery_hint">Esto suele ocurrir después de cambiar el bloqueo de pantalla o de restaurar el dispositivo, lo que invalida la clave que protege la base de datos. Vale la pena probar antes a reiniciar el teléfono. Si esta pantalla sigue apareciendo, reinstalar SMS Tech reconstruirá su base de datos a partir de los mensajes que Android ya conserva.</string>
-    <string name="action_add">Añadir</string>
-    <string name="action_discard">Descartar</string>
-    <string name="safety_call_saved_enabled">Safety call activado</string>
-    <string name="safety_call_saved_disabled">Safety call desactivado</string>
-    <string name="safety_call_contact_added">Contacto añadido</string>
-    <string name="safety_call_contact_removed">Contacto quitado</string>
-    <string name="safety_call_setup_state_label">Estado:</string>
-    <string name="safety_call_setup_state_on">Activo</string>
-    <string name="safety_call_setup_state_off">Desactivado</string>
-    <string name="safety_call_setup_state_unsaved">Cambios sin guardar — toque Guardar para aplicarlos.</string>
-    <string name="safety_call_setup_disabled_now">Safety call desactivado de inmediato.</string>
-    <string name="safety_call_setup_unsaved_title">Cambios sin guardar</string>
-    <string name="safety_call_setup_unsaved_body">Añadir un contacto no basta: hay que guardarlo para que se conserve. Si sale ahora, se perdería.</string>
-    <string name="emergency_location_grant">Permitir la ubicación</string>
-    <string name="settings_panic_code_desc">Un segundo código que abre la app en modo señuelo: caja fuerte y modo emergencia ocultos.</string>
-    <string name="settings_panic_code_set">Configurado. Toque para quitarlo.</string>
-    <string name="settings_panic_code_clear_title">¿Quitar el código de pánico?</string>
-    <string name="settings_panic_code_clear_body">El modo señuelo dejará de ser accesible. Su PIN principal y sus datos no cambian.</string>
-    <string name="settings_panic_code_clear_action">Quitar</string>
-    <string name="settings_panic_code_saved">Código de pánico guardado</string>
-    <string name="settings_panic_code_removed">Código de pánico quitado</string>
-    <string name="settings_panic_code_same_as_pin">Este código es el mismo que su PIN principal. Elija otro, o la app se abriría siempre en modo señuelo.</string>
-    <string name="settings_panic_code_no_pin">Configure antes un bloqueo de la app.</string>
-    <string name="settings_pin_same_as_panic_code">Este PIN es el mismo que su código de pánico. Elija otro, o la app se abriría siempre en modo señuelo y usted ya no podría llegar a su propia sesión.</string>
-    <string name="lock_wrong_code">Código incorrecto</string>
-
-    <!-- ====================================================================================
-         v1.28.12 — THE TEXT THAT IS ACTUALLY SENT.
-
-         These are not screen labels. They are the SMS that leave the phone when someone holds
-         the emergency button for three seconds, or when Safety call decides nobody has touched
-         the phone for long enough. Until now they were hardcoded in French and went out in
-         French to everyone, English users included.
-
-         Rules that are not style, and that hold in EVERY language:
-          - keep them short. 160 characters in GSM-7, 70 in UCS-2, and the Maps URL counts
-            against that budget;
-          - no em dash (U+2014). It switches the whole message to UCS-2, which halves the
-            segment size and risks losing the second part in weak coverage — precisely the
-            situation these messages exist for. A plain ASCII hyphen is enough;
-          - %1$s in the emergency bodies is the location, or an explicit mention when it is not
-            available, so the recipient knows the absence is deliberate and not a bug.
-         ==================================================================================== -->
-    <string name="safety_sms_emergency_need_help">⚠️ EMERGENCIA - necesito ayuda. Mi ubicación: %1$s</string>
-    <string name="safety_sms_emergency_danger">⚠️ PELIGRO - situación crítica, contáctame o ven. Ubicación: %1$s</string>
-    <!-- No ⚠️ on this one, deliberately: DISCREET exists to signal trouble without alarming, and
-         without giving the situation away to someone glancing at the screen. -->
-    <string name="safety_sms_emergency_discreet">¿Puedes llamarme? Necesito ayuda. Ubicación: %1$s</string>
-    <string name="safety_sms_location_unavailable">(ubicación no disponible)</string>
-
-    <string name="safety_sms_check_in">Hola. No he usado el teléfono desde hace %1$s. ¿Puedes llamarme o pasarte para ver que todo va bien? Gracias.</string>
-    <string name="safety_sms_urgent">Si lees este SMS, es que no he podido usar el teléfono desde hace %1$s. Para saber que todo va bien, llámame por favor.</string>
-    <string name="safety_sms_follow_up">Mensaje automático: sin actividad en mi teléfono desde hace %1$s. ¿Puedes llamarme para comprobar que todo va bien? Gracias.</string>
-
-    <!-- Follow-ups. Each one names the app and stands on its own: the first message may never
-         have arrived, and an unsigned SMS in the middle of the night reads as phishing and gets
-         ignored. The last one says that it is the last, so that nobody waits for a message that
-         will never come instead of acting.
-
-         Lint flags "%1$d minutes" as a plural candidate here, and these are deliberately NOT
-         plurals: the value is the follow-up interval times the index, so 15, 30 or 45 — never 1.
-         Making them plurals would ask every translator to write a singular form that can never
-         appear on screen. -->
-    <string name="safety_sms_relance_first">Alerta automática de SMS Tech: sigue sin haber actividad en mi teléfono, %1$d minutos después. Intenta localizarme, por favor.</string>
-    <string name="safety_sms_relance_middle">Alerta automática de SMS Tech: %1$d minutos sin actividad por mi parte. Si no logras localizarme, avisa a alguien cercano a mí.</string>
-    <string name="safety_sms_relance_last">Última alerta automática de SMS Tech: %1$d minutos sin actividad. No seguirá ningún otro mensaje. Comprueba por favor que estoy bien.</string>
-
-    <string name="safety_duration_less_than_hour">menos de una hora</string>
-    <plurals name="safety_duration_hours">
-        <item quantity="one">%1$d hora</item>
-        <item quantity="many">%1$d horas</item>
-        <item quantity="other">%1$d horas</item>
-    </plurals>
-    <plurals name="safety_duration_days">
-        <item quantity="one">%1$d día</item>
-        <item quantity="many">%1$d días</item>
-        <item quantity="other">%1$d días</item>
-    </plurals>
-    <string name="duration_days_hours">%1$d d %2$d h</string>
-</resources>
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="es">
+
+    <!-- Core -->
+    <string name="app_name">SMS Tech</string>
+
+    <!-- v1.3.7 — First-launch splash screen (animated logo + tagline). -->
+    <string name="splash_tagline">La app que no lee sus mensajes y respeta su privacidad.</string>
+    <string name="splash_logo_content_description">Logotipo de SMS Tech</string>
+    <string name="splash_skip_hint">Toque la pantalla para continuar</string>
+    <string name="splash_skip_label">Omitir la pantalla de inicio</string>
+
+    <!-- v1.3.10 — Foreground KeepAliveService (opt-in mode for aggressive OEM ROMs). -->
+    <string name="keep_alive_notification_title">SMS Tech está activa</string>
+    <string name="keep_alive_notification_text">Necesaria para recibir SMS / MMS de forma fiable en su teléfono.</string>
+    <string name="settings_keep_alive_title">Modo resistente (Xiaomi / Huawei…)</string>
+    <string name="settings_keep_alive_desc">Mantiene SMS Tech activa en segundo plano mediante una notificación permanente en la barra de estado (obligación de Android para cualquier servicio en primer plano: no se puede descartar mientras el interruptor esté activado). Útil en las ROM agresivas (Xiaomi MIUI/HyperOS, Huawei EMUI/HarmonyOS, Honor MagicOS, Oppo/Realme/OnePlus ColorOS, Vivo/iQOO FunTouch, Meizu Flyme, ASUS Zen UI), que de lo contrario cierran las apps de SMS de terceros y bloquean los MMS y las notificaciones. Inútil en Pixel, Samsung Galaxy, Sony, Fairphone, Motorola, Nokia, Nothing Phone: en estos, déjelo desactivado.</string>
+
+
+    <!-- Common -->
+    <string name="action_send">Enviar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_confirm">Confirmar</string>
+    <string name="action_save">Guardar</string>
+    <string name="action_delete">Eliminar</string>
+    <string name="action_archive">Archivar</string>
+    <string name="action_unarchive">Desarchivar</string>
+    <string name="action_pin">Fijar arriba</string>
+    <string name="action_unpin">Dejar de fijar</string>
+    <string name="action_mute">Silenciar</string>
+    <string name="action_unmute">Reactivar el sonido</string>
+    <string name="action_block">Bloquear</string>
+    <string name="action_unblock">Desbloquear</string>
+    <string name="action_more">Más</string>
+    <string name="action_message_actions">Acciones del mensaje</string>
+    <string name="action_reply">Responder</string>
+    <string name="action_translate">Traducir</string>
+    <!-- v1.3.11 (F3) — `action_copy` / `action_forward` already defined below (line 91-92);
+         only the toast string is new. -->
+    <string name="toast_copied">Mensaje copiado</string>
+    <!-- v1.3.11 (F4) — phone number actions dialog -->
+    <string name="phone_action_subtitle">Elija una acción para este número de teléfono.</string>
+    <string name="phone_action_call">Llamar</string>
+    <string name="phone_action_add_contact">Añadir a los contactos</string>
+    <string name="phone_action_no_dialer">No hay ninguna app de teléfono en este dispositivo.</string>
+    <string name="phone_action_no_contacts">No hay ninguna app de Contactos en este dispositivo.</string>
+    <!-- v1.3.11 (F5) — forward sheet -->
+    <string name="forward_sheet_title">Reenviar a…</string>
+    <string name="forward_search_placeholder">Busque una conversación</string>
+    <string name="forward_new_contact">Nuevo destinatario</string>
+    <string name="forward_existing_conversation">Conversaciones existentes</string>
+    <string name="forward_no_conversation">No hay otra conversación a la que reenviar.</string>
+    <string name="thread_reply_deleted">Mensaje original eliminado</string>
+    <string name="action_cancel_reply">Cancelar la respuesta</string>
+    <!-- v1.7.1 — translation feature delegated to the system app via
+         ACTION_PROCESS_TEXT (replaces in-app ML Kit removed in v1.7.0).
+         Shown if no app on the device declares the intent. -->
+    <string name="snack_no_translate_app">No hay ninguna app de traducción instalada</string>
+    <string name="chat_you">Yo</string>
+    <string name="attach_photo">Foto</string>
+    <string name="attach_video">Vídeo</string>
+    <string name="attach_file">Archivo</string>
+    <string name="attach_contact">Contacto</string>
+    <string name="attach_sheet_title">Añadir a su mensaje</string>
+    <string name="attach_sheet_subtitle">Se envía como MMS</string>
+    <string name="voice_confirm_title">¿Enviar este mensaje de voz?</string>
+    <string name="voice_confirm_body">La grabación se enviará al destinatario como un MMS.</string>
+    <plurals name="thread_confirm_attachments_body">
+        <item quantity="one">%1$d archivo adjunto se enviará como un MMS.</item>
+        <item quantity="many">%1$d archivos adjuntos se enviarán en un único MMS.</item>
+        <item quantity="other">%1$d archivos adjuntos se enviarán en un único MMS.</item>
+    </plurals>
+    <string name="settings_app_lock">Bloqueo de la app</string>
+    <string name="lock_mode_off">Ninguno</string>
+    <string name="lock_mode_pin">PIN</string>
+    <string name="pin_setup_title">Establezca un PIN</string>
+    <string name="pin_setup_field">PIN (de 4 a 12 dígitos)</string>
+    <string name="pin_setup_confirm">Confirme el PIN</string>
+    <string name="pin_setup_mismatch">Los PIN no coinciden</string>
+    <string name="pin_setup_too_short">Mínimo 4 dígitos</string>
+    <string name="pin_setup_digits_only">Solo dígitos</string>
+    <string name="lock_mode_dialog_title">Elija el modo de bloqueo</string>
+    <string name="conversation_actions_title">Acciones de la conversación</string>
+    <!-- v1.25.3 — blocking no longer deletes anything. The dialog used to promise blocking only
+         while the action ALSO wiped the conversation from Room and from the system SMS database;
+         the deletion has been removed rather than merely documented. -->
+    <string name="conversation_block_confirm_title">¿Bloquear esta conversación?</string>
+    <string name="conversation_block_confirm_body">Se bloquearán todos los números de esta conversación. La conversación permanece en su lista, marcada como bloqueada, y no se elimina nada. Puede desbloquearla en cualquier momento.</string>
+    <string name="conversations_section_blocked">Bloqueadas</string>
+    <string name="conversations_section_messages">Mensajes</string>
+    <string name="conversation_blocked_label">Bloqueada</string>
+    <string name="settings_purge_blocked">Eliminar las conversaciones bloqueadas</string>
+    <string name="settings_purge_blocked_desc">Elimina definitivamente toda conversación cuyos participantes estén todos en la lista de bloqueados del sistema.</string>
+    <string name="settings_purge_blocked_result">%1$d conversación(es) eliminadas</string>
+    <string name="settings_purge_blocked_none">No hay ninguna conversación bloqueada que eliminar</string>
+    <string name="lock_mode_biometric">Biometría + PIN de reserva</string>
+    <string name="lock_biometric_title">Desbloquear SMS Tech</string>
+    <string name="lock_biometric_subtitle">Use su huella o su rostro</string>
+    <string name="lock_use_pin">Usar el PIN</string>
+    <string name="lock_biometric_unavailable">La biometría no está disponible en este dispositivo: establezca antes un PIN</string>
+    <string name="sort_section">Ordenar las conversaciones</string>
+    <string name="sort_date">Las más recientes primero</string>
+    <string name="sort_unread">No leídas primero</string>
+    <string name="action_back">Atrás</string>
+    <string name="action_copy">Copiar</string>
+    <string name="action_forward">Reenviar</string>
+    <string name="action_select_text">Seleccionar texto</string>
+    <string name="action_retry">Reintentar</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_continue">Continuar</string>
+    <string name="action_export_pdf">Exportar a PDF</string>
+    <string name="action_attach">Adjuntar</string>
+    <string name="action_schedule">Programar</string>
+    <string name="action_new_message">Mensaje nuevo</string>
+    <!-- v1.28.3 — named groups -->
+    <string name="action_new_group">Grupo nuevo</string>
+    <string name="action_rename_group">Cambiar el nombre del grupo…</string>
+    <string name="rename_group_title">Nombre del grupo</string>
+    <string name="rename_group_placeholder">Familia, senderismo…</string>
+    <string name="rename_group_hint">Este nombre se queda en este teléfono. Los miembros siguen viendo su número.</string>
+    <string name="group_renamed">Nombre del grupo cambiado</string>
+    <string name="group_avatar_cd">Grupo</string>
+    <string name="action_call">Llamar</string>
+    <string name="conversations_search_hint">Busque un número, un contacto, un mensaje…</string>
+    <string name="conversations_no_match">Ninguna conversación coincide.</string>
+    <string name="thread_create_contact">Crear un contacto</string>
+    <string name="thread_update_contact">Actualizar un contacto</string>
+    <string name="action_create_contact">Crear contacto</string>
+    <string name="action_details">Detalles de la conversación</string>
+
+    <string name="thread_details_messages">%1$d mensajes</string>
+    <string name="thread_details_first">Primer mensaje: %1$s</string>
+    <string name="thread_details_last">Último mensaje: %1$s</string>
+    <string name="thread_details_participants">Participantes: %1$d</string>
+    <string name="thread_details_number">Número: %1$s</string>
+
+    <!-- Tabs / sections -->
+    <string name="tab_archived">Archivadas</string>
+    <string name="tab_vault">Caja fuerte</string>
+
+
+    <!-- Conversations list -->
+    <string name="conversations_empty_title">Todavía no hay conversaciones</string>
+    <string name="conversations_empty_body">En cuanto reciba o envíe un mensaje, aparecerá aquí.</string>
+    <string name="conversations_archived_empty">No hay conversaciones archivadas.</string>
+    <string name="conversations_importing_title">Importando sus mensajes</string>
+    <string name="conversations_importing_body">Leyendo los SMS que ya tiene: esto ocurre una sola vez.</string>
+    <string name="conversations_importing_count">%1$d mensajes importados…</string>
+    <string name="conversations_delete_confirm_title">¿Eliminar esta conversación?</string>
+    <string name="conversations_delete_confirm_body">Todos los mensajes de esta conversación se borrarán definitivamente de este dispositivo. Las demás conversaciones no se ven afectadas.</string>
+    <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
+    <string name="conversations_delete_vault_kept_system">Esta conversación de la caja fuerte no se ha eliminado: no se ha podido quitar su copia del almacén de mensajes del teléfono, y habría vuelto fuera de la caja fuerte en la siguiente sincronización. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo. Si sigue fallando, saque antes la conversación de la caja fuerte: puede que entonces reaparezca en la lista principal.</string>
+    <string name="conversations_delete_kept_local">La conversación no se ha eliminado: una parte no ha podido quitarse de este teléfono. Vuelva a intentarlo.</string>
+    <string name="conversations_draft_prefix">Borrador: %1$s</string>
+    <string name="conversations_preview_attachment">Archivo adjunto</string>
+
+    <!-- Thread -->
+    <string name="thread_compose_placeholder">Escriba un mensaje…</string>
+    <string name="thread_segments_indicator">%1$d / %2$d • %3$d seg.</string>
+    <string name="thread_status_pending">Enviando…</string>
+    <string name="thread_status_sent">Enviado</string>
+    <string name="thread_status_delivered">Entregado</string>
+    <string name="thread_status_failed">Fallido — toque para reintentar</string>
+    <string name="date_today">Hoy</string>
+    <string name="date_yesterday">Ayer</string>
+    <string name="thread_confirm_delete_message">¿Eliminar este mensaje? Esta acción no se puede deshacer.</string>
+    <string name="thread_export_success">PDF guardado (%1$d páginas)</string>
+
+    <!-- Voice MMS composer -->
+    <string name="voice_action_record">Grabar un mensaje de voz</string>
+    <string name="voice_action_stop">Detener la grabación</string>
+    <string name="voice_action_cancel">Cancelar la grabación</string>
+    <string name="voice_action_discard">Descartar la grabación</string>
+    <string name="voice_action_send">Enviar el mensaje de voz</string>
+    <string name="voice_action_play">Reproducir</string>
+    <string name="voice_action_pause">Pausa</string>
+    <string name="voice_permission_denied">Permiso de micrófono denegado. Abra los Ajustes para concederlo.</string>
+
+    <!-- Compose -->
+    <string name="compose_to_label">Para:</string>
+    <string name="compose_search_contact">Busque un contacto o un número de teléfono</string>
+    <string name="compose_use_this_number">Usar este número</string>
+    <string name="compose_add_to_group">Añadir al grupo</string>
+
+    <!-- Blocked numbers -->
+    <string name="blocked_title">Números bloqueados</string>
+    <string name="blocked_empty">Ningún número bloqueado.</string>
+    <string name="blocked_add">Añadir un número</string>
+
+    <!-- Vault -->
+    <string name="vault_title">Caja fuerte segura</string>
+    <string name="vault_empty">La caja fuerte está vacía.</string>
+    <string name="vault_move_in">Mover a la caja fuerte</string>
+    <string name="vault_move_out">Sacar de la caja fuerte</string>
+    <!-- v1.11.0 — feedback snackbar (Vault polish) -->
+    <string name="vault_move_in_done">Conversación movida a la caja fuerte</string>
+    <string name="vault_move_in_failed">No se ha podido mover esta conversación</string>
+    <string name="vault_move_out_done">Conversación sacada de la caja fuerte</string>
+    <string name="vault_move_out_failed">No se ha podido mover esta conversación</string>
+    <!-- v1.13.0 — multi-selection bulk move to/from vault -->
+    <string name="bulk_vault_move_in">Mover a la caja fuerte</string>
+    <string name="bulk_vault_move_out">Sacar de la caja fuerte</string>
+    <string name="selected">Seleccionada</string>
+    <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
+    <string name="bulk_select_multiple">Selección múltiple</string>
+    <!-- v1.14.0 — emergency call behavior + outcomes -->
+    <string name="emergency_call_permission_denied">Permiso de llamada denegado. Se recurre a la app de teléfono.</string>
+    <string name="emergency_call_os_error">No se ha podido iniciar la llamada.</string>
+    <!-- v1.14.0 — kill-switch "Je vais bien" (false-alarm reset) -->
+    <string name="emergency_i_am_ok_body">Falsa alarma. Estoy bien. No te preocupes, no hay nada que hacer.</string>
+    <string name="emergency_i_am_ok_chip_title">Emergencia activada hace poco</string>
+    <string name="emergency_i_am_ok_chip_action">Estoy bien</string>
+    <string name="emergency_i_am_ok_confirm_title">¿Enviar el mensaje «Estoy bien»?</string>
+    <string name="emergency_i_am_ok_confirm_body">Reinicia el tiempo de espera de la emergencia y envía, si lo desea, un SMS breve a sus contactos de Safety call para que sepan que fue una falsa alarma. Puede desactivar el SMS en los Ajustes.</string>
+    <string name="emergency_i_am_ok_done">Mensaje «Estoy bien» enviado.</string>
+    <string name="emergency_i_am_ok_reset_only">Tiempo de espera reiniciado. No se ha enviado ningún SMS.</string>
+    <string name="emergency_i_am_ok_send_failed">Tiempo de espera reiniciado, pero ningún contacto ha recibido el SMS. Vuelva a intentarlo o avíseles en persona.</string>
+    <string name="settings_send_i_am_ok_sms_title">Enviar el SMS «Estoy bien» al reiniciar</string>
+    <string name="settings_send_i_am_ok_sms_desc">Cuando toque «Estoy bien» después de una falsa alarma, envía además un SMS breve a sus contactos de Safety call indicando que fue una falsa alarma.</string>
+    <!-- v1.14.5 — strings emergency_dry_run_* removed (button "Test without sending" deleted). -->
+    <!-- v1.14.5 — Settings → Mode urgence : ToggleRow direct accès GPS opt-in -->
+    <string name="settings_emergency_include_location_title">Incluir el GPS en los SMS de emergencia</string>
+    <string name="settings_emergency_include_location_desc">Añade al texto del SMS de emergencia un enlace de Google Maps con su ubicación actual. Requiere el permiso de ubicación. Si lo rechaza, el SMS se envía sin coordenadas.</string>
+    <string name="settings_emergency_include_location_denied">Permiso de ubicación denegado. Inclusión del GPS desactivada.</string>
+    <!-- v1.14.7 — string emergency_topbar_warning_cd retirée (orpheline, prévue pour un indicateur visuel jamais branché). -->
+    <!-- v1.14.1 — full-page emergency redesign : 4 colored call tiles + disable + open-from-notif -->
+    <!-- v1.28.12 — one label per SERVICE, not per number. The same service is 17 in France,
+         110 in Germany, 091 in Spain, and the tile already shows the number itself. -->
+    <string name="emergency_call_eu_label">Emergencia europea</string>
+    <string name="emergency_call_national_label">Emergencia nacional</string>
+    <string name="emergency_call_police_label">Policía</string>
+    <string name="emergency_call_fire_label">Bomberos</string>
+    <string name="emergency_call_medical_label">Emergencia sanitaria</string>
+    <string name="emergency_section_call_title">Llamar directamente</string>
+    <string name="emergency_section_sms_title">Enviar un SMS de SOS</string>
+    <string name="emergency_section_other_title">Otras acciones</string>
+    <string name="emergency_disable_button">Desactivar el modo emergencia</string>
+    <string name="emergency_disable_confirm_title">¿Desactivar el modo emergencia?</string>
+    <string name="emergency_disable_confirm_body">El botón grande de EMERGENCIA y el acceso directo de la pantalla de bloqueo dejarán de funcionar hasta que los reactive en los Ajustes. Siempre podrá volver a esta página más tarde.</string>
+    <string name="emergency_disable_done">Modo emergencia desactivado.</string>
+    <string name="emergency_call_close_label">Llamar a un ser querido</string>
+    <string name="emergency_call_close_picker_title">¿A quién desea llamar?</string>
+    <!-- v1.13.0 — distinct vault PIN/pass (second-factor) -->
+    <string name="pin_entry_label">PIN o contraseña</string>
+    <string name="pin_error_invalid">PIN o contraseña incorrectos</string>
+    <string name="vault_pin_dialog_title">Segundo factor de la caja fuerte</string>
+    <string name="vault_pin_dialog_subtitle">Introduzca el PIN o la contraseña que protege la caja fuerte. Si está disponible, también puede usar la biometría.</string>
+    <string name="vault_pin_dialog_unlock">Desbloquear</string>
+    <string name="vault_use_biometric">Usar la biometría</string>
+    <string name="settings_vault_pin_title">PIN o contraseña propios para la caja fuerte</string>
+    <string name="settings_vault_pin_desc">Cuando está activado, abrir la caja fuerte pide un PIN o una contraseña propios (y, si lo desea, la biometría) aunque la app ya esté desbloqueada. La credencial se somete a hash por separado del PIN de la app.</string>
+    <string name="settings_vault_pin_set_title">Establecer el PIN de la caja fuerte</string>
+    <string name="settings_vault_pin_set_subtitle">Elija un PIN distinto del PIN de la app.</string>
+    <string name="settings_vault_pin_confirm_title">Confirme el PIN de la caja fuerte</string>
+    <string name="settings_vault_pin_change">Cambiar el PIN de la caja fuerte</string>
+    <string name="settings_vault_pin_mismatch">Los PIN no coinciden. Vuelva a intentarlo.</string>
+    <string name="settings_vault_pin_too_short">El PIN debe tener al menos 4 caracteres.</string>
+    <string name="settings_vault_pin_same_as_app">Elija un PIN distinto del PIN de la app.</string>
+    <string name="settings_vault_pin_saved">PIN de la caja fuerte guardado.</string>
+    <string name="settings_vault_pin_cleared">PIN de la caja fuerte eliminado.</string>
+    <!-- v1.25.3 (audit M24) — the confirm dialog reused the feature description as its body. -->
+    <!-- v1.27.10 (external review !38458) — removing the vault PIN now requires the vault PIN. -->
+    <string name="settings_vault_pin_clear_confirm_title">¿Eliminar el PIN de la caja fuerte?</string>
+    <string name="settings_vault_pin_clear_confirm_body">Introduzca el PIN de la caja fuerte para eliminarlo. La caja fuerte se abrirá entonces en cuanto la app esté desbloqueada. Sus conversaciones se conservan y siguen ocultas en la lista principal.</string>
+    <!-- v1.27.10 — vault PIN replacement now asks for the one in place. -->
+    <string name="settings_vault_pin_current_label">PIN actual de la caja fuerte</string>
+    <string name="settings_vault_pin_new_label">Nuevo PIN o nueva contraseña</string>
+    <!-- v1.27.10 — the way out when the vault PIN is lost. It destroys, on purpose: a way out
+         that asked for nothing more than the app PIN would be the very bypass we closed. -->
+    <string name="settings_vault_pin_forgot_title">¿Ha olvidado el PIN de la caja fuerte?</string>
+    <string name="settings_vault_pin_forgot_desc">Vacía la caja fuerte y elimina su PIN. La única forma de volver a entrar sin el PIN — y destruye lo que abre.</string>
+    <string name="settings_vault_pin_forgot_confirm_title">¿Vaciar la caja fuerte y eliminar su PIN?</string>
+    <string name="settings_vault_pin_forgot_confirm_body">Se elimina toda conversación de la caja fuerte, mensajes incluidos, de este teléfono y del almacén de mensajes del sistema. No se recupera nada: es el precio de volver a entrar sin el PIN. Las conversaciones que están fuera de la caja fuerte no se tocan. Esta acción no se puede deshacer.</string>
+    <string name="settings_vault_pin_forgot_confirm_action">Vaciar y eliminar</string>
+    <string name="settings_vault_pin_forgot_done">Caja fuerte vaciada: %1$d conversación(es) eliminadas. Su PIN se ha eliminado.</string>
+    <string name="settings_vault_pin_forgot_incomplete">Limpieza incompleta: %1$d conversación(es) eliminadas, quedan %2$d. El PIN de la caja fuerte NO se ha eliminado. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo.</string>
+    <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
+    <string name="settings_vault_pin_forgot_local_failure">%1$d conversación(es) eliminadas, pero %2$d no han podido quitarse de este teléfono. El PIN se mantiene: eliminarlo abriría una caja fuerte que sigue llena. Libere espacio y vuelva a intentarlo.</string>
+    <string name="settings_vault_pin_forgot_residue">Caja fuerte vaciada y PIN eliminado. Pero %2$d conversación(es) han dejado su copia en el almacén de mensajes del teléfono: siguen siendo legibles para otra app de mensajería. %1$d conversación(es) se han eliminado por completo.</string>
+    <string name="settings_vault_pin_force_title">¿Vaciarla de todos modos?</string>
+    <string name="settings_vault_pin_force_body">La copia de %1$d conversación(es) no ha podido quitarse del almacén de mensajes del teléfono, y volver a intentarlo dará el mismo resultado. SMS Tech puede vaciar la caja fuerte y eliminar el PIN igualmente: recupera el acceso, pero esas copias se quedan en el teléfono y siguen siendo legibles para otra app de mensajería. Esta acción no se puede deshacer.</string>
+    <string name="settings_vault_pin_force_action">Vaciar y eliminar el PIN</string>
+    <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
+    <string name="settings_lock_clear_confirm_title">¿Desactivar el bloqueo de la app?</string>
+    <string name="settings_lock_clear_confirm_body">Su PIN se eliminará y SMS Tech se abrirá sin pedir nada. El desbloqueo biométrico también se desactiva. Esta acción no se puede deshacer.</string>
+    <string name="settings_lock_clear_confirm_action">Desactivar</string>
+    <string name="action_disable">Desactivar</string>
+    <string name="vault_actions_title">Acciones de la caja fuerte</string>
+    <string name="vault_biometric_title">Desbloquear la caja fuerte</string>
+    <string name="vault_biometric_unavailable_title">Caja fuerte no disponible</string>
+    <string name="vault_biometric_unavailable_body">La biometría es el único segundo factor configurado para esta caja fuerte, y ahora mismo no está disponible. Establezca en los Ajustes un código propio de la caja fuerte para abrirla sin biometría.</string>
+    <string name="vault_biometric_subtitle">Confirme su identidad para abrir la carpeta privada.</string>
+    <string name="vault_biometric_pending">Esperando la huella…</string>
+    <!-- v1.11.0 — Sujet 5 apparence par contact -->
+    <string name="thread_overflow_appearance">Apariencia…</string>
+    <string name="appearance_dialog_title">Apariencia de la conversación</string>
+    <string name="appearance_section_bubble_color">Color del globo enviado</string>
+    <string name="appearance_section_avatar">Imagen del contacto</string>
+    <string name="appearance_pick_avatar">Elegir de la galería</string>
+    <string name="appearance_reset_avatar">Usar la imagen predeterminada</string>
+    <string name="appearance_saved">Apariencia actualizada</string>
+    <!-- v1.11.0 — Sujet 3 anti-smishing -->
+    <string name="settings_smishing_detection">Detección de estafas (sin conexión)</string>
+    <string name="settings_smishing_detection_desc">Señala los SMS entrantes sospechosos (enlaces acortados, expresiones de urgencia, números de tarificación adicional, dominios que imitan a los verdaderos). Cubre Francia, Alemania, Italia, España, el Reino Unido e Irlanda. 100% local, sin nube. Puede producir falsos positivos.</string>
+    <string name="smishing_banner_title">⚠️ Posiblemente fraudulento</string>
+    <string name="smishing_banner_subtitle">Toque para ver por qué</string>
+    <string name="smishing_dialog_title">¿Por qué este aviso?</string>
+    <string name="smishing_dialog_intro">SMS Tech ha detectado en este mensaje las siguientes señales sospechosas. No se ha enviado ningún contenido de SMS a ninguna parte — todo se calcula localmente.</string>
+    <string name="smishing_reason_url_shortener">Enlace acortado (bit.ly, t.co, tinyurl…). Los acortadores pueden ocultar el destino real: compruébelo antes de tocar.</string>
+    <string name="smishing_reason_urgency">Expresiones de urgencia o de presión (urgente, caduca, haga clic aquí…). Una táctica clásica de ingeniería social para provocar pánico.</string>
+    <string name="smishing_reason_premium">Número de tarificación adicional (3xxx o 0899 en Francia, 0900 en Alemania, 899 en Italia, 806 en España…). Llamar a estos números es caro y suele formar parte de una estafa.</string>
+    <string name="smishing_reason_typosquatting">Dominio que imita a uno verdadero (p. ej. «correros.es» en lugar de «correos.es»). Los sitios vigilados son los oficiales de Francia, Alemania, Italia, España, el Reino Unido e Irlanda. Escriba siempre a mano las direcciones oficiales.</string>
+    <string name="smishing_dialog_dismiss">OK</string>
+    <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
+    <string name="appearance_color_brand_blue">Azul de la marca (predeterminado)</string>
+    <string name="appearance_color_navy">Azul marino</string>
+    <string name="appearance_color_sky_blue">Azul cielo</string>
+    <string name="appearance_color_deep_indigo">Índigo intenso</string>
+    <!-- v1.19.0 — mauve (ProtonMail-like) + raspberry added; greens/brown/dupes removed -->
+    <string name="appearance_color_mauve">Malva</string>
+    <string name="appearance_color_deep_purple">Morado intenso</string>
+    <string name="appearance_color_framboise">Frambuesa</string>
+    <string name="appearance_color_brand_red">Rojo de la marca</string>
+    <string name="appearance_color_burnt_orange">Naranja quemado</string>
+    <string name="appearance_color_slate_blue_grey">Gris azulado pizarra</string>
+    <string name="appearance_color_selected">seleccionado</string>
+    <!-- v1.12.0 — vault move with locked session -->
+    <string name="error_session_locked">Desbloquee la app para mover esta conversación</string>
+    <!-- v1.12.0 — Emergency shortcut (lock-screen persistent notification) -->
+    <string name="channel_emergency_shortcut_label">Acceso directo de emergencia</string>
+    <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action "URGENCE" en un tap a été retirée (risque de déclenchement accidentel). Seules les actions 112/17 restent. -->
+    <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
+    <string name="channel_emergency_shortcut_desc">Notificación permanente silenciosa con accesos directos de llamada (112 y el número de la policía de su país). Toque el cuerpo para abrir la pantalla de emergencia y, después, mantenga pulsado 3 s para enviar la alerta.</string>
+    <string name="emergency_shortcut_notif_title">SMS Tech — acceso directo de emergencia</string>
+    <string name="emergency_shortcut_notif_text">Toque para abrir la página de emergencia, o llame al 112.</string>
+    <!-- v1.28.12 — one label for both quick actions: the police number changes from country to
+         country, so it can no longer be written into the string. -->
+    <string name="emergency_shortcut_action_dial">Llamar al %1$s</string>
+    <string name="settings_emergency_shortcut_title">Acceso directo en la pantalla de bloqueo</string>
+    <string name="emergency_saved_enabled">Modo emergencia activado</string>
+    <string name="emergency_saved_disabled">Modo emergencia desactivado</string>
+    <string name="emergency_setup_unsaved_body">El modo emergencia todavía no está guardado. Si sale ahora, se quedaría en su estado anterior.</string>
+    <!-- v1.14.8 audit P2 — texte mis à jour pour refléter v1.14.2 (action URGENCE retirée de la notif). -->
+    <string name="settings_emergency_shortcut_desc">Muestra una notificación permanente con accesos directos de llamada (112 y el número de la policía de su país), accesible sin desbloquear. Toque el cuerpo para abrir la pantalla de emergencia. Desactivado de forma predeterminada.</string>
+    <string name="emergency_shortcut_no_app_to_dial">No hay ninguna app instalada para hacer la llamada</string>
+    <string name="settings_emergency_call_police_title">Acción rápida de Policía en la notificación de bloqueo</string>
+    <string name="settings_emergency_call_police_desc">Añade una acción rápida de Policía a la notificación permanente de emergencia de la pantalla de bloqueo. El número es el del país al que está conectado su teléfono. El botón de Policía siempre está visible en la página de Emergencia de la app, independientemente de este ajuste. Desactivado de forma predeterminada.</string>
+
+    <!-- Backup / restore dialogs -->
+    <string name="backup_explainer">La copia de seguridad cifrada usa AES-256-GCM con derivación de clave PBKDF2-HMAC-SHA512. Elija una frase de contraseña robusta — sin ella el archivo no se puede recuperar.</string>
+    <string name="backup_passphrase_title">Frase de contraseña de la copia</string>
+    <string name="backup_passphrase_explain">Elija una frase de contraseña para cifrar la copia de seguridad. Al menos 8 caracteres. Guárdela bien — no hay ninguna recuperación.</string>
+    <string name="backup_passphrase">Frase de contraseña</string>
+    <string name="backup_passphrase_repeat">Repita la frase de contraseña</string>
+    <string name="backup_passphrase_mismatch">Las frases de contraseña no coinciden.</string>
+    <string name="backup_export_success">Copia de seguridad guardada.</string>
+    <string name="backup_export_failed">La copia de seguridad ha fallado.</string>
+    <string name="backup_export_vault_locked">Caja fuerte bloqueada — ábrala antes para que la copia pueda incluirla.</string>
+    <string name="backup_vault_pin_title">Se necesita el PIN de la caja fuerte</string>
+    <string name="backup_vault_pin_body">Una copia de seguridad incluye su caja fuerte, por eso pide su PIN antes de crearse.</string>
+    <string name="backup_vault_biometric_title">Para la copia se necesita el PIN de la caja fuerte</string>
+    <string name="backup_vault_biometric_body">Su caja fuerte está protegida solo con biometría, que no se puede solicitar desde esta pantalla. Establezca un PIN de la caja fuerte en Ajustes — Seguridad: la copia se lo pedirá aquí.</string>
+
+    <!-- Migration -->
+    <string name="migration_title">Importar los SMS existentes</string>
+    <string name="migration_body">Lee del proveedor de SMS del sistema y refleja los mensajes en la base de datos cifrada. SMS Tech ya debe ser la app de SMS predeterminada.</string>
+    <string name="migration_run">Iniciar la importación</string>
+    <string name="migration_rerun">Volver a ejecutar</string>
+    <string name="migration_imported">Importados: %1$d</string>
+    <!-- v1.25.3 (audit M10) — an import failure used to leave a progress bar spinning forever. -->
+    <string name="migration_failed">La importación se ha detenido por un error. Los mensajes ya importados se han conservado — puede volver a ejecutarla.</string>
+
+    <!-- About -->
+    <string name="about_easter_egg">✨ Gracias a quienes cuidan su privacidad. ✨</string>
+
+    <!-- Lock screen -->
+    <string name="lock_title">SMS Tech está bloqueada</string>
+    <string name="lock_pin_hint">Introduzca su PIN</string>
+    <string name="lock_lockout_message">Demasiados intentos. Vuelva a intentarlo en %1$d s.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Ajustes</string>
+
+    <string name="settings_section_appearance">Apariencia</string>
+    <string name="settings_theme_system">Sistema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Oscuro</string>
+    <string name="settings_theme_dark_tech">Dark Tech</string>
+    <string name="settings_theme_dark_tech_desc">Paleta oscura pensada para quien programa. Tiene prioridad sobre los colores dinámicos y sobre AMOLED.</string>
+    <string name="settings_dynamic_colors">Colores dinámicos (Android 12+)</string>
+    <string name="settings_amoled">Negro absoluto AMOLED</string>
+
+    <string name="settings_section_locale">Idioma y región</string>
+    <string name="settings_language">Idioma de la app</string>
+    <string name="settings_language_desc">Abre la pantalla de Android del idioma por app. SMS Tech sigue el idioma del sistema, salvo que elija uno aquí.</string>
+
+    <string name="settings_section_conversations">Conversaciones</string>
+    <string name="settings_show_avatars">Mostrar los avatares</string>
+    <string name="settings_signature">Firma automática</string>
+
+    <string name="settings_section_sending">Envío</string>
+    <string name="settings_default_region_title">País predeterminado</string>
+    <string name="settings_default_region_auto">Automático (país de la SIM)</string>
+    <string name="settings_default_region_auto_hint">Usa el país de la SIM para convertir los números nacionales (06…) al formato internacional antes de enviar. Elija un país si sus contactos están guardados en el formato nacional de otro país — por ejemplo, los números franceses 06… en una SIM extranjera no se entregan de otro modo.</string>
+    <string name="settings_confirm_broadcast">Pedir confirmación antes de enviar</string>
+    <string name="settings_confirm_send_title">¿Enviar este mensaje?</string>
+    <string name="settings_delivery_reports">Informes de entrega</string>
+    <string name="settings_group_mms">MMS de grupo</string>
+    <string name="settings_group_mms_hint">Un solo MMS para todos, y cada respuesta vuelve al grupo. Los mensajes enviados desde un grupo salen entonces siempre como MMS, texto incluido. Configure «Mi número de teléfono» para que los mensajes de grupo recibidos puedan dejarle fuera de la lista de miembros.</string>
+    <string name="settings_my_number">Mi número de teléfono</string>
+    <string name="settings_my_number_dialog_title">Su número de teléfono</string>
+    <string name="settings_my_number_dialog_body">Opcional. Si se configura, este número sustituye al marcador AOSP «insert-address-token» en la dirección del remitente de los MMS salientes, para que las demás apps de SMS le muestren correctamente.</string>
+    <string name="settings_my_number_placeholder">+34 6XX XXX XXX</string>
+    <string name="settings_my_number_detect">Detectar automáticamente desde la SIM</string>
+    <string name="settings_my_number_not_set">Sin configurar</string>
+    <string name="settings_my_number_detect_failed">No se puede leer el número de la SIM — introdúzcalo a mano</string>
+    <string name="settings_my_number_detect_no_perm">Permiso de números de teléfono no concedido — introdúzcalo a mano</string>
+    <string name="settings_my_number_invalid">Debe ser un número de teléfono válido (+ y dígitos)</string>
+
+    <string name="settings_auto_delete_title">Limpieza del historial</string>
+    <string name="settings_auto_delete_desc">Elimina los SMS, MMS y mensajes de voz más antiguos que la edad elegida. La limpieza automática se ejecuta como mucho una vez al mes; también puede lanzar una limpieza manual en cualquier momento. Los mensajes destacados no se eliminan nunca.</string>
+    <string name="settings_auto_delete_explainer">Lo automático ocurre una vez al mes. Los mensajes destacados no se eliminan nunca.</string>
+    <string name="settings_auto_delete_off">Desactivada — no elimina nada</string>
+    <string name="settings_auto_delete_30">Eliminar los mensajes de más de 30 días</string>
+    <string name="settings_auto_delete_60">Eliminar los mensajes de más de 60 días</string>
+    <string name="settings_auto_delete_180">Eliminar los mensajes de más de 180 días</string>
+    <string name="settings_auto_delete_status_off">Desactivada</string>
+    <string name="settings_auto_delete_status_30">Elimina los mensajes de más de 30 días</string>
+    <string name="settings_auto_delete_status_60">Elimina los mensajes de más de 60 días</string>
+    <string name="settings_auto_delete_status_180">Elimina los mensajes de más de 180 días</string>
+    <string name="settings_auto_delete_status_n_days">Elimina los mensajes de más de %1$d días</string>
+    <string name="settings_auto_delete_purge_now">Limpiar ahora</string>
+    <string name="settings_auto_delete_purge_now_disabled">Elija una duración para activarlo</string>
+    <string name="settings_auto_delete_purge_confirm_title">Confirme la limpieza</string>
+    <string name="settings_auto_delete_purge_confirm_zero">No hay mensajes que eliminar para esta duración.</string>
+    <string name="settings_auto_delete_purge_confirm_body">%1$d mensaje(s) de más de %2$d días se eliminarán del teléfono, no solo de SMS Tech. Los mensajes destacados se conservan. Esta acción no se puede deshacer.</string>
+    <string name="settings_auto_delete_purge_done">%1$d mensaje(s) eliminados.</string>
+    <string name="action_delete_now">Eliminar</string>
+    <string name="settings_resync_title">Volver a sincronizar desde el teléfono</string>
+    <string name="settings_resync_desc">Vuelve a importar todos los SMS del sistema Android. Útil cuando faltan en la app mensajes que sí están en el teléfono. No devuelve lo que usted eliminó: eliminar quita también la copia del teléfono. Sin duplicados.</string>
+    <string name="settings_resync_started">Sincronización iniciada en segundo plano.</string>
+    <string name="settings_send_reactions_title">Enviar mis reacciones al destinatario</string>
+    <string name="settings_send_reactions_desc">Cuando publica una reacción con emoji (corazón, pulgar arriba…), se envía al destinatario un SMS que contiene solo el emoji. Cuenta como un SMS normal, a la tarifa de su plan. Quitar o cambiar una reacción no reenvía nada.</string>
+    <!-- v1.8.0 — bug 5 fix : 3 options at a glance.
+         Title kept (was already pointing to "reaction format"). Desc legacy kept for downgrade. -->
+    <string name="settings_reaction_format_title">Formato de las reacciones</string>
+    <string name="settings_reaction_format_fr">Francés legible</string>
+    <string name="settings_reaction_format_fr_hint">\"Réagi par ❤️ à votre message : «preview»\". Natural y comprensible para cualquier destinatario Android de habla francesa. SMS Tech lo descodifica como una reacción nativa.</string>
+    <string name="settings_reaction_format_en">Tapback (compatible con iMessage)</string>
+    <string name="settings_reaction_format_en_hint">\"Reacted ❤️ to «preview»\". Lo detectan automáticamente iMessage (iPhone) y las versiones recientes de Google Mensajes como un globo de reacción nativo. Menos natural para los destinatarios de habla francesa.</string>
+    <string name="settings_reaction_format_emoji">Solo el emoji</string>
+    <string name="settings_reaction_format_emoji_hint">\"❤️\" a secas. Más limpio en las apps de SMS antiguas, pero el destinatario pierde todo el contexto — no puede saber a qué mensaje ha reaccionado.</string>
+    <!-- v1.9.0 — compact emoji + quote -->
+    <string name="settings_reaction_format_emoji_quote">Emoji + cita (predeterminado)</string>
+    <string name="settings_reaction_format_emoji_quote_hint">\"❤️ «su mensaje»\". Compacto y conserva el contexto. El destinatario ve el emoji seguido del mensaje original citado.</string>
+    <!-- v1.8.1 — sender display name -->
+    <string name="settings_sender_name_title">Su nombre visible</string>
+    <string name="settings_sender_name_desc">Se incluye en los SMS de reacción salientes para ayudar al destinatario a identificar al autor. Déjelo vacío para usar el nombre de su perfil de Android (o, en su defecto, el anónimo \"Réagi par ❤️…\").</string>
+    <string name="settings_sender_name_label">Nombre visible (máx. 40)</string>
+    <string name="settings_sender_name_auto">Detectar desde el perfil de Android</string>
+
+    <!-- v1.9.0 — Safety call -->
+    <string name="settings_section_safety_call">Safety call</string>
+    <string name="settings_safety_call_title">Safety call</string>
+    <string name="settings_safety_call_desc">Envía un SMS automático a sus contactos de emergencia si no abre SMS Tech durante una duración configurada. Pensado para viajes en solitario, vida aislada, oficios de riesgo.</string>
+    <string name="settings_safety_call_disabled">Desactivado</string>
+    <string name="settings_safety_call_disabled_after_alert">Desactivado — se ha lanzado una alerta</string>
+    <string name="settings_safety_call_im_ok_snack">Temporizador reiniciado.</string>
+    <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
+    <string name="settings_safety_call_armed_chip">Activo</string>
+    <string name="settings_safety_call_armed_started">Temporizador iniciado: %1$s a las %2$s</string>
+    <string name="settings_safety_call_im_ok_stops_relances">Safety call desactivado. No se enviará ningún otro mensaje.</string>
+    <plurals name="settings_safety_call_triggered_state">
+        <item quantity="one">Alerta enviada — %1$d mensaje de %2$d</item>
+        <item quantity="many">Alerta enviada — %1$d mensajes de %2$d</item>
+        <item quantity="other">Alerta enviada — %1$d mensajes de %2$d</item>
+    </plurals>
+    <string name="settings_safety_call_triggered_hint">Los recordatorios se envían cada 15 minutos. Toque «Estoy bien» para pararlos.</string>
+    <string name="settings_safety_call_triggered_state_sending">Enviando la alerta…</string>
+    <string name="settings_safety_call_triggered_hint_done">Secuencia completada: Safety call se ha desactivado solo. Vuelva a activarlo para estar protegido de nuevo.</string>
+    <string name="settings_safety_call_armed_duration">Duración: %1$s</string>
+    <string name="settings_safety_call_armed_remaining">Queda: %1$s antes de dispararse</string>
+    <string name="settings_safety_call_armed_remaining_imminent">Menos de 2 h antes de dispararse</string>
+    <string name="settings_safety_call_armed_contacts_one">Contacto: %1$s</string>
+    <string name="settings_safety_call_armed_contacts_many">Contactos: %1$s (+%2$d más)</string>
+    <string name="settings_safety_call_armed_template">Plantilla: %1$s</string>
+    <string name="settings_safety_call_armed_modify">Modificar</string>
+    <string name="settings_safety_call_armed_actions_hint">«Estoy bien» reinicia el temporizador: la cuenta atrás vuelve a empezar desde la duración completa y no se envía ningún mensaje. «Modificar» abre los ajustes (duración, contactos, mensaje).</string>
+    <string name="settings_safety_call_armed_im_ok_short">Estoy bien</string>
+    <string name="safety_call_setup_title">Safety call</string>
+    <string name="safety_call_setup_section_status">Estado</string>
+    <string name="safety_call_setup_section_duration">Duración</string>
+    <string name="safety_call_setup_section_contacts">Contactos de emergencia (máx. 4)</string>
+    <string name="safety_call_setup_section_template">Mensaje</string>
+    <string name="safety_call_setup_toggle_enable">Activar Safety call</string>
+    <string name="safety_call_setup_toggle_desc">Cuando está activo, abrir SMS Tech reinicia el temporizador. Si no la abre dentro de la duración elegida, sus contactos reciben un SMS automático.</string>
+    <string name="safety_call_setup_duration_24h">24 horas</string>
+    <string name="safety_call_setup_duration_48h">48 horas</string>
+    <string name="safety_call_setup_duration_72h">72 horas</string>
+    <string name="safety_call_setup_duration_custom">Personalizada</string>
+    <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="attachment_generic_name">Archivo adjunto</string>
+    <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
+    <string name="safety_call_setup_duration_custom_hint">En horas · 168 h = 1 semana · máx. 720 h (30 días)</string>
+    <string name="safety_call_setup_add_contact">Añadir un contacto</string>
+    <string name="safety_call_setup_contact_name_label">Nombre (opcional)</string>
+    <string name="safety_call_setup_contact_phone_label">Número de teléfono</string>
+    <string name="safety_call_setup_contact_invalid">Número de teléfono no válido.</string>
+    <string name="safety_call_setup_contact_max_reached">Máximo 4 contactos.</string>
+    <string name="safety_call_setup_remove_contact">Quitar</string>
+    <string name="safety_call_setup_template_check_in">Señal de vida (predeterminada)</string>
+    <string name="safety_call_setup_template_urgent">Urgente</string>
+    <string name="safety_call_setup_template_follow_up">Recordatorio</string>
+    <string name="safety_call_setup_template_custom">Personalizado</string>
+    <string name="safety_call_setup_template_custom_label">Su mensaje (máx. 140 caracteres)</string>
+    <string name="safety_call_setup_template_preview">Vista previa</string>
+    <string name="safety_call_setup_save">Guardar</string>
+    <string name="safety_call_setup_save_validation_no_contacts">Añada al menos un contacto antes de activarlo.</string>
+    <string name="safety_call_setup_shared_with_emergency">Estos contactos los usa también el modo emergencia, que sigue activo. Vaciar la lista lo dejaría sin nadie a quien avisar. Desactive antes el modo emergencia, o conserve al menos un contacto.</string>
+    <string name="safety_call_setup_save_validation_custom_empty">El mensaje personalizado no puede estar vacío.</string>
+    <string name="safety_call_warning_title">SMS Tech — confirme que está bien</string>
+    <string name="safety_call_warning_body_hours">Safety call se disparará dentro de unas %1$d horas. Toque para reiniciar el temporizador.</string>
+    <string name="safety_call_warning_body_imminent">Safety call se disparará en menos de 2 horas. Toque para reiniciarlo ahora.</string>
+    <string name="safety_call_cannot_send_title">Safety call no puede enviar</string>
+    <string name="safety_call_cannot_send_body">SMS Tech no es su aplicación de SMS predeterminada: la alerta no se enviaría. Sus contactos no serían avisados. Toque para corregirlo.</string>
+    <string name="safety_role_missing_title">Esta protección no puede enviar</string>
+    <string name="safety_role_missing_body">SMS Tech no es su aplicación de SMS predeterminada. Puede activarla, pero al dispararse no se enviará nada y nadie será avisado.</string>
+    <string name="safety_call_sequence_title">SMS Tech — alerta enviada</string>
+    <plurals name="safety_call_sequence_body">
+        <item quantity="one">%1$d mensaje de %2$d enviado a sus contactos. Toque si está bien: los recordatorios se detendrán.</item>
+        <item quantity="many">%1$d mensajes de %2$d enviados a sus contactos. Toque si está bien: los recordatorios se detendrán.</item>
+        <item quantity="other">%1$d mensajes de %2$d enviados a sus contactos. Toque si está bien: los recordatorios se detendrán.</item>
+    </plurals>
+    <string name="safety_call_sequence_title_sending">SMS Tech — enviando la alerta</string>
+    <string name="safety_call_sequence_body_sending">La alerta se está enviando a sus contactos. Toque si está bien: el envío se detendrá.</string>
+    <string name="safety_call_sequence_title_done">SMS Tech — alerta enviada, Safety call desactivado</string>
+    <plurals name="safety_call_sequence_body_done">
+        <item quantity="one">%1$d mensaje de %2$d se ha enviado a sus contactos. Safety call está ahora desactivado — toque «Volver a activar» para armarlo de nuevo.</item>
+        <item quantity="many">Los %1$d mensajes se han enviado a sus contactos. Safety call está ahora desactivado — toque «Volver a activar» para armarlo de nuevo.</item>
+        <item quantity="other">Los %1$d mensajes se han enviado a sus contactos. Safety call está ahora desactivado — toque «Volver a activar» para armarlo de nuevo.</item>
+    </plurals>
+    <string name="safety_call_notif_action_rearm">Volver a activar</string>
+    <!-- v1.27.4 — confirmation shown after the “Turn back on” action of the receipt notification.
+         The two other confirmations reuse the Settings wording (settings_safety_call_im_ok_snack /
+         settings_safety_call_im_ok_stops_relances) on purpose: the same gesture must read the same
+         way wherever it is made. -->
+    <string name="safety_call_ack_rearmed">Safety call vuelve a estar activo. El temporizador empieza de nuevo.</string>
+    <string name="safety_call_reset_warning_title">El temporizador se reinicia cuando abre SMS Tech</string>
+    <string name="safety_call_reset_warning_body">Una vez activo Safety call, el temporizador se reinicia en cuanto abre esta app y la desbloquea. Usar el teléfono para cualquier otra cosa no cambia nada: si no abre SMS Tech dentro del plazo elegido, la alerta sale hacia sus contactos.</string>
+    <string name="safety_call_history_title">Historial de activaciones</string>
+    <string name="safety_call_history_empty">No hay ninguna activación registrada.</string>
+    <plurals name="safety_call_history_count">
+        <item quantity="one">%1$d mensaje de %2$d enviado</item>
+        <item quantity="many">%1$d mensajes de %2$d enviados</item>
+        <item quantity="other">%1$d mensajes de %2$d enviados</item>
+    </plurals>
+    <string name="safety_call_history_recipients">Dirigida a: %1$s</string>
+    <string name="safety_call_history_stopped">Secuencia detenida — usted confirmó que estaba bien.</string>
+    <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
+    <string name="settings_section_emergency">Modo emergencia</string>
+    <string name="settings_emergency_title">Modo emergencia</string>
+    <string name="settings_emergency_desc">Un botón que se mantiene pulsado 3 s envía un SMS a sus contactos de emergencia con su ubicación actual. Distinto de Safety call, que es automático y se dispara por inactividad. Desactivado de forma predeterminada.</string>
+    <string name="settings_emergency_disabled">Desactivado</string>
+    <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
+    <string name="settings_emergency_armed_chip">Activo</string>
+    <string name="settings_emergency_armed_template">Plantilla: %1$s</string>
+    <string name="settings_emergency_armed_location">Ubicación GPS incluida</string>
+    <string name="settings_emergency_armed_no_location">Sin ubicación GPS</string>
+    <string name="settings_emergency_armed_contacts_one">Contactos: %1$s</string>
+    <string name="settings_emergency_armed_contacts_many">Contactos: %1$s +%2$d más</string>
+    <string name="settings_emergency_armed_no_contacts">No hay contactos configurados</string>
+    <string name="settings_emergency_armed_modify">Editar</string>
+    <string name="settings_emergency_armed_open">Abrir</string>
+    <string name="emergency_title">Modo emergencia</string>
+    <string name="emergency_setup_title">Configuración del modo emergencia</string>
+    <string name="emergency_button_label">EMERGENCIA</string>
+    <string name="emergency_button_hint_hold_3s">Emergencia — mantenga pulsado 3 segundos para enviar</string>
+    <string name="emergency_preview_title">Mensaje que se enviará</string>
+    <string name="emergency_status_disabled">El modo emergencia está desactivado. Actívelo en los ajustes.</string>
+    <string name="emergency_status_no_contacts">No hay contactos de emergencia configurados. Añada alguno en los ajustes de Safety call.</string>
+    <string name="emergency_status_cooldown">Recién enviado. Disponible de nuevo dentro de un minuto.</string>
+    <string name="emergency_status_ready">Mantenga pulsado el botón 3 segundos para avisar a sus contactos.</string>
+    <string name="emergency_triggered_ok">Emergencia enviada a %1$d contacto(s).</string>
+    <string name="emergency_triggered_no_location">Emergencia enviada a %1$d contacto(s) — ubicación no disponible.</string>
+    <string name="emergency_triggered_all_failed">El envío de la emergencia ha fallado (%1$d). Compruebe cuál es su app de SMS predeterminada.</string>
+    <string name="emergency_setup_enable_title">Activar el modo emergencia</string>
+    <string name="emergency_setup_enable_desc">Cuando está activo, aparece un botón de emergencia en la pantalla dedicada. Manténgalo pulsado 3 s para enviar un SMS con su ubicación a sus contactos de emergencia.</string>
+    <string name="emergency_setup_template_title">Plantilla del mensaje</string>
+    <string name="emergency_setup_template_need_help">Necesito ayuda</string>
+    <string name="emergency_setup_template_danger">Peligro</string>
+    <string name="emergency_setup_template_discreet">Discreto</string>
+    <string name="emergency_setup_location_title">Incluir la ubicación</string>
+    <string name="emergency_setup_location_desc">Añade al SMS una dirección de Google Maps. Requiere el permiso de ubicación. Si está desactivada (o el permiso denegado), el SMS se envía sin coordenadas.</string>
+    <string name="emergency_setup_location_permission_warning">Permiso de ubicación no concedido. El SMS de emergencia se enviará sin coordenadas. Concédalo en los ajustes de Android para resolverlo.</string>
+    <string name="emergency_setup_contacts_title">Contactos de emergencia</string>
+    <string name="emergency_setup_contacts_empty">No hay contactos configurados.</string>
+    <string name="emergency_setup_contacts_count">%1$d contacto(s) configurados.</string>
+    <string name="emergency_setup_contacts_cta">Gestionar los contactos</string>
+    <string name="action_edit">Editar</string>
+    <string name="snack_generic_error">Algo ha ido mal.</string>
+    <string name="reaction_send_confirm_title">¿Enviar la reacción?</string>
+    <string name="reaction_send_confirm_body">Se enviará al destinatario un SMS que contiene solo este emoji. Cuenta como un SMS normal (tarifa de su plan). Puede desactivarlo en Ajustes → Envío.</string>
+    <string name="reaction_send_confirm_never_ask">No preguntar más, enviar directamente</string>
+    <string name="reaction_send_confirm_fallback_recipient">este contacto</string>
+    <string name="attachment_image_label">Imagen</string>
+    <string name="attachment_video_label">Vídeo</string>
+    <string name="attachment_file_label">Archivo</string>
+    <string name="bubble_mms_parts_missing">Archivo adjunto no restaurado</string>
+    <string name="bubble_sender_self">Yo</string>
+    <string name="attachment_remove_label">Quitar el archivo adjunto</string>
+
+    <string name="action_react">Reaccionar</string>
+    <string name="settings_auto_lock_delay">Retardo del bloqueo automático</string>
+    <string name="settings_auto_lock_delay_dialog_title">Bloquear la app después de…</string>
+    <string name="auto_lock_immediate">Inmediatamente</string>
+    <string name="auto_lock_15s">15 segundos</string>
+    <string name="auto_lock_1m">1 minuto</string>
+    <string name="auto_lock_5m">5 minutos</string>
+    <string name="auto_lock_next_launch">Solo en el próximo inicio</string>
+    <string name="settings_signature_none">Sin configurar</string>
+    <string name="settings_signature_dialog_body">Se añade al final de cada SMS que envía, tras una línea de separación. Que sea corta: una firma larga puede partir el mensaje en varios SMS, cada uno facturado por separado.</string>
+    <string name="settings_signature_placeholder">p. ej. Pat</string>
+    <string name="action_star">Destacar</string>
+    <string name="action_unstar">Quitar de destacados</string>
+    <string name="reaction_picker_other">Otro emoji</string>
+    <string name="reaction_picker_other_title">Emoji personalizado</string>
+    <string name="reaction_picker_other_body">Escriba o pegue un emoji</string>
+    <string name="reaction_picker_other_hint">😀</string>
+    <!-- v1.5.0 — multi-emoji picker validate button -->
+    <string name="reaction_picker_validate_empty">Seleccione uno o varios emojis</string>
+    <string name="reaction_picker_validate_count">Enviar la reacción %1$s</string>
+    <!-- v1.6.0 — a11y reaction badge (TalkBack) -->
+    <string name="reaction_badge_content_description">Reacción %1$s</string>
+    <string name="reaction_badge_remove_action">Quitar la reacción</string>
+    <!-- v1.6.1 — body of the system notification fired when someone reacts to our message -->
+    <string name="reaction_notif_body_with_preview">Ha reaccionado %1$s a: %2$s</string>
+    <string name="reaction_notif_body_no_preview">Ha reaccionado %1$s a su mensaje</string>
+    <!-- v1.6.1 — snackbar shown when PDF export fails (audit QUAL-07 i18n fix) -->
+    <string name="snack_pdf_export_failed">La exportación a PDF ha fallado</string>
+
+    <!-- v1.8.0 — confirmation dialogs + "Mark all as read" action in overflow menu -->
+    <string name="action_mark_all_read">Marcar todo como leído</string>
+    <string name="mark_all_read_confirm_body">Se borrarán todos los indicadores de no leído actuales. Los mensajes nuevos volverán a mostrar su indicador con normalidad.</string>
+    <string name="settings_resync_confirm_title">¿Volver a sincronizar desde el teléfono?</string>
+    <string name="settings_resync_confirm_body">Vuelve a importar los mensajes del proveedor de SMS/MMS del sistema. Los mensajes existentes se quedan (sin duplicar, gracias al identificador único); los mensajes eliminados antes pueden reaparecer si todavía están en la base de datos del sistema. ¿Continuar?</string>
+    <string name="settings_reset_all_confirm_title">¿Restablecer todos los ajustes?</string>
+    <string name="settings_reset_all_confirm_body">Todas sus preferencias (tema, notificaciones, envío, etc.) volverán a sus valores predeterminados. Sus conversaciones, sus mensajes y sus ajustes de seguridad (bloqueo, PIN de la caja fuerte, código señuelo) NO se ven afectados.</string>
+    <string name="settings_purge_blocked_confirm_title">¿Eliminar las conversaciones bloqueadas?</string>
+    <string name="settings_purge_blocked_confirm_body">Elimina toda conversación cuyos participantes estén todos en la lista de bloqueados. También las quita del proveedor de SMS del sistema. Irreversible.</string>
+
+    <string name="settings_section_notifications">Notificaciones</string>
+    <string name="settings_notifications_enabled">Activar las notificaciones</string>
+    <string name="settings_inline_reply">Responder desde la notificación</string>
+
+    <!-- v1.8.0 — bug 3 fix: exposes PreviewMode + NotificationStyle in the UI. -->
+    <string name="settings_notif_preview">Vista previa en la pantalla de bloqueo</string>
+    <string name="settings_notif_preview_always">Mostrar siempre el nombre y el contenido</string>
+    <string name="settings_notif_preview_unlocked">Solo después de desbloquear</string>
+    <string name="settings_notif_preview_unlocked_hint">En la pantalla de bloqueo aparecen el nombre del remitente y un texto oculto; el contenido completo aparece una vez desbloqueado.</string>
+    <string name="settings_notif_preview_never">Nunca en la pantalla de bloqueo</string>
+    <string name="settings_notif_preview_never_hint">Reproduce el sonido pero no aparece nada en la pantalla de bloqueo — completamente invisible hasta que desbloquee y abra la app.</string>
+    <string name="settings_notif_style">Estilo de las notificaciones</string>
+    <string name="settings_notif_style_heads_up">En primer plano (predeterminado)</string>
+    <string name="settings_notif_style_heads_up_hint">El aviso aparece sobre la pantalla actual con sonido y luego se queda en el panel de notificaciones.</string>
+    <string name="settings_notif_style_banner">Solo aviso</string>
+    <string name="settings_notif_style_banner_hint">Sin ventana emergente, sin sonido. Solo un icono en el panel.</string>
+    <string name="settings_notif_style_silent">Silenciosas</string>
+    <string name="settings_notif_style_silent_hint">Se encaminan por un canal de baja importancia. El sistema quita el sonido y la aparición en primer plano.</string>
+    <string name="settings_notif_open_system">Abrir los ajustes de notificación del sistema</string>
+    <string name="settings_notif_open_system_desc">Compruebe o corrija permisos, canales y sonido a nivel del sistema.</string>
+
+    <string name="settings_section_security">Seguridad y privacidad</string>
+    <string name="settings_flag_secure">Ocultar la vista previa en Recientes</string>
+    <string name="settings_flag_secure_desc">Oculta la miniatura de la conversación en el selector de apps del sistema y bloquea las capturas y la grabación de pantalla mientras la app está abierta.</string>
+    <string name="settings_lock_vault_on_leave">Bloquear la caja fuerte al salir</string>
+    <string name="settings_lock_vault_on_leave_desc">Bloquea automáticamente la caja fuerte cifrada en cuanto la app pasa a segundo plano. Al volver tendrá que desbloquearla de nuevo.</string>
+    <string name="settings_panic_code">PIN señuelo (modo pánico)</string>
+
+    <string name="settings_section_blocking">Bloqueo</string>
+    <string name="settings_block_unknown">Bloquear los números desconocidos</string>
+    <string name="settings_manage_blocked">Gestionar la lista de bloqueados</string>
+
+    <string name="settings_section_backup">Copia de seguridad</string>
+    <string name="settings_backup_now">Hacer una copia ahora</string>
+    <string name="settings_restore">Restaurar desde un archivo</string>
+
+    <string name="settings_section_advanced">Avanzado</string>
+    <string name="settings_default_sms_app">App de SMS predeterminada</string>
+    <string name="settings_set_default">Establecer como predeterminada</string>
+    <string name="settings_is_default">SMS Tech es la app de SMS predeterminada.</string>
+    <string name="settings_reset_all">Restablecer todos los ajustes</string>
+    <string name="settings_nuke_data">Eliminar todos mis datos</string>
+    <string name="settings_nuke_confirm">Se borrarán todas las conversaciones en SMS Tech Y en el almacén de mensajes del teléfono, junto con los archivos adjuntos, los envíos programados y todos los ajustes. La caja fuerte también se borra. Esta acción no se puede deshacer, y en la siguiente sincronización no vuelve nada.</string>
+    <string name="settings_nuke_confirm_not_default">⚠️ SMS Tech no es su app de SMS predeterminada: el sistema se negará a eliminar los mensajes del teléfono. Se quedarán donde están y volverán en la siguiente sincronización. Solo se borrarán los datos propios de SMS Tech.</string>
+    <string name="settings_nuke_done_title">Datos borrados</string>
+    <string name="settings_nuke_done_body">Las conversaciones y los ajustes se han borrado, tanto en SMS Tech como en el almacén de mensajes del teléfono. En la siguiente sincronización no volverá nada. SMS Tech va a reiniciarse.</string>
+    <string name="settings_nuke_residue_title">Eliminación incompleta</string>
+    <plurals name="settings_nuke_residue_body">
+        <item quantity="one">%1$d conversación se ha quedado en el almacén de mensajes del teléfono: el sistema se negó a eliminarla y volverá en la siguiente sincronización. La causa habitual es que SMS Tech no sea la app de SMS predeterminada.</item>
+        <item quantity="many">%1$d conversaciones se han quedado en el almacén de mensajes del teléfono: el sistema se negó a eliminarlas y volverán en la siguiente sincronización. La causa habitual es que SMS Tech no sea la app de SMS predeterminada.</item>
+        <item quantity="other">%1$d conversaciones se han quedado en el almacén de mensajes del teléfono: el sistema se negó a eliminarlas y volverán en la siguiente sincronización. La causa habitual es que SMS Tech no sea la app de SMS predeterminada.</item>
+    </plurals>
+    <!-- v1.28.9 (septieme note d'Andrew, constat 2) — ne pas savoir n'est pas « rien a effacer ». -->
+    <string name="settings_nuke_list_unreadable">No se ha podido leer la lista de conversaciones: sus copias en el almacén de mensajes del teléfono no se han eliminado y volverán en la siguiente sincronización.</string>
+    <string name="settings_nuke_local_failure">Una parte de los datos propios de SMS Tech no ha podido borrarse de este teléfono. Ejecute de nuevo «Eliminar todos mis datos».</string>
+
+    <!-- About -->
+    <string name="about_title">Acerca de</string>
+    <string name="about_tagline_short">SMS y MMS modernos y privados para Android.</string>
+    <!-- v1.25.3 (audit C7) — section titles were hardcoded in French in AboutScreen.kt. -->
+    <string name="about_section_privacy">Privacidad</string>
+    <string name="about_section_features">Funciones</string>
+    <string name="about_section_author">Autor</string>
+    <string name="about_section_help">Ayuda rápida</string>
+    <string name="about_section_links">Enlaces</string>
+    <string name="about_check_updates">Ver las actualizaciones</string>
+    <string name="about_privacy_headline">100% privada — cero rastreo</string>
+    <string name="about_author_role">Desarrollador</string>
+    <!-- v1.25.3 (audit H20) — permission rationales were hardcoded in English. The permission
+         names themselves stay untranslated: they are the Android identifiers, verbatim. -->
+    <string name="about_perm_sms">Necesario para cualquier app de SMS.</string>
+    <string name="about_perm_mms">Recibir los MMS entrantes.</string>
+    <string name="about_perm_contacts">Mostrar los nombres de los contactos en lugar de los números a secas.</string>
+    <string name="about_perm_phone_state">Compatibilidad multi-SIM (enviar desde la SIM correcta).</string>
+    <string name="about_perm_notifications">Mostrar las notificaciones de mensajes nuevos.</string>
+    <string name="about_perm_biometric">Desbloqueo biométrico opcional.</string>
+    <string name="about_perm_internet">Transporte de los MMS por el MMSC de su operador. Sin analítica.</string>
+    <string name="about_perm_record_audio">Grabar mensajes de audio adjuntos a los MMS salientes.</string>
+    <string name="about_perm_foreground_service">Migración o copia de seguridad de larga duración.</string>
+    <string name="about_permissions_title">Permisos que usamos</string>
+    <string name="about_security_title">Seguridad y límites</string>
+    <string name="about_security_body">Los SMS y los MMS viajan sin cifrar por la red del operador: es un límite del protocolo, no una elección. SMS Tech solo protege lo que está guardado en su dispositivo. Para mensajería cifrada de extremo a extremo, use Signal o Matrix.</string>
+    <string name="about_credits_body">Creada por %1$s. Interfaz inspirada en los principios de movimiento de Material 3. Desarrollada con Kotlin, Compose, Hilt, Room y SQLCipher.</string>
+    <string name="about_legal_body">© %1$s %2$s. Publicada bajo la licencia Apache 2.0.</string>
+    <string name="about_source_code">Código fuente</string>
+    <string name="about_report_issue">Informar de un problema</string>
+    <string name="about_website">Sitio web</string>
+    <string name="about_license">Licencia</string>
+    <string name="about_privacy">Política de privacidad</string>
+
+    <!-- Notification channels -->
+    <string name="channel_incoming_label">Mensajes entrantes</string>
+    <string name="channel_incoming_desc">Notificaciones de los SMS y MMS que recibe.</string>
+    <!-- v1.8.0 — silent channel for NotificationStyle.SILENT -->
+    <string name="channel_incoming_silent_label">Mensajes entrantes (silenciosos)</string>
+    <string name="channel_incoming_silent_desc">Notificaciones cuando SMS Tech está en modo «Silenciosas». Sin aparición en primer plano, sin sonido.</string>
+    <string name="channel_sent_label">Mensajes enviados</string>
+    <string name="channel_sent_desc">Estado de los mensajes que ha enviado.</string>
+    <string name="channel_failed_label">Mensajes fallidos</string>
+    <string name="channel_failed_desc">Errores y sugerencias para reintentar.</string>
+    <string name="channel_keep_alive_label">Modo resistente</string>
+    <string name="channel_keep_alive_desc">Mantiene SMS Tech en marcha en los teléfonos cuyo fabricante cierra las apps en segundo plano.</string>
+    <string name="channel_safety_call_warning_label">Aviso de Safety call</string>
+    <string name="channel_safety_call_warning_desc">Recordatorio antes del SMS automático a sus contactos de emergencia.</string>
+    <string name="channel_safety_call_receipt_label">Alerta de Safety call terminada</string>
+    <string name="channel_safety_call_receipt_desc">Registro silencioso de una alerta ya enviada. No emite ningún sonido.</string>
+
+    <!-- Notification actions -->
+    <string name="notif_reply_label">Responder</string>
+    <string name="notif_mark_read_label">Marcar como leído</string>
+    <string name="notif_preview_hidden_content">Mensaje nuevo</string>
+
+    <!-- PDF export -->
+    <string name="pdf_header_subtitle">Exportado el %1$s • %2$d participante(s)</string>
+    <string name="pdf_footer">Página %1$d — SMS Tech</string>
+
+    <!-- Errors -->
+    <string name="error_not_default_app">SMS Tech todavía no es la app de SMS predeterminada.</string>
+    <string name="error_send_failed">No se ha podido enviar el mensaje.</string>
+    <!-- v1.28.3 — un SMS sortant qui echoue le disait a personne. -->
+    <string name="send_failure_notification_title">Mensaje no enviado</string>
+    <string name="send_failure_notification_body">No se ha podido enviar su mensaje a %1$s.</string>
+    <string name="send_failure_notification_unknown_recipient">un contacto</string>
+    <!-- v1.28.3 — la sauvegarde ne transporte aucune piece jointe ; on le dit au lieu de le taire. -->
+    <string name="backup_restore_without_attachments">%1$d de ellos han vuelto sin su archivo adjunto, que las copias de seguridad no transportan.</string>
+    <!-- v1.28.5 — vault conversations restored on a device with no second factor. -->
+    <string name="backup_restore_vault_without_factor">Las conversaciones de la caja fuerte se han restaurado, pero aquí no hay ningún código de caja fuerte ni biometría configurados: establezca uno en los Ajustes para protegerlas.</string>
+    <!-- v1.28.3 (F07) — abaisser le verrouillage retirerait le seul second facteur du coffre. -->
+    <string name="settings_lock_downgrade_vault_refused">Ahora mismo la biometría es el único segundo factor que protege su caja fuerte. Establezca antes un código de la caja fuerte y entonces podrá cambiar esto.</string>
+    <!-- v1.28.5 — the vault state could not be read: the guard refuses rather than assume. -->
+    <string name="settings_lock_downgrade_vault_unverifiable">No se ha podido comprobar ahora mismo el estado de la caja fuerte. El bloqueo se mantiene; vuelva a intentarlo en un momento.</string>
+    <string name="error_send_recipient_blocked">No enviado: usted ha bloqueado este número. Desbloquéelo para volver a enviar.</string>
+    <string name="error_retry_group_echo">Esta es la copia que se conserva en el grupo. Vuelva a enviarla desde la conversación de cada miembro.</string>
+    <string name="error_retry_mms_unsupported">Este MMS no se puede reenviar desde aquí. Envíelo de nuevo desde la ventana de escritura.</string>
+    <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
+    <string name="send_partial">Enviado a %1$d destinatario(s); no se ha podido alcanzar a %2$d.</string>
+    <string name="send_partial_blocked">Enviado a %1$d destinatario(s); %2$d omitidos porque usted los ha bloqueado.</string>
+
+    <!-- v1.14.8 ARCH-M2 — thread snackbars (i18n) — extracted from hardcoded VM strings. -->
+    <string name="snack_thread_max_duration">Límite alcanzado: %1$d s</string>
+    <string name="snack_thread_attach_sent">Archivo adjunto enviado</string>
+    <string name="snack_thread_attach_copy_failed">No se puede leer el archivo adjunto</string>
+    <string name="snack_thread_attach_cap_reached">Límite del MMS alcanzado (280 KB). Quite un archivo adjunto o acorte el texto.</string>
+    <string name="snack_thread_voice_sent">Mensaje de voz enviado</string>
+    <string name="snack_thread_numbers_blocked">Número(s) bloqueados</string>
+    <!-- v1.25.3 (audit M21) — the trash icon used to unblock instantly on a single tap. -->
+    <string name="blocked_unblock_confirm_title">¿Desbloquear este número?</string>
+    <string name="blocked_unblock_confirm_body">%1$s podrá volver a escribirle. Puede bloquearlo de nuevo en cualquier momento.</string>
+    <!-- v1.25.3 (audit H15/H16) — blocking used to report success even when it had failed. -->
+    <string name="snack_block_failed">El bloqueo ha fallado — el número no se ha bloqueado. La conversación se ha conservado.</string>
+    <!-- v1.25.3 (audit SEC3) — a partial block used to be reported as a full success, and the
+         conversation was deleted even though one participant could still reach the user. -->
+    <string name="snack_block_partial">Solo se han podido bloquear %1$d de %2$d números. La conversación se ha conservado para que no la pierda.</string>
+
+    <!-- v1.15.2 — Common a11y + UX strings for passphrase fields. -->
+    <string name="action_show_password">Mostrar la frase de contraseña</string>
+    <string name="action_hide_password">Ocultar la frase de contraseña</string>
+    <string name="backup_passphrase_min_length">Mínimo %1$d caracteres</string>
+
+    <!-- v1.15.2 — Backup restore (encrypted .smsbk). -->
+    <string name="backup_restore_explainer">Elija un archivo .smsbk y luego introduzca su frase de contraseña. Las conversaciones con los mismos destinatarios se fusionan con las actuales; los mensajes existentes se conservan (sin duplicados).</string>
+    <string name="backup_restore_pick_file">Elegir un archivo .smsbk</string>
+    <string name="backup_restore_passphrase_title">Frase de contraseña de la restauración</string>
+    <string name="backup_restore_passphrase_field">Frase de contraseña</string>
+    <string name="backup_restore_action">Restaurar</string>
+    <string name="backup_restore_in_progress">Restaurando…</string>
+    <string name="backup_restore_success">%1$d conversaciones (%2$d nuevas), %3$d mensajes importados (%4$d ya presentes)</string>
+    <string name="backup_restore_failed_wrong_pass">Frase de contraseña incorrecta o archivo dañado</string>
+    <string name="backup_restore_failed_format">No es un archivo de copia de seguridad de SMS Tech válido</string>
+    <string name="backup_restore_failed_storage">No se ha podido leer el archivo</string>
+
+    <!-- v1.15.1 — Scheduled messages screen + Thread schedule flow. -->
+    <string name="settings_section_scheduled">Mensajes programados</string>
+    <string name="scheduled_title">Mensajes programados</string>
+    <string name="scheduled_empty">No hay mensajes programados</string>
+    <!-- v1.15.1 — Inline how-to shown alongside the empty state, so the user discovers
+         the entry point even before reading AboutScreen. -->
+    <string name="scheduled_empty_explainer">Para programar un SMS: abra una conversación, escriba su mensaje y luego ⋮ → «Programar…» → elija fecha y hora. El SMS se enviará automáticamente en ese momento, aunque la app esté cerrada.</string>
+    <string name="scheduled_to">Para: %1$s</string>
+    <string name="scheduled_when">Programado para: %1$s</string>
+    <string name="scheduled_cancel_confirm_title">¿Cancelar este mensaje programado?</string>
+    <string name="scheduled_cancel_confirm_body">No se enviará. Esta acción no se puede deshacer.</string>
+    <string name="scheduled_cancel_confirm_action">Cancelar el envío</string>
+    <!-- v1.25.3 (audit H6) — failed sends were dropped from the list entirely. -->
+    <string name="scheduled_section_pending">Esperando a ser enviados</string>
+    <string name="scheduled_section_failed">Fallidos</string>
+    <string name="scheduled_failed_explainer">El envío ha fallado tras varios intentos. Vuelva a intentarlo, o quítelo de esta lista.</string>
+    <string name="scheduled_failed_when">Estaba previsto para: %1$s</string>
+    <string name="scheduled_delete_confirm_title">¿Quitar este mensaje?</string>
+    <string name="scheduled_delete_confirm_body">Se quitará de esta lista y no se enviará. Esta acción no se puede deshacer.</string>
+    <string name="scheduled_retried">Enviando de nuevo…</string>
+    <!-- v1.28.3 (F20) — un envoi revendiqué puis abandonné : issue réellement inconnue. -->
+    <string name="scheduled_section_failed_or_interrupted">Fallidos o interrumpidos</string>
+    <string name="scheduled_interrupted_explainer">Un mensaje interrumpido puede haberse enviado o no — no hay forma de saberlo. Enviarlo de nuevo podría entregarlo dos veces.</string>
+    <string name="scheduled_interrupted_when">Envío interrumpido, estaba previsto para: %1$s</string>
+    <string name="scheduled_cancel_too_late">Demasiado tarde para cancelar: este mensaje ya se está enviando.</string>
+    <string name="settings_scheduled_messages">Mensajes programados</string>
+    <string name="settings_scheduled_messages_desc">Vea y gestione los SMS programados</string>
+    <string name="thread_schedule_action">Programar…</string>
+    <string name="thread_schedule_date_title">Elija una fecha</string>
+    <string name="thread_schedule_time_title">Elija una hora</string>
+    <string name="thread_schedule_invalid_past">La fecha elegida está en el pasado</string>
+    <string name="thread_schedule_empty_body">Escriba un mensaje antes de programarlo</string>
+    <string name="thread_schedule_success">Mensaje programado</string>
+    <string name="thread_schedule_failed">No se ha podido programar el mensaje</string>
+
+    <!-- v1.14.9 audit I18N-M3 — AboutScreen strings extracted from hardcoded FR to support EN locale. -->
+
+    <!-- Privacy badges (4) -->
+    <string name="about_badge_no_ads">Sin publicidad</string>
+    <string name="about_badge_no_tracker">Sin rastreadores</string>
+    <string name="about_badge_no_collection">Sin recogida de datos</string>
+    <string name="about_badge_no_sharing">Cero compartición</string>
+
+    <!-- Features (15) -->
+    <string name="about_feat_sms_label">SMS y MMS</string>
+    <string name="about_feat_sms_desc">App de SMS predeterminada para Android 8 → 15+. Importación completa del historial, sin duplicados.</string>
+    <string name="about_feat_voice_label">Mensajes de voz</string>
+    <string name="about_feat_voice_desc">Pulsar y hablar, por MMS. Limitado a 60 s / 300 KB por compatibilidad con todos los operadores franceses.</string>
+    <string name="about_feat_vault_label">Caja fuerte cifrada</string>
+    <string name="about_feat_vault_desc">Conversaciones sensibles en una caja fuerte SQLCipher, con la clave protegida por el Keystore de Android.</string>
+    <string name="about_feat_panic_label">Código de pánico</string>
+    <string name="about_feat_panic_desc">Un segundo PIN abre la app en modo señuelo — la caja fuerte queda invisible e inaccesible.</string>
+    <string name="about_feat_emergency_label">Modo emergencia</string>
+    <string name="about_feat_emergency_desc">Mantenga pulsado el botón 3 s en la página de Emergencia → SMS de alerta con el prefijo ⚠️ a sus contactos de Safety call, con GPS opcional. Acceso rápido a los números de emergencia del país en el que se encuentra y accesos directos en la notificación de la pantalla de bloqueo.</string>
+    <string name="about_feat_biometric_label">Biometría</string>
+    <string name="about_feat_biometric_desc">Huella o rostro para desbloquear, con un PIN de reserva obligatorio.</string>
+    <string name="about_feat_reply_label">Respuesta contextual</string>
+    <string name="about_feat_reply_desc">Mini-ficha sobre la ventana de escritura + globo de respuesta con cita en la conversación.</string>
+    <string name="about_feat_translate_label">Traducción delegada</string>
+    <string name="about_feat_translate_desc">Pulsación larga → «Traducir» delega en la app de traducción que tenga instalada (Google Traductor, DeepL, Aves Translate FLOSS…) mediante un Intent del sistema. No se incluye ningún modelo.</string>
+    <string name="about_feat_block_label">Bloqueo sincronizado</string>
+    <string name="about_feat_block_desc">Importación automática de los números bloqueados en Teléfono / Samsung Messages. Limpieza retroactiva.</string>
+    <string name="about_feat_search_label">Búsqueda FTS</string>
+    <string name="about_feat_search_desc">Búsqueda de texto completo SQLite FTS4 en los textos, los números y los nombres de los contactos.</string>
+    <string name="about_feat_pdf_label">Exportación a PDF</string>
+    <string name="about_feat_pdf_desc">Exporte una conversación a PDF (fecha, remitente, texto) para archivo o prueba.</string>
+    <string name="about_feat_backup_label">Copia de seguridad cifrada</string>
+    <string name="about_feat_backup_desc">Copia local AES-256-GCM con una frase de contraseña distinta del PIN.</string>
+    <string name="about_feat_themes_label">Temas</string>
+    <string name="about_feat_themes_desc">Claro, oscuro, AMOLED, Dark Tech (azul pizarra + acento azul). Esquinas redondeadas personalizables.</string>
+    <string name="about_feat_ui_label">Interfaz fluida</string>
+    <string name="about_feat_ui_desc">Compose + recomposición aislada por globo. Ordenación de las conversaciones en el menú de tres puntos.</string>
+    <string name="about_feat_noads_label">Cero publicidad, cero rastreadores</string>
+    <string name="about_feat_noads_desc">Sin analítica. Única conexión de red: el MMSC del operador para el transporte de los MMS.</string>
+
+    <!-- Help recipes (7 titles + steps) -->
+    <string name="about_help_default_title">Establecerla como app de SMS predeterminada</string>
+    <string name="about_help_default_step1">Botón azul «Establecer como predeterminada» arriba de la lista de conversaciones</string>
+    <string name="about_help_default_step2">O Ajustes de Android → Apps predeterminadas → SMS → SMS Tech</string>
+    <string name="about_help_voice_title">Enviar un mensaje de voz</string>
+    <string name="about_help_voice_step1">Mantenga pulsado el micrófono a la derecha de la ventana de escritura</string>
+    <string name="about_help_voice_step2">Hable y luego suelte para enviar (deslice a la izquierda para cancelar)</string>
+    <string name="about_help_voice_step3">Límite de 60 s — más allá, la grabación se detiene sola</string>
+    <string name="about_help_vault_title">Mover una conversación a la caja fuerte</string>
+    <string name="about_help_vault_step1">Mantenga pulsada la conversación en la lista → «Caja fuerte»</string>
+    <string name="about_help_vault_step2">Desbloqueo: PIN, frase de contraseña o biometría según su ajuste</string>
+    <string name="about_help_vault_step3">Ajustes → Seguridad para configurar la caja fuerte</string>
+    <string name="about_help_block_title">Bloquear un número</string>
+    <string name="about_help_block_step1">En una conversación: menú ⋮ → Bloquear (= bloquea y elimina la conversación)</string>
+    <string name="about_help_block_step2">Mantenga pulsada una conversación en la lista → Bloquear (conserva el historial)</string>
+    <string name="about_help_block_step3">El número se añade a la lista de bloqueados del sistema, compartida con la app Teléfono</string>
+    <string name="about_help_translate_title">Traducir un mensaje recibido</string>
+    <string name="about_help_translate_step1">Mantenga pulsado el globo → «Traducir»</string>
+    <string name="about_help_translate_step2">Se abre una lista con todas las apps de traducción instaladas</string>
+    <string name="about_help_translate_step3">Elija Google Traductor, DeepL, Aves Translate (FLOSS) u otra</string>
+    <string name="about_help_translate_step4">Si no tiene ninguna, un mensaje le invita a instalar una</string>
+    <string name="about_help_emergency_title">Usar el modo emergencia</string>
+    <string name="about_help_emergency_step1">Ajustes → Modo emergencia: actívelo y añada al menos un contacto de Safety call</string>
+    <string name="about_help_emergency_step2">Página de Emergencia: llamadas directas a los números de emergencia de su país; botón rojo mantenido 3 s → SMS a sus seres queridos</string>
+    <string name="about_help_emergency_step3">Notificación en la pantalla de bloqueo (opcional): accesos directos al 112 y a la policía sin desbloquear</string>
+    <string name="about_help_emergency_step4">«Estoy bien» en la lista de conversaciones cancela la alerta en caso de activación accidental</string>
+    <string name="about_help_update_title">Buscar una actualización</string>
+    <string name="about_help_update_step1">Botón «Ver las actualizaciones» arriba de esta página</string>
+    <string name="about_help_update_step2">Abre la página de GitHub Releases de SMS Tech</string>
+    <string name="about_help_update_step3">La app nunca intenta actualizarse sola sin su consentimiento</string>
+
+    <!-- v1.14.8 R1/R2 — incoming MMS failure notification (size cap or MMSC error). -->
+    <string name="mms_failure_notification_title">MMS no recibido</string>
+    <string name="mms_failure_notification_body_too_large">Mensaje de %1$s demasiado grande (%2$d KB). Toque para abrir los ajustes de MMS.</string>
+    <string name="mms_failure_notification_body_download_failed">No se ha podido descargar el MMS de %1$s. Compruebe la cobertura y reintente.</string>
+    <string name="mms_failure_notification_body_unknown_sender">un contacto desconocido</string>
+
+    <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->
+    <string name="thread_retry_watchdog_title">¿Reenviar este mensaje?</string>
+    <string name="thread_retry_watchdog_body">Puede que el intento anterior ya haya llegado al destinatario. Reenviarlo podría crear un duplicado.</string>
+    <string name="thread_retry_watchdog_confirm">Reenviar de todos modos</string>
+    <string name="thread_retry_watchdog_cancel">Cancelar</string>
+
+    <!-- v1.14.8 R4 — floating chip shown when new messages arrive while scrolled up. -->
+    <plurals name="thread_unseen_messages">
+        <item quantity="one">↓ %d mensaje nuevo</item>
+        <item quantity="many">↓ %d mensajes nuevos</item>
+        <item quantity="other">↓ %d mensajes nuevos</item>
+    </plurals>
+
+    <!-- v1.13.0 — plurals for multi-selection counts -->
+    <plurals name="conversations_selection_count">
+        <item quantity="one">%d seleccionada</item>
+        <item quantity="many">%d seleccionadas</item>
+        <item quantity="other">%d seleccionadas</item>
+    </plurals>
+    <plurals name="vault_bulk_move_in_done">
+        <item quantity="one">%d conversación movida a la caja fuerte</item>
+        <item quantity="many">%d conversaciones movidas a la caja fuerte</item>
+        <item quantity="other">%d conversaciones movidas a la caja fuerte</item>
+    </plurals>
+    <plurals name="vault_bulk_move_out_done">
+        <item quantity="one">%d conversación sacada de la caja fuerte</item>
+        <item quantity="many">%d conversaciones sacadas de la caja fuerte</item>
+        <item quantity="other">%d conversaciones sacadas de la caja fuerte</item>
+    </plurals>
+    <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
+    <string name="thread_load_older">Cargar los mensajes más antiguos</string>
+    <string name="thread_load_older_remaining">Cargar los mensajes más antiguos (%1$d)</string>
+    <!-- v1.24.0 : ecran de recuperation quand la base ne peut pas etre ouverte -->
+    <string name="db_recovery_title">SMS Tech no puede abrir su base de datos</string>
+    <string name="db_recovery_body">Sus mensajes siguen en este dispositivo — Android guarda su propia copia y SMS Tech no ha eliminado nada. Ahora mismo solo es ilegible la base de datos cifrada propia de SMS Tech.</string>
+    <string name="db_recovery_hint">Esto suele ocurrir después de cambiar el bloqueo de pantalla o de restaurar el dispositivo, lo que invalida la clave que protege la base de datos. Vale la pena probar antes a reiniciar el teléfono. Si esta pantalla sigue apareciendo, reinstalar SMS Tech reconstruirá su base de datos a partir de los mensajes que Android ya conserva.</string>
+    <string name="action_add">Añadir</string>
+    <string name="action_discard">Descartar</string>
+    <string name="safety_call_saved_enabled">Safety call activado</string>
+    <string name="safety_call_saved_disabled">Safety call desactivado</string>
+    <string name="safety_call_contact_added">Contacto añadido</string>
+    <string name="safety_call_contact_removed">Contacto quitado</string>
+    <string name="safety_call_setup_state_label">Estado:</string>
+    <string name="safety_call_setup_state_on">Activo</string>
+    <string name="safety_call_setup_state_off">Desactivado</string>
+    <string name="safety_call_setup_state_unsaved">Cambios sin guardar — toque Guardar para aplicarlos.</string>
+    <string name="safety_call_setup_disabled_now">Safety call desactivado de inmediato.</string>
+    <string name="safety_call_setup_unsaved_title">Cambios sin guardar</string>
+    <string name="safety_call_setup_unsaved_body">Añadir un contacto no basta: hay que guardarlo para que se conserve. Si sale ahora, se perdería.</string>
+    <string name="emergency_location_grant">Permitir la ubicación</string>
+    <string name="settings_panic_code_desc">Un segundo código que abre la app en modo señuelo: caja fuerte y modo emergencia ocultos.</string>
+    <string name="settings_panic_code_set">Configurado. Toque para quitarlo.</string>
+    <string name="settings_panic_code_clear_title">¿Quitar el código de pánico?</string>
+    <string name="settings_panic_code_clear_body">El modo señuelo dejará de ser accesible. Su PIN principal y sus datos no cambian.</string>
+    <string name="settings_panic_code_clear_action">Quitar</string>
+    <string name="settings_panic_code_saved">Código de pánico guardado</string>
+    <string name="settings_panic_code_removed">Código de pánico quitado</string>
+    <string name="settings_panic_code_same_as_pin">Este código es el mismo que su PIN principal. Elija otro, o la app se abriría siempre en modo señuelo.</string>
+    <string name="settings_panic_code_no_pin">Configure antes un bloqueo de la app.</string>
+    <string name="settings_pin_same_as_panic_code">Este PIN es el mismo que su código de pánico. Elija otro, o la app se abriría siempre en modo señuelo y usted ya no podría llegar a su propia sesión.</string>
+    <string name="lock_wrong_code">Código incorrecto</string>
+
+    <!-- ====================================================================================
+         v1.28.12 — THE TEXT THAT IS ACTUALLY SENT.
+
+         These are not screen labels. They are the SMS that leave the phone when someone holds
+         the emergency button for three seconds, or when Safety call decides nobody has touched
+         the phone for long enough. Until now they were hardcoded in French and went out in
+         French to everyone, English users included.
+
+         Rules that are not style, and that hold in EVERY language:
+          - keep them short. 160 characters in GSM-7, 70 in UCS-2, and the Maps URL counts
+            against that budget;
+          - no em dash (U+2014). It switches the whole message to UCS-2, which halves the
+            segment size and risks losing the second part in weak coverage — precisely the
+            situation these messages exist for. A plain ASCII hyphen is enough;
+          - %1$s in the emergency bodies is the location, or an explicit mention when it is not
+            available, so the recipient knows the absence is deliberate and not a bug.
+         ==================================================================================== -->
+    <string name="safety_sms_emergency_need_help">⚠️ EMERGENCIA - necesito ayuda. Mi ubicación: %1$s</string>
+    <string name="safety_sms_emergency_danger">⚠️ PELIGRO - situación crítica, contáctame o ven. Ubicación: %1$s</string>
+    <!-- No ⚠️ on this one, deliberately: DISCREET exists to signal trouble without alarming, and
+         without giving the situation away to someone glancing at the screen. -->
+    <string name="safety_sms_emergency_discreet">¿Puedes llamarme? Necesito ayuda. Ubicación: %1$s</string>
+    <string name="safety_sms_location_unavailable">(ubicación no disponible)</string>
+
+    <string name="safety_sms_check_in">Hola. No he usado el teléfono desde hace %1$s. ¿Puedes llamarme o pasarte para ver que todo va bien? Gracias.</string>
+    <string name="safety_sms_urgent">Si lees este SMS, es que no he podido usar el teléfono desde hace %1$s. Para saber que todo va bien, llámame por favor.</string>
+    <string name="safety_sms_follow_up">Mensaje automático: sin actividad en mi teléfono desde hace %1$s. ¿Puedes llamarme para comprobar que todo va bien? Gracias.</string>
+
+    <!-- Follow-ups. Each one names the app and stands on its own: the first message may never
+         have arrived, and an unsigned SMS in the middle of the night reads as phishing and gets
+         ignored. The last one says that it is the last, so that nobody waits for a message that
+         will never come instead of acting.
+
+         Lint flags "%1$d minutes" as a plural candidate here, and these are deliberately NOT
+         plurals: the value is the follow-up interval times the index, so 15, 30 or 45 — never 1.
+         Making them plurals would ask every translator to write a singular form that can never
+         appear on screen. -->
+    <string name="safety_sms_relance_first">Alerta automática de SMS Tech: sigue sin haber actividad en mi teléfono, %1$d minutos después. Intenta localizarme, por favor.</string>
+    <string name="safety_sms_relance_middle">Alerta automática de SMS Tech: %1$d minutos sin actividad por mi parte. Si no logras localizarme, avisa a alguien cercano a mí.</string>
+    <string name="safety_sms_relance_last">Última alerta automática de SMS Tech: %1$d minutos sin actividad. No seguirá ningún otro mensaje. Comprueba por favor que estoy bien.</string>
+
+    <string name="safety_duration_less_than_hour">menos de una hora</string>
+    <plurals name="safety_duration_hours">
+        <item quantity="one">%1$d hora</item>
+        <item quantity="many">%1$d horas</item>
+        <item quantity="other">%1$d horas</item>
+    </plurals>
+    <plurals name="safety_duration_days">
+        <item quantity="one">%1$d día</item>
+        <item quantity="many">%1$d días</item>
+        <item quantity="other">%1$d días</item>
+    </plurals>
+    <string name="duration_days_hours">%1$d d %2$d h</string>
+</resources>

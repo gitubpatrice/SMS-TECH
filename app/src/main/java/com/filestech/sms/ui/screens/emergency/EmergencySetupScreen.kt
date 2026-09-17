@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.currentStateAsState
 import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyTemplate
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
+import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.theme.BrandBlue
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -91,6 +92,12 @@ fun EmergencySetupScreen(
     // v1.25.5 — la liste elle-même, pour l'afficher au lieu d'un simple compte.
     val emergencyContacts by viewModel.safetyCallContacts.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
+
+    // v1.28.12 — le retour du sélecteur système ne porte rien d'utile : c'est le `ON_RESUME`
+    // de [BanniereRoleSmsManquant] qui relit l'état du rôle et fait disparaître la bannière.
+    val lanceurRoleSms = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { }
 
     // v1.27.2 — AVERTISSEMENT AU RETOUR. Constate sur appareil : « si je fais retour ca m indique
     // rien ». Quitter jetait le brouillon en silence — sur une fonction qui envoie de vrais SMS
@@ -192,6 +199,15 @@ fun EmergencySetupScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // v1.28.12 — AVANT tout le reste : sans le role d'application SMS par defaut, le
+            // bouton d'urgence n'enverra rien. Cet ecran l'ignorait entierement.
+            BanniereRoleSmsManquant(
+                aLeRole = { viewModel.defaultAppManager.isDefault() },
+                onCorriger = {
+                    viewModel.defaultAppManager.buildChangeDefaultIntent()
+                        ?.let { lanceurRoleSms.launch(it) }
+                },
+            )
             // 1. Activation
             SetupCard {
                 Row(

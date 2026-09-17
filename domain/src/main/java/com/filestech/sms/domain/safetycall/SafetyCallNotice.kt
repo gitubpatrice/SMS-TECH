@@ -50,6 +50,19 @@ sealed interface SafetyCallNotice {
     data class Warning(val hoursLeft: Int) : SafetyCallNotice
 
     /**
+     * v1.28.12 — **armé, mais hors d'état d'envoyer.**
+     *
+     * L'application n'est pas (ou n'est plus) l'application SMS par défaut : à l'échéance, le
+     * système refusera l'envoi, et la protection ne se déclenchera pas. Cet état prime sur
+     * [Warning], dont le message — « déclenchement dans N heures » — serait faux.
+     *
+     * Il ne porte aucune donnée : la condition est vivante et se relit à chaque réconciliation,
+     * plutôt que d'être figée dans un instantané. Rien à dédupliquer non plus, donc aucune
+     * republication parasite.
+     */
+    data object EnvoiImpossible : SafetyCallNotice
+
+    /**
      * Séquence d'alerte en cours : « alerte envoyée, N message(s) sur M ».
      *
      * [delivered] compte les envois **conclus**, jamais les créneaux réservés — voir
@@ -100,11 +113,18 @@ sealed interface SafetyCallNotice {
          * disparu pendant l'envoi du dernier message — privant l'utilisateur de son seul moyen de
          * l'arrêter.
          */
+        /**
+         * @param peutEnvoyer l'application détient-elle, MAINTENANT, le rôle qui lui permet
+         *   d'envoyer un SMS ? Volontairement **sans valeur par défaut** : un défaut à `true`
+         *   serait un piège pour le prochain appelant, qui hériterait en silence du défaut que
+         *   ce paramètre existe pour fermer.
+         */
         fun decide(
             cfg: SafetyCallConfig,
             isDecoy: Boolean,
             nowMs: Long,
             nowMonoMs: Long,
+            peutEnvoyer: Boolean,
         ): SafetyCallNotice {
             if (isDecoy) return None
             // 🔴 v1.27.2 (relecture Gemini du 2026-08-05, F-01) — UNE SEQUENCE TERMINEE DOIT
@@ -166,6 +186,32 @@ sealed interface SafetyCallNotice {
                     canRearm = cfg.contacts.isNotEmpty(),
                 )
                 !cfg.enabled -> None
+                // 🔴 v1.28.12 — UN HOMME-MORT QUI NE PEUT PAS TIRER DOIT LE DIRE, ET AVANT
+                // L'ÉCHÉANCE.
+                //
+                // `SendSmsUseCase.refusPrealable` refuse tout envoi si l'application n'est pas
+                // l'application SMS par défaut. Le Safety call et le mode urgence passent tous
+                // deux par là. À l'échéance, `TriggerSafetyCallUseCase` rendait le créneau et
+                // retournait `SendFailed` — et comme la restitution remet `triggeredAt` à zéro,
+                // `sequenceVisible` était faux : **aucune notification, jamais**. Le tick suivant
+                // réessayait, échouait pareil, indéfiniment, pendant que l'écran continuait
+                // d'afficher « activé » et un compte à rebours.
+                //
+                // Quelqu'un qui n'a pas accordé le rôle, ou qui l'a perdu en changeant
+                // d'application SMS, croyait donc être protégé et ne l'était pas. La protection
+                // s'éteignait exactement quand elle sert. Relevé par un audit de motifs le
+                // 2026-09-17 ; aucun test ne pouvait tomber dessus, car tous les doubles de test
+                // posent `isDefault() = true`.
+                //
+                // La décision est ici, et pas dans le worker, délibérément : depuis la v1.27.2 le
+                // worker n'affiche plus rien, parce que deux écrivains sans état commun avaient
+                // laissé un avertissement révéler l'existence de la fonction en mode leurre. Le
+                // réconciliateur unique reste unique.
+                //
+                // Placé APRÈS `!cfg.enabled` — désarmé reste silencieux — et AVANT la fenêtre
+                // d'avertissement : « je ne peux pas envoyer » prime sur « j'enverrai dans N
+                // heures », puisque la seconde est fausse tant que la première est vraie.
+                !peutEnvoyer -> EnvoiImpossible
                 cfg.isInWarningWindow(nowMs, nowMonoMs) ->
                     Warning(hoursLeft = hoursLeft(cfg, nowMs, nowMonoMs))
                 else -> None

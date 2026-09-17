@@ -87,6 +87,10 @@ class SafetyCallWarningNotifier @Inject constructor(
                 dismissSequence()
                 showWarning(notice.hoursLeft)
             }
+            SafetyCallNotice.EnvoiImpossible -> {
+                dismissSequence()
+                showEnvoiImpossible()
+            }
             is SafetyCallNotice.Sequence -> {
                 dismissWarning()
                 showSequence(notice)
@@ -103,6 +107,50 @@ class SafetyCallWarningNotifier @Inject constructor(
      *   [SafetyCallNotice.decide] — c'est la seule granularité que la notification affiche, et
      *   c'est sur elle que le réconciliateur déduplique.
      */
+    /**
+     * v1.28.12 — armé, mais l'application n'a pas le rôle qui lui permettrait d'envoyer.
+     *
+     * Elle occupe **le même créneau de notification que l'avertissement** ([NOTIF_ID_DEADMAN_WARNING])
+     * et c'est délibéré : les deux états sont exclusifs, et laisser coexister « déclenchement dans
+     * 3 heures » avec « je ne peux pas envoyer » dirait à l'utilisateur deux choses contradictoires
+     * dans le même volet. Le `when` de [reconcile] garantit qu'un seul des deux est posé.
+     *
+     * Le tap mène au même endroit que l'avertissement — l'application, après déverrouillage — où
+     * la bannière « définir comme application SMS par défaut » propose le geste qui répare.
+     */
+    private fun showEnvoiImpossible() {
+        if (!hasPostPermission()) {
+            Timber.w("SafetyCallWarningNotifier: POST_NOTIFICATIONS refusee, notification d'envoi impossible sautee")
+            return
+        }
+        val tapIntent = resetActivityIntent(intentToken.rotate())
+        val notif = NotificationCompat.Builder(
+            context,
+            NotificationChannelInitializer.CHANNEL_SAFETY_CALL_WARNING,
+        )
+            .setSmallIcon(R.drawable.ic_notification_message)
+            .setContentTitle(context.getString(R.string.safety_call_cannot_send_title))
+            .setContentText(context.getString(R.string.safety_call_cannot_send_body))
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(context.getString(R.string.safety_call_cannot_send_body)),
+            )
+            // Même raisonnement que pour l'avertissement : `ongoing` ne rend plus rien
+            // non-balayable depuis Android 14, et il n'y a volontairement PAS de `deleteIntent` —
+            // un balayage doit être inerte, pour qu'aucun geste depuis le volet, écran verrouillé,
+            // ne puisse faire taire cet état. La réconciliation suivante le republie.
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(tapIntent)
+            .build()
+
+        @android.annotation.SuppressLint("MissingPermission")
+        NotificationManagerCompat.from(context).notify(NOTIF_ID_DEADMAN_WARNING, notif)
+        Timber.w("SafetyCallWarningNotifier: arme mais role SMS absent - envoi impossible signale")
+    }
+
     private fun showWarning(hoursLeft: Int) {
         if (!hasPostPermission()) {
             Timber.w("SafetyCallWarningNotifier: POST_NOTIFICATIONS not granted, skipping warning")

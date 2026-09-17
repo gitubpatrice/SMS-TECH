@@ -48,6 +48,15 @@ class MainApplication : Application(), Configuration.Provider {
 
     @Inject lateinit var settingsRepository: SettingsRepository
 
+    /**
+     * v1.28.12 — le rôle d'application SMS par défaut, relu à chaque réconciliation du Safety
+     * call. Il n'a pas de flux : c'est un appel Binder synchrone. Le `combine` ci-dessous se
+     * rejoue à chaque écriture de configuration — et le worker en écrit une à chaque tick
+     * horaire — donc la perte du rôle est vue au plus tard une heure après, et immédiatement
+     * au retour au premier plan par [MainActivity.republishSafetyCallNotice].
+     */
+    @Inject lateinit var defaultSmsAppChecker: com.filestech.sms.domain.sender.DefaultSmsAppChecker
+
     /** v1.12.0 — observed dynamically + posted/cancelled by `appScope` loop. */
     @Inject lateinit var emergencyShortcutNotifier: com.filestech.sms.system.notifications.EmergencyShortcutNotifier
 
@@ -275,6 +284,7 @@ class MainApplication : Application(), Configuration.Provider {
                     isDecoy = isDecoy,
                     nowMs = System.currentTimeMillis(),
                     nowMonoMs = SystemClock.elapsedRealtime(),
+                    peutEnvoyer = defaultSmsAppChecker.isDefault(),
                 )
             }
                 .distinctUntilChanged()
