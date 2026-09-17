@@ -380,7 +380,6 @@
 
     <!-- Settings -->
     <string name="settings_title">Einstellungen</string>
-    <string name="settings_search">Einstellungen durchsuchen…</string>
 
     <string name="settings_section_appearance">Darstellung</string>
     <string name="settings_theme_system">System</string>
@@ -462,8 +461,8 @@
 
 
     <!-- v1.9.0 — Safety call -->
-    <string name="settings_section_safety_call">Safety Call</string>
-    <string name="settings_safety_call_title">Safety Call</string>
+    <string name="settings_section_safety_call">Safety call</string>
+    <string name="settings_safety_call_title">Safety call</string>
     <string name="settings_safety_call_desc">Sendet automatisch eine SMS an Ihre Notfallkontakte, wenn Sie SMS Tech eine eingestellte Zeit lang nicht öffnen. Gedacht für Alleinreisende, abgelegenes Wohnen, gefährdete Berufe.</string>
     <string name="settings_safety_call_disabled">Deaktiviert</string>
     <string name="settings_safety_call_disabled_after_alert">Deaktiviert — ein Alarm wurde ausgelöst</string>
@@ -471,14 +470,14 @@
     <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
     <string name="settings_safety_call_armed_chip">Aktiv</string>
     <string name="settings_safety_call_armed_started">Zeitgeber gestartet: %1$s um %2$s</string>
-    <string name="settings_safety_call_im_ok_stops_relances">Safety Call ausgeschaltet. Es wird keine weitere Nachricht gesendet.</string>
+    <string name="settings_safety_call_im_ok_stops_relances">Safety call ausgeschaltet. Es wird keine weitere Nachricht gesendet.</string>
     <plurals name="settings_safety_call_triggered_state">
         <item quantity="one">Alarm gesendet — %1$d Nachricht von %2$d</item>
         <item quantity="other">Alarm gesendet — %1$d Nachrichten von %2$d</item>
     </plurals>
     <string name="settings_safety_call_triggered_hint">Folgenachrichten werden alle 15 Minuten gesendet. Tippen Sie auf „Mir geht es gut“, um sie zu stoppen.</string>
     <string name="settings_safety_call_triggered_state_sending">Alarm wird gesendet…</string>
-    <string name="settings_safety_call_triggered_hint_done">Abfolge beendet: Safety Call hat sich selbst ausgeschaltet. Schalten Sie ihn wieder ein, um erneut geschützt zu sein.</string>
+    <string name="settings_safety_call_triggered_hint_done">Abfolge beendet: Safety call hat sich selbst ausgeschaltet. Schalten Sie ihn wieder ein, um erneut geschützt zu sein.</string>
     <string name="settings_safety_call_armed_duration">Dauer: %1$s</string>
     <string name="settings_safety_call_armed_remaining">Verbleibend: %1$s bis zur Auslösung</string>
     <string name="settings_safety_call_armed_remaining_imminent">Weniger als 2 Std. bis zur Auslösung</string>
@@ -488,12 +487,12 @@
     <string name="settings_safety_call_armed_modify">Ändern</string>
     <string name="settings_safety_call_armed_actions_hint">„Mir geht es gut“ setzt den Zeitgeber zurück: die Frist beginnt wieder von vorn, und es wird keine Nachricht gesendet. „Ändern“ öffnet die Einstellungen (Dauer, Kontakte, Nachricht).</string>
     <string name="settings_safety_call_armed_im_ok_short">Mir geht es gut</string>
-    <string name="safety_call_setup_title">Safety Call</string>
+    <string name="safety_call_setup_title">Safety call</string>
     <string name="safety_call_setup_section_status">Status</string>
     <string name="safety_call_setup_section_duration">Dauer</string>
     <string name="safety_call_setup_section_contacts">Notfallkontakte (max. 4)</string>
     <string name="safety_call_setup_section_template">Nachricht</string>
-    <string name="safety_call_setup_toggle_enable">Safety Call aktivieren</string>
+    <string name="safety_call_setup_toggle_enable">Safety call aktivieren</string>
     <string name="safety_call_setup_toggle_desc">Wenn aktiviert, setzt jedes Öffnen von SMS Tech den Zeitgeber zurück. Öffnen Sie die App nicht innerhalb der gewählten Dauer, erhalten Ihre Kontakte automatisch eine SMS.</string>
     <string name="safety_call_setup_duration_24h">24 Stunden</string>
     <string name="safety_call_setup_duration_48h">48 Stunden</string>
@@ -520,8 +519,8 @@
     <string name="safety_call_setup_shared_with_emergency">Diese Kontakte werden auch vom Notfallmodus verwendet, der noch aktiv ist. Die Liste zu leeren ließe ihn ohne jemanden zum Alarmieren zurück. Schalten Sie zuerst den Notfallmodus aus oder behalten Sie mindestens einen Kontakt.</string>
     <string name="safety_call_setup_save_validation_custom_empty">Die eigene Nachricht darf nicht leer sein.</string>
     <string name="safety_call_warning_title">SMS Tech — bestätigen Sie, dass alles in Ordnung ist</string>
-    <string name="safety_call_warning_body_hours">Safety Call löst in etwa %1$d Stunden aus. Tippen Sie, um den Zeitgeber zurückzusetzen.</string>
-    <string name="safety_call_warning_body_imminent">Safety Call löst in weniger als 2 Stunden aus. Tippen Sie, um jetzt zurückzusetzen.</string>
+    <string name="safety_call_warning_body_hours">Safety call löst in etwa %1$d Stunden aus. Tippen Sie, um den Zeitgeber zurückzusetzen.</string>
+    <string name="safety_call_warning_body_imminent">Safety call löst in weniger als 2 Stunden aus. Tippen Sie, um jetzt zurückzusetzen.</string>
     <string name="safety_call_sequence_title">SMS Tech — Alarm gesendet</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d von %2$d Nachricht an Ihre Kontakte gesendet. Tippen Sie, wenn alles in Ordnung ist: die Folgenachrichten hören auf.</item>
@@ -529,19 +528,19 @@
     </plurals>
     <string name="safety_call_sequence_title_sending">SMS Tech — Alarm wird gesendet</string>
     <string name="safety_call_sequence_body_sending">Der Alarm wird an Ihre Kontakte gesendet. Tippen Sie, wenn alles in Ordnung ist: das Senden hört auf.</string>
-    <string name="safety_call_sequence_title_done">SMS Tech — Alarm gesendet, Safety Call aus</string>
+    <string name="safety_call_sequence_title_done">SMS Tech — Alarm gesendet, Safety call aus</string>
     <plurals name="safety_call_sequence_body_done">
-        <item quantity="one">%1$d von %2$d Nachricht wurde an Ihre Kontakte gesendet. Safety Call ist jetzt aus — tippen Sie auf „Wieder einschalten“, um ihn erneut scharfzustellen.</item>
-        <item quantity="other">Alle %1$d Nachrichten wurden an Ihre Kontakte gesendet. Safety Call ist jetzt aus — tippen Sie auf „Wieder einschalten“, um ihn erneut scharfzustellen.</item>
+        <item quantity="one">%1$d von %2$d Nachricht wurde an Ihre Kontakte gesendet. Safety call ist jetzt aus — tippen Sie auf „Wieder einschalten“, um ihn erneut scharfzustellen.</item>
+        <item quantity="other">Alle %1$d Nachrichten wurden an Ihre Kontakte gesendet. Safety call ist jetzt aus — tippen Sie auf „Wieder einschalten“, um ihn erneut scharfzustellen.</item>
     </plurals>
     <string name="safety_call_notif_action_rearm">Wieder einschalten</string>
     <!-- v1.27.4 — confirmation shown after the “Turn back on” action of the receipt notification.
          The two other confirmations reuse the Settings wording (settings_safety_call_im_ok_snack /
          settings_safety_call_im_ok_stops_relances) on purpose: the same gesture must read the same
          way wherever it is made. -->
-    <string name="safety_call_ack_rearmed">Safety Call ist wieder an. Der Zeitgeber beginnt von vorn.</string>
+    <string name="safety_call_ack_rearmed">Safety call ist wieder an. Der Zeitgeber beginnt von vorn.</string>
     <string name="safety_call_reset_warning_title">Der Zeitgeber beginnt neu, wenn Sie SMS Tech öffnen</string>
-    <string name="safety_call_reset_warning_body">Sobald Safety Call an ist, beginnt der Zeitgeber neu, sobald Sie diese App öffnen und entsperren. Ihr Telefon anderweitig zu benutzen ändert nichts daran: Öffnen Sie SMS Tech nicht innerhalb der gewählten Frist, geht der Alarm an Ihre Kontakte hinaus.</string>
+    <string name="safety_call_reset_warning_body">Sobald Safety call an ist, beginnt der Zeitgeber neu, sobald Sie diese App öffnen und entsperren. Ihr Telefon anderweitig zu benutzen ändert nichts daran: Öffnen Sie SMS Tech nicht innerhalb der gewählten Frist, geht der Alarm an Ihre Kontakte hinaus.</string>
     <string name="safety_call_history_title">Verlauf der Auslösungen</string>
     <string name="safety_call_history_empty">Keine Auslösung verzeichnet.</string>
     <plurals name="safety_call_history_count">
@@ -553,7 +552,7 @@
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Notfallmodus</string>
     <string name="settings_emergency_title">Notfallmodus</string>
-    <string name="settings_emergency_desc">Eine Schaltfläche, die 3 s gehalten wird, sendet eine SMS mit Ihrem aktuellen Standort an Ihre Notfallkontakte. Unterscheidet sich von Safety Call (der bei Untätigkeit automatisch auslöst). Standardmäßig deaktiviert.</string>
+    <string name="settings_emergency_desc">Eine Schaltfläche, die 3 s gehalten wird, sendet eine SMS mit Ihrem aktuellen Standort an Ihre Notfallkontakte. Unterscheidet sich von Safety call (der bei Untätigkeit automatisch auslöst). Standardmäßig deaktiviert.</string>
     <string name="settings_emergency_disabled">Deaktiviert</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Aktiv</string>
@@ -655,7 +654,6 @@
     <string name="settings_notif_preview_never">Nie auf dem Sperrbildschirm</string>
     <string name="settings_notif_preview_never_hint">Spielt den Ton ab, aber auf dem Sperrbildschirm erscheint nichts — vollständig unsichtbar, bis Sie entsperren und die App öffnen.</string>
     <string name="settings_notif_style">Stil der Benachrichtigungen</string>
-    <string name="settings_notif_style_desc">Wie eingehende Benachrichtigungen Sie unterbrechen.</string>
     <string name="settings_notif_style_heads_up">Einblendung (Standard)</string>
     <string name="settings_notif_style_heads_up_hint">Ein Banner erscheint mit Ton über dem aktuellen Bildschirm und wandert danach in die Leiste.</string>
     <string name="settings_notif_style_banner">Nur Banner</string>
@@ -684,7 +682,6 @@
     <string name="settings_default_sms_app">Standard-SMS-App</string>
     <string name="settings_set_default">Als Standard festlegen</string>
     <string name="settings_is_default">SMS Tech ist die Standard-SMS-App.</string>
-    <string name="settings_app_log">App-Protokoll</string>
     <string name="settings_reset_all">Alle Einstellungen zurücksetzen</string>
     <string name="settings_nuke_data">Alle meine Daten löschen</string>
     <string name="settings_nuke_confirm">Alle Unterhaltungen werden in SMS Tech UND im Nachrichtenspeicher des Telefons gelöscht, dazu Anhänge, geplante Sendungen und sämtliche Einstellungen. Der Tresor wird ebenfalls gelöscht. Das lässt sich nicht rückgängig machen, und bei der nächsten Synchronisierung kommt nichts zurück.</string>
@@ -885,7 +882,7 @@
     <string name="about_feat_pdf_desc">Eine Unterhaltung als PDF exportieren (Datum, Absender, Text) zur Ablage oder als Nachweis.</string>
     <string name="about_feat_backup_label">Verschlüsselte Sicherung</string>
     <string name="about_feat_backup_desc">Lokale AES-256-GCM-Sicherung mit einer von der PIN verschiedenen Passphrase.</string>
-    <string name="about_feat_themes_label">Themen</string>
+    <string name="about_feat_themes_label">Designs</string>
     <string name="about_feat_themes_desc">Hell, dunkel, AMOLED, Dark Tech (Schiefer-Blau mit blauem Akzent). Abgerundete Ecken einstellbar.</string>
     <string name="about_feat_ui_label">Flüssige Oberfläche</string>
     <string name="about_feat_ui_desc">Compose mit pro Sprechblase isolierter Neuzeichnung. Sortierung der Unterhaltungen im Drei-Punkte-Menü.</string>
@@ -963,15 +960,15 @@
     <string name="db_recovery_hint">Das passiert meist, nachdem die Bildschirmsperre geändert oder das Gerät wiederhergestellt wurde, was den Schlüssel ungültig macht, der die Datenbank schützt. Einen Neustart des Telefons zuerst zu versuchen lohnt sich. Erscheint dieser Bildschirm weiterhin, baut eine Neuinstallation von SMS Tech seine Datenbank aus den Nachrichten wieder auf, die Android bereits hält.</string>
     <string name="action_add">Hinzufügen</string>
     <string name="action_discard">Verwerfen</string>
-    <string name="safety_call_saved_enabled">Safety Call aktiviert</string>
-    <string name="safety_call_saved_disabled">Safety Call deaktiviert</string>
+    <string name="safety_call_saved_enabled">Safety call aktiviert</string>
+    <string name="safety_call_saved_disabled">Safety call deaktiviert</string>
     <string name="safety_call_contact_added">Kontakt hinzugefügt</string>
     <string name="safety_call_contact_removed">Kontakt entfernt</string>
     <string name="safety_call_setup_state_label">Zustand:</string>
     <string name="safety_call_setup_state_on">Aktiv</string>
     <string name="safety_call_setup_state_off">Deaktiviert</string>
     <string name="safety_call_setup_state_unsaved">Nicht gespeicherte Änderungen — tippen Sie auf Speichern, um sie zu übernehmen.</string>
-    <string name="safety_call_setup_disabled_now">Safety Call sofort deaktiviert.</string>
+    <string name="safety_call_setup_disabled_now">Safety call sofort deaktiviert.</string>
     <string name="safety_call_setup_unsaved_title">Nicht gespeicherte Änderungen</string>
     <string name="safety_call_setup_unsaved_body">Einen Kontakt hinzuzufügen genügt nicht: er muss gespeichert werden, um erhalten zu bleiben. Jetzt zu gehen würde ihn verlieren.</string>
     <string name="emergency_location_grant">Standort erlauben</string>

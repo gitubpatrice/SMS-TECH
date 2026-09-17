@@ -157,6 +157,18 @@ def verifier_test_des_sms(traduites):
               "sur l'anglais en croyant mesurer %s" % (lg, lg))
 
 
+# Les categories CLDR exigees par chaque langue livree. Une categorie manquante fait
+# rendre le mauvais texte pour ces quantites-la ; une categorie en trop est du texte
+# mort, jamais affiche. La source est le CLDR, et le lint `MissingQuantity` d'Android
+# dit la meme chose — ce controle existe pour que le gate le dise AUSSI, sans lint.
+QUANTITES_CLDR = {
+    "en": {"one", "other"},
+    "de": {"one", "other"},
+    "fr": {"one", "many", "other"},
+    "it": {"one", "many", "other"},
+    "es": {"one", "many", "other"},
+}
+
 PLAFONDS_FASTLANE = {
     "title.txt": 50,
     "short_description.txt": 80,
@@ -187,18 +199,51 @@ def verifier_fastlane():
     racine = os.path.join(RACINE, "fastlane", "metadata", "android")
     if not os.path.isdir(racine):
         return
+    version = version_publiee()
     for locale in sorted(os.listdir(racine)):
         dossier = os.path.join(racine, locale)
         if not os.path.isdir(dossier):
             continue
         for nom, plafond in sorted(PLAFONDS_FASTLANE.items()):
             chemin = os.path.join(dossier, nom)
+            # v1.28.12 — un fichier ABSENT etait ignore par un `continue`. Une langue
+            # livree sans `title.txt` passait donc le controle en silence : le trou le
+            # plus facile a ne pas voir, puisqu'il ne produit aucune sortie.
             if not os.path.isfile(chemin):
+                echec(locale, "fastlane/%s MANQUANT" % nom)
                 continue
             octets = len(open(chemin, "rb").read().strip())
             if octets > plafond:
                 echec(locale, "fastlane/%s : %d octets pour un plafond de %d "
                               "(depasse de %d)" % (nom, octets, plafond, octets - plafond))
+        # v1.28.12 — les changelogs n'etaient jamais regardes. Les trois langues livrees
+        # cette semaine n'en avaient AUCUN : leur fiche F-Droid aurait montre un nom, un
+        # resume et une description dans leur langue, et un « Quoi de neuf » en anglais.
+        # Une langue qui a une description de store doit avoir le changelog de la version
+        # publiee — sinon elle n'est pas complete, elle est seulement commencee.
+        if version is not None and os.path.isfile(os.path.join(dossier, "full_description.txt")):
+            journal = os.path.join(dossier, "changelogs", "%d.txt" % version)
+            if not os.path.isfile(journal):
+                echec(locale, "fastlane/changelogs/%d.txt MANQUANT (version publiee)" % version)
+
+
+def version_publiee():
+    """Le versionCode de `version.properties`, ou None s'il est illisible.
+
+    None n'est pas un echec : ce fichier peut manquer dans un depot de test. Le
+    controle des changelogs est alors simplement saute, et il le dit.
+    """
+    chemin = os.path.join(RACINE, "version.properties")
+    if not os.path.isfile(chemin):
+        return None
+    for ligne in open(chemin, encoding="utf-8"):
+        cle, _, valeur = ligne.partition("=")
+        if cle.strip() == "versionCode":
+            try:
+                return int(valeur.strip())
+            except ValueError:
+                return None
+    return None
 
 
 def verifier_langue(dossier, ref_chaines, ref_pluriels, gradle, config):
@@ -232,12 +277,30 @@ def verifier_langue(dossier, ref_chaines, ref_pluriels, gradle, config):
             if invente:
                 echec(lg, "parametre INVENTE dans le pluriel %s[%s] : %s" % (c, q, joli(invente)))
 
-    # 3. PLURIELS - plancher : toute quantite de l'anglais doit exister
+    # 3. PLURIELS - les categories CLDR de LA LANGUE, pas un plancher anglais.
+    #
+    # v1.28.12 — ce controle n'exigeait que les quantites presentes en ANGLAIS. Or
+    # l'anglais n'a que `one` et `other` : un `values-fr` ampute de `many` passait le
+    # gate sans un mot, alors que le francais, l'italien et l'espagnol en ont besoin
+    # pour les millions exacts. Le seul garde-fou etait le lint `MissingQuantity`, qui
+    # ne tourne pas dans ce script. Un controle qui ne verifie que le plus petit
+    # denominateur commun ne verifie pas la langue qu'il croit verifier.
     for c, items in ref_pluriels.items():
         if c not in pluriels:
             continue
         for q in sorted(set(items) - set(pluriels[c])):
             echec(lg, "quantite MANQUANTE dans le pluriel %s : %s" % (c, q))
+    requises = QUANTITES_CLDR.get(lg)
+    if requises is not None:
+        for c in sorted(pluriels):
+            manquantes = requises - set(pluriels[c])
+            if manquantes:
+                echec(lg, "pluriel %s : categorie CLDR MANQUANTE pour cette langue : %s"
+                          % (c, ", ".join(sorted(manquantes))))
+            superflues = set(pluriels[c]) - requises
+            if superflues:
+                echec(lg, "pluriel %s : categorie CLDR INUTILE en %s (jamais rendue) : %s"
+                          % (c, lg, ", ".join(sorted(superflues))))
 
     # 4. LES QUATRE GESTES
     if lg not in gradle:

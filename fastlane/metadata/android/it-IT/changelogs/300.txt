@@ -1,0 +1,3 @@
+Un percorso di riparazione poteva rifiutarsi di aprire un database cifrato perfettamente integro se mancava un solo file di preferenze: né i messaggi né la cassaforte erano più raggiungibili, senza altra via d'uscita che una reinstallazione. Corretto, con un test di regressione.
+
+Prima versione il cui aggiornamento è verificato dalla macchina: un controllo installa la versione precedente, riempie il suo database cifrato, installa questa sopra e rilegge tutto.

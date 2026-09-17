@@ -3,9 +3,20 @@ package com.filestech.sms.domain.settings
 import com.filestech.sms.domain.model.ReactionFormat
 
 /** User-facing immutable snapshot of all preferences. */
+// v1.28.12 — `locale: LocaleSettings` retiré. Ses deux champs, `languageTag` et
+// `firstDayOfWeek`, étaient écrits, persistés et relus, et JAMAIS consultés par une
+// seule ligne de code de production ni exposés par un écran : un réglage fantôme, qui
+// promettait un contrôle inexistant. Même motif que `retryFailedAutomatically` (F26,
+// v1.28.3) et `blockShortCodes` (v1.3.5).
+//
+// Ils ne manquent à rien. La langue de l'application passe par le mécanisme Android par
+// application (`system/locale/LangueDeLApplication.kt`), pas par un champ à nous —
+// `languageTag` était un vestige d'une approche non retenue. Et le premier jour de la
+// semaine suit désormais UNE seule locale, celle de la configuration, au lieu de deux qui
+// divergeaient. Vérifié avant retrait : aucun lecteur, et la sauvegarde ne les sérialise
+// pas, donc aucun fichier `.smsbk` existant n'en dépend.
 data class AppSettings(
     val appearance: Appearance = Appearance(),
-    val locale: LocaleSettings = LocaleSettings(),
     val conversations: ConversationSettings = ConversationSettings(),
     val sending: SendingSettings = SendingSettings(),
     val notifications: NotificationSettings = NotificationSettings(),
@@ -27,14 +38,6 @@ data class Appearance(
 enum class ThemeMode { SYSTEM, LIGHT, DARK, DARK_TECH }
 enum class TextScale { XS, S, MEDIUM, L, XL }
 enum class ListDensity { COMFORT, STANDARD, COMPACT }
-
-data class LocaleSettings(
-    /** null = follow system. ISO-639-1 tag otherwise. */
-    val languageTag: String? = null,
-    val firstDayOfWeek: FirstDayOfWeek = FirstDayOfWeek.SYSTEM,
-)
-
-enum class FirstDayOfWeek { SYSTEM, MONDAY, SUNDAY }
 
 data class ConversationSettings(
     val sortMode: SortMode = SortMode.DATE,

@@ -1,0 +1,3 @@
+Ein Reparaturpfad konnte sich weigern, eine völlig intakte verschlüsselte Datenbank zu öffnen, wenn eine einzige Einstellungsdatei fehlte — weder die Nachrichten noch der Tresor waren dann erreichbar, und der einzige Ausweg war eine Neuinstallation. Behoben, mit einem Regressionstest.
+
+Erste Version, deren Aktualisierung maschinell geprüft wird: ein Job installiert die vorherige Version, füllt ihre verschlüsselte Datenbank, installiert diese darüber und liest alles wieder aus.

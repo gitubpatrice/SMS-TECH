@@ -48,6 +48,23 @@ EN = """<?xml version="1.0" encoding="utf-8"?>
 # Noter le REORDONNANCEMENT de %1$s et %2$s : il est LEGITIME (c'est a cela que servent les
 # 1$ / 2$) et le temoin positif ci-dessous exige donc qu'il passe. Un controle qui refuserait
 # un ordre different interdirait de traduire vers la moitie des langues.
+# Le francais du gabarit ne peut pas etre une copie de l'allemand : le CLDR exige `many`
+# en francais et pas en allemand. C'est le temoin positif qui l'a montre, en rougissant sur
+# un arbre declare sain le jour ou le controle des categories par LANGUE est arrive.
+FR_SAIN = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SMS Tech</string>
+    <string name="salut">Bonjour</string>
+    <string name="promesse">100 % respectueux de la vie privee — zero pistage</string>
+    <string name="envoye">Envoye le %2$s a %1$s</string>
+    <plurals name="messages">
+        <item quantity="one">%1$d message</item>
+        <item quantity="many">%1$d de messages</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
+</resources>
+"""
+
 DE_SAIN = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SMS Tech</string>
@@ -123,11 +140,14 @@ def batir():
     ecrire(chemin("app", "build.gradle.kts"), GRADLE)
     ecrire(os.path.join(res(), "values", "strings.xml"), EN)
     ecrire(os.path.join(res(), "xml", "locales_config.xml"), LOCALES_CONFIG)
-    for langue in ("de", "fr"):
+    for langue, contenu in (("de", DE_SAIN), ("fr", FR_SAIN)):
         # Le francais est present pour que la RECIPROQUE (langue annoncee sans traduction) ne
         # se declenche pas toute seule et ne masque pas le defaut que chaque cas vise.
-        ecrire(os.path.join(res(), "values-" + langue, "strings.xml"), DE_SAIN)
+        ecrire(os.path.join(res(), "values-" + langue, "strings.xml"), contenu)
         ecrire(os.path.join(res_debug(), "values-" + langue, "strings.xml"), DEBUG)
+    # Sans lui, le controle des changelogs se saute en silence — et ses deux cas ci-dessous
+    # passeraient pour verts sans avoir rien mesure.
+    ecrire(chemin("version.properties"), "versionCode=300\nversionName=1.28.11\n")
     ecrire(chemin("app", "src", "test", "java", "com", "filestech", "sms", "system", "safety",
                   "SafetyMessageTextsTest.kt"), TEST_SMS)
     for locale in ("en-US", "de-DE"):
@@ -260,6 +280,50 @@ def test_des_sms_disparu():
     return "les corps de SMS ne sont plus verifies par langue"
 
 
+def fichier_de_store_absent():
+    """Un fichier de fiche qui MANQUE etait ignore par un `continue`, en silence.
+
+    C'est le plus difficile des trous a apercevoir : il ne produit aucune sortie. Une
+    langue livree sans `title.txt` passait donc le controle, et sa fiche F-Droid serait
+    tombee sur celle d'une autre langue sans que rien ne le dise.
+    """
+    os.remove(chemin("fastlane", "metadata", "android", "de-DE", "title.txt"))
+    return "fastlane/title.txt MANQUANT"
+
+
+def changelog_de_la_version_absent():
+    """Une langue qui a une fiche mais pas le changelog de la version publiee.
+
+    C'etait l'etat REEL de l'allemand, de l'italien et de l'espagnol le 2026-09-17 :
+    nom, resume et description dans leur langue, « Quoi de neuf » en anglais. Le
+    controle ne regardait jamais ce dossier.
+    """
+    os.remove(chemin("fastlane", "metadata", "android", "de-DE", "changelogs", "300.txt"))
+    return "fastlane/changelogs/300.txt MANQUANT"
+
+
+def categorie_cldr_de_la_langue_manquante():
+    """Le francais ampute de `many`, que l'ANGLAIS n'a pas.
+
+    Le controle n'exigeait qu'un plancher anglais — `one` et `other`. Un `values-fr`
+    sans `many` passait donc le gate sans un mot, alors que le francais en a besoin pour
+    les millions exacts. Seul le lint `MissingQuantity` l'aurait vu, et il ne tourne pas
+    dans ce script.
+    """
+    ecrire(os.path.join(res(), "values-fr", "strings.xml"),
+           FR_SAIN.replace('        <item quantity="many">%1$d de messages</item>\n', ""))
+    return "categorie CLDR MANQUANTE pour cette langue : many"
+
+
+def categorie_cldr_inutile():
+    """Une categorie que la langue ne rend JAMAIS : du texte mort, jamais affiche."""
+    ecrire(os.path.join(res(), "values-de", "strings.xml"),
+           DE_SAIN.replace('        <item quantity="other">%1$d Nachrichten</item>',
+                           '        <item quantity="two">%1$d Nachrichten</item>\n'
+                           '        <item quantity="other">%1$d Nachrichten</item>'))
+    return "categorie CLDR INUTILE en de"
+
+
 CAS = [
     ("cle manquante", cle_manquante),
     ("cle en trop", cle_en_trop),
@@ -278,6 +342,10 @@ CAS = [
     ("corps de SMS : langue livree hors du test", langue_absente_du_test_des_sms),
     ("corps de SMS : langue testee non traduite", langue_du_test_non_traduite),
     ("corps de SMS : le test lui-meme a disparu", test_des_sms_disparu),
+    ("fiche de store : un fichier ABSENT", fichier_de_store_absent),
+    ("fiche de store : changelog de la version absent", changelog_de_la_version_absent),
+    ("pluriel : categorie CLDR de la LANGUE manquante", categorie_cldr_de_la_langue_manquante),
+    ("pluriel : categorie CLDR inutile", categorie_cldr_inutile),
 ]
 
 

@@ -379,7 +379,6 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
-    <string name="settings_search">Search settings…</string>
 
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_theme_system">System</string>
@@ -652,7 +651,6 @@
     <string name="settings_notif_preview_never">Never on lock screen</string>
     <string name="settings_notif_preview_never_hint">Plays the sound but nothing appears on the lock screen — fully invisible until you unlock and open the app.</string>
     <string name="settings_notif_style">Notification style</string>
-    <string name="settings_notif_style_desc">How incoming notifications interrupt you.</string>
     <string name="settings_notif_style_heads_up">Heads-up (default)</string>
     <string name="settings_notif_style_heads_up_hint">Banner pops over the current screen with sound, then docks in the shade.</string>
     <string name="settings_notif_style_banner">Banner only</string>
@@ -681,7 +679,6 @@
     <string name="settings_default_sms_app">Default SMS app</string>
     <string name="settings_set_default">Set as default</string>
     <string name="settings_is_default">SMS Tech is the default SMS app.</string>
-    <string name="settings_app_log">App log</string>
     <string name="settings_reset_all">Reset all settings</string>
     <string name="settings_nuke_data">Delete all my data</string>
     <string name="settings_nuke_confirm">All conversations will be erased in SMS Tech AND in the phone’s message store, along with attachments, scheduled sends and every setting. The vault is erased too. This cannot be undone, and nothing comes back at the next sync.</string>
@@ -865,7 +862,7 @@
     <string name="about_feat_panic_label">Panic code</string>
     <string name="about_feat_panic_desc">A second PIN opens the app in decoy mode — vault invisible and inaccessible.</string>
     <string name="about_feat_emergency_label">Emergency mode</string>
-    <string name="about_feat_emergency_desc">Hold the button 3 s on the Emergency page → alert SMS prefixed ⚠️ to your Safety Call contacts with optional GPS. Quick access to the emergency numbers of the country you are in + lockscreen notification shortcuts.</string>
+    <string name="about_feat_emergency_desc">Hold the button 3 s on the Emergency page → alert SMS prefixed ⚠️ to your Safety call contacts with optional GPS. Quick access to the emergency numbers of the country you are in + lockscreen notification shortcuts.</string>
     <string name="about_feat_biometric_label">Biometrics</string>
     <string name="about_feat_biometric_desc">Fingerprint or face to unlock, with a mandatory fallback PIN.</string>
     <string name="about_feat_reply_label">Contextual reply</string>
@@ -909,7 +906,7 @@
     <string name="about_help_translate_step3">Choose Google Translate, DeepL, Aves Translate (FLOSS) or another</string>
     <string name="about_help_translate_step4">If none is installed, a message invites you to install one</string>
     <string name="about_help_emergency_title">Use Emergency mode</string>
-    <string name="about_help_emergency_step1">Settings → Emergency mode: enable + add at least one Safety Call contact</string>
+    <string name="about_help_emergency_step1">Settings → Emergency mode: enable + add at least one Safety call contact</string>
     <string name="about_help_emergency_step2">Emergency page: direct calls to your country\'s emergency numbers; red button held 3 s → SMS to relatives</string>
     <string name="about_help_emergency_step3">Lockscreen notification (opt-in): shortcuts to 112 and the police without unlocking</string>
     <string name="about_help_emergency_step4">\"I am OK\" in the conversation list cancels the alert in case of accidental trigger</string>
@@ -986,7 +983,7 @@
          v1.28.12 — THE TEXT THAT IS ACTUALLY SENT.
 
          These are not screen labels. They are the SMS that leave the phone when someone holds
-         the emergency button for three seconds, or when Safety Call decides nobody has touched
+         the emergency button for three seconds, or when Safety call decides nobody has touched
          the phone for long enough. Until now they were hardcoded in French and went out in
          French to everyone, English users included.
 

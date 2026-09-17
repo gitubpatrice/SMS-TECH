@@ -137,7 +137,11 @@ class IncomingMessageNotifier @Inject constructor(
         // tente d'afficher un heads-up pour les notifs HIGH "qui font du bruit",
         // donc en désamorçant le son on neutralise effectivement le pop-up tout
         // en conservant le badge + icône shade. Compromis volontairement
-        // documenté dans le toggle UI ([R.string.settings_notif_style_desc]).
+        // documenté dans le toggle UI ([R.string.settings_notif_style_banner_hint]).
+        // v1.28.12 — ce renvoi nommait `settings_notif_style_desc`, une chaîne qui n'était
+        // rendue nulle part : le compromis était donc « documenté » dans un texte que
+        // personne ne voyait. C'est `settings_notif_style_banner_hint` qui le décrit à
+        // l'écran, et la chaîne orpheline a été retirée des cinq langues.
         val channelId = when (notifSettings.style) {
             NotificationStyle.SILENT -> NotificationChannelInitializer.CHANNEL_INCOMING_SILENT
             NotificationStyle.HEADS_UP, NotificationStyle.BANNER ->

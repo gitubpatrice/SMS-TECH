@@ -1,0 +1,3 @@
+Una vía de reparación podía negarse a abrir una base de datos cifrada perfectamente sana si desaparecía un solo archivo de preferencias: ni los mensajes ni la caja fuerte volvían a ser accesibles, sin más salida que una reinstalación. Corregido, con una prueba de regresión.
+
+Primera versión cuya actualización verifica la máquina: un control instala la versión anterior, llena su base de datos cifrada, instala esta encima y vuelve a leerlo todo.

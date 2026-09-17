@@ -20,14 +20,16 @@ editing an XML file.
 | `app/src/debug/res/values-<lang>/strings.xml` | debug-build app name only (see below) |
 | `fastlane/metadata/android/<locale>/` | the F-Droid / store listing |
 
-There are **796 keys**: 784 `<string>` and 12 `<plurals>`. No string is marked
+There are **797 keys**: 785 `<string>` and 12 `<plurals>`. No string is marked
 `translatable="false"`, and the app has no hardcoded text — everything you see on screen, **and
 every SMS it sends**, comes from these files.
 
-## Adding a language: the five gestures
+## Adding a language: the six gestures
 
-They are **solidary** — doing four of the five ships a language that does not work. A CI check
-enforces all five (see *Continuous integration* below), so a partial change cannot be merged.
+They are **solidary** — doing five of the six ships a language that does not work, or one that
+works while quietly protecting its readers less. A CI check enforces the first five (see
+*Continuous integration* below); the sixth is enforced by nothing, which is exactly why it is
+written down here.
 
 1. **Translate** `app/src/main/res/values-<lang>/strings.xml`, starting from the English file.
 2. **Declare the locale** in `app/build.gradle.kts` → `androidResources { localeFilters }`.
@@ -36,12 +38,25 @@ enforces all five (see *Continuous integration* below), so a partial change cann
 3. **Add the locale** to `app/src/main/res/xml/locales_config.xml`. This is what puts your
    language in *Settings → Apps → SMS Tech → Language* on Android 13 and later.
 4. **Create** `app/src/debug/res/values-<lang>/strings.xml` with just `app_name`, set to
-   `SMS Tech Debug`. Without it, a debug build installed on a device in your language is named
-   exactly like the release build, and the two become impossible to tell apart.
+   `SMS Tech (debug)` — the exact spelling the four existing twins use. Without it, a debug
+   build installed on a device in your language is named exactly like the release build, and
+   the two become impossible to tell apart.
 5. **Add your language code** to `LANGUES` in
    `app/src/test/java/com/filestech/sms/system/safety/SafetyMessageTextsTest.kt`. That test walks
    the SMS the app actually sends, language by language, against the real resources. It carries
    its own list, so a language missing from it ships with **none** of those checks applied to it.
+6. **Add your language's scam wording** to `URGENCY_KEYWORDS` and your country's official
+   domains to `DOMAINES_OFFICIELS`, both in
+   `domain/src/main/java/com/filestech/sms/domain/smishing/SmishingDetector.kt`. The scam
+   detector matches literal words and real domain names, so it is blind in any language whose
+   words it does not hold: a German scam does not write "urgent", and the app told German
+   readers it caught `e1ster.de` while `elster.de` was in no list at all. Nothing fails when
+   this is missing — the app simply protects your readers less than it claims to, in silence.
+   That is why it belongs on this list.
+
+*(A seventh place, `EmergencyNumbers.kt`, deliberately does **not** belong here. It is indexed
+by the country the phone's network is in, never by language — a German speaker in Paris must be
+shown 17, not 110. Adding a language must not add a country.)*
 
 ## Rules that are not style preferences
 
@@ -66,8 +81,9 @@ Italian and Spanish also use `many`. If you are unsure, add the category the bui
 
 **Emoji, and the `&#8230;` / `&amp;` entities, are content.** Keep them as they are.
 
-**Do not translate these**, they are names: `SMS Tech`, `Safety Call`, and protocol words that are
+**Do not translate these**, they are names: `SMS Tech`, `Safety call`, and protocol words that are
 the same everywhere in a phone's UI (`SMS`, `MMS`, `PIN`, `GPS`, `PDF`).
+`Safety call` is spelled exactly that way in every language — one feature, one spelling.
 
 ## The strings that leave the phone
 
@@ -96,10 +112,10 @@ and *emergency* (45): a synonym used halfway through makes users think there are
 
 | English | Occurrences | French | German | Italian | Spanish |
 |---|---|---|---|---|---|
-| vault | 69 | Coffre-fort | Tresor | Cassaforte | Caja fuerte |
+| vault | 69 | coffre | Tresor | Cassaforte | Caja fuerte |
 | emergency (mode) | 45 | mode urgence | Notfallmodus | modalità emergenza | modo emergencia |
-| **EMERGENCY** (the big button) | — | URGENCE | NOTRUF | EMERGENZA | EMERGENCIA |
-| Safety Call | 22 | *Safety call* (kept) | *Safety Call* (kept) | *Safety Call* (kept) | *Safety Call* (kept) |
+| **EMERGENCY** (the big button) | — | URGENCE | NOTFALL | EMERGENZA | EMERGENCIA |
+| Safety call | 22 | *Safety call* (kept) | *Safety call* (kept) | *Safety call* (kept) | *Safety call* (kept) |
 | app lock | 23 | verrouillage | App-Sperre | blocco dell'app | bloqueo de la app |
 | decoy mode | 6 | mode leurre | Tarnmodus | modalità esca | modo señuelo |
 | panic code | 8 | code panique | Panikcode | codice di panico | código de pánico |
@@ -159,7 +175,7 @@ the app; a translation that hides its own provenance is a bad way to start.
 
 `.github/scripts/i18n-parite.sh` runs on every build. It **fails** — it does not warn — when a
 language drifts from the English source: a missing or extra key, a missing plural category, a
-format placeholder that changed, or one of the five gestures above left undone.
+format placeholder that changed, or one of the first five gestures above left undone.
 
 This is deliberate. The app changes with every release, and a translation that can silently fall
 behind is worse than no translation, because it looks current. You can run it yourself before
@@ -171,5 +187,5 @@ pushing:
 
 ## Thank you
 
-Translating 796 strings is real work, and it is the difference between an app someone can use and
+Translating 797 strings is real work, and it is the difference between an app someone can use and
 one they close. It is appreciated.

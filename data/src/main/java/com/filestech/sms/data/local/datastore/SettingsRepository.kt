@@ -20,9 +20,7 @@ import com.filestech.sms.domain.settings.BackupSettings
 import com.filestech.sms.domain.settings.BlockingSettings
 import com.filestech.sms.domain.settings.ConversationSettings
 import com.filestech.sms.domain.settings.EmergencyCallBehavior
-import com.filestech.sms.domain.settings.FirstDayOfWeek
 import com.filestech.sms.domain.settings.ListDensity
-import com.filestech.sms.domain.settings.LocaleSettings
 import com.filestech.sms.domain.settings.LockMode
 import com.filestech.sms.domain.settings.MmsImageQuality
 import com.filestech.sms.domain.settings.NotificationSettings
@@ -217,10 +215,6 @@ class SettingsRepository(
                 density = enumOr(p, K.density, ListDensity.STANDARD, ListDensity::valueOf),
                 amoledTrueBlack = p[K.amoled] ?: false,
             ),
-            locale = LocaleSettings(
-                languageTag = p[K.languageTag],
-                firstDayOfWeek = enumOr(p, K.firstDayOfWeek, FirstDayOfWeek.SYSTEM, FirstDayOfWeek::valueOf),
-            ),
             conversations = ConversationSettings(
                 sortMode = enumOr(p, K.sortMode, SortMode.DATE, SortMode::valueOf),
                 previewLines = p[K.previewLines] ?: 1,
@@ -377,9 +371,10 @@ class SettingsRepository(
         this[K.density] = s.appearance.density.name
         this[K.amoled] = s.appearance.amoledTrueBlack
 
-        s.locale.languageTag?.let { this[K.languageTag] = it } ?: remove(K.languageTag)
-        this[K.firstDayOfWeek] = s.locale.firstDayOfWeek.name
-
+        // v1.28.12 — `locale.languageTag` et `locale.firstDayOfWeek` retirés : persistés,
+        // relus, jamais consultés. Les clés `locale.tag` et `locale.firstDay` restent sur
+        // le disque des installations existantes ; elles ne sont plus ni lues ni écrites,
+        // et un `.smsbk` ne les a jamais portées.
         this[K.sortMode] = s.conversations.sortMode.name
         this[K.previewLines] = s.conversations.previewLines
         this[K.showAvatars] = s.conversations.showAvatars
@@ -494,8 +489,10 @@ class SettingsRepository(
         val textScale = stringPreferencesKey("appearance.textScale")
         val density = stringPreferencesKey("appearance.density")
         val amoled = booleanPreferencesKey("appearance.amoled")
-        val languageTag = stringPreferencesKey("locale.tag")
-        val firstDayOfWeek = stringPreferencesKey("locale.firstDay")
+
+        // v1.28.12 — `locale.tag` et `locale.firstDay` retirés avec les deux champs qu'ils
+        // portaient. Ne PAS réutiliser ces deux noms de clé : ils restent écrits sur le
+        // disque des installations antérieures, avec des valeurs d'une sémantique morte.
         val sortMode = stringPreferencesKey("conv.sort")
         val previewLines = intPreferencesKey("conv.previewLines")
         val showAvatars = booleanPreferencesKey("conv.avatars")

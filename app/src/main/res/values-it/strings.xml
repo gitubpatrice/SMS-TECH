@@ -88,7 +88,7 @@
     <string name="conversations_section_blocked">Bloccate</string>
     <string name="conversations_section_messages">Messaggi</string>
     <string name="conversation_blocked_label">Bloccata</string>
-    <string name="settings_purge_blocked">Ripulisci le conversazioni bloccate</string>
+    <string name="settings_purge_blocked">Elimina le conversazioni bloccate</string>
     <string name="settings_purge_blocked_desc">Elimina definitivamente ogni conversazione i cui partecipanti sono tutti nell\'elenco di blocco del sistema.</string>
     <string name="settings_purge_blocked_result">%1$d conversazione/i ripulite</string>
     <string name="settings_purge_blocked_none">Nessuna conversazione bloccata da ripulire</string>
@@ -211,12 +211,12 @@
     <string name="emergency_i_am_ok_chip_title">Emergenza attivata di recente</string>
     <string name="emergency_i_am_ok_chip_action">Sto bene</string>
     <string name="emergency_i_am_ok_confirm_title">Inviare il messaggio «Sto bene»?</string>
-    <string name="emergency_i_am_ok_confirm_body">Azzera il tempo di attesa dell\'emergenza e invia, se lo desidera, un breve SMS ai suoi contatti Safety Call perché sappiano che si trattava di un falso allarme. Può disattivare l\'SMS nelle Impostazioni.</string>
+    <string name="emergency_i_am_ok_confirm_body">Azzera il tempo di attesa dell\'emergenza e invia, se lo desidera, un breve SMS ai suoi contatti Safety call perché sappiano che si trattava di un falso allarme. Può disattivare l\'SMS nelle Impostazioni.</string>
     <string name="emergency_i_am_ok_done">Messaggio «Sto bene» inviato.</string>
     <string name="emergency_i_am_ok_reset_only">Tempo di attesa azzerato. Nessun SMS inviato.</string>
     <string name="emergency_i_am_ok_send_failed">Tempo di attesa azzerato, ma nessun contatto ha ricevuto l\'SMS. Riprovi o li avvisi di persona.</string>
     <string name="settings_send_i_am_ok_sms_title">Inviare l\'SMS «Sto bene» all\'azzeramento</string>
-    <string name="settings_send_i_am_ok_sms_desc">Quando tocca «Sto bene» dopo un falso allarme, invia anche un breve SMS ai suoi contatti Safety Call che segnala il falso allarme.</string>
+    <string name="settings_send_i_am_ok_sms_desc">Quando tocca «Sto bene» dopo un falso allarme, invia anche un breve SMS ai suoi contatti Safety call che segnala il falso allarme.</string>
     <!-- v1.14.5 — strings emergency_dry_run_* removed (button "Test without sending" deleted). -->
     <!-- v1.14.5 — Settings → Mode urgence : ToggleRow direct accès GPS opt-in -->
     <string name="settings_emergency_include_location_title">Includere il GPS negli SMS di emergenza</string>
@@ -380,7 +380,6 @@
 
     <!-- Settings -->
     <string name="settings_title">Impostazioni</string>
-    <string name="settings_search">Cerca nelle impostazioni…</string>
 
     <string name="settings_section_appearance">Aspetto</string>
     <string name="settings_theme_system">Sistema</string>
@@ -419,8 +418,8 @@
     <string name="settings_my_number_invalid">Deve essere un numero di telefono valido (+ e cifre)</string>
 
     <string name="settings_auto_delete_title">Pulizia della cronologia</string>
-    <string name="settings_auto_delete_desc">Elimina SMS, MMS e messaggi vocali più vecchi dell\'età scelta. La pulizia automatica viene eseguita al massimo una volta al mese; può anche avviarne una manuale in qualsiasi momento. I messaggi con stella non vengono mai eliminati.</string>
-    <string name="settings_auto_delete_explainer">L\'automatismo scatta una volta al mese. I messaggi con stella non vengono mai eliminati.</string>
+    <string name="settings_auto_delete_desc">Elimina SMS, MMS e messaggi vocali più vecchi dell\'età scelta. La pulizia automatica viene eseguita al massimo una volta al mese; può anche avviarne una manuale in qualsiasi momento. I messaggi nei preferiti non vengono mai eliminati.</string>
+    <string name="settings_auto_delete_explainer">L\'automatismo scatta una volta al mese. I messaggi nei preferiti non vengono mai eliminati.</string>
     <string name="settings_auto_delete_off">Disattivata — non elimina nulla</string>
     <string name="settings_auto_delete_30">Elimina i messaggi più vecchi di 30 giorni</string>
     <string name="settings_auto_delete_60">Elimina i messaggi più vecchi di 60 giorni</string>
@@ -434,7 +433,7 @@
     <string name="settings_auto_delete_purge_now_disabled">Scelga una durata per attivarlo</string>
     <string name="settings_auto_delete_purge_confirm_title">Confermi la pulizia</string>
     <string name="settings_auto_delete_purge_confirm_zero">Nessun messaggio da eliminare per questa durata.</string>
-    <string name="settings_auto_delete_purge_confirm_body">%1$d messaggio/i più vecchi di %2$d giorni saranno eliminati dal telefono, non solo da SMS Tech. I messaggi con stella vengono conservati. L\'operazione è irreversibile.</string>
+    <string name="settings_auto_delete_purge_confirm_body">%1$d messaggio/i più vecchi di %2$d giorni saranno eliminati dal telefono, non solo da SMS Tech. I messaggi nei preferiti vengono conservati. L\'operazione è irreversibile.</string>
     <string name="settings_auto_delete_purge_done">%1$d messaggio/i eliminati.</string>
     <string name="action_delete_now">Elimina</string>
     <string name="settings_resync_title">Risincronizza dal telefono</string>
@@ -461,8 +460,8 @@
     <string name="settings_sender_name_auto">Rileva dal profilo Android</string>
 
     <!-- v1.9.0 — Safety call -->
-    <string name="settings_section_safety_call">Safety Call</string>
-    <string name="settings_safety_call_title">Safety Call</string>
+    <string name="settings_section_safety_call">Safety call</string>
+    <string name="settings_safety_call_title">Safety call</string>
     <string name="settings_safety_call_desc">Invia un SMS automatico ai suoi contatti di emergenza se non apre SMS Tech per una durata configurata. Pensato per i viaggi in solitaria, la vita isolata, i mestieri a rischio.</string>
     <string name="settings_safety_call_disabled">Disattivato</string>
     <string name="settings_safety_call_disabled_after_alert">Disattivato — un allarme è scattato</string>
@@ -470,7 +469,7 @@
     <!-- v1.9.0 — armed recap card (visible only when Safety call is enabled) -->
     <string name="settings_safety_call_armed_chip">Attivo</string>
     <string name="settings_safety_call_armed_started">Timer avviato: %1$s alle %2$s</string>
-    <string name="settings_safety_call_im_ok_stops_relances">Safety Call disattivato. Non verrà inviato nessun altro messaggio.</string>
+    <string name="settings_safety_call_im_ok_stops_relances">Safety call disattivato. Non verrà inviato nessun altro messaggio.</string>
     <plurals name="settings_safety_call_triggered_state">
         <item quantity="one">Allarme inviato — %1$d messaggio su %2$d</item>
         <item quantity="many">Allarme inviato — %1$d messaggi su %2$d</item>
@@ -478,7 +477,7 @@
     </plurals>
     <string name="settings_safety_call_triggered_hint">I richiami vengono inviati ogni 15 minuti. Tocchi «Sto bene» per fermarli.</string>
     <string name="settings_safety_call_triggered_state_sending">Invio dell\'allarme…</string>
-    <string name="settings_safety_call_triggered_hint_done">Sequenza completata: Safety Call si è disattivato da solo. Lo riattivi per essere di nuovo protetto.</string>
+    <string name="settings_safety_call_triggered_hint_done">Sequenza completata: Safety call si è disattivato da solo. Lo riattivi per essere di nuovo protetto.</string>
     <string name="settings_safety_call_armed_duration">Durata: %1$s</string>
     <string name="settings_safety_call_armed_remaining">Rimanente: %1$s prima dello scatto</string>
     <string name="settings_safety_call_armed_remaining_imminent">Meno di 2 h prima dello scatto</string>
@@ -488,12 +487,12 @@
     <string name="settings_safety_call_armed_modify">Modifica</string>
     <string name="settings_safety_call_armed_actions_hint">«Sto bene» azzera il timer: il conto alla rovescia riparte dalla durata intera e non viene inviato nessun messaggio. «Modifica» apre le impostazioni (durata, contatti, messaggio).</string>
     <string name="settings_safety_call_armed_im_ok_short">Sto bene</string>
-    <string name="safety_call_setup_title">Safety Call</string>
+    <string name="safety_call_setup_title">Safety call</string>
     <string name="safety_call_setup_section_status">Stato</string>
     <string name="safety_call_setup_section_duration">Durata</string>
     <string name="safety_call_setup_section_contacts">Contatti di emergenza (max 4)</string>
     <string name="safety_call_setup_section_template">Messaggio</string>
-    <string name="safety_call_setup_toggle_enable">Attiva Safety Call</string>
+    <string name="safety_call_setup_toggle_enable">Attiva Safety call</string>
     <string name="safety_call_setup_toggle_desc">Quando è attivo, aprire SMS Tech azzera il timer. Se non la apre entro la durata scelta, i suoi contatti ricevono un SMS automatico.</string>
     <string name="safety_call_setup_duration_24h">24 ore</string>
     <string name="safety_call_setup_duration_48h">48 ore</string>
@@ -520,8 +519,8 @@
     <string name="safety_call_setup_shared_with_emergency">Questi contatti sono usati anche dalla modalità emergenza, che è ancora attiva. Svuotare l\'elenco la lascerebbe senza nessuno da avvisare. Disattivi prima la modalità emergenza, oppure tenga almeno un contatto.</string>
     <string name="safety_call_setup_save_validation_custom_empty">Il messaggio personalizzato non può essere vuoto.</string>
     <string name="safety_call_warning_title">SMS Tech — confermi che sta bene</string>
-    <string name="safety_call_warning_body_hours">Safety Call scatterà tra circa %1$d ore. Tocchi per azzerare il timer.</string>
-    <string name="safety_call_warning_body_imminent">Safety Call scatterà tra meno di 2 ore. Tocchi per azzerarlo adesso.</string>
+    <string name="safety_call_warning_body_hours">Safety call scatterà tra circa %1$d ore. Tocchi per azzerare il timer.</string>
+    <string name="safety_call_warning_body_imminent">Safety call scatterà tra meno di 2 ore. Tocchi per azzerarlo adesso.</string>
     <string name="safety_call_sequence_title">SMS Tech — allarme inviato</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d messaggio su %2$d inviato ai suoi contatti. Tocchi se sta bene: i richiami si fermeranno.</item>
@@ -530,20 +529,20 @@
     </plurals>
     <string name="safety_call_sequence_title_sending">SMS Tech — invio dell\'allarme</string>
     <string name="safety_call_sequence_body_sending">L\'allarme è in corso di invio ai suoi contatti. Tocchi se sta bene: l\'invio si fermerà.</string>
-    <string name="safety_call_sequence_title_done">SMS Tech — allarme inviato, Safety Call disattivato</string>
+    <string name="safety_call_sequence_title_done">SMS Tech — allarme inviato, Safety call disattivato</string>
     <plurals name="safety_call_sequence_body_done">
-        <item quantity="one">%1$d messaggio su %2$d è stato inviato ai suoi contatti. Safety Call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
-        <item quantity="many">Tutti i %1$d messaggi sono stati inviati ai suoi contatti. Safety Call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
-        <item quantity="other">Tutti i %1$d messaggi sono stati inviati ai suoi contatti. Safety Call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
+        <item quantity="one">%1$d messaggio su %2$d è stato inviato ai suoi contatti. Safety call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
+        <item quantity="many">Tutti i %1$d messaggi sono stati inviati ai suoi contatti. Safety call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
+        <item quantity="other">Tutti i %1$d messaggi sono stati inviati ai suoi contatti. Safety call adesso è disattivato — tocchi «Riattiva» per armarlo di nuovo.</item>
     </plurals>
     <string name="safety_call_notif_action_rearm">Riattiva</string>
     <!-- v1.27.4 — confirmation shown after the “Turn back on” action of the receipt notification.
          The two other confirmations reuse the Settings wording (settings_safety_call_im_ok_snack /
          settings_safety_call_im_ok_stops_relances) on purpose: the same gesture must read the same
          way wherever it is made. -->
-    <string name="safety_call_ack_rearmed">Safety Call è di nuovo attivo. Il timer riparte da capo.</string>
+    <string name="safety_call_ack_rearmed">Safety call è di nuovo attivo. Il timer riparte da capo.</string>
     <string name="safety_call_reset_warning_title">Il timer riparte quando apre SMS Tech</string>
-    <string name="safety_call_reset_warning_body">Una volta attivo Safety Call, il timer riparte non appena apre quest\'app e la sblocca. Usare il telefono per qualsiasi altra cosa non fa differenza: se non apre SMS Tech entro il tempo scelto, l\'allarme parte verso i suoi contatti.</string>
+    <string name="safety_call_reset_warning_body">Una volta attivo Safety call, il timer riparte non appena apre quest\'app e la sblocca. Usare il telefono per qualsiasi altra cosa non fa differenza: se non apre SMS Tech entro il tempo scelto, l\'allarme parte verso i suoi contatti.</string>
     <string name="safety_call_history_title">Cronologia degli scatti</string>
     <string name="safety_call_history_empty">Nessuno scatto registrato.</string>
     <plurals name="safety_call_history_count">
@@ -556,7 +555,7 @@
     <!-- v1.10.0 — Emergency mode (active, user-triggered hold-3s SMS to safety contacts) -->
     <string name="settings_section_emergency">Modalità emergenza</string>
     <string name="settings_emergency_title">Modalità emergenza</string>
-    <string name="settings_emergency_desc">Un pulsante da tenere premuto 3 s invia un SMS ai suoi contatti di emergenza con la sua posizione attuale. Distinta da Safety Call, che è automatico e scatta sull\'inattività. Disattivata per impostazione predefinita.</string>
+    <string name="settings_emergency_desc">Un pulsante da tenere premuto 3 s invia un SMS ai suoi contatti di emergenza con la sua posizione attuale. Distinta da Safety call, che è automatico e scatta sull\'inattività. Disattivata per impostazione predefinita.</string>
     <string name="settings_emergency_disabled">Disattivata</string>
     <!-- v1.10.0+ — Emergency armed recap (mirrors safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Attiva</string>
@@ -574,7 +573,7 @@
     <string name="emergency_button_hint_hold_3s">Emergenza — tenga premuto 3 secondi per inviare</string>
     <string name="emergency_preview_title">Messaggio che verrà inviato</string>
     <string name="emergency_status_disabled">La modalità emergenza è disattivata. La attivi nelle impostazioni.</string>
-    <string name="emergency_status_no_contacts">Nessun contatto di emergenza configurato. Ne aggiunga nelle impostazioni di Safety Call.</string>
+    <string name="emergency_status_no_contacts">Nessun contatto di emergenza configurato. Ne aggiunga nelle impostazioni di Safety call.</string>
     <string name="emergency_status_cooldown">Appena inviato. Di nuovo disponibile tra un minuto.</string>
     <string name="emergency_status_ready">Tenga premuto il pulsante 3 secondi per avvisare i suoi contatti.</string>
     <string name="emergency_triggered_ok">Emergenza inviata a %1$d contatto/i.</string>
@@ -657,7 +656,6 @@
     <string name="settings_notif_preview_never">Mai sulla schermata di blocco</string>
     <string name="settings_notif_preview_never_hint">Riproduce il suono ma sulla schermata di blocco non compare nulla — del tutto invisibile finché non sblocca e apre l\'app.</string>
     <string name="settings_notif_style">Stile delle notifiche</string>
-    <string name="settings_notif_style_desc">Come le notifiche in arrivo la interrompono.</string>
     <string name="settings_notif_style_heads_up">In primo piano (predefinito)</string>
     <string name="settings_notif_style_heads_up_hint">Il banner compare sopra la schermata attuale con un suono, poi resta nel pannello delle notifiche.</string>
     <string name="settings_notif_style_banner">Solo banner</string>
@@ -686,7 +684,6 @@
     <string name="settings_default_sms_app">App SMS predefinita</string>
     <string name="settings_set_default">Imposta come predefinita</string>
     <string name="settings_is_default">SMS Tech è l\'app SMS predefinita.</string>
-    <string name="settings_app_log">Registro dell\'app</string>
     <string name="settings_reset_all">Reimposta tutte le impostazioni</string>
     <string name="settings_nuke_data">Elimina tutti i miei dati</string>
     <string name="settings_nuke_confirm">Tutte le conversazioni saranno cancellate in SMS Tech E nell\'archivio messaggi del telefono, insieme agli allegati, agli invii programmati e a ogni impostazione. Anche la cassaforte viene cancellata. L\'operazione è irreversibile e alla sincronizzazione successiva non torna nulla.</string>
@@ -749,9 +746,9 @@
     <string name="channel_failed_desc">Errori e suggerimenti per riprovare.</string>
     <string name="channel_keep_alive_label">Modalità resistente</string>
     <string name="channel_keep_alive_desc">Mantiene SMS Tech attiva sui telefoni il cui produttore chiude le app in secondo piano.</string>
-    <string name="channel_safety_call_warning_label">Avviso Safety Call</string>
+    <string name="channel_safety_call_warning_label">Avviso Safety call</string>
     <string name="channel_safety_call_warning_desc">Promemoria prima dell\'SMS automatico ai suoi contatti di emergenza.</string>
-    <string name="channel_safety_call_receipt_label">Allarme Safety Call terminato</string>
+    <string name="channel_safety_call_receipt_label">Allarme Safety call terminato</string>
     <string name="channel_safety_call_receipt_desc">Traccia silenziosa di un allarme già inviato. Non emette alcun suono.</string>
 
     <!-- Notification actions -->
@@ -871,7 +868,7 @@
     <string name="about_feat_panic_label">Codice esca</string>
     <string name="about_feat_panic_desc">Un secondo PIN apre l\'app in modalità esca — cassaforte invisibile e inaccessibile.</string>
     <string name="about_feat_emergency_label">Modalità emergenza</string>
-    <string name="about_feat_emergency_desc">Tenga premuto il pulsante 3 s nella pagina Emergenza → SMS di allarme con il prefisso ⚠️ ai suoi contatti Safety Call, con GPS facoltativo. Accesso rapido ai numeri di emergenza del paese in cui si trova + scorciatoie nella notifica sulla schermata di blocco.</string>
+    <string name="about_feat_emergency_desc">Tenga premuto il pulsante 3 s nella pagina Emergenza → SMS di allarme con il prefisso ⚠️ ai suoi contatti Safety call, con GPS facoltativo. Accesso rapido ai numeri di emergenza del paese in cui si trova + scorciatoie nella notifica sulla schermata di blocco.</string>
     <string name="about_feat_biometric_label">Biometria</string>
     <string name="about_feat_biometric_desc">Impronta o volto per sbloccare, con un PIN di riserva obbligatorio.</string>
     <string name="about_feat_reply_label">Risposta contestuale</string>
@@ -915,7 +912,7 @@
     <string name="about_help_translate_step3">Scelga Google Traduttore, DeepL, Aves Translate (FLOSS) o un\'altra</string>
     <string name="about_help_translate_step4">Se non ne ha nessuna, un messaggio la invita a installarne una</string>
     <string name="about_help_emergency_title">Usare la modalità emergenza</string>
-    <string name="about_help_emergency_step1">Impostazioni → Modalità emergenza: la attivi e aggiunga almeno un contatto Safety Call</string>
+    <string name="about_help_emergency_step1">Impostazioni → Modalità emergenza: la attivi e aggiunga almeno un contatto Safety call</string>
     <string name="about_help_emergency_step2">Pagina Emergenza: chiamate dirette ai numeri di emergenza del suo paese; pulsante rosso tenuto premuto 3 s → SMS ai suoi cari</string>
     <string name="about_help_emergency_step3">Notifica sulla schermata di blocco (facoltativa): scorciatoie al 112 e alla polizia senza sbloccare</string>
     <string name="about_help_emergency_step4">«Sto bene» nell\'elenco delle conversazioni annulla l\'allarme in caso di attivazione accidentale</string>
@@ -968,15 +965,15 @@
     <string name="db_recovery_hint">Di solito accade dopo un cambio del blocco schermo o un ripristino del dispositivo, che invalida la chiave che protegge il database. Vale la pena provare prima a riavviare il telefono. Se questa schermata continua a comparire, reinstallare SMS Tech ricostruirà il suo database a partire dai messaggi che Android già conserva.</string>
     <string name="action_add">Aggiungi</string>
     <string name="action_discard">Scarta</string>
-    <string name="safety_call_saved_enabled">Safety Call attivato</string>
-    <string name="safety_call_saved_disabled">Safety Call disattivato</string>
+    <string name="safety_call_saved_enabled">Safety call attivato</string>
+    <string name="safety_call_saved_disabled">Safety call disattivato</string>
     <string name="safety_call_contact_added">Contatto aggiunto</string>
     <string name="safety_call_contact_removed">Contatto rimosso</string>
     <string name="safety_call_setup_state_label">Stato:</string>
     <string name="safety_call_setup_state_on">Attivo</string>
     <string name="safety_call_setup_state_off">Disattivato</string>
     <string name="safety_call_setup_state_unsaved">Modifiche non salvate — tocchi Salva per applicarle.</string>
-    <string name="safety_call_setup_disabled_now">Safety Call disattivato immediatamente.</string>
+    <string name="safety_call_setup_disabled_now">Safety call disattivato immediatamente.</string>
     <string name="safety_call_setup_unsaved_title">Modifiche non salvate</string>
     <string name="safety_call_setup_unsaved_body">Aggiungere un contatto non basta: va salvato per essere conservato. Uscendo adesso andrebbe perso.</string>
     <string name="emergency_location_grant">Consenti la posizione</string>
@@ -996,7 +993,7 @@
          v1.28.12 — THE TEXT THAT IS ACTUALLY SENT.
 
          These are not screen labels. They are the SMS that leave the phone when someone holds
-         the emergency button for three seconds, or when Safety Call decides nobody has touched
+         the emergency button for three seconds, or when Safety call decides nobody has touched
          the phone for long enough. Until now they were hardcoded in French and went out in
          French to everyone, English users included.
 

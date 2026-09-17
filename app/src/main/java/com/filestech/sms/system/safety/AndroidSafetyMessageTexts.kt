@@ -19,12 +19,17 @@ import javax.inject.Singleton
  *
  * Pourquoi le contexte d'application suffit
  * ------------------------------------------
- * L'application n'a **pas** de sélecteur de langue interne — `settings_language` et
- * `settings_section_locale` sont des chaînes orphelines, vérifié le 2026-09-16. Elle suit la
- * langue du système, et depuis la v1.28.12 le sélecteur par application d'Android 13+
- * (`res/xml/locales_config.xml`). Dans les deux cas c'est le SYSTÈME qui applique la locale aux
- * ressources de l'application : `getString` rend donc la bonne langue, y compris depuis un
- * travail de fond — ce qui compte, puisque le Safety Call part sans que personne ne regarde.
+ * L'application n'a **pas** de sélecteur de langue à elle : elle ouvre celui d'Android 13+
+ * (`res/xml/locales_config.xml` + `system/locale/LangueDeLApplication.kt`), et sous Android 12
+ * et antérieurs elle suit le système. Dans les deux cas c'est le SYSTÈME qui applique la locale
+ * aux ressources de l'application : `getString` rend donc la bonne langue, y compris depuis un
+ * travail de fond — ce qui compte, puisque le Safety call part sans que personne ne regarde.
+ *
+ * ⚠️ Ce paragraphe affirmait que `settings_language` et `settings_section_locale` étaient des
+ * chaînes orphelines, « vérifié le 2026-09-16 ». Elles ont été câblées le lendemain, dans
+ * `SettingsScreen`, par le commit qui a ouvert ce sélecteur — le commentaire juste au-dessus du
+ * câblage dit lui-même « enfin atteignable ». Deux affirmations contradictoires dans le même
+ * dépôt, à un jour d'écart. Corrigé le 2026-09-17.
  *
  * Si un sélecteur interne arrive un jour via `AppCompatDelegate.setApplicationLocales`, il
  * faudra revérifier ce point sous Android 12 et antérieurs, où la locale par application est
