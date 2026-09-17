@@ -167,12 +167,21 @@ class EmergencyShortcutNotifier @Inject constructor(
                 dial112PI,
             )
         if (dialPolicePI != null) {
+            // v1.28.12 — le libellé nomme le SERVICE, pas le numéro, et ce n'est pas un détail.
+            //
+            // Il nommait le numéro, résolu ICI, au moment où la notification est postée. Or le
+            // receveur le résout À NOUVEAU au moment du tap. Cette notification est persistante :
+            // elle vit des jours, et les quatre choses qui la reposent (deux réglages, l'entrée en
+            // mode leurre, le redémarrage) n'incluent aucun changement de réseau. Traverser une
+            // frontière suffisait donc à ce que le texte affiché nomme un numéro et que le bouton
+            // en compose un autre — tous deux légitimes, mais l'un des deux mentait.
+            //
+            // Relevé par deux audits indépendants le 2026-09-17. Nommer le service supprime la
+            // classe entière de défaut au lieu de la rattraper : il n'y a plus rien à
+            // synchroniser. Et `emergency_call_police_label` existe déjà dans les cinq langues.
             builder.addAction(
                 R.drawable.ic_notification_message,
-                context.getString(
-                    R.string.emergency_shortcut_action_dial,
-                    com.filestech.sms.system.emergency.EmergencyNumbers.police(context),
-                ),
+                context.getString(R.string.emergency_call_police_label),
                 dialPolicePI,
             )
         }

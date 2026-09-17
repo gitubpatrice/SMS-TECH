@@ -140,4 +140,44 @@ class EmergencyNumbersTest {
         assertThat(portugal.firstOrNull { it.service == EmergencyNumbers.Service.POLICE }).isNull()
         assertThat(portugal.map { it.number }).containsExactly("112")
     }
+
+    @Test fun `Royaume-Uni et Irlande - 112 SEUL, le 999 n est pas la police`() {
+        // Verification externe du 2026-09-17 : le 999 britannique et irlandais n'est pas la ligne
+        // de la police, c'est le numero d'urgence GENERAL, strictement equivalent au 112 (meme
+        // standard, memes operateurs). L'etiqueter POLICE annoncait ce qu'il ne fait pas ; comme
+        // les deux aboutissent au meme endroit, le retirer n'ote aucune capacite d'appel.
+        for (pays in listOf("gb", "ie")) {
+            assertThat(EmergencyNumbers.pourLePays(pays).map { it.number }).containsExactly("112")
+        }
+        assertThat(EmergencyNumbers.NUMEROS_AUTORISES).doesNotContain("999")
+    }
+
+    // ──────────────── Le filet de l'OS, et ce qu'il n'a pas le droit de retirer ────────────────
+
+    @Test fun `le 112 traverse le filtre de l OS meme quand l OS refuse TOUT`() {
+        // LA propriete la plus critique du fichier. Elle tenait a l'ordre des operandes d'un `||`
+        // que rien ne verrouillait : `pour()` exige un Context, donc aucun test JVM ne pouvait
+        // l'atteindre. Deux audits independants l'ont releve le meme jour.
+        for (pays in EmergencyNumbers.PAYS_COUVERTS) {
+            val filtres = EmergencyNumbers.filtrerParLOS(EmergencyNumbers.pourLePays(pays)) { false }
+            assertThat(filtres.map { it.number }).containsExactly("112")
+        }
+    }
+
+    @Test fun `un OS qui reconnait tout ne retire rien`() {
+        // Le temoin positif du test precedent : sans lui, un filtre qui viderait tout
+        // SAUF le 112 passerait les deux.
+        for (pays in EmergencyNumbers.PAYS_COUVERTS) {
+            val attendus = EmergencyNumbers.pourLePays(pays)
+            assertThat(EmergencyNumbers.filtrerParLOS(attendus) { true }).isEqualTo(attendus)
+        }
+    }
+
+    @Test fun `un OS qui ne reconnait que la police ne garde que le 112 et la police`() {
+        // Le cas intermediaire : le filtre doit faire son travail, pas seulement tout garder
+        // ou tout jeter.
+        val france = EmergencyNumbers.pourLePays("fr")
+        val filtres = EmergencyNumbers.filtrerParLOS(france) { it == "17" }
+        assertThat(filtres.map { it.number }).containsExactly("112", "17").inOrder()
+    }
 }

@@ -22,7 +22,10 @@ Ce qu'il verifie, et pourquoi chacun est necessaire
                 /!\\ Le PLANCHER seulement : les categories CLDR supplementaires exigees par une
                 langue (many en francais) appartiennent a lint (MissingQuantity), qui en est la
                 source d'autorite. Ne pas dupliquer cette regle ici, elle se contredirait.
-4. LES QUATRE GESTES SOLIDAIRES - une traduction n'est livree que si les quatre sont faits :
+4. FICHES DE STORE - les plafonds de fastlane, comptes en OCTETS (un accent en vaut deux).
+                Rien ne les regardait : la fiche espagnole a depasse de 29 octets sans que
+                personne ne le voie, la verification manuelle ayant compte des caracteres.
+5. LES QUATRE GESTES SOLIDAIRES - une traduction n'est livree que si les quatre sont faits :
                 a. values-XX/strings.xml         la traduction
                 b. localeFilters                 sans quoi AGP RETIRE les ressources de l'APK
                 c. locales_config.xml            sans quoi pas de selecteur de langue Android 13+
@@ -154,6 +157,50 @@ def verifier_test_des_sms(traduites):
               "sur l'anglais en croyant mesurer %s" % (lg, lg))
 
 
+PLAFONDS_FASTLANE = {
+    "title.txt": 50,
+    "short_description.txt": 80,
+    "full_description.txt": 4000,
+}
+
+
+def verifier_fastlane():
+    """Les plafonds des fiches de store, comptes en OCTETS.
+
+    Pourquoi ici : rien d'autre ne les regardait. La fiche espagnole a depasse le
+    plafond de 4000 octets sans que personne ne le voie, parce que la verification
+    manuelle avait compte des CARACTERES - 3928, donc « conforme » - alors que le
+    fichier pesait 4029 octets. Un accent vaut deux octets, et les cinq langues
+    livrees en sont pleines.
+
+    Ce qui n'est PAS verifie ici, et pourquoi : la taille des CHANGELOGS. Les 500
+    caracteres que la documentation annoncait sont une regle de Google Play, pas de
+    F-Droid - fdroidserver ne valide pas ce champ et le client affiche le texte entier.
+    Verifie de deux facons independantes le 2026-09-17 : une relecture externe, et le
+    depot lui-meme, qui a publie cinquante versions avec des changelogs allant jusqu'a
+    2000 octets, relues plusieurs fois par les mainteneurs F-Droid, sans que personne ne
+    le signale. Un controle qui rougit sur du sain finit par ne plus etre lu.
+
+    Un plafond ecrit dans la documentation et verifie nulle part est une promesse, pas
+    une regle ; un plafond verifie mais inexistant est un faux positif permanent.
+    """
+    racine = os.path.join(RACINE, "fastlane", "metadata", "android")
+    if not os.path.isdir(racine):
+        return
+    for locale in sorted(os.listdir(racine)):
+        dossier = os.path.join(racine, locale)
+        if not os.path.isdir(dossier):
+            continue
+        for nom, plafond in sorted(PLAFONDS_FASTLANE.items()):
+            chemin = os.path.join(dossier, nom)
+            if not os.path.isfile(chemin):
+                continue
+            octets = len(open(chemin, "rb").read().strip())
+            if octets > plafond:
+                echec(locale, "fastlane/%s : %d octets pour un plafond de %d "
+                              "(depasse de %d)" % (nom, octets, plafond, octets - plafond))
+
+
 def verifier_langue(dossier, ref_chaines, ref_pluriels, gradle, config):
     lg = etiquette(dossier)
     avant = len(erreurs)
@@ -242,6 +289,8 @@ def main():
     for lg in sorted(config - traduites):
         echec(lg, "annoncee dans locales_config.xml mais aucun values-%s/strings.xml : "
                   "le selecteur proposerait une langue vide" % lg)
+
+    verifier_fastlane()
 
     print()
     if erreurs:

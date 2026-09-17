@@ -130,6 +130,15 @@ def batir():
         ecrire(os.path.join(res_debug(), "values-" + langue, "strings.xml"), DEBUG)
     ecrire(chemin("app", "src", "test", "java", "com", "filestech", "sms", "system", "safety",
                   "SafetyMessageTextsTest.kt"), TEST_SMS)
+    for locale in ("en-US", "de-DE"):
+        fastlane = chemin("fastlane", "metadata", "android", locale)
+        ecrire(os.path.join(fastlane, "title.txt"), "SMS Tech\n")
+        ecrire(os.path.join(fastlane, "short_description.txt"), "Une description courte.\n")
+        ecrire(os.path.join(fastlane, "full_description.txt"), "Une description longue.\n")
+        # Un changelog VOLONTAIREMENT long : F-Droid n'impose AUCUN plafond sur ce champ
+        # (les 500 caracteres sont une regle Google Play), et le temoin positif doit le
+        # prouver en restant vert avec un changelog de plus de mille octets.
+        ecrire(os.path.join(fastlane, "changelogs", "300.txt"), "Correctif. " * 120 + "\n")
 
 
 def de(contenu):
@@ -163,6 +172,20 @@ def parametre_perdu():
 def parametre_invente():
     de(DE_SAIN.replace("Am %2$s an %1$s gesendet", "Am %2$s an %1$s via %3$s gesendet"))
     return "parametres de format divergents sur envoye"
+
+
+def fiche_de_store_trop_longue():
+    """Une description courte qui depasse en OCTETS sans depasser en CARACTERES.
+
+    C'est le defaut REEL du 2026-09-17 : la fiche espagnole pesait 4029 octets pour
+    3928 caracteres, et la verification manuelle, faite en caracteres, l'a declaree
+    conforme. Les 41 « e accent aigu » ci-dessous font 41 caracteres et 82 octets :
+    un controle qui compterait des caracteres laisserait passer, celui-ci doit rougir.
+    """
+    chemin_fiche = chemin("fastlane", "metadata", "android", "de-DE",
+                          "short_description.txt")
+    ecrire(chemin_fiche, "é" * 41 + "\n")
+    return "fastlane/short_description.txt"
 
 
 def parametre_malforme():
@@ -244,6 +267,7 @@ CAS = [
     ("parametre de format PERDU", parametre_perdu),
     ("parametre de format INVENTE", parametre_invente),
     ("parametre de format MALFORME (%1$p)", parametre_malforme),
+    ("fiche de store : trop longue en OCTETS", fiche_de_store_trop_longue),
     ("parametre invente dans un pluriel", parametre_invente_dans_pluriel),
     ("quantite de pluriel manquante", quantite_manquante),
     ("geste 2 : absente de localeFilters", absente_de_localefilters),

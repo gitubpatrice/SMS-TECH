@@ -89,10 +89,19 @@ object EmergencyNumbers {
         "lu" to listOf(EU, Dial(Service.POLICE, "113")),
         // Portugal — 112 unique.
         "pt" to listOf(EU),
-        // Royaume-Uni — 999 historique, 112 reconnu partout.
-        "gb" to listOf(EU, Dial(Service.POLICE, "999")),
-        // Irlande — idem.
-        "ie" to listOf(EU, Dial(Service.POLICE, "999")),
+        // Royaume-Uni et Irlande — 112 SEUL, délibérément.
+        //
+        // Le 999 y figurait, étiqueté POLICE. Une vérification externe (2026-09-17) a montré que
+        // c'était une erreur de CLASSIFICATION : le 999 n'est pas la ligne de la police, c'est le
+        // numéro d'urgence GÉNÉRAL britannique et irlandais, strictement équivalent au 112 — même
+        // standard, mêmes opérateurs, qui demandent ensuite quel service on veut. Une tuile
+        // « Police » qui compose le standard toutes urgences annonce donc ce qu'elle ne fait pas.
+        //
+        // Comme les deux numéros aboutissent au même endroit, retirer le 999 ne coûte aucune
+        // capacité d'appel : il ne retire qu'un libellé faux. (Le vrai numéro spécifique de la
+        // police au Royaume-Uni est le 101, et il n'a rien à faire ici : il est NON URGENT.)
+        "gb" to listOf(EU),
+        "ie" to listOf(EU),
     )
 
     /** Ce que voit un appareil sans téléphonie, sans SIM ou dans un pays non listé. */
@@ -141,9 +150,22 @@ object EmergencyNumbers {
         if (code.isNotBlank() && code !in PAR_PAYS) {
             Timber.i("EmergencyNumbers: pays %s absent de la table, 112 seul", code)
         }
-        return pourLePays(code)
-            .filter { it.service == Service.EUROPEAN || reconnuParLOS(context, it.number) }
+        return filtrerParLOS(pourLePays(code)) { reconnuParLOS(context, it) }
     }
+
+    /**
+     * Le filtre de l'OS, séparé de tout ce qui touche à Android pour qu'un test JVM pur puisse
+     * l'exercer.
+     *
+     * **Ce qu'il garantit, et pourquoi c'est ici et pas dans [pour] :** le 112 traverse le filtre
+     * QUOI QU'IL ARRIVE, parce que son test passe avant celui de l'OS et court-circuite. Cette
+     * garantie tenait jusqu'ici à l'ordre des deux opérandes d'un `||` à l'intérieur de [pour] —
+     * correct, mais qu'aucun test ne pouvait atteindre, [pour] exigeant un `Context`. Un refactor
+     * qui aurait inversé cet ordre, ou remplacé le `||` par un `&&`, n'aurait fait rougir
+     * personne. Deux audits indépendants l'ont relevé le 2026-09-17.
+     */
+    internal fun filtrerParLOS(dials: List<Dial>, reconnu: (String) -> Boolean): List<Dial> =
+        dials.filter { it.service == Service.EUROPEAN || reconnu(it.number) }
 
     /** Le numéro de police du pays courant, ou le 112 quand le pays n'en publie pas d'autre. */
     fun police(context: Context): String =

@@ -135,13 +135,20 @@ the emergency setup.
 ## Store metadata (optional but welcome)
 
 Copy `fastlane/metadata/android/en-US/` to your locale (`de-DE`, `it-IT`, `es-ES`, …) and
-translate. Two hard caps, counted in **bytes**, not characters — an accented letter costs two:
+translate. The caps below are counted in **bytes**, not characters — an accented letter costs
+two, and that difference is not academic: the Spanish listing shipped 29 bytes over the cap while
+a character count called it fine. The parity check now measures them, in bytes, on every build.
 
 | File | Cap |
 |---|---|
+| `title.txt` | 50 |
 | `short_description.txt` | **80** |
 | `full_description.txt` | 4000 |
-| `changelogs/<versionCode>.txt` | **500** |
+
+**Changelogs have no cap here.** The 500 characters you may have seen quoted for
+`changelogs/<versionCode>.txt` are a *Google Play* rule: F-Droid validates nothing on that field
+and its client displays the whole text. This app ships on F-Droid and GitHub, so write what the
+release deserves — fifty of ours run well past 500 and always have.
 
 Please end `full_description.txt` with the same short paragraph the German, Italian and
 Spanish listings carry: who wrote the translation, that no native speaker reviewed it, and
