@@ -53,3 +53,9 @@ ksp_output.log
 # Ne doivent jamais entrer dans le depot : une hallucination versionnee devient
 # une source qu'un futur lecteur prendrait pour un constat etabli.
 audit/
+
+# Les scripts de .github/scripts/ sont importes par leurs propres controles negatifs ;
+# CPython depose alors un __pycache__ a cote d'eux. Il a ete commis une fois (2026-09-17),
+# ce qui versionne un binaire propre a une version de Python.
+__pycache__/
+*.pyc
