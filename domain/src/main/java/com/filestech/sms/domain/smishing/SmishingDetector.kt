@@ -286,8 +286,7 @@ object SmishingDetector {
      * le match).
      */
     /**
-     * La frontière commune à tous les motifs : ni chiffre, ni LETTRE, ni tiret de part et
-     * d'autre.
+     * La frontière des numéros LONGS : ni chiffre, ni LETTRE de part et d'autre.
      *
      * ⚠️ Elle ne regardait que les chiffres, et les lettres passaient donc au travers :
      * « Action immédiate : G-3211 est votre code de validation » et
@@ -295,9 +294,22 @@ object SmishingDetector {
      * surtaxé, sur deux des SMS les plus courants qui soient — un code de validation et une
      * référence de commande. Relevé par deux relectures externes le 2026-09-17. Un vrai
      * numéro est entouré d'espaces ou de ponctuation, jamais de lettres.
+     *
+     * ⚠️ **Le TIRET, lui, ne fait plus frontière ici — il la faisait, et c'était une porte de
+     * sortie.** « Rappelez le -0899123456 » n'était pas signalé : un seul caractère collé
+     * devant le numéro suffisait à neutraliser l'heuristique 3, et le même tour marchait
+     * derrière. Or ces motifs-ci lisent le corps COMPACTÉ, où tout tiret placé entre deux
+     * chiffres a déjà disparu (cf. [SEPARATEUR_DE_NUMERO]) : un tiret qui subsiste à côté d'un
+     * numéro long est de la ponctuation, pas un séparateur de groupes. Il n'avait donc rien à
+     * y garder — la référence « AB08-99-123-456CD » est fermée par la LETTRE, pas par le
+     * tiret. Les numéros COURTS, eux, se lisent sur le corps BRUT et en ont toujours besoin :
+     * cf. [BORD_GAUCHE_COURT], et le test « G-3211 » qui en dépend.
+     *
+     * Les deux côtés sont corrigés ensemble : n'en fermer qu'un laisserait un jumeau ouvert,
+     * et c'est le défaut qui revient le plus souvent dans ce dépôt.
      */
-    private const val BORD_GAUCHE = """(?<![\p{L}\p{N}\-])"""
-    private const val BORD_DROIT = """(?![\p{L}\p{N}\-])"""
+    private const val BORD_GAUCHE = """(?<![\p{L}\p{N}])"""
+    private const val BORD_DROIT = """(?![\p{L}\p{N}])"""
 
     /**
      * Les numéros COURTS, cherchés sur le texte BRUT — voir [containsPremiumNumber].
@@ -324,8 +336,8 @@ object SmishingDetector {
      * d'une suite de groupes. Mesuré : les trois faux positifs tombent, et « STOP au 3211 »,
      * « Code court 3611 », « votre code est 3456. » passent toujours.
      */
-    private const val BORD_GAUCHE_COURT = BORD_GAUCHE + """(?<!\d\p{Zs})"""
-    private const val BORD_DROIT_COURT = BORD_DROIT + """(?!\p{Zs}\d)"""
+    private const val BORD_GAUCHE_COURT = """(?<![\p{L}\p{N}\-])(?<!\d\p{Zs})"""
+    private const val BORD_DROIT_COURT = """(?![\p{L}\p{N}\-])(?!\p{Zs}\d)"""
 
     private val MOTIFS_COURTS = listOf(
         Regex(BORD_GAUCHE_COURT + """3[2-6]\d{2}""" + BORD_DROIT_COURT),
@@ -360,9 +372,25 @@ object SmishingDetector {
         // ────────────────────────── ROYAUME-UNI ET IRLANDE ────────────────────────
         // L'application est livrée EN ANGLAIS d'abord, et n'avait aucune liste pour les
         // pays anglophones : un utilisateur britannique n'était protégé par rien.
-        // 09xx = premium (11 chiffres), 084x / 087x = coûts majorés (11 chiffres).
-        Regex(BORD_GAUCHE + """09\d{9}""" + BORD_DROIT),
-        Regex(BORD_GAUCHE + """08[47]\d{8}""" + BORD_DROIT),
+        //
+        // ⚠️ **Le motif 09xx a été RÉTRÉCI à 090x, et le 084x / 087x RETIRÉ.** Toutes les
+        // listes s'appliquent à tout le monde — c'est la décision, et elle tient — mais le
+        // numéro britannique non géographique de onze chiffres a la forme EXACTE du fixe
+        // allemand : 0911 Nuremberg, 0921 Bayreuth, 0981 Ansbach, 0841 Ingolstadt, 0871
+        // Landshut, suivis de sept chiffres. `09\d{9}` et `08[47]\d{8}` posaient donc un
+        // bandeau rouge sur le SMS d'un commerçant nurembergeois dès qu'un mot d'urgence
+        // traînait dans le message. Aucun chiffre ne distingue les deux écritures : c'est le
+        // pays qui les sépare, et l'anti-smishing ne s'appuie délibérément pas dessus.
+        //
+        // Arbitré comme le 118xx allemand et le 892xxx italien, pour la même raison : mieux
+        // vaut rater une arnaque que coller un bandeau rouge sur un SMS légitime.
+        //
+        // Reste couvert : 090x, la plus grosse part du premium britannique (11 chiffres —
+        // le 09 français en fait 10, et n'entre donc pas dans ce motif).
+        // N'est plus couvert, et c'est dit : 091x, 098x, 084x, 087x.
+        // Angle mort assumé : le 0906 est à la fois premium britannique et l'indicatif de
+        // Donauwörth.
+        Regex(BORD_GAUCHE + """090\d{8}""" + BORD_DROIT),
     )
 
     /**

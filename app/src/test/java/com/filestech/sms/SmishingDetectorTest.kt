@@ -787,6 +787,57 @@ class SmishingDetectorTest {
             .doesNotContain(SmishingReason.PremiumNumber)
     }
 
+    // ──── Suites de l'audit de securite du 2026-09-17 : S8 (tiret) et S6 (fixe allemand) ────
+
+    @Test
+    fun `un tiret colle devant ou derriere un numero surtaxe ne le cache plus`() {
+        // S8 — le tiret faisait frontiere des DEUX cotes, y compris pour les numeros longs.
+        // Un seul caractere colle au numero neutralisait donc l'heuristique 3, et c'est le
+        // genre de detail qu'un envoyeur d'arnaques trouve en une soiree.
+        val arnaques = listOf(
+            "URGENT : rappelez le -0899123456 immédiatement",
+            "URGENT : rappelez le 0899123456- immédiatement",
+        )
+        for (body in arnaques) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .contains(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test
+    fun `le tiret garde toujours les numeros COURTS, eux`() {
+        // Le controle negatif du test precedent : les numeros courts se lisent sur le texte
+        // BRUT, ou un tiret separe vraiment les groupes d'une reference. Retirer la garde
+        // des deux cotes aurait ramene « G-3211 » et « 12-3456-78 ».
+        val legitimes = listOf(
+            "Action immédiate : G-3211 est votre code de validation",
+            "Action requise : votre commande réf. 12-3456-78 est prête.",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test
+    fun `un fixe allemand de onze chiffres n est pas un surtaxe britannique`() {
+        // S6 — `09\d{9}` et `08[47]\d{8}` visaient le premium britannique, et decrivaient mot
+        // pour mot le fixe allemand : Nuremberg, Bayreuth, Ansbach, Ingolstadt, Landshut.
+        // Chacun de ces messages porte un mot d'urgence allemand : sans ce correctif, c'est
+        // le bandeau rouge sur le SMS d'un commercant de Nuremberg.
+        val legitimes = listOf(
+            "Bestätigen Sie Ihren Termin, Rückfragen unter 0911 1234567",
+            "Bestätigen Sie Ihren Termin, Rückfragen unter 0921 1234567",
+            "Bestätigen Sie Ihren Termin, Rückfragen unter 0981 1234567",
+            "Bestätigen Sie Ihren Termin, Rückfragen unter 0841 1234567",
+            "Bestätigen Sie Ihren Termin, Rückfragen unter 0871 1234567",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.PremiumNumber)
+        }
+    }
+
     private companion object {
         /** U+00A0, l'espace insecable ordinaire. */
         const val INSECABLE = " "
