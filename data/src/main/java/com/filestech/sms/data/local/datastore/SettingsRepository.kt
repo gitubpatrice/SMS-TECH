@@ -199,6 +199,11 @@ class SettingsRepository(
     /**
      * v1.28.12 — ramène UNE FOIS le format de réaction au défaut déclaré par la v1.14.4.
      *
+     * [langueDeLApp] est le code à deux lettres de la langue RÉSOLUE de l'application — celle
+     * dans laquelle ses écrans s'affichent. Passé en paramètre plutôt que lu ici : `:data` n'a
+     * pas à connaître les `Configuration` d'Android, et un test doit pouvoir dire « fr » ou
+     * « de » sans monter un `Context`.
+     *
      * Rend `true` si la valeur a changé. Ne fait rien sur une installation déjà migrée : c'est
      * ce qui permet à l'utilisateur de RECHOISIR la forme française ensuite sans qu'on la lui
      * reprenne au redémarrage suivant. Le drapeau est posé dans tous les cas, y compris sur une
@@ -210,11 +215,27 @@ class SettingsRepository(
      * Voir [com.filestech.sms.domain.settings.AdvancedSettings.reactionFormatMigreV12812] pour
      * le pourquoi, et pour ce que cette migration coûte.
      */
-    suspend fun migrerFormatDeReaction(): Boolean {
+    suspend fun migrerFormatDeReaction(langueDeLApp: String): Boolean {
         var change = false
         dataStore.edit { prefs ->
             if (prefs[K.reactionFormatMigreV12812] == true) return@edit
             prefs[K.reactionFormatMigreV12812] = true
+            // ⚠️ L'EXCEPTION FRANÇAISE, et c'est elle qui rend cette migration honnête.
+            //
+            // Rien sur le disque ne distingue « a choisi la forme française » de « en a hérité ».
+            // Mais la LANGUE de l'application dit pour qui ce choix est juste : quelqu'un dont
+            // l'application est en français écrit très probablement à des correspondants qui
+            // LISENT le français, et pour eux « Réagi par ❤️ à votre message » se lit, là où le
+            // format tapback est du texte anglais.
+            //
+            // Le préjudice réel vise donc l'utilisateur allemand, italien, espagnol ou anglais
+            // dont les réactions partent en français sans qu'il sache pourquoi. C'est lui, et lui
+            // seul, que l'on corrige — on n'écrase le choix de personne d'autre.
+            //
+            // Le drapeau est posé quand même : one-shot veut dire une fois. Une migration qui
+            // continuerait de guetter un changement de langue serait imprévisible, et le réglage
+            // reste à deux tapes de toute façon.
+            if (langueDeLApp == "fr") return@edit
             if (prefs[K.reactionFormat] == ReactionFormat.READABLE_FR.name) {
                 prefs[K.reactionFormat] = ReactionFormat.EMOJI_WITH_QUOTE.name
                 change = true

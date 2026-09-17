@@ -102,16 +102,50 @@ class SettingsHydrationTest {
 
                 // 1. Une installation venue du parc : READABLE_FR grave sur le disque.
                 magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
-                assertThat(depot.migrerFormatDeReaction()).isTrue()
+                assertThat(depot.migrerFormatDeReaction("de")).isTrue()
                 assertThat(magasin.data.first()[FORMAT_DE_REACTION])
                     .isEqualTo(ReactionFormat.EMOJI_WITH_QUOTE.name)
 
                 // 2. Elle ne se rejoue pas : le drapeau est pose.
-                assertThat(depot.migrerFormatDeReaction()).isFalse()
+                assertThat(depot.migrerFormatDeReaction("de")).isFalse()
 
                 // 3. LE cas qui compte : l'utilisateur rechoisit la forme francaise. Elle reste.
                 magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
-                assertThat(depot.migrerFormatDeReaction()).isFalse()
+                assertThat(depot.migrerFormatDeReaction("de")).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.READABLE_FR.name)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
+    /**
+     * v1.28.12 (option C) — **une application EN FRANCAIS garde la forme francaise.**
+     *
+     * Rien sur le disque ne distingue « a choisi » de « a herite », mais la LANGUE de
+     * l'application dit pour qui ce choix est juste : quelqu'un dont l'app est en francais ecrit
+     * a des correspondants qui LISENT le francais. Le prejudice reel visait l'utilisateur
+     * allemand, italien, espagnol ou anglais dont les reactions partaient en francais.
+     *
+     * Le drapeau est pose quand meme : one-shot veut dire une fois, et le reglage reste a deux
+     * tapes. Ce test le verifie aussi, sans quoi une migration qui continuerait de guetter la
+     * langue passerait pour correcte.
+     */
+    @Test
+    fun uneApplicationEnFrancaisGardeLaFormeFrancaise() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
+
+                assertThat(depot.migrerFormatDeReaction("fr")).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.READABLE_FR.name)
+
+                // Le drapeau EST pose : passer l'app en allemand plus tard ne relance rien.
+                assertThat(depot.migrerFormatDeReaction("de")).isFalse()
                 assertThat(magasin.data.first()[FORMAT_DE_REACTION])
                     .isEqualTo(ReactionFormat.READABLE_FR.name)
             } finally {
@@ -130,7 +164,7 @@ class SettingsHydrationTest {
             val portee = CoroutineScope(Dispatchers.Unconfined)
             try {
                 magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.EMOJI_ONLY.name }
-                assertThat(SettingsRepository(magasin, portee).migrerFormatDeReaction()).isFalse()
+                assertThat(SettingsRepository(magasin, portee).migrerFormatDeReaction("de")).isFalse()
                 assertThat(magasin.data.first()[FORMAT_DE_REACTION])
                     .isEqualTo(ReactionFormat.EMOJI_ONLY.name)
             } finally {
