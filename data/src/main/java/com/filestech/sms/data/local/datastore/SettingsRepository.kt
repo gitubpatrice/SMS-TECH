@@ -371,9 +371,15 @@ class SettingsRepository(
         this[K.amoled] = s.appearance.amoledTrueBlack
 
         // v1.28.12 — `locale.languageTag` et `locale.firstDayOfWeek` retirés : persistés,
-        // relus, jamais consultés. Les clés `locale.tag` et `locale.firstDay` restent sur
-        // le disque des installations existantes ; elles ne sont plus ni lues ni écrites,
-        // et un `.smsbk` ne les a jamais portées.
+        // relus, jamais consultés. Un `.smsbk` ne les a jamais portées.
+        //
+        // v1.28.12 ter (audit S9) — et leurs clés sont maintenant EFFACÉES, pas seulement
+        // ignorées. Cf. [K.CLES_RETIREES] : sur les installations existantes elles restaient
+        // écrites, et `PanicService.nukeEverything` réécrit les réglages par-dessus au lieu de
+        // vider le magasin — « supprimer toutes mes données » les laissait donc sur le disque,
+        // dont le tag de langue choisi par l'utilisateur. Une purge qui se dit complète doit
+        // l'être aussi pour ce qu'une version précédente a écrit.
+        for (morte in K.CLES_RETIREES) this -= morte
         this[K.sortMode] = s.conversations.sortMode.name
         this[K.previewLines] = s.conversations.previewLines
         this[K.showAvatars] = s.conversations.showAvatars
@@ -488,9 +494,23 @@ class SettingsRepository(
         val density = stringPreferencesKey("appearance.density")
         val amoled = booleanPreferencesKey("appearance.amoled")
 
-        // v1.28.12 — `locale.tag` et `locale.firstDay` retirés avec les deux champs qu'ils
-        // portaient. Ne PAS réutiliser ces deux noms de clé : ils restent écrits sur le
-        // disque des installations antérieures, avec des valeurs d'une sémantique morte.
+        /**
+         * v1.28.12 (audit S9) — les clés d'une version PRÉCÉDENTE, effacées à chaque écriture.
+         *
+         * `locale.tag` et `locale.firstDay` ont été retirés avec les deux champs qu'ils
+         * portaient. Ne PAS réutiliser ces noms : ils ont une sémantique morte. Et ne pas se
+         * contenter de ne plus les lire — tant qu'ils sont sur le disque, ils survivent à
+         * « supprimer toutes mes données », qui réécrit les réglages par-dessus plutôt que de
+         * vider le magasin.
+         *
+         * Toute clé retirée à l'avenir se pose ICI, et nulle part ailleurs : c'est le seul
+         * endroit qui garantit qu'elle finisse par disparaître des installations existantes.
+         */
+        val CLES_RETIREES: List<androidx.datastore.preferences.core.Preferences.Key<*>> = listOf(
+            stringPreferencesKey("locale.tag"),
+            stringPreferencesKey("locale.firstDay"),
+        )
+
         val sortMode = stringPreferencesKey("conv.sort")
         val previewLines = intPreferencesKey("conv.previewLines")
         val showAvatars = booleanPreferencesKey("conv.avatars")

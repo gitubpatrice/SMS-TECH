@@ -2,9 +2,11 @@ package com.filestech.sms.settings
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.domain.model.ReactionFormat
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.PreviewMode
 import com.filestech.sms.domain.settings.SendingSettings
 import com.filestech.sms.testing.magasinDeTest
@@ -82,6 +84,48 @@ class SettingsHydrationTest {
 
     private companion object {
         const val TIMEOUT_MS = 10_000L
+
+        /** Les deux cles d'une version precedente, telles qu'elles sont ecrites sur le disque. */
+        val TAG_DE_LANGUE = stringPreferencesKey("locale.tag")
+        val PREMIER_JOUR = stringPreferencesKey("locale.firstDay")
+    }
+
+    /**
+     * v1.28.12 (audit S9) — **deux cles retirees survivaient a « Supprimer toutes mes donnees ».**
+     *
+     * `locale.tag` et `locale.firstDay` ont ete retires avec les champs qu'ils portaient, mais ils
+     * restaient ecrits sur le disque des installations anterieures. Or `PanicService.nukeEverything`
+     * REECRIT les reglages par-dessus (`update { AppSettings() }`) au lieu de vider le magasin :
+     * une cle que l'ecriture ne nomme pas n'est jamais touchee. Le tag de langue choisi par
+     * l'utilisateur survivait donc a une purge qui se dit complete.
+     *
+     * Le temoin positif est dans le test lui-meme : on verifie que les deux cles SONT la avant,
+     * sans quoi un magasin vide rendrait ce test vert sans rien mesurer.
+     */
+    @Test
+    fun laPurgeEmporteLesClesRetirees() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                // Une installation anterieure : les deux cles sont sur le disque.
+                magasin.edit { prefs ->
+                    prefs[TAG_DE_LANGUE] = "de"
+                    prefs[PREMIER_JOUR] = "MONDAY"
+                }
+                val avant = magasin.data.first()
+                assertThat(avant[TAG_DE_LANGUE]).isEqualTo("de")
+                assertThat(avant[PREMIER_JOUR]).isEqualTo("MONDAY")
+
+                // Ce que fait « Supprimer toutes mes donnees ».
+                SettingsRepository(magasin, portee).update { AppSettings() }
+
+                val apres = magasin.data.first()
+                assertThat(apres[TAG_DE_LANGUE]).isNull()
+                assertThat(apres[PREMIER_JOUR]).isNull()
+            } finally {
+                portee.cancel()
+            }
+        }
     }
 
     /**
