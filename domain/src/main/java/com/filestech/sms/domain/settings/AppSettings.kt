@@ -469,6 +469,22 @@ data class AdvancedSettings(
      */
     val staleConversationPreviewsRepairedV1240: Boolean = false,
     /**
+     * v1.28.12 — le format de réaction du PARC EXISTANT a été ramené une fois au défaut
+     * déclaré par la v1.14.4.
+     *
+     * `SettingsRepository` écrit `send.reactionFormat` à CHAQUE enregistrement de réglages,
+     * sans condition. Toute installation ayant modifié un réglage — n'importe lequel — entre
+     * la v1.8.0 et la v1.14.4 a donc gravé `READABLE_FR`, et la valeur stockée l'emporte sur
+     * le défaut déclaré. Ces installations envoyaient encore leurs réactions en français, y
+     * compris à des correspondants allemands, italiens, espagnols ou anglais.
+     *
+     * ⚠️ Rien ne distingue « a choisi la forme française » de « en a hérité » : la migration
+     * écrase donc un choix délibéré s'il existe. Arbitré par Patrice le 2026-09-17, en
+     * connaissance de ce coût — le réglage se remet en deux tapes, et le changelog le dit.
+     * Indépendant de [startupDbMigrationsDone] : le parc visé l'a déjà à `true`.
+     */
+    val reactionFormatMigreV12812: Boolean = false,
+    /**
      * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-05) — REJOUE la deduplication avec l identite
      * region-aware corrigee.
      *

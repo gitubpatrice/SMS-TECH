@@ -196,6 +196,33 @@ class SettingsRepository(
         return if (firstHydration.await()) _state.value else null
     }
 
+    /**
+     * v1.28.12 — ramène UNE FOIS le format de réaction au défaut déclaré par la v1.14.4.
+     *
+     * Rend `true` si la valeur a changé. Ne fait rien sur une installation déjà migrée : c'est
+     * ce qui permet à l'utilisateur de RECHOISIR la forme française ensuite sans qu'on la lui
+     * reprenne au redémarrage suivant. Le drapeau est posé dans tous les cas, y compris sur une
+     * installation neuve qui n'a rien à migrer.
+     *
+     * Tout tient dans un seul `edit` : lire puis écrire en deux temps laisserait une fenêtre où
+     * un réglage enregistré entre les deux serait perdu.
+     *
+     * Voir [com.filestech.sms.domain.settings.AdvancedSettings.reactionFormatMigreV12812] pour
+     * le pourquoi, et pour ce que cette migration coûte.
+     */
+    suspend fun migrerFormatDeReaction(): Boolean {
+        var change = false
+        dataStore.edit { prefs ->
+            if (prefs[K.reactionFormatMigreV12812] == true) return@edit
+            prefs[K.reactionFormatMigreV12812] = true
+            if (prefs[K.reactionFormat] == ReactionFormat.READABLE_FR.name) {
+                prefs[K.reactionFormat] = ReactionFormat.EMOJI_WITH_QUOTE.name
+                change = true
+            }
+        }
+        return change
+    }
+
     override suspend fun update(transform: (AppSettings) -> AppSettings) {
         dataStore.edit { prefs ->
             val current = prefs.toAppSettings()
@@ -356,6 +383,7 @@ class SettingsRepository(
                 attachmentsMovedToFilesDirV147 = p[K.attachmentsMovedToFilesDirV147] ?: false,
                 startupDbMigrationsDone = p[K.startupDbMigrationsDone] ?: false,
                 staleConversationPreviewsRepairedV1240 = p[K.staleConversationPreviewsRepairedV1240] ?: false,
+                reactionFormatMigreV12812 = p[K.reactionFormatMigreV12812] ?: false,
                 identityDedupRepairedV1272 = p[K.identityDedupRepairedV1272] ?: false,
                 emptyConversationsPurgedV1272 = p[K.emptyConversationsPurgedV1272] ?: false,
             ),
@@ -479,6 +507,7 @@ class SettingsRepository(
         this[K.attachmentsMovedToFilesDirV147] = s.advanced.attachmentsMovedToFilesDirV147
         this[K.startupDbMigrationsDone] = s.advanced.startupDbMigrationsDone
         this[K.staleConversationPreviewsRepairedV1240] = s.advanced.staleConversationPreviewsRepairedV1240
+        this[K.reactionFormatMigreV12812] = s.advanced.reactionFormatMigreV12812
         this[K.identityDedupRepairedV1272] = s.advanced.identityDedupRepairedV1272
         this[K.emptyConversationsPurgedV1272] = s.advanced.emptyConversationsPurgedV1272
     }
@@ -649,6 +678,9 @@ class SettingsRepository(
         val startupDbMigrationsDone = booleanPreferencesKey("advanced.startupDbMigrationsDone")
         val staleConversationPreviewsRepairedV1240 =
             booleanPreferencesKey("advanced.staleConversationPreviewsRepairedV1240")
+
+        // v1.28.12 — drapeau one-shot de la migration du format de réaction.
+        val reactionFormatMigreV12812 = booleanPreferencesKey("advanced.reactionFormatV12812")
 
         /** v1.27.2 (audit Codex, LP-05) — rejeu de la dedup avec l identite region-aware. */
         val identityDedupRepairedV1272 =

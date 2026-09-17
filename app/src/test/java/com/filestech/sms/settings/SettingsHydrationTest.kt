@@ -82,8 +82,68 @@ class SettingsHydrationTest {
         porteeMagasin.cancel()
     }
 
+    /**
+     * v1.28.12 (S7) — **le parc existant envoyait ses réactions en français, à tout le monde.**
+     *
+     * `SettingsRepository` écrit `send.reactionFormat` à chaque enregistrement de réglages, sans
+     * condition : toute installation ayant modifié un réglage entre la v1.8.0 et la v1.14.4 a
+     * gravé `READABLE_FR`, et la valeur stockée l'emporte sur le défaut déclaré.
+     *
+     * Les trois cas qui comptent, et le troisieme est le plus important : une fois migre,
+     * l'utilisateur qui RECHOISIT la forme francaise doit la garder. Une migration qui se
+     * rejoue a chaque demarrage reprendrait son choix indefiniment.
+     */
+    @Test
+    fun laMigrationRamenneLeParcAuDefaut_uneSeuleFois() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+
+                // 1. Une installation venue du parc : READABLE_FR grave sur le disque.
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
+                assertThat(depot.migrerFormatDeReaction()).isTrue()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.EMOJI_WITH_QUOTE.name)
+
+                // 2. Elle ne se rejoue pas : le drapeau est pose.
+                assertThat(depot.migrerFormatDeReaction()).isFalse()
+
+                // 3. LE cas qui compte : l'utilisateur rechoisit la forme francaise. Elle reste.
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
+                assertThat(depot.migrerFormatDeReaction()).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.READABLE_FR.name)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
+    /**
+     * Le temoin negatif du test precedent : la migration ne touche QUE `READABLE_FR`. Sans lui,
+     * une migration qui ecraserait tous les formats passerait les trois cas ci-dessus.
+     */
+    @Test
+    fun laMigrationNeTouchePasLesAutresFormats() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.EMOJI_ONLY.name }
+                assertThat(SettingsRepository(magasin, portee).migrerFormatDeReaction()).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.EMOJI_ONLY.name)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
     private companion object {
         const val TIMEOUT_MS = 10_000L
+
+        /** La cle du format de reaction, telle qu'elle est ecrite sur le disque. */
+        val FORMAT_DE_REACTION = stringPreferencesKey("send.reactions.format")
 
         /** Les trois cles d'une version precedente, telles qu'elles sont ecrites sur le disque. */
         val TAG_DE_LANGUE = stringPreferencesKey("locale.tag")
