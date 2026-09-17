@@ -48,6 +48,7 @@ import com.filestech.sms.domain.emergency.EmergencyConfig
 import com.filestech.sms.domain.usecase.TriggerEmergencyUseCase
 import com.filestech.sms.system.emergency.EmergencyNumbers
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
+import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.EmergencyHoldButton
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
@@ -93,6 +94,12 @@ fun EmergencyScreen(
     val callPhonePermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { /* outcome handled by next recomposition via checkSelfPermission */ }
+    // v1.28.12 (audit 3 axes, U1) — meme raison de hissage : un lanceur ne se declare pas dans
+    // une branche. Pas de gestionnaire de resultat : [BanniereRoleSmsManquant] relit le role a
+    // chaque retour au premier plan, ce qui couvre le retour du selecteur systeme.
+    val lanceurRoleSms = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { }
     // v1.12.0 audit U2 — needed pour afficher un snackbar si aucun dialer
     // n'est installé (ACTION_DIAL ActivityNotFoundException). Sinon le tap
     // du bouton 112/17 reste silencieux et l'user croit que l'appel passe.
@@ -270,6 +277,40 @@ fun EmergencyScreen(
             Spacer(Modifier.height(28.dp))
 
             // ── SECTION 2 — SMS d'urgence aux proches (hold-3s) ──
+
+            // v1.28.12 (audit 3 axes, U1) — **c'est ICI que l'on déclenche, et c'est ici que
+            // l'avertissement manquait.**
+            //
+            // Le rôle d'application SMS par défaut a été câblé le matin même sur les deux écrans
+            // d'ARMEMENT ([EmergencySetupScreen], [SafetyCallSetupScreen]) et pas sur celui-ci.
+            // Or `SendSmsUseCase` refuse tout envoi sans ce rôle, et cet écran est atteint
+            // DIRECTEMENT depuis la notification de l'écran verrouillé — sans jamais passer par
+            // l'écran de configuration. C'est le chemin réel en situation d'urgence.
+            //
+            // Sans elle, `canTrigger` reste vrai, le bouton reste plein et coloré, et le statut
+            // en dessous annonce « prêt ». L'utilisateur tient trois secondes en croyant l'alerte
+            // partie ; le seul filet est le message d'échec, APRÈS coup.
+            //
+            // L'argument est déjà écrit vingt lignes plus bas, pour la permission de
+            // localisation : « l'avertissement de l'écran de configuration ne suffit pas —
+            // celui-ci est là où l'on déclenche ». Il n'avait pas été appliqué à la précondition
+            // voisine, le même jour.
+            //
+            // ⚠️ Placée devant la SECTION 2 et non devant la 1 : les appels directs (112, police)
+            // ne passent pas par SMS et fonctionnent sans ce rôle. L'annoncer plus haut ferait
+            // croire que le numéro d'urgence lui-même est hors service.
+            //
+            // ⚠️ Le bouton n'est PAS désactivé, délibérément : en situation d'urgence, un bouton
+            // qui refuse de répondre est pire qu'un bouton qui tente et le dit. On avertit, on
+            // ne bloque pas.
+            BanniereRoleSmsManquant(
+                aLeRole = { viewModel.defaultAppManager.isDefault() },
+                onCorriger = {
+                    viewModel.defaultAppManager.buildChangeDefaultIntent()
+                        ?.let { lanceurRoleSms.launch(it) }
+                },
+            )
+
             Text(
                 text = stringResource(R.string.emergency_section_sms_title),
                 style = MaterialTheme.typography.titleMedium,
