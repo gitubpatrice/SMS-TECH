@@ -18,12 +18,18 @@ package com.filestech.sms.domain.smishing
  *    est calibré conservateur (2 heuristiques positives minimum).
  *  - **Pas d'IA, pas de modèle** : 100 % règles déterministes, auditables
  *    et FLOSS-compatibles. Pas de modèle bundlé, pas de cloud.
- *  - **Quatre pays, tous vérifiés en même temps** (v1.28.12). Les listes couvraient la
+ *  - **Six pays, tous vérifiés en même temps** (v1.28.12). Les listes couvraient la
  *    France seule, ce qui n'a plus tenu le jour où l'application a parlé allemand,
  *    italien et espagnol : la version allemande annonçait détecter `e1ster.de` alors
  *    qu'`elster.de` n'était nulle part dans la liste. Les mots d'urgence, les numéros
- *    surtaxés et les domaines officiels de ces quatre pays sont désormais là — et ils
- *    sont TOUS appliqués à chaque message, quel que soit le pays de l'utilisateur.
+ *    surtaxés et les domaines officiels de la France, de l'Allemagne, de l'Italie, de
+ *    l'Espagne et du Royaume-Uni sont désormais là, plus les domaines officiels
+ *    irlandais — et ils sont TOUS appliqués à chaque message, quel que soit le pays de
+ *    l'utilisateur.
+ *
+ *    L'anglais est la langue SOURCE de l'application et n'avait, jusque-là, aucune liste
+ *    à lui. L'Irlande a ses domaines mais pas ses numéros surtaxés : c'est une lacune
+ *    connue et écrite, pas un oubli.
  *
  *    Ce n'est pas la même règle que pour les numéros d'urgence, et la différence est
  *    délibérée : là-bas il FAUT choisir un pays, puisqu'on compose un seul numéro. Ici
@@ -68,9 +74,17 @@ object SmishingDetector {
      * v1.11.0 audit S4 — cap dur sur le nombre de matches inspectés par les
      * regex URL / domain-like. Le cap 1000c du body évite le ReDoS, mais
      * sans cap matches le pire cas pathologique `a.b c.d e.f g.h…` répété
-     * dans 1000c donne ~150 matches × 22 LABELS_OFFICIELS ×
-     * Levenshtein O(20×20) = ~15 ms sur Cortex-A53. Cap ici réduit le
-     * pire cas à ~3 ms sur le même device.
+     * dans 1000c donne ~150 matches × [LABELS_OFFICIELS] ×
+     * Levenshtein O(20×20). Cap ici réduit le pire cas d'un ordre de grandeur.
+     *
+     * ⚠️ Le chiffrage écrit ici parlait de **22** labels officiels. Ils sont **54**
+     * (56 domaines dédoublonnés) depuis l'élargissement à cinq pays, et l'on examine
+     * désormais TOUS les labels d'un hôte au lieu du premier — jusqu'à quatre. Pire cas
+     * mesuré le 2026-09-17 : ~55 000 cellules de programmation dynamique par message,
+     * contre ~1 400 avec l'ancienne forme. **Ce n'est pas un déni de service** : le calcul
+     * tourne sur le dispatcher IO, il est mis en cache par `message.id` et le job
+     * précédent est annulé — de l'ordre de 0,3 ms sur ART. Le défaut était documentaire,
+     * et c'est cette borne qu'un relecteur futur aurait crue.
      */
     private const val MAX_URL_MATCHES = 20
     private const val MAX_DOMAIN_MATCHES = 30
@@ -124,7 +138,7 @@ object SmishingDetector {
     /**
      * Pattern domain-like (sans scheme obligatoire) — utilisé pour la
      * détection de typosquatting qui doit capturer les bare hostnames du
-     * type `paypa1.fr/update` ou `arnel1.fr` cités dans le corps d'un SMS
+     * type `paypa1.fr/update` ou `amel1.fr` cités dans le corps d'un SMS
      * sans nécessairement de préfixe `http://`. Le `\b` initial évite de
      * matcher au milieu d'un mot.
      */
@@ -201,11 +215,15 @@ object SmishingDetector {
         "avant minuit", "dans 24h", "dans 24 h",
         // FR — compte / blocage / suspension
         "compte bloqué", "compte bloque", "compte suspendu", "compte gelé", "compte gele",
-        // ⚠️ `iban` et `rib` ont été RETIRÉS le 2026-09-17. Ce ne sont pas des marqueurs
-        // d'urgence, et cherchés comme sous-chaînes ils vivent dans des mots ordinaires :
-        // `rib` est dans **distribution** et **contribution**. « Votre colis est en cours
+        // ⚠️ `rib` a été RETIRÉ le 2026-09-17 : cherché comme sous-chaîne, il vit dans des
+        // mots ordinaires — **distribution**, **contribution**. « Votre colis est en cours
         // de distribution » avec un lien raccourci affichait donc un bandeau d'arnaque sur
-        // l'un des SMS les plus banals qui soient. `iban` est dans « Taliban ».
+        // l'un des SMS les plus banals qui soient. Trois lettres sont trop peu pour qu'une
+        // frontière de mot le sauve : `\brib\b` ne signalerait plus rien d'utile.
+        // `iban`, lui, est dans [MOTS_URGENCE_A_FRONTIERE] : sa seule collision est
+        // « Taliban », et `\biban\b` la ferme sans rien perdre. Il avait été retiré avec
+        // `rib` le même jour, alors que le mécanisme qui le sauvait était écrit dans le
+        // même commit — relevé par un audit de sécurité le 2026-09-17.
         "carte bloquée", "carte bloquee",
         "action requise", "action immédiate", "action immediate",
         "confirmez", "confirmer votre", "vérifier votre", "verifier votre",
@@ -233,7 +251,7 @@ object SmishingDetector {
      * pour cela que ces mots ont leur propre mécanisme plutôt qu'un `\b` posé partout : sur
      * `dringend` ou `inkasso`, la sous-chaîne est VOULUE (`dringende`, `Inkassobüro`).
      */
-    private val MOTS_URGENCE_A_FRONTIERE = listOf("amende", "act now").map { mot ->
+    private val MOTS_URGENCE_A_FRONTIERE = listOf("amende", "act now", "iban").map { mot ->
         Regex("""\b${Regex.escape(mot)}s?\b""")
     }
 
@@ -310,8 +328,24 @@ object SmishingDetector {
      * Avec la contrainte « entre deux chiffres », « 32 - 11 » garde ses espaces (celui qui
      * précède le tiret n'est pas suivi d'un chiffre) et ne correspond plus à rien, tandis
      * que « 08 99 12 34 56 » et « 08-12-345-678 » se compactent toujours correctement.
+     *
+     * `\p{Zs}` plutôt qu'une espace ordinaire : il couvre l'insécable U+00A0 et la fine
+     * insécable U+202F, que les claviers et les traitements de texte posent entre les
+     * groupes d'un numéro de téléphone français. `\s` de Java ne les contient PAS — la
+     * forme d'origine les manquait déjà.
+     *
+     * ⚠️ **Ce que cette règle NE voit PAS, et c'est assumé.** Exiger un séparateur UNIQUE
+     * entre deux chiffres abandonne trois écritures réelles : « 08 - 99 - 12 - 34 - 56 »
+     * (espace + tiret + espace), le retour à la ligne au milieu d'un numéro, et la
+     * tabulation. Un attaquant qui connaît la règle neutralise l'heuristique 3 en écrivant
+     * son numéro avec `" - "`. Les réintroduire ramènerait mécaniquement le faux positif
+     * « résultat du match, 32 - 11 » → `3211`, un numéro court surtaxé français : la même
+     * forme, au caractère près, sert les deux cas. Arbitré le 2026-09-17 selon la doctrine
+     * de l'en-tête — mieux vaut rater une arnaque que coller un bandeau rouge sur un SMS
+     * légitime. L'heuristique 3 n'est pas la seule, et il en faut deux pour afficher quoi
+     * que ce soit.
      */
-    private val SEPARATEUR_DE_NUMERO = Regex("""(?<=\d)[ .\-](?=\d)""")
+    private val SEPARATEUR_DE_NUMERO = Regex("""(?<=\d)[\p{Zs}.\-](?=\d)""")
 
     private fun containsPremiumNumber(body: String): Boolean {
         // Les frontières (?<!\d)/(?!\d) des motifs gèrent les caractères adjacents non
@@ -347,8 +381,13 @@ object SmishingDetector {
      *
      * Exemples qui devraient trigger :
      *  - `1mpots.gouv.fr` (1 au lieu de i)
-     *  - `arnel1.fr` (lookalike ameli)
+     *  - `amel1.fr` (1 au lieu de i, sur `ameli`)
      *  - `colissimo-track.fr` (faux site colissimo)
+     *
+     * ⚠️ Cette liste portait `arnel1.fr` depuis l'origine, donné pour un « lookalike
+     * ameli ». Sa distance à `ameli` vaut **3** : il n'a JAMAIS été détecté, à aucune
+     * tolérance, ni avant ni après le resserrement. Corrigé le 2026-09-17 — un KDoc qui
+     * annonce une propriété de sécurité que le code n'a pas est pire que pas de KDoc.
      *
      * Exemples qui ne doivent PAS trigger :
      *  - `impots.gouv.fr` (domaine exact officiel)
@@ -400,6 +439,22 @@ object SmishingDetector {
     }.toSet()
 
     /**
+     * Les noms officiels qui sont AUSSI des mots ordinaires, ou qui appartiennent à des
+     * opérateurs dont les vrais domaines portent un tiret. Exclus de [porteLeNomOfficiel]
+     * SEULEMENT — la faute de frappe ([levenshteinAtMost]) et le nom exact sur un domaine
+     * de tête à bas coût continuent de les protéger, donc `0range.fr` et `poste.top` sont
+     * toujours vus.
+     *
+     * `free` est un mot anglais courant, `orange` une couleur, `bahn` un chemin de fer,
+     * `ants` des fourmis, `poste` un poste ou un bureau de poste, `amazon` un fleuve.
+     * `free-mobile.fr` et `orange-pro.fr` sont en outre de VRAIS domaines de ces
+     * opérateurs. Fermer cette règle sur eux coûte quelques vraies détections
+     * (`secure-orange.fr` n'est plus vu) et c'est le bon sens du compromis : voir
+     * l'en-tête du fichier, un bandeau rouge sur un SMS légitime coûte plus cher.
+     */
+    private val LABELS_TROP_COMMUNS = setOf("free", "orange", "poste", "amazon", "bahn", "ants")
+
+    /**
      * Les domaines de tête à bas coût, ceux que les campagnes achètent par milliers.
      *
      * Ils servent à trancher un cas que ni Levenshtein ni la concaténation ne voyaient :
@@ -430,14 +485,25 @@ object SmishingDetector {
             // TOUS les labels de l'hôte, pas seulement le premier : `www.paypa1.fr` et
             // `secure.paypa1.fr` échappaient entièrement à la détection, alors que le `www.`
             // est la forme la plus courante d'une URL. Relevé le 2026-09-17.
-            val labels = host.split(".").filter { it.length >= 4 }
+            val tousLesLabels = host.split(".")
+            // Le nom EXACT sur un domaine de tête à bas coût : `paypal.top`, `hmrc.help`,
+            // `dhl.top`. Ce n'est pas une faute de frappe, donc Levenshtein ne le voyait
+            // pas — et la garde `official != label` l'écartait explicitement.
+            //
+            // ⚠️ Cette règle est une ÉGALITÉ, pas une comparaison floue. Le filtre de
+            // longueur ci-dessous n'existe que pour borner Levenshtein, et il était posé
+            // DEVANT elle : les cinq noms officiels de trois lettres — `dhl`, `cic`, `lcl`,
+            // `edf`, `sfr` — étaient donc invisibles sur un TLD jetable, alors qu'un nom
+            // exact ne peut par construction pas créer de faux positif. Relevé par un audit
+            // de sécurité le 2026-09-17 : même motif qu'ailleurs dans ce fichier, une garde
+            // écrite pour une règle et laissée devant sa voisine.
+            if (host.substringAfterLast(".") in TLD_A_RISQUE &&
+                tousLesLabels.any { it in LABELS_OFFICIELS }
+            ) {
+                return true
+            }
+            val labels = tousLesLabels.filter { it.length >= 4 }
             val suspicious = labels.any { label ->
-                // Le nom EXACT sur un domaine de tête à bas coût : `paypal.top`, `hmrc.help`.
-                // Ce n'est pas une faute de frappe, donc Levenshtein ne le voyait pas — et la
-                // garde `official != label` l'écartait explicitement.
-                if (label in LABELS_OFFICIELS && host.substringAfterLast(".") in TLD_A_RISQUE) {
-                    return true
-                }
                 LABELS_OFFICIELS.any { official ->
                     if (official.length < 4 || official == label) return@any false
                     // Deux formes d'usurpation, la seconde échappant à la première :
@@ -459,9 +525,19 @@ object SmishingDetector {
      * À distance 2, un nom de quatre lettres attrape des mots ordinaires : `inps` contre
      * `info`, `hmrc` contre `here`. C'est ce qui obligeait à écarter l'INPS italien et le
      * fisc britannique — précisément les deux organismes les plus imités de leur pays.
-     * À distance 1, ces collisions disparaissent, et les usurpations réelles passent
-     * toujours : `1mpots` contre `impots`, `paypa1` contre `paypal`, `e1ster` contre
-     * `elster`, `correros` contre `correos` sont toutes à distance 1.
+     * À distance 1, ces collisions disparaissent, et les usurpations réelles de ces noms
+     * COURTS passent toujours : `1nps` contre `inps`, `amel1` contre `ameli`, `p0ste`
+     * contre `poste`, `bbv4` contre `bbva` sont toutes à distance 1.
+     *
+     * ⚠️ La justification écrite ici citait `1mpots`, `paypa1`, `e1ster` et `correros`.
+     * Ces quatre noms officiels font plus de cinq lettres : leur tolérance reste à 2, ils
+     * ne sont pas concernés par ce seuil. L'argument ne portait donc pas sur les cas qu'il
+     * changeait. Corrigé le 2026-09-17.
+     *
+     * Ce que le resserrement fait PERDRE, mesuré : les usurpations de noms courts à
+     * distance 2 — `arneli` contre `ameli`, `p0st3` contre `poste`, `1nqs` contre `inps`,
+     * `hrnrc` contre `hmrc`. C'est le prix assumé pour faire ENTRER `inps`, `hmrc`, `dhl`
+     * et `bbva` dans la liste, qui en étaient exclus tant que la tolérance valait 2.
      */
     // Publique comme `levenshteinAtMost` ci-dessous, et pour la meme raison : les
     // tests vivent dans le module `app`, ou `internal` du module `domain` n'est pas
@@ -477,14 +553,30 @@ object SmishingDetector {
      * l'heuristique précédente ne voyait rien du tout. Signalé par une relecture externe
      * le 2026-09-17, et c'est la forme que les campagnes emploient aujourd'hui.
      *
-     * On découpe le label sur les tirets et on cherche le nom officiel comme SEGMENT
-     * ENTIER. Chercher une simple sous-chaîne signalerait `mon-correos-perso` mais aussi
-     * n'importe quel mot qui contient le nom par hasard ; exiger un segment délimité rend
-     * la règle précise : `mi-correo.es` (courrier, en espagnol) n'est pas touché, parce
-     * que son segment vaut `correo` et non `correos`.
+     * On exige le nom officiel en PREMIER segment. Chercher une simple sous-chaîne
+     * signalerait `mon-correos-perso` mais aussi n'importe quel mot qui contient le nom
+     * par hasard ; exiger un segment délimité rend la règle plus précise : `mi-correo.es`
+     * (courrier, en espagnol) n'est pas touché, parce que son premier segment vaut `mi`.
+     *
+     * ⚠️ La première écriture acceptait le nom officiel à N'IMPORTE QUELLE position
+     * (`split('-').any { … }`), et c'était un faux positif plus large que les six que ce
+     * commit corrigeait : neuf des noms officiels sont aussi des mots ordinaires, à
+     * commencer par `free`. « Última oportunidad: 50% en todo el duty-free.es » réunissait
+     * alors DEUX heuristiques — `duty-free` lu comme une usurpation de `free.fr`, et
+     * « última oportunidad » — et affichait un bandeau rouge sur un SMS commercial
+     * parfaitement légitime. Relevé par un audit de sécurité le 2026-09-17.
+     *
+     * Deux gardes, pas une, parce qu'une seule ne suffit pas :
+     *  - le nom officiel en PREMIER ferme `duty-free`, `tax-free`, `auto-bahn`,
+     *    `la-poste`, `shop-amazon` — c'est aussi la forme que prennent réellement les
+     *    campagnes (`inps-sicurezza`, `hmrc-refund`, `correos-es`) ;
+     *  - [LABELS_TROP_COMMUNS] ferme l'autre sens, `free-mobile.fr` et `orange-pro.fr`,
+     *    qui sont les VRAIS domaines de ces opérateurs et resteraient signalés sinon.
      */
     fun porteLeNomOfficiel(label: String, nomOfficiel: String): Boolean =
-        label.contains('-') && label.split('-').any { it == nomOfficiel }
+        nomOfficiel !in LABELS_TROP_COMMUNS &&
+            label.contains('-') &&
+            label.substringBefore('-') == nomOfficiel
 
     /**
      * Distance de Levenshtein bornée — retourne true si la distance entre

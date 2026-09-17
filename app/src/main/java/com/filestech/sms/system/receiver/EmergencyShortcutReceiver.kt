@@ -51,7 +51,8 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
             // puis re-filtré par la liste blanche d'`EmergencyCallHelper`. Cf. [EmergencyNumbers].
             ACTION_DIAL_POLICE -> handleDial(
                 context,
-                com.filestech.sms.system.emergency.EmergencyNumbers.police(context),
+                com.filestech.sms.system.emergency.EmergencyNumbers
+                    .raccourciForcesDeLOrdre(context).number,
             )
             else -> Timber.w("EmergencyShortcutReceiver: unknown action %s", intent.action)
         }

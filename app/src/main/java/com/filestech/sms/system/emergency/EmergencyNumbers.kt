@@ -176,9 +176,34 @@ object EmergencyNumbers {
     internal fun filtrerParLOS(dials: List<Dial>, reconnu: (String) -> Boolean): List<Dial> =
         dials.filter { it.service == Service.EUROPEAN || reconnu(it.number) }
 
-    /** Le numéro de police du pays courant, ou le 112 quand le pays n'en publie pas d'autre. */
-    fun police(context: Context): String =
-        pour(context).firstOrNull { it.service == Service.POLICE }?.number ?: EU.number
+    /**
+     * Le raccourci « forces de l'ordre » du pays courant : son numéro ET le service qu'il
+     * nomme réellement, pour que l'appelant puisse étiqueter ce qu'il compose.
+     *
+     * ⚠️ Cette fonction rendait un simple numéro, avec un repli DIRECT sur le 112. En
+     * déplaçant le 999 britannique et irlandais de [Service.POLICE] vers
+     * [Service.NATIONAL] — il est la ligne d'urgence générale, pas la police — ce repli
+     * est devenu un mensonge silencieux : au Royaume-Uni l'action étiquetée « Police »
+     * composait le 112, et le 999 n'était plus atteignable depuis l'écran verrouillé.
+     * Relevé par un audit de sécurité le 2026-09-17, et c'est précisément la classe de
+     * défaut que le commit précédent disait supprimer — un libellé qui ment sur son
+     * propre bouton — reproduite d'un cran plus loin.
+     *
+     * Le repli suit maintenant le pays au lieu de l'enjamber : police du pays, sinon sa
+     * ligne nationale, sinon le 112. Il n'y a aucun pays où l'on compose moins bien
+     * qu'avant, et deux où l'on compose enfin le bon numéro.
+     */
+    fun raccourciForcesDeLOrdre(context: Context): Dial = raccourciDans(pour(context))
+
+    /**
+     * La partie pure de [raccourciForcesDeLOrdre], extraite pour être testable sans
+     * `Context` ni téléphonie — une propriété de sécurité qu'on ne peut pas tester n'en
+     * est pas une. Même geste que [filtrerParLOS].
+     */
+    internal fun raccourciDans(dials: List<Dial>): Dial =
+        dials.firstOrNull { it.service == Service.POLICE }
+            ?: dials.firstOrNull { it.service == Service.NATIONAL }
+            ?: EU
 
     /**
      * L'avis du système sur un numéro, quand il peut le donner. Voir l'en-tête : en cas de

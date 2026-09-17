@@ -199,4 +199,47 @@ class EmergencyNumbersTest {
         val filtres = EmergencyNumbers.filtrerParLOS(france) { it == "17" }
         assertThat(filtres.map { it.number }).containsExactly("112", "17").inOrder()
     }
+
+    // ──────── Le raccourci « forces de l'ordre » de l'ecran verrouille ────────
+
+    @Test fun `le raccourci compose le 999 au Royaume-Uni et en Irlande, pas le 112`() {
+        // Le repli sautait DIRECTEMENT sur le 112 quand le pays n'avait pas de POLICE. En
+        // deplacant le 999 vers NATIONAL — il est la ligne d'urgence generale, pas la police
+        // — l'action etiquetee « Police » composait donc le 112 au Royaume-Uni, et le 999
+        // n'etait plus atteignable depuis l'ecran verrouille. Releve le 2026-09-17.
+        for (pays in listOf("gb", "ie")) {
+            val raccourci = EmergencyNumbers.raccourciDans(EmergencyNumbers.pourLePays(pays))
+            assertThat(raccourci.number).isEqualTo("999")
+            assertThat(raccourci.service).isEqualTo(EmergencyNumbers.Service.NATIONAL)
+        }
+    }
+
+    @Test fun `le raccourci prefere la police quand le pays en publie une`() {
+        // Le temoin positif : sans lui, un repli qui rendrait TOUJOURS la ligne nationale
+        // passerait le test precedent.
+        val france = EmergencyNumbers.raccourciDans(EmergencyNumbers.pourLePays("fr"))
+        assertThat(france.number).isEqualTo("17")
+        assertThat(france.service).isEqualTo(EmergencyNumbers.Service.POLICE)
+        val allemagne = EmergencyNumbers.raccourciDans(EmergencyNumbers.pourLePays("de"))
+        assertThat(allemagne.number).isEqualTo("110")
+        assertThat(allemagne.service).isEqualTo(EmergencyNumbers.Service.POLICE)
+    }
+
+    @Test fun `le raccourci rend le 112 quand le pays ne publie rien d autre`() {
+        // Le Portugal n'a ni police ni ligne nationale distincte dans la table : le repli
+        // final doit tenir, et il doit se NOMMER correctement.
+        val portugal = EmergencyNumbers.raccourciDans(EmergencyNumbers.pourLePays("pt"))
+        assertThat(portugal.number).isEqualTo("112")
+        assertThat(portugal.service).isEqualTo(EmergencyNumbers.Service.EUROPEAN)
+    }
+
+    @Test fun `le raccourci ne ment jamais sur le service qu il compose`() {
+        // La propriete generale, sur les onze pays : le numero rendu appartient TOUJOURS au
+        // service annonce. C'est ce qui permet d'etiqueter le bouton sans rien synchroniser.
+        for (pays in EmergencyNumbers.PAYS_COUVERTS) {
+            val dials = EmergencyNumbers.pourLePays(pays)
+            val raccourci = EmergencyNumbers.raccourciDans(dials)
+            assertThat(dials).contains(raccourci)
+        }
+    }
 }

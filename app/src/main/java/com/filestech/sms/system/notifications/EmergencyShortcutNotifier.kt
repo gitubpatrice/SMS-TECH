@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.filestech.sms.R
+import com.filestech.sms.system.emergency.EmergencyNumbers
 import com.filestech.sms.system.receiver.EmergencyShortcutReceiver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -179,9 +180,23 @@ class EmergencyShortcutNotifier @Inject constructor(
             // Relevé par deux audits indépendants le 2026-09-17. Nommer le service supprime la
             // classe entière de défaut au lieu de la rattraper : il n'y a plus rien à
             // synchroniser. Et `emergency_call_police_label` existe déjà dans les cinq langues.
+            // v1.28.12 bis — le libellé nomme le service RÉELLEMENT composé dans CE pays.
+            // Au Royaume-Uni et en Irlande il n'existe pas de ligne de police distincte : le
+            // 999 est la ligne d'urgence générale, et l'étiqueter « Police » serait faux. Le
+            // repli du numéro et le choix du libellé lisent la MÊME fonction, donc ils ne
+            // peuvent pas diverger. Reste le cas où l'utilisateur change de pays entre la pose
+            // et le tap : le numéro suit (il est résolu au tap), le libellé non — c'est le
+            // résidu déjà assumé au-dessus, et il nomme désormais un service voisin plutôt
+            // qu'un service absent du pays.
+            val raccourci = EmergencyNumbers.raccourciForcesDeLOrdre(context)
+            val libelleDuRaccourci = if (raccourci.service == EmergencyNumbers.Service.POLICE) {
+                R.string.emergency_call_police_label
+            } else {
+                R.string.emergency_call_national_label
+            }
             builder.addAction(
                 R.drawable.ic_notification_message,
-                context.getString(R.string.emergency_call_police_label),
+                context.getString(libelleDuRaccourci),
                 dialPolicePI,
             )
         }

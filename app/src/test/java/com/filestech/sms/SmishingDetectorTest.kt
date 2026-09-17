@@ -418,8 +418,14 @@ class SmishingDetectorTest {
     @Test fun `une vraie amende reste detectee malgre la frontiere de mot`() {
         // Le temoin positif du test precedent : poser une frontiere ne doit pas rendre
         // le mot inutile. Le pluriel doit passer aussi.
+        //
+        // ⚠️ Le cas singulier disait « Amende impayee, MAJORATION sous 48h ». Or
+        // « majoration » est lui-meme dans URGENCY_KEYWORDS : si la frontiere de mot de
+        // `amende` cassait, l'assertion serait restee VERTE. Un temoin positif doit
+        // isoler la regle qu'il temoigne. Corrige le 2026-09-17 ; cf. memoire
+        // `tests-qui-ne-peuvent-pas-echouer`.
         val amendes = listOf(
-            "Amende impayée, majoration sous 48h : https://bit.ly/x",
+            "Amende impayée : https://bit.ly/x",
             "Vos amendes impayées : https://bit.ly/x",
         )
         for (body in amendes) {
@@ -478,5 +484,103 @@ class SmishingDetectorTest {
             assertThat(SmishingDetector.analyze(body).reasons)
                 .doesNotContain(SmishingReason.TyposquattedDomain)
         }
+    }
+
+    // ──────── Suites de l'audit de securite du 2026-09-17 ────────
+
+    @Test fun `un mot ordinaire qui porte le nom d un operateur n est pas une usurpation`() {
+        // La regle de concatenation acceptait le nom officiel a N'IMPORTE QUELLE position
+        // du label. Neuf des noms officiels sont aussi des mots ordinaires — `free` le
+        // premier. « duty-free » etait donc lu comme une usurpation de `free.fr`, et avec
+        // un seul mot d'urgence le SEUIL DE DEUX etait atteint : bandeau rouge sur un SMS
+        // commercial. C'est le faux positif que ce fichier refuse par-dessus tout.
+        val legitimes = listOf(
+            "Última oportunidad: 50% en todo el duty-free.es",
+            "Limited time offer on tax-free.com",
+            "Dernière chance : location sur auto-bahn.de",
+            "Votre facture est disponible sur free-mobile.fr",
+            "Votre espace pro : orange-pro.fr",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.TyposquattedDomain)
+        }
+    }
+
+    @Test fun `le nom officiel en PREMIER segment reste signale`() {
+        // Le temoin positif du test precedent. C'est la forme que prennent reellement les
+        // campagnes, et les quatre assertions d'origine la respectent deja.
+        assertThat(SmishingDetector.porteLeNomOfficiel("inps-sicurezza", "inps")).isTrue()
+        assertThat(SmishingDetector.porteLeNomOfficiel("hmrc-refund", "hmrc")).isTrue()
+        assertThat(SmishingDetector.porteLeNomOfficiel("correos-es", "correos")).isTrue()
+        // Et les deux gardes, chacune isolee de l'autre :
+        assertThat(SmishingDetector.porteLeNomOfficiel("duty-free", "free")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("free-mobile", "free")).isFalse()
+        assertThat(SmishingDetector.porteLeNomOfficiel("mon-inps", "inps")).isFalse()
+    }
+
+    @Test fun `un nom officiel COURT sur un domaine jetable est signale`() {
+        // Le filtre `length >= 4` n'existe que pour borner Levenshtein, et il etait pose
+        // DEVANT la regle du nom exact, qui est une EGALITE. Les cinq noms officiels de
+        // trois lettres — dhl, cic, lcl, edf, sfr — etaient donc invisibles sur un TLD
+        // jetable, alors qu'une egalite ne peut pas creer de faux positif.
+        val usurpations = listOf(
+            "Ihr Paket konnte nicht zugestellt werden: https://dhl.top/tracking",
+            "Votre facture : https://edf.online/payer",
+            "Votre espace client : https://sfr.click/connexion",
+        )
+        for (body in usurpations) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .contains(SmishingReason.TyposquattedDomain)
+        }
+    }
+
+    @Test fun `un nom officiel court sur son VRAI domaine reste legitime`() {
+        // Le controle negatif du test precedent : c'est le TLD a bas cout qui decide,
+        // pas la longueur du nom.
+        val legitimes = listOf(
+            "Ihre Sendung: https://dhl.de/verfolgen",
+            "Votre facture : https://edf.fr/espace-client",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.TyposquattedDomain)
+        }
+    }
+
+    @Test fun `iban revient, avec la frontiere de mot qui le rendait sur`() {
+        // `iban` avait ete retire avec `rib` au motif qu'il vit dans « Taliban » — alors
+        // que le mecanisme a frontiere de mot etait ecrit dans le MEME commit et n'avait
+        // pas ete applique. Une demande d'IBAN par SMS est le smishing bancaire canonique.
+        assertThat(SmishingDetector.analyze("Communiquez votre IBAN sous 24h : https://bit.ly/xk2").reasons)
+            .contains(SmishingReason.UrgencyKeyword)
+        // Et son controle negatif, la raison meme du retrait initial :
+        assertThat(SmishingDetector.analyze("Reportage sur les Talibans : https://bit.ly/doc").reasons)
+            .doesNotContain(SmishingReason.UrgencyKeyword)
+    }
+
+    @Test fun `un numero surtaxe ecrit avec des espaces insecables est reconnu`() {
+        // `\s` de Java ne contient NI U+00A0 NI U+202F, que les claviers et traitements de
+        // texte posent entre les groupes d'un numero francais. `\p{Zs}` les couvre.
+        val insecable = " "
+        val fineInsecable = " "
+        val numeros = listOf(
+            "Rappelez le 08${insecable}99${insecable}12${insecable}34${insecable}56",
+            "Rappelez le 08${fineInsecable}99${fineInsecable}12${fineInsecable}34${fineInsecable}56",
+        )
+        for (body in numeros) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .contains(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test fun `deux nombres voisins separes par une insecable ne fusionnent toujours pas`() {
+        // Le controle negatif du test precedent : elargir la classe de separateurs ne doit
+        // pas ramener le faux positif « 32 - 11 » corrige le meme jour. L'espace qui
+        // precede le tiret n'est pas suivi d'un chiffre, quelle que soit sa forme.
+        val insecable = " "
+        val body = "Urgent : résultat du match, 32${insecable}-${insecable}11. Compte rendu demain."
+        assertThat(SmishingDetector.analyze(body).reasons)
+            .doesNotContain(SmishingReason.PremiumNumber)
     }
 }
