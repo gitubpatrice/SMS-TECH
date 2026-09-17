@@ -408,11 +408,13 @@ private fun DurationSection(
             onClick = { onSelect(SafetyCallConfig.TIMEOUT_72H_MS) },
         )
         val customLabel = if (!isStandard) {
+            // v1.28.12 (mesure sur appareil, S24 en italien) — le PLURIEL, pas la forme
+            // abrégée. La puce affichait « 1 h » au milieu de « 24 ore / 48 ore / 72 ore » :
+            // traduite, donc invisible à la parité, mais abrégée là où ses voisines ne le
+            // sont pas. Un lecteur italien y voit du texte non traduit.
+            val heures = (current / 3_600_000L).toInt()
             stringResource(R.string.safety_call_setup_duration_custom) + " · " +
-                stringResource(
-                    R.string.safety_call_setup_duration_custom_format,
-                    (current / 3_600_000L).toInt(),
-                )
+                pluralStringResource(R.plurals.safety_duration_hours, heures, heures)
         } else {
             stringResource(R.string.safety_call_setup_duration_custom)
         }
@@ -812,10 +814,7 @@ private fun CustomDurationDialog(
     // Aide l'user à se représenter visuellement la durée sans qu'il ait à
     // diviser mentalement par 24.
     val supportingLabel = when {
-        parsed == null -> stringResource(
-            R.string.safety_call_setup_duration_custom_format,
-            0,
-        )
+        parsed == null -> pluralStringResource(R.plurals.safety_duration_hours, 0, 0)
         // v1.28.12 — l'aperçu passe par [libelleDeDuree] et par le format d'heure déjà
         // traduit. Il était écrit ici à la main, en français : un Italien qui saisissait
         // 96 lisait « 96 h ≈ 4 jours ». Même défaut, même jour, même correctif que dans
@@ -823,13 +822,10 @@ private fun CustomDurationDialog(
         // ont divergé de leurs traductions deux fois.
         parsed >= 24 -> stringResource(
             R.string.safety_call_setup_duration_approx,
-            stringResource(R.string.safety_call_setup_duration_custom_format, parsed),
+            pluralStringResource(R.plurals.safety_duration_hours, parsed, parsed),
             libelleDeDuree(parsed),
         )
-        else -> stringResource(
-            R.string.safety_call_setup_duration_custom_format,
-            parsed,
-        )
+        else -> pluralStringResource(R.plurals.safety_duration_hours, parsed, parsed)
     }
     AlertDialog(
         onDismissRequest = onDismiss,

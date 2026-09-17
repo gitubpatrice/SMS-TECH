@@ -488,7 +488,6 @@
     <string name="safety_call_setup_duration_48h">48 heures</string>
     <string name="safety_call_setup_duration_72h">72 heures</string>
     <string name="safety_call_setup_duration_custom">Personnalisée</string>
-    <string name="safety_call_setup_duration_custom_format">%1$d h</string>
     <string name="attachment_generic_name">Pièce jointe</string>
     <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">En heures · 168 h = 1 semaine · max 720 h (30 jours)</string>

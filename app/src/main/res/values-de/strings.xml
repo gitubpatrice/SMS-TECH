@@ -498,7 +498,6 @@
     <string name="safety_call_setup_duration_48h">48 Stunden</string>
     <string name="safety_call_setup_duration_72h">72 Stunden</string>
     <string name="safety_call_setup_duration_custom">Eigene</string>
-    <string name="safety_call_setup_duration_custom_format">%1$d Std.</string>
     <string name="attachment_generic_name">Anhang</string>
     <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">In Stunden · 168 Std. = 1 Woche · max. 720 Std. (30 Tage)</string>

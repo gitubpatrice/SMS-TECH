@@ -496,7 +496,6 @@
     <string name="safety_call_setup_duration_48h">48 hours</string>
     <string name="safety_call_setup_duration_72h">72 hours</string>
     <string name="safety_call_setup_duration_custom">Custom</string>
-    <string name="safety_call_setup_duration_custom_format">%1$d h</string>
     <string name="attachment_generic_name">Attachment</string>
     <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">In hours · 168 h = 1 week · max 720 h (30 days)</string>
