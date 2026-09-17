@@ -14,11 +14,17 @@ import javax.inject.Singleton
  * **durable** attachment store just before the message is committed to Room + dispatched.
  *
  * **Why** : the UI stages user-picked media in `cacheDir/media_outgoing/` and recorded voice
- * clips in `cacheDir/voice_mms/`. Those cache directories are intentionally prunable — they hold
- * *abandoned drafts* (the user backs out without sending), swept by
- * [com.filestech.sms.system.scheduler.TelephonySyncWorker.pruneStaleOutboundCaches] (24 h) and
- * wiped wholesale by [com.filestech.sms.security.AutoLockObserver] on every lock cycle. But once
- * a message is **sent**, its `AttachmentEntity.localUri` keeps pointing at that same cache path,
+ * clips in `cacheDir/voice_mms/`. Those cache directories are intentionally prunable, swept by
+ * [com.filestech.sms.system.scheduler.TelephonySyncWorker.pruneStaleOutboundCaches] (24 h) and by
+ * [com.filestech.sms.security.purgerBrouillonsSortants] when the app goes to background.
+ *
+ * ⚠️ v1.28.12 (audit B1) — ce commentaire affirmait que ces dossiers ne tiennent que des
+ * *abandoned drafts* et qu'ils sont « wiped wholesale » à chaque cycle de verrouillage. C'était faux,
+ * et c'est cette phrase même qui a servi à justifier la purge en bloc côté `AutoLockObserver` : un
+ * brouillon VIVANT y vit aussi, tant que l'utilisateur n'a pas envoyé. La purge en bloc est
+ * désormais réservée au verrou réellement mordu ; sinon elle procède par âge.
+ *
+ * Once a message is **sent**, its `AttachmentEntity.localUri` keeps pointing at that same cache path,
  * so the file it references gets deleted out from under the row — the bubble then renders an
  * empty tile when the thread is reopened later (bug pré-existant depuis v1.2.3).
  *
