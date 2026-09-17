@@ -1183,16 +1183,10 @@ class ThreadViewModel @Inject constructor(
         runCatching { removed.file.delete() }
     }
 
-    /**
-     * v1.3.4 — vide la bande staging + supprime tous les fichiers cache. Appelé sur
-     * quitter de la conversation, ou bouton "Tout supprimer" si exposé.
-     */
-    fun clearAllPendingAttachments() {
-        val current = _state.value.pendingAttachments
-        if (current.isEmpty()) return
-        _state.update { it.copy(pendingAttachments = emptyList()) }
-        current.forEach { runCatching { it.file.delete() } }
-    }
+    // v1.28.12 (audit B2) — `clearAllPendingAttachments()` a été SUPPRIMÉE. Son KDoc la disait
+    // « appelée sur quitter de la conversation » : c'est faux, [onCleared] supprime les fichiers
+    // lui-même, et le bouton « Tout supprimer » n'a jamais été exposé. Deux façons de vider la
+    // même bande, dont une seule branchée, sur un chemin qui EFFACE des fichiers.
 
     /**
      * v1.28.3 (F27) — facteur de sous-echantillonnage a appliquer au decodage.

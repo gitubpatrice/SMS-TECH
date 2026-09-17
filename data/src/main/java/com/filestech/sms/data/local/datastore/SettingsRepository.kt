@@ -347,7 +347,6 @@ class SettingsRepository(
                 encrypt = p[K.backupEncrypt] ?: true,
             ),
             advanced = AdvancedSettings(
-                isDefaultSmsApp = p[K.isDefault] ?: false,
                 lastSyncedSmsId = p[K.lastSyncedSmsId] ?: 0L,
                 mmsImportCompleted = p[K.mmsImportCompleted] ?: false,
                 splashShown = p[K.splashShown] ?: false,
@@ -465,7 +464,6 @@ class SettingsRepository(
         remove(K.backupFormat)
         this[K.backupEncrypt] = s.backup.encrypt
 
-        this[K.isDefault] = s.advanced.isDefaultSmsApp
         this[K.lastSyncedSmsId] = s.advanced.lastSyncedSmsId
         this[K.mmsImportCompleted] = s.advanced.mmsImportCompleted
         this[K.splashShown] = s.advanced.splashShown
@@ -601,7 +599,6 @@ class SettingsRepository(
         val backupKeep = intPreferencesKey("backup.keep")
         val backupFormat = stringPreferencesKey("backup.format")
         val backupEncrypt = booleanPreferencesKey("backup.encrypt")
-        val isDefault = booleanPreferencesKey("advanced.isDefault")
         val mmsRoaming = booleanPreferencesKey("advanced.mmsRoaming")
         // Bumped from a boolean ("didInitialSmsImport") to a long cursor: the latter encodes the
         // same first-run signal (0 vs > 0) AND tells the sync manager where to resume from.

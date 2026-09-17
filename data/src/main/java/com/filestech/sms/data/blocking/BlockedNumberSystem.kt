@@ -23,12 +23,11 @@ class BlockedNumberSystem @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
-    @RequiresApi(Build.VERSION_CODES.N)
-    fun isSystemBlocked(rawNumber: String): Boolean {
-        return runCatching { BlockedNumberContract.isBlocked(context, rawNumber) }
-            .onFailure { Timber.w(it, "BlockedNumberContract.isBlocked failed") }
-            .getOrDefault(false)
-    }
+    // v1.28.12 (audit B2) — `isSystemBlocked()` a été SUPPRIMÉE. Aucun appelant : le filtrage
+    // réel interroge le miroir Room par [blockKey], et le contrat système n'est lu qu'au démarrage
+    // par [listSystemBlocked] pour alimenter ce miroir. Une seconde autorité sur « ce numéro
+    // est-il bloqué ? », disponible mais jamais consultée, est exactement la façon dont
+    // l'affichage et le filtre ont divergé en v1.25.3.
 
     @RequiresApi(Build.VERSION_CODES.N)
     fun block(rawNumber: String): String? {

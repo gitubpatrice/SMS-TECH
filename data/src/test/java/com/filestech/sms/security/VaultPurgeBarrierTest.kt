@@ -1,6 +1,5 @@
 package com.filestech.sms.security
 
-import com.filestech.sms.core.crypto.KeystoreManager
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.repository.ConversationRepository
@@ -36,7 +35,7 @@ class VaultPurgeBarrierTest {
             every { m.isOpenForUi(any()) } answers { callOriginal() }
         }
         val session = VaultSessionState().apply { markUnlocked() }
-        return VaultManager(mockk<KeystoreManager>(relaxed = true), repo, lock, session, io, barriere)
+        return VaultManager(repo, lock, session, io, barriere)
     }
 
     @Test

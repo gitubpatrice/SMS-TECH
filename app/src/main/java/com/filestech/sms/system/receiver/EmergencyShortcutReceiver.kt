@@ -4,8 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.NotificationManagerCompat
-import com.filestech.sms.R
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 
@@ -103,12 +101,8 @@ class EmergencyShortcutReceiver : BroadcastReceiver() {
     }
 }
 
-/**
- * Helper pour cancel la notif persistante depuis n'importe quel call site
- * sans avoir à injecter le NotificationManagerCompat dans 10 endroits.
- */
-internal fun Context.cancelEmergencyShortcutNotification() {
-    NotificationManagerCompat.from(this).cancel(
-        EmergencyShortcutReceiver.NOTIF_ID_EMERGENCY_SHORTCUT,
-    )
-}
+// v1.28.12 (audit B2) — `Context.cancelEmergencyShortcutNotification()` a été SUPPRIMÉE.
+// Aucun appelant, et une jumelle exacte de
+// [com.filestech.sms.system.notifications.EmergencyShortcutNotifier.cancelShortcut], qui est
+// celle que l'application emprunte. Deux façons d'éteindre la même notification persistante,
+// dont une seule journalise et une seule est testée.

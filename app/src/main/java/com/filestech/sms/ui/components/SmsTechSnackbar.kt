@@ -53,16 +53,9 @@ suspend fun SnackbarHostState.showError(message: String) {
     showSnackbar(SmsTechSnackbarVisuals(message = message, isError = true))
 }
 
-/**
- * Variante isError pour les messages de confirmation de suppression
- * (ex: "Numéro supprimé", "Conversation supprimée"). Sémantiquement
- * équivalent à [showError] — l'identifier explicite aide à la lecture
- * du code et permet à un futur refacto de différencier les deux si
- * besoin (ex: suppression = orange, erreur = rouge fort).
- */
-suspend fun SnackbarHostState.showDestructive(message: String) {
-    showSnackbar(SmsTechSnackbarVisuals(message = message, isError = true))
-}
+// v1.28.12 (audit B2) — `showDestructive()` a été SUPPRIMÉE. Aucun appelant, et son propre
+// KDoc la déclarait « sémantiquement équivalente à showError » : le refacto qui devait un jour
+// les distinguer n'est jamais venu. Elle se réécrira en deux lignes le jour où il viendra.
 
 /**
  * [SnackbarHost] custom qui rend les [SmsTechSnackbarVisuals] avec :

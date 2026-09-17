@@ -1,6 +1,5 @@
 package com.filestech.sms.security
 
-import com.filestech.sms.core.crypto.KeystoreManager
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.repository.ConversationRepository
@@ -32,7 +31,6 @@ import org.junit.jupiter.api.Test
 class VaultGuardsTest {
 
     private val io = UnconfinedTestDispatcher()
-    private val keystore = mockk<KeystoreManager>(relaxed = true)
     private val repo = mockk<ConversationRepository>(relaxed = true)
 
     /**
@@ -52,7 +50,7 @@ class VaultGuardsTest {
     ): Pair<VaultManager, VaultSessionState> {
         // Le porteur de session est le VRAI : c'est lui l'objet du test.
         val session = VaultSessionState().apply { if (sessionUnlocked) markUnlocked() }
-        return VaultManager(keystore, repo, lockManager(state), session, io, VaultPurgeBarrier()) to session
+        return VaultManager(repo, lockManager(state), session, io, VaultPurgeBarrier()) to session
     }
 
     // ──────────── Entrer dans le coffre n'ouvre pas la session ────────────

@@ -1,6 +1,5 @@
 package com.filestech.sms.security
 
-import com.filestech.sms.core.crypto.KeystoreManager
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.PhoneAddress
@@ -50,7 +49,7 @@ class VaultGroupMembersTest {
             every { m.isOpenForUi(any()) } answers { callOriginal() }
         }
         val session = VaultSessionState().apply { markUnlocked() }
-        return VaultManager(mockk<KeystoreManager>(relaxed = true), repo, lock, session, io, VaultPurgeBarrier())
+        return VaultManager(repo, lock, session, io, VaultPurgeBarrier())
     }
 
     @Test

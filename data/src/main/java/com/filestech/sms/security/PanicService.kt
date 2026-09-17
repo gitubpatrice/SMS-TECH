@@ -150,6 +150,9 @@ class PanicService @Inject constructor(
         // La clé de la porte biométrique part aussi, qui manquait à la liste : elle ne chiffre rien, mais sa
         // seule présence dit qu'un verrou biométrique a existé — ce que « tout effacer » doit taire, comme
         // l'empreinte du PIN du coffre (v1.28.6).
+        // v1.28.12 (audit B2) — `ALIAS_VAULT_KEK` n'est créé par RIEN aujourd'hui : la seconde
+        // enveloppe du coffre n'a jamais été construite. On l'efface quand même, préventivement, pour
+        // que le jour où elle le sera, « tout effacer » la couvre sans qu'on ait à y revenir.
         val aliasADetruire = listOf(
             KeystoreManager.ALIAS_DB_MASTER,
             KeystoreManager.ALIAS_VAULT_KEK,

@@ -365,7 +365,11 @@ data class BackupSettings(
 )
 
 data class AdvancedSettings(
-    val isDefaultSmsApp: Boolean = false,
+    // v1.28.12 (audit B2) — `isDefaultSmsApp` a été SUPPRIMÉ. Il était écrit et relu par
+    // `SettingsRepository`, et par personne d'autre : RIEN ne l'a jamais mis à jour, il valait
+    // donc `false` à vie, y compris sur un téléphone où l'application TIENT le rôle. Le rôle se
+    // demande au système, au moment où la question se pose — `DefaultSmsAppManager.isDefault()`,
+    // qui est ce que l'écran des conversations utilise déjà.
     /**
      * Highest `Telephony.Sms._ID` we have already mirrored into our Room DB. Maintained by the
      * [com.filestech.sms.data.sync.TelephonySyncManager] — it queries `content://sms` with
