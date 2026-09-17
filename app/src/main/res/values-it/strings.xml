@@ -644,7 +644,7 @@
     <string name="settings_resync_confirm_title">Risincronizzare dal telefono?</string>
     <string name="settings_resync_confirm_body">Reimporta i messaggi dal fornitore SMS/MMS del sistema. I messaggi esistenti restano (deduplicati tramite identificativo unico); i messaggi eliminati in precedenza possono ricomparire se esistono ancora nel database di sistema. Continuare?</string>
     <string name="settings_reset_all_confirm_title">Ripristinare tutte le impostazioni?</string>
-    <string name="settings_reset_all_confirm_body">Tutte le sue preferenze (tema, notifiche, invio, ecc.) torneranno ai valori predefiniti. Le sue conversazioni, i suoi messaggi e le sue impostazioni di sicurezza (blocco, PIN della cassaforte, codice esca) NON sono toccati.</string>
+    <string name="settings_reset_all_confirm_body">Tutte le sue preferenze (tema, notifiche, invio, ecc.) torneranno ai valori predefiniti. Le sue conversazioni, i suoi messaggi e le sue impostazioni di sicurezza (blocco, PIN della cassaforte, PIN esca) NON sono toccati.</string>
     <string name="settings_purge_blocked_confirm_title">Eliminare le conversazioni bloccate?</string>
     <string name="settings_purge_blocked_confirm_body">Elimina ogni conversazione i cui partecipanti sono tutti nell\'elenco dei bloccati. Le rimuove anche dal fornitore SMS del sistema. Irreversibile.</string>
 
@@ -869,7 +869,7 @@
     <string name="about_feat_voice_desc">Premi e parla, via MMS. Limitato a 60 s / 300 KB per compatibilità con tutti gli operatori francesi.</string>
     <string name="about_feat_vault_label">Cassaforte cifrata</string>
     <string name="about_feat_vault_desc">Conversazioni sensibili in una cassaforte SQLCipher, con la chiave protetta dal Keystore di Android.</string>
-    <string name="about_feat_panic_label">Codice esca</string>
+    <string name="about_feat_panic_label">PIN esca</string>
     <string name="about_feat_panic_desc">Un secondo PIN apre l\'app in modalità esca — cassaforte invisibile e inaccessibile.</string>
     <string name="about_feat_emergency_label">Modalità emergenza</string>
     <string name="about_feat_emergency_desc">Tenga premuto il pulsante 3 s nella pagina Emergenza → SMS di allarme ai suoi contatti Safety call, con GPS facoltativo; il prefisso ⚠️ è su tutti i modelli tranne quello discreto. Accesso rapido ai numeri di emergenza del paese in cui si trova + scorciatoie nella notifica sulla schermata di blocco.</string>
@@ -981,16 +981,16 @@
     <string name="safety_call_setup_unsaved_title">Modifiche non salvate</string>
     <string name="safety_call_setup_unsaved_body">Aggiungere un contatto non basta: va salvato per essere conservato. Uscendo adesso andrebbe perso.</string>
     <string name="emergency_location_grant">Consenti la posizione</string>
-    <string name="settings_panic_code_desc">Un secondo codice che apre l\'app in modalità esca: cassaforte e modalità emergenza nascoste.</string>
+    <string name="settings_panic_code_desc">Un secondo PIN che apre l\'app in modalità esca: cassaforte e modalità emergenza nascoste.</string>
     <string name="settings_panic_code_set">Configurato. Tocchi per rimuoverlo.</string>
-    <string name="settings_panic_code_clear_title">Rimuovere il codice di panico?</string>
+    <string name="settings_panic_code_clear_title">Rimuovere il PIN esca?</string>
     <string name="settings_panic_code_clear_body">La modalità esca non sarà più raggiungibile. Il suo PIN principale e i suoi dati restano invariati.</string>
     <string name="settings_panic_code_clear_action">Rimuovi</string>
-    <string name="settings_panic_code_saved">Codice di panico salvato</string>
-    <string name="settings_panic_code_removed">Codice di panico rimosso</string>
-    <string name="settings_panic_code_same_as_pin">Questo codice è uguale al suo PIN principale. Ne scelga un altro, altrimenti l\'app si aprirebbe sempre in modalità esca.</string>
+    <string name="settings_panic_code_saved">PIN esca salvato</string>
+    <string name="settings_panic_code_removed">PIN esca rimosso</string>
+    <string name="settings_panic_code_same_as_pin">Questo PIN è uguale al suo PIN principale. Ne scelga un altro, altrimenti l\'app si aprirebbe sempre in modalità esca.</string>
     <string name="settings_panic_code_no_pin">Imposti prima un blocco dell\'app.</string>
-    <string name="settings_pin_same_as_panic_code">Questo PIN è uguale al suo codice di panico. Ne scelga un altro, altrimenti l\'app si aprirebbe sempre in modalità esca e lei non potrebbe più raggiungere la propria sessione.</string>
+    <string name="settings_pin_same_as_panic_code">Questo PIN è uguale al suo PIN esca. Ne scelga un altro, altrimenti l\'app si aprirebbe sempre in modalità esca e lei non potrebbe più raggiungere la propria sessione.</string>
     <string name="lock_wrong_code">Codice errato</string>
 
     <!-- ====================================================================================

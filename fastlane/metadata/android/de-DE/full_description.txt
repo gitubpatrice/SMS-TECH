@@ -6,7 +6,7 @@ SMS Tech ist eine SMS-/MMS-App für Android, ohne Werbung und ohne Tracker. Sie 
 <li>SMS und MMS — vollwertige Standard-SMS-App von Android 8 (API 26) bis 15+</li>
 <li>Sprachnachrichten — Aufnahme per Sprechtaste, als echte MMS gesendet, begrenzt auf 60 s / 300 KB, damit jeder Anbieter sie annimmt</li>
 <li>Verschlüsselter Tresor — vertrauliche Unterhaltungen hinter SQLCipher verbergen, mit dem Schlüssel im Android-Keystore verpackt. Mit „Tresor beim Verlassen sperren“ wird er jedes Mal wieder gesperrt, sobald die App in den Hintergrund geht</li>
-<li>Panikcode — eine zweite Entsperr-PIN, die die App in einer Tarnansicht öffnet, in der der Tresor unsichtbar und unzugänglich bleibt</li>
+<li>Tarn-PIN — eine zweite PIN, die die App in einer Tarnansicht öffnet, in der der Tresor unsichtbar und unzugänglich bleibt</li>
 <li>Notfallmodus — die Schaltfläche 3 s halten, um eine Alarm-SMS an Ihre Safety-Call-Kontakte zu senden, mit einer einmaligen GPS-Position, wenn Sie den Standort erlaubt haben; ohne diese Berechtigung geht die SMS trotzdem hinaus, nur ohne Koordinaten. Schnellzugriff auf die Notrufnummern des Landes, in dem Sie sich befinden, plus Verknüpfungen auf dem Sperrbildschirm. Der Direktanruf ist optional: standardmäßig öffnet sich einfach die vorausgefüllte Telefon-App</li>
 <li>Entsperren per Biometrie — Fingerabdruck oder Gesicht, mit einer PIN als Rückfallebene, die Sie selbst festlegen</li>
 <li>Antwort mit Bezug — eine Nachricht lange drücken, „Antworten“ wählen, und das Eingabefeld zeigt ein kleines Zitat, damit der Empfänger sieht, worauf Sie antworten</li>

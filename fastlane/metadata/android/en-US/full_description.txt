@@ -6,7 +6,7 @@ SMS Tech is an ad-free, tracker-free SMS / MMS app for Android. It replaces the 
 <li>SMS and MMS — full default-SMS-app support on Android 8 (API 26) through 15+</li>
 <li>Voice messages — push-to-talk recording sent as a real MMS, capped at 60 s / 300 KB so every carrier accepts it</li>
 <li>Encrypted vault — hide sensitive conversations behind SQLCipher, with the key wrapped in the Android Keystore. Toggle "Lock vault on leave" to re-lock it every time the app goes to background</li>
-<li>Panic code — a second unlock PIN that opens the app in a decoy view where the vault stays invisible and inaccessible</li>
+<li>Decoy PIN — a second PIN that opens the app in a decoy view where the vault stays invisible and inaccessible</li>
 <li>Emergency mode — hold the button for 3 s to send an alert SMS to your Safety Call contacts, with a single GPS fix if you granted location; without that permission the SMS still goes out, only without coordinates. Quick access to the emergency numbers of the country your phone is connected to, and shortcuts on the lockscreen notification. Placing the call directly is opt-in: by default the dialer simply opens pre-filled</li>
 <li>Biometric unlock — fingerprint or face, with a PIN fallback you set yourself</li>
 <li>Contextual reply — long-press a message, pick "Reply" and your composer shows a mini-quote so the recipient sees what you are answering</li>

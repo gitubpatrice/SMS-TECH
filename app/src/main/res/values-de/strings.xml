@@ -642,7 +642,7 @@
     <string name="settings_resync_confirm_title">Vom Telefon neu einlesen?</string>
     <string name="settings_resync_confirm_body">Importiert Nachrichten erneut aus dem SMS/MMS-Speicher des Systems. Vorhandene Nachrichten bleiben (Duplikate werden über die eindeutige ID vermieden); zuvor gelöschte Nachrichten können wieder auftauchen, wenn sie noch in der Systemdatenbank stehen. Fortfahren?</string>
     <string name="settings_reset_all_confirm_title">Alle Einstellungen zurücksetzen?</string>
-    <string name="settings_reset_all_confirm_body">Alle Ihre Einstellungen (Thema, Benachrichtigungen, Senden usw.) kehren auf die Standardwerte zurück. Ihre Unterhaltungen, Ihre Nachrichten und Ihre Sicherheitseinstellungen (Sperre, Tresor-PIN, Panikcode) sind NICHT betroffen.</string>
+    <string name="settings_reset_all_confirm_body">Alle Ihre Einstellungen (Thema, Benachrichtigungen, Senden usw.) kehren auf die Standardwerte zurück. Ihre Unterhaltungen, Ihre Nachrichten und Ihre Sicherheitseinstellungen (Sperre, Tresor-PIN, Tarn-PIN) sind NICHT betroffen.</string>
     <string name="settings_purge_blocked_confirm_title">Blockierte Unterhaltungen bereinigen?</string>
     <string name="settings_purge_blocked_confirm_body">Löscht jede Unterhaltung, deren Teilnehmer vollständig auf der Blockliste stehen. Entfernt sie auch aus dem SMS-Speicher des Systems. Nicht umkehrbar.</string>
 
@@ -868,7 +868,7 @@
     <string name="about_feat_voice_desc">Sprechtaste über MMS. Begrenzt auf 60 s / 300 KB zur Kompatibilität mit allen französischen Mobilfunkanbietern.</string>
     <string name="about_feat_vault_label">Verschlüsselter Tresor</string>
     <string name="about_feat_vault_desc">Vertrauliche Unterhaltungen in einem SQLCipher-Tresor, Schlüssel im Android-Keystore verpackt.</string>
-    <string name="about_feat_panic_label">Panikcode</string>
+    <string name="about_feat_panic_label">Tarn-PIN</string>
     <string name="about_feat_panic_desc">Eine zweite PIN öffnet die App im Tarnmodus — der Tresor ist unsichtbar und unzugänglich.</string>
     <string name="about_feat_emergency_label">Notfallmodus</string>
     <string name="about_feat_emergency_desc">Die Schaltfläche auf der Notrufseite 3 s halten → Alarm-SMS an Ihre Safety-Call-Kontakte, auf Wunsch mit GPS; das Präfix ⚠️ tragen alle Vorlagen außer der diskreten. Schnellzugriff auf die Notrufnummern des Landes, in dem Sie sich befinden, plus Verknüpfungen in der Benachrichtigung des Sperrbildschirms.</string>
@@ -976,16 +976,16 @@
     <string name="safety_call_setup_unsaved_title">Nicht gespeicherte Änderungen</string>
     <string name="safety_call_setup_unsaved_body">Einen Kontakt hinzuzufügen genügt nicht: er muss gespeichert werden, um erhalten zu bleiben. Jetzt zu gehen würde ihn verlieren.</string>
     <string name="emergency_location_grant">Standort erlauben</string>
-    <string name="settings_panic_code_desc">Ein zweiter Code, der die App im Tarnmodus öffnet: Tresor und Notfallmodus sind verborgen.</string>
+    <string name="settings_panic_code_desc">Eine zweite PIN, die die App im Tarnmodus öffnet: Tresor und Notfallmodus sind verborgen.</string>
     <string name="settings_panic_code_set">Eingerichtet. Tippen, um ihn zu entfernen.</string>
-    <string name="settings_panic_code_clear_title">Panikcode entfernen?</string>
+    <string name="settings_panic_code_clear_title">Tarn-PIN entfernen?</string>
     <string name="settings_panic_code_clear_body">Der Tarnmodus wird nicht mehr erreichbar sein. Ihre Haupt-PIN und Ihre Daten bleiben unverändert.</string>
     <string name="settings_panic_code_clear_action">Entfernen</string>
-    <string name="settings_panic_code_saved">Panikcode gespeichert</string>
-    <string name="settings_panic_code_removed">Panikcode entfernt</string>
-    <string name="settings_panic_code_same_as_pin">Dieser Code ist derselbe wie Ihre Haupt-PIN. Wählen Sie einen anderen, sonst würde die App immer im Tarnmodus öffnen.</string>
+    <string name="settings_panic_code_saved">Tarn-PIN gespeichert</string>
+    <string name="settings_panic_code_removed">Tarn-PIN entfernt</string>
+    <string name="settings_panic_code_same_as_pin">Diese PIN ist dieselbe wie Ihre Haupt-PIN. Wählen Sie eine andere, sonst würde die App immer im Tarnmodus öffnen.</string>
     <string name="settings_panic_code_no_pin">Richten Sie zuerst eine App-Sperre ein.</string>
-    <string name="settings_pin_same_as_panic_code">Diese PIN ist dieselbe wie Ihr Panikcode. Wählen Sie eine andere, sonst würde die App immer im Tarnmodus öffnen und Sie kämen nicht mehr in Ihre eigene Sitzung.</string>
+    <string name="settings_pin_same_as_panic_code">Diese PIN ist dieselbe wie Ihre Tarn-PIN. Wählen Sie eine andere, sonst würde die App immer im Tarnmodus öffnen und Sie kämen nicht mehr in Ihre eigene Sitzung.</string>
     <string name="lock_wrong_code">Falscher Code</string>
 
     <!-- ====================================================================================

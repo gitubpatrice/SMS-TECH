@@ -634,7 +634,7 @@
     <string name="settings_resync_confirm_title">Resynchroniser depuis le téléphone ?</string>
     <string name="settings_resync_confirm_body">Réimporte les messages depuis le fournisseur SMS/MMS système. Les messages existants restent (dédup via ID unique) ; des messages précédemment supprimés peuvent réapparaître s\'ils existent encore dans la base système. Continuer ?</string>
     <string name="settings_reset_all_confirm_title">Réinitialiser tous les réglages ?</string>
-    <string name="settings_reset_all_confirm_body">Toutes vos préférences (thème, notifications, envoi, etc.) reviendront aux valeurs par défaut. Vos conversations, vos messages et vos réglages de sécurité (verrouillage, PIN du coffre, code panique) ne sont PAS affectés.</string>
+    <string name="settings_reset_all_confirm_body">Toutes vos préférences (thème, notifications, envoi, etc.) reviendront aux valeurs par défaut. Vos conversations, vos messages et vos réglages de sécurité (verrouillage, PIN du coffre, PIN leurre) ne sont PAS affectés.</string>
     <string name="settings_purge_blocked_confirm_title">Purger les conversations bloquées ?</string>
     <string name="settings_purge_blocked_confirm_body">Supprime toute conversation dont les participants sont entièrement dans la liste de blocage. Les supprime aussi du fournisseur SMS système. Irréversible.</string>
 
@@ -854,7 +854,7 @@
     <string name="about_feat_voice_desc">Push-to-talk en MMS. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR.</string>
     <string name="about_feat_vault_label">Coffre chiffré</string>
     <string name="about_feat_vault_desc">Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android.</string>
-    <string name="about_feat_panic_label">Code panique</string>
+    <string name="about_feat_panic_label">PIN leurre</string>
     <string name="about_feat_panic_desc">Second code qui ouvre l\'app en mode leurre — coffre invisible et inaccessible.</string>
     <string name="about_feat_emergency_label">Mode urgence</string>
     <string name="about_feat_emergency_desc">Bouton maintenu 3 s sur la page Urgence → SMS d\'alerte à vos contacts Safety call avec position GPS optionnelle ; le préfixe ⚠️ est sur tous les modèles sauf le discret. Accès rapide aux numéros d\'urgence du pays où vous vous trouvez + raccourcis dans la notification écran verrouillé.</string>
@@ -967,16 +967,16 @@
     <string name="safety_call_setup_unsaved_title">Modifications non enregistrées</string>
     <string name="safety_call_setup_unsaved_body">Ajouter un contact ne suffit pas : il faut enregistrer pour le conserver. Quitter maintenant le perdrait.</string>
     <string name="emergency_location_grant">Autoriser la localisation</string>
-    <string name="settings_panic_code_desc">Second code qui ouvre l\'application en mode leurre : coffre et mode urgence invisibles.</string>
+    <string name="settings_panic_code_desc">Second PIN qui ouvre l\'application en mode leurre : coffre et mode urgence invisibles.</string>
     <string name="settings_panic_code_set">Configuré. Toucher pour le retirer.</string>
-    <string name="settings_panic_code_clear_title">Retirer le code panique ?</string>
+    <string name="settings_panic_code_clear_title">Retirer le PIN leurre ?</string>
     <string name="settings_panic_code_clear_body">Le mode leurre ne sera plus accessible. Votre PIN principal et vos données ne changent pas.</string>
     <string name="settings_panic_code_clear_action">Retirer</string>
-    <string name="settings_panic_code_saved">Code panique enregistré</string>
-    <string name="settings_panic_code_removed">Code panique retiré</string>
-    <string name="settings_panic_code_same_as_pin">Ce code est identique à votre PIN principal. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre.</string>
+    <string name="settings_panic_code_saved">PIN leurre enregistré</string>
+    <string name="settings_panic_code_removed">PIN leurre retiré</string>
+    <string name="settings_panic_code_same_as_pin">Ce PIN est identique à votre PIN principal. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre.</string>
     <string name="settings_panic_code_no_pin">Configurez d\'abord un verrouillage de l\'application.</string>
-    <string name="settings_pin_same_as_panic_code">Ce PIN est identique à votre code panique. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre et vous ne pourriez plus atteindre votre propre session.</string>
+    <string name="settings_pin_same_as_panic_code">Ce PIN est identique à votre PIN leurre. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre et vous ne pourriez plus atteindre votre propre session.</string>
     <string name="lock_wrong_code">Code incorrect</string>
 
     <!-- ====================================================================================

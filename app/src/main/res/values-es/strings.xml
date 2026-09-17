@@ -644,7 +644,7 @@
     <string name="settings_resync_confirm_title">¿Volver a sincronizar desde el teléfono?</string>
     <string name="settings_resync_confirm_body">Vuelve a importar los mensajes del proveedor de SMS/MMS del sistema. Los mensajes existentes se quedan (sin duplicar, gracias al identificador único); los mensajes eliminados antes pueden reaparecer si todavía están en la base de datos del sistema. ¿Continuar?</string>
     <string name="settings_reset_all_confirm_title">¿Restablecer todos los ajustes?</string>
-    <string name="settings_reset_all_confirm_body">Todas sus preferencias (tema, notificaciones, envío, etc.) volverán a sus valores predeterminados. Sus conversaciones, sus mensajes y sus ajustes de seguridad (bloqueo, PIN de la caja fuerte, código señuelo) NO se ven afectados.</string>
+    <string name="settings_reset_all_confirm_body">Todas sus preferencias (tema, notificaciones, envío, etc.) volverán a sus valores predeterminados. Sus conversaciones, sus mensajes y sus ajustes de seguridad (bloqueo, PIN de la caja fuerte, PIN señuelo) NO se ven afectados.</string>
     <string name="settings_purge_blocked_confirm_title">¿Eliminar las conversaciones bloqueadas?</string>
     <string name="settings_purge_blocked_confirm_body">Elimina toda conversación cuyos participantes estén todos en la lista de bloqueados. También las quita del proveedor de SMS del sistema. Irreversible.</string>
 
@@ -869,7 +869,7 @@
     <string name="about_feat_voice_desc">Pulsar y hablar, por MMS. Limitado a 60 s / 300 KB por compatibilidad con todos los operadores franceses.</string>
     <string name="about_feat_vault_label">Caja fuerte cifrada</string>
     <string name="about_feat_vault_desc">Conversaciones sensibles en una caja fuerte SQLCipher, con la clave protegida por el Keystore de Android.</string>
-    <string name="about_feat_panic_label">Código de pánico</string>
+    <string name="about_feat_panic_label">PIN señuelo</string>
     <string name="about_feat_panic_desc">Un segundo PIN abre la app en modo señuelo — la caja fuerte queda invisible e inaccesible.</string>
     <string name="about_feat_emergency_label">Modo emergencia</string>
     <string name="about_feat_emergency_desc">Mantenga pulsado el botón 3 s en la página de Emergencia → SMS de alerta a sus contactos de Safety call, con GPS opcional; el prefijo ⚠️ está en todas las plantillas salvo la discreta. Acceso rápido a los números de emergencia del país en el que se encuentra y accesos directos en la notificación de la pantalla de bloqueo.</string>
@@ -981,16 +981,16 @@
     <string name="safety_call_setup_unsaved_title">Cambios sin guardar</string>
     <string name="safety_call_setup_unsaved_body">Añadir un contacto no basta: hay que guardarlo para que se conserve. Si sale ahora, se perdería.</string>
     <string name="emergency_location_grant">Permitir la ubicación</string>
-    <string name="settings_panic_code_desc">Un segundo código que abre la app en modo señuelo: caja fuerte y modo emergencia ocultos.</string>
+    <string name="settings_panic_code_desc">Un segundo PIN que abre la app en modo señuelo: caja fuerte y modo emergencia ocultos.</string>
     <string name="settings_panic_code_set">Configurado. Toque para quitarlo.</string>
-    <string name="settings_panic_code_clear_title">¿Quitar el código de pánico?</string>
+    <string name="settings_panic_code_clear_title">¿Quitar el PIN señuelo?</string>
     <string name="settings_panic_code_clear_body">El modo señuelo dejará de ser accesible. Su PIN principal y sus datos no cambian.</string>
     <string name="settings_panic_code_clear_action">Quitar</string>
-    <string name="settings_panic_code_saved">Código de pánico guardado</string>
-    <string name="settings_panic_code_removed">Código de pánico quitado</string>
-    <string name="settings_panic_code_same_as_pin">Este código es el mismo que su PIN principal. Elija otro, o la app se abriría siempre en modo señuelo.</string>
+    <string name="settings_panic_code_saved">PIN señuelo guardado</string>
+    <string name="settings_panic_code_removed">PIN señuelo quitado</string>
+    <string name="settings_panic_code_same_as_pin">Este PIN es el mismo que su PIN principal. Elija otro, o la app se abriría siempre en modo señuelo.</string>
     <string name="settings_panic_code_no_pin">Configure antes un bloqueo de la app.</string>
-    <string name="settings_pin_same_as_panic_code">Este PIN es el mismo que su código de pánico. Elija otro, o la app se abriría siempre en modo señuelo y usted ya no podría llegar a su propia sesión.</string>
+    <string name="settings_pin_same_as_panic_code">Este PIN es el mismo que su PIN señuelo. Elija otro, o la app se abriría siempre en modo señuelo y usted ya no podría llegar a su propia sesión.</string>
     <string name="lock_wrong_code">Código incorrecto</string>
 
     <!-- ====================================================================================
