@@ -610,6 +610,81 @@ class SmishingDetectorTest {
             .doesNotContain(SmishingReason.TyposquattedDomain)
     }
 
+    // ──── Suites de l'audit de securite du 2026-09-17 (soir) ────
+
+    @Test fun `un nom officiel augmente est signale A TRAVERS analyze, pas seulement en isolation`() {
+        // ⚠️ Le test voisin asserte `porteLeNomOfficiel` EN ISOLATION, et il restait vert alors
+        // que la regle etait MORTE pour `impots` : la garde des mots trop communs etait posee
+        // devant les DEUX voies, et `impots` est le seul nom present dans les deux listes.
+        // `mon-impots.fr` — la cible de smishing la plus usurpee du pays — n'etait jamais
+        // signale. L'aide fonctionnait ; personne ne l'atteignait.
+        val usurpations = listOf(
+            "Action requise : regularisez sur https://mon-impots.fr/payer",
+            "Remboursement en attente : https://impots-remboursement.fr",
+            "Accesso anomalo. Verifichi i suoi dati su inps-sicurezza.com",
+            "Su envio esta retenido: https://correos-envio.es/pagar",
+        )
+        for (body in usurpations) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .contains(SmishingReason.TyposquattedDomain)
+        }
+    }
+
+    @Test fun `un numero au milieu d une suite de groupes n est pas un code court`() {
+        // Lire le code court sur le corps BRUT a ferme « 3 211 € » et ouvert les IBAN : dans une
+        // suite de groupes separes par des espaces, chaque groupe devenait un candidat isole.
+        // Un IBAN francais a six ou sept groupes de quatre chiffres.
+        val legitimes = listOf(
+            "Votre virement vers FR76 3000 4000 0312 3456 7890 143. Confirmez avant minuit.",
+            "carte 4970 3312 8899 1234",
+            "Numero de commande 2024 3311 8890",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test fun `un code court isole dans la phrase reste reconnu`() {
+        // Le temoin positif du test precedent : un vrai code court n'est jamais au milieu d'une
+        // suite de groupes.
+        val arnaques = listOf(
+            "URGENT : envoyez STOP au 3211 pour arreter le prelevement",
+            "Code court 3611 pour desabonnement immediat",
+            "Urgent, votre code est 3456.",
+        )
+        for (body in arnaques) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .contains(SmishingReason.PremiumNumber)
+        }
+    }
+
+    @Test fun `un mot de quatre lettres n usurpe pas un sigle de trois`() {
+        // Le filtre de longueur etait applique au LABEL et pas au nom OFFICIEL : les cinq sigles
+        // de trois lettres entraient en comparaison floue, a tolerance 1, contre tout label de
+        // quatre caracteres.
+        val legitimes = listOf(
+            "Derniere chance : nos nouveautes sur chic.fr",
+            "Limited time: catalogue on dahl.de",
+        )
+        for (body in legitimes) {
+            assertThat(SmishingDetector.analyze(body).reasons)
+                .doesNotContain(SmishingReason.TyposquattedDomain)
+        }
+        // Et le temoin : le sigle exact sur un TLD jetable reste vu.
+        assertThat(SmishingDetector.analyze("Ihr Paket: https://dhl.top/tracking").reasons)
+            .contains(SmishingReason.TyposquattedDomain)
+    }
+
+    @Test fun `le webmail d une universite espagnole n est pas une usurpation`() {
+        // `correo.<x>.es` est la forme canonique du webmail des universites et administrations
+        // espagnoles. Distance 1 de `correos`, donc signale — avec « verifique sus datos » dans
+        // le meme message, c'etait le bandeau rouge sur un courriel institutionnel.
+        val body = "Webmail: acceda a correo.uned.es y verifique sus datos"
+        assertThat(SmishingDetector.analyze(body).reasons)
+            .doesNotContain(SmishingReason.TyposquattedDomain)
+    }
+
     @Test fun `le nom officiel en PREMIER segment reste signale`() {
         // Le temoin positif du test precedent. C'est la forme que prennent reellement les
         // campagnes, et les quatre assertions d'origine la respectent deja.

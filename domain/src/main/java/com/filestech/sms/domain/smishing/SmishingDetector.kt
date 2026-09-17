@@ -303,8 +303,32 @@ object SmishingDetector {
      * Les numéros COURTS, cherchés sur le texte BRUT — voir [containsPremiumNumber].
      * Numéros courts surtaxés français, 3200-3699, quatre chiffres.
      */
+    /**
+     * ⚠️ Les numéros courts refusent en plus d'être **flanqués d'un autre groupe de chiffres**,
+     * et c'est une régression de ce même fichier qu'ils ferment.
+     *
+     * Lire le code court sur le corps BRUT a bien fermé « Paiement reçu : 3 211 € ». Mais le
+     * corps brut expose ce que le compactage masquait : dans une suite de groupes séparés par
+     * des espaces, chaque groupe devient un candidat isolé avec des bornes valides. Un IBAN
+     * français s'écrit en six ou sept groupes de quatre — environ une chance sur quatre qu'un
+     * tombe dans `[3200, 3699]`. Mesuré :
+     *
+     *   « Votre virement vers FR76 3000 4000 0312 **3456** 7890 143. Confirmez. » → bandeau.
+     *   « carte 4970 **3312** 8899 1234 » → bandeau. « commande 2024 **3311** 8890 » → bandeau.
+     *
+     * Avec n'importe quel mot des listes d'urgence — `confirmez`, `bestätigen sie ihre`,
+     * `verifique sus` — c'était le bandeau rouge sur un vrai SMS bancaire. Relevé par un audit
+     * de sécurité le 2026-09-17 ; le KDoc affirmait alors « ferme la classe entière ».
+     *
+     * Un vrai code court est isolé dans la phrase (« Envoyez STOP au 3211 »), jamais au milieu
+     * d'une suite de groupes. Mesuré : les trois faux positifs tombent, et « STOP au 3211 »,
+     * « Code court 3611 », « votre code est 3456. » passent toujours.
+     */
+    private const val BORD_GAUCHE_COURT = BORD_GAUCHE + """(?<!\d\p{Zs})"""
+    private const val BORD_DROIT_COURT = BORD_DROIT + """(?!\p{Zs}\d)"""
+
     private val MOTIFS_COURTS = listOf(
-        Regex(BORD_GAUCHE + """3[2-6]\d{2}""" + BORD_DROIT),
+        Regex(BORD_GAUCHE_COURT + """3[2-6]\d{2}""" + BORD_DROIT_COURT),
     )
 
     private val PREMIUM_PATTERNS = listOf(
@@ -634,13 +658,41 @@ object SmishingDetector {
                 // pas. `1mpots.gouv.fr` reste vu, `imports.example` ne l'est plus.
                 val porteUnChiffre = label.any(Char::isDigit)
                 LABELS_OFFICIELS.any { official ->
-                    if (official.length < 3 || official == label) return@any false
+                    if (official == label) return@any false
+                    // ⚠️ LA CONCATÉNATION D'ABORD, et l'ordre n'est pas cosmétique.
+                    //
+                    // La garde [LABELS_TROP_COMMUNS] ci-dessous était posée DEVANT les deux
+                    // voies. Or `impots` est le SEUL nom présent à la fois dans cette liste et
+                    // dans [CONCATENATION_FIABLE] : la règle de concaténation était donc MORTE
+                    // pour lui. `mon-impots.fr` et `impots-remboursement.fr` n'étaient jamais
+                    // signalés — la cible de smishing la plus usurpée du pays principal de
+                    // l'application, sous sa forme la plus courante.
+                    //
+                    // Le test ne pouvait pas le voir : il asserte `porteLeNomOfficiel` EN
+                    // ISOLATION, jamais à travers `analyze()`. L'aide fonctionnait ; personne
+                    // ne l'atteignait. Relevé par un audit de sécurité le 2026-09-17, et c'est
+                    // le cumul des deux leçons les plus chères de ce dépôt : une garde écrite
+                    // pour une règle et laissée devant sa voisine, et un test vert sur un
+                    // chemin que personne n'emprunte.
+                    //
+                    // La concaténation exige un nom EXACT délimité par un tiret ET une entrée
+                    // dans [CONCATENATION_FIABLE] : elle ne peut pas produire le faux positif
+                    // que la garde vise, donc rien ne justifiait de la mettre derrière.
+                    if (porteLeNomOfficiel(label, official)) return@any true
+
+                    // ─── À partir d'ici, la voie FLOUE seulement ───
+                    //
+                    // Le filtre de longueur était appliqué au LABEL et pas au nom OFFICIEL :
+                    // les cinq noms de trois lettres (`cic`, `lcl`, `dhl`, `edf`, `sfr`)
+                    // entraient donc en comparaison floue, à tolérance 1, contre n'importe quel
+                    // label de quatre caractères. Mesuré : `chic.fr` était lu comme une
+                    // usurpation de `cic`, `dahl.de` comme `dhl`. La même règle des deux côtés,
+                    // et les noms courts restent couverts par le nom exact sur TLD à bas coût
+                    // et par les labels porteurs de chiffre (`c1c`, `dh1`).
+                    if (official.length < 4 && !porteUnChiffre) return@any false
+                    if (estLeSingulierOuLePluriel(label, official)) return@any false
                     if (!porteUnChiffre && official in LABELS_TROP_COMMUNS) return@any false
-                    // Deux formes d'usurpation, la seconde échappant à la première :
-                    // la faute de frappe (`paypa1`), et le nom exact augmenté
-                    // (`inps-sicurezza`).
-                    val faute = levenshteinAtMost(label, official, distanceToleree(official))
-                    faute || porteLeNomOfficiel(label, official)
+                    levenshteinAtMost(label, official, distanceToleree(official))
                 }
             }
             if (suspicious) return true
@@ -722,6 +774,24 @@ object SmishingDetector {
      * vus par cette règle. Ils restent couverts par la faute de frappe et par le nom exact
      * sur un domaine de tête à bas coût.
      */
+    /**
+     * Le SINGULIER ou le PLURIEL d'un nom officiel n'est pas une usurpation : c'est le mot
+     * ordinaire dont la marque est tirée.
+     *
+     * `correo` est le courrier en espagnol, `correos` est la poste — et `correo.<université>.es`
+     * est la forme canonique du webmail des universités et administrations espagnoles
+     * (`correo.uned.es`, `correo.ugr.es`). Distance 1, donc Levenshtein ne les distingue pas, et
+     * avec « verifique sus datos » dans le même message c'était le bandeau rouge sur un courriel
+     * institutionnel. Relevé le 2026-09-17.
+     *
+     * ⚠️ Première tentative : mettre `correos` parmi les noms trop communs. Le test l'a refusée,
+     * et il avait raison — elle tuait aussi `correros.es`, une vraie usurpation à la même
+     * distance. La relation singulier/pluriel est étroite et vérifiable ; « mot trop commun »
+     * était une approximation qui emportait les deux.
+     */
+    fun estLeSingulierOuLePluriel(label: String, nomOfficiel: String): Boolean =
+        label + "s" == nomOfficiel || label == nomOfficiel + "s"
+
     fun porteLeNomOfficiel(label: String, nomOfficiel: String): Boolean =
         nomOfficiel in CONCATENATION_FIABLE &&
             label.contains('-') &&
