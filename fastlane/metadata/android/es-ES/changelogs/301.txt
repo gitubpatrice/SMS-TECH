@@ -1,0 +1,7 @@
+Alemán, italiano y español — toda la aplicación, con su propio selector de idioma.
+
+Traducirla hizo visibles defectos que ninguna prueba alcanzaba, porque esos textos nunca estuvieron en los archivos de recursos: los mensajes de emergencia y de la llamada de seguridad salían en francés para todo el mundo, y las llamadas de emergencia marcaban números franceses estuviera donde estuviera el teléfono. Ambos corregidos: el país procede ahora de la red, nunca del idioma.
+
+También corregidos, todos presentes en la 1.28.11: el aviso «Estoy bien» podía aparecer en una sesión señuelo, revelando a quien arrancó el código de pánico que acababa de enviarse una petición de ayuda; la llamada de seguridad y el modo de emergencia podían activarse y luego callar cuando la aplicación no tiene el rol de SMS, mientras la pantalla seguía con la cuenta atrás; dentro de una caja fuerte abierta, una reacción colocaba su distintivo y no enviaba ningún SMS; la purga del bloqueo automático destruía el archivo adjunto que estaba redactando, incluso sin bloqueo configurado.
+
+Las reacciones se envían ahora en forma de emoji fuera de las aplicaciones en francés. El ajuste sigue siendo suyo, en Ajustes > Envío.

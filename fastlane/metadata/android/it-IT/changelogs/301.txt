@@ -1,0 +1,7 @@
+Tedesco, italiano e spagnolo — l'intera applicazione, con un selettore di lingua tutto suo.
+
+Tradurla ha reso visibili difetti che nessun test raggiungeva, perché quei testi non erano mai stati nei file di risorse: i messaggi di emergenza e della chiamata di sicurezza partivano in francese per tutti, e le chiamate di emergenza componevano numeri francesi ovunque si trovasse il telefono. Entrambi corretti: il paese ora viene dalla rete, mai dalla lingua.
+
+Corretti anche, tutti presenti nella 1.28.11: l'avviso «Sto bene» poteva comparire in una sessione esca, rivelando a chi aveva estorto il codice di panico che era appena partita una richiesta di aiuto; la chiamata di sicurezza e la modalità di emergenza potevano armarsi e poi tacere quando l'applicazione non ha il ruolo SMS, mentre lo schermo continuava il conto alla rovescia; dentro una cassaforte aperta, una reazione metteva il suo segno e non inviava alcun SMS; la pulizia del blocco automatico distruggeva l'allegato che si stava componendo, anche senza alcun blocco configurato.
+
+Le reazioni vengono ora inviate in forma di emoji fuori dalle applicazioni in francese. L'impostazione resta vostra, in Impostazioni > Invio.

@@ -1,0 +1,7 @@
+German, Italian and Spanish — the whole app, with a language picker of its own.
+
+Translating it made defects visible that no test had reached, because those texts were never in the resource files: the emergency and safety-call messages went out in French to everyone, and emergency calls dialled French numbers wherever the phone was. Both fixed — the country now comes from the network, never from the language.
+
+Also fixed, all of them present in 1.28.11: the "I'm OK" banner could appear in a decoy session, revealing to whoever forced the panic code that a call for help had just been sent; safety call and emergency mode could arm and then fall silent when the app did not hold the SMS role, while the screen kept counting down; inside an open vault a reaction placed its badge and sent no SMS at all; the auto-lock purge destroyed the attachment you were still composing, even with no lock configured.
+
+Reactions are now sent in the emoji form outside French-language apps. The setting is still yours, in Settings > Sending.

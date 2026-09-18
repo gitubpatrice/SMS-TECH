@@ -1,0 +1,7 @@
+Allemand, italien et espagnol — toute l'application, avec son propre sélecteur de langue.
+
+La traduire a rendu visibles des défauts qu'aucun test n'atteignait, parce que ces textes n'étaient pas dans les fichiers de ressources : les messages d'urgence et de Safety call partaient en français à tout le monde, et les appels d'urgence composaient les numéros de la France où que soit le téléphone. Corrigés — le pays vient désormais du réseau, jamais de la langue.
+
+Corrigés aussi, tous présents dans la 1.28.11 : le bandeau « Je vais bien » pouvait s'afficher en session leurre, révélant à qui arrache le code panique qu'un appel à l'aide venait de partir ; Safety call et le mode urgence pouvaient s'armer puis se taire quand l'application n'a pas le rôle SMS, l'écran continuant son décompte ; dans un coffre ouvert, une réaction posait son badge et n'envoyait aucun SMS ; la purge du verrou automatique détruisait la pièce jointe en cours de composition, même sans verrou configuré.
+
+Les réactions partent désormais sous forme d'emoji hors des applications en français. Le réglage reste le vôtre, dans Réglages > Envoi.
