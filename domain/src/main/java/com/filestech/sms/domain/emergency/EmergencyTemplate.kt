@@ -1,21 +1,23 @@
 package com.filestech.sms.domain.emergency
 
 /**
- * v1.10.0 — Templates de message SMS pour le Mode urgence.
+ * v1.10.0 — Le CHOIX de message pour le Mode urgence. Le texte, lui, vit ailleurs.
  *
- * Le placeholder `[LOC]` est remplacé par une URL Google Maps cliquable du
- * format `https://maps.google.com/?q=LAT,LON` (URL universelle, ne dépend
- * PAS de Google Play Services — fonctionne sur F-Droid). Si la géoloc n'est
- * pas disponible (permission refusée, GPS off, timeout), `[LOC]` est
- * remplacé par une mention explicite "(position non disponible)".
+ * **v1.28.12 — les trois corps de SMS sont sortis d'ici.** Ils étaient écrits en français, en
+ * dur, et partaient donc en français quelle que soit la langue de l'application : un utilisateur
+ * anglophone alertait ses proches par « ⚠️ URGENCE - j'ai besoin d'aide ». Le texte est désormais
+ * dans `app/src/main/res/values-xx/strings.xml` et rendu par
+ * [com.filestech.sms.domain.safety.SafetyMessageTexts], que l'aperçu ET l'envoi appellent.
  *
- * Volontairement court : un SMS d'urgence doit tenir en 1 segment GSM-7
- * (160 chars) ou UCS-2 (70 chars) si caractères spéciaux. Le template
- * + l'URL Maps doivent rester sous 160 chars pour la fiabilité d'envoi.
+ * 3 modèles fixes (pas de CUSTOM — l'urgence doit être cadrée, pas une fenêtre de saisie libre).
  *
- * 3 templates fixes (pas de CUSTOM pour le moment — l'urgence doit être
- * cadrée, pas une fenêtre de saisie libre). L'user pourra demander un
- * CUSTOM en v1.11 si besoin justifié.
+ * **Les contraintes de rédaction restent, et valent dans CHAQUE langue** :
+ *  - un SMS d'urgence doit tenir court : 160 caractères en GSM-7, 70 en UCS-2 ;
+ *  - l'URL Maps (`https://maps.google.com/?q=LAT,LON`, universelle, sans Play Services) compte
+ *    dans ce budget ;
+ *  - pas de tiret cadratin U+2014, qui bascule tout le message en UCS-2 ;
+ *  - quand la position manque (permission refusée, GPS coupé, délai dépassé), une mention
+ *    explicite la remplace, pour que le destinataire sache que c'est voulu et non un défaut.
  */
 enum class EmergencyTemplate {
     /**
@@ -26,24 +28,10 @@ enum class EmergencyTemplate {
      * forçait UCS-2 (70 chars/segment) → multi-segment → risque que le 2e
      * PDU soit perdu en zone radio faible (situation typique d'urgence).
      */
-    NEED_HELP {
-        override fun renderBody(locationUrl: String?): String =
-            // v1.14.5 — emoji `⚠️` (U+26A0 + U+FE0F variation selector) en
-            // tête pour que la notif SMS côté destinataire affiche
-            // visiblement le caractère d'urgence dans le preview heads-up.
-            // Trade-off accepté : l'emoji force UCS-2 (70 chars/segment au
-            // lieu de 160 GSM-7) → potentiel multi-segment, mais opérateurs
-            // FR 2026 fiables sur multi-segment. La visibilité prime sur la
-            // robustesse marginale d'un 1-segment sans emoji.
-            "⚠️ URGENCE - j'ai besoin d'aide. Ma position : ${locOrFallback(locationUrl)}"
-    },
+    NEED_HELP,
 
     /** Danger imminent / agression / accident. Plus pressant. */
-    DANGER {
-        override fun renderBody(locationUrl: String?): String =
-            // v1.14.5 — emoji `⚠️` en tête, cf. KDoc NEED_HELP pour rationale.
-            "⚠️ DANGER - situation critique, contacte-moi ou viens. Position : ${locOrFallback(locationUrl)}"
-    },
+    DANGER,
 
     /**
      * Variante neutre, moins anxiogène, pour signaler malaise sans alarmer.
@@ -55,24 +43,5 @@ enum class EmergencyTemplate {
      * (signaler un malaise sans alarmer / éviter de révéler la situation
      * d'urgence à un agresseur lookant l'écran). Reste 1-segment GSM-7.
      */
-    DISCREET {
-        override fun renderBody(locationUrl: String?): String =
-            "Peux-tu m'appeler ? J'ai besoin d'aide. Position : ${locOrFallback(locationUrl)}"
-    };
-
-    /** Rend le SMS final. [locationUrl] = URL Maps complète OU null. */
-    abstract fun renderBody(locationUrl: String?): String
-
-    companion object {
-        /**
-         * Fallback inséré quand [locationUrl] est `null` (permission refusée,
-         * GPS off, timeout 8s atteint). Mention courte et sans ambiguïté
-         * pour que le destinataire sache que l'absence d'URL est volontaire,
-         * pas un bug.
-         */
-        const val LOCATION_FALLBACK = "(position non disponible)"
-
-        internal fun locOrFallback(locationUrl: String?): String =
-            locationUrl?.takeIf { it.isNotBlank() } ?: LOCATION_FALLBACK
-    }
+    DISCREET,
 }

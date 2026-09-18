@@ -137,7 +137,11 @@ class IncomingMessageNotifier @Inject constructor(
         // tente d'afficher un heads-up pour les notifs HIGH "qui font du bruit",
         // donc en désamorçant le son on neutralise effectivement le pop-up tout
         // en conservant le badge + icône shade. Compromis volontairement
-        // documenté dans le toggle UI ([R.string.settings_notif_style_desc]).
+        // documenté dans le toggle UI ([R.string.settings_notif_style_banner_hint]).
+        // v1.28.12 — ce renvoi nommait `settings_notif_style_desc`, une chaîne qui n'était
+        // rendue nulle part : le compromis était donc « documenté » dans un texte que
+        // personne ne voyait. C'est `settings_notif_style_banner_hint` qui le décrit à
+        // l'écran, et la chaîne orpheline a été retirée des cinq langues.
         val channelId = when (notifSettings.style) {
             NotificationStyle.SILENT -> NotificationChannelInitializer.CHANNEL_INCOMING_SILENT
             NotificationStyle.HEADS_UP, NotificationStyle.BANNER ->
@@ -221,9 +225,9 @@ class IncomingMessageNotifier @Inject constructor(
             // summary à gérer.
             .also { b ->
                 if (notifSettings.inlineReply) {
-                    b.addAction(buildReplyAction(address, messageId, notificationId))
+                    b.addAction(buildReplyAction(address, messageId, notificationId, conversationId))
                 }
-                b.addAction(buildMarkReadAction(address, messageId, notificationId))
+                b.addAction(buildMarkReadAction(address, messageId, notificationId, conversationId))
                 if (isActiveConversation) {
                     b.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)
                 }
@@ -289,6 +293,7 @@ class IncomingMessageNotifier @Inject constructor(
         address: String,
         messageId: Long,
         notificationId: Int,
+        conversationId: Long,
     ): NotificationCompat.Action {
         val remoteInput = RemoteInput.Builder(KEY_REPLY)
             .setLabel(context.getString(R.string.notif_reply_label))
@@ -304,6 +309,14 @@ class IncomingMessageNotifier @Inject constructor(
             putExtra(NotificationActionReceiver.EXTRA_ADDRESS, address)
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            // ⚠️ v1.28.12 — la CONVERSATION, pas seulement l'expéditeur. L'intent d'OUVERTURE
+            // le porte depuis la v1.8.0 (« bug 4 fix ») ; ses deux jumeaux d'action ne l'ont
+            // jamais reçu, et ils résolvaient donc la conversation par l'ADRESSE. Sur un MMS
+            // de groupe, la notification est posée pour le GROUPE : répondre partait au seul
+            // expéditeur, la ligne miroir s'écrivait dans un fil 1-à-1, la notification —
+            // étiquetée par l'id du groupe — ne se fermait pas, et « marquer comme lu » pouvait
+            // CRÉER une conversation vide. Relevé par un audit de motifs le 2026-09-17.
+            putExtra(NotificationActionReceiver.EXTRA_CONVERSATION_ID, conversationId)
         }
         val pi = PendingIntent.getBroadcast(
             context,
@@ -322,6 +335,7 @@ class IncomingMessageNotifier @Inject constructor(
         address: String,
         messageId: Long,
         notificationId: Int,
+        conversationId: Long,
     ): NotificationCompat.Action {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             component = ComponentName(context, NotificationActionReceiver::class.java)
@@ -332,6 +346,14 @@ class IncomingMessageNotifier @Inject constructor(
             putExtra(NotificationActionReceiver.EXTRA_ADDRESS, address)
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            // ⚠️ v1.28.12 — la CONVERSATION, pas seulement l'expéditeur. L'intent d'OUVERTURE
+            // le porte depuis la v1.8.0 (« bug 4 fix ») ; ses deux jumeaux d'action ne l'ont
+            // jamais reçu, et ils résolvaient donc la conversation par l'ADRESSE. Sur un MMS
+            // de groupe, la notification est posée pour le GROUPE : répondre partait au seul
+            // expéditeur, la ligne miroir s'écrivait dans un fil 1-à-1, la notification —
+            // étiquetée par l'id du groupe — ne se fermait pas, et « marquer comme lu » pouvait
+            // CRÉER une conversation vide. Relevé par un audit de motifs le 2026-09-17.
+            putExtra(NotificationActionReceiver.EXTRA_CONVERSATION_ID, conversationId)
         }
         val pi = PendingIntent.getBroadcast(
             context,

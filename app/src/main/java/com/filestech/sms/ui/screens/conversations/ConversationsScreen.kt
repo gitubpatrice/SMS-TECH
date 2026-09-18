@@ -461,30 +461,31 @@ fun ConversationsScreen(
                 HorizontalDivider()
             }
             // v1.14.0 — Chip "Je vais bien" si déclenchement urgence < 30 min.
-            // Masqué en PanicDecoy (cf. derivation showIAmOkChip côté VM).
-            if (state.showIAmOkChip) {
-                var showConfirm by remember { mutableStateOf(false) }
-                IAmOkBanner(onClick = { showConfirm = true })
-                HorizontalDivider()
-                if (showConfirm) {
-                    androidx.compose.material3.AlertDialog(
-                        onDismissRequest = { showConfirm = false },
-                        title = { Text(stringResource(R.string.emergency_i_am_ok_confirm_title)) },
-                        text = { Text(stringResource(R.string.emergency_i_am_ok_confirm_body)) },
-                        confirmButton = {
-                            Button(onClick = {
-                                showConfirm = false
-                                viewModel.triggerIAmOk()
-                            }) { Text(stringResource(R.string.emergency_i_am_ok_chip_action)) }
-                        },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(
-                                onClick = { showConfirm = false },
-                            ) { Text(stringResource(R.string.action_cancel)) }
-                        },
-                    )
-                }
-            }
+            //
+            // ⚠️ v1.28.12 — le `&& !isPanicDecoy` n'est PAS redondant, et son absence était le
+            // défaut le plus grave de cet écran.
+            //
+            // `state.showIAmOkChip` porte bien `!isPanic`, mais il vient du flux AGRÉGÉ, servi
+            // par `stateIn(WhileSubscribed(5 s))`. Quand l'écran de verrouillage se dépile,
+            // cette valeur EN CACHE — calculée avant le verrouillage, donc avec
+            // `isPanicDecoy = false` — est resservie le temps que le `combine` (requête
+            // SQLCipher + appel Binder, `flowOn(io)`) réémette.
+            //
+            // C'est EXACTEMENT le mécanisme que l'audit H18 (v1.26.1) a corrigé pour l'icône du
+            // Coffre, en dérivant [ConversationsViewModel.isPanicDecoy] directement du verrou,
+            // `Eagerly` — son KDoc le décrit mot pour mot. Le correctif a été posé sur ce seul
+            // champ ; le bandeau est resté sur le flux agrégé. Six autres endroits de cet écran
+            // gardent déjà sur la valeur fraîche (lignes 247, 321, 551, 559, 576) : celui-ci
+            // était le septième, et le seul oublié.
+            //
+            // Ce qu'il coûtait : une victime déclenche l'urgence, les SMS partent, on lui prend
+            // le téléphone et on la force à saisir le code panique. Le bandeau « Je vais bien »
+            // s'affiche — et l'agresseur apprend qu'un appel à l'aide vient d'être envoyé.
+            // L'icône du Coffre révélait qu'un coffre existe ; celui-ci révèle l'alerte.
+            BandeauJeVaisBien(
+                visible = state.showIAmOkChip && !isPanicDecoy,
+                onConfirmer = viewModel::triggerIAmOk,
+            )
             // v1.23.x — noms de contact partagés par ≥2 conversations : le numéro n'est affiché
             // sous le nom que pour celles-là. v1.28.3 (audit global C-03) — calculé dans le
             // ViewModel, sur IO, avec le filtre et le tri.
@@ -767,6 +768,47 @@ private fun IAmOkBanner(onClick: () -> Unit) {
  * family (`primaryContainer` + `primary`) instead of error red. The lighter container alpha
  * keeps the line visible without competing with the conversation list below.
  */
+/**
+ * v1.28.12 — extrait de [ConversationsScreen], qui atteignait le plafond de complexite du
+ * projet. L'extraction n'est pas cosmetique : elle place la garde [visible] a UN seul endroit,
+ * la ou l'ancienne forme la laissait au milieu de quarante branches.
+ *
+ * ⚠️ [visible] doit porter la garde du mode leurre, et pas seulement `state.showIAmOkChip`.
+ * Ce champ vient du flux AGREGE, servi par `stateIn(WhileSubscribed(5 s))` : au depilement de
+ * l'ecran de verrouillage, sa valeur EN CACHE — calculee avant, donc avec `isPanicDecoy = false`
+ * — est resservie le temps que le `combine` reemette.
+ *
+ * C'est le mecanisme que l'audit H18 (v1.26.1) a corrige pour l'icone du Coffre, en derivant
+ * `isPanicDecoy` directement du verrou, `Eagerly`. Le correctif n'avait ete pose que sur ce
+ * champ ; ce bandeau etait reste sur le flux agrege, et il est le plus grave des deux : l'icone
+ * revele qu'un coffre existe, celui-ci revele qu'un appel a l'aide vient de partir — a
+ * quelqu'un qui tient le telephone par la contrainte. Releve le 2026-09-17.
+ */
+@Composable
+private fun BandeauJeVaisBien(visible: Boolean, onConfirmer: () -> Unit) {
+    if (!visible) return
+    var confirmationOuverte by remember { mutableStateOf(false) }
+    IAmOkBanner(onClick = { confirmationOuverte = true })
+    HorizontalDivider()
+    if (!confirmationOuverte) return
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirmationOuverte = false },
+        title = { Text(stringResource(R.string.emergency_i_am_ok_confirm_title)) },
+        text = { Text(stringResource(R.string.emergency_i_am_ok_confirm_body)) },
+        confirmButton = {
+            Button(onClick = {
+                confirmationOuverte = false
+                onConfirmer()
+            }) { Text(stringResource(R.string.emergency_i_am_ok_chip_action)) }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = { confirmationOuverte = false },
+            ) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
 @Composable
 private fun DefaultAppBanner(onSetDefault: () -> Unit) {
     val cs = MaterialTheme.colorScheme

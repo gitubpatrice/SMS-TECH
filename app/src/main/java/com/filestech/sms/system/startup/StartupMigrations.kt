@@ -88,6 +88,20 @@ class StartupMigrations @Inject constructor(
         runCatching { purgeEmptyConversationsV1272(advanced) }
             .onFailure { Timber.w(it, "v1.27.2 empty conversations purge failed") }
 
+        // v1.28.12 (S7) — le format de réaction du parc existant, ramené une fois au défaut de
+        // la v1.14.4. Ici encore AVANT le court-circuit, et pour la raison déjà écrite au-dessus :
+        // le parc visé est précisément celui qui a tous les anciens drapeaux à `true`. Ne touche
+        // pas la base — c'est une seule écriture DataStore.
+        runCatching {
+            // La langue RÉSOLUE de l'application : elle suit la langue par application (API 33+)
+            // quand il y en a une, la langue système sinon — donc exactement celle dans laquelle
+            // l'utilisateur lit ses écrans, et celle qui dit si la forme française a du sens.
+            val langue = context.resources.configuration.locales[0].language
+            if (settings.migrerFormatDeReaction(langue)) {
+                Timber.i("v1.28.12 migration: reaction format READABLE_FR -> EMOJI_WITH_QUOTE")
+            }
+        }.onFailure { Timber.w(it, "v1.28.12 reaction format migration failed") }
+
         // Global short-circuit: an up-to-date install does no migration work and never opens the
         // database. This is the whole point of the consolidation.
         if (advanced.startupDbMigrationsDone) return@withContext

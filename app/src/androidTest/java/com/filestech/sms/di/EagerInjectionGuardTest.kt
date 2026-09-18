@@ -45,6 +45,12 @@ class EagerInjectionGuardTest {
             "com.filestech.sms.security.AppLockManager", // DataStore + PasswordKdf, no DAO
             "com.filestech.sms.data.local.datastore.SettingsRepository", // DataStore
             "com.filestech.sms.system.notifications.EmergencyShortcutNotifier", // Context only
+            // v1.28.12 — la seule implementation liee, `DefaultSmsAppManager`, prend
+            // `@ApplicationContext Context` et RIEN d'autre : elle interroge `RoleManager` et
+            // `Telephony.Sms.getDefaultSmsPackage`. Elle ne peut pas atteindre un DAO, faute de
+            // toute autre dependance. Inscrite ici plutot qu'enveloppee dans `Lazy`, ce qui est
+            // la decision que ce test demande d'assumer.
+            "com.filestech.sms.domain.sender.DefaultSmsAppChecker",
             "kotlinx.coroutines.CoroutineScope",
             "kotlinx.coroutines.CoroutineDispatcher",
         ),
@@ -60,6 +66,11 @@ class EagerInjectionGuardTest {
             // It cannot reach a DAO because it depends on nothing. Added here rather than
             // wrapped in Lazy, which is the decision this test asks for.
             "com.filestech.sms.system.notifications.SafetyCallAckHolder",
+            // v1.28.12 — meme raisonnement que dans `MainApplication` ci-dessus :
+            // `DefaultSmsAppManager` ne depend que du `Context` applicatif. Consulte ici par
+            // `republishSafetyCallNotice`, pour que l'ecran cesse d'afficher « arme » quand le
+            // role SMS manque et qu'aucun message ne partira.
+            "com.filestech.sms.domain.sender.DefaultSmsAppChecker",
             "kotlinx.coroutines.CoroutineDispatcher",
         ),
         "com.filestech.sms.system.receiver.SmsDeliverReceiver" to setOf(

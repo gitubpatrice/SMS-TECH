@@ -6,8 +6,8 @@ SMS Tech est une application SMS / MMS pour Android, sans publicité ni traceur.
 <li>SMS et MMS — support complet en tant qu'application SMS par défaut, sur Android 8 (API 26) à 15+</li>
 <li>Messages vocaux — enregistrement push-to-talk envoyé en vrai MMS, limité à 60 s / 300 Ko pour que tous les opérateurs l'acceptent</li>
 <li>Coffre chiffré — masquez les conversations sensibles derrière SQLCipher, la clé étant scellée dans le Keystore Android. Option "Verrouiller le coffre à la sortie" pour le re-verrouiller chaque fois que l'app passe en arrière-plan</li>
-<li>Code panique — un second code de déverrouillage qui ouvre l'app en mode leurre, où le coffre reste invisible et inaccessible</li>
-<li>Mode urgence — bouton maintenu 3 s pour envoyer un SMS d'alerte à vos contacts Safety Call, avec une position GPS ponctuelle si vous avez accordé la localisation ; sans cette permission le SMS part quand même, simplement sans coordonnées. Accès rapide au 112 / 15 / 17 / 18 et raccourcis dans la notification de l'écran verrouillé. L'appel direct est optionnel : par défaut le composeur s'ouvre simplement pré-rempli</li>
+<li>PIN leurre — un second PIN qui ouvre l'app en mode leurre, où le coffre reste invisible et inaccessible</li>
+<li>Mode urgence — bouton maintenu 3 s pour envoyer un SMS d'alerte à vos contacts Safety Call, avec une position GPS ponctuelle si vous avez accordé la localisation ; sans cette permission le SMS part quand même, simplement sans coordonnées. Accès rapide aux numéros d'urgence du pays où votre téléphone est connecté, et raccourcis dans la notification de l'écran verrouillé. L'appel direct est optionnel : par défaut le composeur s'ouvre simplement pré-rempli</li>
 <li>Déverrouillage biométrique — empreinte ou visage, avec PIN de secours obligatoire</li>
 <li>Réponse contextuelle — appui long sur un message, "Répondre" → le composer affiche une mini-citation que voit le destinataire</li>
 <li>Traduction déléguée — appui long sur un message puis "Traduire" transmet le texte à l'app de traduction que vous avez installée (Google Translate, DeepL, Aves Translate …) via un Intent système. Aucun modèle de traduction n'est embarqué, et SMS Tech n'envoie rien nulle part</li>
@@ -18,7 +18,7 @@ SMS Tech est une application SMS / MMS pour Android, sans publicité ni traceur.
 <li>Export d'une conversation en PDF pour archive</li>
 <li>Sauvegarde locale chiffrée avec une passphrase distincte du PIN</li>
 <li>Thèmes — Clair / Sombre / AMOLED / "Dark Tech" ardoise bleutée</li>
-<li>Interface en français et en anglais</li>
+<li>Interface en anglais, en français, en allemand, en italien et en espagnol</li>
 <li>Option dans Réglages → Envoi → "Confirmer avant envoi" pour exiger une confirmation avant tout SMS, MMS ou pièce jointe</li>
 </ul>
 

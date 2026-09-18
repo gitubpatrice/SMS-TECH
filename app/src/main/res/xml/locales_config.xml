@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v1.28.12 — Sélecteur de langue par application (Android 13+, API 33).
+     Déclaré au manifeste par `android:localeConfig`, il fait apparaître une entrée « Langue »
+     dans Réglages → Applications → SMS Tech, indépendante de la langue du système.
+
+     ⚠️ CETTE LISTE EST UN CONTRAT D'AFFICHAGE : toute langue nommée ici est PROPOSÉE à
+     l'utilisateur. N'y ajouter une langue qu'avec les deux autres gestes qui vont avec, sinon
+     l'application offre une langue qu'elle ne parle pas et retombe en silence sur l'anglais :
+       1. `app/src/main/res/values-XX/strings.xml` — la traduction elle-même ;
+       2. `localeFilters` dans `app/build.gradle.kts` — sans quoi AGP écarte les ressources du build ;
+       3. `app/src/debug/res/values-XX/strings.xml` — le jumeau debug d'`app_name`, sans quoi la
+          build de debug porte le MÊME nom que la release sur un appareil dans cette langue.
+     Le contrôle `.github/scripts/i18n-parite.sh` vérifie ces quatre points à chaque build. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="fr" />
+    <locale android:name="de" />
+    <locale android:name="it" />
+    <locale android:name="es" />
+</locale-config>

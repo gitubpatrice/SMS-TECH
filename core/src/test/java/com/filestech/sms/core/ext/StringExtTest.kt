@@ -22,11 +22,6 @@ class StringExtTest {
         assertThat("".avatarInitials()).isEqualTo("?")
     }
 
-    @Test fun `extractOtp finds 6 digit code`() {
-        assertThat("Your code is 482910 please".extractOtp()).isEqualTo("482910")
-        assertThat("No code here".extractOtp()).isNull()
-    }
-
     @Test fun `stripInvisibleChars removes bidi controls`() {
         val sneaky = "hello​‮world"
         assertThat(sneaky.stripInvisibleChars()).isEqualTo("helloworld")

@@ -5,6 +5,7 @@ import com.filestech.sms.domain.model.ReactionFormat
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact
+import com.filestech.sms.domain.safetycall.SafetyCallDuration
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.usecase.buildEmojiWithQuoteBody
 import com.google.common.truth.Truth.assertThat
@@ -110,38 +111,37 @@ class AuditV190Test {
         assertThat(names).containsExactly("CHECK_IN", "URGENT", "FOLLOW_UP", "CUSTOM")
     }
 
-    @Test fun `SafetyCallTemplate formatDuration renders correctly`() {
-        assertThat(SafetyCallTemplate.formatDuration(SafetyCallConfig.TIMEOUT_24H_MS))
-            .isEqualTo("1 jour")
-        assertThat(SafetyCallTemplate.formatDuration(SafetyCallConfig.TIMEOUT_48H_MS))
-            .isEqualTo("2 jours")
-        assertThat(SafetyCallTemplate.formatDuration(SafetyCallConfig.TIMEOUT_72H_MS))
-            .isEqualTo("3 jours")
-        assertThat(SafetyCallTemplate.formatDuration(5 * 60 * 60 * 1000L))
-            .isEqualTo("5 heures")
+    /**
+     * v1.28.12 — ces trois tests vérifiaient un LIBELLÉ FRANÇAIS (« 1 jour », « 2 jours »).
+     * Le libellé vient désormais des ressources, dans la langue de l'application ; ce qui reste
+     * ici, et qui est la vraie règle métier, c'est l'ARRONDI : 24 h se dit en jours et non en
+     * heures. Les mots sont vérifiés, dans toutes les langues à la fois, par le contrôle de
+     * parité i18n (`.github/scripts/i18n-parite.py`).
+     */
+    @Test fun `SafetyCallDuration arrondit les multiples de 24 h en jours`() {
+        assertThat(SafetyCallDuration.of(SafetyCallConfig.TIMEOUT_24H_MS))
+            .isEqualTo(SafetyCallDuration.Days(1))
+        assertThat(SafetyCallDuration.of(SafetyCallConfig.TIMEOUT_48H_MS))
+            .isEqualTo(SafetyCallDuration.Days(2))
+        assertThat(SafetyCallDuration.of(SafetyCallConfig.TIMEOUT_72H_MS))
+            .isEqualTo(SafetyCallDuration.Days(3))
+        assertThat(SafetyCallDuration.of(5 * 60 * 60 * 1000L))
+            .isEqualTo(SafetyCallDuration.Hours(5))
     }
 
-    @Test fun `SafetyCallTemplate render substitutes DURÉE placeholder`() {
-        val body = SafetyCallTemplate.CHECK_IN.render(SafetyCallConfig.TIMEOUT_48H_MS)
-        assertThat(body).contains("2 jours")
-        assertThat(body).doesNotContain("[DURÉE]")
+    @Test fun `SafetyCallDuration en dessous d une heure ne pretend pas a un nombre`() {
+        assertThat(SafetyCallDuration.of(0L)).isEqualTo(SafetyCallDuration.LessThanAnHour)
+        assertThat(SafetyCallDuration.of(59 * 60 * 1000L))
+            .isEqualTo(SafetyCallDuration.LessThanAnHour)
     }
 
-    @Test fun `SafetyCallTemplate URGENT wording matches user request v1_9_0`() {
-        // Verbatim match — l'user a explicitement validé ce wording.
-        val body = SafetyCallTemplate.URGENT.render(SafetyCallConfig.TIMEOUT_24H_MS)
-        assertThat(body).isEqualTo(
-            "Si tu reçois ce SMS, c'est que je n'ai pas pu utiliser mon téléphone " +
-                "depuis 1 jour. Afin d'être certain que tout va bien, appelle-moi STP.",
-        )
-    }
-
-    @Test fun `SafetyCallTemplate CUSTOM returns custom message with placeholder replaced`() {
-        val body = SafetyCallTemplate.CUSTOM.render(
-            SafetyCallConfig.TIMEOUT_24H_MS,
-            customMessage = "Inactif depuis [DURÉE], please call.",
-        )
-        assertThat(body).isEqualTo("Inactif depuis 1 jour, please call.")
+    @Test fun `injecterDuree remplace le jeton historique ET son alias`() {
+        // `[DURÉE]` est déjà écrit dans les messages personnalisés enregistrés des utilisateurs
+        // actuels : le retirer les casserait sans rien dire. `[DURATION]` est l'alias.
+        assertThat(SafetyCallTemplate.injecterDuree("Inactif depuis [DURÉE], please call.", "1 jour"))
+            .isEqualTo("Inactif depuis 1 jour, please call.")
+        assertThat(SafetyCallTemplate.injecterDuree("Idle for [DURATION], please call.", "1 day"))
+            .isEqualTo("Idle for 1 day, please call.")
     }
 
     // ──────────────── ReactionFormat EMOJI_WITH_QUOTE (v1.9.0) ────────────────
@@ -271,13 +271,10 @@ class AuditV190Test {
 
     @Test fun `SafetyCallTemplate CUSTOM caps custom message at MAX_CUSTOM_MESSAGE_LENGTH (SEC-5)`() {
         // SEC-5 — tampered DataStore could persist a CUSTOM message > 140c.
-        // The UI ViewModel cap is the first line of defense ; render() now
-        // re-caps as defense in depth so a multi-segment SMS surprise is avoided.
+        // The UI ViewModel cap is the first line of defense ; the render path re-caps as defense
+        // in depth so a multi-segment SMS surprise is avoided.
         val oversized = "x".repeat(SafetyCallConfig.MAX_CUSTOM_MESSAGE_LENGTH + 50)
-        val rendered = SafetyCallTemplate.CUSTOM.render(
-            timeoutMs = SafetyCallConfig.TIMEOUT_24H_MS,
-            customMessage = oversized,
-        )
-        assertThat(rendered.length).isAtMost(SafetyCallConfig.MAX_CUSTOM_MESSAGE_LENGTH)
+        assertThat(SafetyCallTemplate.capCustom(oversized).length)
+            .isAtMost(SafetyCallConfig.MAX_CUSTOM_MESSAGE_LENGTH)
     }
 }

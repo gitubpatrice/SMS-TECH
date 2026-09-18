@@ -5,9 +5,9 @@ import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
+import com.filestech.sms.domain.safety.SafetyMessageTexts
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallContact
-import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.CoroutineDispatcher
@@ -70,6 +70,8 @@ class TriggerSafetyCallUseCase @Inject constructor(
     // v1.28.3 (F05) — lecture seule du statut d'un envoi, pour attendre l'accuse du radio au
     // lieu de tenir l'acceptation par `SmsManager` pour un envoi reussi.
     private val mirror: OutgoingMessageMirror,
+    // v1.28.12 — les corps de SMS, dans la langue de l'application.
+    private val textes: SafetyMessageTexts,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -545,14 +547,19 @@ class TriggerSafetyCallUseCase @Inject constructor(
     }
 
     /**
-     * Rend le corps du message pour [cfg]. Fonction **pure**, donc réutilisable dans une
+     * Rend le corps du message pour [cfg].
+     *
+     * **Sans effet de bord et déterministe pour un [cfg] donné**, donc réutilisable dans une
      * transaction DataStore pour revalider une décision prise sur un instantané plus ancien.
+     * v1.28.12 — le texte vient désormais des ressources (langue de l'application) au lieu
+     * d'être écrit en français dans le code ; il reste figé dans l'APK, donc la propriété qui
+     * compte ici — deux appels sur le même [cfg] rendent la même chose — est conservée.
      */
     private fun renderBody(cfg: SafetyCallConfig, isRelance: Boolean): String =
         if (isRelance) {
-            SafetyCallTemplate.renderRelance(cfg.messagesSent)
+            textes.safetyCallRelance(cfg.messagesSent)
         } else {
-            cfg.template.render(cfg.timeoutMs, cfg.customMessage)
+            textes.safetyCallBody(cfg.template, cfg.timeoutMs, cfg.customMessage)
         }.trim()
 
     /**

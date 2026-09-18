@@ -400,20 +400,27 @@ private fun IconAttachment(
                 overflow = TextOverflow.Ellipsis,
             )
             if (attachment.sizeBytes > 0) {
+                // v1.28.12 — la taille passe par le formateur de la PLATEFORME, qui lit la
+                // configuration du contexte : il écrit donc l'unité dans la langue de
+                // l'application, et le séparateur décimal avec.
+                //
+                // ⚠️ Elle était écrite à la main, en français : « 1,2 Mo » s'affichait sous
+                // CHAQUE pièce jointe, y compris pour un lecteur allemand, italien, espagnol
+                // ou anglais. Aucun contrôle ne pouvait le voir — ce texte n'était pas dans
+                // `strings.xml`, et c'est exactement le motif des SMS de sécurité partis en
+                // français à tout le monde. Relevé par deux audits indépendants le
+                // 2026-09-17, chacun de son côté.
                 Text(
-                    text = formatBytes(attachment.sizeBytes),
+                    text = android.text.format.Formatter.formatShortFileSize(
+                        LocalContext.current,
+                        attachment.sizeBytes,
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = textColor.copy(alpha = 0.7f),
                 )
             }
         }
     }
-}
-
-private fun formatBytes(b: Long): String = when {
-    b >= 1024 * 1024 -> "%.1f Mo".format(b / (1024.0 * 1024.0))
-    b >= 1024 -> "%d Ko".format(b / 1024)
-    else -> "$b o"
 }
 
 /**

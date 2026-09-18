@@ -47,11 +47,13 @@ class SafetyCallNoticeTest {
         cfg: SafetyCallConfig,
         elapsed: Long,
         isDecoy: Boolean = false,
+        peutEnvoyer: Boolean = true,
     ): SafetyCallNotice = SafetyCallNotice.decide(
         cfg = cfg,
         isDecoy = isDecoy,
         nowMs = ARMED_AT + elapsed,
         nowMonoMs = MONO_AT + elapsed,
+        peutEnvoyer = peutEnvoyer,
     )
 
     @Test
@@ -180,6 +182,7 @@ class SafetyCallNoticeTest {
             isDecoy = false,
             nowMs = ARMED_AT + ecouleMural,
             nowMonoMs = MONO_AT + ecouleMural - retardMono,
+            peutEnvoyer = true,
         )
 
         // Le compteur monotone vient d'entrer dans sa fenêtre (18 h sur 24 h)...
@@ -364,5 +367,54 @@ class SafetyCallNoticeTest {
         assertThat(base.copy(messagesSent = 2, claimedAt = 1L).messagesDelivered).isEqualTo(1)
         // Jamais négatif, même sur un état incohérent hérité.
         assertThat(base.copy(messagesSent = 0, claimedAt = 1L).messagesDelivered).isEqualTo(0)
+    }
+
+    // ──────── v1.28.12 — armé, mais hors d'état d'envoyer ────────
+
+    @Test
+    fun `un deadman arme sans le role SMS le DIT, au lieu de se taire`() {
+        // Le defaut : a l'echeance, le systeme refusait l'envoi, la reservation etait rendue
+        // (`triggeredAt = 0`), donc `sequenceVisible` etait faux et RIEN ne s'affichait. Le tick
+        // suivant reessayait, echouait pareil, indefiniment — pendant que l'ecran continuait
+        // d'afficher « active ». La protection s'eteignait exactement quand elle sert.
+        //
+        // Hors fenetre d'avertissement : sans ce nouvel etat, le verdict serait `None`.
+        assertThat(decideAt(armed(), elapsed = ONE_HOUR, peutEnvoyer = false))
+            .isEqualTo(SafetyCallNotice.EnvoiImpossible)
+    }
+
+    @Test
+    fun `avec le role SMS, le meme instant ne dit rien`() {
+        // Le controle negatif du test precedent : sans lui, un etat qui s'afficherait TOUJOURS
+        // le passerait aussi.
+        assertThat(decideAt(armed(), elapsed = ONE_HOUR, peutEnvoyer = true))
+            .isEqualTo(SafetyCallNotice.None)
+    }
+
+    @Test
+    fun `l impossibilite d envoyer PRIME sur le compte a rebours`() {
+        // « Declenchement dans N heures » est FAUX tant que l'envoi est impossible : annoncer
+        // l'heure d'une protection qui ne partira pas est pire que de ne rien annoncer.
+        val dansLaFenetre = decideAt(armed(), elapsed = 20 * ONE_HOUR, peutEnvoyer = true)
+        assertThat(dansLaFenetre).isInstanceOf(SafetyCallNotice.Warning::class.java)
+        assertThat(decideAt(armed(), elapsed = 20 * ONE_HOUR, peutEnvoyer = false))
+            .isEqualTo(SafetyCallNotice.EnvoiImpossible)
+    }
+
+    @Test
+    fun `desarme et sans role, rien ne s affiche`() {
+        // La porte `!cfg.enabled` reste devant : on ne signale pas l'impossibilite d'envoyer
+        // d'une protection que personne n'a armee.
+        val desarme = armed().copy(enabled = false)
+        assertThat(decideAt(desarme, elapsed = ONE_HOUR, peutEnvoyer = false))
+            .isEqualTo(SafetyCallNotice.None)
+    }
+
+    @Test
+    fun `en session leurre, l impossibilite d envoyer ne se revele pas`() {
+        // Le mode leurre nie l'EXISTENCE de la fonction : lui donner une notification d'erreur
+        // reviendrait a l'annoncer a qui tient le telephone par la contrainte.
+        assertThat(decideAt(armed(), elapsed = ONE_HOUR, isDecoy = true, peutEnvoyer = false))
+            .isEqualTo(SafetyCallNotice.None)
     }
 }

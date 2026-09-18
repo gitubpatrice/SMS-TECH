@@ -18,7 +18,7 @@ import java.util.Locale
  * with the OS calendar / numbering chosen by `Locale`. Both APIs are equally NOT thread-safe, so
  * we scope the instance to the composition (single-threaded by definition).
  */
-class ChatFormatters(locale: Locale) {
+class ChatFormatters(val locale: Locale) {
     val time: SimpleDateFormat = SimpleDateFormat("HH:mm", locale)
     val dayLabel: SimpleDateFormat = SimpleDateFormat("EEE", locale)
     val weekdayFull: SimpleDateFormat = SimpleDateFormat("EEEE", locale)
@@ -39,8 +39,18 @@ fun rememberChatFormatters(): ChatFormatters {
  *  - same week → short day name
  *  - else      → day + month
  */
-fun ChatFormatters.relativeRowLabel(timestampMillis: Long, now: Calendar = Calendar.getInstance()): String {
-    val then = Calendar.getInstance().apply { timeInMillis = timestampMillis }
+fun ChatFormatters.relativeRowLabel(
+    timestampMillis: Long,
+    // v1.28.12 — le `Calendar` prend la MÊME locale que les formateurs. Il prenait celle du
+    // PROCESSUS (`Calendar.getInstance()` sans argument) tandis que les formateurs prennent
+    // celle de la CONFIGURATION, c'est-à-dire la langue de l'application. Or un `Calendar`
+    // porte `firstDayOfWeek` et `minimalDaysInFirstWeek`, et la comparaison ci-dessous se
+    // fait sur `WEEK_OF_YEAR` : samedi et dimanche tombent dans la même semaine en
+    // fr/de/it/es et dans DEUX semaines en `en`. Une Italienne voyait « sab » ; en basculant
+    // l'application en anglais, la même ligne affichait « 12 Sept ». Relevé le 2026-09-17.
+    now: Calendar = Calendar.getInstance(locale),
+): String {
+    val then = Calendar.getInstance(locale).apply { timeInMillis = timestampMillis }
     return when {
         now.get(Calendar.DATE) == then.get(Calendar.DATE) &&
             now.get(Calendar.MONTH) == then.get(Calendar.MONTH) &&
@@ -67,9 +77,13 @@ fun ChatFormatters.daySeparatorLabel(
     timestampMillis: Long,
     todayLabel: String,
     yesterdayLabel: String,
-    now: Calendar = Calendar.getInstance(),
+    // v1.28.12 — même locale que les formateurs, pour la même raison que
+    // [relativeRowLabel] : `WEEK_OF_YEAR` dépend de `firstDayOfWeek`, qui vient du
+    // `Calendar`. Le correctif est posé sur les DEUX fonctions jumelles à la fois : c'est
+    // de les avoir corrigées une à une que sont nés plusieurs défauts de ce dépôt.
+    now: Calendar = Calendar.getInstance(locale),
 ): String {
-    val then = Calendar.getInstance().apply { timeInMillis = timestampMillis }
+    val then = Calendar.getInstance(locale).apply { timeInMillis = timestampMillis }
     val sameYear = now.get(Calendar.YEAR) == then.get(Calendar.YEAR)
     val sameMonth = sameYear && now.get(Calendar.MONTH) == then.get(Calendar.MONTH)
     val sameDay = sameMonth && now.get(Calendar.DATE) == then.get(Calendar.DATE)

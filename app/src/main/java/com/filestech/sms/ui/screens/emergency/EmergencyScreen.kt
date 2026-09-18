@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.screens.emergency
 
 import android.Manifest
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyConfig
 import com.filestech.sms.domain.usecase.TriggerEmergencyUseCase
+import com.filestech.sms.system.emergency.EmergencyNumbers
+import com.filestech.sms.system.safety.rememberSafetyMessageTexts
+import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.EmergencyHoldButton
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
@@ -90,6 +94,12 @@ fun EmergencyScreen(
     val callPhonePermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { /* outcome handled by next recomposition via checkSelfPermission */ }
+    // v1.28.12 (audit 3 axes, U1) — meme raison de hissage : un lanceur ne se declare pas dans
+    // une branche. Pas de gestionnaire de resultat : [BanniereRoleSmsManquant] relit le role a
+    // chaque retour au premier plan, ce qui couvre le retour du selecteur systeme.
+    val lanceurRoleSms = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { }
     // v1.12.0 audit U2 — needed pour afficher un snackbar si aucun dialer
     // n'est installé (ACTION_DIAL ActivityNotFoundException). Sinon le tap
     // du bouton 112/17 reste silencieux et l'user croit que l'appel passe.
@@ -214,34 +224,24 @@ fun EmergencyScreen(
             )
             Spacer(Modifier.height(12.dp))
 
-            // 4 tuiles couleurs FR/EU + 1 tuile proches.
-            EmergencyCallTile(
-                number = "112",
-                label = stringResource(R.string.emergency_call_112_label),
-                containerColor = com.filestech.sms.ui.theme.BrandDanger,
-                onClick = { callEmergency("112") },
-            )
-            Spacer(Modifier.height(8.dp))
-            EmergencyCallTile(
-                number = "15",
-                label = stringResource(R.string.emergency_call_15_label),
-                containerColor = Color(0xFF00796B), // teal médical
-                onClick = { callEmergency("15") },
-            )
-            Spacer(Modifier.height(8.dp))
-            EmergencyCallTile(
-                number = "17",
-                label = stringResource(R.string.emergency_call_17_label),
-                containerColor = Color(0xFF1565C0), // navy police
-                onClick = { callEmergency("17") },
-            )
-            Spacer(Modifier.height(8.dp))
-            EmergencyCallTile(
-                number = "18",
-                label = stringResource(R.string.emergency_call_18_label),
-                containerColor = Color(0xFFE65100), // orange pompiers
-                onClick = { callEmergency("18") },
-            )
+            // v1.28.12 — les tuiles suivent le PAYS OÙ LE TÉLÉPHONE EST ENREGISTRÉ, et non la
+            // langue de l'application : un germanophone à Paris doit voir le 17, pas le 110.
+            // Le 112 y est toujours, et toujours en premier. Cf. [EmergencyNumbers].
+            //
+            // `remember` parce que la résolution interroge la téléphonie (IPC) : inutile de la
+            // repayer à chaque recomposition. Un changement de pays en cours de route est repris
+            // au retour sur l'écran, ce qui suffit — on ne traverse pas une frontière sans que
+            // l'écran soit quitté.
+            val numerosDUrgence = remember(ctx) { EmergencyNumbers.pour(ctx) }
+            numerosDUrgence.forEachIndexed { index, dial ->
+                if (index > 0) Spacer(Modifier.height(8.dp))
+                EmergencyCallTile(
+                    number = dial.number,
+                    label = stringResource(libelleDuService(dial.service)),
+                    containerColor = couleurDuService(dial.service),
+                    onClick = { callEmergency(dial.number) },
+                )
+            }
 
             // v1.14.1 — Bouton "Appeler un proche" : visible si au moins 1
             // contact SafetyCall configuré. Si 1 contact → call direct, si
@@ -277,6 +277,40 @@ fun EmergencyScreen(
             Spacer(Modifier.height(28.dp))
 
             // ── SECTION 2 — SMS d'urgence aux proches (hold-3s) ──
+
+            // v1.28.12 (audit 3 axes, U1) — **c'est ICI que l'on déclenche, et c'est ici que
+            // l'avertissement manquait.**
+            //
+            // Le rôle d'application SMS par défaut a été câblé le matin même sur les deux écrans
+            // d'ARMEMENT ([EmergencySetupScreen], [SafetyCallSetupScreen]) et pas sur celui-ci.
+            // Or `SendSmsUseCase` refuse tout envoi sans ce rôle, et cet écran est atteint
+            // DIRECTEMENT depuis la notification de l'écran verrouillé — sans jamais passer par
+            // l'écran de configuration. C'est le chemin réel en situation d'urgence.
+            //
+            // Sans elle, `canTrigger` reste vrai, le bouton reste plein et coloré, et le statut
+            // en dessous annonce « prêt ». L'utilisateur tient trois secondes en croyant l'alerte
+            // partie ; le seul filet est le message d'échec, APRÈS coup.
+            //
+            // L'argument est déjà écrit vingt lignes plus bas, pour la permission de
+            // localisation : « l'avertissement de l'écran de configuration ne suffit pas —
+            // celui-ci est là où l'on déclenche ». Il n'avait pas été appliqué à la précondition
+            // voisine, le même jour.
+            //
+            // ⚠️ Placée devant la SECTION 2 et non devant la 1 : les appels directs (112, police)
+            // ne passent pas par SMS et fonctionnent sans ce rôle. L'annoncer plus haut ferait
+            // croire que le numéro d'urgence lui-même est hors service.
+            //
+            // ⚠️ Le bouton n'est PAS désactivé, délibérément : en situation d'urgence, un bouton
+            // qui refuse de répondre est pire qu'un bouton qui tente et le dit. On avertit, on
+            // ne bloque pas.
+            BanniereRoleSmsManquant(
+                aLeRole = { viewModel.defaultAppManager.isDefault() },
+                onCorriger = {
+                    viewModel.defaultAppManager.buildChangeDefaultIntent()
+                        ?.let { lanceurRoleSms.launch(it) }
+                },
+            )
+
             Text(
                 text = stringResource(R.string.emergency_section_sms_title),
                 style = MaterialTheme.typography.titleMedium,
@@ -435,6 +469,34 @@ private fun handleCallOutcome(
 }
 
 /**
+ * v1.28.12 — le libellé tient au SERVICE appelé, plus au numéro : le même service porte le 17
+ * en France, le 110 en Allemagne, le 091 en Espagne. Quatre libellés suffisent donc pour tous
+ * les pays de la table, là où il fallait une chaîne par numéro français.
+ */
+@StringRes
+private fun libelleDuService(service: EmergencyNumbers.Service): Int = when (service) {
+    EmergencyNumbers.Service.EUROPEAN -> R.string.emergency_call_eu_label
+    EmergencyNumbers.Service.NATIONAL -> R.string.emergency_call_national_label
+    EmergencyNumbers.Service.POLICE -> R.string.emergency_call_police_label
+    EmergencyNumbers.Service.FIRE -> R.string.emergency_call_fire_label
+    EmergencyNumbers.Service.MEDICAL -> R.string.emergency_call_medical_label
+}
+
+/**
+ * Les couleurs d'origine, rattachées elles aussi au service et non plus au numéro français.
+ * Toutes vérifiées WCAG AA ≥ 4.5:1 contre blanc — voir [EmergencyCallTile].
+ */
+private fun couleurDuService(service: EmergencyNumbers.Service): Color = when (service) {
+    EmergencyNumbers.Service.EUROPEAN -> com.filestech.sms.ui.theme.BrandDanger
+    // Le numéro d'urgence général d'un pays fait la même chose que le 112 : même couleur,
+    // parce qu'une couleur différente laisserait croire à un service différent.
+    EmergencyNumbers.Service.NATIONAL -> com.filestech.sms.ui.theme.BrandDanger
+    EmergencyNumbers.Service.MEDICAL -> Color(0xFF00796B) // teal médical
+    EmergencyNumbers.Service.POLICE -> Color(0xFF1565C0) // navy police
+    EmergencyNumbers.Service.FIRE -> Color(0xFFE65100) // orange pompiers
+}
+
+/**
  * v1.14.1 — Tuile d'appel d'urgence : un gros bouton plein couleur, numéro
  * en gras à gauche + label à droite. Tap → onClick (caller décide direct
  * call vs dialer fallback selon permission). Hauteur fixe 72dp pour tap
@@ -524,9 +586,13 @@ private fun MessagePreviewCard(
     config: EmergencyConfig,
     includeLocationGranted: Boolean,
 ) {
-    val previewBody = remember(config.template, includeLocationGranted) {
+    // v1.28.12 — MEME source que l'envoi (`TriggerEmergencyUseCase`) : un apercu qui mentirait
+    // sur le contenu d'un SMS d'urgence serait la pire occurrence du motif « correctif pose sur
+    // un seul des chemins jumeaux ».
+    val textes = rememberSafetyMessageTexts()
+    val previewBody = remember(config.template, includeLocationGranted, textes) {
         val sampleUrl = if (includeLocationGranted) "https://maps.google.com/?q=48.85661,2.35222" else null
-        config.template.renderBody(sampleUrl)
+        textes.emergencyBody(config.template, sampleUrl)
     }
     Card(
         colors = CardDefaults.cardColors(

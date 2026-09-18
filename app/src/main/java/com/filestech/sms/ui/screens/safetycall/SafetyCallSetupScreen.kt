@@ -67,10 +67,13 @@ import com.filestech.sms.R
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
+import com.filestech.sms.system.safety.rememberSafetyMessageTexts
+import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.theme.BrandBlue
 import com.filestech.sms.ui.theme.BrandWarning
+import com.filestech.sms.ui.util.libelleDeDuree
 import java.text.DateFormat
 import java.util.Date
 
@@ -106,6 +109,12 @@ fun SafetyCallSetupScreen(
     var addContactDialogOpen by remember { mutableStateOf(false) }
     var customDurationDialogOpen by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+
+    // v1.28.12 — le retour du sélecteur système ne porte rien d'utile : c'est le `ON_RESUME`
+    // de [BanniereRoleSmsManquant] qui relit l'état du rôle et fait disparaître la bannière.
+    val lanceurRoleSms = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { }
 
     /*
      * v1.25.5 — quitter sans enregistrer ne doit plus jeter la saisie en silence.
@@ -203,6 +212,16 @@ fun SafetyCallSetupScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // v1.28.12 — AVANT tout le reste : sans le rôle d'application SMS par défaut, rien
+            // ne partira à l'échéance. L'écran l'ignorait entièrement, et l'utilisateur pouvait
+            // armer une protection inerte en croyant être couvert.
+            BanniereRoleSmsManquant(
+                aLeRole = { viewModel.defaultAppManager.isDefault() },
+                onCorriger = {
+                    viewModel.defaultAppManager.buildChangeDefaultIntent()
+                        ?.let { lanceurRoleSms.launch(it) }
+                },
+            )
             StatusSection(
                 draft = draft,
                 savedEnabled = savedEnabled,
@@ -389,11 +408,13 @@ private fun DurationSection(
             onClick = { onSelect(SafetyCallConfig.TIMEOUT_72H_MS) },
         )
         val customLabel = if (!isStandard) {
+            // v1.28.12 (mesure sur appareil, S24 en italien) — le PLURIEL, pas la forme
+            // abrégée. La puce affichait « 1 h » au milieu de « 24 ore / 48 ore / 72 ore » :
+            // traduite, donc invisible à la parité, mais abrégée là où ses voisines ne le
+            // sont pas. Un lecteur italien y voit du texte non traduit.
+            val heures = (current / 3_600_000L).toInt()
             stringResource(R.string.safety_call_setup_duration_custom) + " · " +
-                stringResource(
-                    R.string.safety_call_setup_duration_custom_format,
-                    (current / 3_600_000L).toInt(),
-                )
+                pluralStringResource(R.plurals.safety_duration_hours, heures, heures)
         } else {
             stringResource(R.string.safety_call_setup_duration_custom)
         }
@@ -530,7 +551,9 @@ private fun TemplateSection(
             ),
         ) {
             Text(
-                text = draft.template.render(draft.timeoutMs, draft.customMessage)
+                // v1.28.12 — MEME source que l'envoi (`TriggerSafetyCallUseCase`).
+                text = rememberSafetyMessageTexts()
+                    .safetyCallBody(draft.template, draft.timeoutMs, draft.customMessage)
                     .ifBlank { "—" },
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodyMedium,
@@ -791,23 +814,18 @@ private fun CustomDurationDialog(
     // Aide l'user à se représenter visuellement la durée sans qu'il ait à
     // diviser mentalement par 24.
     val supportingLabel = when {
-        parsed == null -> stringResource(
-            R.string.safety_call_setup_duration_custom_format,
-            0,
+        parsed == null -> pluralStringResource(R.plurals.safety_duration_hours, 0, 0)
+        // v1.28.12 — l'aperçu passe par [libelleDeDuree] et par le format d'heure déjà
+        // traduit. Il était écrit ici à la main, en français : un Italien qui saisissait
+        // 96 lisait « 96 h ≈ 4 jours ». Même défaut, même jour, même correctif que dans
+        // l'écran des réglages — et c'est parce qu'ils étaient écrits deux fois qu'ils
+        // ont divergé de leurs traductions deux fois.
+        parsed >= 24 -> stringResource(
+            R.string.safety_call_setup_duration_approx,
+            pluralStringResource(R.plurals.safety_duration_hours, parsed, parsed),
+            libelleDeDuree(parsed),
         )
-        parsed >= 24 -> {
-            val days = parsed / 24
-            val rem = parsed % 24
-            if (rem == 0) {
-                if (days == 1) "$parsed h ≈ 1 jour" else "$parsed h ≈ $days jours"
-            } else {
-                "$parsed h ≈ $days j ${rem} h"
-            }
-        }
-        else -> stringResource(
-            R.string.safety_call_setup_duration_custom_format,
-            parsed,
-        )
+        else -> pluralStringResource(R.plurals.safety_duration_hours, parsed, parsed)
     }
     AlertDialog(
         onDismissRequest = onDismiss,

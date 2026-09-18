@@ -37,6 +37,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # v1.28.12 - PARITE DES TRADUCTIONS, avant toute compilation : le controle coute une
+      # seconde la ou un echec de build en coute dix minutes. Une langue qui perd des cles ne
+      # devient pas incomplete au grand jour, elle le devient EN SILENCE : l'ecran retombe en
+      # anglais mot par mot et personne ne le voit avant l'utilisateur. C'est exactement
+      # l'objection posee publiquement sur l'issue #15, « the app changes with every release ».
+      # Le script lance d'abord son propre controle negatif : mesurer avec un instrument dont
+      # on n'a pas verifie qu'il devie est ce qui a deja donne a ce projet des tests verts sur
+      # le defaut qu'ils visaient. Marche a suivre pour les traducteurs : TRANSLATING.md.
+      - name: i18n parity
+        run: ./.github/scripts/i18n-parite.sh
+
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:

@@ -32,9 +32,20 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     // v1.24.0 SEC-CRIT — `Lazy` : atteint un DAO donc `AppDatabase` donc la réparation zéro-clé.
     // L'injection de champ Hilt précède le corps, sur le main thread.
-    @Inject lateinit var sendSmsLazy: dagger.Lazy<SendSmsUseCase>
-
+    //
+    // v1.28.12 — `sendSmsLazy` retire avec le passage a l'aiguillage unique : le garder aurait
+    // laisse ici une dependance morte, et une porte ouverte pour qu'un futur appelant reprenne
+    // le chemin qu'on vient de fermer.
     @Inject lateinit var conversationRepoLazy: dagger.Lazy<ConversationRepository>
+
+    /**
+     * v1.28.12 — l'AIGUILLAGE unique (SMS / MMS / MMS de groupe), et non plus
+     * [SendSmsUseCase] en direct. Ce receveur etait le quatrieme point d'envoi de
+     * l'application ; `HeadlessSmsSendService` etait le troisieme, migre en v1.28.5 pour
+     * exactement la meme raison. Une reponse a un MMS de groupe suit desormais le reglage
+     * « MMS de groupe » comme le fil et l'envoi programme.
+     */
+    @Inject lateinit var envoyerLazy: dagger.Lazy<com.filestech.sms.domain.usecase.EnvoyerMessageUseCase>
 
     /** v1.28.3 — action « Renvoyer » de la notification d'echec d'envoi. `Lazy` : cf. ci-dessus. */
     @Inject lateinit var retrySendLazy: dagger.Lazy<com.filestech.sms.domain.usecase.RetrySendUseCase>
@@ -48,6 +59,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
         // ne connait qu'un id de message : la sortir en tete l'aurait rendue inatteignable.
         val address = intent.getStringExtra(EXTRA_ADDRESS)
         if (address == null && intent.action != ACTION_RETRY_SEND) return
+        // v1.28.12 — `-1` quand l'extra est absent : c'est le cas des notifications posees par
+        // une version anterieure, dont le `PendingIntent` survit a la mise a jour. Les deux
+        // appelants retombent alors sur l'adresse, comme avant.
+        val conversationIdOuNull = intent.getLongExtra(EXTRA_CONVERSATION_ID, -1L)
+            .takeIf { it > 0L }
         val pending = goAsync()
         scope.launch {
             try {
@@ -76,13 +92,29 @@ class NotificationActionReceiver : BroadcastReceiver() {
                             ?.toString()
                             ?.takeIf { it.isNotBlank() }
                             ?: return@launch
-                        sendSmsLazy.get().invoke(listOf(PhoneAddress.of(adresse)), text)
+                        // v1.28.12 — on repond a la CONVERSATION, pas au seul expediteur, et
+                        // par l'AIGUILLAGE unique (SMS / MMS / MMS de groupe) et non plus
+                        // `SendSmsUseCase` en direct.
+                        //
+                        // Ce receveur etait le QUATRIEME point d'envoi de l'application, apres
+                        // celui du fil, l'envoi programme, et `HeadlessSmsSendService` — ce
+                        // dernier migre en v1.28.5 comme « le troisieme point d'envoi, celui que
+                        // le refactor du 2026-09-10 n'avait pas vu ». Celui-ci est le suivant.
+                        //
+                        // Sur un MMS de groupe : la reponse partait au SEUL expediteur, la ligne
+                        // miroir s'ecrivait dans un fil 1-a-1, et les deux autres membres ne
+                        // recevaient rien. L'utilisateur croyait avoir repondu au groupe.
+                        val destinataires = conversationIdOuNull
+                            ?.let { conversationRepoLazy.get().findById(it)?.addresses }
+                            ?.takeIf { it.isNotEmpty() }
+                            ?: listOf(PhoneAddress.of(adresse))
+                        envoyerLazy.get().invoke(recipients = destinataires, body = text)
                         // Marquer comme lu (et donc clear notifs via le notifier câblé
                         // dans markRead). Cohérent : répondre = avoir vu le message.
-                        markReadAndCancelNotifs(adresse)
+                        markReadAndCancelNotifs(adresse, conversationIdOuNull)
                     }
                     ACTION_MARK_READ -> {
-                        markReadAndCancelNotifs(address ?: return@launch)
+                        markReadAndCancelNotifs(address ?: return@launch, conversationIdOuNull)
                     }
                     // v1.28.3 — « Renvoyer » depuis la notification d'echec d'envoi.
                     //
@@ -121,11 +153,23 @@ class NotificationActionReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun markReadAndCancelNotifs(address: String) {
-        val conv = conversationRepoLazy.get().findOrCreate(listOf(PhoneAddress.of(address)))
-        if (conv is Outcome.Success) {
-            conversationRepoLazy.get().markRead(conv.value.id)
-        }
+    /**
+     * v1.28.12 — marque la conversation que la NOTIFICATION visait.
+     *
+     * Elle resolvait par l'adresse, via `findOrCreate`. Sur un MMS de groupe, cela marquait
+     * lu un fil 1-a-1 : la notification — etiquetee par l'id du GROUPE — restait dans le
+     * volet, le groupe restait non lu, et `findOrCreate` pouvait CREER une conversation vide
+     * qui apparaissait dans la liste.
+     *
+     * L'adresse reste le repli pour les notifications posees avant cette version, dont le
+     * `PendingIntent` ne porte pas encore l'identifiant.
+     */
+    private suspend fun markReadAndCancelNotifs(address: String, conversationId: Long?) {
+        val depot = conversationRepoLazy.get()
+        val id = conversationId?.takeIf { it > 0L && depot.findById(it) != null }
+            ?: (depot.findOrCreate(listOf(PhoneAddress.of(address))) as? Outcome.Success)?.value?.id
+            ?: return
+        depot.markRead(id)
     }
 
     companion object {
@@ -137,5 +181,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_ADDRESS = "extra_address"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
+
+        /**
+         * v1.28.12 — la CONVERSATION visee, et non son seul expediteur.
+         *
+         * Les deux actions resolvaient la conversation par l'ADRESSE, alors que la
+         * notification est posee pour la CONVERSATION. Sur un MMS de groupe, les deux ne
+         * sont pas la meme chose. Voir [IncomingMessageNotifier] pour ce que cela coutait.
+         */
+        const val EXTRA_CONVERSATION_ID = "extra_conversation_id"
     }
 }

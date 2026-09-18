@@ -3,9 +3,20 @@ package com.filestech.sms.domain.settings
 import com.filestech.sms.domain.model.ReactionFormat
 
 /** User-facing immutable snapshot of all preferences. */
+// v1.28.12 — `locale: LocaleSettings` retiré. Ses deux champs, `languageTag` et
+// `firstDayOfWeek`, étaient écrits, persistés et relus, et JAMAIS consultés par une
+// seule ligne de code de production ni exposés par un écran : un réglage fantôme, qui
+// promettait un contrôle inexistant. Même motif que `retryFailedAutomatically` (F26,
+// v1.28.3) et `blockShortCodes` (v1.3.5).
+//
+// Ils ne manquent à rien. La langue de l'application passe par le mécanisme Android par
+// application (`system/locale/LangueDeLApplication.kt`), pas par un champ à nous —
+// `languageTag` était un vestige d'une approche non retenue. Et le premier jour de la
+// semaine suit désormais UNE seule locale, celle de la configuration, au lieu de deux qui
+// divergeaient. Vérifié avant retrait : aucun lecteur, et la sauvegarde ne les sérialise
+// pas, donc aucun fichier `.smsbk` existant n'en dépend.
 data class AppSettings(
     val appearance: Appearance = Appearance(),
-    val locale: LocaleSettings = LocaleSettings(),
     val conversations: ConversationSettings = ConversationSettings(),
     val sending: SendingSettings = SendingSettings(),
     val notifications: NotificationSettings = NotificationSettings(),
@@ -27,14 +38,6 @@ data class Appearance(
 enum class ThemeMode { SYSTEM, LIGHT, DARK, DARK_TECH }
 enum class TextScale { XS, S, MEDIUM, L, XL }
 enum class ListDensity { COMFORT, STANDARD, COMPACT }
-
-data class LocaleSettings(
-    /** null = follow system. ISO-639-1 tag otherwise. */
-    val languageTag: String? = null,
-    val firstDayOfWeek: FirstDayOfWeek = FirstDayOfWeek.SYSTEM,
-)
-
-enum class FirstDayOfWeek { SYSTEM, MONDAY, SUNDAY }
 
 data class ConversationSettings(
     val sortMode: SortMode = SortMode.DATE,
@@ -232,11 +235,12 @@ data class SecuritySettings(
      */
     val emergencyShortcutEnabled: Boolean = false,
     /**
-     * v1.12.0 — Bouton "Appeler 17 (Police FR)" dans EmergencyScreen ET
-     * action 17 dans la notification raccourci lock-screen. Opt-in spécifique
-     * France — désactivé par défaut car le 112 (SOS européen) couvre déjà
-     * police + SAMU + pompiers pour tous les pays UE. Activer 17 = accès
-     * direct à la police nationale FR depuis l'écran verrouillé.
+     * v1.12.0 — action "police" dans la notification raccourci lock-screen.
+     * Désactivée par défaut : le 112 couvre déjà police + secours + pompiers
+     * dans toute l'UE, et une action de plus sur l'écran verrouillé se paie.
+     * v1.28.12 — le numéro n'est plus le 17 français mais celui du pays où le
+     * téléphone est enregistré ([EmergencyNumbers]), et ce réglage ne gouverne
+     * PLUS la tuile police de l'écran Urgence, qui suit le pays quoi qu'il arrive.
      */
     val emergencyCallPoliceEnabled: Boolean = false,
     /**
@@ -361,7 +365,11 @@ data class BackupSettings(
 )
 
 data class AdvancedSettings(
-    val isDefaultSmsApp: Boolean = false,
+    // v1.28.12 (audit B2) — `isDefaultSmsApp` a été SUPPRIMÉ. Il était écrit et relu par
+    // `SettingsRepository`, et par personne d'autre : RIEN ne l'a jamais mis à jour, il valait
+    // donc `false` à vie, y compris sur un téléphone où l'application TIENT le rôle. Le rôle se
+    // demande au système, au moment où la question se pose — `DefaultSmsAppManager.isDefault()`,
+    // qui est ce que l'écran des conversations utilise déjà.
     /**
      * Highest `Telephony.Sms._ID` we have already mirrored into our Room DB. Maintained by the
      * [com.filestech.sms.data.sync.TelephonySyncManager] — it queries `content://sms` with
@@ -460,6 +468,22 @@ data class AdvancedSettings(
      * migrée qui passe à 1.24.0.
      */
     val staleConversationPreviewsRepairedV1240: Boolean = false,
+    /**
+     * v1.28.12 — le format de réaction du PARC EXISTANT a été ramené une fois au défaut
+     * déclaré par la v1.14.4.
+     *
+     * `SettingsRepository` écrit `send.reactionFormat` à CHAQUE enregistrement de réglages,
+     * sans condition. Toute installation ayant modifié un réglage — n'importe lequel — entre
+     * la v1.8.0 et la v1.14.4 a donc gravé `READABLE_FR`, et la valeur stockée l'emporte sur
+     * le défaut déclaré. Ces installations envoyaient encore leurs réactions en français, y
+     * compris à des correspondants allemands, italiens, espagnols ou anglais.
+     *
+     * ⚠️ Rien ne distingue « a choisi la forme française » de « en a hérité » : la migration
+     * écrase donc un choix délibéré s'il existe. Arbitré par Patrice le 2026-09-17, en
+     * connaissance de ce coût — le réglage se remet en deux tapes, et le changelog le dit.
+     * Indépendant de [startupDbMigrationsDone] : le parc visé l'a déjà à `true`.
+     */
+    val reactionFormatMigreV12812: Boolean = false,
     /**
      * 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-05) — REJOUE la deduplication avec l identite
      * region-aware corrigee.

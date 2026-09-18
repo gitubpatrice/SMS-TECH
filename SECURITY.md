@@ -1,6 +1,6 @@
 # SMS Tech — Security model
 
-Current release : **v1.27.2** (2026-08-05)
+Current release : **v1.28.12** (2026-09-18)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -80,6 +80,83 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 ---
 
 ## Audit history
+
+### v1.28.12 — Ce qu'a montré le fait de parcourir l'application dans une autre langue
+
+**Versions affectées : voir chaque point.** Aucun signalement reçu. Les trois défauts ci-dessous
+ont été trouvés en traduisant l'application, puis par cinq vagues d'audit et deux relectures
+externes ; tous étaient présents dans la 1.28.11 publiée.
+
+#### Le bandeau « Je vais bien » pouvait s'afficher en session leurre
+
+**Versions affectées : 1.26.1 à 1.28.11.** C'est le threat model de l'application qui est en cause,
+pas une commodité : la session leurre existe pour qu'une personne sous contrainte puisse céder un
+code sans rien livrer.
+
+`showIAmOkChip` porte bien `!isPanic`, mais il est calculé dans le flux **agrégé**, servi par
+`stateIn(WhileSubscribed(5 s))`. Quand l'écran de verrouillage se pose par-dessus, cet écran quitte
+la composition ; cinq secondes plus tard l'amont s'arrête et `state.value` **gèle**. Au retour, la
+valeur en cache est servie — calculée avant le verrou, donc avec `isPanicDecoy = false` — jusqu'à ce
+que le `combine` réémette, ce qui coûte une requête chiffrée et un appel Binder sur IO.
+
+Le scénario : la victime déclenche l'urgence, les messages partent, quelqu'un lui prend le téléphone
+et lui arrache le code panique. L'écran leurre s'ouvre — et le bandeau est là. **L'agresseur apprend
+qu'un appel à l'aide vient de partir.** L'icône du coffre révélait qu'un coffre existe ; ceci révèle
+l'alerte elle-même.
+
+C'est exactement le mécanisme que l'audit H18 avait corrigé en v1.26.1, et le KDoc qu'il a laissé le
+décrit mot pour mot. Ce correctif dérivait `isPanicDecoy` directement du verrou, en `Eagerly` — et
+il a été appliqué à **ce seul champ**. Six emplacements de cet écran gardaient déjà la valeur
+fraîche ; le bandeau était le septième, et le seul resté sur le cache.
+
+**Correctif.** Le bloc devient son propre composable, avec le garde en **un** endroit au lieu du
+milieu de quarante branches.
+
+#### Safety call et mode urgence pouvaient s'armer puis se taire
+
+**Versions affectées : 1.10.0 à 1.28.11**, dès lors que l'application ne détient pas le rôle SMS par
+défaut. Disponibilité d'une fonction de sûreté des personnes — la pire des façons d'échouer, parce
+que l'utilisateur croit être couvert.
+
+`SendSmsUseCase` refuse tout envoi sans le rôle, et les deux fonctions passent par lui. À l'échéance,
+l'envoi échouait, le créneau était libéré — ce qui réinitialise `triggeredAt`, donc referme la porte
+`isTriggered` qui aurait posté un avis — et **rien n'était affiché**. Le tick suivant réessayait,
+échouait pareil, indéfiniment, pendant que l'écran affichait « armé » et un décompte.
+
+Aucun des deux écrans d'armement ne mentionnait le rôle : `isDefault` n'y figurait nulle part. Pire,
+l'écran depuis lequel on **déclenche** l'urgence annonçait « prêt » alors que rien ne serait envoyé.
+
+**Correctif.** Un bandeau commun signale le rôle manquant et propose de le demander, sur les trois
+écrans concernés — armement du Safety call, préparation de l'urgence, et l'écran d'urgence lui-même.
+Le bouton n'est **pas** désactivé : en situation de crise, un bouton mort est pire qu'un bouton qui
+tente. Un test de câblage lit les trois sources et exige la présence du bandeau dans chacune.
+
+#### Trois clés retirées survivaient à « Supprimer toutes mes données »
+
+**Versions affectées : toutes celles où ces clés ont existé, jusqu'à 1.28.11.** Complétude de
+l'effacement, pas confidentialité du chiffrement.
+
+`PanicService.nukeEverything` ne **vide** pas le magasin de préférences : il écrit un `AppSettings()`
+neuf par-dessus. Une clé que l'écrivain ne nomme pas n'est donc jamais touchée. `locale.tag`,
+`locale.firstDay` et `advanced.isDefault` avaient cessé d'être lues, ce qui ne les avait pas
+effacées : sur toute installation antérieure, la langue choisie survivait à une purge **qui se
+déclarait complète** — et c'est cette version-ci qui a commencé à compter les résidus et à dire
+quand elle n'avait pas tout effacé.
+
+**Correctif.** L'écrivain retire ces clés à **chaque** écriture, depuis une liste nommée unique.
+Toute clé retirée plus tard va là et nulle part ailleurs : c'est le seul endroit qui garantisse sa
+disparition des installations existantes. Le test écrit les clés dans un vrai DataStore et **vérifie
+d'abord qu'elles y sont** — sans quoi un magasin vide ferait passer le test sans rien mesurer.
+
+#### Deux corrections de sûreté qui ne sont pas des failles
+
+Les corps des SMS d'urgence et de Safety call étaient **codés en français en dur** depuis la
+v1.10.0, hors de `strings.xml` — donc invisibles à tout contrôle de parité. Un destinataire
+germanophone recevait un appel à l'aide qu'il ne pouvait pas lire. Et les appels d'urgence
+composaient les numéros **de la France** où que soit le téléphone : le pays vient désormais du
+**réseau** sur lequel il est enregistré, jamais de la langue de l'application.
+
+---
 
 ### v1.28.11 — Un marqueur d'optimisation ne peut pas porter l'accès aux données
 

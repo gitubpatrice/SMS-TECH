@@ -54,7 +54,6 @@ class SendSmsUseCase @Inject constructor(
         recipients: List<PhoneAddress>,
         body: String,
         subId: Int? = null,
-        respectBlocklistOnIncoming: Boolean = true,
         /**
          * Optional contextual-reply target (#8). When non-null, the persisted outgoing row is
          * tagged with this local message id so the UI can render the quoted excerpt above the
@@ -121,6 +120,25 @@ class SendSmsUseCase @Inject constructor(
         // `upsertOutgoingSms` n'écrit pas de code d'erreur, et la promotion monotone refuserait
         // ensuite d'en poser un sur une ligne déjà au sommet de l'échelle.
         // v1.28.4 — boucle, écho et verdict vivent dans [EnvoiParDestinataire].
+        //
+        // ⚠️ v1.28.12 (audit de cohérence, C1) — **le paramètre `respectBlocklistOnIncoming` a
+        // été RETIRÉ de la signature.** Il commandait le `if` de blocage dans les trois copies de
+        // la boucle d'envoi ; la factorisation de la v1.28.4 a réuni ces copies ici, où le
+        // blocage est désormais INCONDITIONNEL — et elle a nettoyé la signature des deux jumeaux
+        // MMS, mais pas celle-ci. Le paramètre survivait donc seul, sans KDoc, sans appelant
+        // (une seule occurrence dans tout le dépôt : sa propre déclaration) et sans le moindre
+        // effet.
+        //
+        // Aucun trou de sécurité : le comportement du défaut `true` — bloquer — est le seul qui
+        // se soit jamais exécuté. Mais quelqu'un qui écrirait un jour
+        // `invoke(..., respectBlocklistOnIncoming = false)` croirait tenir un levier, et
+        // enverrait à un numéro bloqué sans que rien ne l'avertisse. Ce dépôt retire ces
+        // drapeaux morts plutôt que de les laisser décorer une signature — quatre précédents,
+        // dont `AdvancedSettings.isDefaultSmsApp` ce matin même.
+        //
+        // Si un vrai besoin de contournement apparaît, il se pose sur
+        // [EnvoiParDestinataire.parDestinataire], pour que les TROIS voies d'envoi restent
+        // alignées par construction — ce que la v1.28.4 cherchait précisément à obtenir.
         return envoi.parDestinataire(
             recipients = recipients,
             sansRemise = "no message dispatched",

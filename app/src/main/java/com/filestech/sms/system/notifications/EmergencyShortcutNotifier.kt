@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.filestech.sms.R
+import com.filestech.sms.system.emergency.EmergencyNumbers
 import com.filestech.sms.system.receiver.EmergencyShortcutReceiver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -29,8 +30,9 @@ import javax.inject.Singleton
  *    hold-3s + drag detection. Pour déclencher URGENCE depuis lock-screen :
  *    tap le corps de la notif → page in-app → hold 3 s sur le gros bouton.
  *
- * **Actions actuelles** : 112 (toujours visible) + 17 Police FR (opt-in
- * `emergencyCallPoliceEnabled`). Les deux utilisent `ACTION_DIAL` (composeur
+ * **Actions actuelles** : 112 (toujours visible) + le numéro de police du
+ * PAYS où le téléphone est enregistré (opt-in `emergencyCallPoliceEnabled`,
+ * table dans `EmergencyNumbers`). Les deux utilisent `ACTION_DIAL` (composeur
  * pré-rempli, l'user confirme en appuyant sur le bouton vert du dialer —
  * pas d'auto-call, pas de permission CALL_PHONE).
  *
@@ -47,10 +49,11 @@ import javax.inject.Singleton
  *    action `ACTION_OPEN_EMERGENCY` (constante), `FLAG_IMMUTABLE`, et porte depuis
  *    la v1.26.1 le secret [NotificationIntentToken] : `MainActivity` etant expose,
  *    un Intent EXPLICITE d'une app tierce contournerait sinon tout intent-filter.
- *  - Quick actions 112 / 17 = broadcast vers `EmergencyShortcutReceiver`
+ *  - Quick actions 112 / police = broadcast vers `EmergencyShortcutReceiver`
  *    (`exported=false`). Aucune app tierce ne peut déclencher.
- *  - Numéros 112 et 17 hardcodés dans `EmergencyCallHelper.ALLOWED_NUMBERS`
- *    whitelist stricte.
+ *  - v1.28.12 : `EmergencyCallHelper.ALLOWED_NUMBERS` n'est plus une liste FR
+ *    en dur, mais l'union FERMÉE, connue à la compilation, de tous les numéros
+ *    de `EmergencyNumbers`. La whitelist reste stricte.
  *
  * **Cycle de vie** :
  *  - Posée par [MainApplication] au démarrage si `emergencyShortcutEnabled = true`.
@@ -74,9 +77,9 @@ class EmergencyShortcutNotifier @Inject constructor(
      * Affiche / met à jour la notification persistante. Idempotent — re-poste
      * la même notif avec le même ID = update sans clignotement.
      *
-     * @param policeEnabled si `true`, ajoute une 3ᵉ action "Appeler 17" pour
-     *   la police nationale FR (opt-in spécifique France). Max 3 actions
-     *   par notif Android — URGENCE + 112 + 17 saturé.
+     * @param policeEnabled si `true`, ajoute une 3ᵉ action qui compose le numéro
+     *   de police du pays où le téléphone est enregistré (v1.28.12 : ce n'est
+     *   plus le 17 français). Max 3 actions par notif Android.
      */
     suspend fun postShortcut(policeEnabled: Boolean = false) {
         if (!hasPostPermission()) {
@@ -93,7 +96,7 @@ class EmergencyShortcutNotifier @Inject constructor(
         // Solution : pour déclencher URGENCE depuis lock-screen, l'user tape
         // le CORPS de la notif → ouvre la page in-app (setContentIntent,
         // ACTION_OPEN_EMERGENCY) → hold 3s sur le gros bouton URGENCE. Trois
-        // gestes délibérés au lieu d'un mistap. Les 112/17 quick actions
+        // gestes délibérés au lieu d'un mistap. Les quick actions d'appel
         // restent (ACTION_DIAL ouvre composeur, user confirme dans dialer).
         val dial112PI = PendingIntent.getBroadcast(
             context,
@@ -154,17 +157,80 @@ class EmergencyShortcutNotifier @Inject constructor(
             // page in-app → hold 3s sur EmergencyHoldButton. Trois gestes
             // délibérés au lieu d'un mistap dangereux. Les actions DIAL_112
             // et DIAL_POLICE restent (ACTION_DIAL = composeur, user confirme).
+            // v1.28.12 — un seul libellé « Composer le %s » pour les deux actions : le numéro
+            // de police change de pays en pays, donc il ne peut plus être écrit dans la chaîne.
             .addAction(
                 R.drawable.ic_notification_message,
-                context.getString(R.string.emergency_shortcut_action_112),
+                context.getString(
+                    R.string.emergency_shortcut_action_dial,
+                    EmergencyShortcutReceiver.EMERGENCY_NUMBER_EU,
+                ),
                 dial112PI,
             )
         if (dialPolicePI != null) {
-            builder.addAction(
-                R.drawable.ic_notification_message,
-                context.getString(R.string.emergency_shortcut_action_police),
-                dialPolicePI,
-            )
+            // v1.28.12 — le libellé nomme le SERVICE, pas le numéro, et ce n'est pas un détail.
+            //
+            // Il nommait le numéro, résolu ICI, au moment où la notification est postée. Or le
+            // receveur le résout À NOUVEAU au moment du tap. Cette notification est persistante :
+            // elle vit des jours, et les quatre choses qui la reposent (deux réglages, l'entrée en
+            // mode leurre, le redémarrage) n'incluent aucun changement de réseau. Traverser une
+            // frontière suffisait donc à ce que le texte affiché nomme un numéro et que le bouton
+            // en compose un autre — tous deux légitimes, mais l'un des deux mentait.
+            //
+            // Relevé par deux audits indépendants le 2026-09-17. Nommer le service supprime la
+            // classe entière de défaut au lieu de la rattraper : il n'y a plus rien à
+            // synchroniser. Et `emergency_call_police_label` existe déjà dans les cinq langues.
+            // v1.28.12 bis — le libellé nomme le service RÉELLEMENT composé dans CE pays.
+            // Au Royaume-Uni et en Irlande il n'existe pas de ligne de police distincte : le
+            // 999 est la ligne d'urgence générale, et l'étiqueter « Police » serait faux. Le
+            // repli du numéro et le choix du libellé lisent la MÊME fonction.
+            //
+            // ⚠️ v1.28.12 ter — « ils ne peuvent donc pas diverger » était écrit ici, et c'était
+            // TROP FORT. Ils lisent la même fonction, mais pas au même moment : le libellé est
+            // fixé à la POSE, le numéro est résolu au TAP. Deux choses peuvent bouger entre les
+            // deux, et cette notification vit des jours :
+            //
+            //   - le pays, si l'utilisateur voyage — résidu déjà assumé plus haut ;
+            //   - le VERDICT DE L'OS sur un numéro national, qui dépend du réseau courant. SIM
+            //     retirée ou hors couverture, `isEmergencyNumber("17")` peut répondre non : le
+            //     17 sort de la liste, `raccourciDans` retombe sur le 112, et l'action reste
+            //     étiquetée « Police » ;
+            //   - la SOUSCRIPTION ACTIVE, sans bouger d'un mètre : basculer sur une autre eSIM,
+            //     changer la SIM voix par défaut ou en retirer une change ce que
+            //     `networkCountryIso` répond. Relevé par une relecture externe le 2026-09-17 ;
+            //   - la LANGUE de l'application : le libellé est résolu à la pose, donc changer de
+            //     langue laisse l'ancienne affichée sur cette notification jusqu'à la prochaine
+            //     pose. Cosmétique, mais c'est la même cause.
+            //
+            // Ces résidus ne sont pas rattrapables depuis une notification persistante, et ils
+            // dégradent TOUJOURS vers le 112 — un numéro qui n'est jamais faux, et le seul qui
+            // fonctionne précisément dans les conditions qui provoquent la divergence. On le
+            // dit plutôt que de le nier.
+            //
+            // ⚠️ Ce qui repose réellement la notification, puisqu'une relecture externe s'est
+            // trompée dessus faute d'avoir le fichier : [com.filestech.sms.MainApplication]
+            // combine `emergencyShortcutEnabled`, `emergencyCallPoliceEnabled` et
+            // `appLock.state is PanicDecoy`, en `distinctUntilChanged`. La SORTIE de session
+            // leurre repose donc bien la notification — ce n'est pas un jumeau oublié. Ce qui
+            // n'y figure pas, ce sont le réseau, la souscription et la langue, listés ci-dessus.
+            val raccourci = EmergencyNumbers.raccourciForcesDeLOrdre(context)
+            // v1.28.12 ter (audit S10) — dans un pays que la table ne couvre pas, le raccourci
+            // retombe sur le 112, et la notification affichait alors DEUX actions identiques :
+            // « Composer le 112 » et « Urgence nationale », toutes deux vers le 112. La seconde
+            // n'apportait rien et nommait un service que le pays n'a pas. Quand le raccourci EST
+            // le numéro européen, il n'y a pas de second numéro à proposer.
+            if (raccourci.service != EmergencyNumbers.Service.EUROPEAN) {
+                val libelleDuRaccourci = if (raccourci.service == EmergencyNumbers.Service.POLICE) {
+                    R.string.emergency_call_police_label
+                } else {
+                    R.string.emergency_call_national_label
+                }
+                builder.addAction(
+                    R.drawable.ic_notification_message,
+                    context.getString(libelleDuRaccourci),
+                    dialPolicePI,
+                )
+            }
         }
 
         // Audit lint v1.14.8 — `@SuppressLint("MissingPermission")` justifié : `hasPostPermission()`

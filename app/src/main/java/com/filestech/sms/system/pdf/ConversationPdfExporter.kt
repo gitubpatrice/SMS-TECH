@@ -355,7 +355,15 @@ class ConversationPdfExporter @Inject constructor(
         canvas.drawText(title, margin.toFloat(), margin + 18f, titlePaint)
         val sub = context.getString(
             R.string.pdf_header_subtitle,
-            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date()),
+            // v1.28.12 — `Locale.US`, comme l'horodatage du NOM DE FICHIER 288 lignes plus
+            // haut. Les deux écrivent un `yyyy-MM-dd` technique ; l'un suivait la locale et
+            // l'autre non, dans le même fichier. `SimpleDateFormat` rend les chiffres dans
+            // le jeu de la locale — mesuré : en `ar-EG` et `fa-IR`, des chiffres
+            // indo-arabes — et un PDF exporté est une pièce qu'on garde ou qu'on transmet,
+            // donc son horodatage doit rester lisible hors de son contexte d'origine.
+            // (Les dates DU CORPS, `EEEE d MMMM yyyy` et `HH:mm`, gardent la locale : ce
+            // sont des textes destinés à être lus, pas des repères.)
+            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date()),
             conversation.addresses.size,
         )
         canvas.drawText(sub, margin.toFloat(), margin + 36f, subtitlePaint)

@@ -1,0 +1,7 @@
+Deutsch, Italienisch und Spanisch — die gesamte App, mit einer eigenen Sprachauswahl.
+
+Beim Übersetzen wurden Fehler sichtbar, die kein Test erreicht hatte, weil diese Texte nie in den Ressourcendateien standen: die Notfall-SMS und die Nachrichten des Sicherheitsanrufs gingen für alle auf Französisch hinaus, und Notrufe wählten französische Nummern, wo immer das Telefon auch war. Beides behoben — das Land ergibt sich jetzt aus dem Netz, nie aus der Sprache.
+
+Ebenfalls behoben, alle in 1.28.11 vorhanden: das Banner „Mir geht es gut“ konnte in einer Tarnsitzung erscheinen und damit demjenigen, der den Panik-Code erzwungen hat, verraten, dass gerade ein Hilferuf abgesetzt wurde; Sicherheitsanruf und Notfallmodus konnten sich scharfstellen und dann verstummen, wenn die App nicht die SMS-Rolle hat, während der Bildschirm weiterzählte; in einem geöffneten Tresor setzte eine Reaktion ihr Symbol und versendete gar keine SMS; die Bereinigung der automatischen Sperre löschte den Anhang, den Sie gerade verfassten — auch ohne eingerichtete Sperre.
+
+Reaktionen werden außerhalb französischsprachiger Apps jetzt als Emoji versendet. Die Einstellung bleibt Ihnen überlassen, unter Einstellungen > Senden.

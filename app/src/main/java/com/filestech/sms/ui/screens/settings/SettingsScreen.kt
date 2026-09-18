@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -82,9 +83,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
+import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
 import com.filestech.sms.ui.util.daySeparatorLabel
+import com.filestech.sms.ui.util.libelleDeDuree
 import com.filestech.sms.ui.util.rememberChatFormatters
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -353,6 +356,29 @@ fun SettingsScreen(
                     value = state.appearance.amoledTrueBlack,
                     onChange = { v -> viewModel.update { it.copy(appearance = it.appearance.copy(amoledTrueBlack = v)) } },
                 )
+            }
+
+            // v1.28.12 — LA LANGUE DE L'APPLICATION, enfin atteignable.
+            //
+            // `settings_section_locale` et `settings_language` existaient dans les trois langues
+            // depuis longtemps et n'étaient branchées NULLE PART : des chaînes traduites que
+            // personne ne pouvait lire. Le sélecteur de langue par application existe désormais
+            // (`res/xml/locales_config.xml`), mais il vit dans les réglages d'Android, où
+            // personne ne va le chercher — le déclarer sans y mener, c'est l'offrir à moitié.
+            //
+            // Réservé à Android 13+ : en dessous, la page n'existe pas et l'intent n'ouvrirait
+            // rien. Une entrée qui ne fait rien est pire que pas d'entrée.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                SectionCard(
+                    title = stringResource(R.string.settings_section_locale),
+                    icon = Icons.Outlined.Language,
+                ) {
+                    NavigationRow(
+                        title = stringResource(R.string.settings_language),
+                        description = stringResource(R.string.settings_language_desc),
+                        onClick = { ouvrirLaLangueDeLApplication(ctx) },
+                    )
+                }
             }
 
             SectionCard(
@@ -2747,8 +2773,10 @@ private fun SafetyCallArmedRecap(
     onModify: () -> Unit,
     onImOk: () -> Unit,
 ) {
-    val durationLabel = com.filestech.sms.domain.safetycall.SafetyCallTemplate
-        .formatDuration(config.timeoutMs)
+    // v1.28.12 — le libellé de durée vient des ressources : il était rendu en français en dur
+    // (« 24 heures », « 2 jours »), y compris sur un appareil en anglais.
+    val durationLabel = com.filestech.sms.system.safety.rememberSafetyMessageTexts()
+        .durationLabel(config.timeoutMs)
     // v1.27.2 — moment où le compte à rebours COURANT a démarré. Avec la durée et le restant
     // affichés juste en dessous, le bloc devient vérifiable de tête : départ + durée = échéance.
     //
@@ -2777,17 +2805,16 @@ private fun SafetyCallArmedRecap(
         remainingMs < 2 * 3_600_000L ->
             stringResource(R.string.settings_safety_call_armed_remaining_imminent)
         else -> {
-            val hours = (remainingMs / 3_600_000L).toInt()
-            val niceHours = if (hours >= 24) {
-                val days = hours / 24
-                val rem = hours % 24
-                if (rem == 0) {
-                    if (days == 1) "1 jour" else "$days jours"
-                } else "$days j ${rem} h"
-            } else {
-                "$hours h"
-            }
-            stringResource(R.string.settings_safety_call_armed_remaining, niceHours)
+            // v1.28.12 — le libellé passe par [libelleDeDuree], donc par les pluriels des
+            // cinq langues. Il était construit ICI, à la main, en français, puis injecté
+            // dans un cadre traduit : un lecteur allemand lisait « Noch 3 jours ». Les
+            // pluriels existaient pourtant déjà et étaient bien employés deux fichiers
+            // plus loin. Relevé par deux audits indépendants le 2026-09-17.
+            val heures = (remainingMs / 3_600_000L).toInt()
+            stringResource(
+                R.string.settings_safety_call_armed_remaining,
+                libelleDeDuree(heures),
+            )
         }
     }
     val contactsLabel = run {
@@ -3621,10 +3648,11 @@ private fun EmergencySection(
                     }
                 },
             )
-            // v1.12.0 — Toggle bouton Police FR 17 (FR-specific opt-in).
+            // v1.12.0 — Toggle de l'action police dans la notification d'urgence.
             // Audit fix S2 : disponible uniquement si le raccourci urgence est lui-même ON.
-            // Le toggle Police agit sur les actions de la notif persistante + l'écran
-            // Emergency : sans raccourci, il reste un orphelin qui dupliquerait juste 112.
+            // Sans raccourci, il resterait un orphelin qui dupliquerait juste 112.
+            // v1.28.12 — le numéro suit le pays du réseau, et la tuile police de l'écran
+            // Urgence ne dépend plus de ce réglage : elle s'affiche selon le pays.
             if (security.emergencyShortcutEnabled) {
                 ToggleRow(
                     title = stringResource(R.string.settings_emergency_call_police_title),

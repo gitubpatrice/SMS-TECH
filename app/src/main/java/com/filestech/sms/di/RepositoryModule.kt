@@ -32,6 +32,7 @@ import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.repository.QuickReplyRepository
 import com.filestech.sms.domain.repository.ScheduledMessageRepository
+import com.filestech.sms.domain.safety.SafetyMessageTexts
 import com.filestech.sms.domain.scheduler.ScheduledMessageScheduler
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
@@ -47,6 +48,7 @@ import com.filestech.sms.system.emergency.IAmOkMessageProviderImpl
 import com.filestech.sms.system.notifications.AllNotificationsCancellerImpl
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.pdf.ConversationPdfExporter
+import com.filestech.sms.system.safety.AndroidSafetyMessageTexts
 import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
 import dagger.Binds
 import dagger.Module
@@ -100,6 +102,13 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindLocationProvider(impl: LocationResolver): LocationProvider
+
+    // v1.28.12 — les corps de SMS d'urgence et de Safety Call, dans la langue de l'application.
+    // Meme motif que `bindIAmOkMessageProvider` ci-dessous, qui avait deja sorti le message
+    // « Je vais bien » vers les ressources ; les trois modeles d'urgence, les trois de Safety
+    // Call et les trois relances y etaient restes en francais en dur jusqu'ici.
+    @Binds @Singleton
+    abstract fun bindSafetyMessageTexts(impl: AndroidSafetyMessageTexts): SafetyMessageTexts
 
     @Binds @Singleton
     abstract fun bindSenderNameProvider(impl: SenderNameProviderImpl): SenderNameProvider

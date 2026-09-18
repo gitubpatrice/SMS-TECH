@@ -3,6 +3,83 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.12] — 2026-09-18
+
+Three new languages, and what translating the app made visible. Walking every screen in German
+turned up defects that no test and no audit had reached, because they were never in `strings.xml`
+to begin with. Five audit waves and two external reviews followed; roughly sixty real defects were
+found and fixed. The ones below are the ones a user can feel.
+
+### Added
+- **German, Italian and Spanish** — all 800 strings, the per-app language picker (`locales_config`,
+  reachable from Settings), and the plural categories French, Italian and Spanish actually need
+  (`many`, which English and German do not have). `TRANSLATING.md` documents how to add a language.
+- **A parity check in CI** (`.github/scripts/i18n-parite.py`): every key present in all five
+  languages, format parameters identical, fastlane metadata complete, and line endings rejected if
+  a file mixes LF and CRLF or carries `\r\r\n`. Its own negative control asserts it can fail.
+
+### Fixed
+- **The "I'm OK" banner could appear in a decoy session.** A victim triggers the emergency, the
+  messages go out, someone takes the phone and forces the panic code out of them. The lock screen
+  pops, the decoy list appears — and the banner was there for the seconds the aggregated flow took
+  to restart, because it read a value cached before the lock. The attacker learned that a call for
+  help had just been sent. The v1.26.1 fix for this exact mechanism had been applied to one field;
+  the banner was the seventh place on that screen and the only one still reading the cache.
+- **Safety call and emergency mode armed, and then fell silent.** Both send through
+  `SendSmsUseCase`, which refuses every send when the app does not hold the default-SMS role. At
+  the deadline the send failed, the slot was released — which cleared the gate that would have
+  posted a notice — and nothing happened at all, while the screen kept counting down. Neither
+  arming screen mentioned the role. Both now say so before you rely on them, and the screen you
+  reach in a crisis no longer reports "ready" when nothing would be sent.
+- **Emergency calls dialled French numbers abroad.** The country now comes from the network the
+  phone is registered on, never from the app's language: a German speaker in Paris gets 17, and a
+  French speaker in Berlin gets 110. Labels no longer name a service the country does not have.
+- **The security SMS went out in French to everyone.** The bodies of the emergency and safety-call
+  messages were hard-coded French since v1.10.0. Invisible to every check, because they were not in
+  `strings.xml`. They now follow the app's language, and are capped at two SMS segments.
+- **Inside an open vault, a reaction placed its badge and sent no SMS at all** — silently: no
+  dialog, no error. And a reply quoting a message outside the loaded window rendered "message
+  deleted" on a message that exists. `findMessageById` masked vault conversations unconditionally,
+  alone among five accessors; the fix had been applied to one of its four callers in v1.28.3.
+- **A reply from the notification of a group message went to the sender alone.** Two of three
+  people received nothing, the reply landed in a separate one-to-one thread, the notification did
+  not close, and "mark as read" could create an empty conversation. Both actions now carry the
+  conversation id, and the send goes through the single router — this receiver was the fourth send
+  point in the app.
+- **The auto-lock purge destroyed the attachment being composed.** `cache/media_outgoing` and
+  `cache/voice_mms` were wiped wholesale every time the app went to background, on a comment
+  claiming they held only abandoned drafts. They do not. Worse, it ran with *no* lock configured
+  and after a one-minute default delay — so the common case was: pick two photos, take a call, come
+  back, thumbnails on screen and files gone. Wholesale now requires a lock to have actually bitten;
+  otherwise the folders are purged by age, one hour.
+- **Three retired preference keys outlived "delete all my data"** — including the chosen language.
+  The purge writes a fresh settings object rather than emptying the store, so a key the writer does
+  not name is never touched. Retired keys are now removed on every write, from one named list.
+- **A blocklist switch had commanded nothing since v1.28.4**, and settings promised a control that
+  was never wired.
+- **Help text told users that blocking deletes the conversation.** False since v1.25.3, in five
+  languages, copied from a stale comment.
+- **Anti-smishing: `09xx` is not only a British premium prefix.** It also describes German landlines
+  and the dialling code of Messina. Every UK premium pattern is removed rather than narrowed. A
+  hyphen now forms a boundary for short numbers always, and for long ones only when itself preceded
+  by a letter or digit — so `Réf-0899…` is caught and `le -0899…` is not.
+- Safety call: a custom duration read "1 h" next to "24 ore" in Italian.
+- Nine orphan strings and a written guarantee nothing was keeping: `VaultManager` documented that a
+  second-envelope Keystore alias was created at install time so a future migration would be
+  forward-compatible. Nothing created it — the only function that could had no caller since it was
+  written. The promise is removed rather than quietly kept; `PanicService` still erases the alias
+  pre-emptively, so the day it exists, "erase everything" covers it.
+
+### Changed
+- **The reaction format was migrated, but only outside French.** Reactions were sent in a readable
+  French sentence for everyone, including users whose correspondents read German, Italian, Spanish
+  or English. Nothing on disk distinguishes "chose this" from "inherited this", so the app's
+  language decides: if it is French, the existing setting is kept. Everywhere else it moves once to
+  the emoji form. **The setting is unchanged in Settings → Sending → Reaction format**, and anyone
+  who prefers the French sentence can set it back in two taps.
+- The four translated languages address the user formally (*vous*, *Sie*, *usted*, *lei*); the
+  bodies of the SMS that go out keep the informal form.
+
 ## [1.28.11] — 2026-09-16
 
 ### Fixed

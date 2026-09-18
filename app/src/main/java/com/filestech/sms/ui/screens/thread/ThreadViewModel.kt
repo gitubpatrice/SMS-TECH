@@ -1017,7 +1017,14 @@ class ThreadViewModel @Inject constructor(
             // Resolve the user-facing name via OpenableColumns when possible — Android's
             // PickVisualMedia / OpenDocument both expose it. Falls back to the cached filename
             // (auto-generated, so always visually ugly, hence the lookup).
-            val displayName = carte?.nomDeFichier ?: resolveDisplayName(uri) ?: "Pièce jointe"
+            // v1.28.12 — le nom de repli passe par `strings.xml`. Il était écrit en dur, en
+            // français : « Pièce jointe » s'affichait en légende du chip ET comme
+            // `contentDescription`, donc lu par TalkBack, quelle que soit la langue de
+            // l'application. Le `context` est celui de l'application, et la langue par
+            // application s'applique au processus : il rend bien la langue choisie.
+            val displayName = carte?.nomDeFichier
+                ?: resolveDisplayName(uri)
+                ?: context.getString(com.filestech.sms.R.string.attachment_generic_name)
             val file = copyAttachmentToCache(source, mime)
             if (file == null) {
                 _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))
@@ -1176,16 +1183,10 @@ class ThreadViewModel @Inject constructor(
         runCatching { removed.file.delete() }
     }
 
-    /**
-     * v1.3.4 — vide la bande staging + supprime tous les fichiers cache. Appelé sur
-     * quitter de la conversation, ou bouton "Tout supprimer" si exposé.
-     */
-    fun clearAllPendingAttachments() {
-        val current = _state.value.pendingAttachments
-        if (current.isEmpty()) return
-        _state.update { it.copy(pendingAttachments = emptyList()) }
-        current.forEach { runCatching { it.file.delete() } }
-    }
+    // v1.28.12 (audit B2) — `clearAllPendingAttachments()` a été SUPPRIMÉE. Son KDoc la disait
+    // « appelée sur quitter de la conversation » : c'est faux, [onCleared] supprime les fichiers
+    // lui-même, et le bouton « Tout supprimer » n'a jamais été exposé. Deux façons de vider la
+    // même bande, dont une seule branchée, sur un chemin qui EFFACE des fichiers.
 
     /**
      * v1.28.3 (F27) — facteur de sous-echantillonnage a appliquer au decodage.
@@ -1667,11 +1668,19 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
-     * Blocks every address of the current conversation AND deletes the conversation locally.
-     * v1.2.5 fix: previously only the block call ran — the conversation stayed in the list
-     * showing past history of the now-blocked number, which is not what the user expects when
-     * they explicitly tap "Block" from inside a conversation. The list-level Block action
-     * stays unchanged (block-only) so users keeping history have a path.
+     * Blocks every address of the current conversation. **The conversation is KEPT**, grouped
+     * under « Bloqués » in the list.
+     *
+     * ⚠️ v1.28.12 (relecture externe du 2026-09-17) — cette première ligne disait
+     * « AND deletes the conversation locally », ce qui n'est plus vrai depuis la v1.25.3 : la
+     * suppression a été retirée trois paragraphes plus bas, et la phrase d'ouverture est
+     * restée. Elle avait été recopiée dans l'aide de l'application
+     * (`about_help_block_step1`), qui promettait donc à l'utilisateur que son historique
+     * était effacé alors qu'il ne l'était pas — sur une application qui porte un coffre et
+     * une session leurre, c'est une promesse qu'on ne fait pas à tort.
+     *
+     * Le KDoc d'origine (v1.2.5) décrivait le comportement inverse, et il est conservé en
+     * dessous parce qu'il explique l'aller-retour.
      *
      * v1.25.3 (audit H15) — l'`Outcome` de [BlockNumberUseCase] était purement ignoré et la
      * boucle n'isolait pas ses erreurs. Deux conséquences : une `SecurityException` du

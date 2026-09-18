@@ -56,6 +56,14 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var appLock: AppLockManager
+
+    /**
+     * v1.28.12 — le rôle d'application SMS par défaut, lu au moment de republier l'état du
+     * Safety call. Sans lui, un deadman armé sans ce rôle n'affichait rien du tout : à
+     * l'échéance le système refusait l'envoi, la réservation était rendue, et la porte
+     * d'affichage (`isTriggered`) restait fermée. Voir [SafetyCallNotice.EnvoiImpossible].
+     */
+    @Inject lateinit var defaultSmsAppChecker: com.filestech.sms.domain.sender.DefaultSmsAppChecker
     @Inject lateinit var incomingShare: IncomingShareHolder
     @Inject lateinit var safetyCallIntentToken: SafetyCallIntentToken
 
@@ -906,6 +914,7 @@ class MainActivity : FragmentActivity() {
                     isDecoy = appLock.state.value is AppLockManager.LockState.PanicDecoy,
                     nowMs = System.currentTimeMillis(),
                     nowMonoMs = android.os.SystemClock.elapsedRealtime(),
+                    peutEnvoyer = defaultSmsAppChecker.isDefault(),
                 )
                 safetyCallNotifierLazy.get().reconcile(notice)
             }.onFailure { t ->

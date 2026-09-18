@@ -699,16 +699,36 @@ class ConversationRepositoryImpl @Inject constructor(
         // un overload `findMessageByIdWithAttachments`. Volontairement minimal pour rester
         // O(1) sur la lecture la plus chaude (chaque tap réaction).
         //
-        // v1.11.0 audit SEC-V1 — guard inVault : ce point d'entrée ne doit
-        // pas exposer un message dont la conversation parente est dans le
-        // coffre. Sans ce guard, un caller futur (deep link, intent,
-        // reaction sur un id résolu via une autre voie) pourrait lire le
-        // body d'un message vault. PanicDecoy a déjà sa propre garde via
-        // `observeOne`/`observeMessages` — celui-ci est complémentaire pour
-        // les chemins suspend non-flow.
+        // v1.11.0 audit SEC-V1 — garde `inVault` : ce point d'entrée ne doit pas exposer un
+        // message dont la conversation parente est dans le coffre. Sans elle, un appelant
+        // futur (lien profond, intent, réaction sur un id résolu par une autre voie) pourrait
+        // lire le corps d'un message du coffre.
+        //
+        // ⚠️ v1.28.12 — elle masquait le coffre **INCONDITIONNELLEMENT**, y compris session
+        // ouverte, et c'était le seul des cinq accès à le faire. La règle est écrite partout
+        // ailleurs comme « masqué en leurre OU hors session » : [observeOne] ci-dessus,
+        // `observeMessages`, `ScheduledMessageRepositoryImpl`, `CorrespondentVisibilityPolicy`.
+        //
+        // Ce qu'elle coûtait, dans un coffre OUVERT, second facteur franchi :
+        //  - toute citation d'un message hors de la fenêtre chargée affichait « message
+        //    supprimé » sur un message qui existe — exactement le défaut que le correctif
+        //    v1.24.0 avait écrit pour empêcher, mais seulement hors coffre ;
+        //  - une réaction posait son badge local et **n'envoyait aucun SMS**, en silence.
+        //
+        // Le défaut avait déjà été constaté sur cet accesseur (X-09, v1.28.3) et corrigé sur
+        // UN SEUL de ses quatre appelants. Relevé par un audit de motifs le 2026-09-17 : c'est
+        // le motif dominant de ce dépôt, sur le même accesseur, une seconde fois.
+        //
+        // Aligner RENFORCE la garde en mode leurre — elle y devient explicite au lieu d'être
+        // couverte par hasard — et lève le masquage là où l'utilisateur a franchi son second
+        // facteur.
         val entity = messageDao.findById(id) ?: return@withContext null
         val parent = conversationDao.findById(entity.conversationId)
-        if (parent?.inVault == true) return@withContext null
+        val coffreMasque = parent?.inVault == true && (
+            appLock.state.value is AppLockManager.LockState.PanicDecoy ||
+                !vaultSession.unlocked.value
+            )
+        if (coffreMasque) return@withContext null
         entity.toDomain()
     }
 

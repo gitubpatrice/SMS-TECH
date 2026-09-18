@@ -42,31 +42,14 @@ fun String.foldForSearch(): String =
         .replace(COMBINING_MARKS_REGEX, "")
         .lowercase()
 
-/**
- * Permissive phone-number match used by the blocklist (system entry vs mirrored row).
- *
- * Real-world headache: Téléphone / Samsung Messages stores blocked numbers in **international**
- * form (`+33612345678`), but `content://sms` may carry the same correspondent in **national**
- * form (`0612345678`) — same person, two strings, strict equality fails. We don't pull in
- * libphonenumber for this; we compare the **last 8 digits** of each side. 8 digits covers every
- * French mobile/landline significant portion ("06 12 34 56 78" → `12345678`, "+33 6 12 34 56 78"
- * → `12345678`) and absorbs foreign country codes too. False-positive risk is negligible at
- * 8-digit suffix granularity (~1 in 10⁸).
- *
- * Returns `false` when either side has < 8 digits (short codes, partial inputs).
- */
-fun phonesMatchLoose(a: String, b: String): Boolean {
-    val da = a.filter { it.isDigit() }
-    val db = b.filter { it.isDigit() }
-    if (da.length < 8 || db.length < 8) return da == db && da.isNotEmpty()
-    return da.takeLast(8) == db.takeLast(8)
-}
-
-/** Returns the last 8 digits of [this] — the canonical key for blocklist suffix matching. */
-fun String.phoneSuffix8(): String {
-    val digits = this.filter { it.isDigit() }
-    return if (digits.length <= 8) digits else digits.takeLast(8)
-}
+// v1.28.12 (audit B2) — `phonesMatchLoose()` et `String.phoneSuffix8()` ont été SUPPRIMÉS.
+//
+// Aucun appelant depuis la v1.25.4, qui a unifié le rapprochement des numéros sur [blockKey].
+// Ce n'était pas du code mort inoffensif : leur KDoc affirmait que « le risque de faux positif
+// est négligeable à 8 chiffres de suffixe », ce que le KDoc de
+// [BLOCK_KEY_SIGNIFICANT_DIGITS], vingt lignes plus bas, RÉFUTE — c'est justement à 8 chiffres
+// que `0612345678` et `0712345678` partageaient leur clé. Une fonction disponible, documentée
+// comme sûre et démentie par sa voisine est une invitation à refaire le défaut de la v1.25.3.
 
 /**
  * Nombre de chiffres significatifs retenus pour rapprocher deux écritures d'un même numéro.
@@ -263,11 +246,9 @@ fun String.deterministicHue(): Int {
     return hash % 360
 }
 
-/**
- * 6-digit OTP detector — returns the first plausible 4–8 digit code, or null.
- */
-private val OTP_REGEX = Regex("(?<!\\d)(\\d{4,8})(?!\\d)")
-fun String.extractOtp(): String? = OTP_REGEX.find(this)?.value
+// v1.28.12 (audit B2) — `String.extractOtp()` a été SUPPRIMÉ. Aucun appelant : l'application
+// n'a jamais eu de fonction « copier le code reçu ». Son seul lecteur était son propre test,
+// lequel affirmait « 6 digit code » sur une expression qui en acceptait de 4 à 8.
 
 /**
  * Strips invisible bidi / zero-width / replacement characters often present in spam SMS.

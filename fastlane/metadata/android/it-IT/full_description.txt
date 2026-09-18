@@ -1,0 +1,39 @@
+SMS Tech è un'app SMS / MMS per Android senza pubblicità e senza tracker. Sostituisce l'app di messaggistica di serie e tiene ogni messaggio sul suo dispositivo — nessun cloud, nessuna analisi, nessun SDK di terze parti che spedisce i suoi dati da qualche parte.
+
+<b>Funzioni</b>
+
+<ul>
+<li>SMS e MMS — supporto completo come app SMS predefinita, da Android 8 (API 26) fino ad Android 15+</li>
+<li>Messaggi vocali — registrazione premi-e-parla inviata come vero MMS, limitata a 60 s / 300 KB perché ogni operatore la accetti</li>
+<li>Cassaforte cifrata — nasconde le conversazioni sensibili dietro SQLCipher, con la chiave protetta dal Keystore di Android. Attivi «Blocca la cassaforte all'uscita» perché si richiuda ogni volta che l'app passa in secondo piano</li>
+<li>PIN esca — un secondo PIN che apre l'app in una vista esca, dove la cassaforte resta invisibile e inaccessibile</li>
+<li>Modalità emergenza — tenga premuto il pulsante 3 s per inviare un SMS di allarme ai suoi contatti Safety Call, con una posizione GPS se ha concesso l'autorizzazione; senza quell'autorizzazione l'SMS parte lo stesso, soltanto senza coordinate. Accesso rapido ai numeri di emergenza del paese a cui il telefono è collegato, e scorciatoie nella notifica sulla schermata di blocco. Chiamare direttamente è facoltativo: per impostazione predefinita si apre soltanto il telefono già compilato</li>
+<li>Sblocco biometrico — impronta o volto, con un PIN di riserva scelto da lei</li>
+<li>Risposta contestuale — tenga premuto un messaggio, scelga «Rispondi» e la finestra di scrittura mostra una mini-citazione, così il destinatario vede a cosa sta rispondendo</li>
+<li>Traduzione delegata — tenga premuto un messaggio e scelga «Traduci» per passare il testo all'app di traduzione che ha installato (Google Traduttore, DeepL, Aves Translate…) tramite un Intent di sistema. Nessun modello di traduzione è incorporato, e SMS Tech non invia nulla da nessuna parte</li>
+<li>Messaggi programmati — scriva un SMS, scelga data e ora, e parte in quel momento anche se l'app è chiusa</li>
+<li>Numeri bloccati di sistema — al primo avvio SMS Tech rispecchia l'elenco dei bloccati del sistema (app Telefono, Samsung Messages) ed elimina retroattivamente le conversazioni corrispondenti</li>
+<li>Selettore di allegati — Foto, Video, File, scheda Contatto. Le foto vengono ricodificate automaticamente in JPEG per rientrare nei limiti MMS degli operatori</li>
+<li>Ricerca full-text in tutte le conversazioni, con indicizzazione FTS4</li>
+<li>Esportazione di una conversazione in PDF per l'archivio</li>
+<li>Backup locale cifrato con una passphrase distinta dal PIN di sblocco</li>
+<li>Temi — Chiaro / Scuro / AMOLED / «Dark Tech» con accento blu ardesia</li>
+<li>Interfaccia in inglese, francese, tedesco, italiano e spagnolo</li>
+<li>Interruttore di conferma in Impostazioni → Invio → «Chiedi conferma prima di inviare»: richiede una conferma prima che parta qualsiasi SMS, MMS o allegato</li>
+</ul>
+
+<b>Privacy</b>
+
+<ul>
+<li>Nessuna analisi, nessun rapporto di arresto anomalo, nessun SDK di tracciamento di terze parti</li>
+<li>Unico uso della rete: l'MMSC del suo operatore, per il trasporto degli MMS. Nient'altro lascia il telefono</li>
+<li>Le autorizzazioni alla posizione e alle chiamate servono soltanto alla modalità emergenza. Entrambe sono facoltative, nessuna delle due viene mai usata in secondo piano, e l'app funziona senza concederle</li>
+<li>Licenza Apache 2.0 — codice sorgente su https://github.com/gitubpatrice/SMS-TECH</li>
+<li>Modello di sicurezza documentato su https://github.com/gitubpatrice/SMS-TECH/blob/main/SECURITY.md</li>
+</ul>
+
+<b>Sulla traduzione italiana</b>
+
+Realizzata dallo sviluppatore con l'aiuto di strumenti automatici, non riletta da una persona madrelingua. Se qualcosa suona male: https://github.com/gitubpatrice/SMS-TECH/issues
+
+Sito del progetto: https://files-tech.com/sms-tech.php

@@ -255,8 +255,13 @@ class TriggerSafetyCallRelanceTest {
         assertThat(sender.calls).isEqualTo(SafetyCallConfig.TOTAL_MESSAGES)
         // Les relances ne repetent PAS le message initial : chacune a son propre texte.
         assertThat(sender.bodies.toSet()).hasSize(SafetyCallConfig.TOTAL_MESSAGES)
-        // La derniere annonce qu'elle est la derniere.
-        assertThat(sender.bodies.last()).contains("Dernière alerte")
+        // La derniere se distingue de toutes les autres — c'est ce que ce test peut voir d'ici.
+        // v1.28.12 : elle verifiait le mot francais « Dernière alerte », ce qui liait la SEQUENCE
+        // a une langue. Que la derniere s'ANNONCE comme la derniere se verifie desormais sur les
+        // vraies ressources et dans les trois langues, par
+        // `com.filestech.sms.system.safety.SafetyMessageTextsTest`.
+        assertThat(sender.bodies.last()).isNotEqualTo(sender.bodies.first())
+        assertThat(sender.bodies.dropLast(1)).doesNotContain(sender.bodies.last())
         // Sequence close : le deadman est desarme, sans relance en attente.
         assertThat(settings.safetyCall.enabled).isFalse()
         assertThat(settings.safetyCall.hasRelancePending).isFalse()

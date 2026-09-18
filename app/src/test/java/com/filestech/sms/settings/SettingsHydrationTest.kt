@@ -1,8 +1,14 @@
 package com.filestech.sms.settings
 
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.filestech.sms.data.local.datastore.SettingsRepository
+import com.filestech.sms.domain.model.ReactionFormat
+import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.PreviewMode
+import com.filestech.sms.domain.settings.SendingSettings
 import com.filestech.sms.testing.magasinDeTest
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -76,8 +82,150 @@ class SettingsHydrationTest {
         porteeMagasin.cancel()
     }
 
+    /**
+     * v1.28.12 (S7) — **le parc existant envoyait ses réactions en français, à tout le monde.**
+     *
+     * `SettingsRepository` écrit `send.reactionFormat` à chaque enregistrement de réglages, sans
+     * condition : toute installation ayant modifié un réglage entre la v1.8.0 et la v1.14.4 a
+     * gravé `READABLE_FR`, et la valeur stockée l'emporte sur le défaut déclaré.
+     *
+     * Les trois cas qui comptent, et le troisieme est le plus important : une fois migre,
+     * l'utilisateur qui RECHOISIT la forme francaise doit la garder. Une migration qui se
+     * rejoue a chaque demarrage reprendrait son choix indefiniment.
+     */
+    @Test
+    fun laMigrationRamenneLeParcAuDefaut_uneSeuleFois() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+
+                // 1. Une installation venue du parc : READABLE_FR grave sur le disque.
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
+                assertThat(depot.migrerFormatDeReaction("de")).isTrue()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.EMOJI_WITH_QUOTE.name)
+
+                // 2. Elle ne se rejoue pas : le drapeau est pose.
+                assertThat(depot.migrerFormatDeReaction("de")).isFalse()
+
+                // 3. LE cas qui compte : l'utilisateur rechoisit la forme francaise. Elle reste.
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
+                assertThat(depot.migrerFormatDeReaction("de")).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.READABLE_FR.name)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
+    /**
+     * v1.28.12 (option C) — **une application EN FRANCAIS garde la forme francaise.**
+     *
+     * Rien sur le disque ne distingue « a choisi » de « a herite », mais la LANGUE de
+     * l'application dit pour qui ce choix est juste : quelqu'un dont l'app est en francais ecrit
+     * a des correspondants qui LISENT le francais. Le prejudice reel visait l'utilisateur
+     * allemand, italien, espagnol ou anglais dont les reactions partaient en francais.
+     *
+     * Le drapeau est pose quand meme : one-shot veut dire une fois, et le reglage reste a deux
+     * tapes. Ce test le verifie aussi, sans quoi une migration qui continuerait de guetter la
+     * langue passerait pour correcte.
+     */
+    @Test
+    fun uneApplicationEnFrancaisGardeLaFormeFrancaise() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.READABLE_FR.name }
+
+                assertThat(depot.migrerFormatDeReaction("fr")).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.READABLE_FR.name)
+
+                // Le drapeau EST pose : passer l'app en allemand plus tard ne relance rien.
+                assertThat(depot.migrerFormatDeReaction("de")).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.READABLE_FR.name)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
+    /**
+     * Le temoin negatif du test precedent : la migration ne touche QUE `READABLE_FR`. Sans lui,
+     * une migration qui ecraserait tous les formats passerait les trois cas ci-dessus.
+     */
+    @Test
+    fun laMigrationNeTouchePasLesAutresFormats() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                magasin.edit { it[FORMAT_DE_REACTION] = ReactionFormat.EMOJI_ONLY.name }
+                assertThat(SettingsRepository(magasin, portee).migrerFormatDeReaction("de")).isFalse()
+                assertThat(magasin.data.first()[FORMAT_DE_REACTION])
+                    .isEqualTo(ReactionFormat.EMOJI_ONLY.name)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
     private companion object {
         const val TIMEOUT_MS = 10_000L
+
+        /** La cle du format de reaction, telle qu'elle est ecrite sur le disque. */
+        val FORMAT_DE_REACTION = stringPreferencesKey("send.reactions.format")
+
+        /** Les trois cles d'une version precedente, telles qu'elles sont ecrites sur le disque. */
+        val TAG_DE_LANGUE = stringPreferencesKey("locale.tag")
+        val PREMIER_JOUR = stringPreferencesKey("locale.firstDay")
+        val ROLE_SMS = booleanPreferencesKey("advanced.isDefault")
+    }
+
+    /**
+     * v1.28.12 (audit S9) — **deux cles retirees survivaient a « Supprimer toutes mes donnees ».**
+     *
+     * `locale.tag`, `locale.firstDay` et `advanced.isDefault` ont ete retirees avec les champs
+     * qu'elles portaient, mais elles restaient ecrites sur le disque des installations
+     * anterieures. La TROISIEME a ete oubliee le jour meme ou les deux premieres ont ete
+     * corrigees, et deux relectures externes l'ont trouvee : c'est pour ca qu'elle est ici. Or `PanicService.nukeEverything`
+     * REECRIT les reglages par-dessus (`update { AppSettings() }`) au lieu de vider le magasin :
+     * une cle que l'ecriture ne nomme pas n'est jamais touchee. Le tag de langue choisi par
+     * l'utilisateur survivait donc a une purge qui se dit complete.
+     *
+     * Le temoin positif est dans le test lui-meme : on verifie que les deux cles SONT la avant,
+     * sans quoi un magasin vide rendrait ce test vert sans rien mesurer.
+     */
+    @Test
+    fun laPurgeEmporteLesClesRetirees() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                // Une installation anterieure : les deux cles sont sur le disque.
+                magasin.edit { prefs ->
+                    prefs[TAG_DE_LANGUE] = "de"
+                    prefs[PREMIER_JOUR] = "MONDAY"
+                    prefs[ROLE_SMS] = true
+                }
+                val avant = magasin.data.first()
+                assertThat(avant[TAG_DE_LANGUE]).isEqualTo("de")
+                assertThat(avant[PREMIER_JOUR]).isEqualTo("MONDAY")
+                assertThat(avant[ROLE_SMS]).isTrue()
+
+                // Ce que fait « Supprimer toutes mes donnees ».
+                SettingsRepository(magasin, portee).update { AppSettings() }
+
+                val apres = magasin.data.first()
+                assertThat(apres[TAG_DE_LANGUE]).isNull()
+                assertThat(apres[PREMIER_JOUR]).isNull()
+                assertThat(apres[ROLE_SMS]).isNull()
+            } finally {
+                portee.cancel()
+            }
+        }
     }
 
     /**
@@ -188,6 +336,59 @@ class SettingsHydrationTest {
                 .isEqualTo(PreviewMode.WHEN_UNLOCKED)
 
             scope.cancel()
+        }
+    }
+
+    /**
+     * v1.28.12 — **une installation NEUVE doit lire le défaut DÉCLARÉ.**
+     *
+     * L'hydratation construit `SendingSettings(...)` en passant chaque champ explicitement :
+     * le défaut écrit sur la data-class n'est donc jamais atteint, et rien ne garantissait
+     * que les deux disent la même chose. Ils ne la disaient plus. La v1.14.4 avait changé
+     * le format de réaction par défaut en `EMOJI_WITH_QUOTE` à la demande de l'utilisateur,
+     * sur la déclaration seulement : **le changement n'a pris effet sur aucune
+     * installation**, et toute installation neuve envoyait des réactions écrites en
+     * français, quelle que soit la langue de l'application.
+     *
+     * Deux assertions, et il en faut deux : la première interdit aux deux endroits de
+     * diverger à nouveau, la seconde fige la valeur elle-même, pour qu'un changement
+     * silencieux du défaut déclaré ne passe pas non plus.
+     */
+    @Test
+    fun uneInstallationNeuveLitLeDefautDeclare() {
+        runBlocking {
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+                val neuf = withTimeout(TIMEOUT_MS) { depot.hydratedOrNull() }
+                assertThat(neuf?.sending?.reactionFormat)
+                    .isEqualTo(SendingSettings().reactionFormat)
+                assertThat(neuf?.sending?.reactionFormat)
+                    .isEqualTo(ReactionFormat.EMOJI_WITH_QUOTE)
+            } finally {
+                portee.cancel()
+            }
+        }
+    }
+
+    /**
+     * Le contrôle négatif du test précédent : une installation qui vient de la v1.7.x porte
+     * la clé héritée `send.reactions.emojiOnly` et GARDE son choix. Sans lui, un correctif
+     * qui rendrait le défaut déclaré à tout le monde — y compris à ceux qui avaient choisi
+     * autre chose — passerait le test ci-dessus sans rien signaler.
+     */
+    @Test
+    fun uneInstallationVenueDeLa17xGardeSonChoix() {
+        runBlocking {
+            magasin.edit { it[booleanPreferencesKey("send.reactions.emojiOnly")] = false }
+            val portee = CoroutineScope(Dispatchers.Unconfined)
+            try {
+                val depot = SettingsRepository(magasin, portee)
+                val ancien = withTimeout(TIMEOUT_MS) { depot.hydratedOrNull() }
+                assertThat(ancien?.sending?.reactionFormat).isEqualTo(ReactionFormat.TAPBACK_EN)
+            } finally {
+                portee.cancel()
+            }
         }
     }
 }

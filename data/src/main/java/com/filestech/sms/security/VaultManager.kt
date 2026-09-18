@@ -1,6 +1,5 @@
 package com.filestech.sms.security
 
-import com.filestech.sms.core.crypto.KeystoreManager
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.core.result.map
@@ -41,13 +40,24 @@ import javax.inject.Singleton
  *    Keystore-wrapped key decrypts every row.
  *
  * A real second envelope using [com.filestech.sms.core.crypto.KeystoreManager.ALIAS_VAULT_KEK]
- * with `setUserAuthenticationRequired = true` is reserved for v1.1.1 because it requires a
- * Room schema migration to add an encrypted-body column and a biometric / device-credential
- * UX. The alias is already created at install time so the migration path is forward-compatible.
+ * with `setUserAuthenticationRequired = true` would require a Room schema migration to add an
+ * encrypted-body column plus a biometric / device-credential UX. It has not been built.
+ *
+ * ⚠️ v1.28.12 (audit B2) — ce paragraphe promettait que « l'alias est déjà créé à
+ * l'installation, donc le chemin de migration est compatible en avant », et l'échéance annoncée
+ * était la v1.1.1. **Rien ne créait cet alias** : la seule fonction qui savait le faire,
+ * `ensureKey()`, n'avait aucun appelant depuis son écriture. La promesse est retirée plutôt que
+ * tenue — créer à l'installation une clé Keystore qui ne chiffre rien n'apporte rien, et une
+ * garantie écrite que le code ne tient pas est pire que pas de garantie du tout.
+ * [com.filestech.sms.security.PanicService] efface déjà l'alias par précaution, si bien que le
+ * jour où il existera, « tout effacer » le couvrira sans qu'on ait à y penser.
  */
 @Singleton
 class VaultManager @Inject constructor(
-    private val keystore: KeystoreManager,
+    // v1.28.12 (audit B2) — `KeystoreManager` n'est plus injecté : `ensureKey()`, son unique
+    // usage, n'avait aucun appelant. Une dépendance qu'on ne consulte pas alourdit le graphe
+    // sans rien garantir, et celui de cette classe est déjà surveillé (cf. SEC-CRIT v1.24.0
+    // sur [AutoLockObserver], qui doit résoudre `VaultManager` paresseusement).
     private val conversationRepo: ConversationRepository,
     private val appLock: AppLockManager,
     // v1.26.1 (audit H1) — état de session extrait ici pour être observable ET consultable
@@ -277,10 +287,5 @@ class VaultManager @Inject constructor(
             return@withContext Outcome.Failure(AppError.Locked())
         }
         deplacerSousLaBarriere(ids, intoVault)
-    }
-
-    /** Ensures the underlying Keystore alias exists. Called at first vault use. */
-    fun ensureKey() {
-        keystore.getOrCreateKey(KeystoreManager.ALIAS_VAULT_KEK)
     }
 }

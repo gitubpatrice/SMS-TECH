@@ -63,18 +63,25 @@ class SendReactionUseCase @Inject constructor(
      *     Failure propagée).
      *
      * @param format v1.8.0 (bug 5 fix) — format du SMS sortant :
-     *   - [ReactionFormat.READABLE_FR] (nouveau défaut) :
+     *   - [ReactionFormat.READABLE_FR] :
      *     "J'ai réagi par ❤️ à : «aperçu»" — naturel et compréhensible pour tout
      *     destinataire francophone Android. Décodé côté SMS Tech via la regex FR.
      *   - [ReactionFormat.TAPBACK_EN] :
      *     "Reacted ❤️ to «aperçu»" — compat iMessage iPhone + Google Messages.
      *   - [ReactionFormat.EMOJI_ONLY] :
      *     "❤️" — minimal, perd le contexte du message d'origine côté destinataire.
+     *
+     * ⚠️ v1.28.12 — [format] n'a PLUS de valeur par défaut. Elle valait `READABLE_FR`,
+     * c'est-à-dire un TROISIÈME endroit où le défaut du format était écrit, donc un
+     * troisième endroit d'où il pouvait diverger des deux autres — ce qui est précisément
+     * arrivé. Le seul appelant le passe explicitement : ce défaut n'était pas un
+     * comportement, c'était un piège posé pour le prochain appelant. Le défaut qui fait
+     * foi est celui de `SendingSettings`, et il vaut `EMOJI_WITH_QUOTE` depuis la v1.14.4.
      */
     suspend operator fun invoke(
         messageId: Long,
         emoji: String,
-        format: ReactionFormat = ReactionFormat.READABLE_FR,
+        format: ReactionFormat,
     ): Outcome<SendReport> {
         if (emoji.isBlank()) return Outcome.Failure(AppError.Validation("empty reaction emoji"))
 

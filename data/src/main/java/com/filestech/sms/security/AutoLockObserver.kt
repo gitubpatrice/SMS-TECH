@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.settings.AutoLockDelay
+import com.filestech.sms.domain.settings.LockMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -84,7 +85,9 @@ class AutoLockObserver @Inject constructor(
                 runCatching { vaultLazy.get().lock() }
                     .onFailure { Timber.w(it, "AutoLockObserver: vault relock skipped") }
                 appLock.forceLock()
-                purgeTransientCaches()
+                // Reglages illisibles : on ne SAIT pas si un verrou est arme. Chemin le plus
+                // strict, comme les deux lignes au-dessus.
+                purgeTransientCaches(verrouArme = true)
                 return@launch
             }
             // Audit F33: vault relocks immediately when the user opts in.
@@ -101,6 +104,9 @@ class AutoLockObserver @Inject constructor(
             // décoy persistait indéfiniment et l'user était piégé sans pouvoir revenir à sa
             // vraie session sans force-close. NEXT_LAUNCH s'applique au flow normal Unlocked,
             // pas au flow contraint de défense en situation d'urgence.
+            // v1.28.12 ter (relectures GPT et Gemini) — le critere est « un verrou est ARMÉ »,
+            // et non « l'application est verrouillée A CET INSTANT ». Voir [verrouArme].
+            val verrouArme = verrouArme(s.security.lockMode)
             val isPanicDecoy = appLock.state.value is AppLockManager.LockState.PanicDecoy
             val ms = when (s.security.autoLockDelay) {
                 AutoLockDelay.IMMEDIATE -> 0L
@@ -118,7 +124,7 @@ class AutoLockObserver @Inject constructor(
                 // disque, hors du chiffrement SQLCipher. Or les artefacts en clair n'ont aucune
                 // raison d'attendre le verrouillage : l'utilisateur a quitté l'application, il
                 // peut toujours ré-exporter.
-                purgeTransientCaches()
+                purgeTransientCaches(verrouArme)
                 return@launch
             }
             if (ms > 0) delay(ms)
@@ -131,8 +137,38 @@ class AutoLockObserver @Inject constructor(
             // AND the transient audio caches (un-sent voice MMS drafts, sent-PDU staging). Each
             // of those holds plaintext sensitive bytes that could survive a force-stop or a
             // post-mortem analysis. The user always retains the ability to re-record or re-export.
-            purgeTransientCaches()
+            purgeTransientCaches(verrouArme)
         }
+    }
+
+    /**
+     * v1.28.12 ter — **un verrou est-il ARMÉ ?** Et non : « l'application est-elle verrouillée
+     * à cet instant ? »
+     *
+     * La première écriture lisait `appLock.state` APRÈS `forceLock()`. Deux relectures externes
+     * indépendantes ont montré le même trou, par deux chemins différents :
+     *
+     *  - en « prochain lancement seulement », `forceLock()` n'est pas appelé, l'état reste
+     *    ouvert, donc la purge passait par l'âge — **et rien ne purge au lancement suivant**,
+     *    quand le verrou mord pour de bon. Un brouillon frais restait en clair derrière le PIN,
+     *    session leurre comprise ;
+     *  - à froid, `AppLockManager` démarre sur `Locked` (fail-closed) avant d'avoir résolu son
+     *    état réel : un passage en arrière-plan dans cette fenêtre faisait croire l'inverse, et
+     *    purgeait en bloc alors qu'aucun verrou n'existe.
+     *
+     * Le réglage, lui, ne ment dans aucun des deux sens : si un verrou est armé, il mordra avant
+     * que l'utilisateur ne revoie cet écran — tout de suite, après le délai, ou au lancement
+     * suivant. S'il ne l'est pas, `forceLock()` est un no-op et il n'y a rien à protéger : c'est
+     * le défaut B1, et c'est le seul cas que la purge par âge sert.
+     *
+     * `internal` et non `private` : c'est la ligne dont l'inversion ferait survivre un brouillon
+     * EN CLAIR sous verrou, et le contrôle négatif a montré qu'un prédicat privé n'est couvert
+     * par rien. Le `when` énumère les modes plutôt que de tester `!= OFF`, pour qu'un mode
+     * ajouté demain demande une décision au lieu d'hériter d'une réponse.
+     */
+    internal fun verrouArme(mode: LockMode): Boolean = when (mode) {
+        LockMode.OFF -> false
+        LockMode.PIN, LockMode.PATTERN, LockMode.BIOMETRIC -> true
     }
 
     /**
@@ -141,43 +177,39 @@ class AutoLockObserver @Inject constructor(
      *  - `files/exports/` — generated PDFs and `.smsbk` staging (audit F13)
      *  - `cache/voice_mms/` — un-sent voice-message drafts (audit S-P2-3)
      *  - `cache/media_outgoing/` — un-sent picked media drafts (v1.27.2, jumeau de `voice_mms`)
-     *  - `cache/mms_outgoing/` — built PDU files for in-flight MMS (audit S-P2-3)
+     *  - `cache/mms_outgoing/` — built PDU files for in-flight MMS (audit S-P2-3), par âge
      *
-     * Recursive delete + isolated `runCatching` per folder so a partial failure on one path does
-     * not skip the others. Inbound attachments (v1.14.7 = `filesDir/mms_attachments/`,
-     * legacy v1.3.10→v1.14.6 = `cache/mms_incoming/`) are intentionally **not** purged here:
-     * they are referenced by `AttachmentEntity.localUri` for in-app playback / display, and
-     * dropping them would surface broken bubbles after every lock cycle. They are wiped instead
-     * by [PanicService.nukeEverything] (qui wipe filesDir/mms_attachments + cacheDir entier).
+     * Les TROIS premiers suivent la même règle : en bloc si un verrou est armé, par âge sinon.
+     * Cf. [purgerBrouillonsSortants].
+     *
+     * ⚠️ v1.28.12 ter (relecture GPT) — `exports` était resté en bloc INCONDITIONNEL, et c'était
+     * le jumeau oublié de la correction B1 : sans aucun verrou configuré, partager un PDF ouvre
+     * le sélecteur système, l'application passe en arrière-plan, et le fichier disparaît sous
+     * l'application destinataire avant qu'elle ne lise l'URI — avec le délai par défaut, au bout
+     * d'une minute. L'arbitrage B7 (v1.26.1) n'est pas rouvert : il portait sur « prochain
+     * lancement seulement », où un verrou EST armé, et ce cas reste purgé en bloc.
+     *
+     * Isolated `runCatching` per folder so a partial failure on one path does not skip the
+     * others. Inbound attachments (v1.14.7 = `filesDir/mms_attachments/`, legacy v1.3.10→v1.14.6
+     * = `cache/mms_incoming/`) are intentionally **not** purged here: they are referenced by
+     * `AttachmentEntity.localUri` for in-app playback / display, and dropping them would surface
+     * broken bubbles after every lock cycle. They are wiped instead by
+     * [PanicService.nukeEverything] (qui wipe filesDir/mms_attachments + cacheDir entier).
      */
-    private fun purgeTransientCaches() {
+    private fun purgeTransientCaches(verrouArme: Boolean) {
+        // v1.28.12 ter (relecture GPT) — UN SEUL instant pour tous les dossiers. Chacun lisait
+        // le sien : deux fichiers du même âge, à la frontière, pouvaient connaître deux sorts.
+        val maintenant = System.currentTimeMillis()
         // Audit P1-5 (v1.2.0): `deleteRecursively()` walks every depth — the previous
         // `listFiles()` only swept the first level and would have left any future
         // sub-directory (re-encode staging, tmp ffmpeg work-dirs, etc.) on disk.
-        val targets = listOf(
+        val dossiers = listOf(
             File(context.filesDir, "exports"),
             File(context.cacheDir, "voice_mms"),
-            // v1.27.2 (audit de cohérence 2026-08-04) — `media_outgoing` manquait, alors que
-            // c'est le jumeau exact de `voice_mms` : les deux mettent en attente une pièce
-            // jointe sortante choisie par l'utilisateur, et
-            // [com.filestech.sms.data.mms.OutgoingAttachmentStoreImpl] les décrit côte à côte —
-            // en affirmant même que les deux sont « wiped wholesale by AutoLockObserver on every
-            // lock cycle ». C'était vrai pour l'un, faux pour l'autre.
-            //
-            // Concrètement : choisir une photo pour un MMS puis verrouiller sans envoyer la
-            // laissait EN CLAIR jusqu'à 24 h (seul le balayage par âge de `TelephonySyncWorker`
-            // finissait par la prendre), là où le brouillon vocal équivalent disparaissait au
-            // premier verrouillage.
-            //
-            // Purge en bloc et non par âge, contrairement à `mms_outgoing` (cf. M10 plus bas) :
-            // ce dossier ne contient QUE des brouillons abandonnés. Une pièce jointe réellement
-            // envoyée est promue dans `filesDir/mms_attachments` AVANT l'écriture de sa ligne
-            // Room, donc aucune bulle ne pointe ici — et le système ne relit rien dans ce
-            // dossier après coup.
             File(context.cacheDir, "media_outgoing"),
         )
-        for (dir in targets) {
-            runCatching { if (dir.exists()) dir.deleteRecursively() }
+        for (dir in dossiers) {
+            runCatching { purgerBrouillonsSortants(dir, verrouArme, maintenant) }
                 .onFailure { Timber.w(it, "AutoLockObserver: purge of %s failed", dir.absolutePath) }
         }
         purgeStaleOutgoingPdus()
@@ -195,6 +227,13 @@ class AutoLockObserver @Inject constructor(
      * Aggravant : `forceLock()` est un no-op quand aucun verrou n'est armé — la configuration par
      * défaut — alors que la purge, elle, s'exécutait quand même. On détruisait un envoi pour
      * protéger un verrou qui n'existait pas.
+     *
+     * ⚠️ Relecture externe du 2026-09-17 : **ce PDU porte les mêmes octets en clair que le
+     * brouillon détruit juste au-dessus** — corps, destinataires, pièce jointe. L'asymétrie est
+     * réelle et elle est assumée : le purger en bloc est exactement ce que M10 a corrigé, parce
+     * que le service MMS du système le lit PLUS TARD. Un envoi détruit pour protéger un verrou
+     * coûte un message perdu ; un PDU gardé une heure coûte une heure d'exposition sur des
+     * octets que l'utilisateur vient lui-même d'envoyer.
      *
      * Le seuil DIFFÈRE volontairement de celui de `TelephonySyncWorker` (24 h) : celui-là fait
      * du ménage best-effort, celui-ci arbitre une fenêtre d'exposition. Voir
@@ -230,4 +269,57 @@ class AutoLockObserver @Inject constructor(
          */
         const val OUTGOING_PDU_MAX_AGE_MS = 60L * 60L * 1_000L
     }
+}
+
+/**
+ * v1.28.12 (audit B1) — âge au-delà duquel un brouillon sortant non envoyé est tenu pour
+ * abandonné, quand AUCUN verrou n'est armé.
+ *
+ * Même valeur que `OUTGOING_PDU_MAX_AGE_MS` et délibérément PAS la même constante : l'une arbitre
+ * une fenêtre d'exposition pour un envoi déjà confié au système, l'autre la patience accordée à
+ * une composition inachevée. Les faire varier ensemble serait un couplage fortuit.
+ *
+ * Le filet à 24 h reste posé ailleurs : `TelephonySyncWorker.pruneStaleOutboundCaches` pour
+ * `media_outgoing`, [com.filestech.sms.data.voice.VoiceRecorder.pruneOld] pour `voice_mms`.
+ */
+internal const val DRAFT_MAX_AGE_MS: Long = 60L * 60L * 1_000L
+
+/**
+ * v1.28.12 (audit B1) — purge un dossier d'artefacts en clair : EN BLOC si un verrou est armé,
+ * PAR ÂGE sinon. Renvoie le nombre d'entrées supprimées.
+ *
+ * ⚠️ `voice_mms` et `media_outgoing` ne contiennent PAS que des brouillons abandonnés, contrairement
+ * à ce qu'affirmait le commentaire de v1.27.2. `ThreadViewModel` y met en attente la pièce jointe ou
+ * le clip que l'utilisateur est EN TRAIN de composer, et en garde les [File] dans
+ * `pendingAttachments` / `VoiceState.Reviewing`. Or la purge tournait même sans aucun verrou
+ * configuré — `forceLock()` est alors un no-op — après `autoLockDelay`, dont le défaut est UNE
+ * MINUTE : choisir deux photos, prendre un appel, revenir, et les vignettes étaient encore là quand
+ * les fichiers, eux, n'existaient plus.
+ *
+ * C'est mot pour mot le défaut M10 sur le dossier voisin : « on détruisait un envoi pour protéger un
+ * verrou qui n'existait pas ». La correction est donc la même, étendue cette fois aux DEUX jumeaux
+ * plutôt qu'à un seul.
+ *
+ * Quand un verrou est armé, la purge en bloc reste voulue et documentée depuis F13 / S-P2-3 :
+ * le brouillon part avec le reste du clair, et l'utilisateur peut re-choisir ou ré-enregistrer.
+ * Il mordra avant qu'il ne revoie cet écran — tout de suite, après le délai, ou au lancement
+ * suivant — et c'est précisément ce que [AutoLockObserver.verrouArme] mesure.
+ *
+ * Une seule boucle pour les deux cas : « en bloc » n'est que « tout le monde remplit le critère ».
+ * Deux branches auraient été deux jumeaux à tenir d'accord.
+ */
+internal fun purgerBrouillonsSortants(
+    dir: File,
+    verrouArme: Boolean,
+    nowMs: Long = System.currentTimeMillis(),
+): Int {
+    if (!dir.exists()) return 0
+    val cutoff = nowMs - DRAFT_MAX_AGE_MS
+    var supprimes = 0
+    dir.listFiles()?.forEach { f ->
+        if (verrouArme || f.lastModified() < cutoff) {
+            if (f.deleteRecursively()) supprimes++
+        }
+    }
+    return supprimes
 }

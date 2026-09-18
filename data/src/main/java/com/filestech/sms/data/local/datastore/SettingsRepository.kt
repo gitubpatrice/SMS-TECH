@@ -20,9 +20,7 @@ import com.filestech.sms.domain.settings.BackupSettings
 import com.filestech.sms.domain.settings.BlockingSettings
 import com.filestech.sms.domain.settings.ConversationSettings
 import com.filestech.sms.domain.settings.EmergencyCallBehavior
-import com.filestech.sms.domain.settings.FirstDayOfWeek
 import com.filestech.sms.domain.settings.ListDensity
-import com.filestech.sms.domain.settings.LocaleSettings
 import com.filestech.sms.domain.settings.LockMode
 import com.filestech.sms.domain.settings.MmsImageQuality
 import com.filestech.sms.domain.settings.NotificationSettings
@@ -198,6 +196,54 @@ class SettingsRepository(
         return if (firstHydration.await()) _state.value else null
     }
 
+    /**
+     * v1.28.12 — ramène UNE FOIS le format de réaction au défaut déclaré par la v1.14.4.
+     *
+     * [langueDeLApp] est le code à deux lettres de la langue RÉSOLUE de l'application — celle
+     * dans laquelle ses écrans s'affichent. Passé en paramètre plutôt que lu ici : `:data` n'a
+     * pas à connaître les `Configuration` d'Android, et un test doit pouvoir dire « fr » ou
+     * « de » sans monter un `Context`.
+     *
+     * Rend `true` si la valeur a changé. Ne fait rien sur une installation déjà migrée : c'est
+     * ce qui permet à l'utilisateur de RECHOISIR la forme française ensuite sans qu'on la lui
+     * reprenne au redémarrage suivant. Le drapeau est posé dans tous les cas, y compris sur une
+     * installation neuve qui n'a rien à migrer.
+     *
+     * Tout tient dans un seul `edit` : lire puis écrire en deux temps laisserait une fenêtre où
+     * un réglage enregistré entre les deux serait perdu.
+     *
+     * Voir [com.filestech.sms.domain.settings.AdvancedSettings.reactionFormatMigreV12812] pour
+     * le pourquoi, et pour ce que cette migration coûte.
+     */
+    suspend fun migrerFormatDeReaction(langueDeLApp: String): Boolean {
+        var change = false
+        dataStore.edit { prefs ->
+            if (prefs[K.reactionFormatMigreV12812] == true) return@edit
+            prefs[K.reactionFormatMigreV12812] = true
+            // ⚠️ L'EXCEPTION FRANÇAISE, et c'est elle qui rend cette migration honnête.
+            //
+            // Rien sur le disque ne distingue « a choisi la forme française » de « en a hérité ».
+            // Mais la LANGUE de l'application dit pour qui ce choix est juste : quelqu'un dont
+            // l'application est en français écrit très probablement à des correspondants qui
+            // LISENT le français, et pour eux « Réagi par ❤️ à votre message » se lit, là où le
+            // format tapback est du texte anglais.
+            //
+            // Le préjudice réel vise donc l'utilisateur allemand, italien, espagnol ou anglais
+            // dont les réactions partent en français sans qu'il sache pourquoi. C'est lui, et lui
+            // seul, que l'on corrige — on n'écrase le choix de personne d'autre.
+            //
+            // Le drapeau est posé quand même : one-shot veut dire une fois. Une migration qui
+            // continuerait de guetter un changement de langue serait imprévisible, et le réglage
+            // reste à deux tapes de toute façon.
+            if (langueDeLApp == "fr") return@edit
+            if (prefs[K.reactionFormat] == ReactionFormat.READABLE_FR.name) {
+                prefs[K.reactionFormat] = ReactionFormat.EMOJI_WITH_QUOTE.name
+                change = true
+            }
+        }
+        return change
+    }
+
     override suspend fun update(transform: (AppSettings) -> AppSettings) {
         dataStore.edit { prefs ->
             val current = prefs.toAppSettings()
@@ -216,10 +262,6 @@ class SettingsRepository(
                 textScale = enumOr(p, K.textScale, TextScale.MEDIUM, TextScale::valueOf),
                 density = enumOr(p, K.density, ListDensity.STANDARD, ListDensity::valueOf),
                 amoledTrueBlack = p[K.amoled] ?: false,
-            ),
-            locale = LocaleSettings(
-                languageTag = p[K.languageTag],
-                firstDayOfWeek = enumOr(p, K.firstDayOfWeek, FirstDayOfWeek.SYSTEM, FirstDayOfWeek::valueOf),
             ),
             conversations = ConversationSettings(
                 sortMode = enumOr(p, K.sortMode, SortMode.DATE, SortMode::valueOf),
@@ -244,13 +286,28 @@ class SettingsRepository(
                 //  - reactionEmojiOnly=false → TAPBACK_EN (préserve l'ancien défaut
                 //    "Reacted X to «…»" — l'user avait peut-être beaucoup de contacts
                 //    iPhone et compte sur le parsing Tapback)
-                //  - aucune clé présente (fresh install) → READABLE_FR (nouveau défaut)
+                //  - aucune clé présente (fresh install) → le défaut déclaré par AppSettings
+                //
+                // ⚠️ v1.28.12 — cette branche rendait `READABLE_FR`, et c'est le chemin
+                // RÉELLEMENT emprunté : `toAppSettings()` passe chaque champ explicitement,
+                // donc le défaut écrit sur la data-class n'est jamais atteint. La v1.14.4
+                // avait changé ce défaut en `EMOJI_WITH_QUOTE` à la demande de l'utilisateur
+                // — sur la déclaration seulement. Le changement n'a donc pris effet sur
+                // AUCUNE installation, et toute installation neuve envoyait des réactions
+                // en FRANÇAIS : « Réagi par ❤️ à votre message : «Wie geht's?» » à un
+                // destinataire allemand. Collant, en outre : `update{}` réécrit toutes les
+                // clés, donc au premier réglage modifié la valeur se gravait sur le disque.
+                //
+                // Relevé par un audit de contenu le 2026-09-17. Les installations qui
+                // viennent de la v1.7.x portent `reactionEmojiOnly` et prennent les deux
+                // branches au-dessus : seules les installations NEUVES changent, ce qui est
+                // exactement ce que la v1.14.4 voulait.
                 reactionFormat = p[K.reactionFormat]?.let {
                     runCatching { ReactionFormat.valueOf(it) }.getOrNull()
                 } ?: when {
                     p[K.reactionEmojiOnly] == true -> ReactionFormat.EMOJI_ONLY
                     p[K.reactionEmojiOnly] == false -> ReactionFormat.TAPBACK_EN
-                    else -> ReactionFormat.READABLE_FR
+                    else -> SendingSettings().reactionFormat
                 },
                 senderDisplayName = p[K.senderDisplayName]?.takeIf { it.isNotBlank() },
                 defaultRegionIso = p[K.defaultRegion]?.takeIf { it.isNotBlank() },
@@ -338,7 +395,6 @@ class SettingsRepository(
                 encrypt = p[K.backupEncrypt] ?: true,
             ),
             advanced = AdvancedSettings(
-                isDefaultSmsApp = p[K.isDefault] ?: false,
                 lastSyncedSmsId = p[K.lastSyncedSmsId] ?: 0L,
                 mmsImportCompleted = p[K.mmsImportCompleted] ?: false,
                 splashShown = p[K.splashShown] ?: false,
@@ -348,6 +404,7 @@ class SettingsRepository(
                 attachmentsMovedToFilesDirV147 = p[K.attachmentsMovedToFilesDirV147] ?: false,
                 startupDbMigrationsDone = p[K.startupDbMigrationsDone] ?: false,
                 staleConversationPreviewsRepairedV1240 = p[K.staleConversationPreviewsRepairedV1240] ?: false,
+                reactionFormatMigreV12812 = p[K.reactionFormatMigreV12812] ?: false,
                 identityDedupRepairedV1272 = p[K.identityDedupRepairedV1272] ?: false,
                 emptyConversationsPurgedV1272 = p[K.emptyConversationsPurgedV1272] ?: false,
             ),
@@ -362,9 +419,16 @@ class SettingsRepository(
         this[K.density] = s.appearance.density.name
         this[K.amoled] = s.appearance.amoledTrueBlack
 
-        s.locale.languageTag?.let { this[K.languageTag] = it } ?: remove(K.languageTag)
-        this[K.firstDayOfWeek] = s.locale.firstDayOfWeek.name
-
+        // v1.28.12 — `locale.languageTag` et `locale.firstDayOfWeek` retirés : persistés,
+        // relus, jamais consultés. Un `.smsbk` ne les a jamais portées.
+        //
+        // v1.28.12 ter (audit S9) — et leurs clés sont maintenant EFFACÉES, pas seulement
+        // ignorées. Cf. [K.CLES_RETIREES] : sur les installations existantes elles restaient
+        // écrites, et `PanicService.nukeEverything` réécrit les réglages par-dessus au lieu de
+        // vider le magasin — « supprimer toutes mes données » les laissait donc sur le disque,
+        // dont le tag de langue choisi par l'utilisateur. Une purge qui se dit complète doit
+        // l'être aussi pour ce qu'une version précédente a écrit.
+        for (morte in K.CLES_RETIREES) this -= morte
         this[K.sortMode] = s.conversations.sortMode.name
         this[K.previewLines] = s.conversations.previewLines
         this[K.showAvatars] = s.conversations.showAvatars
@@ -455,7 +519,6 @@ class SettingsRepository(
         remove(K.backupFormat)
         this[K.backupEncrypt] = s.backup.encrypt
 
-        this[K.isDefault] = s.advanced.isDefaultSmsApp
         this[K.lastSyncedSmsId] = s.advanced.lastSyncedSmsId
         this[K.mmsImportCompleted] = s.advanced.mmsImportCompleted
         this[K.splashShown] = s.advanced.splashShown
@@ -465,6 +528,7 @@ class SettingsRepository(
         this[K.attachmentsMovedToFilesDirV147] = s.advanced.attachmentsMovedToFilesDirV147
         this[K.startupDbMigrationsDone] = s.advanced.startupDbMigrationsDone
         this[K.staleConversationPreviewsRepairedV1240] = s.advanced.staleConversationPreviewsRepairedV1240
+        this[K.reactionFormatMigreV12812] = s.advanced.reactionFormatMigreV12812
         this[K.identityDedupRepairedV1272] = s.advanced.identityDedupRepairedV1272
         this[K.emptyConversationsPurgedV1272] = s.advanced.emptyConversationsPurgedV1272
     }
@@ -479,8 +543,32 @@ class SettingsRepository(
         val textScale = stringPreferencesKey("appearance.textScale")
         val density = stringPreferencesKey("appearance.density")
         val amoled = booleanPreferencesKey("appearance.amoled")
-        val languageTag = stringPreferencesKey("locale.tag")
-        val firstDayOfWeek = stringPreferencesKey("locale.firstDay")
+
+        /**
+         * v1.28.12 (audit S9) — les clés d'une version PRÉCÉDENTE, effacées à chaque écriture.
+         *
+         * `locale.tag` et `locale.firstDay` ont été retirés avec les deux champs qu'ils
+         * portaient. Ne PAS réutiliser ces noms : ils ont une sémantique morte. Et ne pas se
+         * contenter de ne plus les lire — tant qu'ils sont sur le disque, ils survivent à
+         * « supprimer toutes mes données », qui réécrit les réglages par-dessus plutôt que de
+         * vider le magasin.
+         *
+         * Toute clé retirée à l'avenir se pose ICI, et nulle part ailleurs : c'est le seul
+         * endroit qui garantit qu'elle finisse par disparaître des installations existantes.
+         *
+         * ⚠️ **Et cette phrase a été fausse dès le jour où elle a été écrite.**
+         * `advanced.isDefault` avait été retirée quelques heures plus tôt, dans le même lot, et
+         * elle n'a pas été posée ici : la correction S9 reproduisait donc le défaut qu'elle
+         * fermait, sur la clé d'à côté. Relevé par DEUX relectures externes indépendantes le
+         * 2026-09-17, et c'est le motif le plus fréquent de ce dépôt : une règle posée sur un
+         * seul de deux jumeaux.
+         */
+        val CLES_RETIREES: List<androidx.datastore.preferences.core.Preferences.Key<*>> = listOf(
+            stringPreferencesKey("locale.tag"),
+            stringPreferencesKey("locale.firstDay"),
+            booleanPreferencesKey("advanced.isDefault"),
+        )
+
         val sortMode = stringPreferencesKey("conv.sort")
         val previewLines = intPreferencesKey("conv.previewLines")
         val showAvatars = booleanPreferencesKey("conv.avatars")
@@ -589,7 +677,6 @@ class SettingsRepository(
         val backupKeep = intPreferencesKey("backup.keep")
         val backupFormat = stringPreferencesKey("backup.format")
         val backupEncrypt = booleanPreferencesKey("backup.encrypt")
-        val isDefault = booleanPreferencesKey("advanced.isDefault")
         val mmsRoaming = booleanPreferencesKey("advanced.mmsRoaming")
         // Bumped from a boolean ("didInitialSmsImport") to a long cursor: the latter encodes the
         // same first-run signal (0 vs > 0) AND tells the sync manager where to resume from.
@@ -612,6 +699,9 @@ class SettingsRepository(
         val startupDbMigrationsDone = booleanPreferencesKey("advanced.startupDbMigrationsDone")
         val staleConversationPreviewsRepairedV1240 =
             booleanPreferencesKey("advanced.staleConversationPreviewsRepairedV1240")
+
+        // v1.28.12 — drapeau one-shot de la migration du format de réaction.
+        val reactionFormatMigreV12812 = booleanPreferencesKey("advanced.reactionFormatV12812")
 
         /** v1.27.2 (audit Codex, LP-05) — rejeu de la dedup avec l identite region-aware. */
         val identityDedupRepairedV1272 =

@@ -24,7 +24,8 @@ No ads, no trackers, no analytics. Apache-2.0 licensed.
 - Scheduled sending via `WorkManager` (exact alarms when granted).
 - Manual backup &amp; restore in `.smsbk` (AES-256-GCM + PBKDF2). Attachments are not part of the backup.
 - Migration assistant: read the system SMS provider once SMS Tech is the default app.
-- Bilingual UI: English &amp; French, following the system language.
+- Five languages: English, French, German, Italian and Spanish — including every SMS the app
+  sends on your behalf. Pick one per app on Android 13 and later, or follow the system.
 - F-Droid friendly: no Google libraries, no proprietary blobs.
 
 ## 📦 Build

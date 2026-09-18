@@ -83,9 +83,9 @@
          suppression a été retirée plutôt que simplement documentée. -->
     <string name="conversation_block_confirm_title">Bloquer cette conversation ?</string>
     <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. La conversation reste dans votre liste, signalée comme bloquée, et rien n\'est supprimé. Vous pourrez la débloquer à tout moment.</string>
-    <string name="conversations_section_blocked">Bloqués</string>
+    <string name="conversations_section_blocked">Bloquées</string>
     <string name="conversations_section_messages">Messages</string>
-    <string name="conversation_blocked_label">Bloqué</string>
+    <string name="conversation_blocked_label">Bloquée</string>
     <string name="settings_purge_blocked">Purger les conversations bloquées</string>
     <string name="settings_purge_blocked_desc">Supprime définitivement toutes les conversations dont les participants sont sur la liste de blocage système.</string>
     <string name="settings_purge_blocked_result">%1$d conversation(s) supprimée(s)</string>
@@ -180,7 +180,7 @@
     <string name="blocked_add">Ajouter un numéro</string>
 
     <string name="vault_title">Coffre-fort</string>
-    <string name="vault_empty">Le coffre-fort est vide.</string>
+    <string name="vault_empty">Le coffre est vide.</string>
     <string name="vault_move_in">Déplacer dans le coffre</string>
     <string name="vault_move_out">Sortir du coffre</string>
     <!-- v1.11.0 — feedback snackbar (Coffre polish) -->
@@ -191,7 +191,7 @@
     <!-- v1.13.0 — sélection multiple bulk move to/from vault -->
     <string name="bulk_vault_move_in">Déplacer dans le coffre</string>
     <string name="bulk_vault_move_out">Sortir du coffre</string>
-    <string name="selected">Sélectionné</string>
+    <string name="selected">Sélectionnée</string>
     <!-- v1.13.1 — entrée mode sélection multiple depuis l'ActionsSheet long-press -->
     <string name="bulk_select_multiple">Sélectionner plusieurs</string>
     <!-- v1.14.0 — comportement boutons d'appel d'urgence + outcomes -->
@@ -202,12 +202,12 @@
     <string name="emergency_i_am_ok_chip_title">Alerte urgence déclenchée récemment</string>
     <string name="emergency_i_am_ok_chip_action">Je vais bien</string>
     <string name="emergency_i_am_ok_confirm_title">Envoyer le message « Je vais bien » ?</string>
-    <string name="emergency_i_am_ok_confirm_body">Cela va réinitialiser le cooldown urgence et (en option) envoyer un SMS court à vos contacts Safety Call pour leur indiquer qu\'il s\'agissait d\'une fausse alerte. Vous pouvez désactiver l\'envoi du SMS dans les Réglages.</string>
+    <string name="emergency_i_am_ok_confirm_body">Cela va réinitialiser le cooldown urgence et (en option) envoyer un SMS court à vos contacts Safety call pour leur indiquer qu\'il s\'agissait d\'une fausse alerte. Vous pouvez désactiver l\'envoi du SMS dans les Réglages.</string>
     <string name="emergency_i_am_ok_done">Message « Je vais bien » envoyé.</string>
     <string name="emergency_i_am_ok_reset_only">Cooldown réinitialisé. Aucun SMS envoyé.</string>
     <string name="emergency_i_am_ok_send_failed">Cooldown réinitialisé, mais aucun contact n\'a reçu le SMS. Réessayez ou contactez-les manuellement.</string>
     <string name="settings_send_i_am_ok_sms_title">Envoyer un SMS « Je vais bien » au reset</string>
-    <string name="settings_send_i_am_ok_sms_desc">Quand vous appuyez sur « Je vais bien » après un déclenchement par erreur, envoie aussi un SMS court à vos contacts Safety Call pour leur indiquer qu\'il s\'agissait d\'une fausse alerte.</string>
+    <string name="settings_send_i_am_ok_sms_desc">Quand vous appuyez sur « Je vais bien » après un déclenchement par erreur, envoie aussi un SMS court à vos contacts Safety call pour leur indiquer qu\'il s\'agissait d\'une fausse alerte.</string>
     <!-- v1.14.5 — strings emergency_dry_run_* retirées (bouton « Tester sans envoyer » supprimé). -->
     <!-- v1.14.5 — Settings → Mode urgence : ToggleRow direct accès GPS opt-in -->
     <string name="settings_emergency_include_location_title">Inclure la position GPS dans le SMS</string>
@@ -215,10 +215,13 @@
     <string name="settings_emergency_include_location_denied">Permission de localisation refusée. Inclusion GPS désactivée.</string>
     <!-- v1.14.7 — string emergency_topbar_warning_cd retirée (orpheline, jamais branchée). -->
     <!-- v1.14.1 — redesign page urgence complète : 4 tuiles couleurs + désactiver + tap-notif-ouvre-page -->
-    <string name="emergency_call_112_label">SOS européen</string>
-    <string name="emergency_call_15_label">SAMU (médical)</string>
-    <string name="emergency_call_17_label">Police</string>
-    <string name="emergency_call_18_label">Pompiers</string>
+    <!-- v1.28.12 — un libellé par SERVICE, plus par numéro : le même service est le 17 en
+         France, le 110 en Allemagne, le 091 en Espagne, et la tuile affiche déjà le numéro. -->
+    <string name="emergency_call_eu_label">Urgence européenne</string>
+    <string name="emergency_call_national_label">Urgence nationale</string>
+    <string name="emergency_call_police_label">Police</string>
+    <string name="emergency_call_fire_label">Pompiers</string>
+    <string name="emergency_call_medical_label">Urgence médicale</string>
     <string name="emergency_section_call_title">Appeler directement</string>
     <string name="emergency_section_sms_title">Envoyer un SOS aux proches</string>
     <string name="emergency_section_other_title">Autres actions</string>
@@ -289,15 +292,15 @@
     <string name="appearance_saved">Apparence mise à jour</string>
     <!-- v1.11.0 — Sujet 3 anti-smishing -->
     <string name="settings_smishing_detection">Détection d\'arnaque (hors-ligne)</string>
-    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). 100 % local, aucun cloud. Peut produire des faux positifs.</string>
+    <string name="settings_smishing_detection_desc">Signale les SMS entrants suspects (URL raccourcies, mots d\'urgence, numéros surtaxés, domaines usurpés). Couvre la France, l\'Allemagne, l\'Italie, l\'Espagne, le Royaume-Uni et l\'Irlande. 100 % local, aucun cloud. Peut produire des faux positifs.</string>
     <string name="smishing_banner_title">⚠️ Possiblement frauduleux</string>
     <string name="smishing_banner_subtitle">Toucher pour voir pourquoi</string>
     <string name="smishing_dialog_title">Pourquoi cet avertissement ?</string>
     <string name="smishing_dialog_intro">SMS Tech a détecté les signaux suspects ci-dessous dans ce message. Aucun contenu n\'a été envoyé ailleurs — tout est calculé localement.</string>
     <string name="smishing_reason_url_shortener">URL raccourcie (bit.ly, t.co, tinyurl…). Les raccourcisseurs peuvent masquer la vraie destination — vérifiez avant de cliquer.</string>
     <string name="smishing_reason_urgency">Mots d\'urgence ou de pression (urgent, expire, cliquez ici…). Tactique classique d\'ingénierie sociale pour pousser à la panique.</string>
-    <string name="smishing_reason_premium">Numéro surtaxé (3xxx, 0899xxx, 081x…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
-    <string name="smishing_reason_typosquatting">Domaine ressemblant à un officiel (ex. « 1mpots.gouv.fr » au lieu de « impots.gouv.fr »). Saisissez toujours les adresses officielles à la main.</string>
+    <string name="smishing_reason_premium">Numéro surtaxé (3xxx ou 0899 en France, 0900 en Allemagne, 899 en Italie, 806 en Espagne…). Rappeler ces numéros coûte cher et fait souvent partie d\'une arnaque.</string>
+    <string name="smishing_reason_typosquatting">Domaine ressemblant à un officiel (ex. « 1mpots.gouv.fr » au lieu de « impots.gouv.fr »). Les sites surveillés sont les sites officiels de la France, de l\'Allemagne, de l\'Italie, de l\'Espagne, du Royaume-Uni et de l\'Irlande. Saisissez toujours les adresses officielles à la main.</string>
     <string name="smishing_dialog_dismiss">OK</string>
     <!-- v1.11.0 — Noms de couleurs de la palette d'apparence (a11y TalkBack) -->
     <string name="appearance_color_brand_blue">Bleu marque (par défaut)</string>
@@ -317,20 +320,22 @@
     <!-- v1.12.0 — Raccourci urgence (notification persistante visible écran verrouillé) -->
     <string name="channel_emergency_shortcut_label">Raccourci urgence</string>
     <!-- v1.14.8 audit P2 — texte aligné sur le comportement v1.14.2+ (action URGENCE retirée de la notif pour éviter les déclenchements accidentels). -->
-    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112/17). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
+    <!-- v1.28.12 - the police number changes from country to country: neither description names it. -->
+    <string name="channel_emergency_shortcut_desc">Notification persistante silencieuse avec raccourcis d\'appel (112 et, le cas échéant, le numéro d\'urgence propre à votre pays). Tapez le corps pour ouvrir l\'écran d\'urgence, puis maintenez 3 s pour envoyer l\'alerte.</string>
     <string name="emergency_shortcut_notif_title">SMS Tech — raccourci urgence</string>
     <string name="emergency_shortcut_notif_text">Tapez pour ouvrir la page urgence, ou appeler le 112.</string>
-    <string name="emergency_shortcut_action_112">Appeler 112</string>
+    <!-- v1.28.12 — un seul libellé pour les deux actions rapides : le numéro de police change
+         de pays en pays, il ne peut donc plus être écrit dans la chaîne. -->
+    <string name="emergency_shortcut_action_dial">Appeler %1$s</string>
     <string name="settings_emergency_shortcut_title">Raccourci écran verrouillé</string>
     <string name="emergency_saved_enabled">Mode urgence activé</string>
     <string name="emergency_saved_disabled">Mode urgence désactivé</string>
     <string name="emergency_setup_unsaved_body">Le mode urgence n\'est pas encore enregistré. Quitter maintenant le laisserait dans son état précédent.</string>
     <!-- v1.14.8 audit P2 — texte mis à jour : depuis v1.14.2 l'action URGENCE en un tap a été retirée. -->
-    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112/17), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
-    <string name="emergency_shortcut_no_app_to_dial">Aucune application pour composer le 112</string>
-    <string name="emergency_shortcut_action_police">Appeler 17</string>
-    <string name="settings_emergency_call_police_title">Action rapide Police 17 sur la notif lock-screen</string>
-    <string name="settings_emergency_call_police_desc">Ajoute une action rapide « Appeler 17 » sur la notification persistante d\'urgence. Le bouton 17 reste toujours visible dans la page Mode urgence in-app, quel que soit ce réglage. Désactivé par défaut.</string>
+    <string name="settings_emergency_shortcut_desc">Affiche une notification persistante avec des raccourcis d\'appel (112 et, le cas échéant, le numéro d\'urgence propre à votre pays), accessible sans déverrouiller. Tapez le corps pour ouvrir l\'écran d\'urgence. Désactivé par défaut.</string>
+    <string name="emergency_shortcut_no_app_to_dial">Aucune application pour passer l\'appel</string>
+    <string name="settings_emergency_call_police_title">Numéro d\'urgence local sur la notif lock-screen</string>
+    <string name="settings_emergency_call_police_desc">Ajoute le numéro d\'urgence propre à votre pays comme seconde action rapide sur la notification persistante : la police dans la plupart des pays, la ligne d\'urgence générale au Royaume-Uni et en Irlande. Il est omis là où le pays n\'a pas de numéro propre. La page Mode urgence in-app affiche toujours tous les numéros, quel que soit ce réglage. Désactivé par défaut.</string>
 
     <!-- Backup / restore -->
     <string name="backup_explainer">La sauvegarde chiffrée utilise AES-256-GCM et PBKDF2-HMAC-SHA512. Choisissez une phrase de passe solide — sans elle le fichier est irrécupérable.</string>
@@ -364,7 +369,6 @@
     <string name="lock_lockout_message">Trop d\'essais. Nouvelle tentative dans %1$d s.</string>
 
     <string name="settings_title">Réglages</string>
-    <string name="settings_search">Rechercher dans les réglages…</string>
 
     <string name="settings_section_appearance">Apparence</string>
     <string name="settings_theme_system">Système</string>
@@ -377,6 +381,7 @@
 
     <string name="settings_section_locale">Langue &amp; région</string>
     <string name="settings_language">Langue de l\'application</string>
+    <string name="settings_language_desc">Ouvre l\'écran Android de langue par application. SMS Tech suit la langue de votre système tant que vous n\'en choisissez pas une ici.</string>
 
     <string name="settings_section_conversations">Conversations</string>
     <string name="settings_show_avatars">Afficher les avatars</string>
@@ -428,7 +433,7 @@
     <!-- v1.8.0 — bug 5 fix : 3 options en un coup d\'œil. -->
     <string name="settings_reaction_format_title">Format des réactions</string>
     <string name="settings_reaction_format_fr">Français lisible</string>
-    <string name="settings_reaction_format_fr_hint">« J\'ai réagi par ❤️ à : «aperçu» ». Naturel et compréhensible pour tout destinataire francophone Android. Décodé par SMS Tech comme un badge de réaction natif.</string>
+    <string name="settings_reaction_format_fr_hint">« Réagi par ❤️ à votre message : «aperçu» ». Naturel et compréhensible pour tout destinataire francophone Android. Décodé par SMS Tech comme un badge de réaction natif.</string>
     <string name="settings_reaction_format_en">Tapback (compat iMessage)</string>
     <string name="settings_reaction_format_en_hint">« Reacted ❤️ to «aperçu» ». Détecté automatiquement par iMessage (iPhone) et Google Messages récents comme une bulle réaction native. Moins naturel pour les destinataires francophones.</string>
     <string name="settings_reaction_format_emoji">Emoji seul</string>
@@ -483,7 +488,8 @@
     <string name="safety_call_setup_duration_48h">48 heures</string>
     <string name="safety_call_setup_duration_72h">72 heures</string>
     <string name="safety_call_setup_duration_custom">Personnalisée</string>
-    <string name="safety_call_setup_duration_custom_format">%1$d h</string>
+    <string name="attachment_generic_name">Pièce jointe</string>
+    <string name="safety_call_setup_duration_approx">%1$s ≈ %2$s</string>
     <string name="safety_call_setup_duration_custom_hint">En heures · 168 h = 1 semaine · max 720 h (30 jours)</string>
     <string name="safety_call_setup_add_contact">Ajouter un contact</string>
     <string name="safety_call_setup_contact_name_label">Nom (facultatif)</string>
@@ -504,6 +510,10 @@
     <string name="safety_call_warning_title">SMS Tech — confirmez que vous allez bien</string>
     <string name="safety_call_warning_body_hours">Le Safety call se déclenchera dans environ %1$d heures. Appuyez pour réinitialiser le minuteur.</string>
     <string name="safety_call_warning_body_imminent">Le Safety call se déclenchera dans moins de 2 heures. Appuyez pour réinitialiser maintenant.</string>
+    <string name="safety_call_cannot_send_title">Le Safety call ne peut pas envoyer</string>
+    <string name="safety_call_cannot_send_body">SMS Tech n\'est pas votre application SMS par défaut : l\'alerte ne partirait pas. Vos contacts ne seraient pas prévenus. Touchez pour corriger.</string>
+    <string name="safety_role_missing_title">Cette protection ne peut pas envoyer</string>
+    <string name="safety_role_missing_body">SMS Tech n\'est pas votre application SMS par défaut. Vous pouvez l\'activer, mais rien ne partira au déclenchement, et personne ne sera prévenu.</string>
     <string name="safety_call_sequence_title">SMS Tech — alerte envoyée</string>
     <plurals name="safety_call_sequence_body">
         <item quantity="one">%1$d message sur %2$d envoyé à vos proches. Appuyez si vous allez bien : les relances s\'arrêteront.</item>
@@ -538,7 +548,7 @@
     <!-- v1.10.0 — Mode urgence (actif, déclenché par l\'user via hold 3s) -->
     <string name="settings_section_emergency">Mode urgence</string>
     <string name="settings_emergency_title">Mode urgence</string>
-    <string name="settings_emergency_desc">Un bouton maintenu 3 s envoie un SMS à vos contacts d\'urgence avec votre position actuelle. Distinct du Safety call (qui est automatique sur inactivité). Désactivé par défaut.</string>
+    <string name="settings_emergency_desc">Un bouton maintenu 3 s envoie un SMS à vos contacts d\'urgence, avec votre position actuelle si vous l\'avez activée et qu\'elle est disponible. Distinct du Safety call (qui est automatique sur inactivité). Désactivé par défaut.</string>
     <string name="settings_emergency_disabled">Désactivé</string>
     <!-- v1.10.0+ — Récap Mode urgence armé (miroir de safety_call_armed_*) -->
     <string name="settings_emergency_armed_chip">Activé</string>
@@ -563,7 +573,7 @@
     <string name="emergency_triggered_no_location">Urgence envoyée à %1$d contact(s) — position indisponible.</string>
     <string name="emergency_triggered_all_failed">Échec de l\'envoi (%1$d). Vérifiez votre app SMS par défaut.</string>
     <string name="emergency_setup_enable_title">Activer le mode urgence</string>
-    <string name="emergency_setup_enable_desc">Quand activé, un bouton URGENCE apparaît dans l\'écran dédié. Maintenez 3 secondes pour envoyer un SMS avec votre position à vos contacts d\'urgence.</string>
+    <string name="emergency_setup_enable_desc">Quand activé, un bouton URGENCE apparaît dans l\'écran dédié. Maintenez 3 secondes pour envoyer un SMS à vos contacts d\'urgence, avec votre position si elle est activée et disponible.</string>
     <string name="emergency_setup_template_title">Modèle de message</string>
     <string name="emergency_setup_template_need_help">J\'ai besoin d\'aide</string>
     <string name="emergency_setup_template_danger">Danger</string>
@@ -623,7 +633,7 @@
     <string name="settings_resync_confirm_title">Resynchroniser depuis le téléphone ?</string>
     <string name="settings_resync_confirm_body">Réimporte les messages depuis le fournisseur SMS/MMS système. Les messages existants restent (dédup via ID unique) ; des messages précédemment supprimés peuvent réapparaître s\'ils existent encore dans la base système. Continuer ?</string>
     <string name="settings_reset_all_confirm_title">Réinitialiser tous les réglages ?</string>
-    <string name="settings_reset_all_confirm_body">Toutes vos préférences (thème, notifications, envoi, etc.) reviendront aux valeurs par défaut. Vos conversations, vos messages et vos réglages de sécurité (verrouillage, PIN du coffre, code panique) ne sont PAS affectés.</string>
+    <string name="settings_reset_all_confirm_body">Toutes vos préférences (thème, notifications, envoi, etc.) reviendront aux valeurs par défaut. Vos conversations, vos messages et vos réglages de sécurité (verrouillage, PIN du coffre, PIN leurre) ne sont PAS affectés.</string>
     <string name="settings_purge_blocked_confirm_title">Purger les conversations bloquées ?</string>
     <string name="settings_purge_blocked_confirm_body">Supprime toute conversation dont les participants sont entièrement dans la liste de blocage. Les supprime aussi du fournisseur SMS système. Irréversible.</string>
 
@@ -639,7 +649,6 @@
     <string name="settings_notif_preview_never">Jamais sur l\'écran de verrouillage</string>
     <string name="settings_notif_preview_never_hint">Le son est joué mais rien ne s\'affiche sur l\'écran de verrouillage — totalement invisible jusqu\'au déverrouillage et l\'ouverture de l\'app.</string>
     <string name="settings_notif_style">Style de notification</string>
-    <string name="settings_notif_style_desc">Comment les notifications entrantes vous interrompent.</string>
     <string name="settings_notif_style_heads_up">Pop-up (défaut)</string>
     <string name="settings_notif_style_heads_up_hint">Une bannière s\'affiche par-dessus l\'écran avec le son, puis se range dans le shade.</string>
     <string name="settings_notif_style_banner">Bannière seule</string>
@@ -654,7 +663,7 @@
     <string name="settings_flag_secure_desc">Cache le contenu des conversations dans le sélecteur de tâches Android et bloque les captures / enregistrements d\'écran tant que l\'application est ouverte.</string>
     <string name="settings_lock_vault_on_leave">Verrouiller le coffre à la sortie</string>
     <string name="settings_lock_vault_on_leave_desc">Verrouille automatiquement le coffre chiffré dès que l\'application passe en arrière-plan. Une nouvelle authentification sera nécessaire au retour.</string>
-    <string name="settings_panic_code">PIN de secours (mode panique)</string>
+    <string name="settings_panic_code">PIN leurre (mode panique)</string>
 
     <string name="settings_section_blocking">Blocage</string>
     <string name="settings_block_unknown">Bloquer les numéros inconnus</string>
@@ -668,7 +677,6 @@
     <string name="settings_default_sms_app">App SMS par défaut</string>
     <string name="settings_set_default">Définir par défaut</string>
     <string name="settings_is_default">SMS Tech est l\'application SMS par défaut.</string>
-    <string name="settings_app_log">Journal de l\'application</string>
     <string name="settings_reset_all">Réinitialiser tous les réglages</string>
     <string name="settings_nuke_data">Supprimer toutes mes données</string>
     <string name="settings_nuke_confirm">Toutes les conversations seront effacées dans SMS Tech ET dans la messagerie du téléphone, avec les pièces jointes, les envois programmés et tous les réglages. Le coffre est effacé lui aussi. Cette opération est irréversible : rien ne revient à la prochaine synchronisation.</string>
@@ -784,7 +792,7 @@
     <string name="backup_passphrase_min_length">Minimum %1$d caractères</string>
 
     <!-- v1.15.2 — Restore d'une sauvegarde chiffrée .smsbk. -->
-    <string name="backup_restore_explainer">Choisis un fichier .smsbk puis saisis sa passphrase. Les conversations avec les mêmes destinataires sont fusionnées avec les tiennes ; les messages existants sont conservés (pas de doublons).</string>
+    <string name="backup_restore_explainer">Choisissez un fichier .smsbk puis saisissez sa passphrase. Les conversations avec les mêmes destinataires sont fusionnées avec les vôtres ; les messages existants sont conservés (pas de doublons).</string>
     <string name="backup_restore_pick_file">Choisir un fichier .smsbk</string>
     <string name="backup_restore_passphrase_title">Passphrase de restauration</string>
     <string name="backup_restore_passphrase_field">Passphrase</string>
@@ -826,7 +834,7 @@
     <string name="thread_schedule_date_title">Choisir une date</string>
     <string name="thread_schedule_time_title">Choisir une heure</string>
     <string name="thread_schedule_invalid_past">La date choisie est dans le passé</string>
-    <string name="thread_schedule_empty_body">Tape un message avant de programmer</string>
+    <string name="thread_schedule_empty_body">Saisissez un message avant de programmer</string>
     <string name="thread_schedule_success">Message programmé</string>
     <string name="thread_schedule_failed">Échec de la programmation</string>
 
@@ -845,10 +853,10 @@
     <string name="about_feat_voice_desc">Push-to-talk en MMS. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR.</string>
     <string name="about_feat_vault_label">Coffre chiffré</string>
     <string name="about_feat_vault_desc">Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android.</string>
-    <string name="about_feat_panic_label">Code panique</string>
+    <string name="about_feat_panic_label">PIN leurre</string>
     <string name="about_feat_panic_desc">Second code qui ouvre l\'app en mode leurre — coffre invisible et inaccessible.</string>
     <string name="about_feat_emergency_label">Mode urgence</string>
-    <string name="about_feat_emergency_desc">Bouton maintenu 3 s sur la page Urgence → SMS d\'alerte préfixé ⚠️ à vos contacts Safety Call avec position GPS optionnelle. Accès rapide 112 / 15 / 17 / 18 + raccourcis dans la notification écran verrouillé.</string>
+    <string name="about_feat_emergency_desc">Bouton maintenu 3 s sur la page Urgence → SMS d\'alerte à vos contacts Safety call avec position GPS optionnelle ; le préfixe ⚠️ est sur tous les modèles sauf le discret. Accès rapide aux numéros d\'urgence du pays où vous vous trouvez + raccourcis dans la notification écran verrouillé.</string>
     <string name="about_feat_biometric_label">Biométrie</string>
     <string name="about_feat_biometric_desc">Empreinte ou visage pour déverrouiller, avec PIN de secours obligatoire.</string>
     <string name="about_feat_reply_label">Réponse contextuelle</string>
@@ -861,7 +869,7 @@
     <string name="about_feat_search_desc">Plein texte SQLite FTS4 sur corps, numéros et noms de contact.</string>
     <string name="about_feat_pdf_label">Export PDF</string>
     <string name="about_feat_pdf_desc">Exporter une conversation en PDF (date, expéditeur, corps) pour archive ou preuve.</string>
-    <string name="about_feat_backup_label">Backup chiffré</string>
+    <string name="about_feat_backup_label">Sauvegarde chiffrée</string>
     <string name="about_feat_backup_desc">Sauvegarde locale AES-256-GCM via passphrase distincte du PIN.</string>
     <string name="about_feat_themes_label">Thèmes</string>
     <string name="about_feat_themes_desc">Clair, sombre, AMOLED, Dark Tech (slate-blue + accent bleu). Coins arrondis personnalisables.</string>
@@ -876,26 +884,26 @@
     <string name="about_help_default_step2">Ou Réglages Android → Apps par défaut → SMS → SMS Tech</string>
     <string name="about_help_voice_title">Envoyer un message vocal</string>
     <string name="about_help_voice_step1">Appui long sur le micro à droite du composer</string>
-    <string name="about_help_voice_step2">Parle, puis relâche pour envoyer (slide à gauche = annuler)</string>
+    <string name="about_help_voice_step2">Parlez, puis relâchez pour envoyer (glissez à gauche = annuler)</string>
     <string name="about_help_voice_step3">Cap 60 s — au-delà l\'enregistrement s\'arrête automatiquement</string>
     <string name="about_help_vault_title">Mettre une conversation au coffre</string>
-    <string name="about_help_vault_step1">Long press sur la conversation dans la liste → \"Coffre\"</string>
+    <string name="about_help_vault_step1">Appui long sur la conversation dans la liste → \"Coffre\"</string>
     <string name="about_help_vault_step2">Déverrouillage : PIN, passphrase ou biométrie selon votre réglage</string>
     <string name="about_help_vault_step3">Réglages → Sécurité pour configurer le coffre</string>
     <string name="about_help_block_title">Bloquer un numéro</string>
-    <string name="about_help_block_step1">Dans une conversation : menu ⋮ → Bloquer (= bloque + supprime la conv)</string>
-    <string name="about_help_block_step2">Long press sur une conversation dans la liste → Bloquer (conserve l\'historique)</string>
+    <string name="about_help_block_step1">Dans une conversation : menu ⋮ → Bloquer (= bloque tous les numéros ; la conversation est conservée, sous « Bloqués »)</string>
+    <string name="about_help_block_step2">Appui long sur une conversation dans la liste → Bloquer (conserve l\'historique)</string>
     <string name="about_help_block_step3">Le numéro est ajouté à la blocklist système, partagée avec Téléphone</string>
     <string name="about_help_translate_title">Traduire un message reçu</string>
-    <string name="about_help_translate_step1">Long press sur la bulle → \"Traduire\"</string>
+    <string name="about_help_translate_step1">Appui long sur la bulle → \"Traduire\"</string>
     <string name="about_help_translate_step2">Un sélecteur s\'ouvre avec toutes les apps de traduction installées</string>
-    <string name="about_help_translate_step3">Choisis Google Translate, DeepL, Aves Translate (FLOSS) ou autre</string>
-    <string name="about_help_translate_step4">Si aucune n\'est installée, un message t\'invite à en installer une</string>
+    <string name="about_help_translate_step3">Choisissez Google Translate, DeepL, Aves Translate (FLOSS) ou autre</string>
+    <string name="about_help_translate_step4">Si aucune n\'est installée, un message vous invite à en installer une</string>
     <string name="about_help_emergency_title">Utiliser le mode urgence</string>
-    <string name="about_help_emergency_step1">Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety Call</string>
-    <string name="about_help_emergency_step2">Page Urgence : appels directs 112 / 15 / 17 / 18 ; bouton rouge tenu 3 s → SMS aux proches</string>
-    <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis 112 + 17 sans déverrouiller</string>
-    <string name="about_help_emergency_step4">« Je vais bien » dans la liste des conversations annule l\'alerte en cas de fausse manip</string>
+    <string name="about_help_emergency_step1">Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety call</string>
+    <string name="about_help_emergency_step2">Page Urgence : appels directs vers les numéros d\'urgence de votre pays ; bouton rouge tenu 3 s → SMS aux proches</string>
+    <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis vers le 112 et, le cas échéant, vers le numéro d\'urgence propre à votre pays, sans déverrouiller</string>
+    <string name="about_help_emergency_step4">« Je vais bien » dans la liste des conversations réinitialise le délai et, sauf si vous avez désactivé le SMS, prévient vos contacts que c\'était une fausse alerte</string>
     <string name="about_help_update_title">Vérifier une mise à jour</string>
     <string name="about_help_update_step1">Bouton \"Voir les mises à jour\" en haut de cette page</string>
     <string name="about_help_update_step2">Ouvre la page Releases GitHub de SMS Tech</string>
@@ -958,15 +966,58 @@
     <string name="safety_call_setup_unsaved_title">Modifications non enregistrées</string>
     <string name="safety_call_setup_unsaved_body">Ajouter un contact ne suffit pas : il faut enregistrer pour le conserver. Quitter maintenant le perdrait.</string>
     <string name="emergency_location_grant">Autoriser la localisation</string>
-    <string name="settings_panic_code_desc">Second code qui ouvre l\'application en mode leurre : coffre et mode urgence invisibles.</string>
+    <string name="settings_panic_code_desc">Second PIN qui ouvre l\'application en mode leurre : coffre et mode urgence invisibles.</string>
     <string name="settings_panic_code_set">Configuré. Toucher pour le retirer.</string>
-    <string name="settings_panic_code_clear_title">Retirer le code panique ?</string>
+    <string name="settings_panic_code_clear_title">Retirer le PIN leurre ?</string>
     <string name="settings_panic_code_clear_body">Le mode leurre ne sera plus accessible. Votre PIN principal et vos données ne changent pas.</string>
     <string name="settings_panic_code_clear_action">Retirer</string>
-    <string name="settings_panic_code_saved">Code panique enregistré</string>
-    <string name="settings_panic_code_removed">Code panique retiré</string>
-    <string name="settings_panic_code_same_as_pin">Ce code est identique à votre PIN principal. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre.</string>
+    <string name="settings_panic_code_saved">PIN leurre enregistré</string>
+    <string name="settings_panic_code_removed">PIN leurre retiré</string>
+    <string name="settings_panic_code_same_as_pin">Ce PIN est identique à votre PIN principal. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre.</string>
     <string name="settings_panic_code_no_pin">Configurez d\'abord un verrouillage de l\'application.</string>
-    <string name="settings_pin_same_as_panic_code">Ce PIN est identique à votre code panique. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre et vous ne pourriez plus atteindre votre propre session.</string>
+    <string name="settings_pin_same_as_panic_code">Ce PIN est identique à votre PIN leurre. Choisissez-en un autre, sinon l\'application s\'ouvrirait toujours en mode leurre et vous ne pourriez plus atteindre votre propre session.</string>
     <string name="lock_wrong_code">Code incorrect</string>
+
+    <!-- ====================================================================================
+         v1.28.12 — LE TEXTE QUI PART VRAIMENT.
+
+         Ces chaînes reprennent MOT POUR MOT celles qui étaient écrites en dur dans
+         `domain/…/EmergencyTemplate.kt` et `SafetyCallTemplate.kt` depuis la v1.10.0 : rien ne
+         change pour un utilisateur francophone. Ce qui change, c'est que les autres langues ne
+         reçoivent plus du français.
+
+         Contraintes à tenir (voir le commentaire du fichier anglais) : court, pas de tiret
+         cadratin U+2014, et l'URL Maps compte dans le budget de caractères.
+         ==================================================================================== -->
+    <string name="safety_sms_emergency_need_help">⚠️ URGENCE - j\'ai besoin d\'aide. Ma position : %1$s</string>
+    <string name="safety_sms_emergency_danger">⚠️ DANGER - situation critique, contacte-moi ou viens. Position : %1$s</string>
+    <!-- Pas d\'emoji ⚠️ ici, volontairement : DISCREET sert à signaler un malaise sans alarmer,
+         et sans se trahir devant quelqu\'un qui regarde l\'écran. -->
+    <string name="safety_sms_emergency_discreet">Peux-tu m\'appeler ? J\'ai besoin d\'aide. Position : %1$s</string>
+    <string name="safety_sms_location_unavailable">(position non disponible)</string>
+
+    <string name="safety_sms_check_in">Bonjour. Je n\'ai pas accédé à mon téléphone depuis %1$s. Pourrais-tu m\'appeler ou passer pour vérifier que tout va bien ? Merci.</string>
+    <string name="safety_sms_urgent">Si tu lis ce SMS, c\'est que je n\'ai pas pu utiliser mon téléphone depuis %1$s. Pour t\'assurer que tout va bien, appelle-moi STP.</string>
+    <string name="safety_sms_follow_up">Message automatique : pas d\'activité sur mon téléphone depuis %1$s. Pourrais-tu m\'appeler pour t\'assurer que tout va bien ? Merci.</string>
+
+    <!-- Relances. Chacune nomme l\'application et se suffit à elle-même : le message initial peut
+         n\'être jamais arrivé, et un SMS anonyme reçu en pleine nuit ressemble à du hameçonnage et
+         se fait ignorer. La dernière s\'annonce comme la dernière, sinon un contact attend une
+         suite qui ne viendra jamais au lieu d\'agir. -->
+    <string name="safety_sms_relance_first">Alerte automatique SMS Tech : toujours aucune activité sur mon téléphone, %1$d minutes plus tard. Merci d\'essayer de me joindre.</string>
+    <string name="safety_sms_relance_middle">Alerte automatique SMS Tech : %1$d minutes sans aucune activité de ma part. Si tu ne parviens pas à me joindre, préviens un proche.</string>
+    <string name="safety_sms_relance_last">Dernière alerte automatique SMS Tech : %1$d minutes sans activité. Plus aucun message ne suivra. Merci de vérifier que je vais bien.</string>
+
+    <string name="safety_duration_less_than_hour">moins d\'une heure</string>
+    <plurals name="safety_duration_hours">
+        <item quantity="one">%1$d heure</item>
+        <item quantity="many">%1$d heures</item>
+        <item quantity="other">%1$d heures</item>
+    </plurals>
+    <plurals name="safety_duration_days">
+        <item quantity="one">%1$d jour</item>
+        <item quantity="many">%1$d jours</item>
+        <item quantity="other">%1$d jours</item>
+    </plurals>
+    <string name="duration_days_hours">%1$d j %2$d h</string>
 </resources>
