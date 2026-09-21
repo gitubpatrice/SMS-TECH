@@ -57,7 +57,7 @@ timber = "5.0.1"
 
 # Tests
 junit = "4.13.2"
-junit5 = "5.11.3"
+junit5 = "6.1.3"
 # Gradle 9 ne fournit plus le lanceur de la plateforme JUnit : sans lui, la tache de test echoue
 # sur « Failed to load JUnit Platform » AVANT le premier test. La plateforme garde sa propre
 # numerotation tant qu'on reste en JUnit 5 — Jupiter 5.11.3 <-> plateforme 1.11.3.
