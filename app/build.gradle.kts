@@ -300,7 +300,7 @@ dependencies {
     implementation(libs.timber)
 
     // Desugaring (java.time on minSdk 26 already, but desugar still useful for stable libs)
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Unit tests
     testImplementation(libs.junit.jupiter.api)
