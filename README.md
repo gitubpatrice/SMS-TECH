@@ -66,5 +66,6 @@ See [PRIVACY.md](PRIVACY.md) and [PERMISSIONS.md](PERMISSIONS.md).
 
 ## 📃 License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE). Third-party libraries and their licences:
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 © 2026 Patrice Haltaya.
