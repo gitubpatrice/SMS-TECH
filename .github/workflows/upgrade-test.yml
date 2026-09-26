@@ -100,7 +100,30 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
 
+      # Une PR qui ne touche que la documentation (ou la CI) produit un APK identique, octet pour
+      # octet, à celui du tag précédent : il n'y a alors aucune mise à jour à mesurer, et
+      # `upgrade-test.sh` refuse à juste titre de conclure (constaté sur la PR #47, textes légaux
+      # seuls). Ce cas est dit, visiblement, et l'émulateur n'est pas démarré. Sur un TAG, deux APK
+      # identiques restent une erreur : une version publiée qui ne change rien n'est pas normale.
+      - name: Compare the two APKs
+        id: comparaison
+        run: |
+          set -euo pipefail
+          ANCIEN="$RUNNER_TEMP/precedent/app/build/outputs/apk/debug/app-x86_64-debug.apk"
+          NOUVEAU="app/build/outputs/apk/debug/app-x86_64-debug.apk"
+          if cmp -s "$ANCIEN" "$NOUVEAU"; then
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+              echo "::error::le tag produit le MÊME APK que ${{ steps.precedent.outputs.tag }}"
+              exit 1
+            fi
+            echo "::notice::APK identique à ${{ steps.precedent.outputs.tag }} : aucune mise à jour à mesurer, test sans objet pour cette révision"
+            echo "identiques=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "identiques=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Enable KVM
+        if: steps.comparaison.outputs.identiques != 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -108,6 +131,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run the upgrade test
+        if: steps.comparaison.outputs.identiques != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         env:
           APK_ANCIEN: ${{ runner.temp }}/precedent/app/build/outputs/apk/debug/app-x86_64-debug.apk
@@ -131,7 +155,7 @@ jobs:
             .github/scripts/upgrade-test.sh
 
       - name: Upload the instrumentation streams
-        if: always()
+        if: always() && steps.comparaison.outputs.identiques != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: smstech-upgrade-streams
