@@ -30,7 +30,9 @@ import kotlin.coroutines.resume
  * FLOSS).
  *
  * **Stratégie en cascade** :
- *  1. Si la permission `ACCESS_FINE_LOCATION` n'est PAS accordée → return null.
+ *  1. Si NI `ACCESS_FINE_LOCATION` NI `ACCESS_COARSE_LOCATION` n'est accordée → return null.
+ *     Avec la seule position approximative, le GPS n'est jamais interrogé (cf.
+ *     [aLaPositionExacte]).
  *  2. Si un `lastKnownLocation` (GPS ou NETWORK) frais (< [FRESH_THRESHOLD_MS])
  *     existe → on le retourne directement (pas de fix réseau, pas d'attente).
  *  3. Sinon, on `requestSingleUpdate`-équivalent sur GPS + NETWORK en
@@ -56,11 +58,17 @@ class LocationResolver @Inject constructor(
      * use-cases. Le timeout de résolution reste un détail d'implémentation.
      */
     override suspend fun resolveLocation(): GeoLocation? =
-        getCurrentLocation()?.let { GeoLocation(latitude = it.latitude, longitude = it.longitude) }
+        getCurrentLocation()?.let {
+            GeoLocation(
+                latitude = it.latitude,
+                longitude = it.longitude,
+                precisionMetres = if (it.hasAccuracy()) it.accuracy else null,
+            )
+        }
 
     /**
      * Tente de récupérer la position actuelle. Retourne null si :
-     *  - permission `ACCESS_FINE_LOCATION` non accordée
+     *  - aucune permission de localisation accordée, ni exacte ni approximative
      *  - aucun provider activé (GPS off ET network off)
      *  - aucun fix dans le timeout ET pas de `lastKnown` rance
      */
@@ -68,7 +76,7 @@ class LocationResolver @Inject constructor(
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     ): Location? {
         if (!hasLocationPermission()) {
-            Timber.d("LocationResolver: ACCESS_FINE_LOCATION not granted, returning null")
+            Timber.d("LocationResolver: no location permission, returning null")
             return null
         }
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
@@ -76,8 +84,9 @@ class LocationResolver @Inject constructor(
             Timber.w("LocationResolver: LocationManager unavailable")
             return null
         }
+        val exacte = aLaPositionExacte()
 
-        val freshLast = bestFreshLastKnown(lm)
+        val freshLast = bestFreshLastKnown(lm, exacte)
         if (freshLast != null) {
             Timber.d(
                 "LocationResolver: using fresh lastKnown (provider=%s, ageMs=%d)",
@@ -87,13 +96,16 @@ class LocationResolver @Inject constructor(
             return freshLast
         }
 
-        val gpsEnabled = runCatching { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) }
+        // Sans la position exacte, `requestLocationUpdates(GPS)` lève `SecurityException` — et
+        // comme les deux demandes partagent un `try`, celle du RÉSEAU n'était jamais faite : la
+        // position approximative accordée ne donnait aucun fix. Le GPS est donc écarté d'emblée.
+        val gpsEnabled = exacte && runCatching { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) }
             .getOrDefault(false)
         val networkEnabled = runCatching { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) }
             .getOrDefault(false)
         if (!gpsEnabled && !networkEnabled) {
             Timber.d("LocationResolver: no enabled provider, returning stale lastKnown if any")
-            return bestLastKnownBounded(lm)
+            return bestLastKnownBounded(lm, exacte)
         }
 
         val newFix = withTimeoutOrNull(timeoutMs) {
@@ -104,7 +116,7 @@ class LocationResolver @Inject constructor(
             return newFix
         }
         // Timeout — repli sur le lastKnown, mais BORNÉ EN ÂGE (cf. [bestLastKnownBounded]).
-        val stale = bestLastKnownBounded(lm)
+        val stale = bestLastKnownBounded(lm, exacte)
         if (stale != null) {
             Timber.d(
                 "LocationResolver: timeout, falling back to stale lastKnown (provider=%s, ageMs=%d)",
@@ -117,15 +129,24 @@ class LocationResolver @Inject constructor(
         return stale
     }
 
+    /**
+     * v1.28.13 — la position APPROXIMATIVE suffit. Ne tester que `ACCESS_FINE_LOCATION` jetait la
+     * réponse « Approximative » de la boîte de dialogue d'Android 12+ : l'utilisateur avait
+     * accordé une position, l'écran disait « non accordée » et le SMS d'urgence partait sans.
+     * L'imprécision est dite dans le SMS, cf. `GeoLocation.lienCarte`.
+     */
     fun hasLocationPermission(): Boolean =
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-        ) == PackageManager.PERMISSION_GRANTED
+        aLaPositionExacte() || accordee(Manifest.permission.ACCESS_COARSE_LOCATION)
 
-    private fun bestFreshLastKnown(lm: LocationManager): Location? {
+    /** `ACCESS_FINE_LOCATION`, seule à ouvrir le GPS. */
+    private fun aLaPositionExacte(): Boolean = accordee(Manifest.permission.ACCESS_FINE_LOCATION)
+
+    private fun accordee(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun bestFreshLastKnown(lm: LocationManager, exacte: Boolean): Location? {
         val now = System.currentTimeMillis()
-        return bestLastKnown(lm)?.takeIf { now - it.time <= FRESH_THRESHOLD_MS }
+        return bestLastKnown(lm, exacte)?.takeIf { now - it.time <= FRESH_THRESHOLD_MS }
     }
 
     /**
@@ -144,8 +165,8 @@ class LocationResolver @Inject constructor(
      * « (position non disponible) » et l'interface sur une erreur : dire qu'on ne sait pas vaut
      * mieux que d'affirmer un lieu périmé.
      */
-    private fun bestLastKnownBounded(lm: LocationManager): Location? {
-        val fix = bestLastKnown(lm) ?: return null
+    private fun bestLastKnownBounded(lm: LocationManager, exacte: Boolean): Location? {
+        val fix = bestLastKnown(lm, exacte) ?: return null
         val ageMs = System.currentTimeMillis() - fix.time
         if (ageMs > STALE_FALLBACK_MAX_AGE_MS) {
             Timber.d("LocationResolver: lastKnown too old (ageMs=%d) — reporting unavailable", ageMs)
@@ -154,9 +175,9 @@ class LocationResolver @Inject constructor(
         return fix
     }
 
-    private fun bestLastKnown(lm: LocationManager): Location? {
+    private fun bestLastKnown(lm: LocationManager, exacte: Boolean): Location? {
         val candidates = listOfNotNull(
-            safeLastKnown(lm, LocationManager.GPS_PROVIDER),
+            if (exacte) safeLastKnown(lm, LocationManager.GPS_PROVIDER) else null,
             safeLastKnown(lm, LocationManager.NETWORK_PROVIDER),
         )
         // Le plus récent et le plus précis (priorité au plus récent).

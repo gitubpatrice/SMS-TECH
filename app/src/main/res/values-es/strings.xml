@@ -982,6 +982,8 @@
     <string name="safety_call_setup_unsaved_title">Cambios sin guardar</string>
     <string name="safety_call_setup_unsaved_body">Añadir un contacto no basta: hay que guardarlo para que se conserve. Si sale ahora, se perdería.</string>
     <string name="emergency_location_grant">Permitir la ubicación</string>
+    <string name="emergency_location_approximate">Ubicación aproximada: el SMS de emergencia indicará una zona de unos 2 km. Permita la ubicación precisa para mayor exactitud.</string>
+    <string name="emergency_location_grant_precise">Permitir la ubicación precisa</string>
     <string name="settings_panic_code_desc">Un segundo PIN que abre la app en modo señuelo: caja fuerte y modo emergencia ocultos.</string>
     <string name="settings_panic_code_set">Configurado. Toque para quitarlo.</string>
     <string name="settings_panic_code_clear_title">¿Quitar el PIN señuelo?</string>

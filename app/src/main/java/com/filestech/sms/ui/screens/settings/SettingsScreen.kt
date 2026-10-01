@@ -84,6 +84,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
+import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
 import com.filestech.sms.ui.util.daySeparatorLabel
@@ -302,9 +303,9 @@ fun SettingsScreen(
     // refuse la permission, on REVERT `includeLocation = false` en DataStore
     // pour éviter un état sale (toggle ON mais SMS sans coords). Pattern
     // miroir de `revertCallBehaviorIfPermissionRevoked` (v1.10.0/v1.14.1).
-    val locationPermLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
+    // v1.28.13 — exacte ET approximative demandées ensemble ; l'une OU l'autre suffit, cf.
+    // [rememberPermissionLocalisation]. Un « Approximative » ne remet plus l'option à OFF.
+    val localisation = rememberPermissionLocalisation { granted ->
         if (!granted) {
             viewModel.update {
                 it.copy(security = it.security.copy(
@@ -652,9 +653,8 @@ fun SettingsScreen(
                     onUpdate = viewModel::update,
                     onOpenEmergencySetup = onOpenEmergencySetup,
                     onOpenEmergency = onOpenEmergency,
-                    onRequestLocationPermission = {
-                        locationPermLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                    },
+                    positionAccordee = localisation.accordee,
+                    onRequestLocationPermission = localisation.demander,
                 )
             }
 
@@ -3599,9 +3599,11 @@ private fun SecuritySection(
  *
  * Le bouton "Inclure position GPS" déclenche [onRequestLocationPermission] lors d'un toggle
  * OFF→ON sans permission accordée. La logique de revert sur refus est gérée côté parent via
- * le `locationPermLauncher` qui appelle [onUpdate] en cas de denied.
+ * `rememberPermissionLocalisation`, qui appelle [onUpdate] en cas de denied.
  *
  * Toute la section est gated par `if (!isPanicDecoy)` au call-site parent (audit SEC-1 v1.10.0).
+ *
+ * @param positionAccordee v1.28.13 — position exacte OU approximative accordée.
  */
 @Composable
 private fun EmergencySection(
@@ -3609,9 +3611,9 @@ private fun EmergencySection(
     onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -> com.filestech.sms.domain.settings.AppSettings) -> Unit,
     onOpenEmergencySetup: () -> Unit,
     onOpenEmergency: () -> Unit,
+    positionAccordee: Boolean,
     onRequestLocationPermission: () -> Unit,
 ) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     SectionCard(
         title = stringResource(R.string.settings_section_emergency),
         icon = Icons.Outlined.WarningAmber,
@@ -3698,13 +3700,8 @@ private fun EmergencySection(
                         ))
                     }
                     // Au passage OFF→ON sans perm déjà accordée → demande runtime.
-                    if (v) {
-                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
-                            ctx, android.Manifest.permission.ACCESS_FINE_LOCATION,
-                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                        if (!granted) {
-                            onRequestLocationPermission()
-                        }
+                    if (v && !positionAccordee) {
+                        onRequestLocationPermission()
                     }
                 },
             )

@@ -977,6 +977,8 @@
     <string name="safety_call_setup_unsaved_title">Nicht gespeicherte Änderungen</string>
     <string name="safety_call_setup_unsaved_body">Einen Kontakt hinzuzufügen genügt nicht: er muss gespeichert werden, um erhalten zu bleiben. Jetzt zu gehen würde ihn verlieren.</string>
     <string name="emergency_location_grant">Standort erlauben</string>
+    <string name="emergency_location_approximate">Ungefährer Standort: Die Notfall-SMS gibt einen Bereich von etwa 2 km an. Erlauben Sie den genauen Standort für eine exakte Position.</string>
+    <string name="emergency_location_grant_precise">Genauen Standort erlauben</string>
     <string name="settings_panic_code_desc">Eine zweite PIN, die die App im Tarnmodus öffnet: Tresor und Notfallmodus sind verborgen.</string>
     <string name="settings_panic_code_set">Eingerichtet. Tippen, um ihn zu entfernen.</string>
     <string name="settings_panic_code_clear_title">Tarn-PIN entfernen?</string>

@@ -4,6 +4,7 @@ import android.os.SystemClock
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.location.LocationProvider
+import com.filestech.sms.domain.location.lienCarte
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.safety.SafetyMessageTexts
 import com.filestech.sms.domain.security.PanicStateProvider
@@ -77,29 +78,10 @@ class TriggerEmergencyUseCase @Inject constructor(
             runCatching { location.resolveLocation() }
                 .onFailure { Timber.w(it, "TriggerEmergencyUseCase: location lookup threw") }
                 .getOrNull()
-                ?.let { loc ->
-                    // Format minimaliste : 5 décimales (~ 1 mètre de précision)
-                    // suffisent pour le secours et restent compactes pour
-                    // tenir dans un segment SMS.
-                    //
-                    // v1.27.2 (audit externe Gemini 2026-08-04) — `Locale.ROOT` OBLIGATOIRE.
-                    //
-                    // `String.format` sans locale explicite prend celle de l'appareil. Sur un
-                    // téléphone réglé en français — le cas de la quasi-totalité des
-                    // utilisateurs de cette application — `%.5f` rend « 48,85341 » avec une
-                    // VIRGULE. L'URL devenait
-                    // `https://maps.google.com/?q=48,85341,2,34880` : quatre nombres séparés par
-                    // des virgules, que Maps ne sait pas interpréter. Le lien de localisation
-                    // d'un SMS d'URGENCE était donc inutilisable, précisément là où il compte.
-                    // Un point décimal est ici une exigence de format machine, pas un choix de
-                    // présentation.
-                    String.format(
-                        java.util.Locale.ROOT,
-                        "https://maps.google.com/?q=%.5f,%.5f",
-                        loc.latitude,
-                        loc.longitude,
-                    )
-                }
+                // Format minimaliste : 5 décimales (~ 1 mètre de précision) suffisent pour le
+                // secours et restent compactes pour tenir dans un segment SMS. `Locale.ROOT`
+                // (v1.27.2) et marge d'une position approximative (v1.28.13) : cf. [lienCarte].
+                ?.lienCarte()
         } else {
             null
         }

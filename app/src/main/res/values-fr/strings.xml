@@ -968,6 +968,8 @@
     <string name="safety_call_setup_unsaved_title">Modifications non enregistrées</string>
     <string name="safety_call_setup_unsaved_body">Ajouter un contact ne suffit pas : il faut enregistrer pour le conserver. Quitter maintenant le perdrait.</string>
     <string name="emergency_location_grant">Autoriser la localisation</string>
+    <string name="emergency_location_approximate">Position approximative : le SMS d\'urgence indiquera une zone d\'environ 2 km. Autorisez la position exacte pour plus de précision.</string>
+    <string name="emergency_location_grant_precise">Autoriser la position exacte</string>
     <string name="settings_panic_code_desc">Second PIN qui ouvre l\'application en mode leurre : coffre et mode urgence invisibles.</string>
     <string name="settings_panic_code_set">Configuré. Toucher pour le retirer.</string>
     <string name="settings_panic_code_clear_title">Retirer le PIN leurre ?</string>

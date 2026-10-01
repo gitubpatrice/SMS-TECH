@@ -972,6 +972,8 @@
     <string name="safety_call_setup_unsaved_title">Unsaved changes</string>
     <string name="safety_call_setup_unsaved_body">Adding a contact is not enough: it must be saved to be kept. Leaving now would lose it.</string>
     <string name="emergency_location_grant">Allow location</string>
+    <string name="emergency_location_approximate">Approximate location: the emergency SMS will give an area of about 2 km. Allow precise location for an exact position.</string>
+    <string name="emergency_location_grant_precise">Allow precise location</string>
     <string name="settings_panic_code_desc">A second PIN that opens the app in decoy mode: vault and emergency mode hidden.</string>
     <string name="settings_panic_code_set">Configured. Tap to remove it.</string>
     <string name="settings_panic_code_clear_title">Remove the decoy PIN?</string>

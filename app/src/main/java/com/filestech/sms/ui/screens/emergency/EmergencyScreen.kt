@@ -48,17 +48,18 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyConfig
+import com.filestech.sms.domain.location.GeoLocation
+import com.filestech.sms.domain.location.lienCarte
 import com.filestech.sms.domain.usecase.TriggerEmergencyUseCase
 import com.filestech.sms.system.emergency.EmergencyCallHelper
 import com.filestech.sms.system.emergency.EmergencyNumbers
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.EmergencyHoldButton
+import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.PermissionStatus
-import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.launch
 
 /**
@@ -155,8 +156,9 @@ fun EmergencyScreen(
     ) { }
     // v1.10.0 audit U1 — preview reflète le statut RÉEL de la permission
     // (pas juste la préférence config). Évite un faux sentiment de sécurité.
-    val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
-    val locationGranted = locationPermission.status == PermissionStatus.Granted
+    // v1.28.13 — exacte OU approximative, cf. [rememberPermissionLocalisation].
+    val localisation = rememberPermissionLocalisation()
+    val locationGranted = localisation.accordee
 
     // v1.27.2 — résolu à la composition, comme les autres messages de cet écran.
     val disableDoneMsg = stringResource(R.string.emergency_disable_done)
@@ -337,6 +339,7 @@ fun EmergencyScreen(
             MessagePreviewCard(
                 config = state,
                 includeLocationGranted = state.includeLocation && locationGranted,
+                positionApproximative = !localisation.exacte,
             )
 
             // v1.25.5 — avertissement EXPLICITE quand la position est armée sans la permission.
@@ -359,8 +362,20 @@ fun EmergencyScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { locationPermission.launchPermissionRequest() }) {
+                OutlinedButton(onClick = localisation.demander) {
                     Text(stringResource(R.string.emergency_location_grant))
+                }
+            } else if (state.includeLocation && !localisation.exacte) {
+                // v1.28.13 — position approximative : elle part, avec sa marge, et on le dit ici.
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.emergency_location_approximate),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = localisation.demander) {
+                    Text(stringResource(R.string.emergency_location_grant_precise))
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -596,17 +611,23 @@ private fun RelativePickerDialog(
     )
 }
 
+/** Lien de l'aperçu : Paris, avec la marge d'une position approximative (~2 km sous Android 12+). */
+private fun lienDExemple(approximative: Boolean): String =
+    GeoLocation(48.85661, 2.35222, precisionMetres = if (approximative) 2_000f else null).lienCarte()
+
 @Composable
 private fun MessagePreviewCard(
     config: EmergencyConfig,
     includeLocationGranted: Boolean,
+    positionApproximative: Boolean,
 ) {
     // v1.28.12 — MEME source que l'envoi (`TriggerEmergencyUseCase`) : un apercu qui mentirait
     // sur le contenu d'un SMS d'urgence serait la pire occurrence du motif « correctif pose sur
     // un seul des chemins jumeaux ».
+    // v1.28.13 — le lien d'exemple passe lui aussi par `lienCarte`, marge comprise.
     val textes = rememberSafetyMessageTexts()
-    val previewBody = remember(config.template, includeLocationGranted, textes) {
-        val sampleUrl = if (includeLocationGranted) "https://maps.google.com/?q=48.85661,2.35222" else null
+    val previewBody = remember(config.template, includeLocationGranted, positionApproximative, textes) {
+        val sampleUrl = if (includeLocationGranted) lienDExemple(positionApproximative) else null
         textes.emergencyBody(config.template, sampleUrl)
     }
     Card(

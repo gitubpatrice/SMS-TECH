@@ -982,6 +982,8 @@
     <string name="safety_call_setup_unsaved_title">Modifiche non salvate</string>
     <string name="safety_call_setup_unsaved_body">Aggiungere un contatto non basta: va salvato per essere conservato. Uscendo adesso andrebbe perso.</string>
     <string name="emergency_location_grant">Consenti la posizione</string>
+    <string name="emergency_location_approximate">Posizione approssimativa: l\'SMS di emergenza indicherà una zona di circa 2 km. Consenta la posizione precisa per una maggiore accuratezza.</string>
+    <string name="emergency_location_grant_precise">Consenti la posizione precisa</string>
     <string name="settings_panic_code_desc">Un secondo PIN che apre l\'app in modalità esca: cassaforte e modalità emergenza nascoste.</string>
     <string name="settings_panic_code_set">Configurato. Tocchi per rimuoverlo.</string>
     <string name="settings_panic_code_clear_title">Rimuovere il PIN esca?</string>
