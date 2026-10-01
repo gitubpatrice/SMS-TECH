@@ -35,21 +35,20 @@ class NotificationsDesMessagesVisiblesTest {
 
     @Test
     fun `canal des messages coupe - pas visibles`() {
-        nm.createNotificationChannel(
-            NotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING, "messages", NotificationManager.IMPORTANCE_NONE),
-        )
+        nm.createNotificationChannel(canalDesMessages(NotificationManager.IMPORTANCE_NONE))
 
         assertThat(notificationsDesMessagesVisibles(contexte)).isFalse()
     }
 
     @Test
     fun `canal des messages actif - visibles`() {
-        nm.createNotificationChannel(
-            NotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING, "messages", NotificationManager.IMPORTANCE_HIGH),
-        )
+        nm.createNotificationChannel(canalDesMessages(NotificationManager.IMPORTANCE_HIGH))
 
         assertThat(notificationsDesMessagesVisibles(contexte)).isTrue()
     }
+
+    private fun canalDesMessages(importance: Int) =
+        NotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING, "messages", importance)
 
     @Test
     fun `canal pas encore cree - visibles, ce n'est pas une coupure`() {

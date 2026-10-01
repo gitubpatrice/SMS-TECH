@@ -56,8 +56,8 @@ import com.filestech.sms.system.emergency.EmergencyNumbers
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.EmergencyHoldButton
-import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.showError
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import kotlinx.coroutines.launch

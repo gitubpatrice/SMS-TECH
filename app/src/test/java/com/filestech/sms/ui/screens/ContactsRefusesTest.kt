@@ -105,7 +105,7 @@ class ContactsRefusesTest {
     fun `nouveau message - une autre panne du fournisseur ne se dit pas refus de permission`() = runTest(dispatcher) {
         val enPanne = object : ContactRepository {
             override suspend fun lookupByPhone(rawPhone: String): Contact? = null
-            override suspend fun listAll(): List<Contact> = throw IllegalStateException("fournisseur indisponible")
+            override suspend fun listAll(): List<Contact> = error("fournisseur indisponible")
         }
 
         val vm = ComposeViewModel(SavedStateHandle(), enPanne, mockk(relaxed = true), dispatcher)
