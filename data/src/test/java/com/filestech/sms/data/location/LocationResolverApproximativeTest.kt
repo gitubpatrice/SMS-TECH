@@ -93,7 +93,13 @@ class LocationResolverApproximativeTest {
 
         assertThat(position?.precisionMetres).isEqualTo(2_000f)
         verify(exactly = 0) {
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, any<Long>(), any<Float>(), any<LocationListener>(), any())
+            lm.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                any<Long>(),
+                any<Float>(),
+                any<LocationListener>(),
+                any(),
+            )
         }
     }
 
