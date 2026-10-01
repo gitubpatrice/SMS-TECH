@@ -85,6 +85,7 @@ import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
 import com.filestech.sms.system.notifications.notificationsDesMessagesVisibles
+import com.filestech.sms.system.notifications.raccourciDUrgenceVisible
 import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
 import com.filestech.sms.ui.components.BanniereNotificationsCoupees
 import com.filestech.sms.ui.components.rememberPermissionAccordee
@@ -3673,6 +3674,7 @@ private fun EmergencySection(
                 BanniereNotificationsCoupees(
                     message = stringResource(R.string.notifications_off_emergency_shortcut),
                     modifier = Modifier.padding(vertical = 8.dp),
+                    visibles = ::raccourciDUrgenceVisible,
                 )
             }
             // v1.12.0 — Toggle de l'action police dans la notification d'urgence.

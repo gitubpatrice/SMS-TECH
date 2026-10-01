@@ -611,8 +611,11 @@ private fun RelativePickerDialog(
     )
 }
 
-/** Lien de l'aperçu : Paris, avec la marge d'une position approximative (~2 km sous Android 12+). */
-private fun lienDExemple(approximative: Boolean): String =
+/**
+ * Lien des aperçus : Paris, avec la marge d'une position approximative (~2 km sous Android 12+).
+ * Partagé avec les exemples de modèles de [EmergencySetupScreen] : un seul lien d'exemple.
+ */
+internal fun lienDExemple(approximative: Boolean): String =
     GeoLocation(48.85661, 2.35222, precisionMetres = if (approximative) 2_000f else null).lienCarte()
 
 @Composable

@@ -307,9 +307,16 @@ fun EmergencySetupScreen(
                             )
                             Text(
                                 // v1.28.12 — MEME source que l'envoi, cf. rememberSafetyMessageTexts.
+                                // v1.28.13 (relecture GPT) — même LIEN aussi : absent quand la
+                                // position ne partira pas, avec sa marge quand elle est approximative.
+                                // Le lien en dur l'affichait même option coupée.
                                 text = rememberSafetyMessageTexts().emergencyBody(
                                     template,
-                                    "https://maps.google.com/?q=48.85,2.35",
+                                    if (draft.includeLocation && locationGranted) {
+                                        lienDExemple(approximative = !localisation.exacte)
+                                    } else {
+                                        null
+                                    },
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

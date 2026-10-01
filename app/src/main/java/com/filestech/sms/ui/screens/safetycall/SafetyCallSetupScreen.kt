@@ -67,6 +67,7 @@ import com.filestech.sms.R
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
+import com.filestech.sms.system.notifications.notificationsDuSafetyCallVisibles
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.BanniereNotificationsCoupees
 import com.filestech.sms.ui.components.BanniereRoleSmsManquant
@@ -226,7 +227,10 @@ fun SafetyCallSetupScreen(
             // v1.28.13 — l'avertissement avant envoi et l'arrêt de la séquence passent par des
             // notifications : sans elles, le Safety call part sans prévenir, et on ne l'arrête plus
             // qu'en rouvrant l'application.
-            BanniereNotificationsCoupees(message = stringResource(R.string.notifications_off_safety_call))
+            BanniereNotificationsCoupees(
+                message = stringResource(R.string.notifications_off_safety_call),
+                visibles = ::notificationsDuSafetyCallVisibles,
+            )
             StatusSection(
                 draft = draft,
                 savedEnabled = savedEnabled,

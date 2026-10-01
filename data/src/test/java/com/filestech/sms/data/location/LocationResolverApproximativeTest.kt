@@ -4,10 +4,12 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
@@ -64,6 +66,35 @@ class LocationResolverApproximativeTest {
         assertThat(position.precisionMetres).isEqualTo(2_000f)
         // Le GPS n'est pas interrogé : il exige la position exacte.
         verify(exactly = 0) { lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) }
+    }
+
+    /**
+     * Relecture GPT du correctif : le cas ci-dessus sort par la position en cache et n'exerce jamais
+     * la demande de fix. Or c'est elle qui portait le second défaut : sans la position exacte, la
+     * demande GPS lève `SecurityException`, et comme elle partage son `try` avec la demande RÉSEAU,
+     * celle-ci n'était jamais faite. Ici rien n'est en cache : seule la demande réseau peut aboutir.
+     */
+    @Test
+    fun `approximative seule, rien en cache - la demande reseau est faite, jamais le GPS`() = runTest {
+        val auditeur = slot<LocationListener>()
+        val lm: LocationManager = mockk(relaxUnitFun = true) {
+            every { getLastKnownLocation(any()) } returns null
+            every { isProviderEnabled(any()) } returns true
+            every {
+                requestLocationUpdates(LocationManager.GPS_PROVIDER, any<Long>(), any<Float>(), any<LocationListener>(), any())
+            } throws SecurityException("\"gps\" location provider requires ACCESS_FINE_LOCATION permission.")
+            every {
+                requestLocationUpdates(LocationManager.NETWORK_PROVIDER, any<Long>(), any<Float>(), capture(auditeur), any())
+            } answers { auditeur.captured.onLocationChanged(positionReseau()) }
+        }
+        val resolveur = LocationResolver(contexte(fine = false, coarse = true, lm = lm))
+
+        val position = resolveur.resolveLocation()
+
+        assertThat(position?.precisionMetres).isEqualTo(2_000f)
+        verify(exactly = 0) {
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, any<Long>(), any<Float>(), any<LocationListener>(), any())
+        }
     }
 
     @Test

@@ -537,22 +537,3 @@ internal fun notificationsToCancel(
     }
     return actives.mapNotNull { (tag, id) -> if (tag != null && (tag to id) in voulues) tag to id else null }
 }
-
-/**
- * `true` quand une notification de message entrant peut réellement s'afficher : notifications de
- * l'application autorisées (`POST_NOTIFICATIONS` sous Android 13+, interrupteur global sinon) ET
- * canal `incoming_messages` non coupé. Sinon `notify()` ne poste rien, sans erreur.
- *
- * v1.8.0 (bug 3 fix, MEDIUM 3c) — écrite pour un avertissement rouge dans les Réglages.
- * v1.28.13 — cet avertissement n'avait JAMAIS existé : la fonction, alors membre de
- * [IncomingMessageNotifier], n'avait aucun appelant. Sortie au niveau du fichier parce qu'un écran
- * Compose a un `Context`, pas ce singleton ; elle est appelée par `BanniereNotificationsCoupees`.
- * `minSdk` 26 : les canaux existent toujours.
- */
-fun notificationsDesMessagesVisibles(contexte: Context): Boolean {
-    if (!NotificationManagerCompat.from(contexte).areNotificationsEnabled()) return false
-    val canal = contexte.getSystemService(NotificationManager::class.java)
-        ?.getNotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING)
-    // Canal pas encore créé : l'étape de création est en attente, il n'est pas « coupé ».
-    return canal == null || canal.importance != NotificationManager.IMPORTANCE_NONE
-}

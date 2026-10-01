@@ -54,4 +54,36 @@ class NotificationsDesMessagesVisiblesTest {
     fun `canal pas encore cree - visibles, ce n'est pas une coupure`() {
         assertThat(notificationsDesMessagesVisibles(contexte)).isTrue()
     }
+
+    /**
+     * Relecture GPT du correctif : le Safety call et le raccourci d'urgence ont leurs PROPRES canaux.
+     * Couper l'un d'eux dans Android laisse l'interrupteur global allumé ; la bannière qui ne
+     * regardait que lui restait muette. Chaque coupure doit éteindre SA fonction, et seulement elle.
+     */
+    @Test
+    fun `canal d'avertissement du Safety call coupe - seul le Safety call est touche`() {
+        nm.createNotificationChannel(canal(NotificationChannelInitializer.CHANNEL_SAFETY_CALL_WARNING))
+
+        assertThat(notificationsDuSafetyCallVisibles(contexte)).isFalse()
+        assertThat(raccourciDUrgenceVisible(contexte)).isTrue()
+        assertThat(notificationsDesMessagesVisibles(contexte)).isTrue()
+    }
+
+    @Test
+    fun `canal d'accuse de reception du Safety call coupe - Safety call pas visible`() {
+        nm.createNotificationChannel(canal(NotificationChannelInitializer.CHANNEL_SAFETY_CALL_RECEIPT))
+
+        assertThat(notificationsDuSafetyCallVisibles(contexte)).isFalse()
+    }
+
+    @Test
+    fun `canal du raccourci d'urgence coupe - seul le raccourci est touche`() {
+        nm.createNotificationChannel(canal(NotificationChannelInitializer.CHANNEL_EMERGENCY_SHORTCUT))
+
+        assertThat(raccourciDUrgenceVisible(contexte)).isFalse()
+        assertThat(notificationsDuSafetyCallVisibles(contexte)).isTrue()
+    }
+
+    /** Un canal coupé par l'utilisateur. */
+    private fun canal(id: String) = NotificationChannel(id, id, NotificationManager.IMPORTANCE_NONE)
 }

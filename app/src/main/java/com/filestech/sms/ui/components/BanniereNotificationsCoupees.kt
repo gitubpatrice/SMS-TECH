@@ -46,8 +46,9 @@ import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
  * que la bannière disparaisse quand on revient de la page Android où l'on vient de les rallumer.
  *
  * @param message ce que la coupure empêche, à cet endroit précis.
- * @param visibles comment lire l'état. Par défaut, les notifications de l'application ; les
- *   Réglages y ajoutent le canal des messages entrants.
+ * @param visibles comment lire l'état. Par défaut, les notifications de l'application seules ;
+ *   chaque appelant passe en pratique les CANAUX de sa fonction (cf. `CanauxVisibles.kt`), qu'on
+ *   coupe un à un dans Android sans toucher à l'interrupteur global.
  */
 @Composable
 fun BanniereNotificationsCoupees(
