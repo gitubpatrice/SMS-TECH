@@ -77,6 +77,11 @@ object EmergencyCallHelper {
             Timber.w("EmergencyCallHelper.openDialer: rejected non-whitelisted number %s", number)
             return CallOutcome.INVALID_NUMBER
         }
+        return dial(context, number)
+    }
+
+    /** `ACTION_DIAL` commun à [openDialer] et [openTrustedContactDialer], une fois le numéro validé. */
+    private fun dial(context: Context, number: String): CallOutcome {
         val intent = Intent(Intent.ACTION_DIAL).apply {
             data = Uri.parse("tel:$number")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -84,7 +89,7 @@ object EmergencyCallHelper {
         return runCatching { context.startActivity(intent) }
             .map { CallOutcome.SUCCESS }
             .getOrElse {
-                Timber.w(it, "EmergencyCallHelper.openDialer: no dialer for %s", number)
+                Timber.w(it, "EmergencyCallHelper.dial: no dialer for %s", number)
                 CallOutcome.NO_DIALER
             }
     }
@@ -114,8 +119,9 @@ object EmergencyCallHelper {
      * `phoneNumber` vient bien d'un `SafetyCallContact.phoneNumber` lu
      * depuis Settings — JAMAIS d'une source non-contrôlée.
      *
-     * Même flow PERMISSION_DENIED / OS_ERROR que [placeCall]. Caller doit
-     * gérer fallback `openDialer` si refusé.
+     * Même flow PERMISSION_DENIED / OS_ERROR que [placeCall]. Si refusé, le caller se replie
+     * sur [openTrustedContactDialer] — et non sur [openDialer], qui écarte tout numéro hors de
+     * la liste blanche des services d'urgence.
      */
     fun placeTrustedContactCall(context: Context, phoneNumber: String): CallOutcome {
         val cleaned = phoneNumber.trim()
@@ -124,6 +130,24 @@ object EmergencyCallHelper {
             return CallOutcome.INVALID_NUMBER
         }
         return executeCall(context, cleaned, isWhitelistedEmergency = false)
+    }
+
+    /**
+     * v1.28.13 — composeur pré-rempli pour un contact SafetyCall : le repli de
+     * [placeTrustedContactCall] quand `CALL_PHONE` est refusée. Même contrat sur l'origine du
+     * numéro que [placeTrustedContactCall], et aucune permission requise.
+     *
+     * Il manquait : sans lui, la tuile « Appeler un proche » ne faisait RIEN une fois l'appel
+     * direct refusé, alors que les commentaires de l'écran Urgence annonçaient ce repli depuis la
+     * v1.14.1.
+     */
+    fun openTrustedContactDialer(context: Context, phoneNumber: String): CallOutcome {
+        val cleaned = phoneNumber.trim()
+        if (cleaned.isBlank()) {
+            Timber.w("EmergencyCallHelper.openTrustedContactDialer: blank number rejected")
+            return CallOutcome.INVALID_NUMBER
+        }
+        return dial(context, cleaned)
     }
 
     /**
