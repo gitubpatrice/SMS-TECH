@@ -1,7 +1,10 @@
 package com.filestech.sms.ui.screens
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.lifecycle.SavedStateHandle
+import com.filestech.sms.R
 import com.filestech.sms.data.contacts.ContactsReader
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.repository.ContactRepositoryImpl
@@ -12,6 +15,7 @@ import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.security.AppLockManager
+import com.filestech.sms.ui.components.AttachmentKind
 import com.filestech.sms.ui.screens.compose.ComposeViewModel
 import com.filestech.sms.ui.screens.thread.ThreadViewModel
 import com.google.common.truth.Truth.assertThat
@@ -21,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -151,7 +157,46 @@ class ContactsRefusesTest {
         assertThrows<SecurityException> { depot.listAll() }
     }
 
-    private fun threadViewModel(contacts: ContactRepository): ThreadViewModel {
+    /**
+     * v1.28.13 (D7) — joindre une fiche contact sans `READ_CONTACTS` échoue, et l'échec doit dire
+     * pourquoi. Le contexte factice ne sait rien lire : la fiche est illisible, comme sans permission.
+     */
+    @Test
+    fun `joindre un contact sans la permission - le message dit pourquoi`() = runTest(dispatcher) {
+        val messages = messagesApresJointureDUnContact(permissionContacts = PackageManager.PERMISSION_DENIED)
+
+        assertThat(messages).containsExactly("permission contacts")
+    }
+
+    /** Témoin : la même fiche illisible, permission accordée, garde le message générique. */
+    @Test
+    fun `joindre un contact illisible avec la permission - message generique`() = runTest(dispatcher) {
+        val messages = messagesApresJointureDUnContact(permissionContacts = PackageManager.PERMISSION_GRANTED)
+
+        assertThat(messages).containsExactly("lecture impossible")
+    }
+
+    private fun kotlinx.coroutines.test.TestScope.messagesApresJointureDUnContact(
+        permissionContacts: Int,
+    ): List<String> {
+        val context: Context = mockk(relaxed = true) {
+            every { checkPermission(Manifest.permission.READ_CONTACTS, any(), any()) } returns permissionContacts
+            every { getString(R.string.attach_contact_needs_permission) } returns "permission contacts"
+            every { getString(R.string.snack_thread_attach_copy_failed) } returns "lecture impossible"
+        }
+        val vm = threadViewModel(ContactsSansPermission().apply { refuse = false }, context)
+        val recus = mutableListOf<ThreadViewModel.Event>()
+        backgroundScope.launch { vm.events.toList(recus) }
+
+        vm.onAttachmentPicked(mockk(relaxed = true), AttachmentKind.CONTACT)
+
+        return recus.filterIsInstance<ThreadViewModel.Event.ShowSnackbar>().map { it.message }
+    }
+
+    private fun threadViewModel(
+        contacts: ContactRepository,
+        context: Context = mockk(relaxed = true),
+    ): ThreadViewModel {
         val conversation = Conversation(
             id = 7L,
             threadId = null,
@@ -177,7 +222,6 @@ class ContactsRefusesTest {
         val appLock: AppLockManager = mockk(relaxed = true) {
             every { state } returns MutableStateFlow(AppLockManager.LockState.Unlocked)
         }
-        val context: Context = mockk(relaxed = true)
         return ThreadViewModel(
             savedStateHandle = SavedStateHandle(mapOf("conversationId" to conversation.id)),
             repo = repo,

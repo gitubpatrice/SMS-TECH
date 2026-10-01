@@ -679,6 +679,8 @@
 
     <string name="settings_section_blocking">Blocking</string>
     <string name="settings_block_unknown">Block unknown numbers</string>
+    <string name="settings_block_unknown_no_contacts">Inactive without access to your contacts: no number is blocked. Allow Contacts in Android settings.</string>
+    <string name="attach_contact_needs_permission">Attaching a contact card requires access to your contacts. Allow Contacts in Android settings.</string>
     <string name="settings_manage_blocked">Manage blocked list</string>
 
     <string name="settings_section_backup">Backup</string>

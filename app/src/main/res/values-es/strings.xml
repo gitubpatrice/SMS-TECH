@@ -684,6 +684,8 @@
 
     <string name="settings_section_blocking">Bloqueo</string>
     <string name="settings_block_unknown">Bloquear los números desconocidos</string>
+    <string name="settings_block_unknown_no_contacts">Inactivo sin acceso a sus contactos: no se bloquea ningún número. Permita Contactos en los ajustes de Android.</string>
+    <string name="attach_contact_needs_permission">Para adjuntar una tarjeta de contacto se necesita acceso a sus contactos. Permita Contactos en los ajustes de Android.</string>
     <string name="settings_manage_blocked">Gestionar la lista de bloqueados</string>
 
     <string name="settings_section_backup">Copia de seguridad</string>

@@ -1010,7 +1010,7 @@ class ThreadViewModel @Inject constructor(
             val carte = if (kind == com.filestech.sms.ui.components.AttachmentKind.CONTACT) {
                 val resolue = kotlinx.coroutines.withContext(io) { ContactCardSource(cr).resoudre(uri) }
                 if (resolue == null) {
-                    _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))
+                    _events.tryEmit(Event.ShowSnackbar(snackEchecPieceJointe(kind), isError = true))
                     return@launch
                 }
                 resolue
@@ -1036,7 +1036,7 @@ class ThreadViewModel @Inject constructor(
                 ?: context.getString(com.filestech.sms.R.string.attachment_generic_name)
             val file = copyAttachmentToCache(source, mime)
             if (file == null) {
-                _events.tryEmit(Event.ShowSnackbar(snackAttachCopyFailed(), isError = true))
+                _events.tryEmit(Event.ShowSnackbar(snackEchecPieceJointe(kind), isError = true))
                 return@launch
             }
             // v1.28.3 (audit global, X-03 — mesure sur le S9) — le plafond se PARTAGE entre
@@ -1884,6 +1884,26 @@ class ThreadViewModel @Inject constructor(
     )
     private fun snackAttachSent(): String = context.getString(com.filestech.sms.R.string.snack_thread_attach_sent)
     private fun snackAttachCopyFailed(): String = context.getString(com.filestech.sms.R.string.snack_thread_attach_copy_failed)
+
+    /**
+     * v1.28.13 (balayage des permissions refusées, MR F-Droid !38458) — l'échec d'une carte de
+     * visite SANS `READ_CONTACTS` se dit comme tel. Le sélecteur accorde un accès temporaire à la
+     * fiche choisie, mais la carte se lit à une autre adresse (`CONTENT_VCARD_URI`), que cet accès
+     * ne couvre probablement pas. On n'interdit rien d'avance : on tente, et seul le message
+     * d'échec change, pour que « Impossible de lire la pièce jointe » ne cache pas sa vraie cause.
+     */
+    private fun snackEchecPieceJointe(kind: com.filestech.sms.ui.components.AttachmentKind): String {
+        val contactSansPermission = kind == com.filestech.sms.ui.components.AttachmentKind.CONTACT &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_CONTACTS,
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        return if (contactSansPermission) {
+            context.getString(com.filestech.sms.R.string.attach_contact_needs_permission)
+        } else {
+            snackAttachCopyFailed()
+        }
+    }
     private fun snackAttachCapReached(): String = context.getString(com.filestech.sms.R.string.snack_thread_attach_cap_reached)
     private fun snackVoiceSent(): String = context.getString(com.filestech.sms.R.string.snack_thread_voice_sent)
     private fun snackNumbersBlocked(): String = context.getString(com.filestech.sms.R.string.snack_thread_numbers_blocked)

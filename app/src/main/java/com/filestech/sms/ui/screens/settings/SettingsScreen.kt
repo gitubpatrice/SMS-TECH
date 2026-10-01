@@ -87,6 +87,7 @@ import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
 import com.filestech.sms.system.notifications.notificationsDesMessagesVisibles
 import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
 import com.filestech.sms.ui.components.BanniereNotificationsCoupees
+import com.filestech.sms.ui.components.rememberPermissionAccordee
 import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
@@ -665,10 +666,20 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_section_blocking),
                 icon = Icons.Outlined.Block,
             ) {
+                // v1.28.13 (balayage des permissions refusées, MR F-Droid !38458) — sans accès aux
+                // contacts, `IncomingBlockPolicy` ne peut savoir qui est inconnu et laisse TOUT
+                // passer, à dessein (bloquer sur une ignorance couperait toute réception). Mais
+                // l'interrupteur restait sur « activé » sans rien dire : on le dit sous lui.
+                val contactsAccordes = rememberPermissionAccordee(android.Manifest.permission.READ_CONTACTS)
                 ToggleRow(
                     title = stringResource(R.string.settings_block_unknown),
                     value = state.blocking.blockUnknown,
                     onChange = { v -> viewModel.update { it.copy(blocking = it.blocking.copy(blockUnknown = v)) } },
+                    description = if (state.blocking.blockUnknown && !contactsAccordes) {
+                        stringResource(R.string.settings_block_unknown_no_contacts)
+                    } else {
+                        null
+                    },
                 )
                 NavigationRow(stringResource(R.string.settings_manage_blocked), onClick = onOpenBlocked)
             }

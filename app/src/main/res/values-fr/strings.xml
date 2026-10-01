@@ -674,6 +674,8 @@
 
     <string name="settings_section_blocking">Blocage</string>
     <string name="settings_block_unknown">Bloquer les numéros inconnus</string>
+    <string name="settings_block_unknown_no_contacts">Inactif sans accès à vos contacts : aucun numéro n\'est bloqué. Autorisez les Contacts dans les réglages d\'Android.</string>
+    <string name="attach_contact_needs_permission">Joindre une fiche contact nécessite l\'accès à vos contacts. Autorisez les Contacts dans les réglages d\'Android.</string>
     <string name="settings_manage_blocked">Gérer la liste des bloqués</string>
 
     <string name="settings_section_backup">Sauvegarde</string>
