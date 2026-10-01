@@ -664,6 +664,11 @@
     <string name="settings_notif_style_silent_hint">Routed to a low-importance channel. The system masks sound and the heads-up pop-up.</string>
     <string name="settings_notif_open_system">Open system notification settings</string>
     <string name="settings_notif_open_system_desc">Check or fix permissions, channels, and sound at the OS level.</string>
+    <string name="notifications_off_title">Notifications are off</string>
+    <string name="notifications_off_fix">Turn on notifications</string>
+    <string name="notifications_off_safety_call">Safety call cannot warn you before it sends the alert, nor let you stop it from a notification.</string>
+    <string name="notifications_off_emergency_shortcut">The emergency shortcut cannot appear on the lock screen.</string>
+    <string name="notifications_off_messages">New messages arrive without a notification.</string>
 
     <string name="settings_section_security">Security &amp; privacy</string>
     <string name="settings_flag_secure">Hide preview in Recents</string>

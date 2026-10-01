@@ -669,6 +669,11 @@
     <string name="settings_notif_style_silent_hint">Se encaminan por un canal de baja importancia. El sistema quita el sonido y la aparición en primer plano.</string>
     <string name="settings_notif_open_system">Abrir los ajustes de notificación del sistema</string>
     <string name="settings_notif_open_system_desc">Compruebe o corrija permisos, canales y sonido a nivel del sistema.</string>
+    <string name="notifications_off_title">Notificaciones desactivadas</string>
+    <string name="notifications_off_fix">Activar las notificaciones</string>
+    <string name="notifications_off_safety_call">El Safety call no podrá avisarle antes de enviar la alerta ni permitirle detenerlo desde una notificación.</string>
+    <string name="notifications_off_emergency_shortcut">El acceso directo de emergencia no puede aparecer en la pantalla de bloqueo.</string>
+    <string name="notifications_off_messages">Los mensajes nuevos llegan sin notificación.</string>
 
     <string name="settings_section_security">Seguridad y privacidad</string>
     <string name="settings_flag_secure">Ocultar la vista previa en Recientes</string>

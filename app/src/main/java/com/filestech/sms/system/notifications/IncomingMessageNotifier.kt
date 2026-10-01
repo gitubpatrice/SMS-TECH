@@ -396,34 +396,6 @@ class IncomingMessageNotifier @Inject constructor(
     }
 
     /**
-     * v1.8.0 (bug 3 fix, MEDIUM 3c) — détecte si l'utilisateur a désactivé soit
-     * les notifications de l'app au global, soit le canal `incoming_messages`
-     * spécifiquement dans les Paramètres système Android. Dans ce cas
-     * `NotificationManagerCompat.notify()` poste silencieusement sans rien
-     * afficher — confusion garantie côté utilisateur ("Tiens, je ne reçois
-     * plus de notifs alors que SMS Tech est activée…").
-     *
-     * Appelé depuis le SettingsScreen pour afficher un warning rouge + bouton
-     * deeplink vers les réglages système quand l'état est dégradé. Le check
-     * est read-only et idempotent — safe à appeler à chaque recomposition.
-     *
-     * Retourne `true` quand les notifs incoming peuvent réellement s'afficher,
-     * `false` quand elles sont muettes (app globale désactivée OU canal
-     * désactivé par l'utilisateur dans Paramètres → Apps → SMS Tech →
-     * Notifications → Messages entrants).
-     */
-    fun isIncomingChannelEffectivelyEnabled(): Boolean {
-        val nmc = NotificationManagerCompat.from(context)
-        if (!nmc.areNotificationsEnabled()) return false
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
-            as NotificationManager? ?: return true
-        val channel = nm.getNotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING)
-            ?: return true // not created yet = ensure step pending, not "disabled"
-        return channel.importance != NotificationManager.IMPORTANCE_NONE
-    }
-
-    /**
      * v1.3.3 bug #6 — cancel TOUTES les notifications affichées qui appartiennent à la
      * conversation [conversationId]. Appelé depuis `ConversationRepositoryImpl.markRead`
      * pour que l'ouverture de la thread depuis l'app efface le pavé de notifs cumulées
@@ -564,4 +536,23 @@ internal fun notificationsToCancel(
         for (messageId in messages) voulues += tag to notificationIdFor(messageId)
     }
     return actives.mapNotNull { (tag, id) -> if (tag != null && (tag to id) in voulues) tag to id else null }
+}
+
+/**
+ * `true` quand une notification de message entrant peut réellement s'afficher : notifications de
+ * l'application autorisées (`POST_NOTIFICATIONS` sous Android 13+, interrupteur global sinon) ET
+ * canal `incoming_messages` non coupé. Sinon `notify()` ne poste rien, sans erreur.
+ *
+ * v1.8.0 (bug 3 fix, MEDIUM 3c) — écrite pour un avertissement rouge dans les Réglages.
+ * v1.28.13 — cet avertissement n'avait JAMAIS existé : la fonction, alors membre de
+ * [IncomingMessageNotifier], n'avait aucun appelant. Sortie au niveau du fichier parce qu'un écran
+ * Compose a un `Context`, pas ce singleton ; elle est appelée par `BanniereNotificationsCoupees`.
+ * `minSdk` 26 : les canaux existent toujours.
+ */
+fun notificationsDesMessagesVisibles(contexte: Context): Boolean {
+    if (!NotificationManagerCompat.from(contexte).areNotificationsEnabled()) return false
+    val canal = contexte.getSystemService(NotificationManager::class.java)
+        ?.getNotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING)
+    // Canal pas encore créé : l'étape de création est en attente, il n'est pas « coupé ».
+    return canal == null || canal.importance != NotificationManager.IMPORTANCE_NONE
 }

@@ -84,6 +84,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
+import com.filestech.sms.system.notifications.notificationsDesMessagesVisibles
+import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
+import com.filestech.sms.ui.components.BanniereNotificationsCoupees
 import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
@@ -3347,6 +3350,16 @@ private fun NotificationsSection(
             value = notifications.enabled,
             onChange = { v -> onUpdate { it.copy(notifications = it.notifications.copy(enabled = v)) } },
         )
+        // v1.28.13 — l'avertissement annoncé en v1.8.0 et jamais branché : notifications coupées
+        // par Android (permission, interrupteur de l'application ou canal des messages), alors que
+        // l'interrupteur ci-dessus dit « activées ».
+        if (notifications.enabled) {
+            BanniereNotificationsCoupees(
+                message = stringResource(R.string.notifications_off_messages),
+                modifier = Modifier.padding(vertical = 8.dp),
+                visibles = ::notificationsDesMessagesVisibles,
+            )
+        }
         ToggleRow(
             title = stringResource(R.string.settings_inline_reply),
             value = notifications.inlineReply,
@@ -3392,15 +3405,8 @@ private fun NotificationsSection(
         NavigationRow(
             title = stringResource(R.string.settings_notif_open_system),
             description = stringResource(R.string.settings_notif_open_system_desc),
-            onClick = {
-                val intent = android.content.Intent(
-                    android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS,
-                ).putExtra(
-                    android.provider.Settings.EXTRA_APP_PACKAGE,
-                    ctx.packageName,
-                )
-                runCatching { ctx.startActivity(intent) }
-            },
+            // v1.28.13 — même ouverture que la bannière ci-dessus, avec repli sur la fiche.
+            onClick = { ouvrirLesNotificationsDeLApplication(ctx) },
         )
     }
 }
@@ -3650,6 +3656,14 @@ private fun EmergencySection(
                     }
                 },
             )
+            // v1.28.13 — le raccourci EST une notification : sans elles, l'interrupteur reste sur
+            // « activé » alors que rien n'apparaît sur l'écran verrouillé.
+            if (security.emergencyShortcutEnabled) {
+                BanniereNotificationsCoupees(
+                    message = stringResource(R.string.notifications_off_emergency_shortcut),
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
             // v1.12.0 — Toggle de l'action police dans la notification d'urgence.
             // Audit fix S2 : disponible uniquement si le raccourci urgence est lui-même ON.
             // Sans raccourci, il resterait un orphelin qui dupliquerait juste 112.

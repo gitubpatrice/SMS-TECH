@@ -667,6 +667,11 @@
     <string name="settings_notif_style_silent_hint">Wird über einen Kanal geringer Wichtigkeit zugestellt. Das System unterdrückt Ton und Einblendung.</string>
     <string name="settings_notif_open_system">Systemeinstellungen für Benachrichtigungen öffnen</string>
     <string name="settings_notif_open_system_desc">Berechtigungen, Kanäle und Ton auf Systemebene prüfen oder ändern.</string>
+    <string name="notifications_off_title">Benachrichtigungen sind deaktiviert</string>
+    <string name="notifications_off_fix">Benachrichtigungen aktivieren</string>
+    <string name="notifications_off_safety_call">Der Safety call kann Sie weder vor dem Senden der Warnung benachrichtigen noch über eine Benachrichtigung angehalten werden.</string>
+    <string name="notifications_off_emergency_shortcut">Die Notfall-Verknüpfung kann nicht auf dem Sperrbildschirm erscheinen.</string>
+    <string name="notifications_off_messages">Neue Nachrichten kommen ohne Benachrichtigung an.</string>
 
     <string name="settings_section_security">Sicherheit &amp; Privatsphäre</string>
     <string name="settings_flag_secure">Vorschau in der Übersicht verbergen</string>
