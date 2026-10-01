@@ -165,6 +165,11 @@ class MainActivity : FragmentActivity() {
      * de SMS Tech en tant qu'app SMS par défaut. Calculée dynamiquement à chaque check
      * pour inclure `POST_NOTIFICATIONS` uniquement sur Android 13+ (API 33+) où elle a
      * été introduite.
+     *
+     * v1.28.13 (MR F-Droid !38458) — `RECORD_AUDIO` n'en fait plus partie. Le micro ne sert qu'aux
+     * messages vocaux, et le bouton micro du fil le demande déjà au moment où l'on appuie dessus
+     * (`ThreadScreen`, `rememberPermissionState`). Le réclamer au premier lancement d'une app SMS
+     * a été relevé par le testeur de F-Droid, à raison : rien ne le justifie à cet instant.
      */
     private val criticalSmsPermissions: Array<String>
         get() = mutableListOf(
@@ -176,7 +181,6 @@ class MainActivity : FragmentActivity() {
             Manifest.permission.READ_PHONE_NUMBERS,
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.RECORD_AUDIO,
         ).apply {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(Manifest.permission.POST_NOTIFICATIONS)

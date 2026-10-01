@@ -451,7 +451,16 @@ class ThreadViewModel @Inject constructor(
             .map { conv -> conv?.addresses?.firstOrNull()?.raw }
             .distinctUntilChanged()
             .onEach { firstNumber ->
-                val has = firstNumber?.let { contactRepo.lookupByPhone(it) != null } ?: false
+                // v1.28.13 (MR F-Droid !38458) — sans `READ_CONTACTS`, la recherche lève
+                // `SecurityException` ; non rattrapée dans `viewModelScope`, ouvrir n'importe quelle
+                // conversation faisait planter l'app (jumeau de `ComposeViewModel.chargerContacts`).
+                // « Contact introuvable » est le bon repli ICI : il ne fait que proposer « Ajouter
+                // aux contacts », que l'appli Contacts du système traite sans notre permission.
+                val has = firstNumber?.let { numero ->
+                    com.filestech.sms.core.result
+                        .runCatchingCancellable { contactRepo.lookupByPhone(numero) != null }
+                        .getOrDefault(false)
+                } ?: false
                 _state.update { it.copy(hasContact = has) }
             }
             .launchIn(viewModelScope)

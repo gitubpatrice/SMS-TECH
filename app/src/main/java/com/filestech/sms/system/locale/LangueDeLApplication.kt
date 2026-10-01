@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.annotation.RequiresApi
+import com.filestech.sms.system.settings.ouvrirLaFicheDeLApplication
 
 /**
  * v1.28.12 — ouvre l'écran Android « Langue » de l'application.
@@ -33,7 +34,6 @@ import androidx.annotation.RequiresApi
 fun ouvrirLaLangueDeLApplication(contexte: Context) {
     val paquet = Uri.fromParts("package", contexte.packageName, null)
     val langue = Intent(Settings.ACTION_APP_LOCALE_SETTINGS, paquet)
-    val ficheDeLApplication = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, paquet)
     runCatching { contexte.startActivity(langue) }
-        .onFailure { runCatching { contexte.startActivity(ficheDeLApplication) } }
+        .onFailure { ouvrirLaFicheDeLApplication(contexte) }
 }

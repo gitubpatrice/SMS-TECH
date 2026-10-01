@@ -180,6 +180,8 @@
     <string name="compose_search_contact">Kontakt oder Rufnummer suchen</string>
     <string name="compose_use_this_number">Diese Nummer verwenden</string>
     <string name="compose_add_to_group">Zur Gruppe hinzufügen</string>
+    <string name="compose_contacts_refused_title">Kein Zugriff auf Kontakte</string>
+    <string name="compose_contacts_refused_desc">Geben Sie oben eine Nummer ein oder tippen Sie hier, um den Zugriff auf Kontakte in den App-Einstellungen zu erlauben.</string>
 
     <!-- Blocked numbers -->
     <string name="blocked_title">Blockierte Nummern</string>

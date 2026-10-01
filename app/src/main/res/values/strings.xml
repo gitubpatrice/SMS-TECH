@@ -180,6 +180,8 @@
     <string name="compose_search_contact">Search a contact or phone number</string>
     <string name="compose_use_this_number">Use this number</string>
     <string name="compose_add_to_group">Add to the group</string>
+    <string name="compose_contacts_refused_title">No access to contacts</string>
+    <string name="compose_contacts_refused_desc">Type a number above, or tap here to allow Contacts in the app\'s Android settings.</string>
 
     <!-- Blocked numbers -->
     <string name="blocked_title">Blocked numbers</string>

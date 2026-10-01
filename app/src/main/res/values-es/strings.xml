@@ -181,6 +181,8 @@
     <string name="compose_search_contact">Busque un contacto o un número de teléfono</string>
     <string name="compose_use_this_number">Usar este número</string>
     <string name="compose_add_to_group">Añadir al grupo</string>
+    <string name="compose_contacts_refused_title">Sin acceso a los contactos</string>
+    <string name="compose_contacts_refused_desc">Escriba un número arriba o toque aquí para permitir el acceso a los contactos en los ajustes de la aplicación.</string>
 
     <!-- Blocked numbers -->
     <string name="blocked_title">Números bloqueados</string>
