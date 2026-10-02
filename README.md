@@ -62,7 +62,10 @@ SMS is **not** end-to-end encrypted at the protocol level — this is a limitati
 network, not a choice. SMS Tech protects what's stored on your device, with SQLCipher + the
 AndroidKeyStore. For true end-to-end encryption, use Signal or Matrix.
 
-See [PRIVACY.md](PRIVACY.md) and [PERMISSIONS.md](PERMISSIONS.md).
+See the [privacy policy](PRIVACY.md), the [terms of use](TERMS.md) and
+[PERMISSIONS.md](PERMISSIONS.md). Security model: [SECURITY.md](SECURITY.md)
+([français](SECURITY.fr.md)). The privacy policy and the terms exist in English, French, German,
+Italian and Spanish; English and French are authoritative.
 
 ## 📃 License
 
