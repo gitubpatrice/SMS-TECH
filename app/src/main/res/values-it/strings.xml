@@ -670,7 +670,7 @@
     <string name="settings_notif_open_system">Apri le impostazioni di notifica del sistema</string>
     <string name="settings_notif_open_system_desc">Verifichi o corregga autorizzazioni, canali e suono a livello di sistema.</string>
     <string name="notifications_off_title">Notifiche disattivate</string>
-    <string name="notifications_off_fix">Attiva le notifiche</string>
+    <string name="notifications_off_fix">Consenti nelle impostazioni Android</string>
     <string name="notifications_off_safety_call">Il Safety call non potrà avvisarLa prima di inviare l\'allerta, né permetterLe di fermarlo da una notifica.</string>
     <string name="notifications_off_emergency_shortcut">La scorciatoia di emergenza non può comparire sulla schermata di blocco.</string>
     <string name="notifications_off_messages">I nuovi messaggi arrivano senza notifica.</string>

@@ -660,7 +660,7 @@
     <string name="settings_notif_open_system">Ouvrir les réglages système</string>
     <string name="settings_notif_open_system_desc">Vérifier ou corriger les permissions, canaux et son au niveau du système.</string>
     <string name="notifications_off_title">Notifications désactivées</string>
-    <string name="notifications_off_fix">Activer les notifications</string>
+    <string name="notifications_off_fix">Autoriser dans les réglages Android</string>
     <string name="notifications_off_safety_call">Le Safety call ne pourra ni vous prévenir avant d\'envoyer l\'alerte, ni vous laisser l\'arrêter depuis une notification.</string>
     <string name="notifications_off_emergency_shortcut">Le raccourci d\'urgence ne peut pas s\'afficher sur l\'écran verrouillé.</string>
     <string name="notifications_off_messages">Les nouveaux messages arrivent sans notification.</string>
