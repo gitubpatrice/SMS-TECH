@@ -1,6 +1,8 @@
 # SMS Tech — Security model
 
-Current release : **v1.28.12** (2026-09-18)
+English · 🇫🇷 [Version française](SECURITY.fr.md)
+
+Current release : **v1.28.13** (2026-10-02)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
@@ -13,11 +15,11 @@ If you find a vulnerability, please disclose it to **contact@files-tech.com** wi
 
 ## Threat model
 
-> 📎 **Complément opérationnel : [`THREAT-MODEL.md`](THREAT-MODEL.md).** La table ci-dessous
-> répond à « contre quoi l'app défend ». `THREAT-MODEL.md` répond à « **où est la garde qui fait
-> autorité, et par quels chemins doit-elle passer** » : invariants, couche d'application, chemins
-> jumeaux à recenser, et **non-garanties assumées** (superposition d'écran, presse-papier).
-> Toute modification touchant une garde de sécurité doit être confrontée à ses invariants.
+> 📎 **Operational companion: [`THREAT-MODEL.md`](THREAT-MODEL.md).** The table below
+> answers "what does the app defend against". `THREAT-MODEL.md` answers "**where is the guard that
+> is authoritative, and which paths must go through it**": invariants, enforcement layer, twin
+> paths to inventory, and **acknowledged non-guarantees** (screen overlay, clipboard).
+> Any change touching a security guard must be checked against its invariants.
 
 | Adversary | What we protect against | How |
 |---|---|---|
@@ -81,949 +83,1016 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
-### v1.28.12 — Ce qu'a montré le fait de parcourir l'application dans une autre langue
+### v1.28.13 — What refusing each permission, one at a time, revealed
 
-**Versions affectées : voir chaque point.** Aucun signalement reçu. Les trois défauts ci-dessous
-ont été trouvés en traduisant l'application, puis par cinq vagues d'audit et deux relectures
-externes ; tous étaient présents dans la 1.28.11 publiée.
+**Affected versions: see each item.** Reported on the F-Droid merge request (fdroid/fdroiddata!38458)
+by a tester, by-architect, who ran 1.28.12 on Android 16 with optional permissions refused, as the
+F-Droid test protocol does — and confirmed from the source by a second reviewer, mezinster. The crash
+they found led to a sweep of every runtime permission, refused one at a time; the three items below
+came out of that sweep and none crashes. They concern the safety of a person, which is why they are
+recorded here.
 
-#### Le bandeau « Je vais bien » pouvait s'afficher en session leurre
+#### Emergency mode: with the call permission refused, tapping 112 did nothing
 
-**Versions affectées : 1.26.1 à 1.28.11.** C'est le threat model de l'application qui est en cause,
-pas une commodité : la session leurre existe pour qu'une personne sous contrainte puisse céder un
-code sans rien livrer.
+**Affected versions: 1.14.1 to 1.28.12.** Availability of a person-safety feature, on the screen
+reached in a crisis.
 
-`showIAmOkChip` porte bien `!isPanic`, mais il est calculé dans le flux **agrégé**, servi par
-`stateIn(WhileSubscribed(5 s))`. Quand l'écran de verrouillage se pose par-dessus, cet écran quitte
-la composition ; cinq secondes plus tard l'amont s'arrête et `state.value` **gèle**. Au retour, la
-valeur en cache est servie — calculée avant le verrou, donc avec `isPanicDecoy = false` — jusqu'à ce
-que le `combine` réémette, ce qui coûte une requête chiffrée et un appel Binder sur IO.
+Without `CALL_PHONE`, an emergency tile only requested the permission again, and the answer was
+read by nobody: refused, the tile did nothing — no call, no dialer, no message. After two refusals
+Android no longer shows the dialog, and the tile stayed inert for good. The comments had promised a
+"fallback to the dialer" since v1.14.1; it did not exist. The permission was also read at
+composition, so a grant could stay without effect until something recomposed the screen.
 
-Le scénario : la victime déclenche l'urgence, les messages partent, quelqu'un lui prend le téléphone
-et lui arrache le code panique. L'écran leurre s'ouvre — et le bandeau est là. **L'agresseur apprend
-qu'un appel à l'aide vient de partir.** L'icône du coffre révélait qu'un coffre existe ; ceci révèle
-l'alerte elle-même.
+Measured on an API 34 emulator with `CALL_PHONE` refused: 1.28.12 stays on the screen after 112 is
+tapped; 1.28.13 opens the dialer with 112 filled in.
 
-C'est exactement le mécanisme que l'audit H18 avait corrigé en v1.26.1, et le KDoc qu'il a laissé le
-décrit mot pour mot. Ce correctif dérivait `isPanicDecoy` directement du verrou, en `Eagerly` — et
-il a été appliqué à **ce seul champ**. Six emplacements de cet écran gardaient déjà la valeur
-fraîche ; le bandeau était le septième, et le seul resté sur le cache.
+**Fix.** The permission is read when the tile is tapped, and the answer to the request places the
+call or opens the dialer, which needs no permission. A trusted contact gets the same fallback through
+`EmergencyCallHelper.openTrustedContactDialer`, since `openDialer` rejects anything off the emergency
+list. The pre-release audit then found the twin: after two refusals, the "Allow location" and "Allow
+precise location" buttons did nothing either. A refusal that comes back faster than a person can
+read a dialog now opens the app's Android settings page, where the permission can still be granted —
+measured both ways on the emulator.
 
-**Correctif.** Le bloc devient son propre composable, avec le garde en **un** endroit au lieu du
-milieu de quarante branches.
+#### An "approximate" location was treated as no location
 
-#### Safety call et mode urgence pouvaient s'armer puis se taire
+**Affected versions: 1.10.0 to 1.28.12, on Android 12 and later.** The emergency SMS left without a
+position although the user had agreed to share one.
 
-**Versions affectées : 1.10.0 à 1.28.11**, dès lors que l'application ne détient pas le rôle SMS par
-défaut. Disponibilité d'une fonction de sûreté des personnes — la pire des façons d'échouer, parce
-que l'utilisateur croit être couvert.
+Since Android 12 the location dialog offers "Approximate", which grants `ACCESS_COARSE_LOCATION`
+only. Every check in the app tested `ACCESS_FINE_LOCATION`: the screens said "permission not
+granted", and `LocationResolver` returned nothing. Past that check, the GPS request throws
+`SecurityException` without the precise permission — inside the same `try` as the network request,
+which was therefore never made.
 
-`SendSmsUseCase` refuse tout envoi sans le rôle, et les deux fonctions passent par lui. À l'échéance,
-l'envoi échouait, le créneau était libéré — ce qui réinitialise `triggeredAt`, donc referme la porte
-`isTriggered` qui aurait posté un avis — et **rien n'était affiché**. Le tick suivant réessayait,
-échouait pareil, indéfiniment, pendant que l'écran affichait « armé » et un décompte.
+**Fix.** Either permission is enough, GPS is used only with the precise one, and the accuracy of the
+fix is carried to the message: beyond one kilometre the map link is followed by `(+/-N km)`. Android
+shifts an approximate position by about two kilometres while the link keeps five decimals; without
+the margin it would point at the wrong street — the "sent but wrong" variant already refused for
+stale positions in v1.26.1. The margin is written in ASCII: `±` would push the whole SMS into UCS-2.
 
-Aucun des deux écrans d'armement ne mentionnait le rôle : `isDefault` n'y figurait nulle part. Pire,
-l'écran depuis lequel on **déclenche** l'urgence annonçait « prêt » alors que rien ne serait envoyé.
+#### With notifications off, Safety call and the lock-screen shortcut failed silently
 
-**Correctif.** Un bandeau commun signale le rôle manquant et propose de le demander, sur les trois
-écrans concernés — armement du Safety call, préparation de l'urgence, et l'écran d'urgence lui-même.
-Le bouton n'est **pas** désactivé : en situation de crise, un bouton mort est pire qu'un bouton qui
-tente. Un test de câblage lit les trois sources et exige la présence du bandeau dans chacune.
+**Affected versions: from their introduction to 1.28.12.**
 
-#### Trois clés retirées survivaient à « Supprimer toutes mes données »
+Without `POST_NOTIFICATIONS`, or with the app's notifications or one of its channels turned off, the
+notifiers skip posting, by design: `notify()` does not throw. But nothing said so. Safety call lost
+its pre-send warning, the notification that stops a sequence, and the v1.28.12 "armed but nothing
+will go out" signal; the lock-screen shortcut stayed "on" in Settings while existing nowhere.
 
-**Versions affectées : toutes celles où ces clés ont existé, jusqu'à 1.28.11.** Complétude de
-l'effacement, pas confidentialité du chiffrement.
+**Fix.** A banner on the Safety call screen, under the shortcut switch and in Settings →
+Notifications, re-read on every resume. It checks the app-wide switch **and** the feature's own
+channels (`CanauxVisibles.kt`), since Android lets the user turn channels off one by one.
 
-`PanicService.nukeEverything` ne **vide** pas le magasin de préférences : il écrit un `AppSettings()`
-neuf par-dessus. Une clé que l'écrivain ne nomme pas n'est donc jamais touchée. `locale.tag`,
-`locale.firstDay` et `advanced.isDefault` avaient cessé d'être lues, ce qui ne les avait pas
-effacées : sur toute installation antérieure, la langue choisie survivait à une purge **qui se
-déclarait complète** — et c'est cette version-ci qui a commencé à compter les résidus et à dire
-quand elle n'avait pas tout effacé.
+#### Two hardening changes that are not vulnerabilities
 
-**Correctif.** L'écrivain retire ces clés à **chaque** écriture, depuis une liste nommée unique.
-Toute clé retirée plus tard va là et nulle part ailleurs : c'est le seul endroit qui garantisse sa
-disparition des installations existantes. Le test écrit les clés dans un vrai DataStore et **vérifie
-d'abord qu'elles y sont** — sans quoi un magasin vide ferait passer le test sans rien mesurer.
+The crash itself: with `READ_CONTACTS` refused, opening New message, or any conversation, threw an
+uncaught `SecurityException`. The refusal is caught at those two callers and deliberately **not** in
+the contacts repository: `IncomingBlockPolicy` needs the exception to tell "could not check" from
+"unknown sender", or "block unknown senders" would block every incoming message. A test locks that
+invariant.
 
-#### Deux corrections de sûreté qui ne sont pas des failles
-
-Les corps des SMS d'urgence et de Safety call étaient **codés en français en dur** depuis la
-v1.10.0, hors de `strings.xml` — donc invisibles à tout contrôle de parité. Un destinataire
-germanophone recevait un appel à l'aide qu'il ne pouvait pas lire. Et les appels d'urgence
-composaient les numéros **de la France** où que soit le téléphone : le pays vient désormais du
-**réseau** sur lequel il est enregistré, jamais de la langue de l'application.
+And the app no longer holds `INTERNET`. It never opened a connection: MMS go through `SmsManager`,
+and Android's own MMS service talks to the carrier. Measured on a Galaxy S9: the app process is
+outside the kernel's `inet` group (no gid 3003), with Fennec measured in the same session as a
+positive control; MMS were confirmed in both directions between two phones.
+`.github/scripts/permissions-manifeste.py` fails CI if `INTERNET` ever reaches the merged release
+manifest, and first proves it can fail.
 
 ---
 
-### v1.28.11 — Un marqueur d'optimisation ne peut pas porter l'accès aux données
+### v1.28.12 — What browsing the app in another language revealed
 
-**Versions affectées : 1.25.0 à 1.28.10.** Disponibilité des données, pas confidentialité : le
-chiffrement au repos, l'algorithme et le threat model sont inchangés. Aucun signalement reçu.
+**Affected versions: see each item.** No report received. The three defects below were found
+while translating the app, then through five audit waves and two external reviews; all were
+present in the published 1.28.11.
 
-Depuis la 1.25.0, la base est ouverte en **clé brute** (cf. l'entrée v1.25.0 plus bas). Or la
-réparation clé-nulle qui s'exécute juste avant, `LegacyZeroKeyRekey.rekeyIfNeeded`, sondait le
-fichier avec la **passphrase en clair** — une sonde fausse par construction sur toute base écrite
-depuis. La sonde de la clé nulle héritée échouait elle aussi, et le code concluait alors que la base
-« ne se déchiffre avec rien » : `Failure` levée, écran de réparation, **messages et coffre refusés à
-chaque lancement**, sans autre issue qu'une réinstallation — sur une application dont
-`allowBackup=false` ne laisse aucun autre exemplaire.
+#### The "I'm OK" banner could appear in a decoy session
 
-La seule chose qui empêchait cette conclusion était le marqueur `shared_prefs/db_repair.xml`, écrit
-par `apply()`, c'est-à-dire de façon **asynchrone**. Un processus tué avant que cette écriture
-n'atteigne le disque perdait le marqueur en laissant la base intacte. `adb install -r` produit
-exactement cet enchaînement ; le système aussi, quand il récupère un processus peu après son premier
-lancement.
+**Affected versions: 1.26.1 to 1.28.11.** What is at stake is the app's threat model, not a
+convenience: the decoy session exists so that a person under duress can give up a code without
+handing over anything.
 
-**Mesure A/B**, même appareil, mêmes fichiers, mêmes APK : **5 contrôles sur 5 passent avec le
-marqueur, 0 sur 5 avec ce seul fichier retiré.**
+`showIAmOkChip` does carry `!isPanic`, but it is computed in the **aggregated** flow, served by
+`stateIn(WhileSubscribed(5 s))`. When the lock screen is laid over it, this screen leaves
+composition; five seconds later the upstream stops and `state.value` **freezes**. On return, the
+cached value is served — computed before the lock, hence with `isPanicDecoy = false` — until the
+`combine` re-emits, which costs an encrypted query and a Binder call on IO.
 
-**Correctif.** La sonde accepte **les deux formes de la même clé**, la brute d'abord — comme son
-jumeau `ensureRawKeyed` l'a toujours fait. Le marqueur redevient une économie de travail et non
-l'unique porte d'entrée des données. Les marqueurs passent en `.commit()` : un marqueur de
-réparation dont l'écriture ne survit pas à la mort du processus ne remplit pas son office.
+The scenario: the victim triggers the emergency, the messages go out, someone takes her phone
+and forces the panic code out of her. The decoy screen opens — and the banner is there. **The
+attacker learns that a call for help has just gone out.** The vault icon revealed that a vault
+exists; this reveals the alert itself.
 
-**Ce que le défaut dit du reste.** C'est, une troisième fois, le motif du correctif posé sur un seul
-des deux chemins jumeaux (cf. v1.28.3). Il a été trouvé non par relecture mais par un contrôle
-d'intégration continue neuf, qui installe la version précédente, sème un jeu d'essai dans la vraie
-base chiffrée, installe la nouvelle par-dessus et exige que tout se relise — contrôles négatifs
-compris. Régression figée par
-`RawKeyMigrationTest.rawKeyedDb_withoutRepairFlag_isNotDeclaredUnreadable`, écrite ROUGE avant le
-correctif.
+This is exactly the mechanism that audit H18 had fixed in v1.26.1, and the KDoc it left describes
+it word for word. That fix derived `isPanicDecoy` directly from the lock, with `Eagerly` — and it
+was applied to **that single field**. Six places on this screen already kept the fresh value; the
+banner was the seventh, and the only one left on the cache.
 
-### v1.28.9 — Ce qui résiste est gardé et dit, jamais annoncé effacé
+**Fix.** The block becomes its own composable, with the guard in **one** place instead of in the
+middle of forty branches.
 
-Septième note d'Andrew Pozdnakov sur la MR F-Droid !38458 : cinq constats déduits du source 1.28.8, tous
-confirmés dans le code et corrigés. Leur point commun : un effacement qui échouait, ou qui ne savait pas,
-était traité comme un effacement réussi.
+#### Safety call and emergency mode could arm and then stay silent
 
-**Fichiers de pièces jointes partagés.** Un même fichier est cité par plusieurs lignes (un envoi à
-plusieurs destinataires, l'écho d'un groupe, un envoi programmé). Le premier effacement l'emportait et
-laissait les autres lignes vers un fichier absent. Un fichier ne part plus qu'avec sa dernière citation ;
-une lecture des citations qui échoue le garde et compte l'échec. Même règle pour la purge de rétention,
-dont les fichiers restaient sur le téléphone sans plus rien pour y mener.
+**Affected versions: 1.10.0 to 1.28.11**, whenever the app does not hold the default-SMS role.
+Availability of a personal-safety feature — the worst way to fail, because the user believes they
+are covered.
 
-**Conversation du coffre dont la copie système résiste.** Sans le rôle SMS, ou sur un refus du fournisseur,
-elle disparaissait de l'application et la resynchronisation la recréait **hors du coffre**, en clair. Elle
-est désormais gardée dans le coffre, et l'utilisateur en est averti. Hors coffre, le contrat reste celui
-d'avant : la conversation disparaît, sa copie système peut revenir.
+`SendSmsUseCase` refuses any send without the role, and both features go through it. At the
+deadline, the send failed, the slot was released — which resets `triggeredAt`, hence closes the
+`isTriggered` gate that would have posted a notice — and **nothing was displayed**. The next tick
+retried, failed the same way, indefinitely, while the screen showed "armed" and a countdown.
 
-**« Supprimer toutes mes données ».** Une liste des conversations illisible passait pour une liste vide,
-et le dialogue disait « effacé » ; en session leurre, rien n'était effacé. Ce qui résiste — copies
-système, échecs locaux, liste illisible — est compté et dit. Les alias Keystore sont relus après leur
-suppression (`deleteKey` avale ses erreurs), et la clé du second facteur biométrique, oubliée de la
-liste, y est ajoutée.
+Neither of the two arming screens mentioned the role: `isDefault` appeared nowhere in them. Worse,
+the screen from which the emergency is **triggered** announced "ready" while nothing would be sent.
 
-**MMS reçus (F17).** Aucun MMS entrant n'est écrit dans `content://mms` : le PDU téléchargé est la seule
-copie. Quand un média ne pouvait pas être écrit, il était gardé mais jamais rouvert, puis balayé à 24 h.
-Il est repris : une clé de transaction — SHA-256 du `transactionId`, de l'adresse de téléchargement et de
-la SIM, chaque champ préfixé par sa longueur — est portée par le nom du fichier et par la base (schéma 14,
-index unique ; exclue des sauvegardes). Ni l'adresse du MMSC, qui peut porter un jeton, ni l'identifiant
-opérateur n'apparaissent en clair. La reprise est idempotente ; la présence du PDU est relue **dans** la
-transaction d'écriture, si bien qu'un message supprimé pendant la reprise ne ressuscite pas ; le PDU part
-avec son message, et un PDU arrivé pendant une suppression garde la conversation. Un média qui échoue dans
-une conversation du coffre ne publie aucune notification d'échec, qui nommerait le correspondant — mesuré
-sur appareil.
+**Fix.** A shared banner reports the missing role and offers to request it, on the three screens
+concerned — Safety call arming, emergency setup, and the emergency screen itself. The button is
+**not** disabled: in a crisis, a dead button is worse than a button that tries. A wiring test reads
+the three sources and requires the banner to be present in each one.
 
-**Limites écrites.** Un PDU écrit avant cette version (sans clé) ou sans expéditeur n'est pas repris ; un
-envoi programmé déjà remis à la radio n'est pas rappelé.
+#### Three retired keys survived "Delete all my data"
 
-**Vérification.** Chaque garde a son test (Room et fournisseur réels pour les chemins de données) et son
-contrôle négatif lu dans le rapport XML : 53 mutations, toutes tombées. Tests sur Galaxy S9 (Android 10)
-et S24 (Android 16) des quatre scénarios, rôle SMS retiré et rendu. Relectures : Gemini 3.1 Pro
-(conception F17), GPT 5.2 (code), audits data-room, cohérence et 3 axes — aucun constat critique ni élevé.
+**Affected versions: all those in which these keys existed, up to 1.28.11.** Completeness of the
+erasure, not confidentiality of the encryption.
 
-### v1.28.8 — La recherche traverse l'historique, jamais le coffre
+`PanicService.nukeEverything` does not **clear** the preferences store: it writes a fresh
+`AppSettings()` over it. A key that the writer does not name is therefore never touched.
+`locale.tag`, `locale.firstDay` and `advanced.isDefault` had stopped being read, which had not
+erased them: on any earlier installation, the chosen language survived a purge **that declared
+itself complete** — and it is this very version that started counting leftovers and saying when it
+had not erased everything.
 
-**La recherche dans le texte des messages est branchée** (issue GitHub #17). Elle existait côté
-données sans aucun appelant ; le champ ne cherchait que le nom, le numéro et le dernier aperçu.
-Portée sécurité : les résultats sont bornés **dans le SQL** — jamais un message d'une conversation du
-coffre (`in_vault = 0`), donc rien de plus en session leurre, qui voit la même liste hors coffre ;
-jamais une ligne de service (`hidden = 0`) ; le texte seul, jamais les numéros. Les conversations des
-résultats sont relues avec la même exigence dans le SQL, contre un passage au coffre entre deux
-lectures, et le flux se réémet quand une conversation passe au coffre pendant qu'une recherche est
-affichée — mesuré sur appareil. Chaque garde a son test instrumenté et son contrôle négatif. L'index
-plein texte couvre toute la base, coffre compris, dans la même base chiffrée : seuls les résultats
-sont bornés, comme avant cette version.
+**Fix.** The writer removes these keys on **every** write, from a single named list. Any key
+retired later goes there and nowhere else: it is the only place that guarantees its disappearance
+from existing installations. The test writes the keys into a real DataStore and **first checks
+that they are there** — otherwise an empty store would make the test pass without measuring
+anything.
 
-**Épinglées en tête dans tous les tris**, et **isolement des tests DataStore** : sans portée sécurité.
-Le second touche `SecurityStore` (constructeur principal recevant le `DataStore`, constructeur injecté
-inchangé) : graphe Hilt, fichier, clés et comportements identiques — relu par GPT 5.2 et par un audit
-sécurité dédié.
+#### Two safety fixes that are not vulnerabilities
 
-### v1.28.7 — Ce qui est supprimé ne s'affiche plus, sur tous les chemins
+The bodies of the emergency and Safety call SMS had been **hard-coded in French** since
+v1.10.0, outside `strings.xml` — hence invisible to any parity check. A German-speaking
+recipient received a call for help they could not read. And emergency calls dialed the numbers
+**of France** wherever the phone was: the country now comes from the **network** the phone is
+registered on, never from the app's language.
 
-**Trois suppressions laissaient leurs notifications**, consignées sans correction en 1.28.6 par la
-relecture sécurité du delta final : la purge de rétention (un `DELETE` de masse), la réconciliation de
-synchronisation quand un message disparaît du fournisseur par une autre application, et la fusion de
-conversations en double. Un message effacé restait lisible dans le volet, expéditeur et texte compris.
-Les deux premières relèvent désormais les messages qu'elles vont effacer — dans la même transaction et
-avec la même clause SQL que le `DELETE`, coffre exclu — puis annulent leurs notifications après la
-validation, et seulement si des lignes sont parties ; la fusion annule celles des conversations
-victimes réellement supprimées. L'annulation groupée lit une seule fois les notifications actives et
-n'annule que les paires tag + identifiant visées, jamais une notification sans tag. L'inventaire de
-toutes les suppressions de l'application est fermé : chacune annule ses notifications, ou ne peut pas en
-avoir.
+---
 
-Une relecture GPT 5.2 a trouvé une erreur dans le correctif lui-même avant publication : la fusion
-annulait les victimes de tous les plans, y compris d'un plan sauté sans rien supprimer — donc les
-notifications de conversations toujours présentes. Corrigée.
+### v1.28.11 — An optimization marker cannot carry access to the data
 
-**Bouton ⋮ écrasé sur écran étroit** (sans portée sécurité ; accessibilité) : la bulle, plafonnée à une
-largeur fixe, était mesurée avant le bouton — 16 dp au lieu de 40 sur un écran de 360 dp avec un long
-message, 0 dp sur 320 dp, menu alors inatteignable. Seules les bulles reçues étaient touchées.
+**Affected versions: 1.25.0 to 1.28.10.** Data availability, not confidentiality: encryption at
+rest, the algorithm and the threat model are unchanged. No report received.
 
-### v1.28.6 — Une seconde voie de copie, alignée sur la première
+Since 1.25.0, the database has been opened with a **raw key** (see the v1.25.0 entry below). Yet
+the zero-key repair that runs just before, `LegacyZeroKeyRekey.rekeyIfNeeded`, probed the file
+with the **plaintext passphrase** — a probe wrong by construction on any database written since.
+The probe with the legacy zero key failed as well, and the code then concluded that the database
+"decrypts with nothing": `Failure` thrown, repair screen, **messages and vault refused on every
+launch**, with no way out other than a reinstall — on an app whose `allowBackup=false` leaves no
+other copy.
 
-*Deux retours d'utilisateurs, sans rapport avec la relecture F-Droid.*
+The only thing that prevented this conclusion was the `shared_prefs/db_repair.xml` marker, written
+by `apply()`, that is to say **asynchronously**. A process killed before that write reached the
+disk lost the marker while leaving the database intact. `adb install -r` produces exactly this
+sequence; so does the system, when it reclaims a process shortly after its first launch.
 
-**La sélection libre d'un extrait de message copie par le menu système**, donc par
-`LocalClipboard` de Compose et non par `copyToClipboardSensitive`. Sans rien, un extrait d'un
-message du coffre ressortait en vignette d'aperçu sous Android 13+ — le défaut N4 exactement,
-rouvert par une voie neuve. `SensitiveClipboard` enveloppe le presse-papiers Compose sous le
-conteneur de sélection et pose la même marque ; `ClipData.markSensitive()` est l'unique écriture
-de cette marque, désormais posée sur toute version (le système l'ignore avant Android 13), ce qui
-la rend **vérifiable** sur l'appareil de mesure. Test instrumenté : appui long, copie par la barre
-d'outils, lecture de la description du clip système ; contrôle négatif : sans l'enveloppe, la
-marque est absente.
+**A/B measurement**, same device, same files, same APKs: **5 checks out of 5 pass with the
+marker, 0 out of 5 with that single file removed.**
 
-**« Supprimer toutes mes données » s'exécutait en session leurre, en totalité.** Trouvé par un
-audit de motif lancé après le correctif du splash, pour chercher ses voisins : le bouton est
-volontairement visible en leurre (v1.27.11, même raison que « Réinitialiser tous les réglages » :
-une application SMS ordinaire sait s'effacer), mais son effet détruisait le coffre réel, le PIN et
-le code panique depuis une session dont la raison d'être est de les préserver. Aucun test ne
-couvrait `nukeEverything`. En leurre, la purge n'efface désormais que ce que le leurre montre :
-chaque conversation hors coffre par `ConversationEraser` en mode ordinaire (copie système, envois
-programmés, fichiers, comme une suppression à la main), les fichiers transitoires, et les réglages
-en préservant le bloc sécurité — le splash se rejoue, l'écran est celui d'une purge réelle. La base,
-sa clé, le Keystore, le PIN, le code panique et les compteurs ne bougent pas. La branche est prise
-dans `PanicService`, point d'entrée unique, et non dans l'écran. Trois tests unitaires, contrôle
-négatif fait. Gravité retenue : moyenne — le leurre protège l'existence du coffre, pas sa
-disponibilité, et qui tient le téléphone peut désinstaller ; mais perdre le coffre ET le code
-panique en trois tapes depuis le leurre n'était pas acceptable.
+**Fix.** The probe accepts **both forms of the same key**, the raw one first — as its twin
+`ensureRawKeyed` always has. The marker goes back to being a work-saver and not the sole gateway
+to the data. The markers switch to `.commit()`: a repair marker whose write does not survive the
+death of the process does not do its job.
 
-**« Supprimer toutes mes données » ne supprimait aucun message du téléphone.** Soulevé par
-Patrice, d'une question qui valait mieux qu'un audit : si l'on supprime tout, c'est pour supprimer
-les messages. La purge détruisait le **fichier** de base sans jamais passer par
-`ConversationEraser`, seul chemin qui propage au fournisseur du système. La copie de chaque message
-restait donc dans `content://sms`, et la resynchronisation du lancement suivant — curseur remis à
-zéro par cette même purge — les ramenait **tous**. Y compris ceux du COFFRE, dans la liste
-principale et **en clair** : leur copie système n'a jamais été supprimée (limite N2, assumée) et le
-drapeau `in_vault` ne vivait que dans la base qu'on venait de détruire. C'était le seul chemin de
-suppression de l'application à contourner le téléphone. Désormais : balayage de toutes les
-conversations par l'effaceur, sous la barrière de purge, avant la destruction de la base ; ce qui
-résiste est compté et **dit** avant le redémarrage, au lieu d'être promis effacé. Mesuré de bout en
-bout sur S9 avec le rôle SMS détenu par l'application : 10 messages dans le téléphone avant, 0
-après, 0 copie système restante.
+**What the defect says about the rest.** It is, for the third time, the pattern of a fix applied
+to only one of two twin paths (see v1.28.3). It was found not by review but by a new
+continuous-integration check, which installs the previous version, seeds a test dataset into the
+real encrypted database, installs the new one over it and requires everything to read back —
+negative controls included. Regression pinned by
+`RawKeyMigrationTest.rawKeyedDb_withoutRepairFlag_isNotDeclaredUnreadable`, written RED before the
+fix.
 
-**La purge pouvait bloquer l'application définitivement**, sur la 1.28.5 déjà publiée. Elle détruit
-la base, le fichier de clé enrobée et les alias du Keystore, mais le processus SURVIT en gardant la
-passphrase SQLCipher en mémoire — `DatabaseFactory` documente pourquoi on ne peut pas l'effacer. La
-moindre réouverture de Room réécrivait une base chiffrée avec une clé dont l'enrobage n'existait
-plus, et le lancement suivant affichait « ne parvient pas à ouvrir sa base de données », pour
-toujours. Deux couches : le processus redémarre après la purge, et au démarrage une base qu'aucune
-clé existante n'ouvre — clé enrobée absente — est écartée au lieu de bloquer, ce qui répare les
-installations déjà bloquées. **La doctrine F18 reste entière** : clé enrobée PRÉSENTE et base
-illisible lève toujours, sans rien supprimer, et un test instrumenté tient ce contrôle positif.
+### v1.28.9 — What resists is kept and reported, never announced as erased
 
-**Le magasin sécurisé ne partait que par huit clés nommées sur dix-huit.** Survivaient à la purge
-l'empreinte du PIN **du coffre** (v1.13.0), sa temporisation (v1.27.10), l'horodatage du dernier
-déverrouillage et le jeton persistant de notification — dans un DataStore de préférences **non
-chiffré**. Une empreinte PBKDF2 de code à quatre chiffres se casse hors ligne, et sa seule présence
-prouve qu'un coffre a existé, ce que le leurre existe pour taire. Aucun défaut de comportement en
-revanche, vérifié : la porte du coffre exige l'empreinte ET le drapeau `vaultPinEnabled`, que la
-purge remet à faux, et reposer un PIN réécrit l'empreinte en purgeant la temporisation. C'est le
-motif d'asymétrie habituel de ce dépôt — `pin.*` et `panic.*` effacés, leur jumeau `vault.*` jamais
-rattaché à la liste. Corrigé par un `clearAll()` unique : une liste de clés à tenir à jour est un
-rendez-vous manqué à chaque nouvelle clé, et il a été manqué trois fois. La session leurre ne
-l'appelle jamais, et un test le tient.
+Andrew Pozdnakov's seventh note on F-Droid MR !38458: five findings deduced from the 1.28.8 source, all
+confirmed in the code and fixed. What they have in common: an erasure that failed, or that did not know,
+was treated as a successful erasure.
 
-**Les notifications survivaient à toute suppression.** Le seul appel d'annulation du dépôt vivait
-dans « marquer comme lu » : l'effaceur, règle unique de suppression depuis la v1.28.1, n'avait même
-pas la dépendance. Supprimer une conversation non lue laissait son expéditeur et son texte dans le
-volet système ; « Supprimer toutes mes données » les y laissait tous, après un dialogue qui promet
-l'irréversible, et au pire moment — on purge parce que quelqu'un va prendre le téléphone. Celle du
-raccourci d'urgence est `ongoing`, donc pas même balayable à la main. Borne vérifiée : une
-conversation du coffre ne notifie jamais, la purge du coffre ne laissait donc rien. L'annulation est
-posée dans l'effaceur — la suppression ordinaire et celle d'un seul message sont réparées du même
-geste — et la purge totale annule tout, dans les deux sessions avec le même effet visible (une
-différence entre leurre et session réelle serait la fuite que I1 interdit).
+**Shared attachment files.** The same file is referenced by several rows (a send to several
+recipients, the echo of a group, a scheduled send). The first erasure won and left the other rows
+pointing to a missing file. A file now goes only with its last reference; a read of the references
+that fails keeps it and counts the failure. Same rule for the retention purge, whose files stayed on
+the phone with nothing left leading to them.
 
-**Le presse-papiers aussi.** Cette version ajoute la copie d'un extrait de message : on
-sélectionne, on copie, on purge — et le texte restait dans le presse-papiers du téléphone, lisible
-par toute application. Le presse-papiers est hors du périmètre du coffre (I7/N4), limite assumée et
-écrite ; ce qui ne l'était pas, c'est qu'une purge se disant irréversible le laisse garni. Il est
-vidé dans les deux sessions, au même point que les notifications. `clearPrimaryClip` demande
-Android 9 alors que `minSdk` vaut 26 : un repli par clip vide couvre Android 8, faute de quoi la
-ligne n'y aurait rien fait sans le signaler. Android 10 et suivants n'autorisent cette écriture qu'à
-l'application au premier plan — ce qu'elle est au moment du tap —, et le code le dit plutôt que de
-le promettre.
+**Vault conversation whose system copy resists.** Without the SMS role, or on a refusal from the
+provider, it disappeared from the app and the resync recreated it **outside the vault**, in
+plaintext. It is now kept in the vault, and the user is warned about it. Outside the vault, the
+contract remains the previous one: the conversation disappears, its system copy may come back.
 
-**Ce que l'annulation des notifications ne couvre pas encore.** La relecture sécurité du delta
-final a trouvé trois chemins qui suppriment sans passer par l'effaceur, et laissent donc leurs
-notifications : la purge de rétention, la réconciliation de synchronisation quand un message
-disparaît du fournisseur par une autre application, et la fusion de doublons. Préexistants et
-d'impact borné — une notification ne survit pas au redémarrage du téléphone, la rétention vise des
-messages anciens, la fusion ne supprime aucun message —, ils sont consignés pour une version
-ultérieure plutôt que corrigés au dernier moment. De même, `cancelAll()` ne retire pas la
-notification d'un service au premier plan actif : celle du mode « résistant » part quand la remise à
-zéro des réglages arrête le service. La même relecture a trouvé la seule étape de la purge sans
-filet — le presse-papiers, dont une exception aurait fait planter l'application après la destruction
-des données et avant le dialogue de confirmation — ; elle est corrigée.
+**"Delete all my data".** An unreadable conversation list passed for an empty list, and the dialog
+said "erased"; in a decoy session, nothing was erased. What resists — system copies, local
+failures, unreadable list — is counted and reported. The Keystore aliases are re-read after their
+deletion (`deleteKey` swallows its errors), and the key of the biometric second factor, missing from
+the list, is added to it.
 
-**La purge n'était non annulable que sur sa fin**, et c'est l'audit pré-release qui l'a trouvé, sur
-du code écrit dans cette même version. Elle vit dans un `viewModelScope` ; la v1.28.5 avait mis ses
-écritures finales sous `NonCancellable` pour cette raison précise, et le balayage des conversations
-ajouté ici est passé **au-dessus** de ce bloc, alors qu'il est suspendu et long. Quitter les
-Réglages pendant la purge annulait le balayage, puis les étapes synchrones détruisaient la base :
-les messages non propagés revenaient à la synchronisation suivante — le défaut que cette version
-ferme. La garantie est portée par la fonction entière. Le commentaire qui justifiait `exitProcess`
-affirmait « `NonCancellable` de bout en bout » : il était faux quand il a été écrit, il est
-rectifié et nomme l'endroit où l'invariant est tenu. *Une justification qui s'appuie sur un
-invariant doit dire où il est tenu, faute de quoi elle survit à sa propre vérité.*
+**Received MMS (F17).** No incoming MMS is written to `content://mms`: the downloaded PDU is the
+only copy. When a media item could not be written, it was kept but never reopened, then swept at
+24 h. It is now recovered: a transaction key — SHA-256 of the `transactionId`, of the download
+address and of the SIM, each field prefixed with its length — is carried by the file name and by
+the database (schema 14, unique index; excluded from backups). Neither the MMSC address, which may
+carry a token, nor the carrier identifier appear in plaintext. The recovery is idempotent; the
+presence of the PDU is re-read **inside** the write transaction, so that a message deleted during
+the recovery is not resurrected; the PDU goes with its message, and a PDU arriving during a
+deletion keeps the conversation. A media item that fails in a vault conversation posts no failure
+notification, which would name the correspondent — measured on device.
 
-**L'écran de bienvenue restait bloqué après une réinitialisation** (garde d'idempotence jamais
-réarmé). Pas de portée sécurité, mais le chemin est celui de « Supprimer toutes mes données » :
-un utilisateur qui vide l'application doit pouvoir la reprendre sans la tuer.
+**Documented limits.** A PDU written before this version (without a key) or without a sender is
+not recovered; a scheduled send already handed to the radio is not recalled.
 
-### v1.28.5 — Six arêtes déduites du source, toutes réelles
+**Verification.** Each guard has its test (real Room and provider for the data paths) and its
+negative control read in the XML report: 53 mutations, all killed. Tests of the four scenarios on
+Galaxy S9 (Android 10) and S24 (Android 16), SMS role removed and restored. Reviews: Gemini 3.1 Pro
+(F17 design), GPT 5.2 (code), data-room, coherence and 3-axis audits — no critical or high finding.
 
-*Sixième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (2026-09-11) : il clôt R01/R02/R03
-sur revue du source de la 1.28.4, puis liste cinq candidats déduits du code et non mesurés, plus
-une arête mineure. Vérifiés un par un dans le source avant de répondre : **les six sont réels.**
-Registre : `audits_relectures_IA/audits-ia-externe/2026-09-11-andrew-pozdnakov-mr38458-6e-note-6-aretes.md`.*
+### v1.28.8 — Search goes through the history, never through the vault
 
-**1. La sortie assumée levait plus que la condition « copie système ».** `purgeVault(force = true)`
-appelait `erase(preserveOnSystemFailure = false)`, et ce même booléen gardait aussi le compte des
-dépendants et la relecture d'arrivée tardive. Sous `force`, un `delete()` refusé ou un `cancel()`
-qui lève passait donc à la suppression du parent avec `localeComplete = true` : le journal de
-reprise disparaissait, la purge se disait localement complète, et `residuSystemeSeul` autorisait
-le retrait du PIN. **Ma note du 10 septembre affirmait le contraire du code** — j'ai décrit
-l'intention, pas la ligne. Trois contrats, trois noms : `ConversationEraser.Mode` (`ORDINAIRE`,
-`COFFRE`, `COFFRE_FORCE`). Sous `COFFRE_FORCE`, seule la condition « copie système » est levée ; un
-dépendant qui résiste garde le parent ; un message arrivé tard part, compté en résidu système.
-Quatre tests sur Room réel, avec le vrai producteur d'échec (dossier `0500`, `cancel()` qui lève,
-message inséré pendant le balayage), et le contrôle positif de ce que `force` lève encore.
+**Search in the text of messages is wired up** (GitHub issue #17). It existed on the data side
+with no caller; the field only searched the name, the number and the last preview. Security scope:
+the results are bounded **in the SQL** — never a message from a vault conversation (`in_vault = 0`),
+hence nothing more in a decoy session, which sees the same non-vault list; never a service row
+(`hidden = 0`); the text only, never the numbers. The conversations of the results are re-read
+with the same requirement in the SQL, against a move to the vault between two reads, and the flow
+re-emits when a conversation moves to the vault while a search is displayed — measured on device.
+Each guard has its instrumented test and its negative control. The full-text index covers the whole
+database, vault included, in the same encrypted database: only the results are bounded, as before
+this version.
 
-**2. La barrière de purge était un test-puis-agir.** Une entrée lisait `enCours`, puis écrivait en
-base plus tard ; une purge levée entre les deux ne la voyait pas et pouvait relire `remaining = 0`
-avant son commit. Et la barrière retombait **avant** le retrait du PIN. `VaultPurgeBarrier` est
-linéarisée : une entrée s'inscrit sous le même verrou que celui qui lève la purge, la purge attend
-les entrées inscrites avant elle, une entrée arrivée après est refusée. Le retrait du PIN s'exécute
-**sous la barrière**, par un rappel `apresPurge` que `deleteAllInVault` invoque avec le résultat
-avant de l'abaisser ; le ViewModel y prend sa décision une fois, et ses événements découlent de ce
-qui a été fait. Tests : entrée en vol attendue puis commise, nouvelle entrée refusée pendant
-l'attente, entrée qui lève désinscrite quand même, PIN retiré barrière levée (mesuré, pas supposé).
+**Pinned conversations first in every sort order**, and **isolation of the DataStore tests**: no
+security scope. The second touches `SecurityStore` (primary constructor receiving the `DataStore`,
+injected constructor unchanged): Hilt graph, file, keys and behaviours identical — reviewed by
+GPT 5.2 and by a dedicated security audit.
 
-**3. MMS de groupe : miroir avec les bloqués, PDU sans eux.** Le fil local était `A+B+C`, le MMS
-transmis `A+B` ; le rapprochement à la réception exigeant le même ensemble de membres, la réponse
-de A revenait dans un second groupe. Le miroir reçoit désormais les mêmes cibles que le PDU, dans
-les deux voies (photo, vocal). Test : trois membres dont un bloqué, le miroir porte `A;B`.
+### v1.28.7 — What is deleted is no longer displayed, on every path
 
-**4. Le garde d'abaissement échouait ouvert.** `countInVault()` en échec devenait `0` et le facteur
-illisible `null` — exactement la combinaison qui autorise l'abaissement, obtenue sans rien lire.
-Les deux lectures rendent `VaultStateUnknown`, refus dit à l'écran. Tests d'injection de panne sur
-chaque lecture, contrôle positif sur un coffre lu vide.
+**Three deletions left their notifications behind**, recorded without a fix in 1.28.6 by the
+security review of the final delta: the retention purge (a bulk `DELETE`), the sync reconciliation
+when a message disappears from the provider through another app, and the merging of duplicate
+conversations. An erased message remained readable in the notification shade, sender and text
+included. The first two now collect the messages they are about to erase — in the same transaction
+and with the same SQL clause as the `DELETE`, vault excluded — then cancel their notifications after
+the commit, and only if rows were removed; the merge cancels those of the victim conversations
+actually deleted. The grouped cancellation reads the active notifications only once and cancels
+only the targeted tag + identifier pairs, never a notification without a tag. The inventory of all
+the app's deletions is closed: each one cancels its notifications, or cannot have any.
 
-**5. Le geste « Je vais bien » venu d'une notification était retenu en session leurre.** La
-politique « attendre l'authentification » était voulue, mais fausse pour `LockedOut` et
-`PanicDecoy` : une ouverture réelle ne fait que remettre le minuteur à zéro, jamais désarmer ; un
-geste retenu pendant le leurre ajoutait donc, au premier vrai déverrouillage, un désarmement que
-l'utilisateur n'avait pas fait. Le geste est **jeté** sur ces deux états, retenu sur `Locked`
-seulement, et la notification est republiée pour qu'un geste légitime reste possible. Le jumeau
-de remise à zéro, qui ne désarme rien, continue d'attendre.
+A GPT 5.2 review found an error in the fix itself before release: the merge cancelled the victims
+of every plan, including a plan skipped without deleting anything — hence the notifications of
+conversations still present. Fixed.
 
-**6. Copie bornée : un fichier partiel après exception.** `LectureBornee.recopier` ne nettoyait
-que sur dépassement ; une source qui lève au milieu laissait ce qui était écrit. Le fichier part
-avant que l'exception ne remonte. Test : source qui lâche après 200 octets.
+**⋮ button squashed on a narrow screen** (no security scope; accessibility): the bubble, capped at
+a fixed width, was measured before the button — 16 dp instead of 40 on a 360 dp screen with a long
+message, 0 dp on 320 dp, the menu then being unreachable. Only received bubbles were affected.
 
-**7. Trouvé en vérifiant le point 2, pas signalé.** En cherchant « tout autre écrivain de
-`in_vault` qui contourne la barrière » : la **restauration d'une sauvegarde** insère des
-conversations avec le `in_vault` de la sauvegarde (`BackupService.importPayload`), hors barrière.
-Une restauration lancée pendant une purge pouvait donc remplir le coffre entre la relecture de
-`remaining` et le retrait du PIN. La restauration s'inscrit désormais comme une entrée
-(`barriere.enEntrant`) ; une purge levée la refuse avant de lire un octet, passphrase effacée.
-Test avec doublures strictes, contrôle positif existant conservé. Dans le même geste,
-`ConversationRepository.moveToVault(id, inVault)` — un `setInVault` nu, sans barrière ni second
-facteur, sans aucun appelant depuis que `VaultManager` porte les gardes — est **retirée** de
-l'interface : une voie non gardée laissée publique à côté de sa jumelle gardée est un piège pour
-le prochain appelant, et l'audit du 2026-08-03 (F11) l'avait déjà demandé.
+### v1.28.6 — A second copy path, aligned with the first
 
-**8. Deux dérives de cohérence, trouvées par l'audit de l'application entière lancé dans la
-foulée.** (a) **Supprimer UN message laissait ses fichiers en clair** : `deleteMessage` vivait
-dans le repository, hors de `ConversationEraser` ; la ligne `attachments` partait en cascade, le
-fichier de `filesDir` restait — la classe de défaut fermée en 1.28.3 (F04) pour la conversation
-entière, rouverte sur le chemin le plus fréquent, supprimer un MMS gênant. `eraseMessage` vit
-désormais dans l'effaceur, avec le même bac à sable ; le repository délègue. Test sur Room réel,
-fichier réellement créé puis mesuré absent. (b) La **réponse rapide depuis un appel**
-(`HeadlessSmsSendService`) appelait `SendSmsUseCase` en direct : troisième point d'envoi, celui
-que l'aiguillage unique du 2026-09-10 n'avait pas vu. Il passe par `EnvoyerMessageUseCase`.
+*Two user reports, unrelated to the F-Droid review.*
 
-**9. Lecture ciblée sur les angles morts du coffre en session leurre** (agent, application
-entière). Quinze surfaces de lecture vérifiées une à une — recherche plein texte, notification
-entrante, identité du correspondant, badge de non-lus, marquage lu, envois programmés, export
-PDF, deep-link, partage entrant : **toutes gardées**, `in_vault = 0` en SQL ou garde de session.
-Deux points moyens corrigés : (a) le chemin « Réactiver » de la notification Safety Call
-(`ACTION_SAFETY_CALL_REARM`) n'avait pas le garde de son jumeau — écriture persistée des réglages
-de sécurité sans preuve de déverrouillage ; il applique désormais `attendreOuvertureOuJeter`.
-(b) Restaurer une sauvegarde contenant des conversations du coffre sur un appareil **sans second
-facteur** les rendait lisibles en deux tapes sans que rien ne le dise. Ce n'est pas un trou de la
-restauration (écrire au coffre n'exige pas de secret, `VaultSecondFactor.NONE` est une
-configuration assumée), c'est un silence : `RestoreResult.vaultRestoredWithoutSecondFactor` le
-dit à l'écran et renvoie vers les Réglages.
+**Free selection of a message excerpt copies through the system menu**, hence through Compose's
+`LocalClipboard` and not through `copyToClipboardSensitive`. Left as it was, an excerpt of a vault
+message came out as a preview thumbnail on Android 13+ — exactly defect N4, reopened by a new
+path. `SensitiveClipboard` wraps the Compose clipboard under the selection container and sets the
+same mark; `ClipData.markSensitive()` is the single writer of this mark, now set on every version
+(the system ignores it before Android 13), which makes it **verifiable** on the measurement device.
+Instrumented test: long press, copy from the toolbar, reading of the system clip's description;
+negative control: without the wrapper, the mark is absent.
 
-**10. Balayage des 245 `runCatching` du dépôt** (agent, lecture seule) : lesquels englobent un
-appel `suspend` sans relancer `CancellationException`. Un constat de **sécurité** : les quatre
-écritures finales de « supprimer toutes mes données » (`PanicService.nukeEverything` — retrait
-du PIN, du code panique, des compteurs de verrouillage, des réglages) vivaient dans un
-`viewModelScope` ; si l'écran des Réglages quittait la pile à cet instant, chaque `suspend`
-levait une annulation que `runCatching` avalait **sans un mot**, et la fonction rendait la main
-en laissant le PIN et les contacts du Safety call. Les quatre écritures sont désormais sous
-`NonCancellable`, échecs journalisés. Cinq sites de données corrigés par un helper commun
-`runCatchingCancellable` qui laisse remonter l'annulation : cache négatif des noms de contacts
-(empoisonné par une annulation), fichiers d'un envoi programmé annulé (jamais effacés),
-instantané de région de numérotation (F-01 rouvert), ligne système précédente d'un MMS
-(orpheline dans `content://mms`), et `runCatchingOutcome` lui-même (export et restauration
-interrompus s'affichaient « échec de stockage »). Les ~30 autres sites relevés sont du bruit de
-journal avec un repli du côté sûr ; listés dans le registre, non modifiés.
+**"Delete all my data" ran in the decoy session, in full.** Found by a pattern audit launched after
+the splash fix, to look for its neighbours: the button is deliberately visible in the decoy
+(v1.27.11, same reason as "Reset all settings": an ordinary SMS app knows how to wipe itself), but
+its effect destroyed the real vault, the PIN and the panic code from a session whose very purpose
+is to preserve them. No test covered `nukeEverything`. In the decoy, the purge now erases only what
+the decoy shows: every non-vault conversation through `ConversationEraser` in ordinary mode (system
+copy, scheduled sends, files, like a manual deletion), the transient files, and the settings while
+preserving the security block — the splash replays, the screen is that of a real purge. The
+database, its key, the Keystore, the PIN, the panic code and the counters stay untouched. The
+branch is taken in `PanicService`, the single entry point, and not in the screen. Three unit tests,
+negative control done. Severity assessed: medium — the decoy protects the vault's existence, not
+its availability, and whoever holds the phone can uninstall; but losing the vault AND the panic
+code in three taps from the decoy was not acceptable.
 
-**11. Relecture externe (Gemini) de la seconde vague**, deux constats retenus : (a) conséquence
-directe du point 10, la passphrase de restauration n'était plus effacée quand l'annulation
-remontait — `restaurer` est en `try/finally` ; (b) préexistant depuis la 1.28.3, l'attente du
-geste « Je vais bien » vivait dans un `lifecycleScope.launch` qui survit à l'arrière-plan :
-notification tapée puis application laissée verrouillée, le geste s'exécutait au premier
-déverrouillage venu, des heures plus tard. `lancerGesteDeNotification` borne les deux jumeaux
-au premier plan : à l'arrêt de l'activité, le geste en attente est annulé et la notification
-republiée.
+**"Delete all my data" deleted no message from the phone.** Raised by Patrice, with a question
+worth more than an audit: if you delete everything, it is to delete the messages. The purge
+destroyed the database **file** without ever going through `ConversationEraser`, the only path that
+propagates to the system provider. The copy of each message therefore stayed in `content://sms`,
+and the resynchronisation at the next launch — cursor reset to zero by that same purge — brought
+them **all** back. Including those of the VAULT, in the main list and **in clear text**: their
+system copy was never deleted (limit N2, accepted) and the `in_vault` flag lived only in the
+database that had just been destroyed. It was the only deletion path in the app that bypassed the
+phone. Now: a sweep of all conversations by the eraser, under the purge barrier, before the
+database is destroyed; whatever resists is counted and **stated** before the restart, instead of
+being promised erased. Measured end to end on S9 with the SMS role held by the app: 10 messages in
+the phone before, 0 after, 0 system copies remaining.
 
-### v1.28.4 — Un nettoyage incomplet rapporté complet
+**The purge could block the app permanently**, on the already published 1.28.5. It destroys the
+database, the wrapped-key file and the Keystore aliases, but the process SURVIVES while keeping the
+SQLCipher passphrase in memory — `DatabaseFactory` documents why it cannot be erased. The slightest
+reopening of Room rewrote an encrypted database with a key whose wrapping no longer existed, and the
+next launch displayed "cannot open its database", forever. Two layers: the process restarts after
+the purge, and at startup a database that no existing key opens — wrapped key absent — is set aside
+instead of blocking, which repairs the installations already blocked. **The F18 doctrine remains
+intact**: wrapped key PRESENT and database unreadable still throws, without deleting anything, and
+an instrumented test holds this positive control.
 
-*Cinquième note d'Andrew Pozdnakov sur la MR F-Droid !38458 (2026-09-10) : il a resserré sur la
-purge du coffre (F03/F04/F09/F13) et mesuré, sur émulateur Android 14 avec la base SQLCipher
-réelle et le graphe Hilt de production, **trois cas où la purge se dit complète alors qu'il
-reste quelque chose**. Registre : même fichier que la 1.28.3, section « Cinquième note ».*
+**The secure store was cleared only through eight named keys out of eighteen.** What survived the
+purge: the **vault** PIN hash (v1.13.0), its throttling (v1.27.10), the timestamp of the last
+unlock and the persistent notification token — in an **unencrypted** preferences DataStore. A
+PBKDF2 hash of a four-digit code is cracked offline, and its mere presence proves that a vault
+existed, which is exactly what the decoy exists to keep quiet. No behavioural defect, on the other
+hand, verified: the vault gate requires the hash AND the `vaultPinEnabled` flag, which the purge
+resets to false, and setting a PIN again rewrites the hash while purging the throttling. It is this
+repository's usual asymmetry pattern — `pin.*` and `panic.*` erased, their twin `vault.*` never
+added to the list. Fixed by a single `clearAll()`: a list of keys to keep up to date is a missed
+appointment with every new key, and it was missed three times. The decoy session never calls it,
+and a test holds this.
 
-**Ce qu'il a trouvé, et pourquoi c'est grave.** La 1.28.3 avait rendu la purge reprenable en
-conservant le parent quand la copie système résiste. Mais ses **dépendants** — envois programmés,
-fichiers de pièces jointes — étaient nettoyés par des aides qui ne rendaient rien : une exception
-gobée, un `delete()` à `false` journalisé et oublié. La branche de succès ordinaire était donc
-atteinte **sans `force`**, le parent partait, le PIN était retiré, `VaultPurged` émis — et un
-envoi programmé orphelin **redevenait visible hors coffre** (`COALESCE(c.in_vault, 0)`), sans que
-la reprise puisse jamais le retrouver, son parent ayant disparu. Troisième cas : un message
-importé par la synchronisation de production qui **commet entre la seconde relecture et le
-`DELETE` du parent** est emporté par la cascade, copie système intacte, purge « complète ».
+**Notifications survived every deletion.** The repository's only cancellation call lived in "mark
+as read": the eraser, the single deletion rule since v1.28.1, did not even have the dependency.
+Deleting an unread conversation left its sender and its text in the system shade; "Delete all my
+data" left them all there, after a dialog that promises the irreversible, and at the worst moment —
+you purge because someone is about to take the phone. The emergency shortcut's notification is
+`ongoing`, so it cannot even be swiped away by hand. Bound verified: a vault conversation never
+notifies, so the vault purge left nothing behind. The cancellation is placed in the eraser —
+ordinary deletion and the deletion of a single message are repaired in the same stroke — and the
+full purge cancels everything, in both sessions with the same visible effect (a difference between
+the decoy and the real session would be the leak that I1 forbids).
 
-**Ce qui change.** `ConversationEraser.erase` rend `Issue(systemCopyGone, localeComplete)`. Les
-deux aides rendent un compte d'échecs (énumération ratée = échec, `delete()` à `false` = échec) ;
-un seul échec **garde le parent** pour le coffre et compte en `localFailures`, donc jamais
-« complet ». La relecture et la suppression du parent vivent dans **une seule transaction Room** :
-SQLite n'ayant qu'un écrivain, un import qui commet pendant la purge attend le verrou et ne peut
-plus se glisser entre les deux. Les lignes programmées sont supprimées dans cette même
-transaction, plus par l'aide.
+**The clipboard too.** This version adds copying a message excerpt: you select, you copy, you purge
+— and the text stayed in the phone's clipboard, readable by any app. The clipboard is outside the
+vault's scope (I7/N4), an accepted and written limit; what was not accepted is that a purge calling
+itself irreversible leaves it filled. It is cleared in both sessions, at the same point as the
+notifications. `clearPrimaryClip` requires Android 9 whereas `minSdk` is 26: a fallback with an
+empty clip covers Android 8, without which the line would have done nothing there without saying
+so. Android 10 and later allow this write only to the foreground app — which it is at the moment of
+the tap —, and the code says so rather than promising it.
 
-**Ce que la mesure a ajouté.** Trois tests sur Room réel reproduisent R01 (`TRIGGER` refusant le
-`DELETE`), R02 (dossier `0500`, `delete()` mesuré à `false`), R03 (message inséré au point
-d'injection de l'ordonnanceur), chacun avec sa reprise. Le **contrôle négatif de R01 ne tombait
-pas** : le `DELETE` refusé vit désormais dans la transaction finale et remonte par un autre
-chemin — le compte d'échecs de l'annulation elle-même n'était couvert par rien. Un quatrième test
-fait lever `cancel()` de l'ordonnanceur et tombe seul quand ce compte est neutralisé.
+**What the notification cancellation does not cover yet.** The security review of the final delta
+found three paths that delete without going through the eraser, and therefore leave their
+notifications behind: the retention purge, the sync reconciliation when a message disappears from
+the provider through another app, and the merging of duplicates. Pre-existing and of bounded impact
+— a notification does not survive a phone restart, retention targets old messages, merging deletes
+no message —, they are recorded for a later version rather than fixed at the last minute. Likewise,
+`cancelAll()` does not remove the notification of an active foreground service: the one of the
+"resistant" mode goes away when the settings reset stops the service. The same review found the
+only step of the purge without a safety net — the clipboard, where an exception would have crashed
+the app after the data was destroyed and before the confirmation dialog —; it is fixed.
 
-**Deux branches du coffre jamais testées depuis la v1.26.1**, fermées : le refus d'export **et de
-restauration** en session leurre, atteinte par le vrai chemin (PIN principal, code panique,
-déverrouillage par le code panique) ; et le second facteur **biométrique**, que la politique doit
-rendre pour un coffre sans PIN de coffre et que l'export doit respecter. Contrôles négatifs sur la
-politique, sur le garde d'export, sur le garde de restauration.
+**The purge was non-cancellable only at its end**, and it was the pre-release audit that found it,
+on code written in this very version. It lives in a `viewModelScope`; v1.28.5 had put its final
+writes under `NonCancellable` for that precise reason, and the conversation sweep added here went
+**above** that block, even though it is suspending and long. Leaving Settings during the purge
+cancelled the sweep, then the synchronous steps destroyed the database: the messages not
+propagated came back at the next sync — the very defect this version closes. The guarantee is now
+carried by the whole function. The comment that justified `exitProcess` claimed "`NonCancellable`
+end to end": it was false when it was written; it is corrected and names the place where the
+invariant is held. *A justification that relies on an invariant must say where it is held,
+otherwise it outlives its own truth.*
 
-**Deux limites, dites plutôt que tues.** (1) Annuler un envoi programmé est une demande à
-WorkManager : une opération radio déjà remise par une tentative en cours n'est pas rappelée, la
-ligne est retirée et, si le radio avait déjà accepté l'envoi, le message part. (2) Un message qui
-commet **après** la transaction finale vise un parent disparu : Room applique la clé étrangère,
-l'insertion échoue au lieu de créer un orphelin protégé, et la ligne du fournisseur est importée
-plus tard dans une conversation ordinaire neuve — comme tout message de ce correspondant arrivé
-après la purge. Le coffre protège ce que l'application connaît.
+**The welcome screen stayed stuck after a reset** (idempotence guard never re-armed). No security
+impact, but the path is that of "Delete all my data": a user who empties the app must be able to
+start using it again without killing it.
 
-**Hors sécurité, dans la même version** : MMS de groupe (réglage désactivé par défaut), colonne
-`hidden` (schéma 13) pour ne plus reconnaître une sentinelle de réaction par sa forme, boucle
-d'envoi et aiguillage écrits une seule fois après une quatrième divergence entre chemins jumeaux.
+### v1.28.5 — Six edges deduced from the source, all real
 
-### v1.28.3 — Un correctif posé sur un seul des chemins qui en avaient besoin
+*Andrew Pozdnakov's sixth note on F-Droid MR !38458 (2026-09-11): he closes R01/R02/R03 after
+reviewing the 1.28.4 source, then lists five candidates deduced from the code and not measured,
+plus a minor edge. Checked one by one in the source before replying: **all six are real.**
+Register: `audits_relectures_IA/audits-ia-externe/2026-09-11-andrew-pozdnakov-mr38458-6e-note-6-aretes.md`.*
 
-*Quatrième passe de la relecture externe d'Andrew Pozdnakov sur la MR F-Droid !38458 — 33
-constats, tous vérifiés dans le source avant correction, 32 corrigés — suivie d'un audit global
-et d'une session de mesure sur deux téléphones. Registre :
+**1. The deliberate exit lifted more than the "system copy" condition.** `purgeVault(force = true)`
+called `erase(preserveOnSystemFailure = false)`, and that same boolean also guarded the count of
+dependants and the re-read for late arrivals. Under `force`, a refused `delete()` or a `cancel()`
+that throws therefore went on to the deletion of the parent with `localeComplete = true`: the resume
+log disappeared, the purge called itself locally complete, and `residuSystemeSeul` allowed the
+removal of the PIN. **My note of 10 September claimed the opposite of the code** — I described the
+intent, not the line. Three contracts, three names: `ConversationEraser.Mode` (`ORDINAIRE`,
+`COFFRE`, `COFFRE_FORCE`). Under `COFFRE_FORCE`, only the "system copy" condition is lifted; a
+dependant that resists keeps the parent; a message that arrived late goes, counted as a system
+residue. Four tests on real Room, with the real failure producer (folder `0500`, `cancel()` that
+throws, message inserted during the sweep), and the positive control of what `force` still lifts.
+
+**2. The purge barrier was a test-then-act.** An entry read `enCours`, then wrote to the database
+later; a purge raised between the two did not see it and could re-read `remaining = 0` before its
+commit. And the barrier came down **before** the removal of the PIN. `VaultPurgeBarrier` is
+linearised: an entry registers under the same lock as the one that raises the purge, the purge waits
+for the entries registered before it, an entry arriving after it is refused. The removal of the PIN
+runs **under the barrier**, through an `apresPurge` callback that `deleteAllInVault` invokes with
+the result before lowering it; the ViewModel makes its decision there, once, and its events follow
+from what was done. Tests: in-flight entry awaited then committed, new entry refused during the
+wait, throwing entry deregistered anyway, PIN removed while the barrier is raised (measured, not
+assumed).
+
+**3. Group MMS: mirror with the blocked members, PDU without them.** The local thread was `A+B+C`,
+the MMS transmitted `A+B`; since matching on reception requires the same set of members, A's reply
+came back into a second group. The mirror now receives the same targets as the PDU, on both paths
+(photo, voice). Test: three members including one blocked, the mirror carries `A;B`.
+
+**4. The downgrade guard failed open.** A failing `countInVault()` became `0` and the unreadable
+factor `null` — exactly the combination that authorises the downgrade, obtained without reading
+anything. Both reads now return `VaultStateUnknown`, a refusal stated on screen. Fault-injection
+tests on each read, positive control on a vault read as empty.
+
+**5. The "I am OK" gesture coming from a notification was held back in the decoy session.** The
+"wait for authentication" policy was intended, but wrong for `LockedOut` and `PanicDecoy`: a real
+opening only resets the timer, it never disarms; a gesture held back during the decoy therefore
+added, at the first real unlock, a disarm the user had not made. The gesture is **discarded** in
+these two states, held back in `Locked` only, and the notification is republished so that a
+legitimate gesture remains possible. The reset twin, which disarms nothing, keeps waiting.
+
+**6. Bounded copy: a partial file after an exception.** `LectureBornee.recopier` only cleaned up
+on overflow; a source that throws midway left what had been written. The file is now deleted
+before the exception propagates. Test: a source that gives out after 200 bytes.
+
+**7. Found while verifying point 2, not reported.** While looking for "any other writer of
+`in_vault` that bypasses the barrier": **restoring a backup** inserts conversations with the
+backup's `in_vault` (`BackupService.importPayload`), outside the barrier. A restore launched during
+a purge could therefore fill the vault between the re-read of `remaining` and the removal of the
+PIN. The restore now registers as an entry (`barriere.enEntrant`); a raised purge refuses it before
+it reads a single byte, passphrase erased. Test with strict test doubles, existing positive control
+kept. In the same stroke, `ConversationRepository.moveToVault(id, inVault)` — a bare `setInVault`,
+with neither barrier nor second factor, with no caller at all since `VaultManager` carries the
+guards — is **removed** from the interface: an unguarded path left public next to its guarded twin
+is a trap for the next caller, and the 2026-08-03 audit (F11) had already asked for it.
+
+**8. Two consistency drifts, found by the whole-app audit launched right after.** (a) **Deleting
+ONE message left its files in clear text**: `deleteMessage` lived in the repository, outside
+`ConversationEraser`; the `attachments` row went by cascade, the file in `filesDir` stayed — the
+defect class closed in 1.28.3 (F04) for the whole conversation, reopened on the most frequent path,
+deleting an embarrassing MMS. `eraseMessage` now lives in the eraser, with the same sandbox; the
+repository delegates. Test on real Room, file actually created then measured absent. (b) The
+**quick reply from a call** (`HeadlessSmsSendService`) called `SendSmsUseCase` directly: a third
+sending point, the one the single dispatch of 2026-09-10 had missed. It now goes through
+`EnvoyerMessageUseCase`.
+
+**9. Targeted reading of the vault's blind spots in the decoy session** (agent, whole app). Fifteen
+read surfaces checked one by one — full-text search, incoming notification, contact identity,
+unread badge, mark as read, scheduled sends, PDF export, deep link, incoming share: **all
+guarded**, by `in_vault = 0` in SQL or by a session guard. Two medium points fixed: (a) the "Turn
+back on" path of the Safety Call notification (`ACTION_SAFETY_CALL_REARM`) lacked its twin's guard
+— a persisted write of security settings without proof of unlock; it now applies
+`attendreOuvertureOuJeter`. (b) Restoring a backup containing vault conversations on a device
+**without a second factor** made them readable in two taps without anything saying so. This is not
+a hole in the restore (writing to the vault requires no secret, `VaultSecondFactor.NONE` is an
+accepted configuration), it is a silence: `RestoreResult.vaultRestoredWithoutSecondFactor` states
+it on screen and points to Settings.
+
+**10. Sweep of the repository's 245 `runCatching`** (agent, read-only): which ones wrap a `suspend`
+call without rethrowing `CancellationException`. One **security** finding: the four final writes
+of "Delete all my data" (`PanicService.nukeEverything` — removal of the PIN, of the panic code, of
+the lock counters, of the settings) lived in a `viewModelScope`; if the Settings screen left the
+stack at that instant, each `suspend` raised a cancellation that `runCatching` swallowed **without
+a word**, and the function returned leaving the PIN and the Safety call contacts in place. The four
+writes are now under `NonCancellable`, failures logged. Five data sites fixed by a common helper,
+`runCatchingCancellable`, which lets the cancellation propagate: negative cache of contact names
+(poisoned by a cancellation), files of a cancelled scheduled send (never erased), snapshot of the
+dialling region (F-01 reopened), previous system row of an MMS (orphaned in `content://mms`), and
+`runCatchingOutcome` itself (an interrupted export or restore displayed "storage failure"). The
+~30 other sites identified are log noise with a fallback on the safe side; listed in the register,
+not modified.
+
+**11. External review (Gemini) of the second wave**, two findings retained: (a) a direct
+consequence of point 10, the restore passphrase was no longer erased when the cancellation
+propagated — `restaurer` is now in `try/finally`; (b) pre-existing since 1.28.3, the wait of the
+"I am OK" gesture lived in a `lifecycleScope.launch` that survives going to the background:
+notification tapped, then app left locked, and the gesture ran at whatever unlock came next, hours
+later. `lancerGesteDeNotification` bounds both twins to the foreground: when the activity stops,
+the pending gesture is cancelled and the notification republished.
+
+### v1.28.4 — An incomplete cleanup reported as complete
+
+*Andrew Pozdnakov's fifth note on F-Droid MR !38458 (2026-09-10): he narrowed in on the vault purge
+(F03/F04/F09/F13) and measured, on an Android 14 emulator with the real SQLCipher database and the
+production Hilt graph, **three cases where the purge calls itself complete while something
+remains**. Register: same file as 1.28.3, section "Cinquième note" ("Fifth note").*
+
+**What he found, and why it is serious.** 1.28.3 had made the purge resumable by keeping the parent
+when the system copy resists. But its **dependants** — scheduled sends, attachment files — were
+cleaned up by helpers that returned nothing: an exception swallowed, a `delete()` returning `false`
+logged and forgotten. The ordinary success branch was therefore reached **without `force`**, the
+parent went, the PIN was removed, `VaultPurged` emitted — and an orphaned scheduled send **became
+visible again outside the vault** (`COALESCE(c.in_vault, 0)`), with no way for the resume ever to
+find it again, its parent being gone. Third case: a message imported by the production sync that
+**commits between the second re-read and the `DELETE` of the parent** is swept away by the cascade,
+system copy intact, purge "complete".
+
+**What changes.** `ConversationEraser.erase` returns `Issue(systemCopyGone, localeComplete)`. Both
+helpers return a failure count (failed enumeration = failure, `delete()` returning `false` =
+failure); a single failure **keeps the parent** for the vault and counts in `localFailures`, so
+never "complete". The re-read and the deletion of the parent live in **a single Room transaction**:
+SQLite having only one writer, an import that commits during the purge waits for the lock and can
+no longer slip in between the two. The scheduled rows are deleted in that same transaction, no
+longer by the helper.
+
+**What the measurement added.** Three tests on real Room reproduce R01 (`TRIGGER` refusing the
+`DELETE`), R02 (folder `0500`, `delete()` measured at `false`), R03 (message inserted at the
+scheduler's injection point), each with its resume. The **negative control of R01 did not fail**:
+the refused `DELETE` now lives in the final transaction and propagates through another path — the
+failure count of the cancellation itself was covered by nothing. A fourth test makes the
+scheduler's `cancel()` throw and fails on its own when that count is neutralised.
+
+**Two vault branches never tested since v1.26.1**, now closed: the refusal of export **and of
+restore** in the decoy session, reached through the real path (main PIN, panic code, unlock with
+the panic code); and the **biometric** second factor, which the policy must return for a vault
+without a vault PIN and which export must respect. Negative controls on the policy, on the export
+guard, on the restore guard.
+
+**Two limits, stated rather than kept quiet.** (1) Cancelling a scheduled send is a request to
+WorkManager: a radio operation already handed over by an attempt in progress is not recalled; the
+row is removed and, if the radio had already accepted the send, the message goes out. (2) A message
+that commits **after** the final transaction targets a parent that is gone: Room enforces the
+foreign key, the insertion fails instead of creating a protected orphan, and the provider's row is
+imported later into a new ordinary conversation — like any message from that contact arriving after
+the purge. The vault protects what the app knows about.
+
+**Outside security, in the same version**: group MMS (setting off by default), a `hidden` column
+(schema 13) so that a reaction sentinel is no longer recognised by its shape, the send loop and the
+dispatch written only once after a fourth divergence between twin paths.
+
+### v1.28.3 — A fix applied to only one of the paths that needed it
+
+*Fourth pass of Andrew Pozdnakov's external review on F-Droid MR !38458 — 33 findings, all
+verified in the source before fixing, 32 fixed — followed by a global audit and a measurement
+session on two phones. Register:
 `audits_relectures_IA/audits-ia-externe/2026-09-09-andrew-pozdnakov-mr38458-4e-passe-33-findings.md`.*
 
-**Le motif dominant, qui vaut plus que la liste.** La grande majorité de ces défauts étaient des
-correctifs **déjà écrits**, mais posés sur un seul des chemins qui en avaient besoin. Le dépôt
-savait, et le disait souvent en commentaire : la sauvegarde décrivait mot pour mot le mécanisme de
-F01 et le contournait pour elle seule ; le notificateur des messages entrants appliquait les trois
-gardes de rédaction que celui des échecs n'avait pas (F08) ; le chemin sortant gérait plusieurs
-pièces jointes quand le chemin entrant n'en gardait qu'une (F16). Et le motif s'est reproduit
-**pendant la correction** : F21 posé sur la voie SMS seule alors que le même `continue` muet
-vivait sur les deux voies MMS ; puis sur leur appelant de fond, l'envoi programmé.
-
-**Deuxième motif : les affirmations d'exhaustivité vieillissent mal.** « La SEULE voie de lecture
-non gardée », « three dialogs, one setting, consistent », « toute migration est additive » — trois
-commentaires faux, dont un a masqué F02 pendant deux versions.
-
-**Ce qui touche la sécurité, en substance.**
-- **F01** — deux conversations locales sans fil système partageaient la sentinelle `thread_id = 0`
-  sous un index UNIQUE : la seconde effaçait la première, avec ses favoris, réactions et son
-  appartenance au coffre. `thread_id` est nullable (migration 8 → 9), l'insertion ne remplace
-  plus.
-- **F02, F03, F04, F09, F10, F11** — le coffre : ses messages programmés se lisaient sans le PIN,
-  sa purge laissait des envois programmés, des fichiers, et croyait avoir supprimé des lignes
-  système qu'elle n'atteignait pas (aucun MMS sortant n'a jamais eu de `telephony_uri`).
-- **F06, F07** — désarmer le verrou n'exigeait pas de s'authentifier ; abaisser le mode retirait
-  le second facteur du coffre.
-- **F26** — « Bloquer les numéros inconnus » était une promesse affichée que zéro ligne tenait.
-  Câblé, avec la règle qui compte : une permission contacts refusée **ne bloque rien**, parce
-  qu'une ignorance n'est pas une connaissance.
-- **X-01** (trouvé en vérifiant un constat de l'audit global qui était faux) — répondre depuis un
-  groupe du coffre écrivait hors du coffre, et la réponse d'un membre y arrivait de même. Le SMS
-  n'a pas de groupe : mettre un groupe au coffre y met désormais ses membres, et l'en sortir les
-  en sort.
-- **A-03** — la restauration ne refusait pas en session leurre, contrairement à l'export.
-
-**Ce que la mesure sur appareil a appris, et que la lecture ne pouvait pas donner.** Neuf défauts
-trouvés en une soirée sur un Galaxy S9 et un S24, dont quatre sur des fonctions annoncées qui
-n'avaient **jamais** fonctionné : joindre un contact (la fiche n'est pas un fichier), envoyer deux
-photos (chaque image tenait seule sous le plafond, jamais ensemble), créer un groupe (le raccourci
-« toucher = ouvrir » avait tué le chemin), voir toutes les pièces jointes d'un MMS (le correctif
-de données F16 n'avait pas son jumeau d'affichage). Un test unitaire vert ne dit rien d'un chemin
-que personne n'emprunte.
-
-**Ce que le contrôle négatif a appris.** Deux correctifs remis ensemble peuvent se masquer : F12
-restait vert pour la mauvaise raison tant que F14 était neutralisé avec lui. Et un contrôle
-négatif dont le rapport est périmé n'a rien mesuré — vu deux fois dans la session, une fois sur
-une compilation refusée, une fois sur un verrou de fichier Windows.
-
-Campagne instrumentée : **131 cas sur Galaxy S9 / Android 10, 0 échec, 0 ignoré** ; 557 tests
-unitaires ; migration 11 → 12 exécutée sur appareil.
-
-### v1.28.2 — Un garde qui refuse toujours de la même façon n'est plus une protection
-
-*Suite directe de la v1.28.1, décidée après elle et non signalée par la relecture externe : c'est
-le correctif de la v1.28.1 lui-même qui a créé le cas.*
-
-La v1.28.1 a eu raison de **conserver** la conversation du coffre quand sa copie système résiste.
-C'est ce qui rend la purge reprenable, et c'est ce qui a fermé la fuite du second essai. Mais elle
-supposait l'échec **passager** — un rôle SMS momentanément perdu, un fournisseur indisponible —
-et cette hypothèse est fausse dans un cas précis et durable.
-
-Une sauvegarde restaurée d'**avant la v1.27.10** recopiait les `telephony_uri` du téléphone
-**source**. Un message peut donc porter, définitivement, une liaison qui désigne ici un **autre**
-message. Le garde d'identité posé en v1.28.1 fait alors exactement ce qu'on lui demande : il
-refuse de supprimer la ligne système, parce qu'elle n'est pas prouvée être celle-là. Il refuse au
-premier essai, au deuxième, au centième — à l'identique. Et l'utilisateur qui a oublié son PIN de
-coffre n'a plus **aucune** issue.
-
-**Une porte de sortie qui ne s'ouvre jamais n'en est pas une.** Le garde finissait par protéger
-l'application contre son propriétaire.
-
-**Ce qui change, et ce qui ne change pas.** Au **second** échec seulement, l'application propose
-de vider le coffre et de retirer le PIN quand même, après avoir énoncé ce qui **restera** sur le
-téléphone — et le redit une fois l'opération faite. Le premier échec continue d'inviter à
-réessayer : une panne passagère se lève d'elle-même, et offrir tout de suite l'option dégradée
-pousserait à détruire plus que nécessaire.
-
-`SystemCopyEraser` ne bouge **pas d'une ligne** : la copie système n'est toujours pas supprimée
-sans preuve d'identité, et ce n'est donc pas un assouplissement du garde. Ce qui change est
-l'arbitrage **local** — conserver ou non la ligne Room quand la propagation a échoué — et il
-appartient désormais à l'utilisateur, informé, au second échec.
-
-**Le drapeau qui distingue les deux échecs est en base** (`vaultPurgeFailedOnce`), pas en mémoire.
-Un compteur en mémoire ne survit pas à ce qu'on lui demande de survivre : fermer l'application
-entre deux essais ramènerait l'impasse, et c'est précisément ce que ferait quelqu'un de bloqué.
-
-**La règle générale, à appliquer aux prochains gardes.** Distinguer l'échec **passager** de
-l'échec **répété**. Le premier invite à réessayer. Le second ouvre une sortie assumée, à trois
-conditions : le garde lui-même ne bouge pas, l'utilisateur décide après avoir lu ce qui
-subsistera, et l'état qui distingue les deux échecs est persistant.
-
-Couvert par 5 tests JVM (`SettingsResetGuardsTest`) et 2 instrumentés (`VaultPurgeRetryTest`),
-contrôle négatif effectué : les deux régressions remises en place font tomber les tests qui les
-visent.
-
-### v1.28.1 — La porte de sortie du coffre s'ouvrait au second essai
-
-*Troisième passe de la relecture d'Andrew Pozdnakov sur la MR F-Droid !38458, 2026-09-08, qu'il
-a reproduite sur émulateur Android 14. Suite directe de la v1.27.11, qui avait corrigé le même
-chemin sans le fermer.*
-
-La v1.27.11 avait rendu la purge du coffre **honnête** : elle disait ce qui avait échoué, et le
-PIN n'était retiré que sur un coffre démontrablement vide. Elle ne l'avait pas rendue
-**reprenable**, et c'est ce qui manquait : la ligne Room partait quand même, y compris quand la
-copie système résistait.
-
-L'enchaînement est plus grave que le constat isolé. Premier essai : le PIN est correctement
-conservé, mais la conversation est déjà effacée. Second essai : `idsInVault()` rend une liste
-vide, `VaultPurgeResult` vaut `0/0/0`, et `isComplete` est vrai **par vacuité**. Le PIN part, la
-copie système survit, et la resynchronisation suivante la ressuscite **en clair** — précisément
-l'état que la v1.27.11 prétendait empêcher.
-
-**La leçon, plus utile que le défaut.** Rendre compte d'un échec ne sert à rien si l'on détruit au
-passage l'état dont la reprise a besoin. Le correctif n'ajoute aucun journal de purge : **la ligne
-du coffre EST le journal**. Conservée, elle est relue au prochain essai comme après un
-redémarrage, elle compte dans `remaining`, et la suppression système est retentée.
-
-**Deux gardes renforcés dans la foulée.** L'identité d'une ligne du fournisseur ne tenait qu'à sa
-date, à une minute près — c'est-à-dire à rien, une minute étant la durée ordinaire d'un échange.
-Elle compare désormais date, corps, sens et adresse côté `content://sms`, et une identité
-invérifiable échoue du côté sûr au lieu de déclencher la suppression. Côté `content://mms`, la
-table désignée par l'URI ne porte ni corps ni adresse : l'identité s'y réduisait à date + sens, et
-le test écrit pour le vérifier a **supprimé le MMS d'un autre correspondant** sur un Galaxy S9
-avant que le correctif n'existe. L'adresse y est maintenant relue dans `content://mms/<id>/addr`.
-
-**L'effacement automatique de l'historique ne propageait pas au fournisseur du système**,
-contrairement aux trois autres chemins de suppression, et rien ne le documentait. Pour un réglage
-de confidentialité, le défaut est le plus coûteux possible : il ne se voit pas. Les messages que
-l'utilisateur croyait effacés restaient dans `content://sms`, lisibles par toute application ayant
-`READ_SMS`, et « Resynchroniser » les ramenait tous — alors que la confirmation promettait déjà
-« Cette action est irréversible ». Trouvé en audit de cohérence, pas par la relecture externe.
-
-⚠ **Changement de comportement destructeur.** Sur un appareil où la rétention automatique est
-activée, la prochaine purge supprime les messages **du téléphone** et non plus seulement de
-l'application. La confirmation le dit désormais explicitement, et la description de
-« Resynchroniser » ne promet plus de récupérer un historique effacé.
-
-**La règle qui unifie les quatre chemins destructeurs**, et qui manquait : *la ligne locale ne
-survit à un échec de propagation que si une décision de **sécurité** dépend de cette propagation.*
-Retirer le PIN du coffre en est une — on exige la preuve. Une suppression ordinaire ou une purge
-de rétention n'en lèvent aucune : y conserver la ligne enfermerait l'utilisateur dans un
-historique qu'il a demandé à voir disparaître, sans rien protéger de plus.
-
-**Pourquoi trois défauts sont passés sur le même chemin en trois versions.** Il vivait en
-`private` dans `ConversationRepositoryImpl`, au milieu de onze dépendances dont neuf ne le
-concernaient pas : aucun test ne pouvait l'atteindre sans construire tout le repository, et
-personne ne l'a fait. Il est désormais en propre (`SystemCopyEraser`, `ConversationEraser`), la
-politique de suppression est une table testée pour elle-même, et chaque correctif a fait l'objet
-d'un contrôle négatif — le défaut remis en place fait tomber les tests qui le visent.
-
-### v1.27.10 — Le second facteur du coffre se remplaçait sans lui-même
-
-*Relecture externe d'Andrew Pozdnakov sur la MR F-Droid !38458, 2026-09-07. Suite directe de
-l'entrée v1.27.2 ci-dessous : celle-là avait montré que la garde du coffre tenait l'écran et
-non la donnée ; celle-ci montre que le secret lui-même n'était pas gardé.*
-
-Le PIN du coffre pouvait être **remplacé** (Réglages → « Changer le PIN du coffre ») ou
-**retiré** (bascule OFF) sans qu'on demande jamais celui en place. Le second facteur ne
-résistait donc pas à son adversaire déclaré : celui qui connaît le PIN d'application. Reproduit
-sur émulateur Android 14 par le relecteur.
-
-**Ce n'était pas un oubli, et c'est ce qui en fait une leçon.** La KDoc de `VaultPinManager`
-documentait cette désactivation comme la porte de sortie en cas de PIN oublié, vingt lignes
-sous le « threat model » qu'elle contredisait mot pour mot. Les deux paragraphes avaient été
-relus des dizaines de fois sans que la contradiction saute aux yeux, parce qu'ils étaient justes
-séparément. **Une porte de sortie qui n'exige rien de plus que le facteur dont on se protège
-n'est pas un compromis : c'est le contournement.**
-
-Depuis :
-
-- `changeVaultPin` et `disableVaultPin` exigent le PIN en place, vérifié par le même PBKDF2 et
-  sous la même temporisation que l'entrée dans le coffre ;
-- `configureVaultPin` refuse d'écraser un coffre réellement gardé (hash posé **et** drapeau ON) —
-  garde de dernier recours si un futur écran rebranchait le mauvais dialogue ;
-- la porte de sortie subsiste, parce qu'un secret irrécupérable sans issue est un piège, mais
-  elle est **destructive** : elle vide le coffre avant d'en retirer le PIN. Détruire est un
-  pouvoir que le porteur du PIN d'application avait déjà ; lire est celui qu'on lui refuse ;
-- `verifyVaultPin` porte enfin une temporisation exponentielle **dédiée**. Le raisonnement
-  d'origine — « le coffre n'est atteignable qu'après le verrou d'application, déjà borné » —
-  était vrai tant que le coffre n'était qu'une porte derrière une autre, et faux dès lors que
-  le second facteur doit résister à quelqu'un ayant **déjà** franchi la première : ses essais ne
-  produisent aucun échec côté application. Jeu de clés `vault.*` séparé d'`auth.*`, sans quoi un
-  simple verrouillage/déverrouillage aurait effacé la temporisation à volonté.
-
-Verrouillé par 12 tests dans `VaultPinGuardsTest`, posés sur `VaultPinManager` et non sur
-l'écran — la garde fautive vivait dans l'interface, c'est précisément pourquoi elle ne gardait
-rien.
-
-### v1.27.2 — Le second facteur du coffre gardait l'écran, pas la donnée
-
-**Versions affectées : toutes, jusqu'à 1.27.1 incluse.**
-
-Quatre chemins ouvraient ou exposaient le coffre sans que son code distinct soit demandé :
-
-- **Déplacer une conversation vers le coffre armait la session.** L'auto-déverrouillage datait de
-  la v1.11.0, antérieure au code du coffre (v1.13.0). Depuis, quiconque passait le verrou principal
-  déplaçait une conversation quelconque puis ouvrait le coffre — code et biométrie sautés, l'écran
-  s'initialisant depuis cette session.
-- **En sortir n'exigeait rien.** Sortir une conversation du coffre révèle du contenu protégé ;
-  seule la variante non groupée portait la garde.
-- **La sauvegarde chiffrée exportait le coffre verrouillé.** `buildPayload` lit toutes les
-  conversations, coffre compris. Le fichier était déchiffrable hors de l'appareil avec la
-  passphrase choisie par celui qui l'exportait.
-- **`observeVault` était le dernier flux de lecture non gardé**, alors que ses trois frères
-  consultaient la session depuis la v1.26.1.
-
-**Correctif.** La garde porte désormais sur l'**accès** et non sur l'affichage : plus
-d'auto-déverrouillage, sortie et export conditionnés au second facteur, et tous les flux de lecture
-alignés. Quand la biométrie est l'unique second facteur et devient indisponible, le coffre n'est
-plus ouvert par défaut — l'application l'explique et renvoie vers la configuration d'un code
-distinct, joignable hors du coffre.
-
-### v1.27.2 — Perte de messages entrants sur erreur de base
-
-**Versions affectées : toutes, jusqu'à 1.27.1 incluse.**
-
-Une indisponibilité momentanée de Room/SQLCipher pouvait faire disparaître un message entrant sans
-trace :
-
-- **SMS.** La consultation de liste noire précédait l'écriture. Son échec terminait le message
-  diffusé par le système sans que `insertInboxSms` ait été appelé : le SMS n'existait ni dans le
-  fournisseur téléphonie, ni dans l'application.
-- **MMS.** Le fichier PDU — seule copie du message et de sa pièce jointe — était supprimé dès que
-  le téléchargement avait réussi, y compris lorsque l'écriture en base échouait ensuite.
-
-**Correctif.** Le décodage précède toute résolution de dépendance ; la consultation de liste noire
-échoue du côté **ouvert** (une erreur laisse passer le message, seul un blocage franc écarte) ; un
-filet de dernier recours écrit le SMS dans la boîte système même base morte ; et le PDU n'est
-supprimé qu'une fois son sort réglé. `CancellationException` traverse ces gardes au lieu d'être
-convertie en « non bloqué ».
-
-⚠️ **Limite assumée.** Si le fournisseur système valide l'insertion puis échoue avant le retour de
-l'appel, le filet réinsère : sémantique « au moins une fois ». Un doublon se voit et s'efface, une
-perte est définitive.
-
-### v1.27.2 — Alerte de sécurité personnelle neutralisable par redémarrage
-
-**Versions affectées : 1.10.0 à 1.27.1.**
-
-Le déclenchement exige que les **deux** horloges aient expiré — murale et monotone — pour qu'une
-avance d'horloge ne puisse pas provoquer une alerte prématurée (SEC-11). Or `elapsedRealtime()`
-repart de zéro à chaque redémarrage, et la récupération de dérive re-calait le compteur sur cette
-valeur : redémarrer plus souvent que le délai configuré empêchait l'alerte de partir,
-indéfiniment. Un vol suivi de redémarrages réguliers la neutralisait ; pour un usage honnête, une
-mise à jour système repoussait l'échéance d'autant.
-
-**Correctif.** Le temps monotone écoulé est capitalisé dans un champ persisté, jalonné à chaque
-tick horaire du worker. Un redémarrage ne coûte plus que le segment non encore jalonné, borné à un
-tick. Aucune horloge murale n'entre dans ce calcul : la protection SEC-11 reste entière.
-
-### v1.25.0 — Ouverture SQLCipher en clé brute (performance, sans changement de sécurité)
-
-Depuis la 1.25.0, la base est ouverte avec la **clé brute** (`SupportOpenHelperFactory` reçoit
-`x'<64 hex>'`) au lieu de laisser SQLCipher dériver la clé par **PBKDF2** (256 000 itérations).
-
-**Pourquoi c'est neutre côté sécurité.** PBKDF2 sert à *étirer* un secret à faible entropie (un mot
-de passe humain) pour le rendre coûteux à brute-forcer. Or la passphrase de SMS Tech est déjà
-**32 octets aléatoires (256 bits) scellés par le Keystore** (depuis le correctif clé-nulle v1.24.0) :
-sur une clé déjà à pleine entropie, les itérations PBKDF2 n'ajoutent **aucune** résistance — elles ne
-font que ralentir l'ouverture (~490 ms → quelques ms). Le chiffrement au repos, l'algorithme
-(AES-256) et le threat model sont **inchangés** ; seule l'étape de dérivation, inutile ici, est sautée.
-
-**Conversion.** Une bascule unique, crash-safe (`LegacyZeroKeyRekey.ensureRawKeyed`, même pattern
-copie → validation `cipher_integrity_check` + comptage de lignes → swap que la réparation v1.24.0),
-est exécutée au premier lancement de la 1.25.0, après la réparation clé-nulle. Aucune perte de
-message : l'original n'est jamais détruit avant que le remplaçant ne soit prouvé sain.
-
-### v1.24.0 — SEC-CRIT : la base était chiffrée avec une clé nulle
-
-**Versions affectées : toutes, jusqu'à 1.23.4 incluse.**
-
-`DatabaseFactory` remettait la passphrase SQLCipher à `SupportOpenHelperFactory` puis la zéroïsait
-immédiatement (`raw.wipe()`, soit `Arrays.fill(this, 0)` — une mutation **sur place**). Or aucun
-maillon de SQLCipher ne copie ce tableau : vérifié par désassemblage de `sqlcipher-android-4.16.0`,
-`SupportOpenHelperFactory` en stocke la référence, `SupportHelper` la transmet, et
-`SQLiteOpenHelper` la conserve dans `mPassword` qu'il ne lit que dans `getDatabaseLocked()`,
-c'est-à-dire **à l'ouverture de la base**. Room ouvrant paresseusement, au premier accès DAO,
-SQLCipher recevait 32 octets nuls.
-
-**Conséquence : `smstech.db` était chiffrée avec une clé constante et publique**, et non avec la
-passphrase de 32 octets aléatoires scellée par le Keystore. Le défaut était invisible parce qu'une
-clé nulle est parfaitement stable d'un lancement à l'autre. Il était présent depuis le premier
-commit du fichier — l'affirmation « 32-byte random passphrase wrapped by Keystore » du tableau des
-primitives ci-dessus n'a donc jamais été tenue avant la 1.24.0.
-
-**Portée réelle du risque.** Elle doit être énoncée honnêtement dans les deux sens :
-- en tant qu'application SMS par défaut, SMS Tech est **tenue** de miroiter tous les messages dans
-  `content://sms`, en clair, y compris ceux des conversations du coffre (`in_vault` est un simple
-  drapeau Room). La base SQLCipher est de la défense en profondeur, jamais l'unique copie ;
-- ce que la clé nulle exposait **en plus** : les métadonnées propres à SMS Tech — appartenance au
-  coffre, brouillons, messages programmés, réactions, verdicts anti-smishing — et tout message
-  supprimé par l'utilisateur dans SMS Tech.
-
-**Correctif (`LegacyZeroKeyRekey`).** Au premier lancement de la 1.24.0, avant que Room n'ouvre le
-fichier : checkpoint du WAL, copie vers un fichier temporaire, re-chiffrement de la **copie** avec
-la vraie passphrase, validation de bout en bout (`PRAGMA cipher_integrity_check` + comptage ligne à
-ligne par table), puis bascule. L'original n'est jamais modifié ni supprimé avant que le remplaçant
-ne soit prouvé sain : un arrêt du processus à n'importe quelle étape laisse une base exploitable.
-Une base illisible par les deux clés est signalée, jamais effacée.
-
-**Ce que le correctif ne peut pas faire.** `File.delete()` ne réécrit pas les blocs : les secteurs
-qui contenaient l'ancienne base restent physiquement lisibles jusqu'à ce que le système de fichiers
-les réutilise. Un écrasement applicatif serait illusoire sur f2fs (copy-on-write) et avec le
-wear-levelling des mémoires flash. La seule action qui élimine réellement ce résidu est une
-**réinitialisation d'usine**, qui détruit la clé de chiffrement FBE de l'appareil.
-
-
-### v1.14.7 (this release) — Protection cache MMS reçus + filets sync + splash transparent + audit fixes
-
-User remontée 2026-05-23 : sur S24 (après cycles désinstall/réinstall pour tester v1.14.5/6), les attachments audio MMS reçus avaient disparu et la sync semblait gelée. Root cause identifiée par diag logcat : (a) `cacheDir/mms_incoming/` (où vivaient les fichiers audio des MMS reçus) est volatile — Android Storage Manager le purge sous pression mémoire, et "Effacer le cache" via Réglages → Apps le vide aussi, laissant les `AttachmentEntity.localUri` Room pointer sur des fichiers absents ; (b) sur Samsung S24 Android 15 le ContentObserver système rate parfois des émissions après sleep long + Freecess gèle les workers en background.
-
-**Trois changements + 3 audit fixes** :
-
-1. **Protection cache → filesDir pour les attachments MMS reçus**. `MmsDownloadedReceiver.persistAttachment` écrit désormais dans `filesDir/mms_attachments/` (persistant, ne disparaît qu'avec `PanicService.nukeEverything` ou `clearData`) au lieu de `cacheDir/mms_incoming/`. `FileProvider` paths déjà OK (`files-path "attachments" path="mms_attachments/"` existant). `AutoLockObserver.purgeTransientCaches` doc mise à jour : NE purge PAS le nouveau filesDir/mms_attachments (par design, sinon les attachments disparaîtraient à chaque auto-lock). `PanicService.nukeEverything` continue de wipe filesDir/mms_attachments correctement (déjà dans sa liste, vérifié).
-
-2. **Migration cold-start one-shot** `MainApplication.migrateAttachmentsToFilesDirIfNeeded()`. Flag DataStore `AdvancedSettings.attachmentsMovedToFilesDirV147` idempotent. Pour chaque `AttachmentEntity.local_uri` commençant par `cacheDir/mms_incoming/`, déplace physiquement le fichier vers `filesDir/mms_attachments/` (rename atomique si même partition, fallback copy+delete) puis `attachmentDao.updateLocalUri(id, newPath)`. Edge cases gérés : (a) fichier source absent (cache déjà clearé) → flip quand même le path Room pour cohérence, (b) destination existe déjà → garde dest, delete source. **Audit S1 fix** : `canonicalFile` + `startsWith(newDir.canonicalFile)` check anti path-traversal avant écriture, defense-in-depth contre une régression future du générateur de noms. **Audit P2 fix** : `withContext(Dispatchers.IO)` explicite autour de la migration (les IO `renameTo` / `copyTo` ne saturent plus le thread pool Default). Async dans `appScope.launch` — pas de blocage main thread.
-
-3. **Filet de sécurité sync onResume**. `MainActivity.onResume()` appelle `telephonySyncManager.requestSync("MainActivity.onResume")` (idempotent via Mutex côté manager) + `TelephonySyncWorker.enqueueOneShot(this)` (belt-and-braces si le manager est en état inattendu). **Audit P1 fix** : throttle 30s mono sur le `enqueueOneShot` WorkManager (sans le throttle, switch rapide entre apps spammait WorkManager SQLite interne → risque Freecess throttling). `requestSync` lui ne nécessite pas de cooldown (Mutex single-flight absorbe).
-
-**Polish** : `splash_logo.xml` v1.14.5 retiré (user remontée "préfère l'ancien splash, le rond Android 12+ cache mon logo carré") → nouveau `drawable/splash_transparent.xml` = `<shape rectangle solid transparent />`. `windowSplashScreenAnimatedIcon = @drawable/splash_transparent` (light + night themes) → Android 12+ affiche juste un flash de fond uni, aucun cercle visible. La Compose `SplashScreen.kt` fade-in intro 1re ouverture reste intacte. String `emergency_topbar_warning_cd` orpheline retirée (FR+EN).
-
-**Threat model** inchangé. Aucun changement crypto / Keystore / Room / SQLCipher. Cert SHA-256 stable. Pas de migration Room. `lintVitalRelease` clean, `testReleaseUnitTest` green. Audit final 3 axes — 1 MEDIUM (P1) + 3 LOW TOUS FIXÉS, zéro Critical/High.
-
-### v1.14.6 — Label `(défaut)` du picker de réactions
-
-Le picker `Réglages → Format des réactions` portait `(défaut)` sur "Français lisible" alors que la valeur réelle par défaut a été basculée sur `EMOJI_WITH_QUOTE` en v1.14.4 (cf. section ci-dessous). Strings FR+EN corrigées (`settings_reaction_format_fr` retire `(défaut)`, `settings_reaction_format_emoji_quote` ajoute `(défaut)`). Aucun changement comportemental, uniquement étiquette d'interface. Aucun changement crypto / Room / Keystore / threat-model.
-
-### v1.14.5 — Mode urgence polish UX : emoji ⚠️ + toggle GPS direct + reset complet sur disable + nettoyage dry-run + splash carré
-
-UX polish post-v1.14.4 sur 6 axes :
-
-1. **Emoji ⚠️ en tête du corps SMS d'urgence** (templates NEED_HELP + DANGER). Quand le destinataire reçoit le SMS, la notification heads-up affiche immédiatement le triangle d'alerte en preview → caractère d'urgence visuellement reconnaissable avant même d'ouvrir le SMS. **Trade-off accepté** : le ⚠️ (U+26A0 + U+FE0F variation selector) force l'encodage UCS-2 → 70 chars/segment au lieu de 160 GSM-7 → potentiel multi-segment. Audit SEC-5 v1.10.0 préservait 1-segment GSM-7 par défaut pour fiabilité en zone radio faible. **Décision v1.14.5** : la visibilité du caractère d'urgence prime sur la robustesse marginale (opérateurs FR 2026 fiables sur multi-segment). Tests `AuditV1100Test` mis à jour (`startsWith("⚠️ URGENCE")`). **DISCREET PAS modifié** : la variante neutre/anxiogène-évitante préserve son but (signaler malaise sans alarmer, éviter de révéler la situation à un agresseur lookant l'écran). Reste 1-segment GSM-7.
-
-2. **Toggle "Inclure position GPS dans le SMS" directement dans Settings → Mode urgence**. Avant : seul `EmergencySetupScreen` exposait ce toggle. v1.14.5 : `ToggleRow` direct accessible dans `SettingsScreen` principal. Au passage OFF→ON, demande `ACCESS_FINE_LOCATION` runtime immédiatement via `rememberLauncherForActivityResult`. **Audit SEC-1 fix** : si l'user refuse la permission, le callback `revert` automatiquement `includeLocation = false` en DataStore + snackbar erreur "Permission refusée — inclusion GPS désactivée". Pattern miroir de `revertCallBehaviorIfPermissionRevoked` (v1.10/v1.14.1) — pas d'état sale "toggle ON mais SMS sans coords".
-
-3. **Hotfix banner "Je vais bien" orphelin** (user remonté 2026-05-22). `EmergencyViewModel.disableEmergencyMode()` clear désormais AUSSI `lastTriggeredAt = 0L` + `monotonicLastTriggeredAt = 0L` en plus de `enabled = false` + `emergencyShortcutEnabled = false` + `emergencyCallPoliceEnabled = false`. Reset complet en une transaction atomique DataStore. **Cold-start repair migration étendue** : `MainApplication.onCreate` détecte `hasOrphanShortcut || hasOrphanTrigger` (cooldown actif alors que mode désactivé) et repair automatiquement → users existants avec état sale post-v1.14.x sont nettoyés au prochain démarrage. Idempotente.
-
-4. **Cleanup "Tester sans envoyer"** retiré de la page urgence sur demande user (encombrait l'UI, le mode actif est déjà visible via la section recap). Suppression : bouton + composable `EmergencyDryRunDialog` + `EmergencyViewModel.previewTrigger/dismissPreview/_previewState/_isPreviewLoading/DryRunPreview/redactPhoneNumber` + constructor param `locationResolver` + 12 strings `emergency_dry_run_*` (FR+EN). Zéro référence orpheline.
-
-5. **Splash logo carré** (user remonté : "c'est en cercle le logo c'est pas beau, mon logo est carré"). Nouveau `drawable/splash_logo.xml` (inset 20% wrap `sms_tech_icon.png`). `windowSplashScreenAnimatedIcon` → `@drawable/splash_logo`. Ajout `windowSplashScreenIconBackgroundColor` matching `windowSplashScreenBackground` (light + dark) → le masque circulaire Android 12+ devient visuellement invisible, le logo carré branded apparaît tel quel.
-
-6. **AboutScreen + site files-tech.com sms-tech.php** : nouvelle entrée `Feature` "Mode urgence" + nouvelle `HelpRecipe` "Utiliser le mode urgence" (4 étapes concises). Site web : nouvelle carte feature ⚠️ + ligne permissions `ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION` (optionnelle, mode urgence). Version site bumpée à v1.14.5.
-
-Audit final 3 axes (sécu / perf+qualité / UI+branchements) — 1 MEDIUM finding fixé (SEC-1 revert toggle GPS sur permission denied), aucun Critical/High. Pas de changement crypto / Room / Keystore / threat-model. Pas de migration Room. `lintVitalRelease` clean, `testReleaseUnitTest` green.
+**The dominant pattern, worth more than the list.** The vast majority of these defects were fixes
+**already written**, but applied to only one of the paths that needed them. The repository knew,
+and often said so in a comment: the backup described the F01 mechanism word for word and bypassed
+it for itself alone; the incoming-message notifier applied the three redaction guards that the
+failure notifier lacked (F08); the outgoing path handled several attachments where the incoming
+path kept only one (F16). And the pattern recurred **during the fix**: F21 applied to the SMS path
+alone while the same silent `continue` lived on both MMS paths; then to their background caller,
+the scheduled send.
+
+**Second pattern: claims of exhaustiveness age badly.** "The ONLY unguarded read path", "three
+dialogs, one setting, consistent", "every migration is additive" — three false comments, one of
+which hid F02 for two versions.
+
+**What touches security, in substance.**
+- **F01** — two local conversations without a system thread shared the sentinel `thread_id = 0`
+  under a UNIQUE index: the second erased the first, along with its favourites, reactions and vault
+  membership. `thread_id` is nullable (migration 8 → 9), insertion no longer replaces.
+- **F02, F03, F04, F09, F10, F11** — the vault: its scheduled messages could be read without the
+  PIN, its purge left scheduled sends and files behind, and believed it had deleted system rows it
+  never reached (no outgoing MMS ever had a `telephony_uri`).
+- **F06, F07** — disarming the lock did not require authenticating; downgrading the mode removed
+  the vault's second factor.
+- **F26** — "Block unknown numbers" was a displayed promise that not a single line kept. Wired,
+  with the rule that matters: a refused contacts permission **blocks nothing**, because ignorance is
+  not knowledge.
+- **X-01** (found while verifying a finding of the global audit that was false) — replying from a
+  vault group wrote outside the vault, and a member's reply arrived there likewise. SMS has no
+  groups: putting a group in the vault now puts its members there, and taking it out takes them
+  out.
+- **A-03** — restore did not refuse in the decoy session, unlike export.
+
+**What on-device measurement taught, and reading could not provide.** Nine defects found in one
+evening on a Galaxy S9 and an S24, four of them in advertised features that had **never** worked:
+attaching a contact (the contact card is not a file), sending two photos (each image fit under the
+cap on its own, never together), creating a group (the "touch = open" shortcut had killed the path),
+seeing all the attachments of an MMS (the F16 data fix lacked its display twin). A green unit test
+says nothing about a path that no one takes.
+
+**What the negative control taught.** Two fixes delivered together can mask each other: F12 stayed
+green for the wrong reason as long as F14 was neutralised along with it. And a negative control
+whose report is stale measured nothing — seen twice in the session, once on a refused compilation,
+once on a Windows file lock.
+
+Instrumented campaign: **131 cases on Galaxy S9 / Android 10, 0 failed, 0 skipped**; 557 unit
+tests; migration 11 → 12 run on device.
+
+### v1.28.2 — A guard that always refuses the same way is no longer a protection
+
+*Direct follow-up to v1.28.1, decided after it and not reported by the external review: it is
+the v1.28.1 fix itself that created the case.*
+
+v1.28.1 was right to **keep** the vault conversation when its system copy resists. That is
+what makes the purge resumable, and that is what closed the leak on the second attempt. But it
+assumed the failure was **transient** — the SMS role momentarily lost, a provider unavailable —
+and that assumption is false in one specific and lasting case.
+
+A backup restored from **before v1.27.10** copied the `telephony_uri` values of the **source**
+phone. A message can therefore carry, permanently, a link that here designates **another**
+message. The identity guard added in v1.28.1 then does exactly what it is asked to do: it
+refuses to delete the system row, because that row is not proven to be the right one. It refuses
+on the first attempt, the second, the hundredth — identically. And the user who has forgotten
+their vault PIN has **no** way out at all.
+
+**An exit door that never opens is not one.** The guard ended up protecting the application
+against its owner.
+
+**What changes, and what does not.** On the **second** failure only, the application offers to
+empty the vault and remove the PIN anyway, after stating what will **remain** on the phone — and
+says it again once the operation is done. The first failure still invites the user to retry: a
+transient fault clears by itself, and offering the degraded option straight away would push
+toward destroying more than necessary.
+
+`SystemCopyEraser` does **not change by a single line**: the system copy is still not deleted
+without proof of identity, so this is not a loosening of the guard. What changes is the
+**local** trade-off — whether or not to keep the Room row when propagation has failed — and it
+now belongs to the user, informed, on the second failure.
+
+**The flag that tells the two failures apart is in the database** (`vaultPurgeFailedOnce`), not
+in memory. An in-memory counter does not survive what it is asked to survive: closing the
+application between two attempts would bring back the dead end, and that is precisely what
+someone who is stuck would do.
+
+**The general rule, to apply to future guards.** Distinguish the **transient** failure from the
+**repeated** failure. The first invites a retry. The second opens a deliberate exit, under three
+conditions: the guard itself does not move, the user decides after reading what will remain,
+and the state that tells the two failures apart is persistent.
+
+Covered by 5 JVM tests (`SettingsResetGuardsTest`) and 2 instrumented ones
+(`VaultPurgeRetryTest`), negative control performed: putting both regressions back makes the
+tests that target them fail.
+
+### v1.28.1 — The vault's exit door opened on the second attempt
+
+*Third pass of Andrew Pozdnakov's review of F-Droid MR !38458, 2026-09-08, which he reproduced
+on an Android 14 emulator. Direct follow-up to v1.27.11, which had fixed the same path without
+closing it.*
+
+v1.27.11 had made the vault purge **honest**: it said what had failed, and the PIN was only
+removed from a demonstrably empty vault. It had not made it **resumable**, and that is what was
+missing: the Room row went away anyway, including when the system copy resisted.
+
+The sequence is more serious than the isolated finding. First attempt: the PIN is correctly
+kept, but the conversation is already erased. Second attempt: `idsInVault()` returns an empty
+list, `VaultPurgeResult` is `0/0/0`, and `isComplete` is true **vacuously**. The PIN goes, the
+system copy survives, and the next resync resurrects it **in cleartext** — precisely the state
+v1.27.11 claimed to prevent.
+
+**The lesson, more useful than the defect.** Reporting a failure serves no purpose if the state
+that resumption needs is destroyed along the way. The fix adds no purge log: **the vault row IS
+the log**. Kept, it is reread on the next attempt just as after a restart, it counts in
+`remaining`, and the system deletion is retried.
+
+**Two guards hardened along the way.** The identity of a provider row rested only on its date,
+to within one minute — that is, on nothing, one minute being the ordinary length of an exchange.
+It now compares date, body, direction and address on the `content://sms` side, and an
+unverifiable identity fails on the safe side instead of triggering the deletion. On the
+`content://mms` side, the table designated by the URI carries neither body nor address: identity
+there came down to date + direction, and the test written to verify it **deleted another
+correspondent's MMS** on a Galaxy S9 before the fix existed. The address is now reread from
+`content://mms/<id>/addr`.
+
+**Automatic history deletion did not propagate to the system provider**, unlike the three other
+deletion paths, and nothing documented it. For a privacy setting, this is the costliest kind of
+defect: it cannot be seen. The messages the user believed erased remained in `content://sms`,
+readable by any application holding `READ_SMS`, and "Resync" brought them all back — even though
+the confirmation already promised "This cannot be undone". Found in a coherence audit, not by
+the external review.
+
+⚠ **Destructive behaviour change.** On a device where automatic retention is enabled, the next
+purge deletes the messages **from the phone** and no longer only from the application. The
+confirmation now says so explicitly, and the description of "Resync" no longer promises to
+recover an erased history.
+
+**The rule that unifies the four destructive paths**, and that was missing: *the local row only
+survives a propagation failure if a **security** decision depends on that propagation.* Removing
+the vault PIN is one — proof is required. An ordinary deletion or a retention purge raises none:
+keeping the row there would lock the user into a history they asked to see disappear, without
+protecting anything more.
+
+**Why three defects got through on the same path in three versions.** It lived as `private` in
+`ConversationRepositoryImpl`, among eleven dependencies, nine of which had nothing to do with it:
+no test could reach it without building the whole repository, and nobody did. It now stands on
+its own (`SystemCopyEraser`, `ConversationEraser`), the deletion policy is a table tested in its
+own right, and every fix went through a negative control — the defect put back makes the tests
+that target it fail.
+
+### v1.27.10 — The vault's second factor could be replaced without being asked for
+
+*External review by Andrew Pozdnakov on F-Droid MR !38458, 2026-09-07. Direct follow-up to the
+v1.27.2 entry below: that one had shown that the vault guard held the screen and not the data;
+this one shows that the secret itself was not guarded.*
+
+The vault PIN could be **replaced** (Settings → "Change the vault PIN") or **removed** (toggle
+OFF) without the current one ever being asked for. The second factor therefore did not withstand
+its declared adversary: whoever knows the app PIN. Reproduced on an Android 14 emulator by the
+reviewer.
+
+**It was not an oversight, and that is what makes it a lesson.** The KDoc of `VaultPinManager`
+documented this disabling as the way out in case of a forgotten PIN, twenty lines below the
+"threat model" it contradicted word for word. Both paragraphs had been reread dozens of times
+without the contradiction standing out, because each was right on its own. **An exit door that
+requires nothing more than the factor one is protecting against is not a compromise: it is the
+bypass.**
+
+Since then:
+
+- `changeVaultPin` and `disableVaultPin` require the current PIN, verified by the same PBKDF2 and
+  under the same backoff as entering the vault;
+- `configureVaultPin` refuses to overwrite a genuinely guarded vault (hash set **and** flag ON) —
+  a last-resort guard in case a future screen wired up the wrong dialog;
+- the exit door remains, because an unrecoverable secret with no way out is a trap, but it is
+  **destructive**: it empties the vault before removing its PIN. Destroying is a power the holder
+  of the app PIN already had; reading is the one denied to them;
+- `verifyVaultPin` finally has a **dedicated** exponential backoff. The original reasoning —
+  "the vault can only be reached after the app lock, which is already rate-limited" — was true as
+  long as the vault was just one door behind another, and false as soon as the second factor has
+  to resist someone who has **already** passed the first: their attempts produce no failure on
+  the app side. A `vault.*` key set separate from `auth.*`, without which a simple lock/unlock
+  would have reset the backoff at will.
+
+Locked in by 12 tests in `VaultPinGuardsTest`, placed on `VaultPinManager` and not on the
+screen — the faulty guard lived in the UI, which is precisely why it guarded nothing.
+
+### v1.27.2 — The vault's second factor guarded the screen, not the data
+
+**Affected versions: all, up to and including 1.27.1.**
+
+Four paths opened or exposed the vault without its separate code being asked for:
+
+- **Moving a conversation into the vault armed the session.** The auto-unlock dated from
+  v1.11.0, earlier than the vault code (v1.13.0). Since then, anyone who got past the main lock
+  could move any conversation and then open the vault — code and biometrics skipped, the screen
+  initialising from that session.
+- **Moving out required nothing.** Moving a conversation out of the vault reveals protected
+  content; only the non-grouped variant carried the guard.
+- **The encrypted backup exported the locked vault.** `buildPayload` reads all conversations,
+  vault included. The file could be decrypted off the device with the passphrase chosen by
+  whoever exported it.
+- **`observeVault` was the last unguarded read flow**, while its three siblings had been checking
+  the session since v1.26.1.
+
+**Fix.** The guard now applies to **access** and not to display: no more auto-unlock, moving out
+and export made conditional on the second factor, and all read flows aligned. When biometrics is
+the only second factor and becomes unavailable, the vault is no longer opened by default — the
+application explains why and points to setting up a separate code, reachable from outside the
+vault.
+
+### v1.27.2 — Loss of incoming messages on a database error
+
+**Affected versions: all, up to and including 1.27.1.**
+
+A momentary unavailability of Room/SQLCipher could make an incoming message disappear without a
+trace:
+
+- **SMS.** The blocklist lookup came before the write. Its failure ended the message broadcast by
+  the system without `insertInboxSms` having been called: the SMS existed neither in the
+  telephony provider nor in the application.
+- **MMS.** The PDU file — the only copy of the message and its attachment — was deleted as soon
+  as the download had succeeded, including when the database write then failed.
+
+**Fix.** Decoding comes before any dependency resolution; the blocklist lookup fails **open** (an
+error lets the message through, only an explicit block discards it); a last-resort safety net
+writes the SMS into the system inbox even with the database dead; and the PDU is only deleted
+once its fate is settled. `CancellationException` passes through these guards instead of being
+converted into "not blocked".
+
+⚠️ **Accepted limitation.** If the system provider commits the insertion and then fails before
+the call returns, the safety net reinserts: "at least once" semantics. A duplicate is visible and
+can be deleted; a loss is permanent.
+
+### v1.27.2 — Personal safety alert defeatable by rebooting
+
+**Affected versions: 1.10.0 to 1.27.1.**
+
+Triggering requires **both** clocks to have expired — wall and monotonic — so that moving the
+clock forward cannot cause a premature alert (SEC-11). But `elapsedRealtime()` restarts from zero
+at every reboot, and the drift recovery re-aligned the counter on that value: rebooting more
+often than the configured delay prevented the alert from going off, indefinitely. A theft
+followed by regular reboots defeated it; in honest use, a system update pushed the deadline back
+by as much.
+
+**Fix.** Elapsed monotonic time is accumulated in a persisted field, checkpointed at every hourly
+tick of the worker. A reboot now costs only the segment not yet checkpointed, bounded to one
+tick. No wall clock enters this calculation: the SEC-11 protection remains fully intact.
+
+### v1.25.0 — Opening SQLCipher with a raw key (performance, no change to security)
+
+Since 1.25.0, the database is opened with the **raw key** (`SupportOpenHelperFactory` receives
+`x'<64 hex>'`) instead of letting SQLCipher derive the key through **PBKDF2** (256 000
+iterations).
+
+**Why it is neutral for security.** PBKDF2 is used to *stretch* a low-entropy secret (a human
+password) to make it costly to brute-force. But SMS Tech's passphrase is already **32 random
+bytes (256 bits) sealed by the Keystore** (since the null-key fix in v1.24.0): on a key already at
+full entropy, PBKDF2 iterations add **no** resistance — they only slow down opening (~490 ms → a
+few ms). Encryption at rest, the algorithm (AES-256) and the threat model are **unchanged**; only
+the derivation step, useless here, is skipped.
+
+**Conversion.** A single, crash-safe switchover (`LegacyZeroKeyRekey.ensureRawKeyed`, same
+copy → `cipher_integrity_check` validation + row count → swap pattern as the v1.24.0 repair)
+runs on the first launch of 1.25.0, after the null-key repair. No message loss: the original is
+never destroyed before the replacement has been proven sound.
+
+### v1.24.0 — SEC-CRIT: the database was encrypted with a null key
+
+**Affected versions: all, up to and including 1.23.4.**
+
+`DatabaseFactory` handed the SQLCipher passphrase to `SupportOpenHelperFactory` and then zeroed it
+immediately (`raw.wipe()`, i.e. `Arrays.fill(this, 0)` — an **in-place** mutation). But no link
+in SQLCipher copies that array: verified by disassembling `sqlcipher-android-4.16.0`,
+`SupportOpenHelperFactory` stores its reference, `SupportHelper` passes it on, and
+`SQLiteOpenHelper` keeps it in `mPassword`, which it only reads in `getDatabaseLocked()`, that
+is, **when the database is opened**. Since Room opens lazily, on the first DAO access, SQLCipher
+received 32 zero bytes.
+
+**Consequence: `smstech.db` was encrypted with a constant and public key**, and not with the
+32-random-byte passphrase sealed by the Keystore. The defect was invisible because a null key is
+perfectly stable from one launch to the next. It had been present since the first commit of the
+file — the claim "32-byte random passphrase wrapped by Keystore" in the primitives table above
+was therefore never true before 1.24.0.
+
+**Actual scope of the risk.** It must be stated honestly in both directions:
+- as the default SMS application, SMS Tech is **required** to mirror all messages into
+  `content://sms`, in cleartext, including those of vault conversations (`in_vault` is a simple
+  Room flag). The SQLCipher database is defence in depth, never the only copy;
+- what the null key exposed **in addition**: SMS Tech's own metadata — vault membership, drafts,
+  scheduled messages, reactions, anti-smishing verdicts — and any message deleted by the user in
+  SMS Tech.
+
+**Fix (`LegacyZeroKeyRekey`).** On the first launch of 1.24.0, before Room opens the file: WAL
+checkpoint, copy to a temporary file, re-encryption of the **copy** with the real passphrase,
+end-to-end validation (`PRAGMA cipher_integrity_check` + row-by-row count per table), then
+switchover. The original is never modified or deleted before the replacement has been proven
+sound: a process kill at any step leaves a usable database. A database unreadable with either
+key is reported, never erased.
+
+**What the fix cannot do.** `File.delete()` does not overwrite blocks: the sectors that held the
+old database remain physically readable until the file system reuses them. An application-level
+overwrite would be illusory on f2fs (copy-on-write) and with the wear-levelling of flash memory.
+The only action that truly eliminates this residue is a **factory reset**, which destroys the
+device's FBE encryption key.
+
+
+### v1.14.7 (this release) — Received-MMS cache protection + sync safety nets + transparent splash + audit fixes
+
+User report 2026-05-23: on S24 (after uninstall/reinstall cycles to test v1.14.5/6), the audio attachments of received MMS had disappeared and sync seemed frozen. Root cause identified by logcat diagnosis: (a) `cacheDir/mms_incoming/` (where the audio files of received MMS lived) is volatile — the Android Storage Manager purges it under memory pressure, and "Clear cache" via Settings → Apps empties it too, leaving the Room `AttachmentEntity.localUri` values pointing at missing files; (b) on Samsung S24 Android 15 the system ContentObserver sometimes misses emissions after a long sleep + Freecess freezes background workers.
+
+**Three changes + 3 audit fixes**:
+
+1. **Cache → filesDir protection for received MMS attachments**. `MmsDownloadedReceiver.persistAttachment` now writes to `filesDir/mms_attachments/` (persistent, only disappears with `PanicService.nukeEverything` or `clearData`) instead of `cacheDir/mms_incoming/`. `FileProvider` paths already OK (existing `files-path "attachments" path="mms_attachments/"`). `AutoLockObserver.purgeTransientCaches` doc updated: does NOT purge the new filesDir/mms_attachments (by design, otherwise attachments would disappear at every auto-lock). `PanicService.nukeEverything` still wipes filesDir/mms_attachments correctly (already in its list, verified).
+
+2. **One-shot cold-start migration** `MainApplication.migrateAttachmentsToFilesDirIfNeeded()`. Idempotent DataStore flag `AdvancedSettings.attachmentsMovedToFilesDirV147`. For each `AttachmentEntity.local_uri` starting with `cacheDir/mms_incoming/`, physically moves the file to `filesDir/mms_attachments/` (atomic rename if same partition, copy+delete fallback) then `attachmentDao.updateLocalUri(id, newPath)`. Edge cases handled: (a) source file missing (cache already cleared) → flips the Room path anyway for consistency, (b) destination already exists → keeps dest, deletes source. **Audit S1 fix**: `canonicalFile` + `startsWith(newDir.canonicalFile)` anti-path-traversal check before writing, defence in depth against a future regression of the name generator. **Audit P2 fix**: explicit `withContext(Dispatchers.IO)` around the migration (the `renameTo` / `copyTo` IO no longer saturates the Default thread pool). Async in `appScope.launch` — no main-thread blocking.
+
+3. **onResume sync safety net**. `MainActivity.onResume()` calls `telephonySyncManager.requestSync("MainActivity.onResume")` (idempotent via Mutex on the manager side) + `TelephonySyncWorker.enqueueOneShot(this)` (belt-and-braces if the manager is in an unexpected state). **Audit P1 fix**: 30s monotonic throttle on the WorkManager `enqueueOneShot` (without the throttle, quickly switching between apps spammed WorkManager's internal SQLite → risk of Freecess throttling). `requestSync` itself needs no cooldown (the single-flight Mutex absorbs it).
+
+**Polish**: `splash_logo.xml` from v1.14.5 removed (user report "prefer the old splash, the Android 12+ circle hides my square logo") → new `drawable/splash_transparent.xml` = `<shape rectangle solid transparent />`. `windowSplashScreenAnimatedIcon = @drawable/splash_transparent` (light + night themes) → Android 12+ just shows a flash of plain background, no visible circle. The Compose `SplashScreen.kt` fade-in intro on first launch remains intact. Orphan string `emergency_topbar_warning_cd` removed (FR+EN).
+
+**Threat model** unchanged. No crypto / Keystore / Room / SQLCipher change. Cert SHA-256 stable. No Room migration. `lintVitalRelease` clean, `testReleaseUnitTest` green. Final 3-axis audit — 1 MEDIUM (P1) + 3 LOW ALL FIXED, zero Critical/High.
+
+### v1.14.6 — `(défaut)` label in the reactions picker
+
+The `Réglages → Format des réactions` picker showed `(défaut)` on "Readable French" whereas the actual default value had been switched to `EMOJI_WITH_QUOTE` in v1.14.4 (see section below). FR+EN strings fixed (`settings_reaction_format_fr` drops `(défaut)`, `settings_reaction_format_emoji_quote` adds `(défaut)`). No behavioural change, interface label only. No crypto / Room / Keystore / threat-model change.
+
+### v1.14.5 — Emergency mode UX polish: ⚠️ emoji + direct GPS toggle + full reset on disable + dry-run cleanup + square splash
+
+UX polish after v1.14.4 on 6 axes:
+
+1. **⚠️ emoji at the start of the emergency SMS body** (NEED_HELP + DANGER templates). When the recipient receives the SMS, the heads-up notification immediately shows the alert triangle in the preview → the urgency is visually recognisable even before the SMS is opened. **Trade-off accepted**: the ⚠️ (U+26A0 + U+FE0F variation selector) forces UCS-2 encoding → 70 chars/segment instead of 160 GSM-7 → potentially multi-segment. Audit SEC-5 v1.10.0 kept 1-segment GSM-7 by default for reliability in areas with weak radio coverage. **v1.14.5 decision**: the visibility of the urgency takes precedence over marginal robustness (French carriers in 2026 are reliable on multi-segment). `AuditV1100Test` tests updated (`startsWith("⚠️ URGENCE")`). **DISCREET NOT modified**: the neutral, non-alarming variant keeps its purpose (signal distress without alarming, avoid revealing the situation to an aggressor looking at the screen). Stays 1-segment GSM-7.
+
+2. **"Include GPS position in the SMS" toggle directly in Settings → Emergency mode**. Before: only `EmergencySetupScreen` exposed this toggle. v1.14.5: direct `ToggleRow` accessible in the main `SettingsScreen`. On switching OFF→ON, requests `ACCESS_FINE_LOCATION` at runtime immediately via `rememberLauncherForActivityResult`. **Audit SEC-1 fix**: if the user denies the permission, the callback automatically does a `revert` to `includeLocation = false` in DataStore + error snackbar "Permission denied — GPS inclusion disabled". Mirror pattern of `revertCallBehaviorIfPermissionRevoked` (v1.10/v1.14.1) — no dirty "toggle ON but SMS without coords" state.
+
+3. **Hotfix for the orphan "I am OK" banner** (user report 2026-05-22). `EmergencyViewModel.disableEmergencyMode()` now ALSO clears `lastTriggeredAt = 0L` + `monotonicLastTriggeredAt = 0L` in addition to `enabled = false` + `emergencyShortcutEnabled = false` + `emergencyCallPoliceEnabled = false`. Full reset in a single atomic DataStore transaction. **Cold-start repair migration extended**: `MainApplication.onCreate` detects `hasOrphanShortcut || hasOrphanTrigger` (cooldown active while the mode is disabled) and repairs automatically → existing users with a dirty state after v1.14.x are cleaned up at the next startup. Idempotent.
+
+4. **"Test without sending" cleanup**: removed from the emergency page at the user's request (it cluttered the UI, the active mode is already visible via the recap section). Removed: button + composable `EmergencyDryRunDialog` + `EmergencyViewModel.previewTrigger/dismissPreview/_previewState/_isPreviewLoading/DryRunPreview/redactPhoneNumber` + constructor param `locationResolver` + 12 strings `emergency_dry_run_*` (FR+EN). Zero orphan references.
+
+5. **Square splash logo** (user report: "the logo is in a circle, it's not nice, my logo is square"). New `drawable/splash_logo.xml` (20% inset wrapping `sms_tech_icon.png`). `windowSplashScreenAnimatedIcon` → `@drawable/splash_logo`. Added `windowSplashScreenIconBackgroundColor` matching `windowSplashScreenBackground` (light + dark) → the Android 12+ circular mask becomes visually invisible, and the branded square logo appears as is.
+
+6. **AboutScreen + files-tech.com site sms-tech.php**: new `Feature` entry "Emergency mode" + new `HelpRecipe` "Use Emergency mode" (4 concise steps). Website: new ⚠️ feature card + permissions row `ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION` (optional, emergency mode). Site version bumped to v1.14.5.
+
+Final 3-axis audit (security / perf+quality / UI+wiring) — 1 MEDIUM finding fixed (SEC-1 revert of the GPS toggle on permission denied), no Critical/High. No crypto / Room / Keystore / threat-model change. No Room migration. `lintVitalRelease` clean, `testReleaseUnitTest` green.
 
 ### v1.14.4 — Reaction default `EMOJI_WITH_QUOTE` (user request)
 
-Petite release UX : le format par défaut des SMS de réaction emoji passe de `READABLE_FR` ("J'ai réagi par ❤️ à : «…»") à `EMOJI_WITH_QUOTE` ("❤️ «…»"). Demande user 2026-05-22.
+Small UX release: the default format of emoji reaction SMS changes from `READABLE_FR` ("J'ai réagi par ❤️ à : «…»") to `EMOJI_WITH_QUOTE` ("❤️ «…»"). User request 2026-05-22.
 
-**Pourquoi** : `EMOJI_WITH_QUOTE` est compact, conserve le contexte (citation du message d'origine), et ne contient pas de phrase explicative parasite. Plus naturel pour les conversations actuelles où les réactions sont nombreuses et où le destinataire n'a pas besoin de relire "j'ai réagi par".
+**Why**: `EMOJI_WITH_QUOTE` is compact, keeps the context (quote of the original message), and contains no stray explanatory sentence. More natural for today's conversations, where reactions are numerous and the recipient does not need to read "j'ai réagi par" again.
 
-**Périmètre** : default DataStore pour les NOUVEAUX installs uniquement. Les users existants conservent leur choix (DataStore persistant). Le picker Settings → Envoi → "Format des réactions" expose les 4 options inchangé.
+**Scope**: DataStore default for NEW installs only. Existing users keep their choice (persistent DataStore). The Settings → Sending → "Reaction format" picker exposes the 4 options, unchanged.
 
-Pas de changement crypto / Room / Keystore / threat-model. Pas de migration.
+No crypto / Room / Keystore / threat-model change. No migration.
 
-### v1.14.3 — Hotfix migration one-shot : repair dirty `emergencyShortcutEnabled` flag
+### v1.14.3 — One-shot migration hotfix: repair dirty `emergencyShortcutEnabled` flag
 
-PATCH urgent post-v1.14.2 — un utilisateur ayant désactivé le Mode urgence en v1.14.0 ou v1.14.1 voyait la notification persistante lock-screen ré-apparaître à chaque lancement de l'app malgré la désactivation. Cause racine : avant le fix cascade-disable de v1.14.2, le bouton "Désactiver le mode urgence" ne flippait QUE `emergency.enabled = false`, laissant `emergencyShortcutEnabled = true` orphelin en DataStore. Le fix v1.14.2 corrige les FUTURES désactivations mais ne nettoie pas l'état dirty existant.
+Urgent PATCH after v1.14.2 — a user who had disabled emergency mode in v1.14.0 or v1.14.1 saw the persistent lock-screen notification reappear at every app launch despite the deactivation. Root cause: before the cascade-disable fix of v1.14.2, the "Disable emergency mode" button flipped ONLY `emergency.enabled = false`, leaving `emergencyShortcutEnabled = true` orphaned in DataStore. The v1.14.2 fix corrects FUTURE deactivations but does not clean up the existing dirty state.
 
-**Fix v1.14.3** : migration one-shot au cold-start de l'app dans `MainApplication.onCreate`. Si `emergency.enabled == false` ET (`emergencyShortcutEnabled == true` OU `emergencyCallPoliceEnabled == true`), force-clear les 2 flags dans la même transaction `settings.update`. Idempotent : si l'invariant est déjà respecté, le `update` ne re-écrit pas. Exécuté UNE fois par cold-start, perf négligeable (`first()` snapshot DataStore + éventuellement 1 write).
+**v1.14.3 fix**: one-shot migration at app cold start in `MainApplication.onCreate`. If `emergency.enabled == false` AND (`emergencyShortcutEnabled == true` OR `emergencyCallPoliceEnabled == true`), force-clears the 2 flags in the same `settings.update` transaction. Idempotent: if the invariant already holds, the `update` does not rewrite. Executed ONCE per cold start, negligible cost (`first()` DataStore snapshot + possibly 1 write).
 
-Log Timber au repair pour audit trail. Pas de migration Room, pas de changement crypto.
+Timber log on repair for the audit trail. No Room migration, no crypto change.
 
-### v1.14.2 — Hotfix CRITIQUE : 3 voies de déclenchement SMS d'urgence accidentel fermées
+### v1.14.2 — CRITICAL hotfix: 3 paths of accidental emergency SMS triggering closed
 
-**HOTFIX URGENT** post-v1.14.1 sur bug critique remonté user 2026-05-22 : "beaucoup de mms envoyés sans rien faire, mode urgence désactivé". Investigation a identifié **3 voies indépendantes** de déclenchement accidentel du SMS d'urgence aux contacts SafetyCall. Toutes fermées dans v1.14.2.
+**URGENT HOTFIX** after v1.14.1 for a critical bug reported by a user on 2026-05-22: "lots of MMS sent without doing anything, emergency mode disabled". The investigation identified **3 independent paths** of accidental triggering of the emergency SMS to SafetyCall contacts. All closed in v1.14.2.
 
-**3 fixes critiques** :
+**3 critical fixes**:
 
-1. **`EmergencyHoldButton` interprétait les gestes scroll comme un hold-3s**. v1.14.1 a ajouté `Modifier.verticalScroll(rememberScrollState())` sur la page EmergencyScreen. Quand l'user scrollait verticalement à travers le gros bouton URGENCE, le pointerInput interceptait l'événement DOWN, mettait `isHolding = true`, et le `LaunchedEffect(isHolding) { delay(3000) }` fired le trigger SMS. Le scroll modifier parent prenait ensuite le contrôle visuel (faisait scroller la page), mais le hold logique avait déjà commencé. Un scroll lent ≥ 3 s déclenchait l'envoi SMS aux contacts.
+1. **`EmergencyHoldButton` interpreted scroll gestures as a hold-3s**. v1.14.1 added `Modifier.verticalScroll(rememberScrollState())` on the EmergencyScreen page. When the user scrolled vertically across the big EMERGENCY button, the pointerInput intercepted the DOWN event, set `isHolding = true`, and the `LaunchedEffect(isHolding) { delay(3000) }` fired the SMS trigger. The parent scroll modifier then took visual control (scrolled the page), but the logical hold had already started. A slow scroll ≥ 3 s triggered the SMS send to the contacts.
 
-   **Fix** : ajout d'une détection de drag via `viewConfiguration.touchSlop`. Si le pointer bouge de plus que la slop (~24 dp), `isHolding = false` immédiatement + drain les pointer events restants jusqu'au UP pour ne pas re-fire le hold sur le même geste. Code dans `EmergencyHoldButton.kt:121-167`.
+   **Fix**: added drag detection via `viewConfiguration.touchSlop`. If the pointer moves more than the slop (~24 dp), `isHolding = false` immediately + drains the remaining pointer events until UP so the hold does not re-fire on the same gesture. Code in `EmergencyHoldButton.kt:121-167`.
 
-2. **Quick action URGENCE retirée de la notif persistante lock-screen**. La notif posée par `EmergencyShortcutNotifier` avait 3 quick actions : URGENCE + 112 + 17 (police opt-in). Le tap sur URGENCE = `ACTION_TRIGGER_EMERGENCY` reçu par `EmergencyShortcutReceiver.handleTrigger` qui appelait `TriggerEmergencyUseCase` → SMS aux contacts. Un mistap (pocket-tap, dismiss confondu avec action, confusion avec body-tap) = SMS broadcasté. Les notif actions Android sont single-tap par design — impossible d'y poser un hold-3s anti-pocket-dial.
+2. **EMERGENCY quick action removed from the persistent lock-screen notification**. The notification posted by `EmergencyShortcutNotifier` had 3 quick actions: EMERGENCY + 112 + 17 (police, opt-in). Tapping EMERGENCY = `ACTION_TRIGGER_EMERGENCY` received by `EmergencyShortcutReceiver.handleTrigger`, which called `TriggerEmergencyUseCase` → SMS to the contacts. A mistap (pocket tap, dismiss mistaken for an action, confusion with a body tap) = SMS broadcast. Android notification actions are single-tap by design — it is impossible to put an anti-pocket-dial hold-3s on them.
 
-   **Fix** : la quick action URGENCE est **supprimée** de la notif lock-screen. Pour déclencher URGENCE depuis le lock-screen, l'user tape désormais le **corps** de la notif → `setContentIntent` (ajouté v1.14.1) ouvre la page in-app Emergency → hold 3 s sur le gros bouton URGENCE (lui-même protégé par le fix #1 ci-dessus). Trois gestes délibérés au lieu d'un mistap. Les quick actions 112 et 17 (Police FR opt-in) restent — elles utilisent `ACTION_DIAL` (composeur, l'user confirme dans le dialer, pas d'auto-call).
+   **Fix**: the EMERGENCY quick action is **removed** from the lock-screen notification. To trigger EMERGENCY from the lock screen, the user now taps the **body** of the notification → `setContentIntent` (added in v1.14.1) opens the in-app Emergency page → hold 3 s on the big EMERGENCY button (itself protected by fix #1 above). Three deliberate gestures instead of one mistap. The 112 and 17 (French Police, opt-in) quick actions remain — they use `ACTION_DIAL` (dialer: the user confirms in the dialer, no auto-call).
 
-3. **`disableEmergencyMode()` n'effaçait pas le raccourci notif**. v1.14.1 ajoutait le bouton "Désactiver le mode urgence" sur EmergencyScreen. Il flippait `emergency.enabled = false` MAIS laissait `emergencyShortcutEnabled = true`. Conséquence : la notif persistante lock-screen ré-apparaissait à chaque lancement de l'app (MainApplication combine flow). User confondu, tap notif (souvent URGENCE quick action AVANT le fix #2), SMS envoyé.
+3. **`disableEmergencyMode()` did not clear the notification shortcut**. v1.14.1 added the "Disable emergency mode" button on EmergencyScreen. It flipped `emergency.enabled = false` BUT left `emergencyShortcutEnabled = true`. Consequence: the persistent lock-screen notification reappeared at every app launch (MainApplication combine flow). Confused user, taps the notification (often the EMERGENCY quick action BEFORE fix #2), SMS sent.
 
-   **Fix** : `disableEmergencyMode()` met maintenant `emergency.enabled = false`, `emergencyShortcutEnabled = false`, ET `emergencyCallPoliceEnabled = false` dans la même transaction DataStore. Désactivation complète en un seul clic, sans setting résiduel actif. `EmergencyViewModel.kt:188-203`.
+   **Fix**: `disableEmergencyMode()` now sets `emergency.enabled = false`, `emergencyShortcutEnabled = false`, AND `emergencyCallPoliceEnabled = false` in the same DataStore transaction. Complete deactivation in a single click, with no residual active setting. `EmergencyViewModel.kt:188-203`.
 
-**Threat model corrigé** :
+**Threat model corrected**:
 
-- Le hold-3s de `EmergencyHoldButton` est désormais une vraie garde anti-pocket-dial (pas seulement contre tap accidentel — aussi contre drag/scroll qui était une voie ouverte v1.14.1).
-- La notif lock-screen ne permet plus de déclencher l'envoi SMS aux contacts en 1 tap. Le déclenchement URGENCE est gated derrière nav-vers-page-in-app + hold-3s = 3 gestes délibérés.
-- La fonction "Désactiver" est atomique : 1 confirm dialog + tap → tous les flags urgence + raccourci off. Aucun setting résiduel ne peut faire repop la notif.
+- The hold-3s of `EmergencyHoldButton` is now a real anti-pocket-dial guard (not only against an accidental tap — also against drag/scroll, which was an open path in v1.14.1).
+- The lock-screen notification no longer allows triggering the SMS send to the contacts in 1 tap. EMERGENCY triggering is gated behind navigation to the in-app page + hold-3s = 3 deliberate gestures.
+- The "Disable" function is atomic: 1 confirm dialog + tap → all emergency flags + shortcut off. No residual setting can make the notification pop up again.
 
-**Verdict** : aucun changement crypto / DB / threat-model étendu. Hotfix purement défensif sur 3 voies de déclenchement non-intentionnel.
+**Verdict**: no crypto / DB / extended threat-model change. Purely defensive hotfix on 3 unintentional triggering paths.
 
 ### v1.14.1 — Emergency screen full-page redesign + 15 SAMU + 18 Pompiers + "Call a relative" + Disable mode + tap-notif-opens-page + 5 audit fixes
 
-PATCH release post-v1.14.0 répondant à un retour user pour rendre la page Mode urgence "plus claire avec toutes les actions visibles, sans manipulation". Toutes les actions urgence sont désormais regroupées sur un seul écran avec gros boutons couleurs.
+PATCH release after v1.14.0 responding to user feedback asking for the emergency mode page to be "clearer, with all actions visible, without any fiddling". All emergency actions are now grouped on a single screen with big colored buttons.
 
-**4 sujets livrés** :
+**4 topics delivered**:
 
-1. **EmergencyScreen full-page redesign** — 3 sections claires : "Appeler directement" (5 tuiles), "Envoyer un SOS aux proches" (preview + hold-3s SMS), "Autres actions" (Tester / Désactiver). Scroll vertical pour petits écrans. Toutes les actions urgence sur la même page, plus de navigation cachée.
+1. **EmergencyScreen full-page redesign** — 3 clear sections: "Call directly" (5 tiles), "Send an SOS to relatives" (preview + hold-3s SMS), "Other actions" (Test / Disable). Vertical scroll for small screens. All emergency actions on the same page, no more hidden navigation.
 
-2. **Numéros français complets — 4 tuiles d'appel direct + 1 tuile proches** :
-   - **112** (SOS européen, BrandDanger rouge)
+2. **Complete French numbers — 4 direct-call tiles + 1 relatives tile**:
+   - **112** (European SOS, BrandDanger red)
    - **15** (SAMU, teal `#00796B`)
    - **17** (Police, navy `#1565C0`)
-   - **18** (Pompiers, orange `#E65100`)
-   - **★ Appeler un proche** (primary brand-blue, si ≥1 contact SafetyCall) — si 1 contact, call direct ; si ≥2, picker dialog
-   - Toutes les couleurs WCAG AA ≥ 4.5:1 vs white text.
-   - **Tap = appel direct** (`ACTION_CALL`) sans passer par le composeur. Fallback automatique sur composeur si CALL_PHONE refusée.
+   - **18** (Fire brigade, orange `#E65100`)
+   - **★ Call a relative** (primary brand-blue, if ≥1 SafetyCall contact) — if 1 contact, direct call; if ≥2, picker dialog
+   - All colors WCAG AA ≥ 4.5:1 vs white text.
+   - **Tap = direct call** (`ACTION_CALL`) without going through the dialer. Automatic fallback to the dialer if CALL_PHONE is denied.
 
-3. **Bouton "Désactiver le mode urgence"** — sur la page elle-même, avec dialog de confirmation. Met `emergency.enabled = false` en DataStore. Effet immédiat : URGENCE button grisé, notif lock-screen cancel, sections Settings affichent "désactivé". Réactivable depuis Settings ou re-setup. PanicDecoy déjà gated en amont (cf. v1.10.0 SEC-1).
+3. **"Disable emergency mode" button** — on the page itself, with a confirmation dialog. Sets `emergency.enabled = false` in DataStore. Immediate effect: EMERGENCY button greyed out, lock-screen notification cancelled, Settings sections show "disabled". Can be re-enabled from Settings or by re-running setup. PanicDecoy already gated upstream (see v1.10.0 SEC-1).
 
-4. **Tap notification persistante → ouvre la page in-app** — `setContentIntent` ajouté sur le NotificationCompat.Builder avec PendingIntent `getActivity` vers MainActivity, action `ACTION_OPEN_EMERGENCY`. `MainActivity.handleSharedIntent` route → `pendingNav.set(Pending(openEmergency = true))`. `AppRoot.LaunchedEffect` consume → `nav.navigate(Emergency)`. Préserve PanicDecoy guard : si décoy actif, le pending est holding 30s sans push (TTL `PENDING_TTL_MS`). Reprise normale si user sort du décoy avant expiration.
+4. **Tap on the persistent notification → opens the in-app page** — `setContentIntent` added on the NotificationCompat.Builder with a `getActivity` PendingIntent to MainActivity, action `ACTION_OPEN_EMERGENCY`. `MainActivity.handleSharedIntent` routes → `pendingNav.set(Pending(openEmergency = true))`. `AppRoot.LaunchedEffect` consumes → `nav.navigate(Emergency)`. Preserves the PanicDecoy guard: if decoy is active, the pending is held for 30s without a push (TTL `PENDING_TTL_MS`). Normal resumption if the user leaves the decoy before expiry.
 
-#### Sécurité — élargissement whitelist `EmergencyCallHelper`
+#### Security — `EmergencyCallHelper` whitelist widened
 
-- `ALLOWED_NUMBERS = setOf("15", "17", "18", "112")` (étendu de 2 à 4).
-- Nouvelle méthode `placeTrustedContactCall(context, phoneNumber)` SANS whitelist par design (le numéro vient du DataStore SafetyCall configuré user, pas d'une source intent extra). Refacto interne `executeCall(...)` privé partagé entre `placeCall` (whitelist stricte) et `placeTrustedContactCall` (contact trusted).
-- L'UI route les contacts SafetyCall via `viewModel.safetyCallContacts` (StateFlow → DataStore privé) ; aucun chemin Intent extra → `placeTrustedContactCall`. Vérifié par audit.
+- `ALLOWED_NUMBERS = setOf("15", "17", "18", "112")` (extended from 2 to 4).
+- New method `placeTrustedContactCall(context, phoneNumber)` WITHOUT a whitelist by design (the number comes from the user-configured SafetyCall DataStore, not from an intent-extra source). Internal refactor: private `executeCall(...)` shared between `placeCall` (strict whitelist) and `placeTrustedContactCall` (trusted contact).
+- The UI routes SafetyCall contacts via `viewModel.safetyCallContacts` (StateFlow → private DataStore); no Intent extra path → `placeTrustedContactCall`. Verified by audit.
 
-**Audit final multi-axes** (sécurité + perf + qualité + branchements + cohérence + vulnérabilités) — 2 MEDIUM + 5 LOW findings, tous fixés :
+**Final multi-axis audit** (security + perf + quality + wiring + coherence + vulnerabilities) — 2 MEDIUM + 5 LOW findings, all fixed:
 
-- **MEDIUM SEC-1** — `safetyCallContacts.collectAsStateWithLifecycle()` hoisté au top du Composable EmergencyScreen (vs body Scaffold conditionnel) pour respecter les règles de position des hooks Compose. Suppression du double `.let { _ -> }` mort qui masquait la précédente `state`.
-- **MEDIUM COH-1** — Setting `emergencyCallBehavior` (DIALER_ONLY / HOLD_3S_DIRECT_CALL ajouté v1.14.0) devenu orphelin avec le redesign v1.14.1 (la page utilise toujours direct-call avec fallback). Nettoyage : suppression `EmergencyCallBehaviorPickerDialog` + `EmergencyBehaviorRadioRow` de SettingsScreen + suppression `EmergencyViewModel.callBehavior` StateFlow + suppression `revertCallBehaviorIfPermissionRevoked()` + suppression `DryRunPreview.callBehavior` field. La clé DataStore `emergencyCallBehavior` est PRÉSERVÉE pour backward compat (downgrade safe) mais n'est plus consommée par l'UI.
-- **LOW SEC-2** — Commentaire explicatif ajouté sur la séparation `ACTION_OPEN_EMERGENCY` (handled par MainActivity, pas par EmergencyShortcutReceiver) pour maintenance future.
-- **LOW COH-2** — Strings `settings_emergency_call_police_title/desc` FR+EN mises à jour pour clarifier que le toggle ne contrôle plus que la 3e action de la notif lock-screen (le bouton 17 in-app est toujours visible v1.14.1).
-- **LOW PERF-1+PERF-2** — `callPhonePermLauncher` hoisté au top du Composable. `callPhoneGranted` lu à chaque recomposition (cheap), captureur recompose au retour ON_RESUME → status à jour.
-- **LOW UI-1** — String orpheline `emergency_call_close_no_contacts` retirée FR + EN (le bouton "Appeler un proche" est conditionné par `if (safetyContacts.isNotEmpty())`, pas d'état "disabled" affiché).
+- **MEDIUM SEC-1** — `safetyCallContacts.collectAsStateWithLifecycle()` hoisted to the top of the EmergencyScreen Composable (vs the conditional Scaffold body) to respect the Compose hook position rules. Removed the dead double `.let { _ -> }` that shadowed the previous `state`.
+- **MEDIUM COH-1** — Setting `emergencyCallBehavior` (DIALER_ONLY / HOLD_3S_DIRECT_CALL added in v1.14.0) became orphaned with the v1.14.1 redesign (the page always uses direct call with fallback). Cleanup: removed `EmergencyCallBehaviorPickerDialog` + `EmergencyBehaviorRadioRow` from SettingsScreen + removed the `EmergencyViewModel.callBehavior` StateFlow + removed `revertCallBehaviorIfPermissionRevoked()` + removed the `DryRunPreview.callBehavior` field. The DataStore key `emergencyCallBehavior` is PRESERVED for backward compat (safe downgrade) but is no longer consumed by the UI.
+- **LOW SEC-2** — Explanatory comment added on the `ACTION_OPEN_EMERGENCY` separation (handled by MainActivity, not by EmergencyShortcutReceiver) for future maintenance.
+- **LOW COH-2** — Strings `settings_emergency_call_police_title/desc` FR+EN updated to clarify that the toggle now only controls the 3rd action of the lock-screen notification (the in-app 17 button is always visible in v1.14.1).
+- **LOW PERF-1+PERF-2** — `callPhonePermLauncher` hoisted to the top of the Composable. `callPhoneGranted` read on every recomposition (cheap), the capturer recomposes on return ON_RESUME → status up to date.
+- **LOW UI-1** — Orphan string `emergency_call_close_no_contacts` removed FR + EN (the "Call a relative" button is conditioned by `if (safetyContacts.isNotEmpty())`, no "disabled" state shown).
 
-#### Threat model — précisions
+#### Threat model — clarifications
 
-- Direct call via CALL_PHONE permission : risque pocket-dial mitigé par (a) nav explicite vers EmergencyScreen + (b) tuiles disposées en colonne (pas un seul tap accidentel sur tap-target oublié) + (c) confirm Désactiver mode pour annuler. Acceptable pour la feature demandée.
-- Le picker "Appeler un proche" ne montre que les contacts SafetyCall (déjà configurés par user, autorisés par défaut). Pas d'accès Contacts Android natif → pas de leak `READ_CONTACTS`.
-- Le bouton "Désactiver le mode urgence" : action réversible (Settings re-enable). Pas d'effet destructif sur les contacts ni le template. PanicDecoy déjà gated par `AppRoot` upstream.
-- `ACTION_OPEN_EMERGENCY` : action constante, PendingIntent FLAG_IMMUTABLE, targeting `MainActivity::class.java` explicite. Pas exposé en intent-filter manifest → pas d'exfiltration possible par une autre app.
+- Direct call via the CALL_PHONE permission: pocket-dial risk mitigated by (a) explicit navigation to EmergencyScreen + (b) tiles laid out in a column (not a single accidental tap on a forgotten tap target) + (c) the Disable-mode confirm to cancel. Acceptable for the requested feature.
+- The "Call a relative" picker only shows SafetyCall contacts (already configured by the user, authorized by default). No access to native Android Contacts → no `READ_CONTACTS` leak.
+- The "Disable emergency mode" button: reversible action (re-enable in Settings). No destructive effect on the contacts or the template. PanicDecoy already gated by `AppRoot` upstream.
+- `ACTION_OPEN_EMERGENCY`: constant action, FLAG_IMMUTABLE PendingIntent, explicitly targeting `MainActivity::class.java`. Not exposed in a manifest intent-filter → no exfiltration possible by another app.
 
 ### v1.14.0 — Vault auto-lock + Emergency hold-3s call (CALL_PHONE) + kill-switch "I am OK" + dry-run preview + 4 audit fixes
 
-MINOR release plafonnant le mode urgence de SMS Tech avant la sortie d'une app dédiée **SOS Tech** (Files Tech n°8) pour les features étendues (vocal, sirène, GPS live). Quatre sujets livrés :
+MINOR release capping SMS Tech's emergency mode before the release of a dedicated app, **SOS Tech** (Files Tech no. 8), for the extended features (voice, siren, live GPS). Four topics delivered:
 
-1. **Auto-lock coffre à la sortie explicite de VaultScreen**. Tap back arrow / system back / cancel PIN dialog / biometric refused → `VaultManager.lock()` immédiat. Préserve le fix v1.13.1 sur la navigation ThreadScreen ↔ VaultScreen : le `sessionUnlocked` AtomicBoolean Singleton persiste pendant qu'on ouvre une conv vault et qu'on en revient (composable VaultScreen reste dans le back stack), mais lock dès qu'on sort vraiment. Cohabite avec `lockVaultOnLeave` existant (lock au process-background) — les deux sont idempotents et orthogonaux. Nouveau helper `VaultViewModel.lockVaultSession()`.
+1. **Vault auto-lock on explicit exit from VaultScreen**. Tap back arrow / system back / cancel PIN dialog / biometric refused → immediate `VaultManager.lock()`. Preserves the v1.13.1 fix on ThreadScreen ↔ VaultScreen navigation: the Singleton `sessionUnlocked` AtomicBoolean persists while a vault conversation is opened and closed again (the VaultScreen composable stays in the back stack), but locks as soon as one really leaves. Coexists with the existing `lockVaultOnLeave` (lock when the process goes to background) — both are idempotent and orthogonal. New helper `VaultViewModel.lockVaultSession()`.
 
-2. **Boutons 112 / 17 — 2 niveaux de comportement** :
-   - **DIALER_ONLY** (default, comportement v1.12–v1.13) : `ACTION_DIAL`, le user confirme dans le composeur pré-rempli. Zéro permission requise.
-   - **HOLD_3S_DIRECT_CALL** (opt-in) : maintien 3 secondes sur le bouton → appel direct via `ACTION_CALL` + permission runtime `CALL_PHONE`. Anti-pocket-dial via hold obligatoire (anneau de progression visible). Pas de NIVEAU 2 (tap unique → call direct) volontairement : risque pocket-dial trop élevé pour gain marginal.
+2. **112 / 17 buttons — 2 behavior levels**:
+   - **DIALER_ONLY** (default, v1.12–v1.13 behavior): `ACTION_DIAL`, the user confirms in the pre-filled dialer. Zero permission required.
+   - **HOLD_3S_DIRECT_CALL** (opt-in): holding the button for 3 seconds → direct call via `ACTION_CALL` + runtime permission `CALL_PHONE`. Anti-pocket-dial through a mandatory hold (visible progress ring). No LEVEL 2 (single tap → direct call), on purpose: pocket-dial risk too high for a marginal gain.
 
-   Toute la voie d'appel passe par `EmergencyCallHelper` (nouveau) avec une **whitelist stricte de numéros** : seuls `"112"` et `"17"` sont acceptés, tout autre numéro retourne `INVALID_NUMBER` sans aucun Intent émis. Élimine toute possibilité de redirection vers un numéro premium via Intent extra forgé. `EmergencyShortcutReceiver.handleDial` (lock-screen actions) délégué au même helper pour cohérence ; sur lock-screen on garde `openDialer` (jamais `placeCall`) car le tap accidentel est probabilistiquement plus élevé sur écran verrouillé.
+   The whole call path goes through `EmergencyCallHelper` (new) with a **strict number whitelist**: only `"112"` and `"17"` are accepted, any other number returns `INVALID_NUMBER` without any Intent being emitted. Eliminates any possibility of redirection to a premium number via a forged Intent extra. `EmergencyShortcutReceiver.handleDial` (lock-screen actions) delegated to the same helper for consistency; on the lock screen we keep `openDialer` (never `placeCall`) because an accidental tap is probabilistically more likely on a locked screen.
 
-3. **Kill-switch "Je vais bien"**. Nouveau `IAmOkUseCase` qui réinitialise `lastTriggeredAt = 0L` + (opt-in `sendIAmOkSmsOnReset`, default `true`) envoie un SMS court "Je vais bien, fausse alerte" aux contacts SafetyCall. Garde `PanicDecoy` (anti-tampering : un agresseur ne peut pas effacer la trace UI du déclenchement urgence). Sur `ConversationsScreen`, un bandeau `IAmOkBanner` apparaît pendant 30 minutes post-trigger et propose un dialog de confirmation. Snackbar différencié sur succès partiel (`sent=0, failed=N` → message d'erreur explicite, l'user sait que les contacts n'ont PAS été informés).
+3. **"I am OK" kill-switch**. New `IAmOkUseCase` which resets `lastTriggeredAt = 0L` + (opt-in `sendIAmOkSmsOnReset`, default `true`) sends a short SMS "I am OK, false alarm" to the SafetyCall contacts. `PanicDecoy` guard (anti-tampering: an attacker cannot erase the UI trace of the emergency trigger). On `ConversationsScreen`, an `IAmOkBanner` banner appears for 30 minutes after the trigger and offers a confirmation dialog. Differentiated snackbar on partial success (`sent=0, failed=N` → explicit error message, the user knows the contacts were NOT informed).
 
-4. **"Tester sans envoyer"**. Bouton dans `EmergencyScreen` qui lance un dry-run : résolution GPS, rendu du body SMS, comptage contacts, masquage des numéros (`+33 … 78` style). **Aucun side-effect** — pas d'envoi SMS, pas d'écriture DataStore, pas de mutation `lastTriggeredAt`. Loader spinner pendant les ~8s de résolution GPS, guard double-tap. Affiche le call behavior actif + un warning rouge si mode urgence désactivé.
+4. **"Test without sending"**. Button in `EmergencyScreen` that runs a dry run: GPS resolution, SMS body rendering, contact count, number masking (`+33 … 78` style). **No side effect** — no SMS sent, no DataStore write, no `lastTriggeredAt` mutation. Loader spinner during the ~8s of GPS resolution, double-tap guard. Shows the active call behavior + a red warning if emergency mode is disabled.
 
-Un audit final HAUTE PRÉCISION a surfacé **3 MEDIUM** bloquants, tous fixés avant tag :
+A HIGH-PRECISION final audit surfaced **3 blocking MEDIUM** findings, all fixed before tag:
 
-- **MEDIUM SEC-1** — Sur `ON_RESUME` de `EmergencyScreen`, re-vérification de la permission `CALL_PHONE`. Si l'user a révoqué la permission via Paramètres Android entre temps, `emergencyCallBehavior` est auto-revert à `DIALER_ONLY` dans le DataStore. Sans ce check, le setting devenait orphelin (placeCall retournait `PERMISSION_DENIED` à chaque tap, snackbar erreur silencieuse, en situation d'urgence l'user croyait l'app cassée).
-- **MEDIUM SEC-2** — Snackbar `IAmOkDoneWithSms(sent, failed)` différencie maintenant `sent > 0` (succès) vs `sent == 0 && failed > 0` (erreur, contacts non informés malgré le reset). Nouvelle string `emergency_i_am_ok_send_failed` FR+EN. L'user voit clairement quand les SMS de réassurance n'ont pas pu partir.
-- **MEDIUM PERF-1** — Guard double-tap + spinner UI pendant la résolution GPS du dry-run (jusqu'à 8s). `_isPreviewLoading: StateFlow<Boolean>` exposé au `EmergencyScreen` qui désactive le `TextButton` et affiche `CircularProgressIndicator` + label "Résolution GPS…". Sans ça, le bouton semblait non-réactif et l'user pouvait re-tapper créant N coroutines parallèles.
+- **MEDIUM SEC-1** — On `ON_RESUME` of `EmergencyScreen`, re-check of the `CALL_PHONE` permission. If the user revoked the permission via Android Settings in the meantime, `emergencyCallBehavior` is auto-reverted to `DIALER_ONLY` in DataStore. Without this check, the setting became orphaned (placeCall returned `PERMISSION_DENIED` on every tap, silent error snackbar; in an emergency the user believed the app was broken).
+- **MEDIUM SEC-2** — Snackbar `IAmOkDoneWithSms(sent, failed)` now distinguishes `sent > 0` (success) from `sent == 0 && failed > 0` (error, contacts not informed despite the reset). New string `emergency_i_am_ok_send_failed` FR+EN. The user clearly sees when the reassurance SMS could not go out.
+- **MEDIUM PERF-1** — Double-tap guard + UI spinner during the dry-run GPS resolution (up to 8s). `_isPreviewLoading: StateFlow<Boolean>` exposed to `EmergencyScreen`, which disables the `TextButton` and shows `CircularProgressIndicator` + the label "Resolving GPS…". Without it, the button seemed unresponsive and the user could tap again, creating N parallel coroutines.
 
-Un **LOW ARCH-1** également corrigé : double `if (emergency.enabled)` imbriqué redondant dans `SettingsScreen` (cosmétique, suppression).
+A **LOW ARCH-1** was also fixed: redundant nested double `if (emergency.enabled)` in `SettingsScreen` (cosmetic, removed).
 
-#### Sécurité — checks vérifiés sans finding
+#### Security — checks verified with no finding
 
-- `EmergencyCallHelper` whitelist stricte sur `openDialer` ET `placeCall`. Pas de chemin extra-intent qui injecterait un numéro arbitraire.
-- `EmergencyShortcutReceiver` (`exported=false`) ne passe que les constantes hardcodées `EMERGENCY_NUMBER_EU = "112"` et `EMERGENCY_NUMBER_POLICE_FR = "17"` au helper.
-- Auto-lock coffre couvre tous les chemins de sortie explicite (top-bar back, system back, PIN cancel, biometric refused). Aucun `DisposableEffect` ne lock à la destruction (préserve fix v1.13.1).
-- Anti-pocket-dial hold-3s : `Button(onClick = {})` no-op + `pointerInput` qui ne déclenche que sur hold complet. Cancellation propre à la rotation Activity via clé `LaunchedEffect(isHolding)`.
-- `IAmOkUseCase` : guard PanicDecoy en tête, opt-in `sendIAmOkSmsOnReset` strictement respecté.
-- Dry-run : zéro side-effect confirmé par audit (pas de SendSms, pas de DataStore write, pas de Timber log du body en clair).
+- `EmergencyCallHelper` strict whitelist on `openDialer` AND `placeCall`. No extra-intent path that would inject an arbitrary number.
+- `EmergencyShortcutReceiver` (`exported=false`) only passes the hardcoded constants `EMERGENCY_NUMBER_EU = "112"` and `EMERGENCY_NUMBER_POLICE_FR = "17"` to the helper.
+- Vault auto-lock covers all explicit exit paths (top-bar back, system back, PIN cancel, biometric refused). No `DisposableEffect` locks on destruction (preserves the v1.13.1 fix).
+- Anti-pocket-dial hold-3s: no-op `Button(onClick = {})` + `pointerInput` that only triggers on a complete hold. Clean cancellation on Activity rotation via the `LaunchedEffect(isHolding)` key.
+- `IAmOkUseCase`: PanicDecoy guard first, opt-in `sendIAmOkSmsOnReset` strictly honored.
+- Dry run: zero side effect confirmed by audit (no SendSms, no DataStore write, no Timber log of the body in clear text).
 
 #### Manifest
 
-Nouvelle permission `<uses-permission android:name="android.permission.CALL_PHONE" />`. Demandée RUNTIME uniquement quand l'user opt-in `HOLD_3S_DIRECT_CALL` dans Réglages. Refus → fallback automatique à `DIALER_ONLY`. Aucun appel automatique : hold-3s est la garde anti-pocket-dial.
+New permission `<uses-permission android:name="android.permission.CALL_PHONE" />`. Requested at RUNTIME only when the user opts in to `HOLD_3S_DIRECT_CALL` in Settings. Denial → automatic fallback to `DIALER_ONLY`. No automatic call: hold-3s is the anti-pocket-dial guard.
 
-#### Note stratégique — cap mode urgence dans SMS Tech
+#### Strategic note — emergency mode cap in SMS Tech
 
-v1.14.0 est volontairement le **cap supérieur** du mode urgence dans SMS Tech. Les features étendues (mode vocal Vosk, sirène + flash, partage GPS live, recording audio chiffré, webhook diffusion) sont déléguées à une nouvelle app **SOS Tech** (Files Tech n°8) qui sera scaffoldée séparément. Le code partagé (`LocationResolver`, `EmergencyConfig`, `SafetyCallContact`, `PasswordKdf`, `Outcome`) sera factorisé progressivement dans un module AAR `files-tech-emergency-core` consommé par SMS Tech et SOS Tech. Justification : ces features impliqueraient pour 95 % des utilisateurs SMS du poids inutile (foreground service permanent, modèle Vosk ~50 Mo, permissions agressives BACKGROUND_LOCATION / RECORD_AUDIO continu).
+v1.14.0 is deliberately the **upper cap** of emergency mode in SMS Tech. The extended features (Vosk voice mode, siren + flash, live GPS sharing, encrypted audio recording, webhook broadcast) are delegated to a new app, **SOS Tech** (Files Tech no. 8), which will be scaffolded separately. The shared code (`LocationResolver`, `EmergencyConfig`, `SafetyCallContact`, `PasswordKdf`, `Outcome`) will be progressively factored into an AAR module `files-tech-emergency-core` consumed by SMS Tech and SOS Tech. Rationale: for 95 % of SMS users, these features would mean useless weight (permanent foreground service, Vosk model ~50 MB, aggressive permissions BACKGROUND_LOCATION / continuous RECORD_AUDIO).
 
 ### v1.13.1 — Hotfix UX on top of v1.13.0
 
@@ -1031,7 +1100,7 @@ PATCH release fixing three user-reported regressions after v1.13.0:
 
 - **Long-press → ActionsSheet legacy** restored on both `ConversationsScreen` and `VaultScreen`. v1.13.0 had collapsed the long-press behaviour into "enter multi-selection mode" — discoverability of the legacy quick actions (Move to vault / Move out of vault / Block / Delete) was lost. v1.13.1 restores the ModalBottomSheet on long-press AND adds a new item "Sélectionner plusieurs" (Select multiple) which enters multi-selection mode for users who want batch ops.
 - **Vault PIN re-prompt bug** on return from `ThreadScreen` to `VaultScreen`. The `vaultPinPassed` Compose `remember` local state was reset on re-composition, causing the PIN dialog to briefly re-flash. Fix: initialise `vaultPinPassed` (and `unlocked`) from `VaultManager.sessionUnlocked` (Singleton AtomicBoolean) which persists for the app session. PIN re-entry now only happens after auto-lock / panic / process kill — the expected behaviour.
-- **Avatar palette : retrait slate + gunmetal**. v1.13.0 kept these two blue-grey shades but on some displays they could appear greenish (G ≈ B in RGB). v1.13.1 ships **9 strictly-blue stops** : 4 royal/electric/cobalt/brand-blue + 3 sky/periwinkle/azure + navy + indigo-deep (Material Indigo 600→900). All WCAG AA ≥ 4.5:1 vs white confirmed.
+- **Avatar palette: slate + gunmetal removed**. v1.13.0 kept these two blue-grey shades but on some displays they could appear greenish (G ≈ B in RGB). v1.13.1 ships **9 strictly-blue stops** : 4 royal/electric/cobalt/brand-blue + 3 sky/periwinkle/azure + navy + indigo-deep (Material Indigo 600→900). All WCAG AA ≥ 4.5:1 vs white confirmed.
 
 No threat-model change, no DB / SQLCipher / Keystore change, no schema change. `adb install -r` non-destructive.
 
@@ -1048,11 +1117,11 @@ A pre-release final audit run twice (consolidation pass) surfaced **2 HIGH + 4 M
 - **MEDIUM NEW-5** — `VaultPinManager.setVaultPin` now writes the `settings.vaultPinEnabled = true` flag **inside** the `try { hash; storeHash; flag }` block, immediately after `securityStore.setVaultPinHash()`. Symmetrically, `clearVaultPin` flips the flag BEFORE removing the hash. Without this ordering, a rare DataStore IOException between hash-write and flag-write would leave the vault in an "orphan hash, flag=false" state where `isVaultPinConfigured()` would detect the inconsistency and gracefully treat as disabled — but the inverse (flag=true with no hash) would lock the user out.
 - **LOW NEW-1** — Removed orphan string `settings_vault_pin_confirm_subtitle` (declared FR + EN, used nowhere). APK cleanup.
 
-#### Multi-selection bulk vault (Sujet A)
+#### Multi-selection bulk vault (Topic A)
 
 `ConversationsScreen` and `VaultScreen` both expose a Gmail-style multi-selection mode: long-press a row → enters selection mode, tap toggles inclusion, top-bar swaps to a contextual title (count) + bulk action (`Move to vault` / `Move out of vault`) + a Cancel (X) icon. System back exits selection mode (BackHandler). The bulk action loops through `requestMoveToVault(id, intoVault)` per ID — the existing PanicDecoy + Locked guards are re-evaluated on each call (defensive, no batch transaction bypass). A single snackbar is emitted with the success count (plurals FR + EN). The `selectedIds` is purged on PanicDecoy entry (audit SEC-4).
 
-#### Distinct vault PIN/password + biometric (Sujet B)
+#### Distinct vault PIN/password + biometric (Topic B)
 
 New `VaultPinManager` Singleton:
 - **Crypto**: PBKDF2-HMAC-SHA512, 16-byte salt + ≥ 210 000 iterations (calibrated). Hash stored in `SecurityStore` under `vault.salt` / `vault.hash` / `vault.iters` — totally separated from `pin.*` (app) and `panic.*` (decoy). Comparison via `MessageDigest.isEqual` (constant-time).
@@ -1063,7 +1132,7 @@ New `VaultPinManager` Singleton:
 
 New `PinEntryDialog` reusable composable (kept under `ui/components/`) with `PasswordVisualTransformation` + `KeyboardType.Password` (alphanumeric — user picks PIN or passphrase), optional biometric button slot, suspend `(CharArray) -> Boolean` callback contract, single error string `pin_error_invalid` (no leak between "no PIN set" and "wrong PIN").
 
-#### Avatar palette strict-blue (Sujet 0)
+#### Avatar palette strict-blue (Topic 0)
 
 The 14-shade palette of v1.12.0 was reduced to **11 strict-blue stops** by removing the 3 green-leaning entries (`teal`, `dark teal`, `cyan`). The remaining 11 are pure blue / cobalt / sky / periwinkle / azure / navy / cool-steel / slate / gunmetal — all WCAG AA ≥ 4.5:1 against white initials. Deterministic hash distribution unchanged ; existing users will see some contacts shift to a new slot (size 14 → 11), which is acceptable for a UX refinement.
 
@@ -1071,17 +1140,17 @@ The 14-shade palette of v1.12.0 was reduced to **11 strict-blue stops** by remov
 
 MINOR release with UX-focused polish on the Emergency mode (accessibility on lock screen + voice-grade emergency call buttons) and on the conversation list (all-blue avatar palette WCAG AA, contact name now resolved at compose time). No DB / vault / Keystore changes — `adb install -r` non-destructive.
 
-A pre-release final audit (3-axes + cohérence) surfaced **2 HIGH and 1 MEDIUM bloquants**, all fixed before tag :
+A pre-release final audit (3-axes + coherence) surfaced **2 HIGH and 1 MEDIUM blockers**, all fixed before tag :
 
 - **HIGH S1** — `MainApplication.kt` emergency-shortcut observation now `combine(settings.flow, appLock.state)` and cancels the persistent lock-screen notification whenever `LockState.PanicDecoy` becomes active. Without this guard, an attacker who coerces a panic-PIN unlock would still see the "URGENCE / 112 / 17" notification on the lock screen, learning that SMS Tech has an Emergency mode configured (info leak + lateral attack vector — the URGENCE action itself is already gated by `TriggerEmergencyUseCase`'s PanicDecoy check, but the *presence* of the shortcut was leaking).
 - **HIGH S2** — `SettingsScreen` Toggle "Appel police FR (17)" is now gated behind `if (state.security.emergencyShortcutEnabled)` so it cannot be configured as an orphan. Without the shortcut enabled, the toggle had no observable effect (the in-app EmergencyScreen 17 button reads the same flag, so it stayed visible, but the lock-screen notification — the only consumer that visibly differs — wasn't posted) — confusing UX + spurious DataStore writes.
 - **MEDIUM U2** — Emergency 112 and 17 buttons in `EmergencyScreen` now catch `ActivityNotFoundException` (no dialer installed — rare but possible on stripped AOSP builds and corporate MDM profiles) and surface a snackbar `emergency_shortcut_no_app_to_dial`. Without feedback, the user would believe the call is in progress while nothing happens — a silent failure in an emergency context. Also added `FLAG_ACTIVITY_NEW_TASK` defensively (currently invoked from Activity context, so non-blocking, but matches the BroadcastReceiver path which strictly requires it).
 
-#### Avatar palette refactor (Sujet 1)
+#### Avatar palette refactor (Topic 1)
 
 The v1.11.0 palette mixed 5 reds + 1 plum with blues and greens. Red is visually anxiogenic in a messaging context and reserved by Files Tech for destructive/danger states (BrandDanger). v1.12.0 ships a 14-shade pure blue / teal / navy / cyan palette, every stop verified ≥ 4.5:1 against `Color.White` for initials legibility (WCAG AA). The light teals and cyans that didn't meet contrast were darkened; the hue family is uniform but the spread across royal/electric/navy/teal/cyan keeps avatars distinguishable in long conversation lists.
 
-#### ComposeScreen contact name fix (Sujet 7)
+#### ComposeScreen contact name fix (Topic 7)
 
 `ConversationRepositoryImpl.findOrCreate(addresses)` used to insert new conversations with `displayName = null`, leaving the conversation labelled by raw phone number until the next system contact sync. With single-recipient compose, we now :
 
@@ -1092,7 +1161,7 @@ The v1.11.0 palette mixed 5 reds + 1 plum with blues and greens. Red is visually
 
 Single-recipient only (group MMS keeps `null` and lets the UI compose participants).
 
-#### ThreadScreen "Move to vault" overflow (Sujet 2)
+#### ThreadScreen "Move to vault" overflow (Topic 2)
 
 Overflow menu in `ThreadActionsMenu` now exposes "Move to vault" / "Move out of vault" with `Lock` / `LockOpen` icons. The action :
 
@@ -1101,7 +1170,7 @@ Overflow menu in `ThreadActionsMenu` now exposes "Move to vault" / "Move out of 
 - Snackbar distinguishes Locked (`error_session_locked`) vs generic failure (`snack_generic_error`).
 - No data-layer-only feature flag — the row simply doesn't render in PanicDecoy, defeating the snoop-the-menu sidechannel.
 
-#### Emergency lock-screen shortcut (Sujet "vigilance vocale")
+#### Emergency lock-screen shortcut (Topic "voice vigilance")
 
 The Emergency mode in v1.10.0/v1.11.0 required unlock + nav into Settings to reach. In a real emergency that's too many taps. v1.12.0 adds :
 
@@ -1117,61 +1186,61 @@ The numbers `112` and `17` are hard-coded in companion objects — they cannot b
 
 ### v1.11.0 — Vault polish + Anti-smishing + Appearance + 7 audit fixes
 
-MINOR release fortifiant la feature Vault (3 trous comblés), introduisant un détecteur anti-smishing 100 % offline, et l'apparence personnalisée par conversation (couleur de bulle WCAG-safe + avatar custom).
+MINOR release strengthening the Vault feature (3 gaps closed), introducing a 100% offline anti-smishing detector, and per-conversation custom appearance (WCAG-safe bubble color + custom avatar).
 
 A pre-release audit (3 axes + deep-dive security final + architecture coherence + i18n) surfaced **7 HIGH and 14 MEDIUM** findings, all fixed before tag :
 
-- **HIGH SEC-V1** — `MessageDao.search` join `conversations` avec filtre `in_vault = 0` ; `ConversationRepositoryImpl.findMessageById` guard `inVault`. Sans ces 2 fixes, la recherche FTS exposait le body des messages vault (IDOR : `1mpots scam` cherché dans la search ramenait les messages vault).
-- **HIGH SEC-V2** — `VaultManager.sessionUnlocked` migré `@Volatile Boolean` → `AtomicBoolean`. Sémantique correcte pour un flag partagé coroutines IO/UI (tearing impossible). Double-check `PanicDecoy` post-suspend dans `requestMoveToVault` (race window fermée).
-- **HIGH SEC-V3** — `AppearanceDialog` conditionne `pickedAvatarUri` au succès de `takePersistableUriPermission`. Sans, une URI révoquée entre pick et take polluait Room en silence (Coil échouait au render).
-- **HIGH P1** — `SmishingDetector.analyze()` déplacé sur IO dispatcher dans `ThreadViewModel.recomputeSmishingVerdicts`, exposé via `Map<Long, List<SmishingReason>>` dans state. Plus de jank 600 ms à 3 s sur thread 200 msgs low-end (Cortex-A53).
-- **HIGH U1** — `ColorChip` accessibilité TalkBack : `contentDescription` + `role = RadioButton` + `selected` semantics + 9 noms de couleurs FR/EN. `FlowRow` pour adaptation petits écrans 320 dp.
-- **HIGH C4** — `ForwardMessageSheet` propage `customUri = conv.avatarUri` au composable `Avatar` (cohérence avec ConversationRow — sinon avatar custom invisible dans le sheet de partage).
-- **HIGH S1** — `VaultScreen.LaunchedEffect(Unit)` (au lieu de `lockMode` comme clef) : empêche un double `BiometricPrompt` empilé sur certains OEM si lockMode change pendant que le prompt est en vol.
+- **HIGH SEC-V1** — `MessageDao.search` joins `conversations` with an `in_vault = 0` filter; `ConversationRepositoryImpl.findMessageById` guards on `inVault`. Without these 2 fixes, FTS search exposed the body of vault messages (IDOR: searching for `1mpots scam` returned the vault messages).
+- **HIGH SEC-V2** — `VaultManager.sessionUnlocked` migrated from `@Volatile Boolean` → `AtomicBoolean`. Correct semantics for a flag shared between IO/UI coroutines (no tearing possible). `PanicDecoy` double-check after suspension in `requestMoveToVault` (race window closed).
+- **HIGH SEC-V3** — `AppearanceDialog` makes `pickedAvatarUri` conditional on the success of `takePersistableUriPermission`. Without it, a URI revoked between pick and take silently polluted Room (Coil failed at render).
+- **HIGH P1** — `SmishingDetector.analyze()` moved to the IO dispatcher in `ThreadViewModel.recomputeSmishingVerdicts`, exposed via `Map<Long, List<SmishingReason>>` in state. No more 600 ms to 3 s jank on a 200-message thread on low-end hardware (Cortex-A53).
+- **HIGH U1** — `ColorChip` TalkBack accessibility: `contentDescription` + `role = RadioButton` + `selected` semantics + 9 color names FR/EN. `FlowRow` to adapt to small 320 dp screens.
+- **HIGH C4** — `ForwardMessageSheet` passes `customUri = conv.avatarUri` to the `Avatar` composable (consistency with ConversationRow — otherwise the custom avatar was invisible in the share sheet).
+- **HIGH S1** — `VaultScreen.LaunchedEffect(Unit)` (instead of `lockMode` as key): prevents a double stacked `BiometricPrompt` on some OEMs if lockMode changes while the prompt is in flight.
 
-#### Vault polish (3 trous comblés)
+#### Vault polish (3 gaps closed)
 
-1. **Notifications gates `inVault`** — `IncomingMessageNotifier.notifyIncoming` injecte `ConversationDao` et early-returns si la conv est dans le coffre. SMS + MMS couverts (1 seul point). Aucune notif, aucun son, aucun badge système ne fuite pour les conv vault.
-2. **UI move-in/move-out** — Long-press conv dans `ConversationsScreen` → ActionsSheet avec "Déplacer vers le coffre" (masqué en PanicDecoy). Long-press conv dans `VaultScreen` → "Sortir du coffre". Strings `vault_move_in/out` (jusque-là orphelines) câblées. Snackbar feedback (bleu marque succès / rouge erreur).
-3. **BiometricPrompt à l'entrée** — Si `lockMode = BIOMETRIC`, prompt à l'entrée VaultScreen comme second-factor. Si refusé/annulé → `onBack()`. Si biométrie indisponible → fallback gracieux à l'entrée directe.
-4. **Nouveau `VaultManager.requestMoveToVault(id, intoVault)`** — wrap pour appels hors-VaultScreen (long-press liste, futur overflow Thread). Refuse `PanicDecoy` + `Locked`, auto-`markUnlocked` sinon. Double-check `PanicDecoy` post-suspend (SEC-V2).
+1. **Notifications gated on `inVault`** — `IncomingMessageNotifier.notifyIncoming` injects `ConversationDao` and returns early if the conversation is in the vault. SMS + MMS covered (a single point). No notification, no sound, no system badge leaks for vault conversations.
+2. **UI move-in/move-out** — Long-press on a conversation in `ConversationsScreen` → ActionsSheet with "Move to vault" (hidden in PanicDecoy). Long-press on a conversation in `VaultScreen` → "Move out of vault". Strings `vault_move_in/out` (orphaned until then) wired up. Snackbar feedback (brand blue for success / red for error).
+3. **BiometricPrompt on entry** — If `lockMode = BIOMETRIC`, prompt on entering VaultScreen as a second factor. If refused/cancelled → `onBack()`. If biometrics unavailable → graceful fallback to direct entry.
+4. **New `VaultManager.requestMoveToVault(id, intoVault)`** — wrapper for calls outside VaultScreen (list long-press, future Thread overflow). Refuses `PanicDecoy` + `Locked`, auto-`markUnlocked` otherwise. `PanicDecoy` double-check after suspension (SEC-V2).
 
-#### Anti-smishing local (Sujet 3)
+#### Local anti-smishing (Topic 3)
 
-Détecteur 100 % offline, sans modèle, sans cloud. 4 heuristiques composables :
-- **URL shortener** (17 hosts : bit.ly, t.co, tinyurl, rebrand.ly…)
-- **Mots d'urgence** (~40 patterns FR + EN : urgent, compte bloqué, colis bloqué, click here, impots impayés…)
-- **Numéros surtaxés FR** (regex avec lookaround non-digit : `32xx`-`36xx`, `0899xxxxxx`, `081x/088x/089x`)
-- **Typosquatting de domaines officiels FR** (Levenshtein bornée ≤ 2 sur 28 hosts officiels : impots.gouv.fr, ameli.fr, banques, opérateurs, paypal…)
+100% offline detector, no model, no cloud. 4 composable heuristics:
+- **URL shortener** (17 hosts: bit.ly, t.co, tinyurl, rebrand.ly…)
+- **Urgency words** (~40 FR + EN patterns: urgent, compte bloqué, colis bloqué, click here, impots impayés…)
+- **FR premium-rate numbers** (regex with non-digit lookaround: `32xx`-`36xx`, `0899xxxxxx`, `081x/088x/089x`)
+- **Typosquatting of official FR domains** (Levenshtein bounded ≤ 2 over 28 official hosts: impots.gouv.fr, ameli.fr, banks, carriers, paypal…)
 
-Seuil par défaut = 2 heuristiques positives (anti faux positif). Cap 1000c sur le body inspecté. Cap 20 URLs + 30 domaines inspectés par body (anti-DoS Levenshtein × matches). Bandeau rouge cliquable dans la bulle SMS entrante → dialog "Pourquoi" listant les raisons localisées. Toggle Settings opt-in par défaut, désactivable.
+Default threshold = 2 positive heuristics (against false positives). Cap 1000c on the inspected body. Cap of 20 URLs + 30 domains inspected per body (anti-DoS on Levenshtein × matches). Clickable red banner in the incoming SMS bubble → "Why" dialog listing the localized reasons. Settings toggle, opt-in by default, can be disabled.
 
-20 tests garde-régression : cas véritables (colissimo phishing, fake impots, scam Amazon EN) + faux positifs FR officiels (banque, impots, ameli) + edges (vide, body > 1000c, Levenshtein symétrique).
+20 regression-guard tests: genuine cases (colissimo phishing, fake impots, Amazon scam EN) + official FR false positives (bank, impots, ameli) + edges (empty, body > 1000c, symmetric Levenshtein).
 
-#### Apparence par conversation (Sujet 5)
+#### Per-conversation appearance (Topic 5)
 
-Room migration v6→v7 strictement additive : `conversations.bubble_color_argb INTEGER?` + `avatar_uri TEXT?`. Downgrade safe. `ALTER TABLE ADD COLUMN` × 2 wrappés atomiquement par Room (SQLCipher WAL rollback en cas de kill).
+Strictly additive Room migration v6→v7: `conversations.bubble_color_argb INTEGER?` + `avatar_uri TEXT?`. Downgrade safe. `ALTER TABLE ADD COLUMN` × 2 wrapped atomically by Room (SQLCipher WAL rollback if the process is killed).
 
-UI : dialog "Apparence" depuis l'overflow ThreadScreen. Palette `BubbleColorPalette` 8 couleurs WCAG-safe contre texte blanc (BRAND_BLUE par défaut = reset null). Avatar picker via `PickVisualMedia` Android 13+ → URI `content://` persistée via `takePersistableUriPermission` (release de l'ancienne URI avant prise de la nouvelle, anti-accumulation grants). Scheme `content://` whitelist côté repository (defense in depth path traversal).
+UI: "Appearance" dialog from the ThreadScreen overflow. `BubbleColorPalette` palette of 8 WCAG-safe colors against white text (default BRAND_BLUE = reset to null). Avatar picker via `PickVisualMedia` Android 13+ → `content://` URI persisted via `takePersistableUriPermission` (the old URI is released before taking the new one, against grant accumulation). `content://` scheme whitelisted on the repository side (defense in depth against path traversal).
 
-Palette avatars auto-générés étendue 7 → 14 nuances (cœur bleu/teal + transition plum + 5 nuances rouge/grenat/bordeaux), toutes WCAG AA contre blanc, hash déterministe par contact.
+Auto-generated avatar palette extended 7 → 14 shades (blue/teal core + plum transition + 5 red/garnet/burgundy shades), all WCAG AA against white, deterministic hash per contact.
 
-#### Refactos + corrections audit MEDIUM (14)
+#### Refactors + MEDIUM audit fixes (14)
 
-- `IncomingMessageNotifier` : suppression du `Timber.d` "conv vault suppressed" (anti-corrélation builds bêta)
-- `SmishingDetector` : cap `MAX_URL_MATCHES=20` + `MAX_DOMAIN_MATCHES=30` sur `findAll`
-- `ConversationRepositoryImpl.setAppearance` : whitelist scheme `content://`
-- `AppearanceDialog` : release ancienne URI avant prise nouvelle (anti-accumulation)
-- `ThreadViewModel.recomputeSmishingVerdicts` : `smishingJob?.cancel()` avant re-launch (anti-race toggle rapide)
-- `Migrations.MIGRATION_6_7` : KDoc explicite sur non-idempotence d'`ALTER TABLE ADD COLUMN` (transactionnalité Room WAL)
-- `EmergencyArmedRecap` ajouté dans `SettingsScreen` (miroir de `SafetyCallArmedRecap`, chip "Armé" + 3 lignes + 2 boutons)
-- `AboutScreen` nettoyé : références ML Kit + Google Messages retirées (post-v1.7.0 FLOSS compliance + cohérence éditoriale)
-- Tonalité FR : 4 strings tutoiement résiduels v1.9.0 → vouvoiement (cohérence i18n projet)
-- `smishing_reason_typosquatting` : retrait balises HTML `<i>` (non rendues par Compose Text) → guillemets typographiques
+- `IncomingMessageNotifier`: removed the `Timber.d` "conv vault suppressed" (anti-correlation on beta builds)
+- `SmishingDetector`: cap `MAX_URL_MATCHES=20` + `MAX_DOMAIN_MATCHES=30` on `findAll`
+- `ConversationRepositoryImpl.setAppearance`: `content://` scheme whitelist
+- `AppearanceDialog`: old URI released before taking the new one (anti-accumulation)
+- `ThreadViewModel.recomputeSmishingVerdicts`: `smishingJob?.cancel()` before re-launch (anti-race on rapid toggling)
+- `Migrations.MIGRATION_6_7`: explicit KDoc on the non-idempotence of `ALTER TABLE ADD COLUMN` (Room WAL transactionality)
+- `EmergencyArmedRecap` added to `SettingsScreen` (mirror of `SafetyCallArmedRecap`, "Armed" chip + 3 lines + 2 buttons)
+- `AboutScreen` cleaned up: ML Kit + Google Messages references removed (post-v1.7.0 FLOSS compliance + editorial consistency)
+- FR tone: 4 leftover tutoiement strings from v1.9.0 → vouvoiement (project i18n consistency)
+- `smishing_reason_typosquatting`: HTML `<i>` tags removed (not rendered by Compose Text) → typographic quotation marks
 
-**Reporté v1.12.0** : overflow Thread "Déplacer vers coffre", PIN/pass distinct pour coffre (second hash crypto), multi-sélection de conv pour coffre, options de partage depuis coffre, répondre depuis coffre.
+**Deferred to v1.12.0**: Thread overflow "Move to vault", separate PIN/passphrase for the vault (second crypto hash), multi-selection of conversations for the vault, sharing options from the vault, replying from the vault.
 
-Cert SHA-256 stable `b09a9511…687d`. Aucune dépendance NonFreeDep ajoutée.
+Cert SHA-256 stable `b09a9511…687d`. No NonFreeDep dependency added.
 
 ### v1.10.0 — Emergency mode + clock-monotonic hardening + refactors
 
@@ -1209,7 +1278,7 @@ Migration v1.9.0 → v1.10.0: configs persisted before this release have `monoto
 
 `SettingsScreen.SafetyCallArmedRecap` no longer calls `System.currentTimeMillis()` at every recomposition ; `SettingsViewModel` exposes `safetyCallRemainingMs: StateFlow<Long>` recomputed every 60 s (or whenever `state` changes via `combine`). Granularity sufficient for an hour-level countdown displayed to the user.
 
-Pre-release audit: 17 garde-régression tests in `AuditV1100Test` (clock-forward attack on safety call + emergency, post-reboot drift, v1.9.0 migration fallback, emergency anti-spam, GSM-7 single-segment guarantee, template defaults).
+Pre-release audit: 17 regression-guard tests in `AuditV1100Test` (clock-forward attack on safety call + emergency, post-reboot drift, v1.9.0 migration fallback, emergency anti-spam, GSM-7 single-segment guarantee, template defaults).
 
 ### v1.9.0 — Safety call + compact reaction format + audit hardening
 
@@ -1252,68 +1321,68 @@ Suppression of `com.google.mlkit:translate` + `com.google.mlkit:language-id` + `
 
 PATCH bundling 5 user-visible fixes uncovered during v1.6.1 in-field testing.
 
-**B1 — CRITICAL : tous les réglages utilisateur ignorés par ThreadViewModel.** Ma
-PERF-01 v1.6.1 a introduit un `cachedSettings: StateFlow<AppSettings>` initialisé
-avec `stateIn(viewModelScope, WhileSubscribed(5_000), AppSettings())` — mais
-AUCUN consommateur ne collectait jamais cette flow (lecture uniquement via `.value`
-depuis 5 sites). Sans collecteur, le flux sous-jacent n'était jamais souscrit et
-`.value` retournait toujours la **valeur initiale par défaut** `AppSettings()`. Tous
-les réglages utilisateur étaient donc **silencieusement ignorés** dans
-`ThreadViewModel` : `confirmBeforeBroadcast`, `reactionConfirmDismissed`,
-`reactionEmojiOnly`, `sendReactionsToRecipient`. Le dialog de confirmation s'affichait
-sans cesse même après coche "Ne plus demander", le mode emoji-only restait inaccessible,
-etc. Fix : `cachedSettings` délègue désormais à `settings.state` (la StateFlow
-`Eagerly` hydratée par `appScope` côté [SettingsRepository], qui elle EST toujours
-collectée). Vérification ajoutée : `WhileSubscribed` n'est valide que pour des
-StateFlow exposées et collectées par Compose ; les caches privés doivent utiliser
-`Eagerly` ou un autre mécanisme actif.
+**B1 — CRITICAL: all user settings ignored by ThreadViewModel.** My
+PERF-01 v1.6.1 introduced a `cachedSettings: StateFlow<AppSettings>` initialized
+with `stateIn(viewModelScope, WhileSubscribed(5_000), AppSettings())` — but
+NO consumer ever collected this flow (read only through `.value`
+from 5 sites). With no collector, the upstream flow was never subscribed and
+`.value` always returned the **default initial value** `AppSettings()`. All
+user settings were therefore **silently ignored** in
+`ThreadViewModel`: `confirmBeforeBroadcast`, `reactionConfirmDismissed`,
+`reactionEmojiOnly`, `sendReactionsToRecipient`. The confirmation dialog kept showing
+up even after ticking "Don't ask again", the emoji-only mode remained unreachable,
+etc. Fix: `cachedSettings` now delegates to `settings.state` (the `Eagerly`
+StateFlow hydrated by `appScope` on the [SettingsRepository] side, which IS always
+collected). Check added: `WhileSubscribed` is only valid for
+StateFlows exposed to and collected by Compose; private caches must use
+`Eagerly` or another active mechanism.
 
-**B2 — Tapback fold échouait sur les bodies multi-ligne.** L'encoder
-[SendReactionUseCase.buildTapbackBody] normalise les whitespace (newlines, tabs →
-espace simple) dans le preview avant émission, mais le matcher receiver
-[ConversationMirror.applyIncomingReaction] utilisait `body LIKE 'prefix%'` côté
-SQL — et SQLite LIKE ne fait pas d'équivalence whitespace. Un OUTGOING stocké
-`"Hello\nworld"` ne matchait pas le prefix `"Hello world"`, donc la réaction
-s'affichait comme bulle texte au lieu d'un badge. Fix : nouveau DAO
-`findRecentOutgoingForConversation(convId, 50)` + fallback Kotlin qui normalise
-les whitespace des 2 côtés (`collapseWhitespace()` extension privée). Path rapide
-SQL LIKE conservé pour les cas mono-ligne (majorité).
+**B2 — Tapback fold failed on multi-line bodies.** The encoder
+[SendReactionUseCase.buildTapbackBody] normalizes whitespace (newlines, tabs →
+single space) in the preview before sending, but the receiver matcher
+[ConversationMirror.applyIncomingReaction] used `body LIKE 'prefix%'` on the
+SQL side — and SQLite LIKE has no whitespace equivalence. An OUTGOING stored as
+`"Hello\nworld"` did not match the prefix `"Hello world"`, so the reaction
+showed up as a text bubble instead of a badge. Fix: new DAO
+`findRecentOutgoingForConversation(convId, 50)` + Kotlin fallback that normalizes
+whitespace on both sides (`collapseWhitespace()` private extension). The SQL LIKE
+fast path is kept for single-line cases (the majority).
 
-**B3 — Ambiguïté de fold sur messages courts à préfixe partagé.** Quand
-plusieurs OUTGOING courts partagent un préfixe ("Hello" vs "Hello world"),
-l'ancien matcher prenait toujours le PLUS RÉCENT — donc une réaction à l'ancien
-"Hello" était folded sur "Hello world" (faux message). Fix : nouveau champ
-[DecodedReaction.wasTruncated] (true si le wire contenait `…`). Dans le matcher :
-- `wasTruncated == false` (body court non tronqué, preview = body complet) →
-  match **EXACT** après normalisation des whitespace. "Hello" matche uniquement
-  "Hello", pas "Hello world".
-- `wasTruncated == true` (body long, prefix seul connu) → fallback prefix
-  match (avec l'ambiguïté inhérente au protocole SMS-based Tapback, sans solution
-  sans casser la compat iMessage/Google Messages).
+**B3 — Fold ambiguity on short messages sharing a prefix.** When
+several short OUTGOING messages share a prefix ("Hello" vs "Hello world"),
+the old matcher always picked the MOST RECENT one — so a reaction to the older
+"Hello" was folded onto "Hello world" (wrong message). Fix: new field
+[DecodedReaction.wasTruncated] (true if the wire text contained `…`). In the matcher:
+- `wasTruncated == false` (short, non-truncated body, preview = full body) →
+  **EXACT** match after whitespace normalization. "Hello" only matches
+  "Hello", not "Hello world".
+- `wasTruncated == true` (long body, only the prefix is known) → fallback prefix
+  match (with the ambiguity inherent to the SMS-based Tapback protocol, which has no
+  solution that does not break iMessage/Google Messages compatibility).
 
-**B4 — Dialog confirm réaction réouvrait malgré "Ne plus demander".** Race
-sub-100 ms entre `settings.update { reactionConfirmDismissed = true }` (write
-DataStore async) et la prochaine lecture de `cachedSettings.value.sending`
-(StateFlow Eagerly avec délai de propagation). Si l'utilisateur réagissait deux
-fois en rapide succession, la 2e lecture trouvait encore l'ancienne valeur
-`false`, ré-ouvrait le dialog. Fix : lecture **fraîche** via `settings.flow.first()`
-UNIQUEMENT sur ce site (lecture après write potentiel). Les 4 autres sites
-PERF-01 (envoi SMS/MMS hot path) restent en lecture `cachedSettings.value` car
-ils n'ont pas de write précédent à attendre.
+**B4 — Reaction confirm dialog reopened despite "Don't ask again".** Sub-100 ms
+race between `settings.update { reactionConfirmDismissed = true }` (async DataStore
+write) and the next read of `cachedSettings.value.sending`
+(Eagerly StateFlow with a propagation delay). If the user reacted twice
+in quick succession, the 2nd read still found the old value
+`false` and reopened the dialog. Fix: **fresh** read via `settings.flow.first()`
+ONLY at this site (read after a potential write). The 4 other
+PERF-01 sites (SMS/MMS send hot path) keep reading `cachedSettings.value` because
+they have no prior write to wait for.
 
-**B5 — Label "Format compact (emoji seul)" trompeur.** L'option contrôle en
-réalité le format wire des réactions (Tapback verbeux qui permet le fold côté
-destinataire, vs emoji nu qui force le destinataire à voir un SMS texte sans
-contexte). Les utilisateurs activaient l'option pensant "compact = mieux", et se
-retrouvaient avec les badges qui n'apparaissaient plus chez le destinataire.
-Label renommé en **"Envoyer l'emoji nu (sans contexte)"** + description
-réécrite pour expliciter le trade-off OFF (recommandé, badge sur message) vs
-ON (SMS texte, perd la fusion).
+**B5 — Misleading "Compact format (emoji only)" label.** The option actually
+controls the wire format of reactions (verbose Tapback, which enables the fold on the
+recipient side, vs bare emoji, which forces the recipient to see a text SMS with no
+context). Users turned the option on thinking "compact = better", and ended up
+with badges that no longer appeared on the recipient's side.
+Label renamed to **"Send the bare emoji (no context)"** + description
+rewritten to spell out the trade-off OFF (recommended, badge on the message) vs
+ON (text SMS, loses the merge).
 
-Aucune surface sécurité changée. Le fold Tapback est strictement local au
-receveur ; il ne crée pas de nouvelle entrée sensible. Le matcher exact
-(B3) ne diminue pas la sécurité — il améliore juste la précision de
-l'association message↔réaction.
+No security surface changed. The Tapback fold is strictly local to the
+receiver; it creates no new sensitive entry. The exact matcher
+(B3) does not lower security — it only improves the precision of
+the message↔reaction association.
 
 ### v1.6.1 — Reaction notif fix + deep audit hardening (30 fixes)
 
@@ -1332,94 +1401,94 @@ iMessage / Google Messages Tapback.
 **2. Post-release deep audit — 30 fixes landed across 3 axes** (score 84/83/88 → 96+).
 
 *Security (7)*
-- **SEC-01** : `MessagingStyle.Message(visiblePreview)` au lieu de `body` brut. Avant,
-  certains OEMs (Xiaomi MIUI/HyperOS, Samsung One UI < 5) ignoraient
-  `VISIBILITY_SECRET` pour `MessagingStyle` et fuitaient le contenu en lockscreen.
-- **SEC-05** : `addrSuffixes` (PII suffixes téléphoniques 8 chiffres, quasi-identifiants
-  RGPD) retirés des logs Timber dans `BlockedNumbersImporter`.
-- **SEC-06** : URL MMSC complète (potentiels tokens session opérateur dans path/query)
-  retirée du log debug dans `MmsWapPushReceiver`.
-- **SEC-07** : `applied.targetBody` désormais passé par `stripInvisibleChars()` dans
-  `SmsDeliverReceiver` avant injection dans la notif réaction (anti BiDi/RLO sur body
-  OUTGOING qui n'était pas stripé à l'écriture).
-- **SEC-08** : sender + caption + subject MMS passés par `stripInvisibleChars()` dans
-  `MmsDownloadedReceiver` (parité avec le path SMS, defense in depth).
-- **SEC-09** : `Attachment.toShareableUri` ajoute `canonicalFile` + whitelist
-  `[filesDir, cacheDir]` avant FileProvider (defense in depth path traversal).
-- **SEC-11** : `AndroidManifest.xml` clarifié sur la protection réelle des actions
-  `BOOT_COMPLETED` / `LOCKED_BOOT_COMPLETED` / `USER_UNLOCKED` (protected broadcasts
-  AOSP, pas la permission `RECEIVE_BOOT_COMPLETED` qui est "normal").
+- **SEC-01**: `MessagingStyle.Message(visiblePreview)` instead of the raw `body`. Previously,
+  some OEMs (Xiaomi MIUI/HyperOS, Samsung One UI < 5) ignored
+  `VISIBILITY_SECRET` for `MessagingStyle` and leaked the content on the lockscreen.
+- **SEC-05**: `addrSuffixes` (PII: 8-digit phone number suffixes, GDPR
+  quasi-identifiers) removed from the Timber logs in `BlockedNumbersImporter`.
+- **SEC-06**: full MMSC URL (potential carrier session tokens in path/query)
+  removed from the debug log in `MmsWapPushReceiver`.
+- **SEC-07**: `applied.targetBody` now passed through `stripInvisibleChars()` in
+  `SmsDeliverReceiver` before injection into the reaction notification (anti BiDi/RLO on
+  OUTGOING bodies, which were not stripped at write time).
+- **SEC-08**: MMS sender + caption + subject passed through `stripInvisibleChars()` in
+  `MmsDownloadedReceiver` (parity with the SMS path, defense in depth).
+- **SEC-09**: `Attachment.toShareableUri` adds `canonicalFile` + a
+  `[filesDir, cacheDir]` whitelist before FileProvider (defense in depth against path traversal).
+- **SEC-11**: `AndroidManifest.xml` clarified on the actual protection of the
+  `BOOT_COMPLETED` / `LOCKED_BOOT_COMPLETED` / `USER_UNLOCKED` actions (AOSP protected
+  broadcasts, not the `RECEIVE_BOOT_COMPLETED` permission, which is "normal").
 
 *Performance (8)*
-- **PERF-01 (HIGH)** : `cachedSettings: StateFlow<AppSettings>` dans `ThreadViewModel`
-  remplace 5 `settings.flow.first()` sur le chemin send (économie ~25-50 ms de
-  latence cumulée sur clavier rapide). Idem **PERF-08** dans `TelephonySyncWorker`
-  (snapshot unique) et **PERF-11** dans `IncomingMessageNotifier` (lecture
-  synchrone via `SettingsRepository.state` hydraté Eagerly au boot).
-- **PERF-02** : `distinctUntilChanged` sur le flux de lookup contact dans
-  `ThreadViewModel` (la query ContentProvider ne se redéclenche plus sur chaque
-  frappe clavier).
-- **PERF-03** : `remember(conversation.lastMessageAt)` autour de `relativeRowLabel`
-  dans `ConversationRow` (~100 allocations Calendar évitées par recomposition de
-  liste).
-- **PERF-04** : pré-calcul `daySeparatorLabels: List<String?>` dans `ThreadScreen`
-  via `remember(state.messages, todayLabel, yesterdayLabel)` (était ~600 allocations
-  Calendar par rendu initial sur thread de 200 msgs).
-- **PERF-05** : `appLock.state` isolé du combine principal dans
-  `ConversationRepositoryImpl.observeMessages` (un déverrouillage ne déclenche plus
-  un rebuild attachments).
-- **PERF-06** : `debounce(200 ms)` sur la query recherche dans `ConversationsViewModel`
-  (une seule recomposition LazyColumn par stabilisation au lieu d'une par frappe).
-- **PERF-07** : `ContactsReader` passe de `ConcurrentHashMap` non-borné à
-  `LruCache(500)` + `LruCache(1000)` (anti leak mémoire progressif sur SMS spam
-  / 2FA / livraisons).
+- **PERF-01 (HIGH)**: `cachedSettings: StateFlow<AppSettings>` in `ThreadViewModel`
+  replaces 5 `settings.flow.first()` calls on the send path (saves ~25-50 ms of
+  cumulative latency on fast typing). Same for **PERF-08** in `TelephonySyncWorker`
+  (single snapshot) and **PERF-11** in `IncomingMessageNotifier` (synchronous
+  read via `SettingsRepository.state`, hydrated Eagerly at boot).
+- **PERF-02**: `distinctUntilChanged` on the contact lookup flow in
+  `ThreadViewModel` (the ContentProvider query no longer re-fires on every
+  keystroke).
+- **PERF-03**: `remember(conversation.lastMessageAt)` around `relativeRowLabel`
+  in `ConversationRow` (~100 Calendar allocations avoided per list
+  recomposition).
+- **PERF-04**: precomputed `daySeparatorLabels: List<String?>` in `ThreadScreen`
+  via `remember(state.messages, todayLabel, yesterdayLabel)` (was ~600 Calendar
+  allocations per initial render on a 200-message thread).
+- **PERF-05**: `appLock.state` isolated from the main combine in
+  `ConversationRepositoryImpl.observeMessages` (an unlock no longer triggers
+  an attachments rebuild).
+- **PERF-06**: `debounce(200 ms)` on the search query in `ConversationsViewModel`
+  (a single LazyColumn recomposition per stabilization instead of one per keystroke).
+- **PERF-07**: `ContactsReader` moves from an unbounded `ConcurrentHashMap` to
+  `LruCache(500)` + `LruCache(1000)` (prevents a progressive memory leak on spam SMS
+  / 2FA / delivery messages).
 
 *Quality (15)*
-- **QUAL-01 + QUAL-16** : `SAFETY_NET_DAYS`, `MS_PER_DAY`, `purgeCutoffMs(days, now)`
-  centralisés dans `domain/purge/PurgePolicy.kt` (source unique de vérité — les
-  duplications dans `ConversationRepositoryImpl` et `TelephonySyncWorker` sont
-  retirées).
-- **QUAL-02** : `flowOn(io)` avant `stateIn` dans `ConversationsViewModel`
-  (`defaultAppManager.isDefault()` IPC Binder synchrone ne bloque plus le Main thread).
-- **QUAL-03** : `defaultAppManager` rendu `private` dans `ConversationsViewModel` —
-  la screen passe désormais par `buildChangeDefaultIntent()` (encapsulation ViewModel
-  respectée).
-- **QUAL-04** : `openOutputStream(uri)!!` remplacé par `?: error("...")` dans
-  `BackupService` (diagnostic explicite si URI révoqué / disque plein).
-- **QUAL-05** : `!!` redondant post smart-cast retiré dans `ContactsReader`.
-- **QUAL-06** : `conv!!.draft` remplacé par `conv?.draft.orEmpty()` dans
-  `ThreadViewModel` (invariante non-captée par le compilateur, robuste à un futur
-  refactor de `seededDraft`).
-- **QUAL-07** : `"PDF export failed"` (anglais hardcodé) remplacé par
-  `R.string.snack_pdf_export_failed` FR+EN (regression i18n corrigée).
-- **QUAL-10** : `SmsDeliverReceiver` passe par `ConversationRepository.findMessageById`
-  au lieu d'accéder directement à `MessageDao` (pattern Repository respecté).
-- **QUAL-11** : `VoicePlaybackController` reçoit `@MainDispatcher` injecté au lieu
-  du `Dispatchers.Main.immediate` hardcodé (testabilité).
-- **QUAL-13** : `splitGraphemeClusters` déplacé de `ui.components` vers
-  `core/ext/StringExt.kt` (extension String utilitaire, ne doit pas vivre dans un
-  module UI).
-- **QUAL-14** : `SortMode.DATE` ne trie plus par `pinned` en premier (était
-  indistinguable de `SortMode.PINNED_FIRST`).
-- **QUAL-15** : KDoc drift `v1.3.11` → `v1.4.0 (F5 forward feature)` dans
-  `ThreadViewModel` et `AppRoot`.
-- **QUAL-17** : `@androidx.compose.runtime.Stable` sur les 5 `UiState` data classes
+- **QUAL-01 + QUAL-16**: `SAFETY_NET_DAYS`, `MS_PER_DAY`, `purgeCutoffMs(days, now)`
+  centralized in `domain/purge/PurgePolicy.kt` (single source of truth — the
+  duplicates in `ConversationRepositoryImpl` and `TelephonySyncWorker` are
+  removed).
+- **QUAL-02**: `flowOn(io)` before `stateIn` in `ConversationsViewModel`
+  (the synchronous Binder IPC `defaultAppManager.isDefault()` no longer blocks the Main thread).
+- **QUAL-03**: `defaultAppManager` made `private` in `ConversationsViewModel` —
+  the screen now goes through `buildChangeDefaultIntent()` (ViewModel encapsulation
+  respected).
+- **QUAL-04**: `openOutputStream(uri)!!` replaced by `?: error("...")` in
+  `BackupService` (explicit diagnostic if the URI is revoked / the disk is full).
+- **QUAL-05**: redundant `!!` after a smart cast removed in `ContactsReader`.
+- **QUAL-06**: `conv!!.draft` replaced by `conv?.draft.orEmpty()` in
+  `ThreadViewModel` (an invariant not captured by the compiler; robust to a future
+  refactor of `seededDraft`).
+- **QUAL-07**: `"PDF export failed"` (hardcoded English) replaced by
+  `R.string.snack_pdf_export_failed` FR+EN (i18n regression fixed).
+- **QUAL-10**: `SmsDeliverReceiver` goes through `ConversationRepository.findMessageById`
+  instead of accessing `MessageDao` directly (Repository pattern respected).
+- **QUAL-11**: `VoicePlaybackController` receives an injected `@MainDispatcher` instead
+  of the hardcoded `Dispatchers.Main.immediate` (testability).
+- **QUAL-13**: `splitGraphemeClusters` moved from `ui.components` to
+  `core/ext/StringExt.kt` (a utility String extension, which must not live in a
+  UI module).
+- **QUAL-14**: `SortMode.DATE` no longer sorts by `pinned` first (it was
+  indistinguishable from `SortMode.PINNED_FIRST`).
+- **QUAL-15**: KDoc drift `v1.3.11` → `v1.4.0 (F5 forward feature)` in
+  `ThreadViewModel` and `AppRoot`.
+- **QUAL-17**: `@androidx.compose.runtime.Stable` on the 5 `UiState` data classes
   (Compose recomposition skipping).
-- **QUAL-18** : `escapeFtsQuery` extrait en fonction top-level pure dans
-  `data/repository/EscapeFtsQuery.kt` + nouveau fichier de tests
-  `EscapeFtsQueryTest.kt` (15 cas : empty, whitespace, FTS reserved chars, BiDi,
+- **QUAL-18**: `escapeFtsQuery` extracted as a pure top-level function in
+  `data/repository/EscapeFtsQuery.kt` + new test file
+  `EscapeFtsQueryTest.kt` (15 cases: empty, whitespace, FTS reserved chars, BiDi,
   zero-width, BOM, control chars, Unicode letters).
 
-**Reportés v1.6.2+** (changement de format / migration / infrastructure) : SEC-04
-(PBKDF2 salt 16→32 B casse `.smsbk`), SEC-12 (hash PendingIntent), SEC-14 (whitelist
-MMSC opérateurs), PERF-09 (Baseline Profile setup), PERF-10 (FTS4→FTS5),
-PERF-12 (WAL + page_size SQLCipher), QUAL-08/09/12 (FQN imports / Dispatchers.Default
-injectable VoiceRecorder).
+**Deferred to v1.6.2+** (format change / migration / infrastructure): SEC-04
+(PBKDF2 salt 16→32 B breaks `.smsbk`), SEC-12 (PendingIntent hash), SEC-14 (carrier
+MMSC whitelist), PERF-09 (Baseline Profile setup), PERF-10 (FTS4→FTS5),
+PERF-12 (WAL + SQLCipher page_size), QUAL-08/09/12 (FQN imports / injectable
+Dispatchers.Default in VoiceRecorder).
 
-**Tests** : 14 tests pré-existants `IncomingReactionDecoderTest` + 15 nouveaux
-`EscapeFtsQueryTest` (29 tests JUnit5 sur les 2 fichiers les plus sensibles) + suite
-complète verte. **Lint** : aucune nouvelle erreur (baseline régénéré pour 4 erreurs
-+ 177 warnings pré-existants).
+**Tests**: 14 pre-existing `IncomingReactionDecoderTest` tests + 15 new
+`EscapeFtsQueryTest` tests (29 JUnit5 tests on the 2 most sensitive files) + full
+suite green. **Lint**: no new error (baseline regenerated for 4 pre-existing errors
++ 177 pre-existing warnings).
 
 ### v1.6.0 — Post-v1.5.0 audit hardening (security / perf / a11y)
 
@@ -2018,23 +2087,23 @@ bubble, no notification" failure mode — and the fixes are layered:
   greyed out in the system file picker. The MMS size cap (~280 KB on most French
   MMSCs) still gates oversized files at send time.
 
-**KeepAliveService — opt-in foreground service ("Mode résistant")** :
+**KeepAliveService — opt-in foreground service ("Resistant mode")** :
 - For aggressive OEMs (Xiaomi/Redmi/Poco, Huawei/Honor, Oppo/Realme/OnePlus,
   Vivo/iQOO, Meizu, Asus — detected by `OemRomDetector` via `Build.MANUFACTURER`
   / `Build.BRAND`) that kill background SMS apps within minutes. Disabled by
-  default; enabled via Settings → Avancé → "Mode résistant". `START_STICKY`,
+  default; enabled via Settings → Advanced → "Resistant mode". `START_STICKY`,
   `stopWithTask="false"`, `foregroundServiceType="dataSync"`. Auto-restart at
   device boot via `BootReceiver` (reads the DataStore flag). Defensive try/catch
   covers POST_NOTIFICATIONS revocation (Android 13+) and
   `ForegroundServiceStartNotAllowedException` (Android 12+).
 
-**Limites de compatibilité documentées (HyperOS récent)** :
+**Documented compatibility limits (recent HyperOS)** :
 - **Xiaomi Poco F5 + HyperOS 2024+** : HyperOS whitelists Google Messages + Mi
   Messages at the system level and demands a Mi Account login to disable MIUI
-  Optimization — a step many users won't take. The "Mode résistant" foreground
+  Optimization — a step many users won't take. The "Resistant mode" foreground
   service mitigates background kills but does not bypass the system whitelist.
   Recommended fallback for these devices: use Google Messages. Documented in
-  the [Compatibilité](https://files-tech.com/sms-tech.php) section of the
+  the [Compatibility](https://files-tech.com/sms-tech.php) section of the
   product site.
 
 No new dependency. No schema change. No signing-key change. Same cert SHA-256
@@ -2070,7 +2139,7 @@ message had already appeared in real-time inside the open conversation.
   before building the notification, then conditionally applies
   `.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)` in the builder `.also { ... }` block.
 
-**Why this design is robust** (pre-release audit mobile-quality-auditor, niveau 2
+**Why this design is robust** (pre-release audit mobile-quality-auditor, level 2
 STRICT, verdict APPROVED) :
 - `AtomicLong` lock-free read costs ~1 ns per SMS, negligible vs the already-present
   IO suspends (`settings.flow.first()`, `contacts.lookupByPhone`).
@@ -2166,7 +2235,7 @@ no state, no network access, no persistence).
 - `RetrySendUseCase` should learn to re-dispatch MMS (voice / multi-attach) via the
   appropriate use case, not always through `SmsSender.send()` (which silently
   ignores attachments). The "tap to retry" affordance is currently dead for MMS.
-  → **v1.28.3 (audit global du 2026-09-09, B-1)** : worse than dead, it *did* something — it
+  → **v1.28.3 (global audit of 2026-09-09, B-1)** : worse than dead, it *did* something — it
   re-sent the caption as a plain SMS and the row could flip to SENT under a thumbnail that
   never left the device. `RetrySendUseCase` now refuses MMS rows with a typed
   `AppError.MmsRetryUnsupported` **before** `resetOutgoingForRetry`, and the thread shows a
@@ -2216,7 +2285,7 @@ v1.3.5 and v1.3.6 pre-release audits.
 **Cleanup release — audit backlog cleared** :
 
 - **G4 (MEDIUM)** : `MIGRATION_5_6 { DROP TABLE IF EXISTS conversation_overrides }` —
-  table morte (entity + DAO existed but zero business consumer ; verified by
+  dead table (entity + DAO existed but zero business consumer ; verified by
   transversal grep). `IF EXISTS` makes the migration idempotent. `ConversationOverride
   Entity` + DAO files deleted, removed from `AppDatabase.entities[]` + Hilt
   `DatabaseModule.@Provides`. Schema version bumped 5 → 6.
@@ -2250,8 +2319,8 @@ v1.3.5 and v1.3.6 pre-release audits.
 
 Compile clean (`assembleRelease` green). All 60+ unit tests still pass. No new
 dependency. APK size delta ≈ -10 KB (G5 strings purge minus a few bytes from the
-splash classes). Cert SHA-256 `b09a9511…687d` unchanged. Aucun changement format
-fichier / aucune destruction de données utilisateur (G4 drop empty table).
+splash classes). Cert SHA-256 `b09a9511…687d` unchanged. No file format change /
+no user data destroyed (G4 drop empty table).
 
 ### v1.3.6 — Voice MMS universal codec + reaction format toggle
 
@@ -2403,7 +2472,7 @@ Three independent agents reviewed the v1.1.x → v1.2.0 delta along three axes :
 Full audit reports archived as comments inside the code (search "Audit P0-1", "Audit P1-5"
 etc. for the inline justification of each fix).
 
-### v1.1.x — Vagues 1–3 (audit interne)
+### v1.1.x — Waves 1–3 (internal audit)
 
 Internal pre-release audit applied 23 corrections (F1–F14 sec, P1–P5 perf, U1–U11 UX).
 See [`CHANGELOG.md`](CHANGELOG.md#1-1-0--2026-05-14) for the exhaustive list.
