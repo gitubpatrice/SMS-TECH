@@ -1,56 +1,46 @@
-# SMS Tech &nbsp; [`github.com/gitubpatrice/sms_tech`](https://github.com/gitubpatrice/sms_tech)
+# SMS Tech
+
+English · 🇫🇷 [Version française](README.fr.md)
 
 A modern, private SMS &amp; MMS app for Android — built with Kotlin, Jetpack Compose and Material 3.
-No ads, no trackers, no analytics. Apache-2.0 licensed.
+No ads, no trackers, no analytics, **no Internet permission**. Part of the **Files Tech** suite.
+Apache-2.0 licensed.
 
-> **Status**: v1.0.0 — first public release.
+Source: [github.com/gitubpatrice/SMS-TECH](https://github.com/gitubpatrice/SMS-TECH) ·
+Website: [files-tech.com/sms-tech.php](https://files-tech.com/sms-tech.php) ·
+Releases: [GitHub Releases](https://github.com/gitubpatrice/SMS-TECH/releases/latest)
 
 ## ✨ Features
 
-- Default SMS / MMS app for Android (KitKat → Android 14+).
-- Single-Activity Compose UI, Material 3 with dynamic colors + AMOLED true-black.
-- Encrypted Room database (SQLCipher), AndroidKeyStore-wrapped master key.
-- App lock: PIN with PBKDF2-HMAC-SHA512, monotonic exponential backoff after failed attempts.
-- Optional **panic-decoy** PIN: when entered, the app opens in a session where the **vault**
-  (a UI-level folder of hidden conversations) is fully invisible — neither its top-bar entry
-  point nor its rows / messages are reachable, even via saved nav state or share-target deep
-  links. Note: the vault is currently a logical UX boundary inside the (already-encrypted by
-  SQLCipher) Room database, not a separately-keyed cryptographic envelope. A second-layer
-  vault crypto keyed by an `setUserAuthenticationRequired = true` Keystore alias is planned
-  for v1.1.1 — see `SECURITY.md` for the threat model and the explicit limit.
-- Inline reply &amp; mark-as-read actions on notifications.
-- **Voice messages** — recorded on-device with `MediaRecorder` and sent as an audio MMS (no network beyond the carrier).
-- **PDF export** of any conversation, generated locally via `PdfDocument` (no external lib).
-- Scheduled sending via `WorkManager` (exact alarms when granted).
-- Manual backup &amp; restore in `.smsbk` (AES-256-GCM + PBKDF2). Attachments are not part of the backup.
-- Migration assistant: read the system SMS provider once SMS Tech is the default app.
-- Five languages: English, French, German, Italian and Spanish — including every SMS the app
-  sends on your behalf. Pick one per app on Android 13 and later, or follow the system.
-- F-Droid friendly: no Google libraries, no proprietary blobs.
-
-## 📦 Build
-
-```bash
-./gradlew assembleDebug          # → app/build/outputs/apk/debug/*.apk
-./gradlew test detekt ktlintCheck lintDebug
-```
-
-Requires JDK 17. Min SDK 26 (Android 8.0). Compile/Target SDK 35.
-
-## 🏗️ Architecture
-
-```
-core/      Result, AppError, crypto (AES-GCM + Keystore + PBKDF2), Timber wrapper
-data/      Room (entities, DAOs, FTS4), DataStore, ContentResolver wrappers, repositories
-domain/    Immutable models, repository interfaces, UseCases
-system/    Receivers (SMS_DELIVER, WAP_PUSH, sent/delivered, boot), Services
-           (HeadlessSmsSendService), Notifications (channels, MessagingStyle, inline reply),
-           Schedulers (WorkManager)
-security/  AppLockManager, AutoLockObserver (ProcessLifecycleOwner), VaultManager, PanicService
-ui/        Theme (M3, dynamic, AMOLED), Navigation (type-safe), Screens (Compose), ViewModels
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture and the end-to-end flow of a received SMS.
+- Default SMS / MMS app for Android 8.0 and later (tested up to Android 16), with a one-time import
+  of your existing messages.
+- Single-Activity Compose UI, Material 3 with dynamic colors, AMOLED true-black and a "Dark Tech"
+  theme.
+- Encrypted Room database (SQLCipher), master key wrapped by the AndroidKeyStore.
+- App lock: PIN with PBKDF2-HMAC-SHA512 and exponential backoff after failed attempts; optional
+  biometric unlock with a mandatory fallback PIN.
+- **Vault** for sensitive conversations: hidden from the main list and opened with its own PIN,
+  passphrase or biometrics. It lives in the same SQLCipher-encrypted database, not in a separately
+  keyed envelope — see [SECURITY.md](SECURITY.md) for the threat model and its limits.
+- Optional **decoy PIN**: entering it opens the app in a session where the vault, emergency mode and
+  Safety call are invisible and unreachable.
+- **Emergency mode**: hold a button for three seconds to text your chosen contacts, with your location
+  if you allow it (precise, or approximate and marked as such), and call tiles for the emergency
+  numbers of the country your phone is registered in. **Safety call** texts the same contacts if you
+  do not open the app within a delay you set. These features help; they do not replace emergency
+  services — see the [terms of use](TERMS.md).
+- **Voice messages** recorded on the device and sent as audio MMS.
+- Named groups and group MMS, contextual replies with quotes, inline reply from notifications.
+- Offline **scam detection** (shortened links, urgency wording, premium numbers, spoofed domains), on
+  rules: it can be wrong both ways.
+- Blocking synchronized with the Phone / Samsung Messages blocklist; optional blocking of unknown
+  numbers.
+- Full-text search (FTS4), **PDF export** of a conversation, scheduled sending (WorkManager).
+- Manual backup &amp; restore in `.smsbk` (AES-256-GCM + PBKDF2). Attachments are not part of the
+  backup.
+- Five languages: English, French, German, Italian and Spanish — including every SMS the app sends
+  on your behalf. Pick one per app on Android 13 and later, or follow the system.
+- F-Droid friendly: no Google libraries, no proprietary blobs, reproducible build.
 
 ## 🔐 Privacy
 
@@ -66,6 +56,30 @@ See the [privacy policy](PRIVACY.md), the [terms of use](TERMS.md) and
 [PERMISSIONS.md](PERMISSIONS.md). Security model: [SECURITY.md](SECURITY.md)
 ([français](SECURITY.fr.md)). The privacy policy and the terms exist in English, French, German,
 Italian and Spanish; English and French are authoritative.
+
+## 📦 Build
+
+```bash
+./gradlew assembleDebug          # → app/build/outputs/apk/debug/*.apk
+./gradlew test detekt ktlintCheck lintDebug
+```
+
+Requires JDK 17. Min SDK 26 (Android 8.0), compile SDK 37, target SDK 35.
+
+## 🏗️ Architecture
+
+```
+core/      Result, AppError, crypto (AES-GCM + Keystore + PBKDF2), Timber wrapper
+data/      Room (entities, DAOs, FTS4), DataStore, ContentResolver wrappers, repositories
+domain/    Immutable models, repository interfaces, UseCases
+system/    Receivers (SMS_DELIVER, WAP_PUSH, sent/delivered, boot), Services
+           (HeadlessSmsSendService), Notifications (channels, MessagingStyle, inline reply),
+           Schedulers (WorkManager)
+security/  AppLockManager, AutoLockObserver (ProcessLifecycleOwner), VaultManager, PanicService
+ui/        Theme (M3, dynamic, AMOLED), Navigation (type-safe), Screens (Compose), ViewModels
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture and the end-to-end flow of a received SMS.
 
 ## 📃 License
 
