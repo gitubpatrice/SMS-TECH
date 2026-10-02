@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.screens.emergency
 
 import android.Manifest
+import android.content.pm.PackageManager
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,20 +43,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.emergency.EmergencyConfig
+import com.filestech.sms.domain.location.GeoLocation
+import com.filestech.sms.domain.location.lienCarte
 import com.filestech.sms.domain.usecase.TriggerEmergencyUseCase
+import com.filestech.sms.system.emergency.EmergencyCallHelper
 import com.filestech.sms.system.emergency.EmergencyNumbers
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.EmergencyHoldButton
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.showError
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.PermissionStatus
-import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.launch
 
 /**
@@ -87,27 +92,73 @@ fun EmergencyScreen(
     val safetyContacts by viewModel.safetyCallContacts.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val ctx = LocalContext.current
+    // v1.12.0 audit U2 — needed pour afficher un snackbar si aucun dialer
+    // n'est installé (ACTION_DIAL ActivityNotFoundException). Sinon le tap
+    // du bouton 112/17 reste silencieux et l'user croit que l'appel passe.
+    val scope = rememberCoroutineScope()
+    val noDialerMsg = stringResource(R.string.emergency_shortcut_no_app_to_dial)
+    val permDeniedMsg = stringResource(R.string.emergency_call_permission_denied)
+    val osErrorMsg = stringResource(R.string.emergency_call_os_error)
+
+    // v1.28.13 (balayage des permissions refusées, MR F-Droid !38458) — **une tuile d'appel
+    // aboutit TOUJOURS à un appel ou à un composeur.**
+    //
+    // Sans `CALL_PHONE`, le tap ne faisait que relancer la demande, et la réponse n'était lue par
+    // personne : refusée, la tuile 112 ne faisait RIEN ; après deux refus, Android n'affiche plus la
+    // boîte de dialogue et la tuile devenait inerte pour de bon, sans un mot. Les commentaires
+    // annonçaient pourtant un « fallback automatique au composeur » depuis la v1.14.1. La
+    // permission était en outre lue à la COMPOSITION : un accord pouvait rester sans effet tant que
+    // rien ne recomposait l'écran. Elle est désormais lue au moment du tap, et la réponse à la
+    // demande compose l'appel — ou ouvre le composeur, qui ne demande aucune permission.
+    //
+    // L'appel en attente est sauvegardé : la boîte de dialogue système peut survivre à une
+    // recréation de l'activité, et la réponse doit retrouver le numéro touché.
+    var numeroEnAttente by rememberSaveable { mutableStateOf<String?>(null) }
+    var procheEnAttente by rememberSaveable { mutableStateOf(false) }
+    fun appeler(numero: String, proche: Boolean, appelDirect: Boolean) {
+        val outcome = when {
+            appelDirect && proche -> EmergencyCallHelper.placeTrustedContactCall(ctx, numero)
+            appelDirect -> EmergencyCallHelper.placeCall(ctx, numero)
+            proche -> EmergencyCallHelper.openTrustedContactDialer(ctx, numero)
+            else -> EmergencyCallHelper.openDialer(ctx, numero)
+        }
+        handleCallOutcome(outcome, scope, snackbarHost, noDialerMsg, permDeniedMsg, osErrorMsg)
+        // Le composeur s'est ouvert À LA PLACE de l'appel direct : on dit pourquoi.
+        if (!appelDirect && outcome == EmergencyCallHelper.CallOutcome.SUCCESS) {
+            scope.launch { snackbarHost.showError(permDeniedMsg) }
+        }
+    }
     // v1.14.1 audit PERF-2 — launcher hissé au top du Composable (vs body
-    // Scaffold conditionnel) pour respecter règle position hooks. Pas de
-    // outcome handler ici — la recomposition de `callPhoneGranted` ci-dessous
-    // capture le nouveau status après autorisation/refus.
+    // Scaffold conditionnel) pour respecter règle position hooks.
     val callPhonePermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { /* outcome handled by next recomposition via checkSelfPermission */ }
+    ) { accordee ->
+        val numero = numeroEnAttente ?: return@rememberLauncherForActivityResult
+        numeroEnAttente = null
+        appeler(numero, proche = procheEnAttente, appelDirect = accordee)
+    }
+    fun appelerOuDemander(numero: String, proche: Boolean) {
+        val accordee = ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE) ==
+            PackageManager.PERMISSION_GRANTED
+        if (accordee) {
+            appeler(numero, proche, appelDirect = true)
+        } else {
+            numeroEnAttente = numero
+            procheEnAttente = proche
+            callPhonePermLauncher.launch(Manifest.permission.CALL_PHONE)
+        }
+    }
     // v1.28.12 (audit 3 axes, U1) — meme raison de hissage : un lanceur ne se declare pas dans
     // une branche. Pas de gestionnaire de resultat : [BanniereRoleSmsManquant] relit le role a
     // chaque retour au premier plan, ce qui couvre le retour du selecteur systeme.
     val lanceurRoleSms = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
     ) { }
-    // v1.12.0 audit U2 — needed pour afficher un snackbar si aucun dialer
-    // n'est installé (ACTION_DIAL ActivityNotFoundException). Sinon le tap
-    // du bouton 112/17 reste silencieux et l'user croit que l'appel passe.
-    val scope = rememberCoroutineScope()
     // v1.10.0 audit U1 — preview reflète le statut RÉEL de la permission
     // (pas juste la préférence config). Évite un faux sentiment de sécurité.
-    val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
-    val locationGranted = locationPermission.status == PermissionStatus.Granted
+    // v1.28.13 — exacte OU approximative, cf. [rememberPermissionLocalisation].
+    val localisation = rememberPermissionLocalisation()
+    val locationGranted = localisation.accordee
 
     // v1.27.2 — résolu à la composition, comme les autres messages de cet écran.
     val disableDoneMsg = stringResource(R.string.emergency_disable_done)
@@ -136,12 +187,6 @@ fun EmergencyScreen(
             }
         }
     }
-
-    // v1.14.0 audit SEC-1 — re-check CALL_PHONE permission au ON_RESUME.
-    // Retiré v1.14.1 : le `emergencyCallBehavior` setting est dead (cf. refonte
-    // EmergencyScreen full-page). Le `callPhoneGranted` ci-dessous est lu
-    // direct à chaque recomposition, ce qui couvre déjà le retour de
-    // Paramètres Android (recomposition au ON_RESUME).
 
     Scaffold(
         topBar = {
@@ -172,41 +217,13 @@ fun EmergencyScreen(
         // Ordre : (a) section Appel direct (4 tuiles + bouton proche),
         // (b) section SMS aux proches (hold-3s + preview), (c) actions
         // secondaires (Tester sans envoyer, Désactiver mode).
-        val noDialerMsg = stringResource(R.string.emergency_shortcut_no_app_to_dial)
-        val permDeniedMsg = stringResource(R.string.emergency_call_permission_denied)
-        val osErrorMsg = stringResource(R.string.emergency_call_os_error)
         val cooldownActive = state.isInAntiSpamWindow()
         val canTrigger = state.enabled && contactsCount > 0 && !cooldownActive
 
-        // v1.14.1 — détecte CALL_PHONE permission pour fallback dialer si
-        // refusée. Pas de pré-demande agressive : on demande au 1er tap.
-        // Re-évalué à chaque recomposition (post-launcher result + post-RESUME),
-        // pas mémoïsé : `checkSelfPermission` est cheap (~µs).
-        val callPhoneGranted = androidx.core.content.ContextCompat.checkSelfPermission(
-            ctx, android.Manifest.permission.CALL_PHONE,
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-        // v1.14.1 — helper pour passer un appel direct (CALL_PHONE) avec
-        // fallback automatique au composeur si permission refusée. Pour les
-        // numéros d'urgence (112/15/17/18), passe par placeCall (whitelist).
-        // Pour un proche SafetyCall, passe par placeTrustedContactCall.
-        val callEmergency: (String) -> Unit = { number ->
-            if (!callPhoneGranted) {
-                callPhonePermLauncher.launch(android.Manifest.permission.CALL_PHONE)
-            } else {
-                val outcome = com.filestech.sms.system.emergency.EmergencyCallHelper.placeCall(ctx, number)
-                handleCallOutcome(outcome, scope, snackbarHost, noDialerMsg, permDeniedMsg, osErrorMsg)
-            }
-        }
-        val callRelative: (String) -> Unit = { phone ->
-            if (!callPhoneGranted) {
-                callPhonePermLauncher.launch(android.Manifest.permission.CALL_PHONE)
-            } else {
-                val outcome = com.filestech.sms.system.emergency.EmergencyCallHelper
-                    .placeTrustedContactCall(ctx, phone)
-                handleCallOutcome(outcome, scope, snackbarHost, noDialerMsg, permDeniedMsg, osErrorMsg)
-            }
-        }
+        // Numéros d'urgence : `placeCall` / `openDialer` (liste blanche). Proche SafetyCall :
+        // `placeTrustedContactCall` / `openTrustedContactDialer`. Cf. [appelerOuDemander].
+        val callEmergency: (String) -> Unit = { number -> appelerOuDemander(number, proche = false) }
+        val callRelative: (String) -> Unit = { phone -> appelerOuDemander(phone, proche = true) }
 
         // Scroll vertical au cas où l'écran est petit (< 360dp height utile).
         Column(
@@ -322,6 +339,7 @@ fun EmergencyScreen(
             MessagePreviewCard(
                 config = state,
                 includeLocationGranted = state.includeLocation && locationGranted,
+                positionApproximative = !localisation.exacte,
             )
 
             // v1.25.5 — avertissement EXPLICITE quand la position est armée sans la permission.
@@ -344,8 +362,20 @@ fun EmergencyScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { locationPermission.launchPermissionRequest() }) {
+                OutlinedButton(onClick = localisation.demander) {
                     Text(stringResource(R.string.emergency_location_grant))
+                }
+            } else if (state.includeLocation && !localisation.exacte) {
+                // v1.28.13 — position approximative : elle part, avec sa marge, et on le dit ici.
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.emergency_location_approximate),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = localisation.demander) {
+                    Text(stringResource(R.string.emergency_location_grant_precise))
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -581,17 +611,26 @@ private fun RelativePickerDialog(
     )
 }
 
+/**
+ * Lien des aperçus : Paris, avec la marge d'une position approximative (~2 km sous Android 12+).
+ * Partagé avec les exemples de modèles de [EmergencySetupScreen] : un seul lien d'exemple.
+ */
+internal fun lienDExemple(approximative: Boolean): String =
+    GeoLocation(48.85661, 2.35222, precisionMetres = if (approximative) 2_000f else null).lienCarte()
+
 @Composable
 private fun MessagePreviewCard(
     config: EmergencyConfig,
     includeLocationGranted: Boolean,
+    positionApproximative: Boolean,
 ) {
     // v1.28.12 — MEME source que l'envoi (`TriggerEmergencyUseCase`) : un apercu qui mentirait
     // sur le contenu d'un SMS d'urgence serait la pire occurrence du motif « correctif pose sur
     // un seul des chemins jumeaux ».
+    // v1.28.13 — le lien d'exemple passe lui aussi par `lienCarte`, marge comprise.
     val textes = rememberSafetyMessageTexts()
-    val previewBody = remember(config.template, includeLocationGranted, textes) {
-        val sampleUrl = if (includeLocationGranted) "https://maps.google.com/?q=48.85661,2.35222" else null
+    val previewBody = remember(config.template, includeLocationGranted, positionApproximative, textes) {
+        val sampleUrl = if (includeLocationGranted) lienDExemple(positionApproximative) else null
         textes.emergencyBody(config.template, sampleUrl)
     }
     Card(

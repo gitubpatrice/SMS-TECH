@@ -11,6 +11,7 @@ import com.filestech.sms.core.ext.foldForSearch
 import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Contact
 import com.filestech.sms.domain.model.PhoneAddress
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -45,6 +47,8 @@ class ComposeViewModel @Inject constructor(
         val results: List<Contact> = emptyList(),
         val recipients: List<PhoneAddress> = emptyList(),
         val initialLoaded: Boolean = false,
+        /** v1.28.13 — `READ_CONTACTS` refusée : la liste est vide parce qu'on n'a pas pu la lire. */
+        val contactsRefused: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -82,8 +86,36 @@ class ComposeViewModel @Inject constructor(
         savedStateHandle.get<String>("initialAddress")?.let { addr ->
             _state.update { it.copy(recipients = listOf(PhoneAddress.of(addr))) }
         }
+        chargerContacts()
+    }
+
+    /**
+     * v1.28.13 (MR F-Droid !38458, test de by-architect sur Android 16) — **la liste se charge sans
+     * la permission Contacts, et l'écran dit pourquoi elle est vide.**
+     *
+     * `ContactsReader.listAll` lève `SecurityException` quand `READ_CONTACTS` est refusée, et rien
+     * ne la rattrapait dans `viewModelScope` : ouvrir « Nouveau message » faisait planter l'app. Le
+     * protocole de test de F-Droid refuse exprès les permissions optionnelles ; nos tests, et le
+     * premier testeur, les accordaient toutes.
+     *
+     * ⚠️ Le refus se rattrape ICI, pas dans `ContactRepositoryImpl` : `IncomingBlockPolicy` a besoin
+     * de l'exception pour distinguer « je n'ai pas pu regarder » de « expéditeur inconnu ». L'avaler
+     * dans le dépôt couperait toute réception à qui bloque les inconnus sans accorder les contacts.
+     *
+     * Rappelée par l'écran à chaque retour au premier plan tant que l'accès manque : Android tue le
+     * processus quand on RETIRE une permission, pas quand on l'accorde.
+     */
+    fun chargerContacts() {
         viewModelScope.launch {
-            _state.update { it.copy(results = contactRepo.listAll(), initialLoaded = true) }
+            val lecture = runCatchingCancellable { contactRepo.listAll() }
+            lecture.exceptionOrNull()?.let { Timber.w(it, "ComposeViewModel: contacts illisibles") }
+            _state.update {
+                it.copy(
+                    results = lecture.getOrDefault(emptyList()),
+                    initialLoaded = true,
+                    contactsRefused = lecture.exceptionOrNull() is SecurityException,
+                )
+            }
         }
     }
 

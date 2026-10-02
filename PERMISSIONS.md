@@ -15,22 +15,26 @@ permissions "just in case", and degrades gracefully if any of them is refused.
 | `READ_PHONE_STATE` / `READ_PHONE_NUMBERS`    | Detect dual-SIM and let you choose which SIM to send from.                      |
 | `POST_NOTIFICATIONS` (API 33+)               | Show new-message notifications (no notifications without your consent).         |
 | `USE_BIOMETRIC`                              | Optional biometric unlock.                                                      |
-| `INTERNET` + `ACCESS_NETWORK_STATE`          | MMS transport via your carrier MMSC, on demand. No analytics, no update check.  |
 | `FOREGROUND_SERVICE` (+ `DATA_SYNC` type)    | Long-running migration and backup jobs.                                         |
 | `FOREGROUND_SERVICE_SPECIAL_USE`             | The optional "keep alive" setting (off by default): a permanent notification that stops aggressive ROMs from killing the app. |
 | `RECEIVE_BOOT_COMPLETED`                     | Reschedule pending scheduled messages after a reboot.                           |
 | `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | Emergency mode only, and only if you turn it on and grant the permission: **one** position, read when you trigger the alert, added to the emergency SMS as a map link. No background or continuous location. Refused: the SMS leaves without coordinates. See [PRIVACY.md](PRIVACY.md). |
-| `CALL_PHONE`                                 | Emergency mode only, and only if you choose "call directly": the app itself calls 112 or 17. By default it opens the dialer instead, which needs no permission. |
+| `CALL_PHONE`                                 | Emergency mode only: requested when you first tap an emergency call tile (the numbers of the country your phone is registered in, 112 always). Granted, the app places the call itself; refused, the tile opens the dialer pre-filled, which needs no permission. The lock-screen shortcut always opens the dialer. |
 | `VIBRATE`                                    | Optional vibration on new messages.                                             |
 | `RECORD_AUDIO`                               | Record audio clips attached to outgoing MMS (mic only while the user is actively recording).|
 | `HIDE_OVERLAY_WINDOWS` (API 31+)             | Hide other apps' overlays while you type a PIN or passphrase, so a malicious window cannot harvest your keystrokes. Grants **no** access to any data — it only asks that third-party overlays be hidden above **our own** windows. Protection level `normal`: granted at install, no prompt. |
 
-Two more permissions are declared by AndroidX libraries, not by SMS Tech's own manifest: `WAKE_LOCK`
-(WorkManager, to finish a background job) and `USE_FINGERPRINT` (the Biometric library, for
-Android 8). Both are install-time permissions that give access to no data.
+Three more permissions are declared by AndroidX libraries, not by SMS Tech's own manifest: `WAKE_LOCK`
+(WorkManager, to finish a background job), `ACCESS_NETWORK_STATE` (WorkManager, which can read
+whether a connection exists; it opens none) and `USE_FINGERPRINT` (the Biometric library, for
+Android 8). All are install-time permissions that give access to no data.
 
 ## What we do **not** request
 
+- **No `INTERNET`** (since 1.28.13). The app process cannot open a network connection at all. MMS
+  still work: Android's own MMS service, in its own process, talks to your carrier's MMSC when SMS
+  Tech asks it to send or download one. A CI check fails the build if `INTERNET` ever reaches the
+  merged manifest (`.github/scripts/permissions-manifeste.py`).
 - No background location, no camera, no Bluetooth, no nearby devices, no usage stats.
 - No `QUERY_ALL_PACKAGES` (we use targeted `<queries>` blocks only).
 - No Play Services dependency.

@@ -12,8 +12,8 @@ package com.filestech.sms.domain.location
 interface LocationProvider {
 
     /**
-     * Renvoie la position courante, ou `null` si indisponible (permission `ACCESS_FINE_LOCATION`
-     * refusée, aucun provider activé, ou aucun fix dans le délai).
+     * Renvoie la position courante, ou `null` si indisponible (aucune permission de localisation,
+     * ni exacte ni approximative ; aucun provider activé ; ou aucun fix dans le délai).
      */
     suspend fun resolveLocation(): GeoLocation?
 }

@@ -1,6 +1,13 @@
 # Privacy Policy — SMS Tech
 
-_Last updated: 2026-09-26._
+_Last updated: 2 October 2026_ · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
+
+> **Reference versions.** The English and [French](PRIVACY.fr.md) versions of this policy are both
+> authoritative. The German, Italian and Spanish translations are provided for information; in case
+> of discrepancy, the English and French versions prevail.
+
+SMS Tech (`com.filestech.sms`) is part of the **Files Tech** suite, published by **Patrice
+Haltaya**. See also the [terms of use](TERMS.md).
 
 ## What we collect
 
@@ -11,7 +18,7 @@ fingerprinting library. The binary contains no third-party tracking code.
 
 ## What stays on your device
 
-- SMS &amp; MMS messages, stored in an encrypted Room database (SQLCipher) protected by a key wrapped
+- SMS & MMS messages, stored in an encrypted Room database (SQLCipher) protected by a key wrapped
   by the AndroidKeyStore.
 - Conversation metadata (drafts, pinning, archiving, vault flag, per-conversation overrides).
 - Settings, in Android DataStore Preferences.
@@ -21,14 +28,18 @@ fingerprinting library. The binary contains no third-party tracking code.
 - If you set them up, your emergency contacts and the settings of the emergency mode and of Safety
   call.
 
+Like any default SMS app, SMS Tech also writes your messages to Android's own message store, which
+keeps them independently of the app.
+
 The Android system backup is **disabled** so this data does not get synced to Google Drive or to a
 device transfer without your explicit consent.
 
 ## Network use
 
-SMS Tech makes no network call by default. The `INTERNET` permission is declared exclusively for
-MMS transport via your carrier's MMSC, and is only used when the user actually sends or receives an
-MMS. No update check, no remote configuration, no analytics ping.
+SMS Tech makes no network call. Since 1.28.13 it does not even hold the `INTERNET` permission, so
+its process cannot open a network connection. MMS are carried by Android's own MMS service, which
+talks to your carrier's MMSC when you send or receive one. No update check, no remote configuration,
+no analytics ping.
 
 The messages you send travel through your carrier's network, as with any SMS app. The developer
 never receives them.
@@ -36,17 +47,23 @@ never receives them.
 ## Emergency features (off until you turn them on)
 
 - **Emergency mode.** When you hold the emergency button for three seconds, SMS Tech sends an SMS
-  to the emergency contacts **you** chose. If you granted the location permission and left
-  "include my location" on (it is on by default in this mode), the app asks Android for **one**
-  position at that moment, or reuses one less than five minutes old — no background or continuous
-  tracking — and adds it to the SMS as a `https://maps.google.com/?q=…` link. If a contact opens that link, their
-  browser contacts Google Maps; the app itself sends nothing to Google. If location is refused or
-  unavailable, the SMS says so and leaves without coordinates.
+  to the emergency contacts **you** chose. If you granted the location permission, precise or
+  approximate, and left "include my location" on (it is on by default in this mode), the app asks
+  Android for **one** position at that moment: it reuses a position less than five minutes old if
+  Android has one, otherwise it waits at most eight seconds for a new fix, and failing that reuses
+  the last known position if it is less than thirty minutes old. No background or continuous
+  tracking. The position is added to the SMS as a `https://maps.google.com/?q=…` link; when it is
+  only approximate, Android shifts it by about two kilometres and the SMS says so with "(+/-N km)"
+  after the link. If a contact opens that link, their browser contacts Google Maps; the app itself
+  sends nothing to Google. If location is refused or unavailable, the SMS says so and leaves without
+  coordinates.
 - **Safety call.** If you do not use the app before the delay you set, SMS Tech sends a check-in
   SMS to the same contacts. It carries no location.
-- **Emergency call.** By default, the emergency button opens the phone dialer pre-filled. Only if
-  you choose "call directly" in the settings does the app place the call itself (112 or 17), which
-  is what the `CALL_PHONE` permission is for.
+- **Emergency call.** The call tiles of the Emergency screen offer the emergency numbers of the
+  country where your phone is registered on the network (112 is always there). When you tap one,
+  the app asks for the call permission (`CALL_PHONE`) and, if you grant it, places the call itself;
+  if you refuse, it opens the phone dialer pre-filled, which needs no permission. The lock-screen
+  shortcut always opens the dialer.
 - None of these run in the decoy session opened by the panic code.
 - These messages are ordinary SMS: your carrier may charge them according to your plan.
 
@@ -58,82 +75,10 @@ See [PERMISSIONS.md](PERMISSIONS.md) for the justification of every permission u
 
 Since no personal data leaves your device, there is nothing for you to access, rectify, transfer or
 delete from any remote system. To remove data from SMS Tech, either uninstall the app (Android
-wipes the data automatically) or use **Settings → Delete all my data** which performs a panic-wipe
-of the encrypted database, Keystore aliases, cached attachments and PDF exports.
+wipes its data automatically) or use **Settings → Delete all my data** which performs a panic-wipe
+of the encrypted database, Keystore aliases, cached attachments and PDF exports. Messages kept by
+Android's own message store are managed from Android or from any SMS app.
 
 ## Contact
 
-For any privacy-related question: `contact@files-tech.com`.
-
----
-
-# Politique de confidentialité — SMS Tech
-
-_Dernière mise à jour : 26 septembre 2026._
-
-## Ce que nous collectons
-
-**Rien.** SMS Tech ne collecte, ne transmet ni n'agrège aucune donnée personnelle.
-
-Aucun SDK d'analytique, aucun rapporteur de crash, aucun endpoint de télémétrie, aucun identifiant
-publicitaire, aucune bibliothèque de fingerprinting. Le binaire ne contient aucun code de pistage
-tiers.
-
-## Ce qui reste sur votre appareil
-
-- Vos SMS et MMS, dans une base Room chiffrée (SQLCipher) protégée par une clé enrobée par
-  l'AndroidKeyStore.
-- Les métadonnées de conversation (brouillons, épinglage, archivage, coffre-fort, préférences par
-  conversation).
-- Les réglages, dans Android DataStore Preferences.
-- Un hash salé PBKDF2-HMAC-SHA512 de votre code PIN (le PIN n'est jamais stocké en clair).
-- Les pièces jointes MMS éventuelles, dans `<files>/mms_attachments/`.
-- Les éventuels PDF de conversation générés localement, dans `<files>/exports/`.
-- Si vous les configurez, vos contacts d'urgence et les réglages du mode urgence et du Safety call.
-
-La sauvegarde Android système est **désactivée** : ces données ne partent ni sur Google Drive ni
-lors d'un transfert d'appareil sans votre accord explicite.
-
-## Réseau
-
-SMS Tech n'émet aucune requête réseau par défaut. La permission `INTERNET` n'est déclarée que pour
-le transport MMS via le MMSC de votre opérateur, et n'est utilisée qu'au moment de l'envoi ou de la
-réception effective d'un MMS. Aucune vérification de mise à jour, aucune configuration distante,
-aucun ping analytique.
-
-Les messages que vous envoyez passent par le réseau de votre opérateur, comme avec toute application
-de SMS. Le développeur ne les reçoit jamais.
-
-## Fonctions d'urgence (inactives tant que vous ne les activez pas)
-
-- **Mode urgence.** Quand vous maintenez le bouton d'urgence trois secondes, SMS Tech envoie un SMS
-  aux contacts d'urgence que **vous** avez choisis. Si vous avez accordé la permission de
-  localisation et laissé « inclure ma position » (activé par défaut dans ce mode), l'application
-  demande à Android **une** position à cet instant, ou en reprend une datant de moins de cinq
-  minutes — aucun suivi en arrière-plan ni continu — et l'ajoute au SMS sous forme de lien
-  `https://maps.google.com/?q=…`. Si un contact
-  ouvre ce lien, c'est son navigateur qui contacte Google Maps ; l'application, elle, n'envoie rien
-  à Google. Si la position est refusée ou indisponible, le SMS le dit et part sans coordonnées.
-- **Safety call.** Si vous n'utilisez pas l'application avant le délai que vous avez fixé, SMS Tech
-  envoie un SMS de vérification aux mêmes contacts. Il ne contient aucune position.
-- **Appel d'urgence.** Par défaut, le bouton d'urgence ouvre le composeur pré-rempli. C'est
-  seulement si vous choisissez « appeler directement » dans les réglages que l'application passe
-  l'appel elle-même (112 ou 17) : c'est l'usage de la permission `CALL_PHONE`.
-- Aucune de ces fonctions ne s'exécute dans la session leurre ouverte par le code panique.
-- Ces messages sont des SMS ordinaires : votre opérateur peut les facturer selon votre forfait.
-
-## Permissions
-
-Voir [PERMISSIONS.md](PERMISSIONS.md) pour la justification de chaque permission.
-
-## Vos droits
-
-Aucune donnée personnelle ne quittant votre appareil, il n'y a rien à consulter, rectifier ou
-supprimer auprès d'un système distant. Pour effacer vos données dans SMS Tech : désinstallez
-l'application (Android purge les données automatiquement) ou utilisez **Réglages → Supprimer
-toutes mes données**, qui efface la base chiffrée, les alias Keystore, les pièces jointes en
-cache et les PDF exportés.
-
-## Contact
-
-Pour toute question : `contact@files-tech.com`.
+For any privacy-related question: **contact@files-tech.com**.

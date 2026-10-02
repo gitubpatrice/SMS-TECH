@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.PersonOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -31,17 +32,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
+import com.filestech.sms.system.settings.ouvrirLaFicheDeLApplication
 import com.filestech.sms.ui.components.Avatar
 import com.filestech.sms.ui.components.ContactIntents
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
@@ -69,6 +76,17 @@ fun ComposeScreen(
                 is ComposeViewModel.Event.ConversationCreated -> onConversationCreated(e.id)
             }
         }
+    }
+    // v1.28.13 — relit les contacts au retour au premier plan tant que l'accès manque : on revient
+    // le plus souvent de la fiche Android où l'on vient de l'accorder.
+    val cycleDeVie = LocalLifecycleOwner.current.lifecycle
+    val accesRefuse by rememberUpdatedState(state.contactsRefused)
+    DisposableEffect(cycleDeVie) {
+        val observateur = LifecycleEventObserver { _, evenement ->
+            if (evenement == Lifecycle.Event.ON_RESUME && accesRefuse) viewModel.chargerContacts()
+        }
+        cycleDeVie.addObserver(observateur)
+        onDispose { cycleDeVie.removeObserver(observateur) }
     }
 
     Scaffold(
@@ -158,6 +176,24 @@ fun ComposeScreen(
                             },
                     )
                     HorizontalDivider()
+                }
+                // v1.28.13 (MR F-Droid !38458) — sans `READ_CONTACTS`, la liste est vide parce
+                // qu'on n'a pas pu la lire, pas parce qu'il n'y a personne : l'écran le dit, et
+                // mène à la fiche Android de l'application. La fiche plutôt que la boîte de
+                // dialogue système : après deux refus, Android ne l'affiche plus, et la ligne ne
+                // ferait alors RIEN. La liste est relue au retour, cf. l'observateur ci-dessus.
+                if (state.contactsRefused) {
+                    item(key = "contacts-refused") {
+                        ListItem(
+                            headlineContent = { Text(stringResource(R.string.compose_contacts_refused_title)) },
+                            supportingContent = { Text(stringResource(R.string.compose_contacts_refused_desc)) },
+                            leadingContent = { Icon(Icons.Outlined.PersonOff, contentDescription = null) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { ouvrirLaFicheDeLApplication(context) },
+                        )
+                        HorizontalDivider()
+                    }
                 }
                 // Free-entry row: lets the user pick a raw number (or anything they typed) when
                 // it doesn't match any saved contact. Audit Q-BUG-1: previously the modifier ran

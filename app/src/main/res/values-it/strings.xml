@@ -181,6 +181,8 @@
     <string name="compose_search_contact">Cerchi un contatto o un numero di telefono</string>
     <string name="compose_use_this_number">Usa questo numero</string>
     <string name="compose_add_to_group">Aggiungi al gruppo</string>
+    <string name="compose_contacts_refused_title">Nessun accesso ai contatti</string>
+    <string name="compose_contacts_refused_desc">Digiti un numero qui sopra oppure tocchi qui per consentire l\'accesso ai contatti nelle impostazioni dell\'app.</string>
 
     <!-- Blocked numbers -->
     <string name="blocked_title">Numeri bloccati</string>
@@ -667,6 +669,11 @@
     <string name="settings_notif_style_silent_hint">Instradate su un canale a bassa importanza. Il sistema toglie il suono e la comparsa in primo piano.</string>
     <string name="settings_notif_open_system">Apri le impostazioni di notifica del sistema</string>
     <string name="settings_notif_open_system_desc">Verifichi o corregga autorizzazioni, canali e suono a livello di sistema.</string>
+    <string name="notifications_off_title">Notifiche disattivate</string>
+    <string name="notifications_off_fix">Consenti nelle impostazioni Android</string>
+    <string name="notifications_off_safety_call">Il Safety call non potrà avvisarla prima di inviare l\'allerta, né permetterle di fermarlo da una notifica.</string>
+    <string name="notifications_off_emergency_shortcut">La scorciatoia di emergenza non può comparire sulla schermata di blocco.</string>
+    <string name="notifications_off_messages">I nuovi messaggi arrivano senza notifica.</string>
 
     <string name="settings_section_security">Sicurezza e privacy</string>
     <string name="settings_flag_secure">Nascondi l\'anteprima nelle app recenti</string>
@@ -677,6 +684,8 @@
 
     <string name="settings_section_blocking">Blocco</string>
     <string name="settings_block_unknown">Blocca i numeri sconosciuti</string>
+    <string name="settings_block_unknown_no_contacts">Senza accesso ai suoi contatti, i numeri sconosciuti non vengono bloccati. Il suo elenco di numeri bloccati resta attivo. Consenta i Contatti nelle impostazioni di Android.</string>
+    <string name="attach_contact_needs_permission">Per allegare una scheda contatto serve l\'accesso ai Suoi contatti. Consenta i Contatti nelle impostazioni di Android.</string>
     <string name="settings_manage_blocked">Gestisci l\'elenco dei bloccati</string>
 
     <string name="settings_section_backup">Backup</string>
@@ -723,9 +732,10 @@
     <string name="about_perm_phone_state">Supporto multi-SIM (invio dalla SIM giusta).</string>
     <string name="about_perm_notifications">Mostrare le notifiche dei nuovi messaggi.</string>
     <string name="about_perm_biometric">Sblocco biometrico facoltativo.</string>
-    <string name="about_perm_internet">Trasporto degli MMS tramite l\'MMSC del suo operatore. Nessuna analisi.</string>
     <string name="about_perm_record_audio">Registrare messaggi audio allegati agli MMS in uscita.</string>
     <string name="about_perm_foreground_service">Migrazione o backup di lunga durata.</string>
+    <string name="about_perm_location">Solo modalità emergenza, se la attiva: una posizione al momento dell\'allerta, precisa o approssimativa.</string>
+    <string name="about_perm_call_phone">Riquadri di chiamata d\'emergenza: chiamata diretta. Se negata, aprono l\'app Telefono.</string>
     <string name="about_permissions_title">Autorizzazioni che usiamo</string>
     <string name="about_security_title">Sicurezza e limiti</string>
     <string name="about_security_body">SMS e MMS viaggiano in chiaro sulla rete dell\'operatore: è un limite del protocollo, non una scelta. SMS Tech protegge soltanto ciò che è conservato sul suo dispositivo. Per una messaggistica cifrata da un capo all\'altro, usi Signal o Matrix.</string>
@@ -736,6 +746,7 @@
     <string name="about_website">Sito web</string>
     <string name="about_license">Licenza</string>
     <string name="about_privacy">Informativa sulla privacy</string>
+    <string name="about_terms">Condizioni d\'uso</string>
 
     <!-- Notification channels -->
     <string name="channel_incoming_label">Messaggi in arrivo</string>
@@ -891,7 +902,7 @@
     <string name="about_feat_ui_label">Interfaccia fluida</string>
     <string name="about_feat_ui_desc">Compose + ricomposizione isolata per ogni bolla. Ordinamento delle conversazioni nel menu a tre punti.</string>
     <string name="about_feat_noads_label">Zero pubblicità, zero tracker</string>
-    <string name="about_feat_noads_desc">Nessuna analisi. Unica connessione di rete: l\'MMSC dell\'operatore per il trasporto degli MMS.</string>
+    <string name="about_feat_noads_desc">Nessuna analisi. Nessun accesso alla rete: l\'app non ha l\'autorizzazione Internet; gli MMS li trasporta il servizio MMS di Android.</string>
 
     <!-- Help recipes (7 titles + steps) -->
     <string name="about_help_default_title">Impostare come app SMS predefinita</string>
@@ -980,6 +991,8 @@
     <string name="safety_call_setup_unsaved_title">Modifiche non salvate</string>
     <string name="safety_call_setup_unsaved_body">Aggiungere un contatto non basta: va salvato per essere conservato. Uscendo adesso andrebbe perso.</string>
     <string name="emergency_location_grant">Consenti la posizione</string>
+    <string name="emergency_location_approximate">Posizione approssimativa: l\'SMS di emergenza indicherà una zona di circa 2 km. Consenta la posizione precisa per una maggiore accuratezza.</string>
+    <string name="emergency_location_grant_precise">Consenti la posizione precisa</string>
     <string name="settings_panic_code_desc">Un secondo PIN che apre l\'app in modalità esca: cassaforte e modalità emergenza nascoste.</string>
     <string name="settings_panic_code_set">Configurato. Tocchi per rimuoverlo.</string>
     <string name="settings_panic_code_clear_title">Rimuovere il PIN esca?</string>

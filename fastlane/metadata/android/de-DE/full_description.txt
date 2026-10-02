@@ -26,7 +26,7 @@ SMS Tech ist eine SMS-/MMS-App für Android, ohne Werbung und ohne Tracker. Sie 
 
 <ul>
 <li>Keine Analyse, keine Absturzberichte, kein Tracking-SDK eines Dritten</li>
-<li>Einzige Netznutzung: der MMSC Ihres Mobilfunkanbieters, für den MMS-Transport. Sonst verlässt nichts das Telefon</li>
+<li>Kein Netzzugriff: keine Internetberechtigung, MMS überträgt der MMS-Dienst von Android. Nur Ihre Nachrichten verlassen das Telefon</li>
 <li>Standort und Telefonanruf dienen ausschließlich dem Notfallmodus. Beide sind freiwillig, keine wird je im Hintergrund genutzt, und die App läuft auch ohne sie</li>
 <li>Apache-Lizenz 2.0 — Quellcode unter https://github.com/gitubpatrice/SMS-TECH</li>
 <li>Sicherheitsmodell dokumentiert unter https://github.com/gitubpatrice/SMS-TECH/blob/main/SECURITY.md</li>

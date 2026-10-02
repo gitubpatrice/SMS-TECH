@@ -1,0 +1,7 @@
+Correcciones de la revisión de F-Droid y de rechazar cada permiso, uno por uno.
+
+Con los Contactos denegados, abrir «Mensaje nuevo» o una conversación cerraba la app. Ahora funciona y explica por qué la lista de contactos está vacía. El micrófono ya no se pide al iniciar: el botón de voz lo pide cuando lo usa.
+
+SMS Tech ya no tiene el permiso de Internet, así que no puede acceder a la red en absoluto. Los MMS siguen funcionando: los transporta el servicio MMS de Android.
+
+Modo emergencia: sin el permiso de llamada, el botón 112 no hacía nada; ahora abre la app de teléfono. Una ubicación «aproximada» se ignoraba; ahora la alerta la incluye, marcada (+/-2 km). Cuando las notificaciones están desactivadas, las pantallas del Safety call y del acceso directo en la pantalla de bloqueo lo indican.

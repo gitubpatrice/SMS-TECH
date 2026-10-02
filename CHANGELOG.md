@@ -3,6 +3,69 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.28.13] — 2026-10-02
+
+What the F-Droid review found, and what refusing every permission one by one turned up next. A
+tester (by-architect) ran 1.28.12 on Android 16 with optional permissions refused, as the F-Droid
+test protocol does, and the app crashed; a second reviewer (mezinster) traced it to the source and
+asked whether the app needed the Internet permission at all. It did not.
+
+### Fixed
+- **With Contacts refused, the app crashed.** Opening New message read the contact list without the
+  permission, and the `SecurityException` went uncaught in `viewModelScope`. Opening any conversation
+  crashed the same way, through the contact lookup behind the "add to contacts" menu. Both now carry
+  on without contacts; New message says why the list is empty and opens the app's Android settings.
+  The refusal is deliberately caught at those two callers and **not** in the contacts repository:
+  "block unknown senders" needs it to tell "could not check" from "unknown", or it would block
+  every incoming message. A test now locks that invariant.
+- **Emergency mode: with the call permission refused, tapping 112 did nothing.** It only asked for
+  the permission again, nobody read the answer, and after two refusals Android stops asking — so the
+  tile stayed inert for good, on the screen people reach in a crisis. The permission is now read when
+  the tile is tapped, and a refusal opens the dialer, which needs no permission.
+- **An "approximate" location was ignored.** Since Android 12 the location dialog offers
+  "Approximate", which grants only `ACCESS_COARSE_LOCATION`; every check tested the precise one, so
+  the emergency SMS went out without a position although the user had agreed to share one. The GPS
+  request also threw without the precise permission, inside the same `try` as the network request,
+  which was therefore never made. An approximate position is now sent, and the SMS says so:
+  `(+/-2 km)` after the map link, in ASCII to keep the message in the GSM-7 alphabet.
+- **With notifications off, Safety call and the lock-screen shortcut failed silently.** The pre-send
+  warning, the notification that stops a sequence and the lock-screen shortcut simply did not appear,
+  while the switches said "on". Each screen now says so, checking both the app-wide switch and the
+  feature's own notification channels; Settings → Notifications also gets the warning a v1.8.0
+  comment had promised and nothing had ever displayed.
+- **After two refusals, "Allow location" did nothing** — the twin of the 112 tile, found by the
+  pre-release audit. Android stops showing the dialog and answers "refused" at once; such an instant
+  refusal now opens the app's Android settings page, where the permission can still be granted.
+- **The lock-screen shortcut did not come back** after notifications were turned on again from the
+  new banner: nothing reposted it before the next restart of the app. Returning to the app now does.
+- The notification banners read the channel each feature actually posts on: the "Silent" message
+  style has its own, and turning off only Safety call's end-of-sequence receipt no longer claims you
+  cannot be warned.
+- "Block unknown numbers" said nothing when it could not work; it now says that, without access to
+  contacts, unknown numbers are not blocked — and that your list of blocked numbers stays active.
+  Attaching a contact card without that permission gets a message naming the cause rather than
+  "could not read the attachment".
+
+### Changed
+- **The microphone is no longer requested at launch.** The voice button already asked for it when
+  pressed; asking at first start had no reason, and the tester flagged it.
+- **No more `INTERNET` permission.** The app never opened a connection: MMS go through
+  `SmsManager`, and Android's own MMS service talks to the carrier. Without the permission the app
+  process is outside the kernel's `inet` group (measured on a Galaxy S9, with Fennec as a positive
+  control), and MMS were confirmed in both directions between two phones. A CI check reads the merged
+  release manifest and fails if `INTERNET` ever comes back, and first proves it can fail. The About
+  screen and the store description no longer say "only network connection: the MMSC".
+- **Terms of use, and the privacy policy in five languages.** SMS Tech had no terms at all. They now
+  say who publishes the app, that the emergency features **do not replace emergency services**, that
+  an alert cannot be guaranteed to leave or arrive, and that French law applies without prejudice to
+  the consumer protections of your country. The privacy policy is corrected: it described a "call
+  directly" setting removed in v1.14.1 and positions "less than five minutes old" where the app
+  accepts up to thirty. English and French are both authoritative; German, Italian and Spanish are
+  translations. About links to both documents in the app's language.
+- **About: the permission list named neither location nor calls** — the two most sensitive ones.
+  They are listed now, and hidden in the decoy session, like the rest of what mentions emergency mode.
+- `SECURITY.md` is now entirely in English, with a French version in `SECURITY.fr.md`.
+
 ## [1.28.12] — 2026-09-18
 
 Three new languages, and what translating the app made visible. Walking every screen in German

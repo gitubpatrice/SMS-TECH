@@ -59,12 +59,17 @@
          révocation potentielle Android 14+. Aucun usage de AlarmManager.setExact*
          vérifié par grep avant retrait. -->
 
-    <!-- MMS HTTP only -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- v1.3.5 G3 audit fix — CHANGE_NETWORK_STATE retirée : aucun appel
-         ConnectivityManager.setMobileDataEnabled / requestNetwork* dans l'app.
-         INTERNET + ACCESS_NETWORK_STATE suffisent pour le transport MMS. -->
+    <!-- v1.28.13 (MR F-Droid !38458, relecture de mezinster) — INTERNET RETIRÉE.
+         Elle était déclarée « pour le transport MMS », mais l'application n'ouvre aucune connexion :
+         l'envoi et la réception passent par SmsManager.sendMultimediaMessage /
+         downloadMultimediaMessage, et c'est le service MMS d'Android, dans son propre processus,
+         qui parle au MMSC de l'opérateur. Aucune bibliothèque ne l'apporte (manifeste fusionné
+         vérifié). Sans elle, le processus de l'app n'est pas dans le groupe noyau `inet` et ne peut
+         créer aucun socket : « aucun accès réseau » devient vérifiable, et
+         .github/scripts/permissions-manifeste.py le garde en CI.
+         ACCESS_NETWORK_STATE reste dans l'APK, apportée par androidx.work : elle LIT l'état de la
+         connexion, elle n'en ouvre aucune. Nos propres déclarations des deux sont retirées.
+         v1.3.5 G3 — CHANGE_NETWORK_STATE déjà retirée : aucun appel ConnectivityManager. -->
 
     <!-- v1.27.1 (N3) — requise par `Window.setHideOverlayWindows()`, qui masque les
          superpositions des autres applications pendant la saisie d'un secret

@@ -505,19 +505,33 @@ class MainApplication : Application(), Configuration.Provider {
         // l'envoi SMS aux contacts urgence (qui passerait quand même la garde
         // PanicDecoy du UseCase, mais leak la *présence* du raccourci ⇒ leak
         // d'info que SMS Tech a un mode urgence configuré).
+        // v1.28.13 (audit pré-release, M1) — combiner aussi le RETOUR AU PREMIER PLAN. Sans
+        // notifications, `postShortcut` sort sans rien poster ; la bannière des Réglages envoie alors
+        // vers la page Android qui les rallume, et disparaît au retour… mais rien ne repostait le
+        // raccourci avant le prochain redémarrage du processus : l'écran verrouillé restait vide
+        // alors que plus rien ne le signalait. Chaque retour au premier plan repose désormais le
+        // raccourci (idempotent, même identifiant).
         appScope.launch {
             kotlinx.coroutines.flow.combine(
                 settingsRepository.flow
                     .map { it.security.emergencyShortcutEnabled to it.security.emergencyCallPoliceEnabled }
                     .distinctUntilChanged(),
                 appLock.state,
-            ) { (enabled, policeEnabled), lockState ->
-                Triple(enabled, policeEnabled, lockState is AppLockManager.LockState.PanicDecoy)
+                androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentStateFlow
+                    .map { it.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) }
+                    .distinctUntilChanged(),
+            ) { (enabled, policeEnabled), lockState, auPremierPlan ->
+                EtatDuRaccourci(
+                    enabled = enabled,
+                    policeEnabled = policeEnabled,
+                    isPanicDecoy = lockState is AppLockManager.LockState.PanicDecoy,
+                    auPremierPlan = auPremierPlan,
+                )
             }
                 .distinctUntilChanged()
-                .onEach { (enabled, policeEnabled, isPanicDecoy) ->
-                    if (enabled && !isPanicDecoy) {
-                        emergencyShortcutNotifier.postShortcut(policeEnabled = policeEnabled)
+                .onEach { etat ->
+                    if (etat.enabled && !etat.isPanicDecoy) {
+                        emergencyShortcutNotifier.postShortcut(policeEnabled = etat.policeEnabled)
                     } else {
                         emergencyShortcutNotifier.cancelShortcut()
                     }
@@ -526,3 +540,11 @@ class MainApplication : Application(), Configuration.Provider {
         }
     }
 }
+
+/** v1.28.13 — ce qui décide de poser ou retirer le raccourci d'urgence de l'écran verrouillé. */
+private data class EtatDuRaccourci(
+    val enabled: Boolean,
+    val policeEnabled: Boolean,
+    val isPanicDecoy: Boolean,
+    val auPremierPlan: Boolean,
+)

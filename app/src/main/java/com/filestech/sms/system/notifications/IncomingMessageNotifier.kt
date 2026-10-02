@@ -142,11 +142,8 @@ class IncomingMessageNotifier @Inject constructor(
         // rendue nulle part : le compromis était donc « documenté » dans un texte que
         // personne ne voyait. C'est `settings_notif_style_banner_hint` qui le décrit à
         // l'écran, et la chaîne orpheline a été retirée des cinq langues.
-        val channelId = when (notifSettings.style) {
-            NotificationStyle.SILENT -> NotificationChannelInitializer.CHANNEL_INCOMING_SILENT
-            NotificationStyle.HEADS_UP, NotificationStyle.BANNER ->
-                NotificationChannelInitializer.CHANNEL_INCOMING
-        }
+        // v1.28.13 — table partagée avec la bannière des Réglages, qui vérifie CE canal.
+        val channelId = canalDesMessages(notifSettings.style)
 
         // Audit F15: the legacy "WHEN_UNLOCKED" branch leaked the body in setContentText on some
         // OEMs that disregarded VISIBILITY_PRIVATE. Both WHEN_UNLOCKED and NEVER now ship a
@@ -393,34 +390,6 @@ class IncomingMessageNotifier @Inject constructor(
             val actives = nm.activeNotifications.map { it.tag to it.id }
             for ((tag, id) in notificationsToCancel(actives, messagesByConversation)) nm.cancel(tag, id)
         }.onFailure { Timber.w(it, "cancelForMessages") }
-    }
-
-    /**
-     * v1.8.0 (bug 3 fix, MEDIUM 3c) — détecte si l'utilisateur a désactivé soit
-     * les notifications de l'app au global, soit le canal `incoming_messages`
-     * spécifiquement dans les Paramètres système Android. Dans ce cas
-     * `NotificationManagerCompat.notify()` poste silencieusement sans rien
-     * afficher — confusion garantie côté utilisateur ("Tiens, je ne reçois
-     * plus de notifs alors que SMS Tech est activée…").
-     *
-     * Appelé depuis le SettingsScreen pour afficher un warning rouge + bouton
-     * deeplink vers les réglages système quand l'état est dégradé. Le check
-     * est read-only et idempotent — safe à appeler à chaque recomposition.
-     *
-     * Retourne `true` quand les notifs incoming peuvent réellement s'afficher,
-     * `false` quand elles sont muettes (app globale désactivée OU canal
-     * désactivé par l'utilisateur dans Paramètres → Apps → SMS Tech →
-     * Notifications → Messages entrants).
-     */
-    fun isIncomingChannelEffectivelyEnabled(): Boolean {
-        val nmc = NotificationManagerCompat.from(context)
-        if (!nmc.areNotificationsEnabled()) return false
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
-            as NotificationManager? ?: return true
-        val channel = nm.getNotificationChannel(NotificationChannelInitializer.CHANNEL_INCOMING)
-            ?: return true // not created yet = ensure step pending, not "disabled"
-        return channel.importance != NotificationManager.IMPORTANCE_NONE
     }
 
     /**

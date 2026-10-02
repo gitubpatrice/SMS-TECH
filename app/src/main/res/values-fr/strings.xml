@@ -174,6 +174,8 @@
     <string name="compose_search_contact">Chercher un contact ou un numéro</string>
     <string name="compose_use_this_number">Utiliser ce numéro</string>
     <string name="compose_add_to_group">Ajouter au groupe</string>
+    <string name="compose_contacts_refused_title">Pas d\'accès aux contacts</string>
+    <string name="compose_contacts_refused_desc">Saisissez un numéro ci-dessus, ou touchez ici pour autoriser les Contacts dans les Paramètres de l\'application.</string>
 
     <string name="blocked_title">Numéros bloqués</string>
     <string name="blocked_empty">Aucun numéro bloqué.</string>
@@ -657,6 +659,11 @@
     <string name="settings_notif_style_silent_hint">Routé vers un canal d\'importance faible. Le système masque le son et la pop-up.</string>
     <string name="settings_notif_open_system">Ouvrir les réglages système</string>
     <string name="settings_notif_open_system_desc">Vérifier ou corriger les permissions, canaux et son au niveau du système.</string>
+    <string name="notifications_off_title">Notifications désactivées</string>
+    <string name="notifications_off_fix">Autoriser dans les réglages Android</string>
+    <string name="notifications_off_safety_call">Le Safety call ne pourra ni vous prévenir avant d\'envoyer l\'alerte, ni vous laisser l\'arrêter depuis une notification.</string>
+    <string name="notifications_off_emergency_shortcut">Le raccourci d\'urgence ne peut pas s\'afficher sur l\'écran verrouillé.</string>
+    <string name="notifications_off_messages">Les nouveaux messages arrivent sans notification.</string>
 
     <string name="settings_section_security">Sécurité &amp; confidentialité</string>
     <string name="settings_flag_secure">Masquer l\'aperçu dans les Récents</string>
@@ -667,6 +674,8 @@
 
     <string name="settings_section_blocking">Blocage</string>
     <string name="settings_block_unknown">Bloquer les numéros inconnus</string>
+    <string name="settings_block_unknown_no_contacts">Sans accès à vos contacts, les numéros inconnus ne sont pas bloqués. Votre liste de numéros bloqués reste active. Autorisez les Contacts dans les réglages d\'Android.</string>
+    <string name="attach_contact_needs_permission">Joindre une fiche contact nécessite l\'accès à vos contacts. Autorisez les Contacts dans les réglages d\'Android.</string>
     <string name="settings_manage_blocked">Gérer la liste des bloqués</string>
 
     <string name="settings_section_backup">Sauvegarde</string>
@@ -712,9 +721,10 @@
     <string name="about_perm_phone_state">Prise en charge du double SIM (envoi depuis la bonne carte).</string>
     <string name="about_perm_notifications">Afficher les notifications de nouveaux messages.</string>
     <string name="about_perm_biometric">Déverrouillage biométrique facultatif.</string>
-    <string name="about_perm_internet">Transport des MMS via le MMSC de votre opérateur. Aucune télémétrie.</string>
     <string name="about_perm_record_audio">Enregistrer les messages vocaux joints aux MMS sortants.</string>
     <string name="about_perm_foreground_service">Migration et sauvegarde de longue durée.</string>
+    <string name="about_perm_location">Mode urgence uniquement, si vous l\'activez : une position au moment de l\'alerte, exacte ou approximative.</string>
+    <string name="about_perm_call_phone">Tuiles d\'appel d\'urgence : appel direct. Refusée, elles ouvrent le composeur.</string>
     <string name="about_permissions_title">Permissions utilisées</string>
     <string name="about_security_title">Sécurité &amp; limites</string>
     <string name="about_security_body">SMS et MMS circulent en clair sur le réseau opérateur — c\'est une limite du protocole, pas un choix. SMS Tech ne protège que ce qui est stocké sur l\'appareil. Pour du chiffrement de bout en bout, utilisez Signal ou Matrix.</string>
@@ -725,6 +735,7 @@
     <string name="about_website">Site web</string>
     <string name="about_license">Licence</string>
     <string name="about_privacy">Politique de confidentialité</string>
+    <string name="about_terms">Conditions d\'utilisation</string>
 
     <string name="channel_incoming_label">Messages entrants</string>
     <!-- v1.8.0 — canal silent pour NotificationStyle.SILENT -->
@@ -876,7 +887,7 @@
     <string name="about_feat_ui_label">UI fluide</string>
     <string name="about_feat_ui_desc">Compose + recomposition isolée par bulle. Tri des conversations dans le menu 3 points.</string>
     <string name="about_feat_noads_label">Zéro pub, zéro traceur</string>
-    <string name="about_feat_noads_desc">Aucune analytics. Seule connexion réseau : le MMSC de l\'opérateur pour le transport MMS.</string>
+    <string name="about_feat_noads_desc">Aucune analytics. Aucun accès réseau : l\'application ne détient pas la permission Internet ; les MMS sont acheminés par le service MMS d\'Android.</string>
 
     <!-- Recettes d'aide (7 titres + steps) -->
     <string name="about_help_default_title">Définir comme app SMS par défaut</string>
@@ -966,6 +977,8 @@
     <string name="safety_call_setup_unsaved_title">Modifications non enregistrées</string>
     <string name="safety_call_setup_unsaved_body">Ajouter un contact ne suffit pas : il faut enregistrer pour le conserver. Quitter maintenant le perdrait.</string>
     <string name="emergency_location_grant">Autoriser la localisation</string>
+    <string name="emergency_location_approximate">Position approximative : le SMS d\'urgence indiquera une zone d\'environ 2 km. Autorisez la position exacte pour plus de précision.</string>
+    <string name="emergency_location_grant_precise">Autoriser la position exacte</string>
     <string name="settings_panic_code_desc">Second PIN qui ouvre l\'application en mode leurre : coffre et mode urgence invisibles.</string>
     <string name="settings_panic_code_set">Configuré. Toucher pour le retirer.</string>
     <string name="settings_panic_code_clear_title">Retirer le PIN leurre ?</string>

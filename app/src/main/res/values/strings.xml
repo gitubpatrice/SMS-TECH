@@ -180,6 +180,8 @@
     <string name="compose_search_contact">Search a contact or phone number</string>
     <string name="compose_use_this_number">Use this number</string>
     <string name="compose_add_to_group">Add to the group</string>
+    <string name="compose_contacts_refused_title">No access to contacts</string>
+    <string name="compose_contacts_refused_desc">Type a number above, or tap here to allow Contacts in the app\'s Android settings.</string>
 
     <!-- Blocked numbers -->
     <string name="blocked_title">Blocked numbers</string>
@@ -662,6 +664,11 @@
     <string name="settings_notif_style_silent_hint">Routed to a low-importance channel. The system masks sound and the heads-up pop-up.</string>
     <string name="settings_notif_open_system">Open system notification settings</string>
     <string name="settings_notif_open_system_desc">Check or fix permissions, channels, and sound at the OS level.</string>
+    <string name="notifications_off_title">Notifications are off</string>
+    <string name="notifications_off_fix">Allow in Android settings</string>
+    <string name="notifications_off_safety_call">Safety call cannot warn you before it sends the alert, nor let you stop it from a notification.</string>
+    <string name="notifications_off_emergency_shortcut">The emergency shortcut cannot appear on the lock screen.</string>
+    <string name="notifications_off_messages">New messages arrive without a notification.</string>
 
     <string name="settings_section_security">Security &amp; privacy</string>
     <string name="settings_flag_secure">Hide preview in Recents</string>
@@ -672,6 +679,8 @@
 
     <string name="settings_section_blocking">Blocking</string>
     <string name="settings_block_unknown">Block unknown numbers</string>
+    <string name="settings_block_unknown_no_contacts">Without access to your contacts, unknown numbers are not blocked. Your list of blocked numbers stays active. Allow Contacts in Android settings.</string>
+    <string name="attach_contact_needs_permission">Attaching a contact card requires access to your contacts. Allow Contacts in Android settings.</string>
     <string name="settings_manage_blocked">Manage blocked list</string>
 
     <string name="settings_section_backup">Backup</string>
@@ -717,9 +726,10 @@
     <string name="about_perm_phone_state">Multi-SIM support (sending from the correct SIM).</string>
     <string name="about_perm_notifications">Show new-message notifications.</string>
     <string name="about_perm_biometric">Optional biometric unlock.</string>
-    <string name="about_perm_internet">MMS transport via your carrier MMSC. No analytics.</string>
     <string name="about_perm_record_audio">Record audio messages attached to outgoing MMS.</string>
     <string name="about_perm_foreground_service">Long-running migration / backup.</string>
+    <string name="about_perm_location">Emergency mode only, if you turn it on: one position at the moment of the alert, precise or approximate.</string>
+    <string name="about_perm_call_phone">Emergency call tiles: call directly. Refused, they open the dialer instead.</string>
     <string name="about_permissions_title">Permissions we use</string>
     <string name="about_security_title">Security &amp; limits</string>
     <string name="about_security_body">SMS and MMS travel unencrypted across the carrier network — this is a protocol limitation, not a choice. SMS Tech only protects what is stored on your device. For end-to-end encrypted messaging, use Signal or Matrix.</string>
@@ -730,6 +740,7 @@
     <string name="about_website">Website</string>
     <string name="about_license">License</string>
     <string name="about_privacy">Privacy policy</string>
+    <string name="about_terms">Terms of use</string>
 
     <!-- Notification channels -->
     <string name="channel_incoming_label">Incoming messages</string>
@@ -885,7 +896,7 @@
     <string name="about_feat_ui_label">Smooth UI</string>
     <string name="about_feat_ui_desc">Compose + per-bubble isolated recomposition. Conversation sorting in the 3-dot menu.</string>
     <string name="about_feat_noads_label">Zero ads, zero trackers</string>
-    <string name="about_feat_noads_desc">No analytics. Only network connection: the carrier MMSC for MMS transport.</string>
+    <string name="about_feat_noads_desc">No analytics. No network access: the app does not hold the Internet permission; MMS are carried by Android\'s own MMS service.</string>
 
     <!-- Help recipes (7 titles + steps) -->
     <string name="about_help_default_title">Set as default SMS app</string>
@@ -970,6 +981,8 @@
     <string name="safety_call_setup_unsaved_title">Unsaved changes</string>
     <string name="safety_call_setup_unsaved_body">Adding a contact is not enough: it must be saved to be kept. Leaving now would lose it.</string>
     <string name="emergency_location_grant">Allow location</string>
+    <string name="emergency_location_approximate">Approximate location: the emergency SMS will give an area of about 2 km. Allow precise location for an exact position.</string>
+    <string name="emergency_location_grant_precise">Allow precise location</string>
     <string name="settings_panic_code_desc">A second PIN that opens the app in decoy mode: vault and emergency mode hidden.</string>
     <string name="settings_panic_code_set">Configured. Tap to remove it.</string>
     <string name="settings_panic_code_clear_title">Remove the decoy PIN?</string>

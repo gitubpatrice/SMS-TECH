@@ -1,6 +1,5 @@
 package com.filestech.sms.ui.screens.emergency
 
-import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,10 +55,9 @@ import com.filestech.sms.domain.emergency.EmergencyTemplate
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.BanniereRoleSmsManquant
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
+import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.theme.BrandBlue
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.PermissionStatus
-import com.google.accompanist.permissions.rememberPermissionState
 
 /**
  * v1.10.0 — Écran de configuration du Mode urgence.
@@ -119,8 +117,9 @@ fun EmergencySetupScreen(
     // l'user active "Inclure la position". Sans ça, le switch ON sans
     // permission = SMS sans coordonnées en cas d'urgence (faux sentiment
     // de sécurité).
-    val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
-    val locationGranted = locationPermission.status == PermissionStatus.Granted
+    // v1.28.13 — exacte OU approximative, cf. [rememberPermissionLocalisation].
+    val localisation = rememberPermissionLocalisation()
+    val locationGranted = localisation.accordee
 
     // v1.27.2 — résolues à la composition : un `context.getString` dans le `collect` ajouterait
     // une instance de `LocalContextGetResourceValueCall` au-delà de la baseline lint.
@@ -308,9 +307,16 @@ fun EmergencySetupScreen(
                             )
                             Text(
                                 // v1.28.12 — MEME source que l'envoi, cf. rememberSafetyMessageTexts.
+                                // v1.28.13 (relecture GPT) — même LIEN aussi : absent quand la
+                                // position ne partira pas, avec sa marge quand elle est approximative.
+                                // Le lien en dur l'affichait même option coupée.
                                 text = rememberSafetyMessageTexts().emergencyBody(
                                     template,
-                                    "https://maps.google.com/?q=48.85,2.35",
+                                    if (draft.includeLocation && locationGranted) {
+                                        lienDExemple(approximative = !localisation.exacte)
+                                    } else {
+                                        null
+                                    },
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -347,7 +353,7 @@ fun EmergencySetupScreen(
                             // le warning ci-dessous s'affiche et le SMS
                             // partira sans coordonnées en cas d'urgence.
                             if (newValue && !locationGranted) {
-                                locationPermission.launchPermissionRequest()
+                                localisation.demander()
                             }
                         },
                     )
@@ -363,6 +369,17 @@ fun EmergencySetupScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
+                } else if (draft.includeLocation && !localisation.exacte) {
+                    // v1.28.13 — position approximative : accordée, envoyée avec sa marge, et dite.
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.emergency_location_approximate),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = localisation.demander) {
+                        Text(stringResource(R.string.emergency_location_grant_precise))
+                    }
                 }
             }
 

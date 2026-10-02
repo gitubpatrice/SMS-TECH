@@ -81,6 +81,17 @@ jobs:
       - name: Lint
         run: ./gradlew lintDebug --no-daemon
 
+      # v1.28.13 — SMS Tech ne détient plus INTERNET : le processus de l'app ne peut ouvrir aucune
+      # connexion, le MMS passant par le service MMS d'Android. La promesse est publique
+      # (PERMISSIONS.md, PRIVACY.md) ; c'est le manifeste fusionné RELEASE qui en décide, une
+      # dépendance pouvant y ajouter une permission. Le contrôle lit le XML, tient une liste revue,
+      # et prouve d'abord qu'il sait échouer (manifestes fautifs fabriqués).
+      - name: No INTERNET permission (merged release manifest)
+        run: |
+          python3 .github/scripts/permissions-manifeste.py --controle-negatif
+          ./gradlew :app:processReleaseMainManifest --no-daemon
+          python3 .github/scripts/permissions-manifeste.py
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
 

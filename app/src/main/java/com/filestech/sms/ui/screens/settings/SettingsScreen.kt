@@ -84,6 +84,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
+import com.filestech.sms.system.notifications.CANAL_DU_RACCOURCI_D_URGENCE
+import com.filestech.sms.system.notifications.canalDesMessages
+import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
+import com.filestech.sms.ui.components.BanniereNotificationsCoupees
+import com.filestech.sms.ui.components.rememberPermissionAccordee
+import com.filestech.sms.ui.components.rememberPermissionLocalisation
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.ProtectSecretInput
 import com.filestech.sms.ui.util.daySeparatorLabel
@@ -302,9 +308,9 @@ fun SettingsScreen(
     // refuse la permission, on REVERT `includeLocation = false` en DataStore
     // pour éviter un état sale (toggle ON mais SMS sans coords). Pattern
     // miroir de `revertCallBehaviorIfPermissionRevoked` (v1.10.0/v1.14.1).
-    val locationPermLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
+    // v1.28.13 — exacte ET approximative demandées ensemble ; l'une OU l'autre suffit, cf.
+    // [rememberPermissionLocalisation]. Un « Approximative » ne remet plus l'option à OFF.
+    val localisation = rememberPermissionLocalisation { granted ->
         if (!granted) {
             viewModel.update {
                 it.copy(security = it.security.copy(
@@ -652,9 +658,8 @@ fun SettingsScreen(
                     onUpdate = viewModel::update,
                     onOpenEmergencySetup = onOpenEmergencySetup,
                     onOpenEmergency = onOpenEmergency,
-                    onRequestLocationPermission = {
-                        locationPermLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                    },
+                    positionAccordee = localisation.accordee,
+                    onRequestLocationPermission = localisation.demander,
                 )
             }
 
@@ -662,10 +667,20 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_section_blocking),
                 icon = Icons.Outlined.Block,
             ) {
+                // v1.28.13 (balayage des permissions refusées, MR F-Droid !38458) — sans accès aux
+                // contacts, `IncomingBlockPolicy` ne peut savoir qui est inconnu et laisse TOUT
+                // passer, à dessein (bloquer sur une ignorance couperait toute réception). Mais
+                // l'interrupteur restait sur « activé » sans rien dire : on le dit sous lui.
+                val contactsAccordes = rememberPermissionAccordee(android.Manifest.permission.READ_CONTACTS)
                 ToggleRow(
                     title = stringResource(R.string.settings_block_unknown),
                     value = state.blocking.blockUnknown,
                     onChange = { v -> viewModel.update { it.copy(blocking = it.blocking.copy(blockUnknown = v)) } },
+                    description = if (state.blocking.blockUnknown && !contactsAccordes) {
+                        stringResource(R.string.settings_block_unknown_no_contacts)
+                    } else {
+                        null
+                    },
                 )
                 NavigationRow(stringResource(R.string.settings_manage_blocked), onClick = onOpenBlocked)
             }
@@ -3347,6 +3362,16 @@ private fun NotificationsSection(
             value = notifications.enabled,
             onChange = { v -> onUpdate { it.copy(notifications = it.notifications.copy(enabled = v)) } },
         )
+        // v1.28.13 — l'avertissement annoncé en v1.8.0 et jamais branché : notifications coupées
+        // par Android (permission, interrupteur de l'application ou canal des messages), alors que
+        // l'interrupteur ci-dessus dit « activées ».
+        if (notifications.enabled) {
+            BanniereNotificationsCoupees(
+                message = stringResource(R.string.notifications_off_messages),
+                modifier = Modifier.padding(vertical = 8.dp),
+                canaux = listOf(canalDesMessages(notifications.style)),
+            )
+        }
         ToggleRow(
             title = stringResource(R.string.settings_inline_reply),
             value = notifications.inlineReply,
@@ -3392,15 +3417,8 @@ private fun NotificationsSection(
         NavigationRow(
             title = stringResource(R.string.settings_notif_open_system),
             description = stringResource(R.string.settings_notif_open_system_desc),
-            onClick = {
-                val intent = android.content.Intent(
-                    android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS,
-                ).putExtra(
-                    android.provider.Settings.EXTRA_APP_PACKAGE,
-                    ctx.packageName,
-                )
-                runCatching { ctx.startActivity(intent) }
-            },
+            // v1.28.13 — même ouverture que la bannière ci-dessus, avec repli sur la fiche.
+            onClick = { ouvrirLesNotificationsDeLApplication(ctx) },
         )
     }
 }
@@ -3599,9 +3617,11 @@ private fun SecuritySection(
  *
  * Le bouton "Inclure position GPS" déclenche [onRequestLocationPermission] lors d'un toggle
  * OFF→ON sans permission accordée. La logique de revert sur refus est gérée côté parent via
- * le `locationPermLauncher` qui appelle [onUpdate] en cas de denied.
+ * `rememberPermissionLocalisation`, qui appelle [onUpdate] en cas de denied.
  *
  * Toute la section est gated par `if (!isPanicDecoy)` au call-site parent (audit SEC-1 v1.10.0).
+ *
+ * @param positionAccordee v1.28.13 — position exacte OU approximative accordée.
  */
 @Composable
 private fun EmergencySection(
@@ -3609,9 +3629,9 @@ private fun EmergencySection(
     onUpdate: (transform: (com.filestech.sms.domain.settings.AppSettings) -> com.filestech.sms.domain.settings.AppSettings) -> Unit,
     onOpenEmergencySetup: () -> Unit,
     onOpenEmergency: () -> Unit,
+    positionAccordee: Boolean,
     onRequestLocationPermission: () -> Unit,
 ) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     SectionCard(
         title = stringResource(R.string.settings_section_emergency),
         icon = Icons.Outlined.WarningAmber,
@@ -3648,6 +3668,15 @@ private fun EmergencySection(
                     }
                 },
             )
+            // v1.28.13 — le raccourci EST une notification : sans elles, l'interrupteur reste sur
+            // « activé » alors que rien n'apparaît sur l'écran verrouillé.
+            if (security.emergencyShortcutEnabled) {
+                BanniereNotificationsCoupees(
+                    message = stringResource(R.string.notifications_off_emergency_shortcut),
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    canaux = listOf(CANAL_DU_RACCOURCI_D_URGENCE),
+                )
+            }
             // v1.12.0 — Toggle de l'action police dans la notification d'urgence.
             // Audit fix S2 : disponible uniquement si le raccourci urgence est lui-même ON.
             // Sans raccourci, il resterait un orphelin qui dupliquerait juste 112.
@@ -3698,13 +3727,8 @@ private fun EmergencySection(
                         ))
                     }
                     // Au passage OFF→ON sans perm déjà accordée → demande runtime.
-                    if (v) {
-                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
-                            ctx, android.Manifest.permission.ACCESS_FINE_LOCATION,
-                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                        if (!granted) {
-                            onRequestLocationPermission()
-                        }
+                    if (v && !positionAccordee) {
+                        onRequestLocationPermission()
                     }
                 },
             )

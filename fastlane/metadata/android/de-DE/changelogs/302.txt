@@ -1,0 +1,7 @@
+Korrekturen aus der F-Droid-Prüfung und aus dem Verweigern jeder einzelnen Berechtigung.
+
+Ohne Zugriff auf Kontakte stürzte die App beim Öffnen von „Neue Nachricht“ oder einer Unterhaltung ab. Jetzt funktioniert sie und sagt, warum die Kontaktliste leer ist. Das Mikrofon wird nicht mehr beim Start angefordert: Die Sprachtaste fragt danach, wenn Sie sie benutzen.
+
+SMS Tech besitzt die Internetberechtigung nicht mehr und kann daher überhaupt nicht auf das Netz zugreifen. MMS funktionieren weiterhin: Der MMS-Dienst von Android überträgt sie.
+
+Notfallmodus: Ohne Anrufberechtigung tat die Kachel 112 nichts; jetzt öffnet sie die Telefon-App. Ein „ungefährer“ Standort wurde ignoriert; die Warnung enthält ihn jetzt, gekennzeichnet mit (+/-2 km). Sind Benachrichtigungen deaktiviert, sagen es die Bildschirme von Safety call und der Verknüpfung auf dem Sperrbildschirm.
