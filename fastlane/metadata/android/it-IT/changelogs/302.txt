@@ -1,0 +1,7 @@
+Correzioni dalla revisione F-Droid e dal rifiuto di ogni autorizzazione, una per una.
+
+Con i Contatti negati, aprire «Nuovo messaggio» o una conversazione faceva chiudere l'app. Ora funziona e dice perché l'elenco dei contatti è vuoto. Il microfono non viene più chiesto all'avvio: il pulsante vocale lo chiede quando lo usa.
+
+SMS Tech non ha più l'autorizzazione Internet, quindi non può accedere in alcun modo alla rete. Gli MMS funzionano ancora: li trasporta il servizio MMS di Android.
+
+Modalità emergenza: senza l'autorizzazione alle chiamate, il riquadro 112 non faceva nulla; ora apre l'app Telefono. Una posizione «approssimativa» veniva ignorata; ora l'allerta la include, indicata con (+/-2 km). Quando le notifiche sono disattivate, le schermate del Safety call e della scorciatoia sulla schermata di blocco lo segnalano.
