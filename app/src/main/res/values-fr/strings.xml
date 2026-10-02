@@ -721,7 +721,6 @@
     <string name="about_perm_phone_state">Prise en charge du double SIM (envoi depuis la bonne carte).</string>
     <string name="about_perm_notifications">Afficher les notifications de nouveaux messages.</string>
     <string name="about_perm_biometric">Déverrouillage biométrique facultatif.</string>
-    <string name="about_perm_internet">Transport des MMS via le MMSC de votre opérateur. Aucune télémétrie.</string>
     <string name="about_perm_record_audio">Enregistrer les messages vocaux joints aux MMS sortants.</string>
     <string name="about_perm_foreground_service">Migration et sauvegarde de longue durée.</string>
     <string name="about_permissions_title">Permissions utilisées</string>

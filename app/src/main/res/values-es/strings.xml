@@ -732,7 +732,6 @@
     <string name="about_perm_phone_state">Compatibilidad multi-SIM (enviar desde la SIM correcta).</string>
     <string name="about_perm_notifications">Mostrar las notificaciones de mensajes nuevos.</string>
     <string name="about_perm_biometric">Desbloqueo biométrico opcional.</string>
-    <string name="about_perm_internet">Transporte de los MMS por el MMSC de su operador. Sin analítica.</string>
     <string name="about_perm_record_audio">Grabar mensajes de audio adjuntos a los MMS salientes.</string>
     <string name="about_perm_foreground_service">Migración o copia de seguridad de larga duración.</string>
     <string name="about_permissions_title">Permisos que usamos</string>

@@ -732,7 +732,6 @@
     <string name="about_perm_phone_state">Supporto multi-SIM (invio dalla SIM giusta).</string>
     <string name="about_perm_notifications">Mostrare le notifiche dei nuovi messaggi.</string>
     <string name="about_perm_biometric">Sblocco biometrico facoltativo.</string>
-    <string name="about_perm_internet">Trasporto degli MMS tramite l\'MMSC del suo operatore. Nessuna analisi.</string>
     <string name="about_perm_record_audio">Registrare messaggi audio allegati agli MMS in uscita.</string>
     <string name="about_perm_foreground_service">Migrazione o backup di lunga durata.</string>
     <string name="about_permissions_title">Autorizzazioni che usiamo</string>

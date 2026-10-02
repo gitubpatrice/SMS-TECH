@@ -726,7 +726,6 @@
     <string name="about_perm_phone_state">Multi-SIM support (sending from the correct SIM).</string>
     <string name="about_perm_notifications">Show new-message notifications.</string>
     <string name="about_perm_biometric">Optional biometric unlock.</string>
-    <string name="about_perm_internet">MMS transport via your carrier MMSC. No analytics.</string>
     <string name="about_perm_record_audio">Record audio messages attached to outgoing MMS.</string>
     <string name="about_perm_foreground_service">Long-running migration / backup.</string>
     <string name="about_permissions_title">Permissions we use</string>

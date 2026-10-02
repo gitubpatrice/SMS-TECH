@@ -55,8 +55,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture and the end-to-end f
 ## 🔐 Privacy
 
 We collect **nothing**. No analytics, no crash reporting, no remote logging.
-The only network calls SMS Tech can make are MMS transport via your carrier MMSC (`INTERNET`
-permission), and only when you actually send / receive an MMS.
+SMS Tech makes no network call: it does not hold the `INTERNET` permission, so its process cannot
+open a connection. MMS are carried by Android's own MMS service, which talks to your carrier's MMSC.
 
 SMS is **not** end-to-end encrypted at the protocol level — this is a limitation of the carrier
 network, not a choice. SMS Tech protects what's stored on your device, with SQLCipher + the

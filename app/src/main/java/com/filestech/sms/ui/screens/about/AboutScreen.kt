@@ -662,7 +662,7 @@ private fun permissions(): List<Permission> = listOf(
     Permission("USE_BIOMETRIC", stringResource(R.string.about_perm_biometric)),
     // v1.3.5 G3 + audit F1 — SCHEDULE_EXACT_ALARM retiré du manifest (envoi planifié via
     // WorkManager.enqueueUniqueWork, pas AlarmManager.setExact*).
-    Permission("INTERNET", stringResource(R.string.about_perm_internet)),
+    // v1.28.13 — INTERNET retirée du manifeste : le MMS passe par le service MMS d'Android.
     Permission("RECORD_AUDIO", stringResource(R.string.about_perm_record_audio)),
     Permission("FOREGROUND_SERVICE", stringResource(R.string.about_perm_foreground_service)),
 )

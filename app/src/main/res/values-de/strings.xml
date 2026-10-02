@@ -729,7 +729,6 @@
     <string name="about_perm_phone_state">Unterstützung mehrerer SIM-Karten (Senden über die richtige SIM).</string>
     <string name="about_perm_notifications">Benachrichtigungen über neue Nachrichten anzeigen.</string>
     <string name="about_perm_biometric">Optionales Entsperren per Biometrie.</string>
-    <string name="about_perm_internet">MMS-Transport über den MMSC Ihres Anbieters. Keine Analyse.</string>
     <string name="about_perm_record_audio">Sprachnachrichten aufnehmen, die an ausgehende MMS angehängt werden.</string>
     <string name="about_perm_foreground_service">Lang laufende Migration bzw. Sicherung.</string>
     <string name="about_permissions_title">Berechtigungen, die wir verwenden</string>

@@ -26,9 +26,10 @@ device transfer without your explicit consent.
 
 ## Network use
 
-SMS Tech makes no network call by default. The `INTERNET` permission is declared exclusively for
-MMS transport via your carrier's MMSC, and is only used when the user actually sends or receives an
-MMS. No update check, no remote configuration, no analytics ping.
+SMS Tech makes no network call. Since 1.28.13 it does not even hold the `INTERNET` permission, so
+its process cannot open a network connection. MMS are carried by Android's own MMS service, which
+talks to your carrier's MMSC when you send or receive one. No update check, no remote configuration,
+no analytics ping.
 
 The messages you send travel through your carrier's network, as with any SMS app. The developer
 never receives them.
@@ -96,10 +97,10 @@ lors d'un transfert d'appareil sans votre accord explicite.
 
 ## Réseau
 
-SMS Tech n'émet aucune requête réseau par défaut. La permission `INTERNET` n'est déclarée que pour
-le transport MMS via le MMSC de votre opérateur, et n'est utilisée qu'au moment de l'envoi ou de la
-réception effective d'un MMS. Aucune vérification de mise à jour, aucune configuration distante,
-aucun ping analytique.
+SMS Tech n'émet aucune requête réseau. Depuis la 1.28.13, elle ne détient même plus la permission
+`INTERNET` : son processus ne peut ouvrir aucune connexion réseau. Les MMS sont acheminés par le
+service MMS d'Android, qui contacte le MMSC de votre opérateur lorsque vous en envoyez ou en recevez
+un. Aucune vérification de mise à jour, aucune configuration distante, aucun ping analytique.
 
 Les messages que vous envoyez passent par le réseau de votre opérateur, comme avec toute application
 de SMS. Le développeur ne les reçoit jamais.
