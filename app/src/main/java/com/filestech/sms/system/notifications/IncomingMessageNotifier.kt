@@ -142,11 +142,8 @@ class IncomingMessageNotifier @Inject constructor(
         // rendue nulle part : le compromis était donc « documenté » dans un texte que
         // personne ne voyait. C'est `settings_notif_style_banner_hint` qui le décrit à
         // l'écran, et la chaîne orpheline a été retirée des cinq langues.
-        val channelId = when (notifSettings.style) {
-            NotificationStyle.SILENT -> NotificationChannelInitializer.CHANNEL_INCOMING_SILENT
-            NotificationStyle.HEADS_UP, NotificationStyle.BANNER ->
-                NotificationChannelInitializer.CHANNEL_INCOMING
-        }
+        // v1.28.13 — table partagée avec la bannière des Réglages, qui vérifie CE canal.
+        val channelId = canalDesMessages(notifSettings.style)
 
         // Audit F15: the legacy "WHEN_UNLOCKED" branch leaked the body in setContentText on some
         // OEMs that disregarded VISIBILITY_PRIVATE. Both WHEN_UNLOCKED and NEVER now ship a

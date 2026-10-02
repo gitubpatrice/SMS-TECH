@@ -1,8 +1,13 @@
 package com.filestech.sms.ui.components
 
 import android.Manifest
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.filestech.sms.system.settings.ouvrirLaFicheDeLApplication
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -28,12 +33,30 @@ class PermissionLocalisation internal constructor(
     val demander: () -> Unit,
 )
 
+/**
+ * Audit pré-release 1.28.13 (M2), jumeau du correctif de la tuile 112 — **un bouton « Autoriser » ne
+ * reste jamais sans effet.** Après deux refus, Android n'affiche plus la boîte de dialogue et répond
+ * « refusé » sur-le-champ : « Autoriser la localisation » et « Autoriser la position exacte » ne
+ * faisaient alors plus rien, sans un mot. Rien dans l'API ne distingue « refusé à l'instant » de
+ * « refusé sans demander » ; le seul signe observable est la DURÉE. Une réponse sans la position
+ * exacte arrivée en moins de [SEUIL_SANS_DIALOGUE_MS] n'a pas pu passer par un humain : on ouvre alors
+ * la fiche Android de l'application, où la permission reste accordable. C'est une heuristique,
+ * assumée : au pire, une fiche s'ouvre pour qui a refusé en moins de quatre dixièmes de seconde.
+ */
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun rememberPermissionLocalisation(onResultat: (accordee: Boolean) -> Unit = {}): PermissionLocalisation {
+    val contexte = LocalContext.current
+    val debutDeLaDemande = remember { mutableLongStateOf(0L) }
     val etat = rememberMultiplePermissionsState(
         permissions = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-        onPermissionsResult = { reponses -> onResultat(reponses.values.any { it }) },
+        onPermissionsResult = { reponses ->
+            val instantanee = SystemClock.elapsedRealtime() - debutDeLaDemande.longValue < SEUIL_SANS_DIALOGUE_MS
+            if (instantanee && reponses[Manifest.permission.ACCESS_FINE_LOCATION] != true) {
+                ouvrirLaFicheDeLApplication(contexte)
+            }
+            onResultat(reponses.values.any { it })
+        },
     )
     val exacte = etat.permissions.any {
         it.permission == Manifest.permission.ACCESS_FINE_LOCATION && it.status == PermissionStatus.Granted
@@ -41,6 +64,12 @@ fun rememberPermissionLocalisation(onResultat: (accordee: Boolean) -> Unit = {})
     return PermissionLocalisation(
         accordee = etat.permissions.any { it.status == PermissionStatus.Granted },
         exacte = exacte,
-        demander = etat::launchMultiplePermissionRequest,
+        demander = {
+            debutDeLaDemande.longValue = SystemClock.elapsedRealtime()
+            etat.launchMultiplePermissionRequest()
+        },
     )
 }
+
+/** Une boîte de dialogue affichée puis refusée par un humain prend bien plus longtemps que cela. */
+private const val SEUIL_SANS_DIALOGUE_MS = 400L

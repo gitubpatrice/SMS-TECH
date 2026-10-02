@@ -682,7 +682,7 @@
 
     <string name="settings_section_blocking">Blockieren</string>
     <string name="settings_block_unknown">Unbekannte Nummern blockieren</string>
-    <string name="settings_block_unknown_no_contacts">Ohne Zugriff auf Ihre Kontakte inaktiv: Es wird keine Nummer blockiert. Erlauben Sie Kontakte in den Android-Einstellungen.</string>
+    <string name="settings_block_unknown_no_contacts">Ohne Zugriff auf Ihre Kontakte werden unbekannte Nummern nicht blockiert. Ihre Liste blockierter Nummern bleibt aktiv. Erlauben Sie Kontakte in den Android-Einstellungen.</string>
     <string name="attach_contact_needs_permission">Zum Anhängen einer Kontaktkarte ist Zugriff auf Ihre Kontakte nötig. Erlauben Sie Kontakte in den Android-Einstellungen.</string>
     <string name="settings_manage_blocked">Blockliste verwalten</string>
 
@@ -731,6 +731,8 @@
     <string name="about_perm_biometric">Optionales Entsperren per Biometrie.</string>
     <string name="about_perm_record_audio">Sprachnachrichten aufnehmen, die an ausgehende MMS angehängt werden.</string>
     <string name="about_perm_foreground_service">Lang laufende Migration bzw. Sicherung.</string>
+    <string name="about_perm_location">Nur Notfallmodus, wenn Sie ihn aktivieren: eine Position im Moment des Alarms, genau oder ungefähr.</string>
+    <string name="about_perm_call_phone">Notruf-Kacheln: direkter Anruf. Verweigert, öffnen sie stattdessen die Telefon-App.</string>
     <string name="about_permissions_title">Berechtigungen, die wir verwenden</string>
     <string name="about_security_title">Sicherheit &amp; Grenzen</string>
     <string name="about_security_body">SMS und MMS laufen unverschlüsselt über das Netz des Anbieters — das ist eine Grenze des Protokolls, keine Entscheidung. SMS Tech schützt nur, was auf Ihrem Gerät gespeichert ist. Für Ende-zu-Ende-verschlüsselte Nachrichten verwenden Sie Signal oder Matrix.</string>
@@ -741,6 +743,7 @@
     <string name="about_website">Webseite</string>
     <string name="about_license">Lizenz</string>
     <string name="about_privacy">Datenschutzerklärung</string>
+    <string name="about_terms">Nutzungsbedingungen</string>
 
 
     <!-- Notification channels -->
@@ -898,7 +901,7 @@
     <string name="about_feat_ui_label">Flüssige Oberfläche</string>
     <string name="about_feat_ui_desc">Compose mit pro Sprechblase isolierter Neuzeichnung. Sortierung der Unterhaltungen im Drei-Punkte-Menü.</string>
     <string name="about_feat_noads_label">Keine Werbung, keine Tracker</string>
-    <string name="about_feat_noads_desc">Keine Analyse. Einzige Netzverbindung: der MMSC des Anbieters für den MMS-Transport.</string>
+    <string name="about_feat_noads_desc">Keine Analyse. Kein Netzzugriff: Die App besitzt keine Internetberechtigung; MMS überträgt der MMS-Dienst von Android.</string>
 
     <!-- Help recipes (7 titles + steps) -->
     <string name="about_help_default_title">Als Standard-SMS-App festlegen</string>

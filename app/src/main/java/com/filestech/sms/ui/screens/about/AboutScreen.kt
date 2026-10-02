@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.BugReport
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Contactless
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.GraphicEq
@@ -38,7 +40,6 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QuestionAnswer
-import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Shield
@@ -69,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -154,7 +156,7 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_permissions_title))
             Spacer(Modifier.size(8.dp))
-            permissions().forEach { p -> PermissionLine(name = p.name, why = p.why) }
+            permissions(isPanicDecoy).forEach { p -> PermissionLine(name = p.name, why = p.why) }
 
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.about_section_links))
@@ -187,11 +189,24 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
                 supporting = "Apache License 2.0",
                 onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(LICENSE_URL))) },
             )
-            LinkItem(
-                icon = Icons.Outlined.PrivacyTip,
-                label = stringResource(R.string.about_privacy),
-                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) },
-            )
+            // v1.28.13 — la politique et les conditions existent dans les cinq langues de
+            // l'application : le lien ouvre celle de la langue AFFICHÉE, l'anglais à défaut.
+            // Masqués en session leurre (revue de sécurité de la 1.28.13) : ces deux documents
+            // décrivent le mode urgence et le Safety call, que le reste de cet écran tait en leurre
+            // (fonctions, aide, permissions). Un agresseur ne peut pas savoir qu'ils manquent.
+            val langue = LocalConfiguration.current.locales[0].language
+            if (!isPanicDecoy) {
+                LinkItem(
+                    icon = Icons.Outlined.PrivacyTip,
+                    label = stringResource(R.string.about_privacy),
+                    onClick = { ouvrirTexteJuridique(context, "PRIVACY", langue) },
+                )
+                LinkItem(
+                    icon = Icons.Outlined.Description,
+                    label = stringResource(R.string.about_terms),
+                    onClick = { ouvrirTexteJuridique(context, "TERMS", langue) },
+                )
+            }
 
             Spacer(Modifier.size(24.dp))
             Text(
@@ -567,7 +582,23 @@ private const val REPO_URL = "https://github.com/gitubpatrice/SMS-TECH"
 private const val RELEASES_URL = "https://github.com/gitubpatrice/SMS-TECH/releases/latest"
 private const val WEBSITE_URL = "https://files-tech.com"
 private const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
-private const val PRIVACY_URL = "https://github.com/gitubpatrice/SMS-TECH/blob/main/PRIVACY.md"
+private const val LEGAL_BASE_URL = "https://github.com/gitubpatrice/SMS-TECH/blob/main/"
+
+/** Langues dans lesquelles PRIVACY et TERMS ont une traduction ; l'anglais est `PRIVACY.md`. */
+private val LANGUES_DES_TEXTES_JURIDIQUES = setOf("fr", "de", "it", "es")
+
+/**
+ * v1.28.13 — `PRIVACY.md` / `TERMS.md` en anglais, `PRIVACY.fr.md`… pour les autres langues de
+ * l'application. Les versions anglaise et française font foi ; les autres sont des traductions.
+ */
+internal fun urlTexteJuridique(document: String, langue: String): String {
+    val suffixe = if (langue in LANGUES_DES_TEXTES_JURIDIQUES) ".$langue" else ""
+    return "$LEGAL_BASE_URL$document$suffixe.md"
+}
+
+private fun ouvrirTexteJuridique(context: android.content.Context, document: String, langue: String) {
+    safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(urlTexteJuridique(document, langue))))
+}
 
 private data class PrivacyBadge(val icon: ImageVector, val label: String, val color: Color)
 
@@ -642,7 +673,11 @@ private fun features(isPanicDecoy: Boolean): List<Feature> = listOf(
     Feature(Icons.Outlined.QuestionAnswer, stringResource(R.string.about_feat_noads_label), stringResource(R.string.about_feat_noads_desc)),
 ).filterNot { isPanicDecoy && it.sensitive }
 
-private data class Permission(val name: String, val why: String)
+/**
+ * @property sensitive v1.28.13 — la ligne nomme le mode urgence : masquée en session leurre, comme
+ *   les fonctions et l'aide du même écran (cf. [features], [helpRecipes]).
+ */
+private data class Permission(val name: String, val why: String, val sensitive: Boolean = false)
 
 /**
  * v1.25.3 (audit H20) — les justificatifs de permissions étaient des littéraux **anglais** dans
@@ -653,7 +688,7 @@ private data class Permission(val name: String, val why: String)
  * traduire les rendrait invérifiables face à l'écran système des autorisations.
  */
 @androidx.compose.runtime.Composable
-private fun permissions(): List<Permission> = listOf(
+private fun permissions(isPanicDecoy: Boolean): List<Permission> = listOf(
     Permission("SEND_SMS / RECEIVE_SMS / READ_SMS / WRITE_SMS", stringResource(R.string.about_perm_sms)),
     Permission("RECEIVE_MMS / RECEIVE_WAP_PUSH", stringResource(R.string.about_perm_mms)),
     Permission("READ_CONTACTS", stringResource(R.string.about_perm_contacts)),
@@ -664,8 +699,16 @@ private fun permissions(): List<Permission> = listOf(
     // WorkManager.enqueueUniqueWork, pas AlarmManager.setExact*).
     // v1.28.13 — INTERNET retirée du manifeste : le MMS passe par le service MMS d'Android.
     Permission("RECORD_AUDIO", stringResource(R.string.about_perm_record_audio)),
+    // v1.28.13 — les deux permissions « dangereuses » du mode urgence manquaient à cette liste,
+    // intitulée « Permissions utilisées » : précisément les plus sensibles. Masquées en leurre.
+    Permission(
+        "ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION",
+        stringResource(R.string.about_perm_location),
+        sensitive = true,
+    ),
+    Permission("CALL_PHONE", stringResource(R.string.about_perm_call_phone), sensitive = true),
     Permission("FOREGROUND_SERVICE", stringResource(R.string.about_perm_foreground_service)),
-)
+).filterNot { isPanicDecoy && it.sensitive }
 
 private data class HelpRecipe(
     val title: String,

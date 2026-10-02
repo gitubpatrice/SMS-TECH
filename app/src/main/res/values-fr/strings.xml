@@ -674,7 +674,7 @@
 
     <string name="settings_section_blocking">Blocage</string>
     <string name="settings_block_unknown">Bloquer les numéros inconnus</string>
-    <string name="settings_block_unknown_no_contacts">Inactif sans accès à vos contacts : aucun numéro n\'est bloqué. Autorisez les Contacts dans les réglages d\'Android.</string>
+    <string name="settings_block_unknown_no_contacts">Sans accès à vos contacts, les numéros inconnus ne sont pas bloqués. Votre liste de numéros bloqués reste active. Autorisez les Contacts dans les réglages d\'Android.</string>
     <string name="attach_contact_needs_permission">Joindre une fiche contact nécessite l\'accès à vos contacts. Autorisez les Contacts dans les réglages d\'Android.</string>
     <string name="settings_manage_blocked">Gérer la liste des bloqués</string>
 
@@ -723,6 +723,8 @@
     <string name="about_perm_biometric">Déverrouillage biométrique facultatif.</string>
     <string name="about_perm_record_audio">Enregistrer les messages vocaux joints aux MMS sortants.</string>
     <string name="about_perm_foreground_service">Migration et sauvegarde de longue durée.</string>
+    <string name="about_perm_location">Mode urgence uniquement, si vous l\'activez : une position au moment de l\'alerte, exacte ou approximative.</string>
+    <string name="about_perm_call_phone">Tuiles d\'appel d\'urgence : appel direct. Refusée, elles ouvrent le composeur.</string>
     <string name="about_permissions_title">Permissions utilisées</string>
     <string name="about_security_title">Sécurité &amp; limites</string>
     <string name="about_security_body">SMS et MMS circulent en clair sur le réseau opérateur — c\'est une limite du protocole, pas un choix. SMS Tech ne protège que ce qui est stocké sur l\'appareil. Pour du chiffrement de bout en bout, utilisez Signal ou Matrix.</string>
@@ -733,6 +735,7 @@
     <string name="about_website">Site web</string>
     <string name="about_license">Licence</string>
     <string name="about_privacy">Politique de confidentialité</string>
+    <string name="about_terms">Conditions d\'utilisation</string>
 
     <string name="channel_incoming_label">Messages entrants</string>
     <!-- v1.8.0 — canal silent pour NotificationStyle.SILENT -->
@@ -884,7 +887,7 @@
     <string name="about_feat_ui_label">UI fluide</string>
     <string name="about_feat_ui_desc">Compose + recomposition isolée par bulle. Tri des conversations dans le menu 3 points.</string>
     <string name="about_feat_noads_label">Zéro pub, zéro traceur</string>
-    <string name="about_feat_noads_desc">Aucune analytics. Seule connexion réseau : le MMSC de l\'opérateur pour le transport MMS.</string>
+    <string name="about_feat_noads_desc">Aucune analytics. Aucun accès réseau : l\'application ne détient pas la permission Internet ; les MMS sont acheminés par le service MMS d\'Android.</string>
 
     <!-- Recettes d'aide (7 titres + steps) -->
     <string name="about_help_default_title">Définir comme app SMS par défaut</string>

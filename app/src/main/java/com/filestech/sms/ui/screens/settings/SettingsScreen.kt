@@ -84,8 +84,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.domain.settings.AutoLockDelay
 import com.filestech.sms.system.locale.ouvrirLaLangueDeLApplication
-import com.filestech.sms.system.notifications.notificationsDesMessagesVisibles
-import com.filestech.sms.system.notifications.raccourciDUrgenceVisible
+import com.filestech.sms.system.notifications.CANAL_DU_RACCOURCI_D_URGENCE
+import com.filestech.sms.system.notifications.canalDesMessages
 import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
 import com.filestech.sms.ui.components.BanniereNotificationsCoupees
 import com.filestech.sms.ui.components.rememberPermissionAccordee
@@ -3369,7 +3369,7 @@ private fun NotificationsSection(
             BanniereNotificationsCoupees(
                 message = stringResource(R.string.notifications_off_messages),
                 modifier = Modifier.padding(vertical = 8.dp),
-                visibles = ::notificationsDesMessagesVisibles,
+                canaux = listOf(canalDesMessages(notifications.style)),
             )
         }
         ToggleRow(
@@ -3674,7 +3674,7 @@ private fun EmergencySection(
                 BanniereNotificationsCoupees(
                     message = stringResource(R.string.notifications_off_emergency_shortcut),
                     modifier = Modifier.padding(vertical = 8.dp),
-                    visibles = ::raccourciDUrgenceVisible,
+                    canaux = listOf(CANAL_DU_RACCOURCI_D_URGENCE),
                 )
             }
             // v1.12.0 — Toggle de l'action police dans la notification d'urgence.

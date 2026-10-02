@@ -67,7 +67,7 @@ import com.filestech.sms.R
 import com.filestech.sms.domain.safetycall.SafetyCallConfig
 import com.filestech.sms.domain.safetycall.SafetyCallTemplate
 import com.filestech.sms.domain.safetycall.SafetyCallTriggerRecord
-import com.filestech.sms.system.notifications.notificationsDuSafetyCallVisibles
+import com.filestech.sms.system.notifications.CANAL_DU_SAFETY_CALL
 import com.filestech.sms.system.safety.rememberSafetyMessageTexts
 import com.filestech.sms.ui.components.BanniereNotificationsCoupees
 import com.filestech.sms.ui.components.BanniereRoleSmsManquant
@@ -229,7 +229,7 @@ fun SafetyCallSetupScreen(
             // qu'en rouvrant l'application.
             BanniereNotificationsCoupees(
                 message = stringResource(R.string.notifications_off_safety_call),
-                visibles = ::notificationsDuSafetyCallVisibles,
+                canaux = listOf(CANAL_DU_SAFETY_CALL),
             )
             StatusSection(
                 draft = draft,

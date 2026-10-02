@@ -66,7 +66,7 @@
          qui parle au MMSC de l'opérateur. Aucune bibliothèque ne l'apporte (manifeste fusionné
          vérifié). Sans elle, le processus de l'app n'est pas dans le groupe noyau `inet` et ne peut
          créer aucun socket : « aucun accès réseau » devient vérifiable, et
-         tools/check-manifest-permissions.py le garde en CI.
+         .github/scripts/permissions-manifeste.py le garde en CI.
          ACCESS_NETWORK_STATE reste dans l'APK, apportée par androidx.work : elle LIT l'état de la
          connexion, elle n'en ouvre aucune. Nos propres déclarations des deux sont retirées.
          v1.3.5 G3 — CHANGE_NETWORK_STATE déjà retirée : aucun appel ConnectivityManager. -->

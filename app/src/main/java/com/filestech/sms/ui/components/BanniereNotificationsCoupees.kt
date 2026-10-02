@@ -1,6 +1,5 @@
 package com.filestech.sms.ui.components
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,11 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.filestech.sms.R
+import com.filestech.sms.system.notifications.canauxVisibles
 import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
 
 /**
@@ -46,22 +45,23 @@ import com.filestech.sms.system.settings.ouvrirLesNotificationsDeLApplication
  * que la bannière disparaisse quand on revient de la page Android où l'on vient de les rallumer.
  *
  * @param message ce que la coupure empêche, à cet endroit précis.
- * @param visibles comment lire l'état. Par défaut, les notifications de l'application seules ;
- *   chaque appelant passe en pratique les CANAUX de sa fonction (cf. `CanauxVisibles.kt`), qu'on
- *   coupe un à un dans Android sans toucher à l'interrupteur global.
+ * @param canaux les canaux sur lesquels la fonction poste RÉELLEMENT (cf. `CanauxVisibles.kt`),
+ *   qu'Android permet de couper un à un sans toucher à l'interrupteur global. Une liste et non une
+ *   fonction : elle se compare, donc l'état est relu quand elle change — le style des notifications
+ *   peut changer pendant que l'écran est ouvert (audit pré-release 1.28.13, L2).
  */
 @Composable
 fun BanniereNotificationsCoupees(
     message: String,
+    canaux: List<String>,
     modifier: Modifier = Modifier,
-    visibles: (Context) -> Boolean = { NotificationManagerCompat.from(it).areNotificationsEnabled() },
 ) {
     val contexte = LocalContext.current
     val cycleDeVie = LocalLifecycleOwner.current.lifecycle
-    var actives by remember { mutableStateOf(visibles(contexte)) }
-    DisposableEffect(cycleDeVie) {
+    var actives by remember(canaux) { mutableStateOf(canauxVisibles(contexte, canaux)) }
+    DisposableEffect(cycleDeVie, canaux) {
         val observateur = LifecycleEventObserver { _, evenement ->
-            if (evenement == Lifecycle.Event.ON_RESUME) actives = visibles(contexte)
+            if (evenement == Lifecycle.Event.ON_RESUME) actives = canauxVisibles(contexte, canaux)
         }
         cycleDeVie.addObserver(observateur)
         onDispose { cycleDeVie.removeObserver(observateur) }
