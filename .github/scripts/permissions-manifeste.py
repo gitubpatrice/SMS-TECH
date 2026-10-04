@@ -46,9 +46,9 @@ exige que chacun soit REFUSE : un controle qui ne peut pas echouer ne protege ri
 from __future__ import annotations
 
 import contextlib
-import glob
 import io
 import os
+import shutil
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
@@ -180,23 +180,53 @@ def verifier(chemin: str, bavard: bool = True) -> int:
     return 0
 
 
+IGNORES_AU_PARCOURS = {".git", ".gradle", "build", "node_modules"}
+
+
+def fichiers_du_depot(retenir) -> list[str]:
+    """Tous les fichiers du depot que `retenir(chemin)` accepte, a toute profondeur.
+
+    A toute profondeur : un module imbrique (`feature/x/src/main/`) doit etre lu comme les
+    autres - un motif a un seul niveau l'aurait laisse hors du controle, sans un mot.
+    """
+    trouves = []
+    for dossier, sous_dossiers, noms in os.walk("."):
+        sous_dossiers[:] = [d for d in sous_dossiers if d not in IGNORES_AU_PARCOURS]
+        trouves += [os.path.join(dossier, nom) for nom in noms if retenir(os.path.join(dossier, nom))]
+    return sorted(trouves)
+
+
 def manifestes_source() -> list[str]:
     """Les manifestes de chaque module et de chaque jeu de sources (main, debug...)."""
-    return sorted(glob.glob(os.path.join("*", "src", "*", "AndroidManifest.xml")))
+    return fichiers_du_depot(lambda c: os.path.basename(c) == "AndroidManifest.xml"
+                             and f"{os.sep}src{os.sep}" in c)
 
 
-def verifier_exceptions_lint(chemins: list[str], bavard: bool = True) -> int:
+def configurations_lint() -> list[str]:
+    """Les autres endroits ou un lint se fait taire : lint.xml, baselines, scripts Gradle."""
+    return fichiers_du_depot(lambda c: os.path.basename(c) in ("lint.xml", "lint-baseline.xml")
+                             or c.endswith((".gradle.kts", ".gradle")))
+
+
+def verifier_exceptions_lint(chemins: list[str], configurations: list[str] = (),
+                             bavard: bool = True) -> int:
     """Chaque `tools:ignore` qui couvre ProtectedPermissions doit viser une permission revue.
 
     `all` fait taire tous les lints, ProtectedPermissions compris : il compte. Pose sur un autre
     element qu'un <uses-permission> (la racine <manifest>, par exemple), il couvrirait tout ce
-    qui est dessous : refuse aussi.
+    qui est dessous : refuse aussi. Hors du manifeste - `lint.xml`, une baseline regeneree,
+    `lint { disable += ... }` - l'exception ne vise aucune permission en particulier : refusee
+    toujours.
     """
     if not chemins:
         erreur(["aucun manifeste source trouve (*/src/*/AndroidManifest.xml) : c'est un echec du "
                 "controle, pas une absence. Lancer le script depuis la racine du depot."])
         return 1
     problemes: list[str] = []
+    for chemin in configurations:
+        with open(chemin, encoding="utf-8", errors="replace") as f:
+            if "ProtectedPermissions" in f.read():
+                problemes.append(f"{chemin} : fait taire le lint ProtectedPermissions hors du manifeste")
     for chemin in chemins:
         try:
             racine = ET.parse(chemin).getroot()
@@ -219,7 +249,8 @@ def verifier_exceptions_lint(chemins: list[str], bavard: bool = True) -> int:
         erreur(problemes)
         return 1
     if bavard:
-        print(f"OK : aucune exception non revue au lint ProtectedPermissions ({len(chemins)} manifestes source).")
+        print(f"OK : aucune exception non revue au lint ProtectedPermissions "
+              f"({len(chemins)} manifestes source, {len(configurations)} configurations lint).")
     return 0
 
 
@@ -264,35 +295,68 @@ def controle_negatif() -> int:
     def exception(nom: str, valeur: str = "ProtectedPermissions") -> str:
         return f'  <uses-permission\n      android:name="{nom}"\n      tools:ignore="{valeur}" />\n'
 
-    # (nom, corps du manifeste source ou None pour « aucun manifeste », code attendu, cause attendue)
+    def lint_xml(contenu: str) -> str:
+        fd, chemin = tempfile.mkstemp(suffix="-lint.xml")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(contenu)
+        return chemin
+
+    revue = ">\n" + exception("android.permission.WRITE_SMS")
+    lint_sain = '<lint>\n  <issue id="NewerVersionAvailable" severity="ignore" />\n</lint>\n'
+    # (nom, corps du manifeste source ou None pour « aucun manifeste », lint.xml, code, cause)
     cas_lint = [
-        ("exception revue (WRITE_SMS)", ">\n" + exception("android.permission.WRITE_SMS"), 0, ""),
+        ("exception revue (WRITE_SMS)", revue, lint_sain, 0, ""),
         ("exception sur BROADCAST_WAP_PUSH (le defaut de la 1.28.13)",
-         ">\n" + exception("android.permission.BROADCAST_WAP_PUSH"), 1, "BROADCAST_WAP_PUSH"),
+         ">\n" + exception("android.permission.BROADCAST_WAP_PUSH"), lint_sain, 1, "BROADCAST_WAP_PUSH"),
         ("tools:ignore=\"all\"", ">\n" + exception("android.permission.READ_CONTACTS", "all"),
-         1, "READ_CONTACTS"),
+         lint_sain, 1, "READ_CONTACTS"),
         ("exception parmi d'autres lints",
          ">\n" + exception("android.permission.CALL_PHONE", "MissingVersion, ProtectedPermissions"),
-         1, "CALL_PHONE"),
+         lint_sain, 1, "CALL_PHONE"),
         ("exception posee sur la racine <manifest>",
          ' tools:ignore="ProtectedPermissions">\n' + exception("android.permission.WRITE_SMS", "Autre"),
-         1, "<manifest"),
-        ("aucun manifeste source", None, 1, "aucun manifeste source"),
+         lint_sain, 1, "<manifest"),
+        ("exception dans lint.xml", revue,
+         '<lint>\n  <issue id="ProtectedPermissions" severity="ignore" />\n</lint>\n',
+         1, "hors du manifeste"),
+        ("aucun manifeste source", None, lint_sain, 1, "aucun manifeste source"),
     ]
-    for nom, corps, attendu, cause in cas_lint:
+    for nom, corps, config, attendu, cause in cas_lint:
         chemins = [] if corps is None else [source(corps)]
+        configurations = [lint_xml(config)]
         sortie = io.StringIO()
         try:
             with contextlib.redirect_stdout(sortie):
-                obtenu = verifier_exceptions_lint(chemins, bavard=False)
+                obtenu = verifier_exceptions_lint(chemins, configurations, bavard=False)
         finally:
-            for chemin in chemins:
+            for chemin in chemins + configurations:
                 os.unlink(chemin)
         ok = obtenu == attendu and cause in sortie.getvalue()
         echecs += 0 if ok else 1
         print(f"  {'OK   ' if ok else 'RATE '} lint : {nom} : attendu {attendu}, obtenu {obtenu}")
         if obtenu == attendu and not ok:
             print(f"        rougit, mais sans nommer « {cause} » :\n        {sortie.getvalue().strip()}")
+
+    # La decouverte elle-meme : un module IMBRIQUE doit etre lu, une sortie de build jamais.
+    attendus = {os.path.join(".", "feature", "x", "src", "main", "AndroidManifest.xml"),
+                os.path.join(".", "app", "src", "debug", "AndroidManifest.xml")}
+    ecartes = {os.path.join(".", "app", "build", "intermediates", "src", "AndroidManifest.xml"),
+               os.path.join(".", "app", "AndroidManifest.xml")}
+    arbre = tempfile.mkdtemp(prefix="permissions-")
+    ici = os.getcwd()
+    try:
+        for relatif in attendus | ecartes:
+            os.makedirs(os.path.join(arbre, os.path.dirname(relatif)), exist_ok=True)
+            open(os.path.join(arbre, relatif), "w").close()
+        os.chdir(arbre)
+        trouves = set(manifestes_source())
+    finally:
+        os.chdir(ici)
+        shutil.rmtree(arbre, ignore_errors=True)
+    ok = trouves == attendus
+    echecs += 0 if ok else 1
+    print(f"  {'OK   ' if ok else 'RATE '} decouverte : module imbrique lu, build/ ecarte "
+          f"(trouves : {sorted(trouves)})")
 
     if echecs:
         erreur([f"le controle des permissions ne refuse pas ce qu'il doit refuser ({echecs} cas)"])
@@ -306,5 +370,5 @@ if __name__ == "__main__":
         sys.exit(controle_negatif())
     fusionne = verifier(sys.argv[1] if len(sys.argv) > 1 else MANIFESTE_PAR_DEFAUT)
     print()
-    sources = verifier_exceptions_lint(manifestes_source())
+    sources = verifier_exceptions_lint(manifestes_source(), configurations_lint())
     sys.exit(1 if fusionne or sources else 0)
