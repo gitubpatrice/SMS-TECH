@@ -6,8 +6,8 @@
 #   ./.github/scripts/i18n-parite.sh
 #
 # Il fait DEUX choses, dans cet ordre, et l'ordre est le propos :
-#   1. le controle NEGATIF, qui prouve que l'instrument sait rougir (13 defauts reproduits
-#      dans un arbre jetable, plus un temoin positif) ;
+#   1. le controle NEGATIF, qui prouve que l'instrument sait rougir (chaque defaut revendique
+#      reproduit dans un arbre jetable, plus un temoin positif) ;
 #   2. le controle de parite lui-meme sur le depot.
 #
 # Mesurer avec un instrument dont on n'a pas verifie qu'il devie, c'est ce qui a deja donne a

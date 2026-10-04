@@ -1,7 +1,5 @@
-Corrections issues de la relecture F-Droid, et du refus de chaque permission, une par une.
+Contacts refusés, « Nouveau message » et les conversations plantaient : corrigé. Le micro n'est demandé qu'à l'enregistrement.
 
-Contacts refusés, ouvrir « Nouveau message » ou une conversation faisait planter l'application. Elle fonctionne désormais, et dit pourquoi la liste de contacts est vide. Le micro n'est plus demandé au démarrage : le bouton vocal le demande quand vous l'utilisez.
+Plus de permission Internet : l'application ne peut plus du tout accéder au réseau. Les MMS passent par le service MMS d'Android.
 
-SMS Tech ne détient plus la permission Internet : l'application ne peut plus du tout accéder au réseau. Les MMS fonctionnent toujours, acheminés par le service MMS d'Android.
-
-Mode urgence : sans la permission d'appel, la tuile 112 ne faisait rien ; elle ouvre maintenant le composeur. Une position « approximative » était ignorée ; l'alerte l'inclut désormais, marquée (+/-2 km). Quand les notifications sont coupées, les écrans du Safety call et du raccourci écran verrouillé le disent.
+Mode urgence, permissions refusées : la tuile 112 ouvre le composeur, une position approximative part marquée (+/-2 km), et Safety call et le raccourci écran verrouillé signalent les notifications coupées.
