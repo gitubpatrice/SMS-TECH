@@ -22,9 +22,9 @@ Ce qu'il verifie, et pourquoi chacun est necessaire
                 /!\\ Le PLANCHER seulement : les categories CLDR supplementaires exigees par une
                 langue (many en francais) appartiennent a lint (MissingQuantity), qui en est la
                 source d'autorite. Ne pas dupliquer cette regle ici, elle se contredirait.
-4. FICHES DE STORE - les plafonds de fastlane, comptes en OCTETS (un accent en vaut deux).
-                Rien ne les regardait : la fiche espagnole a depasse de 29 octets sans que
-                personne ne le voie, la verification manuelle ayant compte des caracteres.
+4. FICHES DE STORE - les plafonds de fastlane, comptes en CARACTERES comme fdroidserver les
+                coupe, et le changelog de la version publiee : 500 caracteres, au-dela
+                desquels F-Droid tronque le « Quoi de neuf » sans rien signaler.
 5. LES QUATRE GESTES SOLIDAIRES - une traduction n'est livree que si les quatre sont faits :
                 a. values-XX/strings.xml         la traduction
                 b. localeFilters                 sans quoi AGP RETIRE les ressources de l'APK
@@ -175,6 +175,9 @@ PLAFONDS_FASTLANE = {
     "full_description.txt": 4000,
 }
 
+# fdroidserver, `common.py` : char_limits['whatsNew'] = 500.
+PLAFOND_CHANGELOG = 500
+
 
 def verifier_fins_de_ligne(dossiers):
     """Aucun strings.xml ne doit porter de \\r\\r\\n, ni melanger les conventions.
@@ -212,25 +215,51 @@ def verifier_fins_de_ligne(dossiers):
                   "fichier" % (crlf, lf - crlf))
 
 
+def caracteres(chemin):
+    """La longueur que fdroidserver mesure : des CARACTERES, apres decodage UTF-8.
+
+    Le blanc final ne compte pas : au-dela du plafond, `text[:limit]` n'y perdrait qu'un saut
+    de ligne. None si le fichier n'est pas de l'UTF-8 valide - fdroidserver y mettrait des
+    caracteres de remplacement (`errors='replace'`), et la fiche publiee serait illisible.
+    """
+    try:
+        with open(chemin, encoding="utf-8") as f:
+            return len(f.read().rstrip())
+    except UnicodeDecodeError:
+        return None
+
+
+def verifier_longueur(locale, nom, chemin, plafond, consequence):
+    longueur = caracteres(chemin)
+    if longueur is None:
+        echec(locale, "fastlane/%s n'est pas de l'UTF-8 valide" % nom)
+    elif longueur > plafond:
+        echec(locale, "fastlane/%s : %d caracteres pour un plafond de %d (depasse de %d) - %s"
+                      % (nom, longueur, plafond, longueur - plafond, consequence))
+
+
 def verifier_fastlane():
-    """Les plafonds des fiches de store, comptes en OCTETS.
+    """Les plafonds des fiches de store et du changelog publie, en CARACTERES.
 
-    Pourquoi ici : rien d'autre ne les regardait. La fiche espagnole a depasse le
-    plafond de 4000 octets sans que personne ne le voie, parce que la verification
-    manuelle avait compte des CARACTERES - 3928, donc « conforme » - alors que le
-    fichier pesait 4029 octets. Un accent vaut deux octets, et les cinq langues
-    livrees en sont pleines.
+    Ce que fdroidserver fait de ces fichiers (lu dans son source, 2.4.2, le 2026-10-04) :
+    `common.py` fixe char_limits - title 50, summary 80, description 4000, whatsNew 500 -
+    et `update.py` COUPE chaque texte a `text[:limit]`. Aucune erreur, aucun avertissement :
+    le texte publie s'arrete au milieu d'un mot. Ce sont des caracteres Python, jamais des
+    octets ; `lint.py` mesure de meme, par `len()`.
 
-    Ce qui n'est PAS verifie ici, et pourquoi : la taille des CHANGELOGS. Les 500
-    caracteres que la documentation annoncait sont une regle de Google Play, pas de
-    F-Droid - fdroidserver ne valide pas ce champ et le client affiche le texte entier.
-    Verifie de deux facons independantes le 2026-09-17 : une relecture externe, et le
-    depot lui-meme, qui a publie cinquante versions avec des changelogs allant jusqu'a
-    2000 octets, relues plusieurs fois par les mainteneurs F-Droid, sans que personne ne
-    le signale. Un controle qui rougit sur du sain finit par ne plus etre lu.
+    Ce controle a dit le contraire, deux fois, le 2026-09-17 :
+      - il comptait les fiches en OCTETS, sur la foi d'une fiche espagnole « de 29 octets
+        trop longue » - 4029 octets, mais 3928 caracteres : F-Droid n'en aurait rien coupe ;
+      - il declarait les CHANGELOGS sans plafond (« regle de Google Play, le client affiche le
+        texte entier »), preuve donnee : cinquante versions publiees au-dela de 500 sans que
+        personne ne le signale. Mais l'application n'a jamais ete dans l'index F-Droid : la
+        troncature ne POUVAIT se voir nulle part. Une absence de plainte n'est pas une mesure.
+    La relecture de mezinster sur la MR !38458 (2026-10-03) a releve les changelogs de la
+    1.28.13, de 718 a 871 caracteres dans les cinq langues. Le code de fdroidserver tranchait
+    en une commande ; c'est lui qui fait foi ici, pas une relecture ni un historique.
 
-    Un plafond ecrit dans la documentation et verifie nulle part est une promesse, pas
-    une regle ; un plafond verifie mais inexistant est un faux positif permanent.
+    Seul le changelog de la version PUBLIEE est mesure : F-Droid le lit dans le source au tag
+    qu'il compile, et les anciens sont figes dans leurs tags.
     """
     racine = os.path.join(RACINE, "fastlane", "metadata", "android")
     if not os.path.isdir(racine):
@@ -248,19 +277,21 @@ def verifier_fastlane():
             if not os.path.isfile(chemin):
                 echec(locale, "fastlane/%s MANQUANT" % nom)
                 continue
-            octets = len(open(chemin, "rb").read().strip())
-            if octets > plafond:
-                echec(locale, "fastlane/%s : %d octets pour un plafond de %d "
-                              "(depasse de %d)" % (nom, octets, plafond, octets - plafond))
+            verifier_longueur(locale, nom, chemin, plafond, "F-Droid coupe la fiche")
+        if version is None:
+            continue
+        nom_journal = "changelogs/%d.txt" % version
+        journal = os.path.join(dossier, "changelogs", "%d.txt" % version)
+        if os.path.isfile(journal):
+            verifier_longueur(locale, nom_journal, journal, PLAFOND_CHANGELOG,
+                              "F-Droid tronque ce changelog")
         # v1.28.12 — les changelogs n'etaient jamais regardes. Les trois langues livrees
         # cette semaine n'en avaient AUCUN : leur fiche F-Droid aurait montre un nom, un
         # resume et une description dans leur langue, et un « Quoi de neuf » en anglais.
         # Une langue qui a une description de store doit avoir le changelog de la version
         # publiee — sinon elle n'est pas complete, elle est seulement commencee.
-        if version is not None and os.path.isfile(os.path.join(dossier, "full_description.txt")):
-            journal = os.path.join(dossier, "changelogs", "%d.txt" % version)
-            if not os.path.isfile(journal):
-                echec(locale, "fastlane/changelogs/%d.txt MANQUANT (version publiee)" % version)
+        elif os.path.isfile(os.path.join(dossier, "full_description.txt")):
+            echec(locale, "fastlane/%s MANQUANT (version publiee)" % nom_journal)
 
 
 def version_publiee():

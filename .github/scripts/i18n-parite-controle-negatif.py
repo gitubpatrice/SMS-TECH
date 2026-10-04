@@ -160,12 +160,14 @@ def batir():
     for locale in ("en-US", "de-DE"):
         fastlane = chemin("fastlane", "metadata", "android", locale)
         ecrire(os.path.join(fastlane, "title.txt"), "SMS Tech\n")
-        ecrire(os.path.join(fastlane, "short_description.txt"), "Une description courte.\n")
         ecrire(os.path.join(fastlane, "full_description.txt"), "Une description longue.\n")
-        # Un changelog VOLONTAIREMENT long : F-Droid n'impose AUCUN plafond sur ce champ
-        # (les 500 caracteres sont une regle Google Play), et le temoin positif doit le
-        # prouver en restant vert avec un changelog de plus de mille octets.
-        ecrire(os.path.join(fastlane, "changelogs", "300.txt"), "Correctif. " * 120 + "\n")
+        # Deux textes EXACTEMENT au plafond, en caracteres accentues : 80 caracteres pour
+        # 160 octets, 500 caracteres pour 1000 octets. fdroidserver coupe en CARACTERES
+        # (`text[:limit]`) ; le temoin positif doit rester vert, ce qui prouve a la fois la
+        # borne et l'unite. Un controle qui compterait des octets rougirait ici.
+        ecrire(os.path.join(fastlane, "short_description.txt"),
+               ("é" * 80 if locale == "de-DE" else "Une description courte.") + "\n")
+        ecrire(os.path.join(fastlane, "changelogs", "300.txt"), "é" * 500 + "\n")
 
 
 def de(contenu):
@@ -202,17 +204,32 @@ def parametre_invente():
 
 
 def fiche_de_store_trop_longue():
-    """Une description courte qui depasse en OCTETS sans depasser en CARACTERES.
+    """Une description courte d'UN caractere au-dessus du plafond : 81 pour 80.
 
-    C'est le defaut REEL du 2026-09-17 : la fiche espagnole pesait 4029 octets pour
-    3928 caracteres, et la verification manuelle, faite en caracteres, l'a declaree
-    conforme. Les 41 « e accent aigu » ci-dessous font 41 caracteres et 82 octets :
-    un controle qui compterait des caracteres laisserait passer, celui-ci doit rougir.
+    Le temoin positif en porte 80, accentues : la borne est donc tenue des deux cotes.
     """
     chemin_fiche = chemin("fastlane", "metadata", "android", "de-DE",
                           "short_description.txt")
-    ecrire(chemin_fiche, "é" * 41 + "\n")
-    return "fastlane/short_description.txt"
+    ecrire(chemin_fiche, "é" * 81 + "\n")
+    return "fastlane/short_description.txt : 81 caracteres"
+
+
+def changelog_trop_long():
+    """Le changelog publie d'UN caractere au-dessus des 500 ou F-Droid le coupe.
+
+    Le defaut REEL de la 1.28.13 : 718 a 871 caracteres dans les cinq langues, releve par
+    mezinster sur la MR !38458. Ce controle les declarait alors sans plafond.
+    """
+    ecrire(chemin("fastlane", "metadata", "android", "de-DE", "changelogs", "300.txt"),
+           "é" * 501 + "\n")
+    return "fastlane/changelogs/300.txt : 501 caracteres"
+
+
+def changelog_pas_en_utf8():
+    """Un changelog en Latin-1 : fdroidserver y mettrait des caracteres de remplacement."""
+    ecrire_octets(chemin("fastlane", "metadata", "android", "de-DE", "changelogs", "300.txt"),
+                  "Corrigé.\n".encode("latin-1"))
+    return "fastlane/changelogs/300.txt n'est pas de l'UTF-8 valide"
 
 
 def parametre_malforme():
@@ -359,7 +376,9 @@ CAS = [
     ("parametre de format PERDU", parametre_perdu),
     ("parametre de format INVENTE", parametre_invente),
     ("parametre de format MALFORME (%1$p)", parametre_malforme),
-    ("fiche de store : trop longue en OCTETS", fiche_de_store_trop_longue),
+    ("fiche de store : un caractere de trop", fiche_de_store_trop_longue),
+    ("changelog publie : un caractere de trop", changelog_trop_long),
+    ("changelog publie : pas en UTF-8", changelog_pas_en_utf8),
     ("parametre invente dans un pluriel", parametre_invente_dans_pluriel),
     ("quantite de pluriel manquante", quantite_manquante),
     ("geste 2 : absente de localeFilters", absente_de_localefilters),

@@ -1,7 +1,5 @@
-Fixes from the F-Droid review, and from refusing every permission one by one.
+With Contacts refused, New message and conversations crashed; fixed. The microphone is only requested when you record.
 
-With Contacts refused, opening New message or any conversation crashed the app. It now works, and says why the contact list is empty. The microphone is no longer requested at launch: the voice button asks when you use it.
+No more Internet permission: the app cannot reach the network at all. MMS still work, carried by Android's MMS service.
 
-SMS Tech no longer holds the Internet permission, so it cannot reach the network at all. MMS still work: Android's own MMS service carries them.
-
-Emergency mode: with the call permission refused, the 112 tile did nothing; it now opens the dialer. An "approximate" location was ignored; the alert now includes it, marked (+/-2 km). When notifications are off, the Safety call and Lock-screen shortcut screens say so.
+Emergency mode, permissions refused: the 112 tile opens the dialer, an approximate location is sent marked (+/-2 km), and Safety call and the lock-screen shortcut warn when notifications are off.

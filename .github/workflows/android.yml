@@ -86,7 +86,9 @@ jobs:
       # (PERMISSIONS.md, PRIVACY.md) ; c'est le manifeste fusionné RELEASE qui en décide, une
       # dépendance pouvant y ajouter une permission. Le contrôle lit le XML, tient une liste revue,
       # et prouve d'abord qu'il sait échouer (manifestes fautifs fabriqués).
-      - name: No INTERNET permission (merged release manifest)
+      # Après la 1.28.13, il refuse aussi toute exception non revue au lint ProtectedPermissions
+      # dans les manifestes source : elle cachait une permission système jamais accordée.
+      - name: Permissions (no INTERNET, no unreviewed protected permission)
         run: |
           python3 .github/scripts/permissions-manifeste.py --controle-negatif
           ./gradlew :app:processReleaseMainManifest --no-daemon

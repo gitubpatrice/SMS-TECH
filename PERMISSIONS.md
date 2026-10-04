@@ -10,7 +10,6 @@ permissions "just in case", and degrades gracefully if any of them is refused.
 | `READ_SMS`                                   | Read the system inbox (mandatory for any default SMS app).                      |
 | `WRITE_SMS`                                  | Mark messages read, insert sent rows (mandatory).                               |
 | `RECEIVE_MMS` / `RECEIVE_WAP_PUSH`           | Receive MMS notifications (WAP push).                                           |
-| `BROADCAST_WAP_PUSH`                         | Required pairing for the WAP_PUSH_DELIVER receiver.                             |
 | `READ_CONTACTS`                              | Show names instead of bare phone numbers in conversations.                      |
 | `READ_PHONE_STATE` / `READ_PHONE_NUMBERS`    | Detect dual-SIM and let you choose which SIM to send from.                      |
 | `POST_NOTIFICATIONS` (API 33+)               | Show new-message notifications (no notifications without your consent).         |
