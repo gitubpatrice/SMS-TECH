@@ -1,6 +1,6 @@
 # Conditions d'utilisation — SMS Tech
 
-_Dernière mise à jour : 2 octobre 2026_ · 🇬🇧 [English](TERMS.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇮🇹 [Italiano](TERMS.it.md) · 🇪🇸 [Español](TERMS.es.md)
+_Dernière mise à jour : 26 octobre 2026_ · 🇬🇧 [English](TERMS.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇮🇹 [Italiano](TERMS.it.md) · 🇪🇸 [Español](TERMS.es.md)
 
 > **Versions de référence.** Les versions française et anglaise de ces conditions font foi. Les
 > traductions allemande, italienne et espagnole sont fournies à titre d'information ; en cas de
@@ -87,13 +87,13 @@ l'y autorisez.
 
 ## Responsabilité
 
-Dans la limite autorisée par la loi, l'éditeur ne pourra être tenu responsable d'aucun dommage direct
-ou indirect résultant de l'utilisation de l'application. En particulier, l'éditeur n'est pas
-responsable de la non-remise ou du retard d'une alerte dus au réseau, à l'opérateur, au forfait, ou
-aux réglages et permissions de l'appareil ; et **toute perte de données consécutive à un oubli de
-phrase de passe ou de PIN, à l'effacement des données, à une désinstallation ou à une
-réinitialisation de l'appareil est de la seule responsabilité de l'utilisateur**. Rien dans ces
-conditions ne limite une responsabilité que la loi interdit de limiter.
+L'application est fournie gratuitement, par un particulier. Dans la mesure permise par la loi,
+l'éditeur n'est pas responsable des dommages indirects, ni de la non-remise ou du retard d'une
+alerte dus au réseau, à l'opérateur, au forfait, ou aux réglages et permissions de l'appareil, ni
+des pertes de données dues à l'usage de fonctions conçues pour être irréversibles (effacement des
+données, désinstallation, réinitialisation de l'appareil) ou à une phrase de passe ou un PIN oublié
+(licence Apache 2.0, section 8). Cette limite ne s'applique ni en cas de faute lourde ou dolosive,
+ni aux dommages que la loi interdit d'exclure.
 
 ## Loi applicable
 

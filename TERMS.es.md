@@ -1,6 +1,6 @@
 # Condiciones de uso — SMS Tech
 
-_Última actualización: 2 de octubre de 2026_ · 🇬🇧 [English](TERMS.md) · 🇫🇷 [Français](TERMS.fr.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇮🇹 [Italiano](TERMS.it.md)
+_Última actualización: 26 de octubre de 2026_ · 🇬🇧 [English](TERMS.md) · 🇫🇷 [Français](TERMS.fr.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇮🇹 [Italiano](TERMS.it.md)
 
 > **Traducción.** Esta traducción al español se facilita a título informativo. Solo las versiones
 > [inglesa](TERMS.md) y [francesa](TERMS.fr.md) de estas condiciones hacen fe; en caso de
@@ -89,13 +89,13 @@ si usted lo autoriza.
 
 ## Responsabilidad
 
-En la medida en que lo permita la ley, el editor no podrá ser considerado responsable de ningún daño
-directo o indirecto derivado del uso de la aplicación. En particular, el editor no es responsable de
-la falta de entrega o del retraso de una alerta debidos a la red, al operador, al plan, o a los
-ajustes y permisos del dispositivo; y **cualquier pérdida de datos derivada del olvido de una frase
-de contraseña o de un PIN, del borrado de los datos, de una desinstalación o de un restablecimiento
-del dispositivo es responsabilidad exclusiva del usuario**. Nada de lo dispuesto en estas
-condiciones limita una responsabilidad que la ley prohíbe limitar.
+La aplicación se ofrece gratuitamente, por un particular. En la medida en que la ley lo permita, el
+editor no es responsable de los daños indirectos, ni de la falta de entrega o del retraso de una
+alerta debidos a la red, al operador, al plan, o a los ajustes y permisos del dispositivo, ni de las
+pérdidas de datos debidas al uso de funciones concebidas para ser irreversibles (borrado de los
+datos, desinstalación, restablecimiento del dispositivo) o a una frase de contraseña o un PIN
+olvidados (licencia Apache 2.0, sección 8). Esta limitación no se aplica en caso de culpa grave o
+dolo, ni a los daños que la ley prohíbe excluir.
 
 ## Ley aplicable
 

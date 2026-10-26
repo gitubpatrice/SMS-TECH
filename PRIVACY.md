@@ -1,6 +1,6 @@
 # Privacy Policy — SMS Tech
 
-_Last updated: 2 October 2026_ · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
+_Last updated: 26 October 2026_ · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
 
 > **Reference versions.** The English and [French](PRIVACY.fr.md) versions of this policy are both
 > authoritative. The German, Italian and Spanish translations are provided for information; in case
@@ -82,3 +82,8 @@ Android's own message store are managed from Android or from any SMS app.
 ## Contact
 
 For any privacy-related question: **contact@files-tech.com**.
+
+The publisher receives no data from the app. Only an e-mail you choose to write to him reaches him:
+it is used only to answer you, kept for the time of the exchange, then erased. You can ask for
+access to it or its erasure at the same address, and complain to the CNIL, the French data
+protection authority (www.cnil.fr), if you think your rights are not respected.

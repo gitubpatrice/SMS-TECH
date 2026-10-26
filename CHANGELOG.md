@@ -3,6 +3,19 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+
+- **Terms of use, liability, in the five languages (English and French prevail).** The clause said the
+  publisher was liable for no damage at all, direct or indirect, and that any data loss was the user's
+  alone: a clause that broad risks being set aside whole. It now says the app is free and published by a
+  private individual, and limits liability to indirect damage, to an alert the network or the device did
+  not deliver, and to the data lost through functions meant to be irreversible or a forgotten passphrase
+  or PIN — never gross negligence, wilful misconduct, or what the law forbids excluding.
+- **Privacy policy, the e-mail you write to the developer.** It is used only to answer you, kept for the
+  time of the exchange, then erased; access and erasure on request, and the CNIL (GDPR article 13).
+
 ## [1.28.14] — 2026-10-16
 
 Asked for by the F-Droid review (fdroid/fdroiddata!38458). F-Droid reads the store listing from the
