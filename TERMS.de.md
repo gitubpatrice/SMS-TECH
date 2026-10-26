@@ -1,6 +1,6 @@
 # Nutzungsbedingungen — SMS Tech
 
-_Zuletzt aktualisiert: 2. Oktober 2026_ · 🇬🇧 [English](TERMS.md) · 🇫🇷 [Français](TERMS.fr.md) · 🇮🇹 [Italiano](TERMS.it.md) · 🇪🇸 [Español](TERMS.es.md)
+_Zuletzt aktualisiert: 26. Oktober 2026_ · 🇬🇧 [English](TERMS.md) · 🇫🇷 [Français](TERMS.fr.md) · 🇮🇹 [Italiano](TERMS.it.md) · 🇪🇸 [Español](TERMS.es.md)
 
 > **Übersetzung.** Diese deutsche Fassung ist eine Übersetzung, die zur Information bereitgestellt
 > wird. Verbindlich sind die [englische](TERMS.md) und die [französische](TERMS.fr.md) Fassung
@@ -90,14 +90,13 @@ F-Droid-Client, wenn Sie ihm dies erlauben.
 
 ## Haftung
 
-Soweit gesetzlich zulässig, kann der Herausgeber für keinerlei unmittelbare oder mittelbare Schäden
-haftbar gemacht werden, die sich aus der Nutzung der App ergeben. Insbesondere haftet der
-Herausgeber nicht dafür, dass ein Alarm aufgrund des Netzes, des Mobilfunkanbieters, des Tarifs oder
-der Einstellungen und Berechtigungen des Geräts nicht oder verspätet zugestellt wird; und **jeder
-Datenverlust infolge einer vergessenen Passphrase oder PIN, einer Datenlöschung, einer
-Deinstallation oder eines Zurücksetzens des Geräts liegt in der alleinigen Verantwortung des
-Nutzers**. Keine Bestimmung dieser Bedingungen beschränkt eine Haftung, deren Beschränkung
-gesetzlich unzulässig ist.
+Die App wird kostenlos von einer Privatperson bereitgestellt. Soweit gesetzlich zulässig, haftet der
+Herausgeber nicht für indirekte Schäden, nicht dafür, dass ein Alarm aufgrund des Netzes, des
+Mobilfunkanbieters, des Tarifs oder der Einstellungen und Berechtigungen des Geräts nicht oder
+verspätet zugestellt wird, und nicht für Datenverluste, die auf die Nutzung bewusst unwiderruflicher
+Funktionen (Datenlöschung, Deinstallation, Zurücksetzen des Geräts) oder auf eine vergessene
+Passphrase oder PIN zurückgehen (Apache-Lizenz 2.0, Abschnitt 8). Diese Beschränkung gilt weder bei
+grober Fahrlässigkeit oder Vorsatz noch für Schäden, deren Ausschluss das Gesetz verbietet.
 
 ## Anwendbares Recht
 

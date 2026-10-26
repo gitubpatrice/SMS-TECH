@@ -1,6 +1,6 @@
 # Terms of use — SMS Tech
 
-_Last updated: 2 October 2026_ · 🇫🇷 [Français](TERMS.fr.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇮🇹 [Italiano](TERMS.it.md) · 🇪🇸 [Español](TERMS.es.md)
+_Last updated: 26 October 2026_ · 🇫🇷 [Français](TERMS.fr.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇮🇹 [Italiano](TERMS.it.md) · 🇪🇸 [Español](TERMS.es.md)
 
 > **Reference versions.** The English and [French](TERMS.fr.md) versions of these terms are both
 > authoritative. The German, Italian and Spanish translations are provided for information; in case
@@ -82,12 +82,13 @@ version is up to you, or to your F-Droid client if you allow it.
 
 ## Liability
 
-To the extent permitted by law, the publisher cannot be held liable for any direct or indirect damage
-resulting from the use of the app. In particular, the publisher is not liable for an alert that is
-not delivered or is delayed because of the network, the carrier, the plan, or the device's settings
-and permissions; and **any data loss following a forgotten passphrase or PIN, a data wipe, an
-uninstall or a device reset is the sole responsibility of the user**. Nothing in these terms limits a
-liability that the law forbids limiting.
+The app is provided free of charge, by a private individual. To the extent permitted by law, the
+publisher is not liable for indirect damage, nor for an alert that is not delivered or is delayed
+because of the network, the carrier, the plan, or the device's settings and permissions, nor for
+data loss caused by using functions designed to be irreversible (wiping the data, uninstalling,
+resetting the device) or by a forgotten passphrase or PIN (Apache 2.0 license, section 8). This
+limit applies neither to gross negligence or wilful misconduct, nor to damage the law forbids
+excluding.
 
 ## Governing law
 

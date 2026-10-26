@@ -1,6 +1,6 @@
 # Política de privacidad — SMS Tech
 
-_Última actualización: 2 de octubre de 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md)
+_Última actualización: 26 de octubre de 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md)
 
 > **Traducción.** Esta traducción al español se facilita a título informativo. Solo las versiones
 > [inglesa](PRIVACY.md) y [francesa](PRIVACY.fr.md) de esta política hacen fe; en caso de
@@ -86,3 +86,9 @@ desde cualquier aplicación de SMS.
 ## Contacto
 
 Para cualquier pregunta: **contact@files-tech.com**.
+
+El editor no recibe ningún dato de la aplicación. Solo le llega un correo que usted decida
+escribirle: solo sirve para responderle, se conserva el tiempo del intercambio y después se borra.
+Puede solicitar el acceso a él o su supresión en la misma dirección, y reclamar ante la CNIL, la
+autoridad francesa de protección de datos (www.cnil.fr), si considera que no se respetan sus
+derechos.

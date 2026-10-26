@@ -1,6 +1,6 @@
 # Datenschutzerklärung — SMS Tech
 
-_Zuletzt aktualisiert: 2. Oktober 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
+_Zuletzt aktualisiert: 26. Oktober 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
 
 > **Übersetzung.** Diese deutsche Fassung ist eine Übersetzung, die zur Information bereitgestellt
 > wird. Verbindlich sind die [englische](PRIVACY.md) und die [französische](PRIVACY.fr.md) Fassung
@@ -87,3 +87,9 @@ Android-Systems aufbewahrten Nachrichten verwalten Sie über Android oder über 
 ## Kontakt
 
 Bei allen Fragen: **contact@files-tech.com**.
+
+Der Herausgeber erhält keine Daten von der App. Ihn erreicht nur eine E-Mail, die Sie ihm schreiben
+möchten: Sie dient nur dazu, Ihnen zu antworten, wird für die Dauer des Austauschs aufbewahrt und
+dann gelöscht. Sie können unter derselben Adresse Auskunft darüber oder ihre Löschung verlangen und
+sich bei der CNIL, der französischen Datenschutzbehörde (www.cnil.fr), beschweren, wenn Sie Ihre
+Rechte nicht gewahrt sehen.

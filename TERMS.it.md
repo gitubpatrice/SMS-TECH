@@ -1,6 +1,6 @@
 # Condizioni d'uso — SMS Tech
 
-_Ultimo aggiornamento: 2 ottobre 2026_ · 🇬🇧 [English](TERMS.md) · 🇫🇷 [Français](TERMS.fr.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇪🇸 [Español](TERMS.es.md)
+_Ultimo aggiornamento: 26 ottobre 2026_ · 🇬🇧 [English](TERMS.md) · 🇫🇷 [Français](TERMS.fr.md) · 🇩🇪 [Deutsch](TERMS.de.md) · 🇪🇸 [Español](TERMS.es.md)
 
 > **Traduzione.** Questa traduzione italiana è fornita a titolo informativo. Fanno fede le versioni
 > [inglese](TERMS.md) e [francese](TERMS.fr.md) di queste condizioni; in caso di discrepanza,
@@ -88,13 +88,13 @@ se lei lo autorizza.
 
 ## Responsabilità
 
-Nei limiti consentiti dalla legge, l'editore non potrà essere ritenuto responsabile di alcun danno
-diretto o indiretto derivante dall'utilizzo dell'applicazione. In particolare, l'editore non è
-responsabile della mancata consegna o del ritardo di un allarme dovuti alla rete, all'operatore, al
-piano tariffario, o alle impostazioni e autorizzazioni del dispositivo; e **qualsiasi perdita di
-dati conseguente alla dimenticanza di una passphrase o di un PIN, alla cancellazione dei dati, a una
-disinstallazione o a un ripristino del dispositivo è di esclusiva responsabilità dell'utente**.
-Nulla in queste condizioni limita una responsabilità che la legge vieta di limitare.
+L'applicazione è fornita gratuitamente, da un privato. Nella misura consentita dalla legge,
+l'editore non è responsabile dei danni indiretti, né della mancata consegna o del ritardo di un
+allarme dovuti alla rete, all'operatore, al piano tariffario, o alle impostazioni e autorizzazioni
+del dispositivo, né delle perdite di dati dovute all'uso di funzioni concepite per essere
+irreversibili (cancellazione dei dati, disinstallazione, ripristino del dispositivo) o a una
+passphrase o un PIN dimenticati (licenza Apache 2.0, sezione 8). Questo limite non si applica né in
+caso di colpa grave o dolo, né ai danni che la legge vieta di escludere.
 
 ## Legge applicabile
 
