@@ -755,6 +755,8 @@
     <string name="about_license">License</string>
     <string name="about_privacy">Privacy policy</string>
     <string name="about_terms">Terms of use</string>
+    <string name="about_support">Support the project</string>
+    <string name="about_support_desc">A donation helps keep the app free, with no ads and no trackers</string>
 
     <!-- Notification channels -->
     <string name="channel_incoming_label">Incoming messages</string>

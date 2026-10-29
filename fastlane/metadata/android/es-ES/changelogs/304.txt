@@ -1,0 +1,7 @@
+Tamaño del texto de los mensajes: Ajustes > Apariencia, seis niveles hasta el 175 %, además de la fuente de Android.
+
+Las fotos muestran su estado, y un MMS rechazado por el operador ya no parece enviado: lo indica, con el código del operador.
+
+«Bloquear los números desconocidos» explica que esos mensajes se eliminan al llegar.
+
+El resumen de emergencia ya no promete una ubicación que el SMS no incluye. Límite de voz correcto: 120 s / 280 KB.

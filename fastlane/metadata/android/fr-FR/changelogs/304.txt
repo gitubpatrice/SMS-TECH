@@ -1,0 +1,7 @@
+Taille du texte des messages : Réglages > Apparence, six crans jusqu'à 175 %, en plus de la police d'Android.
+
+Les photos affichent leur statut, et un MMS refusé par l'opérateur ne paraît plus envoyé : il le dit, avec le code de l'opérateur.
+
+« Bloquer les numéros inconnus » explique que ces messages sont supprimés à l'arrivée.
+
+Le résumé du mode urgence n'annonce plus une position absente du SMS. Limite vocale exacte : 120 s / 280 Ko.
