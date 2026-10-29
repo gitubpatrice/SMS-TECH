@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -50,13 +51,16 @@ internal fun TextScalePickerDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.size(8.dp))
-                TextScale.entries.forEach { scale ->
-                    TextScaleOption(
-                        label = textScaleLabel(scale),
-                        style = MaterialTheme.typography.bodyLarge.scaledBy(scale.factor()),
-                        selected = scale == current,
-                        onClick = { onPick(scale) },
-                    )
+                // Un seul groupe pour TalkBack : il annonce la position (« 3 sur 6 »).
+                Column(modifier = Modifier.selectableGroup()) {
+                    TextScale.entries.forEach { scale ->
+                        TextScaleOption(
+                            label = textScaleLabel(scale),
+                            style = MaterialTheme.typography.bodyLarge.scaledBy(scale.factor()),
+                            selected = scale == current,
+                            onClick = { onPick(scale) },
+                        )
+                    }
                 }
             }
         },

@@ -42,6 +42,13 @@ import com.filestech.sms.domain.settings.TextScale
  *
  * ⚠️ Un conteneur de taille FIXE qui porte du texte casse sous ce coefficient (texte coupé) : ne
  * pas envelopper l'avatar (initiales dans un cercle fixe), dimensionner une pastille en `heightIn`.
+ *
+ * # Menus et dialogues ouverts depuis le périmètre
+ *
+ * Un menu ou un dialogue composé DANS le périmètre hérite de la taille : le menu ⋮ d'une bulle,
+ * l'explication anti-hameçonnage. C'est voulu — ils servent le même lecteur, et un menu resté
+ * petit sous un message agrandi serait le seul texte illisible de l'écran. Conséquence : tout
+ * dialogue composé dans le périmètre doit DÉFILER (`SmishingExplainDialog` le fait).
  */
 
 /**

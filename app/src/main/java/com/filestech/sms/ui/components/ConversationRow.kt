@@ -295,13 +295,14 @@ fun ConversationRow(
 private fun UnreadChip(count: Int) {
     val cs = MaterialTheme.colorScheme
     val label = if (count > 99) "99+" else count.toString()
-    // 2026-10-29 — hauteur MINIMALE, coins à 50 % : la pastille suit la taille du texte des
-    // messages ([MessageTextSize]) et la police d'Android. Une hauteur fixe coupait le chiffre
-    // dès que le texte dépassait 22 dp. Au défaut, rendu inchangé (22 dp, coins de 11 dp).
+    // 2026-10-29 — hauteur MINIMALE et non plus fixe : la pastille suit la taille du texte des
+    // messages ([MessageTextSize]) et la police d'Android, qui coupait déjà le chiffre au-delà de
+    // 22 dp. Coins gardés à 11 dp : à police normale, rendu identique au pixel près (mesuré ;
+    // un arrondi à 50 % différait de quelques pixels d'anticrénelage).
     Box(
         modifier = Modifier
             .heightIn(min = 22.dp)
-            .clip(RoundedCornerShape(percent = 50))
+            .clip(RoundedCornerShape(11.dp))
             .background(cs.primary)
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
