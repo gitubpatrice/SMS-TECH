@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.filestech.sms.domain.model.MessageSearchHit
+import com.filestech.sms.ui.theme.MessageTextSize
 import com.filestech.sms.ui.util.relativeRowLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
 
@@ -63,31 +64,34 @@ fun MessageSearchRow(
             Avatar(label = conversation.title, customUri = conversation.avatarUri, isGroup = conversation.isGroup)
             Spacer(Modifier.width(12.dp))
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // Taille du texte des messages : la colonne de texte seulement, comme ConversationRow.
+        MessageTextSize {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = conversation.title,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                        color = cs.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = dateLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.size(2.dp))
                 Text(
-                    text = conversation.title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-                    color = cs.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = dateLabel,
-                    style = MaterialTheme.typography.labelSmall,
+                    text = extrait,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = cs.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.size(2.dp))
-            Text(
-                text = extrait,
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }

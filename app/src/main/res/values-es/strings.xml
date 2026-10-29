@@ -391,6 +391,15 @@
     <string name="settings_theme_dark_tech_desc">Paleta oscura pensada para quien programa. Tiene prioridad sobre los colores dinámicos y sobre AMOLED.</string>
     <string name="settings_dynamic_colors">Colores dinámicos (Android 12+)</string>
     <string name="settings_amoled">Negro absoluto AMOLED</string>
+    <string name="settings_text_scale">Tamaño del texto de los mensajes</string>
+    <string name="settings_text_scale_desc">%1$s · mensajes, campo de escritura y lista de conversaciones. Se suma al tamaño de fuente de Android.</string>
+    <string name="settings_text_scale_hint">Agranda o reduce el texto de sus conversaciones: los mensajes, el campo de escritura, la lista de conversaciones y los resultados de búsqueda. Este ajuste se suma al tamaño de fuente elegido en los ajustes de Android.</string>
+    <string name="text_scale_xs">Muy pequeño</string>
+    <string name="text_scale_s">Pequeño</string>
+    <string name="text_scale_medium">Normal</string>
+    <string name="text_scale_l">Grande</string>
+    <string name="text_scale_xl">Muy grande</string>
+    <string name="text_scale_xxl">Máximo</string>
 
     <string name="settings_section_locale">Idioma y región</string>
     <string name="settings_language">Idioma de la app</string>
@@ -685,6 +694,7 @@
     <string name="settings_section_blocking">Bloqueo</string>
     <string name="settings_block_unknown">Bloquear los números desconocidos</string>
     <string name="settings_block_unknown_no_contacts">Sin acceso a sus contactos, los números desconocidos no se bloquean. Su lista de números bloqueados sigue activa. Permita Contactos en los ajustes de Android.</string>
+    <string name="settings_block_unknown_desc">Los mensajes de números que no están en sus contactos se eliminan en cuanto llegan: sin notificación, sin copia, sin forma de recuperarlos. Esto también se aplica a los remitentes que aparecen con un nombre (banco, empresa de reparto) y a los códigos de verificación.</string>
     <string name="attach_contact_needs_permission">Para adjuntar una tarjeta de contacto se necesita acceso a sus contactos. Permita Contactos en los ajustes de Android.</string>
     <string name="settings_manage_blocked">Gestionar la lista de bloqueados</string>
 

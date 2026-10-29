@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.ui.theme.BrandBlocked
 import com.filestech.sms.ui.theme.BrandDanger
+import com.filestech.sms.ui.theme.MessageTextSize
 import com.filestech.sms.ui.util.relativeRowLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
 
@@ -124,144 +126,148 @@ fun ConversationRow(
                 Avatar(label = title, customUri = conversation.avatarUri, isGroup = conversation.isGroup)
                 Spacer(Modifier.width(12.dp))
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (conversation.pinned) {
-                        Icon(
-                            imageVector = Icons.Outlined.PushPin,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = cs.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(4.dp))
-                    }
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
-                        ),
-                        color = cs.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // v1.28.3 — le nombre de membres, discret, à côté du titre d'un groupe.
-                    if (conversation.isGroup) {
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "· ${conversation.addresses.size}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = cs.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    if (conversation.muted) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = cs.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    // v1.6.1 (audit PERF-03) — `relativeRowLabel` alloue 2 Calendar
-                    // par appel ; sur liste de 50 conversations qui recompose lors d'une
-                    // arrivée SMS, c'est 100 allocations Calendar inutiles. La clef
-                    // `lastMessageAt` garantit le recalcul si la date change réellement.
-                    val dateLabel = remember(conversation.lastMessageAt) {
-                        formatters.relativeRowLabel(conversation.lastMessageAt)
-                    }
-                    Text(
-                        text = dateLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
-                        ),
-                        color = if (unread) cs.primary else cs.onSurfaceVariant,
-                    )
-                }
-                if (!subtitleNumber.isNullOrBlank()) {
-                    // v1.23.x — numéro sous le nom pour distinguer deux conversations du même
-                    // contact (noms identiques, numéros différents).
-                    Text(
-                        text = subtitleNumber,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = cs.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(Modifier.size(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // v1.25.3 — « Bloqué » sur la ligne d'aperçu et non sur celle du titre : cette
-                    // dernière se termine par l'horodatage relatif (« jeu. », « 14:32 »), et le
-                    // titre prenant toute la largeur restante, le libellé s'y retrouvait collé à
-                    // la date, les deux se lisant comme un seul bloc.
-                    //
-                    // Il double le fond et la bordure : la couleur seule ne doit jamais porter une
-                    // information (daltonisme, contraste réduit), et TalkBack n'annonce pas un
-                    // fond coloré.
-                    if (conversation.blocked) {
-                        Text(
-                            text = androidx.compose.ui.res.stringResource(
-                                id = com.filestech.sms.R.string.conversation_blocked_label,
-                            ),
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            color = BrandBlocked,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = " · ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = cs.onSurfaceVariant,
-                        )
-                    }
-                    val draftText = conversation.draft
-                    Text(
-                        text = if (!draftText.isNullOrBlank()) {
-                            androidx.compose.ui.res.stringResource(
-                                id = com.filestech.sms.R.string.conversations_draft_prefix,
-                                draftText,
+            // Taille du texte des messages : la colonne de texte seulement — l'avatar écrit ses
+            // initiales dans un cercle de taille fixe, qu'un texte agrandi déborderait.
+            MessageTextSize {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (conversation.pinned) {
+                            Icon(
+                                imageVector = Icons.Outlined.PushPin,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = cs.onSurfaceVariant,
                             )
-                        } else {
-                            // v1.27.2 (relecture Codex 2026-08-04) — repli quand l'aperçu est
-                            // vide alors qu'un dernier message existe.
-                            //
-                            // `conversations.last_message_preview` se reconstruit depuis
-                            // `messages.body`, or le corps d'un MMS SANS LÉGENDE est vide : son
-                            // libellé utile (« 🖼️ … », sujet) n'est posé qu'à l'insertion et
-                            // aucune colonne ne le porte par message. Tout recalcul d'aperçu le
-                            // perd donc — à la suppression d'un message, à la purge d'historique
-                            // comme à la réconciliation de synchro. La ligne devenait alors
-                            // MUETTE, sans rien dire de ce qu'elle contenait.
-                            //
-                            // Corrigé ici plutôt qu'en base : une colonne supplémentaire
-                            // imposerait une migration Room sur une base chiffrée contenant tous
-                            // les messages, pour un défaut d'affichage. Le repli couvre les
-                            // trois chemins d'un coup.
-                            //
-                            // `lastMessageAt > 0` distingue « message sans texte » de
-                            // « conversation sans aucun message » — cette dernière reste muette,
-                            // ce qui est exact.
-                            val preview = conversation.lastMessagePreview.orEmpty()
-                            if (preview.isBlank() && conversation.lastMessageAt > 0L) {
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
+                            ),
+                            color = cs.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        // v1.28.3 — le nombre de membres, discret, à côté du titre d'un groupe.
+                        if (conversation.isGroup) {
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "· ${conversation.addresses.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = cs.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        if (conversation.muted) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = cs.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        // v1.6.1 (audit PERF-03) — `relativeRowLabel` alloue 2 Calendar
+                        // par appel ; sur liste de 50 conversations qui recompose lors d'une
+                        // arrivée SMS, c'est 100 allocations Calendar inutiles. La clef
+                        // `lastMessageAt` garantit le recalcul si la date change réellement.
+                        val dateLabel = remember(conversation.lastMessageAt) {
+                            formatters.relativeRowLabel(conversation.lastMessageAt)
+                        }
+                        Text(
+                            text = dateLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
+                            ),
+                            color = if (unread) cs.primary else cs.onSurfaceVariant,
+                        )
+                    }
+                    if (!subtitleNumber.isNullOrBlank()) {
+                        // v1.23.x — numéro sous le nom pour distinguer deux conversations du même
+                        // contact (noms identiques, numéros différents).
+                        Text(
+                            text = subtitleNumber,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.size(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // v1.25.3 — « Bloqué » sur la ligne d'aperçu et non sur celle du titre : cette
+                        // dernière se termine par l'horodatage relatif (« jeu. », « 14:32 »), et le
+                        // titre prenant toute la largeur restante, le libellé s'y retrouvait collé à
+                        // la date, les deux se lisant comme un seul bloc.
+                        //
+                        // Il double le fond et la bordure : la couleur seule ne doit jamais porter une
+                        // information (daltonisme, contraste réduit), et TalkBack n'annonce pas un
+                        // fond coloré.
+                        if (conversation.blocked) {
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(
+                                    id = com.filestech.sms.R.string.conversation_blocked_label,
+                                ),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = BrandBlocked,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = " · ",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = cs.onSurfaceVariant,
+                            )
+                        }
+                        val draftText = conversation.draft
+                        Text(
+                            text = if (!draftText.isNullOrBlank()) {
                                 androidx.compose.ui.res.stringResource(
-                                    id = com.filestech.sms.R.string.conversations_preview_attachment,
+                                    id = com.filestech.sms.R.string.conversations_draft_prefix,
+                                    draftText,
                                 )
                             } else {
-                                preview
-                            }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (unread) cs.onSurface else cs.onSurfaceVariant,
-                        maxLines = previewLines,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (unread) {
-                        Spacer(Modifier.width(8.dp))
-                        UnreadChip(count = conversation.unreadCount)
+                                // v1.27.2 (relecture Codex 2026-08-04) — repli quand l'aperçu est
+                                // vide alors qu'un dernier message existe.
+                                //
+                                // `conversations.last_message_preview` se reconstruit depuis
+                                // `messages.body`, or le corps d'un MMS SANS LÉGENDE est vide : son
+                                // libellé utile (« 🖼️ … », sujet) n'est posé qu'à l'insertion et
+                                // aucune colonne ne le porte par message. Tout recalcul d'aperçu le
+                                // perd donc — à la suppression d'un message, à la purge d'historique
+                                // comme à la réconciliation de synchro. La ligne devenait alors
+                                // MUETTE, sans rien dire de ce qu'elle contenait.
+                                //
+                                // Corrigé ici plutôt qu'en base : une colonne supplémentaire
+                                // imposerait une migration Room sur une base chiffrée contenant tous
+                                // les messages, pour un défaut d'affichage. Le repli couvre les
+                                // trois chemins d'un coup.
+                                //
+                                // `lastMessageAt > 0` distingue « message sans texte » de
+                                // « conversation sans aucun message » — cette dernière reste muette,
+                                // ce qui est exact.
+                                val preview = conversation.lastMessagePreview.orEmpty()
+                                if (preview.isBlank() && conversation.lastMessageAt > 0L) {
+                                    androidx.compose.ui.res.stringResource(
+                                        id = com.filestech.sms.R.string.conversations_preview_attachment,
+                                    )
+                                } else {
+                                    preview
+                                }
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (unread) cs.onSurface else cs.onSurfaceVariant,
+                            maxLines = previewLines,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (unread) {
+                            Spacer(Modifier.width(8.dp))
+                            UnreadChip(count = conversation.unreadCount)
+                        }
                     }
                 }
             }
@@ -289,10 +295,13 @@ fun ConversationRow(
 private fun UnreadChip(count: Int) {
     val cs = MaterialTheme.colorScheme
     val label = if (count > 99) "99+" else count.toString()
+    // 2026-10-29 — hauteur MINIMALE, coins à 50 % : la pastille suit la taille du texte des
+    // messages ([MessageTextSize]) et la police d'Android. Une hauteur fixe coupait le chiffre
+    // dès que le texte dépassait 22 dp. Au défaut, rendu inchangé (22 dp, coins de 11 dp).
     Box(
         modifier = Modifier
-            .height(22.dp)
-            .clip(RoundedCornerShape(11.dp))
+            .heightIn(min = 22.dp)
+            .clip(RoundedCornerShape(percent = 50))
             .background(cs.primary)
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,

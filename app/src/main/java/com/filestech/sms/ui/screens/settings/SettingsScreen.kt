@@ -130,6 +130,7 @@ fun SettingsScreen(
     var lockModePickerOpen by remember { mutableStateOf(false) }
     // v1.26.1 (audit F4) — sélecteur du délai de verrouillage automatique.
     var autoLockDelayPickerOpen by remember { mutableStateOf(false) }
+    var textScalePickerOpen by remember { mutableStateOf(false) }
 
     /** v1.25.3 (audit M23) — confirmation avant de supprimer le verrou de l'app. */
     var lockClearConfirmOpen by remember { mutableStateOf(false) }
@@ -361,6 +362,15 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_amoled),
                     value = state.appearance.amoledTrueBlack,
                     onChange = { v -> viewModel.update { it.copy(appearance = it.appearance.copy(amoledTrueBlack = v)) } },
+                )
+                // 2026-10-29 — taille du texte des messages, cf. [com.filestech.sms.ui.theme.MessageTextSize].
+                NavigationRow(
+                    title = stringResource(R.string.settings_text_scale),
+                    description = stringResource(
+                        R.string.settings_text_scale_desc,
+                        textScaleLabel(state.appearance.textScale),
+                    ),
+                    onClick = { textScalePickerOpen = true },
                 )
             }
 
@@ -676,10 +686,15 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_block_unknown),
                     value = state.blocking.blockUnknown,
                     onChange = { v -> viewModel.update { it.copy(blocking = it.blocking.copy(blockUnknown = v)) } },
+                    // 2026-10-29 — l'effet est dit AVANT d'activer : `IncomingBlockPolicy` écarte le
+                    // message à la réception, sans notification ni copie (pas même le filet de
+                    // secours de `SmsDeliverReceiver`), et un expéditeur alphanumérique n'est
+                    // jamais un contact. Activé sans accès aux contacts, l'avertissement prime :
+                    // rien n'est alors bloqué.
                     description = if (state.blocking.blockUnknown && !contactsAccordes) {
                         stringResource(R.string.settings_block_unknown_no_contacts)
                     } else {
-                        null
+                        stringResource(R.string.settings_block_unknown_desc)
                     },
                 )
                 NavigationRow(stringResource(R.string.settings_manage_blocked), onClick = onOpenBlocked)
@@ -939,6 +954,17 @@ fun SettingsScreen(
                     viewModel.terminerEffacement()
                 }) { Text(stringResource(R.string.action_close)) }
             },
+        )
+    }
+
+    if (textScalePickerOpen) {
+        TextScalePickerDialog(
+            current = state.appearance.textScale,
+            onPick = { scale ->
+                textScalePickerOpen = false
+                viewModel.update { it.copy(appearance = it.appearance.copy(textScale = scale)) }
+            },
+            onDismiss = { textScalePickerOpen = false },
         )
     }
 

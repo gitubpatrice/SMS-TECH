@@ -132,6 +132,7 @@ import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.components.toPlaybackUri
 import com.filestech.sms.ui.security.copyToClipboardSensitive
 import com.filestech.sms.ui.theme.BrandDanger
+import com.filestech.sms.ui.theme.MessageTextSize
 import com.filestech.sms.ui.util.daySeparatorLabel
 import com.filestech.sms.ui.util.rememberChatFormatters
 import com.filestech.sms.ui.util.rememberSimLabeler
@@ -1638,31 +1639,34 @@ private fun ComposingRow(
                     cancelHinted = cancelHinted,
                 )
             } else {
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = onDraftChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(stringResource(R.string.thread_compose_placeholder)) },
-                    maxLines = 5,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Default,
-                    ),
-                    supportingText = if (segments.segmentCount > 0) {
-                        {
-                            Text(
-                                text = stringResource(
-                                    R.string.thread_segments_indicator,
-                                    segments.length,
-                                    segments.length + segments.charsRemainingInCurrentSegment,
-                                    segments.segmentCount,
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = cs.onSurfaceVariant,
-                            )
-                        }
-                    } else null,
-                )
+                // Le texte saisi suit la taille du texte des messages, comme les bulles.
+                MessageTextSize {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = onDraftChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(stringResource(R.string.thread_compose_placeholder)) },
+                        maxLines = 5,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Default,
+                        ),
+                        supportingText = if (segments.segmentCount > 0) {
+                            {
+                                Text(
+                                    text = stringResource(
+                                        R.string.thread_segments_indicator,
+                                        segments.length,
+                                        segments.length + segments.charsRemainingInCurrentSegment,
+                                        segments.segmentCount,
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = cs.onSurfaceVariant,
+                                )
+                            }
+                        } else null,
+                    )
+                }
             }
         }
         Spacer(Modifier.width(4.dp))
@@ -2145,108 +2149,111 @@ private fun ThreadMessageItem(
     simLabel: String? = null,
     actions: ThreadMessageItemActions,
 ) {
-    // Date separator (calendar day boundary) — affiché au-dessus du 1er msg du jour.
-    daySeparatorLabel?.let { label ->
-        DateSeparator(label = label)
-    }
+    // Taille du texte des messages : tout l'élément (séparateur, bulle, citation, horodatage).
+    MessageTextSize {
+        // Date separator (calendar day boundary) — affiché au-dessus du 1er msg du jour.
+        daySeparatorLabel?.let { label ->
+            DateSeparator(label = label)
+        }
 
-    val showTimestamp = prev?.date?.let { msg.date - it > 5 * 60_000L } ?: true
-    val burstPosition = computeBurstPosition(prev, msg, next)
-    val audio = msg.audioAttachment
-    // v1.3.3 bug #2 — pour les pièces jointes NON-audio (image/video/file), on délègue à
-    // MediaAttachmentBubble qui ajoute le tap-to-view (ACTION_VIEW via FileProvider).
-    // v1.28.3 (audit global, X-04 — mesuré sur le S9) — TOUTES, pas la première : F16 gardait
-    // toutes les parties d'un MMS, l'écran n'en montrait qu'une.
-    val mediaAttachments = msg.attachments.filter { !it.isAudio }
-    val mediaAttachment = mediaAttachments.firstOrNull()
-    // v1.3.3 #7 — étiquette d'expéditeur uniquement sur la 1ʳᵉ bulle d'un burst (Solo ou First)
-    // pour ne pas surcharger visuellement les suites consécutives du même expéditeur.
-    val baseSenderLabel: String? = if (
-        burstPosition == BurstPosition.Solo ||
-        burstPosition == BurstPosition.First
-    ) {
-        if (msg.isOutgoing) {
-            stringResource(R.string.bubble_sender_self)
-        } else {
-            conversationDisplayName?.takeIf { it.isNotBlank() } ?: msg.address
+        val showTimestamp = prev?.date?.let { msg.date - it > 5 * 60_000L } ?: true
+        val burstPosition = computeBurstPosition(prev, msg, next)
+        val audio = msg.audioAttachment
+        // v1.3.3 bug #2 — pour les pièces jointes NON-audio (image/video/file), on délègue à
+        // MediaAttachmentBubble qui ajoute le tap-to-view (ACTION_VIEW via FileProvider).
+        // v1.28.3 (audit global, X-04 — mesuré sur le S9) — TOUTES, pas la première : F16 gardait
+        // toutes les parties d'un MMS, l'écran n'en montrait qu'une.
+        val mediaAttachments = msg.attachments.filter { !it.isAudio }
+        val mediaAttachment = mediaAttachments.firstOrNull()
+        // v1.3.3 #7 — étiquette d'expéditeur uniquement sur la 1ʳᵉ bulle d'un burst (Solo ou First)
+        // pour ne pas surcharger visuellement les suites consécutives du même expéditeur.
+        val baseSenderLabel: String? = if (
+            burstPosition == BurstPosition.Solo ||
+            burstPosition == BurstPosition.First
+        ) {
+            if (msg.isOutgoing) {
+                stringResource(R.string.bubble_sender_self)
+            } else {
+                conversationDisplayName?.takeIf { it.isNotBlank() } ?: msg.address
+            }
+        } else null
+        // v1.22.0 (double SIM) — suffixe le libellé SIM au nom de l'expéditeur sur la 1ʳᵉ bulle du
+        // burst ("Marie · SIM 2"), ce qui distingue d'un coup d'œil les conversations reçues sur la
+        // puce locale vs étrangère. `simLabel` vaut déjà `null` hors multi-SIM (ou message sans
+        // `sub_id`), donc les cas mono-SIM et les messages historiques restent strictement inchangés.
+        val senderLabel: String? = when {
+            baseSenderLabel == null -> null
+            simLabel.isNullOrBlank() -> baseSenderLabel
+            else -> "$baseSenderLabel · $simLabel"
         }
-    } else null
-    // v1.22.0 (double SIM) — suffixe le libellé SIM au nom de l'expéditeur sur la 1ʳᵉ bulle du
-    // burst ("Marie · SIM 2"), ce qui distingue d'un coup d'œil les conversations reçues sur la
-    // puce locale vs étrangère. `simLabel` vaut déjà `null` hors multi-SIM (ou message sans
-    // `sub_id`), donc les cas mono-SIM et les messages historiques restent strictement inchangés.
-    val senderLabel: String? = when {
-        baseSenderLabel == null -> null
-        simLabel.isNullOrBlank() -> baseSenderLabel
-        else -> "$baseSenderLabel · $simLabel"
-    }
 
-    when {
-        audio != null -> {
-            AudioMessageBubble(
-                message = msg,
-                audio = audio,
-                playbackProvider = playbackProvider,
-                onTogglePlay = { actions.onTogglePlayback(audio) },
-                onSeekTo = actions.onSeekPlayback,
-                onDelete = { actions.onDelete(msg) },
-                onReply = { actions.onReply(msg) },
-                // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus.
-                onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
-                onForward = { actions.onForward(msg) },
-                // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
-                onToggleStar = { actions.onToggleStar(msg) },
-                onRemoveReaction = { actions.onRemoveReaction(msg) },
-                repliedToPreview = repliedToPreview,
-                showTimestamp = showTimestamp,
-                senderLabel = senderLabel,
-            )
-        }
-        mediaAttachment != null -> {
-            com.filestech.sms.ui.components.MediaAttachmentBubble(
-                message = msg,
-                attachment = mediaAttachment,
-                autres = mediaAttachments.drop(1),
-                showTimestamp = showTimestamp,
-                onDelete = { actions.onDelete(msg) },
-                onReply = { actions.onReply(msg) },
-                onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
-                // v1.3.11 (F3) — copy exposed only when the bubble carries a user-typed caption.
-                onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
-                onSelectText = if (msg.body.isNotBlank()) { { actions.onSelectText(msg) } } else null,
-                onForward = { actions.onForward(msg) },
-                // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
-                onToggleStar = { actions.onToggleStar(msg) },
-                onPhoneClick = actions.onPhoneClick,
-                onRemoveReaction = { actions.onRemoveReaction(msg) },
-                repliedToPreview = repliedToPreview,
-                senderLabel = senderLabel,
-            )
-        }
-        else -> {
-            MessageBubble(
-                message = msg,
-                showTimestamp = showTimestamp,
-                burstPosition = burstPosition,
-                onTap = { if (msg.status == Message.Status.FAILED) actions.onTapFailed(msg) },
-                onDelete = { actions.onDelete(msg) },
-                onReply = { actions.onReply(msg) },
-                // v1.7.1 — Translate via ACTION_PROCESS_TEXT system intent. Only wired when
-                // the body is non-blank (nothing to translate on attachment-only messages).
-                onTranslate = if (msg.body.isNotBlank()) { { actions.onTranslate(msg) } } else null,
-                onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
-                onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
-                onSelectText = if (msg.body.isNotBlank()) { { actions.onSelectText(msg) } } else null,
-                onForward = { actions.onForward(msg) },
-                // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
-                onToggleStar = { actions.onToggleStar(msg) },
-                onPhoneClick = actions.onPhoneClick,
-                onRemoveReaction = { actions.onRemoveReaction(msg) },
-                repliedToPreview = repliedToPreview,
-                senderLabel = senderLabel,
-                customBubbleColorArgb = bubbleColorArgb,
-                smishingReasons = smishingReasons,
-            )
+        when {
+            audio != null -> {
+                AudioMessageBubble(
+                    message = msg,
+                    audio = audio,
+                    playbackProvider = playbackProvider,
+                    onTogglePlay = { actions.onTogglePlayback(audio) },
+                    onSeekTo = actions.onSeekPlayback,
+                    onDelete = { actions.onDelete(msg) },
+                    onReply = { actions.onReply(msg) },
+                    // v1.3.1 — "Réagir" exposé uniquement sur les messages reçus.
+                    onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
+                    onForward = { actions.onForward(msg) },
+                    // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
+                    onToggleStar = { actions.onToggleStar(msg) },
+                    onRemoveReaction = { actions.onRemoveReaction(msg) },
+                    repliedToPreview = repliedToPreview,
+                    showTimestamp = showTimestamp,
+                    senderLabel = senderLabel,
+                )
+            }
+            mediaAttachment != null -> {
+                com.filestech.sms.ui.components.MediaAttachmentBubble(
+                    message = msg,
+                    attachment = mediaAttachment,
+                    autres = mediaAttachments.drop(1),
+                    showTimestamp = showTimestamp,
+                    onDelete = { actions.onDelete(msg) },
+                    onReply = { actions.onReply(msg) },
+                    onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
+                    // v1.3.11 (F3) — copy exposed only when the bubble carries a user-typed caption.
+                    onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
+                    onSelectText = if (msg.body.isNotBlank()) { { actions.onSelectText(msg) } } else null,
+                    onForward = { actions.onForward(msg) },
+                    // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
+                    onToggleStar = { actions.onToggleStar(msg) },
+                    onPhoneClick = actions.onPhoneClick,
+                    onRemoveReaction = { actions.onRemoveReaction(msg) },
+                    repliedToPreview = repliedToPreview,
+                    senderLabel = senderLabel,
+                )
+            }
+            else -> {
+                MessageBubble(
+                    message = msg,
+                    showTimestamp = showTimestamp,
+                    burstPosition = burstPosition,
+                    onTap = { if (msg.status == Message.Status.FAILED) actions.onTapFailed(msg) },
+                    onDelete = { actions.onDelete(msg) },
+                    onReply = { actions.onReply(msg) },
+                    // v1.7.1 — Translate via ACTION_PROCESS_TEXT system intent. Only wired when
+                    // the body is non-blank (nothing to translate on attachment-only messages).
+                    onTranslate = if (msg.body.isNotBlank()) { { actions.onTranslate(msg) } } else null,
+                    onReact = if (msg.isIncoming) { { actions.onReact(msg.id) } } else null,
+                    onCopy = if (msg.body.isNotBlank()) { { actions.onCopy(msg) } } else null,
+                    onSelectText = if (msg.body.isNotBlank()) { { actions.onSelectText(msg) } } else null,
+                    onForward = { actions.onForward(msg) },
+                    // v1.26.1 (audit F2) — « Favori » sur les trois types de bulle.
+                    onToggleStar = { actions.onToggleStar(msg) },
+                    onPhoneClick = actions.onPhoneClick,
+                    onRemoveReaction = { actions.onRemoveReaction(msg) },
+                    repliedToPreview = repliedToPreview,
+                    senderLabel = senderLabel,
+                    customBubbleColorArgb = bubbleColorArgb,
+                    smishingReasons = smishingReasons,
+                )
+            }
         }
     }
 }

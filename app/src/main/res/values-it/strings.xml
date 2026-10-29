@@ -391,6 +391,15 @@
     <string name="settings_theme_dark_tech_desc">Palette scura pensata per chi sviluppa. Ha la precedenza sui colori dinamici e su AMOLED.</string>
     <string name="settings_dynamic_colors">Colori dinamici (Android 12+)</string>
     <string name="settings_amoled">Nero assoluto AMOLED</string>
+    <string name="settings_text_scale">Dimensione del testo dei messaggi</string>
+    <string name="settings_text_scale_desc">%1$s · messaggi, campo di scrittura ed elenco delle conversazioni. Si aggiunge alla dimensione dei caratteri di Android.</string>
+    <string name="settings_text_scale_hint">Ingrandisce o riduce il testo delle sue conversazioni: i messaggi, il campo di scrittura, l\'elenco delle conversazioni e i risultati della ricerca. Questa impostazione si aggiunge alla dimensione dei caratteri scelta nelle impostazioni di Android.</string>
+    <string name="text_scale_xs">Molto piccola</string>
+    <string name="text_scale_s">Piccola</string>
+    <string name="text_scale_medium">Normale</string>
+    <string name="text_scale_l">Grande</string>
+    <string name="text_scale_xl">Molto grande</string>
+    <string name="text_scale_xxl">Massima</string>
 
     <string name="settings_section_locale">Lingua e regione</string>
     <string name="settings_language">Lingua dell\'app</string>
@@ -685,6 +694,7 @@
     <string name="settings_section_blocking">Blocco</string>
     <string name="settings_block_unknown">Blocca i numeri sconosciuti</string>
     <string name="settings_block_unknown_no_contacts">Senza accesso ai suoi contatti, i numeri sconosciuti non vengono bloccati. Il suo elenco di numeri bloccati resta attivo. Consenta i Contatti nelle impostazioni di Android.</string>
+    <string name="settings_block_unknown_desc">I messaggi dei numeri che non sono nei suoi contatti vengono eliminati appena arrivano: nessuna notifica, nessuna copia, impossibile recuperarli. Vale anche per i mittenti mostrati con un nome (banca, corriere) e per i codici di verifica.</string>
     <string name="attach_contact_needs_permission">Per allegare una scheda contatto serve l\'accesso ai Suoi contatti. Consenta i Contatti nelle impostazioni di Android.</string>
     <string name="settings_manage_blocked">Gestisci l\'elenco dei bloccati</string>
 

@@ -390,6 +390,15 @@
     <string name="settings_theme_dark_tech_desc">Developer-friendly dark palette. Overrides dynamic colors and AMOLED.</string>
     <string name="settings_dynamic_colors">Dynamic colors (Android 12+)</string>
     <string name="settings_amoled">AMOLED true black</string>
+    <string name="settings_text_scale">Message text size</string>
+    <string name="settings_text_scale_desc">%1$s · messages, typing field and conversation list. Comes on top of Android\'s font size.</string>
+    <string name="settings_text_scale_hint">Makes the text of your conversations larger or smaller: the messages, the field where you type, the conversation list and the search results. It comes on top of the font size chosen in Android\'s settings.</string>
+    <string name="text_scale_xs">Extra small</string>
+    <string name="text_scale_s">Small</string>
+    <string name="text_scale_medium">Default</string>
+    <string name="text_scale_l">Large</string>
+    <string name="text_scale_xl">Extra large</string>
+    <string name="text_scale_xxl">Largest</string>
 
     <string name="settings_section_locale">Language &amp; region</string>
     <string name="settings_language">App language</string>
@@ -680,6 +689,7 @@
     <string name="settings_section_blocking">Blocking</string>
     <string name="settings_block_unknown">Block unknown numbers</string>
     <string name="settings_block_unknown_no_contacts">Without access to your contacts, unknown numbers are not blocked. Your list of blocked numbers stays active. Allow Contacts in Android settings.</string>
+    <string name="settings_block_unknown_desc">Messages from numbers that are not in your contacts are deleted as soon as they arrive: no notification, no copy, no way to get them back. This also applies to senders shown as a name (bank, delivery service) and to verification codes.</string>
     <string name="attach_contact_needs_permission">Attaching a contact card requires access to your contacts. Allow Contacts in Android settings.</string>
     <string name="settings_manage_blocked">Manage blocked list</string>
 
