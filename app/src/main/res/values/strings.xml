@@ -571,6 +571,8 @@
     <string name="settings_emergency_armed_template">Template: %1$s</string>
     <string name="settings_emergency_armed_location">GPS location included</string>
     <string name="settings_emergency_armed_no_location">No GPS location</string>
+    <string name="settings_emergency_armed_location_approximate">Approximate location included (about 2 km)</string>
+    <string name="settings_emergency_armed_location_denied">Location NOT sent: location permission not granted</string>
     <string name="settings_emergency_armed_contacts_one">Contacts: %1$s</string>
     <string name="settings_emergency_armed_contacts_many">Contacts: %1$s +%2$d more</string>
     <string name="settings_emergency_armed_no_contacts">No contacts configured</string>

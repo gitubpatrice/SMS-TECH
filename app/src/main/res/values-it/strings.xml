@@ -576,6 +576,8 @@
     <string name="settings_emergency_armed_template">Modello: %1$s</string>
     <string name="settings_emergency_armed_location">Posizione GPS inclusa</string>
     <string name="settings_emergency_armed_no_location">Nessuna posizione GPS</string>
+    <string name="settings_emergency_armed_location_approximate">Posizione approssimativa inclusa (circa 2 km)</string>
+    <string name="settings_emergency_armed_location_denied">Posizione NON inviata: autorizzazione alla posizione non concessa</string>
     <string name="settings_emergency_armed_contacts_one">Contatti: %1$s</string>
     <string name="settings_emergency_armed_contacts_many">Contatti: %1$s +%2$d altri</string>
     <string name="settings_emergency_armed_no_contacts">Nessun contatto configurato</string>
