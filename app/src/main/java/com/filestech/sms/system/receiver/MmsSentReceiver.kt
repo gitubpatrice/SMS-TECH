@@ -193,10 +193,30 @@ internal fun issueDeLEnvoiMms(resultCode: Int, reponse: ByteArray?): IssueEnvoiM
             Timber.w("MMS refused by the carrier: X-Mms-Response-Status=0x%02X", verdict.statut)
             IssueEnvoiMms.Echec(SendErrorCode.mmscRefused(verdict.statut))
         }
-        VerdictOperateur.Accepte -> IssueEnvoiMms.Envoye
+        VerdictOperateur.Accepte -> {
+            Timber.i("MMS accepted by the carrier: X-Mms-Response-Status=0x80")
+            IssueEnvoiMms.Envoye
+        }
         VerdictOperateur.Inconnu -> {
-            Timber.i("MMS sent: no readable m-send-conf, kept as sent")
+            Timber.i("MMS sent: no readable m-send-conf (%s), kept as sent", apercuDeReponse(reponse))
             IssueEnvoiMms.Envoye
         }
     }
 }
+
+/**
+ * Ce qu'on peut dire d'une réponse illisible sans rien en divulguer d'utile : absente, ou sa taille
+ * et ses premiers octets — des en-têtes MMS (type, transaction, version), jamais le contenu d'un
+ * message. Mesuré le 2026-10-29 sur un S24 (Android 16) : la réponse d'un envoi ACCEPTÉ y était
+ * déclarée illisible, et il faut savoir si elle manquait ou si le décodeur l'a manquée.
+ */
+private fun apercuDeReponse(reponse: ByteArray?): String = when {
+    reponse == null -> "absent"
+    reponse.isEmpty() -> "empty"
+    else -> "%d bytes: %s".format(
+        reponse.size,
+        reponse.take(APERCU_OCTETS).joinToString(" ") { "%02X".format(it.toInt() and 0xFF) },
+    )
+}
+
+private const val APERCU_OCTETS = 32

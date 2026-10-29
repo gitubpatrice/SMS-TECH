@@ -294,7 +294,7 @@ class MmsSender @Inject constructor(
             context,
             requestCode,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            drapeauxDeLAccuseDEnvoi(Build.VERSION.SDK_INT),
         )
     }
 
@@ -318,3 +318,19 @@ class MmsSender @Inject constructor(
         private const val MMS_OUT_DIR: String = "mms_outgoing"
     }
 }
+
+/**
+ * 2026-10-29 (issue #53) — drapeaux de l'accusé d'envoi MMS : MUTABLE, et c'est le cœur du correctif.
+ *
+ * Le service MMS d'Android joint la réponse de l'opérateur (`SmsManager.EXTRA_MMS_DATA`) par un
+ * fill-in au moment d'envoyer ce PendingIntent. IMMUTABLE la jetait : mesuré sur un S24
+ * (Android 16), le receveur la trouvait ABSENTE et ne pouvait jamais voir un refus ; en MUTABLE,
+ * même téléphone, même opérateur : « X-Mms-Response-Status=0x80 » lu.
+ *
+ * ⚠️ Ne pas « durcir » en IMMUTABLE : sans risque ici — intent explicite vers un receveur non
+ * exporté, et `Intent.fillIn` garde nos propres extras prioritaires. Avant Android 12, un
+ * PendingIntent est mutable par défaut (même règle que `PendingIntentCompat`).
+ */
+internal fun drapeauxDeLAccuseDEnvoi(sdk: Int): Int =
+    PendingIntent.FLAG_UPDATE_CURRENT or
+        if (sdk >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
