@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -115,7 +117,13 @@ private fun SmishingExplainDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.smishing_dialog_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 2026-10-29 — défilable : ouvert depuis une bulle, ce dialogue suit la taille du texte
+            // des messages ([com.filestech.sms.ui.theme.MessageTextSize]). Au cran le plus haut,
+            // sur une grande police Android, l'introduction et quatre raisons dépassent l'écran.
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(stringResource(R.string.smishing_dialog_intro))
                 reasons.forEach { reason ->
                     Text(

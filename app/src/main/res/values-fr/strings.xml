@@ -380,6 +380,15 @@
     <string name="settings_theme_dark_tech_desc">Palette sombre pour développeurs. Désactive les couleurs dynamiques et le mode AMOLED.</string>
     <string name="settings_dynamic_colors">Couleurs dynamiques (Android 12+)</string>
     <string name="settings_amoled">AMOLED noir pur</string>
+    <string name="settings_text_scale">Taille du texte des messages</string>
+    <string name="settings_text_scale_desc">%1$s · messages, saisie et liste des conversations. S\'ajoute à la taille de police d\'Android.</string>
+    <string name="settings_text_scale_hint">Agrandit ou réduit le texte de vos conversations : les messages, le champ de saisie, la liste des conversations et les résultats de recherche. Ce réglage s\'ajoute à la taille de police choisie dans les paramètres d\'Android.</string>
+    <string name="text_scale_xs">Très petite</string>
+    <string name="text_scale_s">Petite</string>
+    <string name="text_scale_medium">Normale</string>
+    <string name="text_scale_l">Grande</string>
+    <string name="text_scale_xl">Très grande</string>
+    <string name="text_scale_xxl">Maximale</string>
 
     <string name="settings_section_locale">Langue &amp; région</string>
     <string name="settings_language">Langue de l\'application</string>
@@ -675,6 +684,7 @@
     <string name="settings_section_blocking">Blocage</string>
     <string name="settings_block_unknown">Bloquer les numéros inconnus</string>
     <string name="settings_block_unknown_no_contacts">Sans accès à vos contacts, les numéros inconnus ne sont pas bloqués. Votre liste de numéros bloqués reste active. Autorisez les Contacts dans les réglages d\'Android.</string>
+    <string name="settings_block_unknown_desc">Les messages des numéros absents de vos contacts sont supprimés dès leur arrivée : aucune notification, aucune copie, impossible de les retrouver. Cela vaut aussi pour les expéditeurs affichés sous forme de nom (banque, livreur) et pour les codes de vérification.</string>
     <string name="attach_contact_needs_permission">Joindre une fiche contact nécessite l\'accès à vos contacts. Autorisez les Contacts dans les réglages d\'Android.</string>
     <string name="settings_manage_blocked">Gérer la liste des bloqués</string>
 

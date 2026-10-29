@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -65,7 +66,11 @@ fun SmsTechTheme(
         }
     }
 
-    MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
+    // La typographie de l'appli reste AppTypography ; le coefficient n'agit que dans les
+    // périmètres [MessageTextSize] (messages, saisie, listes de conversations).
+    CompositionLocalProvider(LocalMessageTextFactor provides appearance.textScale.factor()) {
+        MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
+    }
 }
 
 private fun ColorScheme.maybeAmoled(amoled: Boolean): ColorScheme =

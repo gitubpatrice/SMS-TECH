@@ -391,6 +391,15 @@
     <string name="settings_theme_dark_tech_desc">Dunkle Palette für Entwickler. Setzt dynamische Farben und AMOLED außer Kraft.</string>
     <string name="settings_dynamic_colors">Dynamische Farben (Android 12+)</string>
     <string name="settings_amoled">AMOLED-Tiefschwarz</string>
+    <string name="settings_text_scale">Textgröße der Nachrichten</string>
+    <string name="settings_text_scale_desc">%1$s · Nachrichten, Eingabefeld und Liste der Unterhaltungen. Kommt zur Schriftgröße von Android hinzu.</string>
+    <string name="settings_text_scale_hint">Vergrößert oder verkleinert den Text Ihrer Unterhaltungen: die Nachrichten, das Eingabefeld, die Liste der Unterhaltungen und die Suchergebnisse. Diese Einstellung kommt zu der in den Android-Einstellungen gewählten Schriftgröße hinzu.</string>
+    <string name="text_scale_xs">Sehr klein</string>
+    <string name="text_scale_s">Klein</string>
+    <string name="text_scale_medium">Normal</string>
+    <string name="text_scale_l">Groß</string>
+    <string name="text_scale_xl">Sehr groß</string>
+    <string name="text_scale_xxl">Maximal</string>
 
     <string name="settings_section_locale">Sprache &amp; Region</string>
     <string name="settings_language">App-Sprache</string>
@@ -683,6 +692,7 @@
     <string name="settings_section_blocking">Blockieren</string>
     <string name="settings_block_unknown">Unbekannte Nummern blockieren</string>
     <string name="settings_block_unknown_no_contacts">Ohne Zugriff auf Ihre Kontakte werden unbekannte Nummern nicht blockiert. Ihre Liste blockierter Nummern bleibt aktiv. Erlauben Sie Kontakte in den Android-Einstellungen.</string>
+    <string name="settings_block_unknown_desc">Nachrichten von Nummern, die nicht in Ihren Kontakten stehen, werden beim Eintreffen gelöscht: keine Benachrichtigung, keine Kopie, keine Wiederherstellung. Das gilt auch für Absender, die als Name erscheinen (Bank, Paketdienst), und für Bestätigungscodes.</string>
     <string name="attach_contact_needs_permission">Zum Anhängen einer Kontaktkarte ist Zugriff auf Ihre Kontakte nötig. Erlauben Sie Kontakte in den Android-Einstellungen.</string>
     <string name="settings_manage_blocked">Blockliste verwalten</string>
 

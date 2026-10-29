@@ -36,7 +36,20 @@ data class Appearance(
 )
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK, DARK_TECH }
-enum class TextScale { XS, S, MEDIUM, L, XL }
+
+/**
+ * Taille du texte des messages (Réglages → Apparence). Le coefficient de chaque cran vit côté
+ * interface (`ui/theme/MessageTextSize.kt`), qui seul sait ce qu'il agrandit.
+ *
+ * ⚠️ Persisté PAR SON NOM (`appearance.textScale`) : on ajoute un cran, on n'en renomme ni n'en
+ * retire aucun. Un nom inconnu — une version plus ancienne qui lit `XXL` — retombe sur [MEDIUM]
+ * (`SettingsRepository.enumOr`), sans planter.
+ *
+ * 2026-10-29 — `XXL` ajouté pour une demande d'utilisateur malvoyant : le cran le plus haut
+ * restait trop proche du texte normal. Jusque-là ce réglage était FANTÔME (persisté, restauré,
+ * jamais affiché ni appliqué — relevé par l'audit du 2026-08-03).
+ */
+enum class TextScale { XS, S, MEDIUM, L, XL, XXL }
 enum class ListDensity { COMFORT, STANDARD, COMPACT }
 
 data class ConversationSettings(
