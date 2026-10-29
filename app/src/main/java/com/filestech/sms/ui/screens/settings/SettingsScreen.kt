@@ -3073,9 +3073,14 @@ private fun EmergencyArmedRecap(
                 R.string.emergency_setup_template_discreet
         },
     )
+    // 2026-10-29 — la permission réelle, pas le seul réglage : cf. [libelleDePositionArmee].
+    val localisation = rememberPermissionLocalisation()
     val locationLabel = stringResource(
-        if (config.includeLocation) R.string.settings_emergency_armed_location
-        else R.string.settings_emergency_armed_no_location,
+        libelleDePositionArmee(
+            inclure = config.includeLocation,
+            accordee = localisation.accordee,
+            exacte = localisation.exacte,
+        ),
     )
     val contactsLabel = run {
         val labels = contacts.map { c -> c.sanitizedDisplayName() ?: c.phoneNumber }

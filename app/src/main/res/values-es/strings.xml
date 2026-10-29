@@ -576,6 +576,8 @@
     <string name="settings_emergency_armed_template">Plantilla: %1$s</string>
     <string name="settings_emergency_armed_location">Ubicación GPS incluida</string>
     <string name="settings_emergency_armed_no_location">Sin ubicación GPS</string>
+    <string name="settings_emergency_armed_location_approximate">Ubicación aproximada incluida (unos 2 km)</string>
+    <string name="settings_emergency_armed_location_denied">Ubicación NO enviada: permiso de ubicación no concedido</string>
     <string name="settings_emergency_armed_contacts_one">Contactos: %1$s</string>
     <string name="settings_emergency_armed_contacts_many">Contactos: %1$s +%2$d más</string>
     <string name="settings_emergency_armed_no_contacts">No hay contactos configurados</string>

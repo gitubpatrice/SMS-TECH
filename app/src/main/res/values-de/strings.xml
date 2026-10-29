@@ -573,6 +573,8 @@
     <string name="settings_emergency_armed_template">Vorlage: %1$s</string>
     <string name="settings_emergency_armed_location">GPS-Standort enthalten</string>
     <string name="settings_emergency_armed_no_location">Kein GPS-Standort</string>
+    <string name="settings_emergency_armed_location_approximate">Ungefährer Standort enthalten (etwa 2 km)</string>
+    <string name="settings_emergency_armed_location_denied">Standort wird NICHT gesendet: Standortberechtigung nicht erteilt</string>
     <string name="settings_emergency_armed_contacts_one">Kontakte: %1$s</string>
     <string name="settings_emergency_armed_contacts_many">Kontakte: %1$s +%2$d weitere</string>
     <string name="settings_emergency_armed_no_contacts">Keine Kontakte eingerichtet</string>
