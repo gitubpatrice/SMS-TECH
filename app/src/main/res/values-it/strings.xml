@@ -761,6 +761,8 @@
     <string name="about_license">Licenza</string>
     <string name="about_privacy">Informativa sulla privacy</string>
     <string name="about_terms">Condizioni d\'uso</string>
+    <string name="about_support">Sostenere il progetto</string>
+    <string name="about_support_desc">Una donazione aiuta a mantenere l\'app gratuita, senza pubblicità né tracker</string>
 
     <!-- Notification channels -->
     <string name="channel_incoming_label">Messaggi in arrivo</string>

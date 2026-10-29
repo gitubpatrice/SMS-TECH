@@ -14,6 +14,8 @@ First release since SMS Tech joined F-Droid (fdroid/fdroiddata!38458, merged 202
   them, the typing field, the conversation list and the search results; bars, buttons and avatars stay as
   they are. At the default step the rendering is pixel-identical to 1.28.14 (measured). The setting had
   been stored since v1.2.0, but nothing showed or applied it.
+- **"Support the project"** in About: opens files-tech.com's donation page in the browser, in French or
+  German when the app is, in English otherwise. The app still has no Internet permission.
 
 ### Fixed
 
@@ -36,7 +38,8 @@ First release since SMS Tech joined F-Droid (fdroid/fdroiddata!38458, merged 202
 
 - **Block unknown numbers** now explains, under the switch, that such messages are deleted on arrival,
   with no notification and no copy, including senders shown as a name and verification codes.
-- **Donation link**: `.github/FUNDING.yml` points to the donation page; F-Droid shows it from this release.
+- **Donation link on F-Droid and GitHub**: `.github/FUNDING.yml` points to the donation page; F-Droid
+  shows it from this release.
 - **Terms of use, liability, in the five languages (English and French prevail).** The clause said the
   publisher was liable for no damage at all, direct or indirect, and that any data loss was the user's
   alone: a clause that broad risks being set aside whole. It now says the app is free and published by a

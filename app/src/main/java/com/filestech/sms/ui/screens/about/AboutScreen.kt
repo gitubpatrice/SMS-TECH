@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -78,6 +79,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import com.filestech.sms.BuildConfig
 import com.filestech.sms.R
 
@@ -207,6 +209,15 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
                     onClick = { ouvrirTexteJuridique(context, "TERMS", langue) },
                 )
             }
+            // 2026-10-29 — soutenir le projet : la page de dons du site, ouverte dans le navigateur
+            // comme les autres liens (l'application n'a toujours pas la permission Internet).
+            // Visible aussi en session leurre : une page publique de dons ne révèle rien.
+            LinkItem(
+                icon = Icons.Outlined.VolunteerActivism,
+                label = stringResource(R.string.about_support),
+                supporting = stringResource(R.string.about_support_desc),
+                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, urlPageDeDons(langue).toUri())) },
+            )
 
             Spacer(Modifier.size(24.dp))
             Text(
@@ -595,6 +606,16 @@ internal fun urlTexteJuridique(document: String, langue: String): String {
     val suffixe = if (langue in LANGUES_DES_TEXTES_JURIDIQUES) ".$langue" else ""
     return "$LEGAL_BASE_URL$document$suffixe.md"
 }
+
+/** Langues dans lesquelles files-tech.com publie sa page de dons ; l'anglais à défaut. */
+private val LANGUES_DE_LA_PAGE_DE_DONS = mapOf(
+    "fr" to "https://www.files-tech.com/soutenir.php",
+    "de" to "https://www.files-tech.com/de/soutenir.php",
+)
+private const val PAGE_DE_DONS_EN = "https://www.files-tech.com/en/soutenir.php"
+
+/** 2026-10-29 — la page de dons dans la langue affichée si le site la publie, l'anglaise sinon. */
+internal fun urlPageDeDons(langue: String): String = LANGUES_DE_LA_PAGE_DE_DONS[langue] ?: PAGE_DE_DONS_EN
 
 private fun ouvrirTexteJuridique(context: android.content.Context, document: String, langue: String) {
     safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(urlTexteJuridique(document, langue))))

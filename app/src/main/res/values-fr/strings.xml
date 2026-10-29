@@ -750,6 +750,8 @@
     <string name="about_license">Licence</string>
     <string name="about_privacy">Politique de confidentialité</string>
     <string name="about_terms">Conditions d\'utilisation</string>
+    <string name="about_support">Soutenir le projet</string>
+    <string name="about_support_desc">Un don aide à garder l\'application gratuite, sans publicité ni traceur</string>
 
     <string name="channel_incoming_label">Messages entrants</string>
     <!-- v1.8.0 — canal silent pour NotificationStyle.SILENT -->
