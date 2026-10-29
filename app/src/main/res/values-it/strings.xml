@@ -876,7 +876,7 @@
     <string name="about_feat_sms_label">SMS e MMS</string>
     <string name="about_feat_sms_desc">App SMS predefinita per Android 8 → 15+. Importazione completa della cronologia, senza duplicati.</string>
     <string name="about_feat_voice_label">Messaggi vocali</string>
-    <string name="about_feat_voice_desc">Premi e parla, via MMS. Limitato a 60 s / 300 KB per compatibilità con tutti gli operatori francesi.</string>
+    <string name="about_feat_voice_desc">Premi e parla, via MMS. Limitato a 120 s / 280 KB per compatibilità con tutti gli operatori francesi.</string>
     <string name="about_feat_vault_label">Cassaforte cifrata</string>
     <string name="about_feat_vault_desc">Conversazioni sensibili in una cassaforte SQLCipher, con la chiave protetta dal Keystore di Android.</string>
     <string name="about_feat_panic_label">PIN esca</string>
@@ -911,7 +911,7 @@
     <string name="about_help_voice_title">Inviare un messaggio vocale</string>
     <string name="about_help_voice_step1">Tenga premuto il microfono a destra della finestra di scrittura</string>
     <string name="about_help_voice_step2">Parli, poi rilasci per inviare (trascini a sinistra per annullare)</string>
-    <string name="about_help_voice_step3">Limite 60 s — oltre, la registrazione si ferma da sola</string>
+    <string name="about_help_voice_step3">Limite 120 s — oltre, la registrazione si ferma da sola</string>
     <string name="about_help_vault_title">Spostare una conversazione nella cassaforte</string>
     <string name="about_help_vault_step1">Tenga premuta la conversazione nell\'elenco → «Cassaforte»</string>
     <string name="about_help_vault_step2">Sblocco: PIN, passphrase o biometria secondo la sua impostazione</string>

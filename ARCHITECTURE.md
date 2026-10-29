@@ -118,7 +118,8 @@ at the UI/data boundary.
 ## Lifecycle of an outgoing MMS (voice clip)
 
 1. `ThreadViewModel` enters Recording state when the user holds the mic button (push-to-talk).
-   `VoiceRecorder` writes an AAC/M4A clip to `cache/voice_mms/` (60 s / 300 KB hard caps).
+   `VoiceRecorder` writes an AMR-NB clip in a 3GP container (`audio/3gpp`) to `cache/voice_mms/`
+   (120 s / 280 KB hard caps).
 2. On release without drag-to-cancel, the composer switches to Reviewing and `VoicePlaybackController`
    plays the clip back through a single shared MediaPlayer instance.
 3. Send button → `SendVoiceMmsUseCase`:
