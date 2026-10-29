@@ -161,6 +161,8 @@
     <string name="thread_status_sent">Enviado</string>
     <string name="thread_status_delivered">Entregado</string>
     <string name="thread_status_failed">Fallido — toque para reintentar</string>
+    <string name="thread_status_failed_mms">No enviado</string>
+    <string name="thread_status_refused_by_carrier">Rechazado por el operador (código %1$s)</string>
     <string name="date_today">Hoy</string>
     <string name="date_yesterday">Ayer</string>
     <string name="thread_confirm_delete_message">¿Eliminar este mensaje? Esta acción no se puede deshacer.</string>

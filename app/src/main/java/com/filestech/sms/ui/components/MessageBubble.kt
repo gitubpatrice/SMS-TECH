@@ -27,8 +27,6 @@ import androidx.compose.ui.unit.dp
 import com.filestech.sms.R
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.ui.theme.BrandBlue
-import com.filestech.sms.ui.util.rememberChatFormatters
-import java.util.Date
 
 /**
  * Position of a message inside a burst (consecutive messages from the same sender, < 60 s apart).
@@ -286,32 +284,13 @@ fun MessageBubble(
     if (!isOut && smishingReasons.isNotEmpty()) {
         SmishingBanner(reasons = smishingReasons)
     }
-    if (showTimestamp || message.status == Message.Status.FAILED) {
-        val label = when (message.status) {
-            Message.Status.FAILED -> stringResource(R.string.thread_status_failed)
-            Message.Status.DELIVERED -> stringResource(R.string.thread_status_delivered)
-            Message.Status.SENT -> stringResource(R.string.thread_status_sent)
-            Message.Status.PENDING -> stringResource(R.string.thread_status_pending)
-            else -> null
-        }
-        val formatters = rememberChatFormatters()
-        // Audit P-Q7 (v1.2.0): cache the formatted time so we don't re-allocate a Date + run
-        // the SimpleDateFormat at every bubble recomposition. Same pattern as AudioMessageBubble.
-        val time = androidx.compose.runtime.remember(message.date) {
-            formatters.time.format(Date(message.date))
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 2.dp),
-            horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = if (label != null) "$time • $label" else time,
-                color = if (message.status == Message.Status.FAILED) cs.error else cs.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-    }
+    // 2026-10-29 (issue #53) — ligne commune aux trois bulles, cf. [MessageStatusLine].
+    MessageStatusLine(
+        message = message,
+        isOut = isOut,
+        showTimestamp = showTimestamp,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
+    )
 }
 
 /**

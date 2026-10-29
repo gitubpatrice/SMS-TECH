@@ -160,6 +160,8 @@
     <string name="thread_status_sent">Gesendet</string>
     <string name="thread_status_delivered">Zugestellt</string>
     <string name="thread_status_failed">Fehlgeschlagen — zum Wiederholen tippen</string>
+    <string name="thread_status_failed_mms">Nicht gesendet</string>
+    <string name="thread_status_refused_by_carrier">Vom Mobilfunkanbieter abgelehnt (Code %1$s)</string>
     <string name="date_today">Heute</string>
     <string name="date_yesterday">Gestern</string>
     <string name="thread_confirm_delete_message">Diese Nachricht löschen? Das lässt sich nicht rückgängig machen.</string>
