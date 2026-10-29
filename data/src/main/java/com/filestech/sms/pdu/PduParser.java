@@ -104,7 +104,11 @@ public class PduParser {
                 case PduHeaders.READ_REPORT:
                 case PduHeaders.READ_STATUS:
                 case PduHeaders.RETRIEVE_STATUS:
-                case PduHeaders.CONTENT_CLASS: {
+                case PduHeaders.CONTENT_CLASS:
+                // 2026-10-29 (issue #53) — le verdict de l'opérateur dans un m-send-conf. Il
+                // tombait dans « en-tête inconnu, sauté » : l'application ne pouvait pas savoir
+                // qu'un MMS avait été REFUSÉ, et l'affichait envoyé. Cf. VerdictOperateur.
+                case PduHeaders.RESPONSE_STATUS: {
                     int v = extractByteValue(in);
                     try { headers.setOctet(v, headerField); } catch (Exception ignored) {}
                     break;

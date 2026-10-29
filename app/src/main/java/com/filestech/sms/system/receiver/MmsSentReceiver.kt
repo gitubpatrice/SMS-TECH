@@ -4,12 +4,16 @@ import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.telephony.SmsManager
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.mms.MmsSystemWriteback
+import com.filestech.sms.data.mms.VerdictOperateur
+import com.filestech.sms.data.mms.lireVerdictOperateur
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.SendErrorCode
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -23,7 +27,8 @@ import javax.inject.Inject
 /**
  * Receives the dispatch result of an outgoing MMS sent via `SmsManager.sendMultimediaMessage`.
  *
- * On `RESULT_OK` :
+ * On `RESULT_OK` — unless the carrier's m-send-conf explicitly refuses the message, which is a
+ * failure since 2026-10-29 (issue #53, cf. [issueDeLEnvoiMms]) :
  *   1. Flip the Room mirror row to SENT.
  *   2. Promote the `content://mms` row from OUTBOX to SENT.
  *   3. Replace the placeholder FROM address with the user's MSISDN (audit F4) so other SMS
@@ -71,16 +76,16 @@ class MmsSentReceiver : BroadcastReceiver() {
         val localId = intent.getLongExtra(MmsSender.EXTRA_LOCAL_ID, -1L)
         val pduPath = intent.getStringExtra(MmsSender.EXTRA_PDU_FILE)
         val mmsSystemId = intent.getLongExtra(MmsSender.EXTRA_MMS_SYSTEM_ID, -1L)
-        val rc = resultCode
+        // 2026-10-29 (issue #53) — la réponse de l'opérateur, jointe par Android au résultat.
+        val issue = issueDeLEnvoiMms(resultCode, intent.getByteArrayExtra(SmsManager.EXTRA_MMS_DATA))
 
         val pending = goAsync()
         scope.launch {
             try {
                 if (localId >= 0) {
-                    if (rc == Activity.RESULT_OK) {
-                        handleOk(localId, mmsSystemId)
-                    } else {
-                        handleFailure(localId, mmsSystemId, rc)
+                    when (issue) {
+                        IssueEnvoiMms.Envoye -> handleOk(localId, mmsSystemId)
+                        is IssueEnvoiMms.Echec -> handleFailure(localId, mmsSystemId, issue.code)
                     }
                 }
                 // The OS keeps its own copy of the PDU through the dispatch pipeline; ours
@@ -155,7 +160,7 @@ class MmsSentReceiver : BroadcastReceiver() {
             return
         }
 
-        Timber.w("MMS sent failed for id=%d resultCode=%d", localId, rc)
+        Timber.w("MMS sent failed for id=%d code=%d", localId, rc)
         mirrorLazy.get().updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = rc)
         if (mmsSystemId > 0L) {
             // Important : on garde `mmsSystemId` côté Room pour que le prochain retry puisse
@@ -163,6 +168,35 @@ class MmsSentReceiver : BroadcastReceiver() {
             // C'est la suppression côté system-provider qui se fait ici.
             runCatching { systemWriteback.delete(mmsSystemId) }
                 .onFailure { Timber.w(it, "delete(%d) failed", mmsSystemId) }
+        }
+    }
+}
+
+/** Ce que devient un MMS sortant au retour d'Android. */
+internal sealed interface IssueEnvoiMms {
+    data object Envoye : IssueEnvoiMms
+
+    /** [code] est stocké dans `error_code` : code d'Android, ou [SendErrorCode.mmscRefused]. */
+    data class Echec(val code: Int) : IssueEnvoiMms
+}
+
+/**
+ * 2026-10-29 (issue #53) — `RESULT_OK` ne veut dire que « la requête HTTP vers le serveur MMS de
+ * l'opérateur a abouti » ; le verdict de l'opérateur est dans [reponse]. Un refus EXPLICITE devient
+ * un échec qui garde son statut ; une réponse absente ou illisible garde le comportement d'avant
+ * (envoyé). Cf. [lireVerdictOperateur].
+ */
+internal fun issueDeLEnvoiMms(resultCode: Int, reponse: ByteArray?): IssueEnvoiMms {
+    if (resultCode != Activity.RESULT_OK) return IssueEnvoiMms.Echec(resultCode)
+    return when (val verdict = lireVerdictOperateur(reponse)) {
+        is VerdictOperateur.Refuse -> {
+            Timber.w("MMS refused by the carrier: X-Mms-Response-Status=0x%02X", verdict.statut)
+            IssueEnvoiMms.Echec(SendErrorCode.mmscRefused(verdict.statut))
+        }
+        VerdictOperateur.Accepte -> IssueEnvoiMms.Envoye
+        VerdictOperateur.Inconnu -> {
+            Timber.i("MMS sent: no readable m-send-conf, kept as sent")
+            IssueEnvoiMms.Envoye
         }
     }
 }

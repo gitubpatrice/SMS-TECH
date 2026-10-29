@@ -229,6 +229,15 @@ fun MediaAttachmentBubble(
             )
         }
     }
+    // 2026-10-29 (issue #53) — une photo n'affichait AUCUN statut : `showTimestamp` était reçu et
+    // jamais lu, et un envoi en échec ne se distinguait pas d'un envoi parti. Mêmes marges que la
+    // bulle texte.
+    MessageStatusLine(
+        message = message,
+        isOut = isOut,
+        showTimestamp = showTimestamp,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
+    )
 }
 
 /** Une pièce jointe, selon son type : vignette, icône vidéo ou icône de fichier. */

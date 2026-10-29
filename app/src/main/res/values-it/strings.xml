@@ -161,6 +161,8 @@
     <string name="thread_status_sent">Inviato</string>
     <string name="thread_status_delivered">Consegnato</string>
     <string name="thread_status_failed">Non riuscito — tocchi per riprovare</string>
+    <string name="thread_status_failed_mms">Non inviato</string>
+    <string name="thread_status_refused_by_carrier">Rifiutato dall\'operatore (codice %1$s)</string>
     <string name="date_today">Oggi</string>
     <string name="date_yesterday">Ieri</string>
     <string name="thread_confirm_delete_message">Eliminare questo messaggio? L\'operazione è irreversibile.</string>

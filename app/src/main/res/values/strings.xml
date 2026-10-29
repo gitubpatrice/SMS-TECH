@@ -160,6 +160,8 @@
     <string name="thread_status_sent">Sent</string>
     <string name="thread_status_delivered">Delivered</string>
     <string name="thread_status_failed">Failed — tap to retry</string>
+    <string name="thread_status_failed_mms">Not sent</string>
+    <string name="thread_status_refused_by_carrier">Refused by the carrier (code %1$s)</string>
     <string name="date_today">Today</string>
     <string name="date_yesterday">Yesterday</string>
     <string name="thread_confirm_delete_message">Delete this message? This cannot be undone.</string>

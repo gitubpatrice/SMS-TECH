@@ -105,4 +105,23 @@ object SendErrorCode {
      * relancer tant que le blocage tient — ce qui est le comportement voulu, pas un défaut.
      */
     const val RECIPIENT_BLOCKED: Int = -3
+
+    /**
+     * 2026-10-29 (issue #53) — le serveur MMS de l'opérateur a REFUSÉ le message, après qu'Android
+     * le lui a remis (`RESULT_OK` + m-send-conf au statut d'échec). Plage à part, qui CONSERVE le
+     * statut : `MMSC_REFUSED_BASE - statut`, soit -1129 à -1255. L'écran l'affiche, pour que
+     * l'utilisateur puisse nous le transmettre — c'est ce code qui dit ce que l'opérateur refuse.
+     */
+    private const val MMSC_REFUSED_BASE: Int = -1000
+    private val MMSC_REFUSAL_STATUSES = 0x81..0xFF
+
+    /** Code d'erreur stocké pour un refus de l'opérateur de statut [responseStatus] (0x81-0xFF). */
+    fun mmscRefused(responseStatus: Int): Int {
+        require(responseStatus in MMSC_REFUSAL_STATUSES) { "not a refusal status: $responseStatus" }
+        return MMSC_REFUSED_BASE - responseStatus
+    }
+
+    /** Le statut de l'opérateur si [errorCode] est un refus de l'opérateur, `null` sinon. */
+    fun mmscRefusalStatus(errorCode: Int?): Int? =
+        errorCode?.let { MMSC_REFUSED_BASE - it }?.takeIf { it in MMSC_REFUSAL_STATUSES }
 }

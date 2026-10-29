@@ -155,6 +155,8 @@
     <string name="thread_status_sent">Envoyé</string>
     <string name="thread_status_delivered">Remis</string>
     <string name="thread_status_failed">Échec — appuyer pour réessayer</string>
+    <string name="thread_status_failed_mms">Non envoyé</string>
+    <string name="thread_status_refused_by_carrier">Refusé par l\'opérateur (code %1$s)</string>
     <string name="date_today">Aujourd\'hui</string>
     <string name="date_yesterday">Hier</string>
     <string name="thread_confirm_delete_message">Supprimer ce message ? Action irréversible.</string>
