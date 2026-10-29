@@ -861,7 +861,7 @@
     <string name="about_feat_sms_label">SMS &amp; MMS</string>
     <string name="about_feat_sms_desc">App SMS par défaut Android 8 → 15+. Import historique complet, sans duplication.</string>
     <string name="about_feat_voice_label">Messages vocaux</string>
-    <string name="about_feat_voice_desc">Push-to-talk en MMS. Cap 60 s / 300 Ko pour passer chez tous les opérateurs FR.</string>
+    <string name="about_feat_voice_desc">Push-to-talk en MMS. Cap 120 s / 280 Ko pour passer chez tous les opérateurs FR.</string>
     <string name="about_feat_vault_label">Coffre chiffré</string>
     <string name="about_feat_vault_desc">Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android.</string>
     <string name="about_feat_panic_label">PIN leurre</string>
@@ -896,7 +896,7 @@
     <string name="about_help_voice_title">Envoyer un message vocal</string>
     <string name="about_help_voice_step1">Appui long sur le micro à droite du composer</string>
     <string name="about_help_voice_step2">Parlez, puis relâchez pour envoyer (glissez à gauche = annuler)</string>
-    <string name="about_help_voice_step3">Cap 60 s — au-delà l\'enregistrement s\'arrête automatiquement</string>
+    <string name="about_help_voice_step3">Cap 120 s — au-delà l\'enregistrement s\'arrête automatiquement</string>
     <string name="about_help_vault_title">Mettre une conversation au coffre</string>
     <string name="about_help_vault_step1">Appui long sur la conversation dans la liste → \"Coffre\"</string>
     <string name="about_help_vault_step2">Déverrouillage : PIN, passphrase ou biométrie selon votre réglage</string>

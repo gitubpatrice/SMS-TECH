@@ -875,7 +875,7 @@
     <string name="about_feat_sms_label">SMS &amp; MMS</string>
     <string name="about_feat_sms_desc">Standard-SMS-App für Android 8 → 15+. Vollständiger Import des Verlaufs, keine Duplikate.</string>
     <string name="about_feat_voice_label">Sprachnachrichten</string>
-    <string name="about_feat_voice_desc">Sprechtaste über MMS. Begrenzt auf 60 s / 300 KB zur Kompatibilität mit allen französischen Mobilfunkanbietern.</string>
+    <string name="about_feat_voice_desc">Sprechtaste über MMS. Begrenzt auf 120 s / 280 KB zur Kompatibilität mit allen französischen Mobilfunkanbietern.</string>
     <string name="about_feat_vault_label">Verschlüsselter Tresor</string>
     <string name="about_feat_vault_desc">Vertrauliche Unterhaltungen in einem SQLCipher-Tresor, Schlüssel im Android-Keystore verpackt.</string>
     <string name="about_feat_panic_label">Tarn-PIN</string>
@@ -910,7 +910,7 @@
     <string name="about_help_voice_title">Eine Sprachnachricht senden</string>
     <string name="about_help_voice_step1">Das Mikrofon rechts neben dem Eingabefeld lange drücken</string>
     <string name="about_help_voice_step2">Sprechen, dann loslassen zum Senden (nach links ziehen = abbrechen)</string>
-    <string name="about_help_voice_step3">Grenze 60 s — die Aufnahme stoppt darüber hinaus automatisch</string>
+    <string name="about_help_voice_step3">Grenze 120 s — die Aufnahme stoppt darüber hinaus automatisch</string>
     <string name="about_help_vault_title">Eine Unterhaltung in den Tresor verschieben</string>
     <string name="about_help_vault_step1">Die Unterhaltung in der Liste lange drücken → \"Tresor\"</string>
     <string name="about_help_vault_step2">Entsperren: PIN, Passwort oder Biometrie, je nach Ihrer Einstellung</string>

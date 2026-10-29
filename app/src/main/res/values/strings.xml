@@ -870,7 +870,7 @@
     <string name="about_feat_sms_label">SMS &amp; MMS</string>
     <string name="about_feat_sms_desc">Default SMS app for Android 8 → 15+. Full history import, no duplicates.</string>
     <string name="about_feat_voice_label">Voice messages</string>
-    <string name="about_feat_voice_desc">Push-to-talk over MMS. Capped at 60 s / 300 KB for compatibility with all French carriers.</string>
+    <string name="about_feat_voice_desc">Push-to-talk over MMS. Capped at 120 s / 280 KB for compatibility with all French carriers.</string>
     <string name="about_feat_vault_label">Encrypted vault</string>
     <string name="about_feat_vault_desc">Sensitive conversations in a SQLCipher vault, key wrapped in the Android Keystore.</string>
     <string name="about_feat_panic_label">Decoy PIN</string>
@@ -905,7 +905,7 @@
     <string name="about_help_voice_title">Send a voice message</string>
     <string name="about_help_voice_step1">Long-press the mic to the right of the composer</string>
     <string name="about_help_voice_step2">Speak, then release to send (slide left = cancel)</string>
-    <string name="about_help_voice_step3">Cap 60 s — recording stops automatically beyond that</string>
+    <string name="about_help_voice_step3">Cap 120 s — recording stops automatically beyond that</string>
     <string name="about_help_vault_title">Move a conversation to the vault</string>
     <string name="about_help_vault_step1">Long-press the conversation in the list → \"Vault\"</string>
     <string name="about_help_vault_step2">Unlock: PIN, passphrase or biometrics depending on your setting</string>
