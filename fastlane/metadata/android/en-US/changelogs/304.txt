@@ -1,0 +1,7 @@
+Message text size: Settings > Appearance, six steps up to 175 %, on top of Android's font size.
+
+Pictures now show their status, and an MMS your carrier refuses no longer looks sent: it says so, with the carrier's code.
+
+"Block unknown numbers" now explains that such messages are deleted on arrival.
+
+The emergency summary no longer promises a location the SMS will not carry. Voice limit shown right: 120 s / 280 KB.

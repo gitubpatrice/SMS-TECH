@@ -1,0 +1,7 @@
+Dimensione del testo dei messaggi: Impostazioni > Aspetto, sei livelli fino al 175 %, in aggiunta ai caratteri di Android.
+
+Le foto mostrano il loro stato, e un MMS rifiutato dall'operatore non sembra più inviato: lo dice, con il codice dell'operatore.
+
+«Blocca i numeri sconosciuti» spiega che quei messaggi vengono eliminati all'arrivo.
+
+Il riepilogo dell'emergenza non promette più una posizione assente dall'SMS. Limite vocale corretto: 120 s / 280 KB.

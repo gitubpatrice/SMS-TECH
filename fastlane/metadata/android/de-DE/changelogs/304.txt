@@ -1,0 +1,7 @@
+Textgröße der Nachrichten: Einstellungen > Darstellung, sechs Stufen bis 175 %, zusätzlich zur Android-Schriftgröße.
+
+Bilder zeigen ihren Status, und eine vom Anbieter abgelehnte MMS wirkt nicht mehr gesendet: Sie sagt es, mit dem Code des Anbieters.
+
+„Unbekannte Nummern blockieren“ erklärt, dass solche Nachrichten beim Eintreffen gelöscht werden.
+
+Die Notfall-Übersicht verspricht keinen Standort mehr, den die SMS nicht enthält. Sprachlimit korrekt: 120 s / 280 KB.

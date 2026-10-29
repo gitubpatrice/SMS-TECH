@@ -3,10 +3,40 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
-## [Unreleased]
+## [1.29.0] — 2026-10-29
+
+First release since SMS Tech joined F-Droid (fdroid/fdroiddata!38458, merged 2026-10-23).
+
+### Added
+
+- **Message text size** (Settings → Appearance), asked for by a visually impaired user. Six steps from
+  85 % to 175 %, on top of Android's own font size. It enlarges the message bubbles and what opens from
+  them, the typing field, the conversation list and the search results; bars, buttons and avatars stay as
+  they are. At the default step the rendering is pixel-identical to 1.28.14 (measured). The setting had
+  been stored since v1.2.0, but nothing showed or applied it.
+
+### Fixed
+
+- **A picture your carrier refuses no longer shows as sent** (issue #53). The MMS sent `PendingIntent`
+  was immutable, so Android's MMS service could not attach the carrier's answer (`EXTRA_MMS_DATA`): on a
+  Galaxy S24 it arrived absent, and every MMS handed to the carrier looked sent. It is now mutable on
+  Android 12+ and the answer is read. An explicit refusal shows "Refused by the carrier (code 0x…)"; an
+  absent or unreadable answer keeps the previous behaviour, so it cannot create false failures. Measured
+  on a real network: answer read (`0x80`), picture shown as sent and received.
+- **Picture bubbles show their status** (time, sent, failed): they showed none, so a failed picture
+  looked like a sent one. A failed MMS now says "Not sent" instead of promising a retry that MMS do not
+  have (the voice bubble promised it).
+- **The unread pill** no longer clips its digit under a large Android font.
+- **The emergency summary** in Settings no longer says "GPS location included" without the location
+  permission: it says the location will not be sent, or that it is approximate (about 2 km).
+- **The voice message limit** reads 120 s / 280 KB (it said 60 s / 300 KB) in About and in the store
+  listing.
 
 ### Changed
 
+- **Block unknown numbers** now explains, under the switch, that such messages are deleted on arrival,
+  with no notification and no copy, including senders shown as a name and verification codes.
+- **Donation link**: `.github/FUNDING.yml` points to the donation page; F-Droid shows it from this release.
 - **Terms of use, liability, in the five languages (English and French prevail).** The clause said the
   publisher was liable for no damage at all, direct or indirect, and that any data loss was the user's
   alone: a clause that broad risks being set aside whole. It now says the app is free and published by a
