@@ -228,9 +228,13 @@ fun ThreadScreen(
     //
     // Security : we pass `EXTRA_PROCESS_TEXT_READONLY = true` so the receiving
     // app cannot modify the original text. Empty / blank bodies are filtered
-    // out — no point opening a chooser with nothing to translate. If no app
-    // declares the intent, we show a snackbar instead of letting the chooser
-    // display its empty state (cleaner UX).
+    // out — no point opening a chooser with nothing to translate.
+    //
+    // No `resolveActivity` check any more: it needed a `<queries>` for
+    // PROCESS_TEXT, and that declaration also put every app declaring a text
+    // action into the selection toolbar of every field (see the manifest). The
+    // chooser runs in the system, sees every app, and says itself when none
+    // can take the text.
     val translateMessageExternal: (Message) -> Unit = { m ->
         val body = m.body.trim()
         if (body.isNotEmpty()) {
@@ -238,13 +242,8 @@ fun ThreadScreen(
                 .setType("text/plain")
                 .putExtra(Intent.EXTRA_PROCESS_TEXT, body)
                 .putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true)
-            if (intent.resolveActivity(context.packageManager) != null) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                context.startActivity(Intent.createChooser(intent, null))
-            } else {
-                val label = context.getString(R.string.snack_no_translate_app)
-                scope.launch { snackbarHost.showSnackbar(label) }
-            }
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            context.startActivity(Intent.createChooser(intent, null))
         }
     }
 

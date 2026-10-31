@@ -51,10 +51,6 @@
     <string name="forward_no_conversation">Keine andere Unterhaltung zum Weiterleiten.</string>
     <string name="thread_reply_deleted">Ursprüngliche Nachricht gelöscht</string>
     <string name="action_cancel_reply">Antwort verwerfen</string>
-    <!-- v1.7.1 — translation feature delegated to the system app via
-         ACTION_PROCESS_TEXT (replaces in-app ML Kit removed in v1.7.0).
-         Shown if no app on the device declares the intent. -->
-    <string name="snack_no_translate_app">Keine Übersetzungs-App installiert</string>
     <string name="chat_you">Ich</string>
     <string name="attach_photo">Foto</string>
     <string name="attach_video">Video</string>

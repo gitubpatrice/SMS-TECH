@@ -49,10 +49,6 @@
     <string name="forward_no_conversation">Aucune autre conversation où transférer.</string>
     <string name="thread_reply_deleted">Message d\'origine supprimé</string>
     <string name="action_cancel_reply">Annuler la réponse</string>
-    <!-- v1.7.1 — traduction déléguée au système via ACTION_PROCESS_TEXT
-         (remplace ML Kit retiré en v1.7.0). Affiché si aucune app installée
-         ne déclare l'intent. -->
-    <string name="snack_no_translate_app">Aucune app de traduction installée</string>
     <string name="chat_you">Vous</string>
     <string name="attach_photo">Photo</string>
     <string name="attach_video">Vidéo</string>

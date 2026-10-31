@@ -33,6 +33,7 @@ import com.filestech.sms.system.notifications.SafetyCallIntentToken
 import com.filestech.sms.system.notifications.SafetyCallWarningNotifier
 import com.filestech.sms.system.share.IncomingShareHolder
 import com.filestech.sms.ui.AppRoot
+import com.filestech.sms.ui.security.keepSelectedTextInApp
 import com.filestech.sms.ui.theme.SmsTechTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
@@ -229,6 +230,10 @@ class MainActivity : FragmentActivity() {
         // effect: the user is never exposed in Recents during cold-start, and the main thread
         // is freed.
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+
+        // Before the first field exists: the selection toolbar's "Translate" would hand the selected
+        // text of a message to another app. See `keepSelectedTextInApp`.
+        keepSelectedTextInApp()
 
         enableEdgeToEdge()
 

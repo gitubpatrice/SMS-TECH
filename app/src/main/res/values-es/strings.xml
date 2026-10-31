@@ -52,10 +52,6 @@
     <string name="forward_no_conversation">No hay otra conversación a la que reenviar.</string>
     <string name="thread_reply_deleted">Mensaje original eliminado</string>
     <string name="action_cancel_reply">Cancelar la respuesta</string>
-    <!-- v1.7.1 — translation feature delegated to the system app via
-         ACTION_PROCESS_TEXT (replaces in-app ML Kit removed in v1.7.0).
-         Shown if no app on the device declares the intent. -->
-    <string name="snack_no_translate_app">No hay ninguna app de traducción instalada</string>
     <string name="chat_you">Yo</string>
     <string name="attach_photo">Foto</string>
     <string name="attach_video">Vídeo</string>
