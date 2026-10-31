@@ -109,6 +109,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.withResumed
@@ -192,6 +193,12 @@ fun ThreadScreen(
         if (vaultHidden) {
             threadNavOwner.lifecycle.withResumed { onBack() }
         }
+    }
+    // v1.29.1 (issue #60) — « active » pour les notifications seulement quand l'écran est visible :
+    // écran éteint, autre application ou autre écran de l'app passent par ON_STOP.
+    LifecycleStartEffect(viewModel) {
+        viewModel.onVisibilityChanged(true)
+        onStopOrDispose { viewModel.onVisibilityChanged(false) }
     }
     val snackbarHost = remember { SnackbarHostState() }
     val context = LocalContext.current

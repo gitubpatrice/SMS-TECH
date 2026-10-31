@@ -387,13 +387,6 @@ class ThreadViewModel @Inject constructor(
     }
 
     init {
-        // v1.3.9 — déclare la conversation comme "active foreground" pour que
-        // `IncomingMessageNotifier` puisse poser un `setTimeoutAfter` court (~1500 ms)
-        // sur toute notif arrivant sur CETTE conv pendant qu'elle est ouverte. Son /
-        // heads-up jouent (signal sonore préservé), puis Android cancel la notif
-        // automatiquement — l'utilisateur n'a pas à la dismiss à la main.
-        activeConversationTracker.setActive(conversationId)
-
         // v1.12.0 — propage `isPanicDecoy` dans le state pour gater
         // l'overflow item "Déplacer vers le coffre" côté UI.
         viewModelScope.launch {
@@ -1745,6 +1738,24 @@ class ThreadViewModel @Inject constructor(
             } else {
                 _events.tryEmit(Event.ShowSnackbar(context.getString(message), isError = true))
             }
+        }
+    }
+
+    /**
+     * v1.29.1 (issue #60) — la conversation n'est « active » (cf. [ActiveConversationTracker]) que
+     * tant que son écran est VISIBLE, de ON_START à ON_STOP : `IncomingMessageNotifier` donne alors à
+     * la notification d'un message de CETTE conversation un `setTimeoutAfter` court — le son joue,
+     * puis la notification s'efface, le message étant déjà sous les yeux.
+     *
+     * Jusqu'à la 1.29.0, elle était déclarée active dans `init` et ne l'était plus qu'à `onCleared`.
+     * Or le ViewModel survit à l'écran éteint et à une autre application au premier plan : la
+     * notification d'un message que personne ne voyait disparaissait en 1,5 s.
+     */
+    fun onVisibilityChanged(visible: Boolean) {
+        if (visible) {
+            activeConversationTracker.setActive(conversationId)
+        } else {
+            activeConversationTracker.clearActive(conversationId)
         }
     }
 
