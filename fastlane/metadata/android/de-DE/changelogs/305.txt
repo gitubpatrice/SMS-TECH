@@ -1,0 +1,5 @@
+Die Auswahlleiste bietet kein „Übersetzen“ und keine Textaktionen anderer Apps mehr, unter jedem Android: Sie erhielten den markierten Text einer Nachricht. Es bleiben Ausschneiden, Kopieren, Einfügen, Alles auswählen.
+
+Die Schaltfläche „Übersetzen“ einer Nachricht öffnet direkt die App-Auswahl von Android.
+
+Eine Nachricht im offen gelassenen Gespräch, bei ausgeschaltetem Bildschirm oder einer anderen App im Vordergrund, behält ihre Benachrichtigung, statt sie nach einer Sekunde zu verlieren.

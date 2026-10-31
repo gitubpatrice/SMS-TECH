@@ -1,0 +1,5 @@
+La barre de sélection ne propose plus « Traduire » ni les actions d'une autre application, sur toutes les versions d'Android : elles recevaient le texte sélectionné d'un message. Restent Couper, Copier, Coller, Tout sélectionner.
+
+Le bouton « Traduire » d'un message ouvre directement le choix d'application d'Android.
+
+Un message arrivant dans la conversation restée ouverte, écran éteint ou autre application devant, garde sa notification au lieu de la perdre en une seconde.

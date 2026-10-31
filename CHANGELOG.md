@@ -3,6 +3,26 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.29.1] — 2026-10-31
+
+### Fixed
+
+- **The selection toolbar no longer hands the selected text of a message to other apps** (#61). It
+  offered "Translate" (Android's text classifier) and the `ACTION_PROCESS_TEXT` actions of other apps,
+  each of which received the selected text. `MainActivity` sets `TextClassifier.NO_OP` and turns
+  `ComposeFoundationFlags.isSmartSelectionEnabled` off before the first composition, on every Android
+  version (before Android 11 every installed app is visible). The toolbar keeps Cut, Copy, Paste and
+  Select all; Android's "Read aloud" no longer appears there.
+- **A message arriving in the conversation left open keeps its notification** (issue #60, #62). The
+  conversation was declared active from `ThreadViewModel.init` to `onCleared`, and the ViewModel outlives
+  a screen turned off or another app in front: the notification got the 1.5 s timeout meant for a message
+  already in view. It is now active between ON_START and ON_STOP only.
+
+### Changed
+
+- **A message's Translate button** opens Android's app picker directly; the `<queries>` entry for
+  `PROCESS_TEXT` is gone from the manifest, and with it the "no translation app" message (5 languages).
+
 ## [1.29.0] — 2026-10-29
 
 First release since SMS Tech joined F-Droid (fdroid/fdroiddata!38458, merged 2026-10-23).

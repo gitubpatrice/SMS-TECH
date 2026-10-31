@@ -1,0 +1,5 @@
+La barra di selezione non propone più «Traduci» né le azioni di un'altra app, su ogni versione di Android: ricevevano il testo selezionato di un messaggio. Restano Taglia, Copia, Incolla, Seleziona tutto.
+
+Il pulsante «Traduci» di un messaggio apre direttamente la scelta dell'app di Android.
+
+Un messaggio che arriva nella conversazione rimasta aperta, a schermo spento o con un'altra app davanti, mantiene la sua notifica invece di perderla dopo un secondo.

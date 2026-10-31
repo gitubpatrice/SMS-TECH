@@ -1,0 +1,5 @@
+The selection toolbar no longer offers Translate or another app's text actions, on any Android version: they received the selected text of a message. Cut, Copy, Paste and Select all remain.
+
+A message's Translate button now opens Android's app picker directly.
+
+A message arriving in the conversation left open, screen off or another app in front, keeps its notification instead of losing it after a second.

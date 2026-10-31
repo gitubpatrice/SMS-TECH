@@ -1,0 +1,5 @@
+La barra de selección ya no ofrece «Traducir» ni las acciones de otra app, en ninguna versión de Android: recibían el texto seleccionado de un mensaje. Quedan Cortar, Copiar, Pegar, Seleccionar todo.
+
+El botón «Traducir» de un mensaje abre directamente el selector de apps de Android.
+
+Un mensaje que llega a la conversación que quedó abierta, con la pantalla apagada u otra app delante, conserva su notificación en lugar de perderla en un segundo.
