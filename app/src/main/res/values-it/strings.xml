@@ -51,10 +51,6 @@
     <string name="forward_no_conversation">Nessun\'altra conversazione a cui inoltrare.</string>
     <string name="thread_reply_deleted">Messaggio originale eliminato</string>
     <string name="action_cancel_reply">Annulla la risposta</string>
-    <!-- v1.7.1 — translation feature delegated to the system app via
-         ACTION_PROCESS_TEXT (replaces in-app ML Kit removed in v1.7.0).
-         Shown if no app on the device declares the intent. -->
-    <string name="snack_no_translate_app">Nessuna app di traduzione installata</string>
     <string name="chat_you">Io</string>
     <string name="attach_photo">Foto</string>
     <string name="attach_video">Video</string>

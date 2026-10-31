@@ -774,17 +774,6 @@
     <issue
         id="LocalContextGetResourceValueCall"
         message="Querying resource values using LocalContext.current"
-        errorLine1="                val label = context.getString(R.string.snack_no_translate_app)"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/filestech/sms/ui/screens/thread/ThreadScreen.kt"
-            line="220"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="LocalContextGetResourceValueCall"
-        message="Querying resource values using LocalContext.current"
         errorLine1="                    snackbarHost.showSnackbar(context.getString(R.string.thread_export_success, e.pages))"
         errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
