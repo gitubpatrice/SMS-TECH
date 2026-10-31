@@ -14,8 +14,10 @@ import javax.inject.Singleton
  * voit déjà le message en temps réel.
  *
  * **Pattern attendu** :
- *   - `ThreadViewModel.init` → `setActive(conversationId)`
- *   - `ThreadViewModel.onCleared` → `clearActive(conversationId)`
+ *   - `ThreadScreen`, ON_START → `ThreadViewModel.onVisibilityChanged(true)` → `setActive(conversationId)`
+ *   - ON_STOP, puis `ThreadViewModel.onCleared` en filet → `clearActive(conversationId)`. Jusqu'à la
+ *     1.29.0, `init` et `onCleared` seuls : le ViewModel survivant à l'écran éteint, la conversation
+ *     restait « active » sans être vue (issue #60).
  *   - `IncomingMessageNotifier.notifyIncoming` → check `isActive(conversationId)`
  *     pour décider du `setTimeoutAfter` court vs persistance par défaut.
  *
