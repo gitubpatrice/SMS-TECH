@@ -1,7 +1,6 @@
 package com.filestech.sms.ui.security
 
 import android.app.Activity
-import android.os.Build
 import android.view.textclassifier.TextClassificationManager
 import android.view.textclassifier.TextClassifier
 import androidx.compose.foundation.ComposeFoundationFlags
@@ -23,21 +22,21 @@ import androidx.compose.foundation.ExperimentalFoundationApi
  *    Mesuré et fermé dans Notes Tech 3.1.1.
  * 2. **Les actions de texte des autres applications** (`ACTION_PROCESS_TEXT`). Compose ajoute à la
  *    barre chaque application VISIBLE qui en déclare une — n'importe laquelle peut le faire, sous
- *    n'importe quel nom. À partir d'Android 11, la visibilité des paquets les cache, sauf les
- *    applications visibles de tous (TalkBack et sa lecture à voix haute) : d'où le retrait du
- *    `<queries>` du manifeste, qui les rendait toutes visibles. Avant Android 11, rien ne les cache :
- *    [ComposeFoundationFlags.isSmartSelectionEnabled] à `false` retire de la barre ces actions et la
- *    sélection intelligente, pour tout Compose et tout le processus.
+ *    n'importe quel nom. La visibilité des paquets ne suffit pas à les écarter : avant Android 11 elle
+ *    n'existe pas, et ensuite elle se donne par application ENTIÈRE — le `<queries>` `SEND
+ *    text/plain` de ce manifeste rend visible toute application qui accepte un partage de texte, un
+ *    traducteur compris, avec toutes ses actions. [ComposeFoundationFlags.isSmartSelectionEnabled] à
+ *    `false` retire ces actions (et la sélection intelligente) de toute barre Compose du processus,
+ *    sur toutes les versions. Le `<queries>` `PROCESS_TEXT`, qui les rendait toutes visibles, est
+ *    retiré du manifeste en plus.
  *
  * Ce qui se perd : la sélection intelligente (un appui long qui sélectionne une adresse entière), les
- * actions du classifieur (appeler, ouvrir une carte, traduire) et, avant Android 11 seulement, la
- * lecture à voix haute dans la barre (elle reste joignable par son propre raccourci d'accessibilité).
- * Couper, Copier, Coller et Tout sélectionner restent.
+ * actions du classifieur (appeler, ouvrir une carte, traduire) et la lecture à voix haute dans la
+ * barre (elle reste joignable par son propre raccourci d'accessibilité). Couper, Copier, Coller et
+ * Tout sélectionner restent : la barre ne garde que l'édition, comme le corps d'une note de Notes Tech.
  */
 @OptIn(ExperimentalFoundationApi::class)
 fun Activity.keepSelectedTextInApp() {
     getSystemService(TextClassificationManager::class.java)?.setTextClassifier(TextClassifier.NO_OP)
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-        ComposeFoundationFlags.isSmartSelectionEnabled = false
-    }
+    ComposeFoundationFlags.isSmartSelectionEnabled = false
 }
