@@ -1,0 +1,3 @@
+A long message containing a character outside the basic SMS alphabet (ê, ç, ’, an emoji…) no longer closes the app when the Phone permission is denied, and it can be sent again.
+
+Android needs that permission to count and split such a message; when Android refuses, the app now does it itself.

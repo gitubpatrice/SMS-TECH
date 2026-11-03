@@ -3,6 +3,20 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.29.2] — 2026-11-03
+
+### Fixed
+
+- **A long Unicode text no longer closes the app when the Phone permission is denied, and it can be sent
+  again** (#68; reported by e-mail, Android 17, GrapheneOS). For a text outside the GSM alphabet (ê, ç,
+  ’, an emoji…) longer than 70 characters, Android's `SmsMessage.calculateLength` and
+  `SmsManager.divideMessage` read the SIM's GID1 through `hasEmsSupport()`, which needs
+  `READ_PHONE_STATE`; with the permission denied they threw `SecurityException: getGroupIdLevel1`. The
+  segment counter closed the app on every change of the field, and on opening a conversation whose draft
+  is such a text; the send failed. On that refusal only, the app now counts and splits the text itself,
+  with AOSP's rule (70 UTF-16 units, then parts of 67, never splitting a character). With the permission
+  granted, nothing changes.
+
 ## [1.29.1] — 2026-10-31
 
 ### Fixed

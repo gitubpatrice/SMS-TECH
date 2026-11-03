@@ -1,0 +1,3 @@
+Un long message contenant un caractère hors de l'alphabet SMS de base (ê, ç, ’, un émoji…) ne ferme plus l'application quand la permission Téléphone est refusée, et il peut de nouveau être envoyé.
+
+Android a besoin de cette permission pour compter et découper un tel message ; quand Android refuse, l'application le fait désormais elle-même.

@@ -1,0 +1,3 @@
+Eine lange Nachricht mit einem Zeichen außerhalb des einfachen SMS-Alphabets (ê, ç, ’, ein Emoji …) schließt die App nicht mehr, wenn die Berechtigung „Telefon“ verweigert ist, und lässt sich wieder senden.
+
+Android braucht diese Berechtigung, um eine solche Nachricht zu zählen und aufzuteilen; lehnt Android ab, übernimmt das jetzt die App selbst.
