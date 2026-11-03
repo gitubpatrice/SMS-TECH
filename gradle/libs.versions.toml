@@ -63,7 +63,7 @@ junit5 = "5.11.3"
 # numerotation tant qu'on reste en JUnit 5 — Jupiter 5.11.3 <-> plateforme 1.11.3.
 junit-platform = "1.11.3"
 mockk = "1.14.11"
-turbine = "1.2.0"
+turbine = "1.2.1"
 truth = "1.4.5"
 robolectric = "4.17"
 androidx-test-ext = "1.2.1"
