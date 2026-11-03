@@ -1,0 +1,3 @@
+Un mensaje largo con un carácter fuera del alfabeto SMS básico (ê, ç, ’, un emoji…) ya no cierra la aplicación cuando se deniega el permiso Teléfono, y puede volver a enviarse.
+
+Android necesita ese permiso para contar y dividir un mensaje así; cuando Android se niega, ahora lo hace la propia aplicación.

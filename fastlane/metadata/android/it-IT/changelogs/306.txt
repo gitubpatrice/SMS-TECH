@@ -1,0 +1,3 @@
+Un messaggio lungo con un carattere fuori dall'alfabeto SMS di base (ê, ç, ’, un'emoji…) non chiude più l'app quando l'autorizzazione Telefono è negata, e può di nuovo essere inviato.
+
+Android ha bisogno di questa autorizzazione per contare e dividere un messaggio simile; quando Android rifiuta, ora lo fa l'app stessa.

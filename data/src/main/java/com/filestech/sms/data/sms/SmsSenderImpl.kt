@@ -10,6 +10,7 @@ import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.sender.SmsSender
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,6 +34,22 @@ internal fun smsTrackingRequestCode(action: String, localId: Long, partIndex: In
     val salt = (attempt.toLong() + 1L) * SmsSenderImpl.GOLDEN_ODD
     return ((mix xor salt) xor action.hashCode().toLong()).toInt() and 0x7FFFFFFF
 }
+
+/**
+ * v1.29.2 — les parties à envoyer, le découpage du système étant passé en [decoupageSysteme] pour être
+ * mesurable.
+ *
+ * `SmsManager.divideMessage` refuse un long texte Unicode quand la permission Téléphone est refusée
+ * (`SecurityException: getGroupIdLevel1`, cf. [decouperEnUcs2]) : l'envoi échouait alors pour ce seul
+ * texte. Le découpage vient dans ce cas de [decouperEnUcs2] ; toute autre exception reste ce qu'elle était.
+ */
+internal fun partiesAEnvoyer(text: String, decoupageSysteme: (String) -> ArrayList<String>): ArrayList<String> =
+    try {
+        decoupageSysteme(text)
+    } catch (refus: SecurityException) {
+        Timber.w(refus, "divideMessage refusé : découpage Unicode de l'application")
+        ArrayList(decouperEnUcs2(text))
+    }
 
 /**
  * Wraps the Android [SmsManager] API. Caller is expected to be the default SMS app.
@@ -60,7 +77,7 @@ class SmsSenderImpl @Inject constructor(
             // the region is unknown or the number is a short code — no regression on domestic
             // sends. Only the wire address is affected; the Room/provider rows keep the raw form.
             val wireDestination = wireFormatter.toWireFormat(destination, subId)
-            val parts = manager.divideMessage(text)
+            val parts = partiesAEnvoyer(text) { manager.divideMessage(it) }
             val sentIntents = ArrayList<PendingIntent>(parts.size)
             val deliveredIntents = ArrayList<PendingIntent>(parts.size)
             for (i in parts.indices) {
