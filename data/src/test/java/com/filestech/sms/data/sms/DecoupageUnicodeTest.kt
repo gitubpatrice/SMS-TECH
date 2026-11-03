@@ -49,6 +49,17 @@ class DecoupageUnicodeTest {
     }
 
     @Test
+    fun `une lettre et son accent combinant ne sont jamais separes`() {
+        // « e » + U+0301 à cheval sur la limite : aucune paire de substitution ici, seule la frontière
+        // de caractère empêche la coupure. Un découpage qui ne regarderait que les paires couperait à 67.
+        val texte = "ê".repeat(66) + "é" + "ê".repeat(10)
+        val parties = decouperEnUcs2(texte)
+        assertThat(parties.first().length).isEqualTo(66)
+        assertThat(parties[1]).startsWith("é")
+        assertThat(parties.joinToString("")).isEqualTo(texte)
+    }
+
+    @Test
     fun `aucun texte n'est perdu ni double par le decoupage`() {
         for (texte in listOf("ê", "Ça marche, à très bientôt ’".repeat(9), "😀".repeat(80), "é😀".repeat(50))) {
             assertThat(decouperEnUcs2(texte).joinToString("")).isEqualTo(texte)
