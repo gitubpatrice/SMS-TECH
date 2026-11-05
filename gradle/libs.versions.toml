@@ -2,7 +2,7 @@
 # Build — AGP 9 (Kotlin integre a AGP : plus de plugin `org.jetbrains.kotlin.android`).
 # Migre le 2026-09-16, sur le modele d'Agenda Tech, dont l'entree 1.1.1 (57) a passe le job
 # `fdroid build` de leur pipeline avec cette meme chaine — AGP 9.4, Gradle 9.7.1, compileSdk 37.
-agp = "9.4.0"
+agp = "9.5.0"
 # Kotlin plafonne SOUS 2.4.20 : CodeQL 2.27 refuse de compiler a partir de la (« Kotlin version
 # 2.4.20 is too recent »), mesure sur Agenda Tech. `codeql.yml` tourne aussi sur ce depot.
 kotlin = "2.4.10"
@@ -11,13 +11,13 @@ java = "17"
 
 # AndroidX / Compose
 compose-bom = "2026.09.00"
-core-ktx = "1.19.0"
+core-ktx = "1.19.1"
 activity-compose = "1.13.0"
 lifecycle = "2.11.0"
 navigation-compose = "2.9.8"
-datastore = "1.2.1"
+datastore = "1.3.0"
 room = "2.8.5"
-work = "2.11.2"
+work = "2.12.0"
 biometric = "1.1.0"
 splashscreen = "1.2.0"
 documentfile = "1.1.0"
@@ -42,7 +42,7 @@ accompanist = "0.37.3"
 coroutines = "1.11.0"
 
 # Serialization
-kotlinx-serialization = "1.11.0"
+kotlinx-serialization = "1.12.0"
 
 # SQLCipher
 sqlcipher = "4.19.0"
