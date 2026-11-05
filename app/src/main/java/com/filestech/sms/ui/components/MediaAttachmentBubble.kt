@@ -111,29 +111,9 @@ fun MediaAttachmentBubble(
     val bgColor = if (isOut) cs.primary else bubbleIncomingColor(cs)
     val shape = RoundedCornerShape(18.dp)
 
-    // v1.3.3 Z1 audit fix — `localUri` peut être :
-    //   (1) un absolute file path (cache MMS, voice_mms, vault decrypt — fichiers app)
-    //   (2) une `content://mms/part/N` URI (MMS importés du système Android via
-    //       TelephonyReader → ConversationMirror.bulkImportMmsFromTelephony)
-    // L'ancien code wrappait aveuglément `File(localUri)` → FileProvider throw sur (2)
-    // = aucun MMS image historique ne pouvait s'ouvrir. On détecte le scheme avant.
     // X-04 — une seule fonction d'ouverture, paramétrée par la pièce jointe touchée.
     val ouvrir: (Attachment) -> Unit = remember(message.id) {
-        fun(cible: Attachment) {
-            runCatching {
-                val targetUri = cible.toShareableUri(context)
-                if (targetUri == null) {
-                    Timber.w("MediaAttachmentBubble: cannot resolve URI for %s", cible.localUri)
-                    return@runCatching
-                }
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(targetUri, cible.mimeType)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(Intent.createChooser(intent, cible.fileName ?: ""))
-            }.onFailure { Timber.w(it, "Failed to open attachment %d", cible.id) }
-        }
+        fun(cible: Attachment) = ouvrirPieceJointe(context, cible)
     }
 
     Row(
@@ -287,13 +267,6 @@ private fun ImagePreview(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    // v1.3.3 Z1 — Coil accepte File OU Uri ; on évite File("content://...") qui
-    // crash silencieusement à l'affichage.
-    val model: Any = if (attachment.localUri.startsWith("content://")) {
-        Uri.parse(attachment.localUri)
-    } else {
-        File(attachment.localUri)
-    }
     Box(
         modifier = Modifier
             .widthIn(min = 80.dp, max = 240.dp)
@@ -309,7 +282,7 @@ private fun ImagePreview(
         // 480 px ≈ 240 dp × 2 density factor (xxhdpi) — sharp on every device, ~230 KiB per image.
         AsyncImage(
             model = ImageRequest.Builder(context)
-                .data(model)
+                .data(attachment.modeleImage())
                 .size(THUMBNAIL_PX)
                 .crossfade(true)
                 .build(),
@@ -328,6 +301,39 @@ private fun ImagePreview(
             },
         )
     }
+}
+
+/**
+ * v1.3.3 Z1 — ce que Coil doit charger. Il accepte File OU Uri ; on évite File("content://...") qui
+ * échoue en silence à l'affichage.
+ */
+internal fun Attachment.modeleImage(): Any =
+    if (localUri.startsWith("content://")) Uri.parse(localUri) else File(localUri)
+
+/**
+ * Ouvre une pièce jointe dans l'application du système associée à son type.
+ *
+ * v1.3.3 Z1 audit fix — `localUri` peut être :
+ *   (1) un absolute file path (cache MMS, voice_mms, vault decrypt — fichiers app)
+ *   (2) une `content://mms/part/N` URI (MMS importés du système Android via
+ *       TelephonyReader → ConversationMirror.bulkImportMmsFromTelephony)
+ * L'ancien code wrappait aveuglément `File(localUri)` → FileProvider throw sur (2)
+ * = aucun MMS image historique ne pouvait s'ouvrir. On détecte le scheme avant.
+ */
+internal fun ouvrirPieceJointe(context: android.content.Context, cible: Attachment) {
+    runCatching {
+        val targetUri = cible.toShareableUri(context)
+        if (targetUri == null) {
+            Timber.w("ouvrirPieceJointe: cannot resolve URI for %s", cible.localUri)
+            return@runCatching
+        }
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(targetUri, cible.mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(Intent.createChooser(intent, cible.fileName ?: ""))
+    }.onFailure { Timber.w(it, "Failed to open attachment %d", cible.id) }
 }
 
 /**

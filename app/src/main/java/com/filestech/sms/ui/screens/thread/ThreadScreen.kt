@@ -52,6 +52,7 @@ import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PersonSearch
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Schedule
@@ -171,6 +172,7 @@ fun ThreadScreen(
      * .ComposeScreen] which then funnels back into a thread once a contact is picked.
      */
     onForwardToNewContact: () -> Unit = {},
+    onOpenMedia: () -> Unit = {},
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -583,6 +585,7 @@ fun ThreadScreen(
                         onCreateContact = { menuOpen = false; viewModel.requestCreateContact() },
                         onAddContact = { menuOpen = false; viewModel.requestAddContact() },
                         onDetails = { menuOpen = false; detailsOpen = true },
+                        onMedia = { menuOpen = false; onOpenMedia() },
                         onExportPdf = { menuOpen = false; viewModel.exportToPdf() },
                         onAppearance = { menuOpen = false; appearanceOpen = true },
                         isGroup = state.conversation?.isGroup == true,
@@ -1262,6 +1265,7 @@ private fun ThreadActionsMenu(
     onCreateContact: () -> Unit,
     onAddContact: () -> Unit,
     onDetails: () -> Unit,
+    onMedia: () -> Unit,
     onExportPdf: () -> Unit,
     onAppearance: () -> Unit,
     /** v1.28.3 — « Renommer le groupe… », présent sur un groupe seulement. */
@@ -1302,6 +1306,11 @@ private fun ThreadActionsMenu(
             leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
             text = { Text(stringResource(R.string.action_details)) },
             onClick = onDetails,
+        )
+        DropdownMenuItem(
+            leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+            text = { Text(stringResource(R.string.media_gallery_title)) },
+            onClick = onMedia,
         )
         DropdownMenuItem(
             leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, contentDescription = null) },

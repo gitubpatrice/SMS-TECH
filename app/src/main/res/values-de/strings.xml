@@ -611,6 +611,8 @@
     <string name="reaction_send_confirm_fallback_recipient">dieser Kontakt</string>
     <string name="attachment_image_label">Bild</string>
     <string name="attachment_video_label">Video</string>
+    <string name="media_gallery_title">Fotos und Videos</string>
+    <string name="media_gallery_empty">Keine Fotos oder Videos in dieser Unterhaltung.</string>
     <string name="attachment_file_label">Datei</string>
     <string name="bubble_mms_parts_missing">Anhang nicht wiederhergestellt</string>
     <string name="bubble_sender_self">Ich</string>

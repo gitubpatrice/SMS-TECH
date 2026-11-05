@@ -609,6 +609,8 @@
     <string name="reaction_send_confirm_fallback_recipient">this contact</string>
     <string name="attachment_image_label">Image</string>
     <string name="attachment_video_label">Video</string>
+    <string name="media_gallery_title">Photos and videos</string>
+    <string name="media_gallery_empty">No photos or videos in this conversation.</string>
     <string name="attachment_file_label">File</string>
     <string name="bubble_mms_parts_missing">Attachment not restored</string>
     <string name="bubble_sender_self">You</string>
