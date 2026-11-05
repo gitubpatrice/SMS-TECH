@@ -29,9 +29,9 @@ import java.util.Map;
 public class PduPart {
 
     /* ─── Constants for content-type parameters (OMA-WSP §8.4.2.24) ────────── */
-    public static final int P_TYPE                  = 0x09;
+    public static final int P_TYPE                  = 0x03;
     public static final int P_CHARSET               = 0x01;
-    public static final int P_CT_MR_TYPE            = 0x03;
+    public static final int P_CT_MR_TYPE            = 0x09;
     public static final int P_DEP_NAME              = 0x05;
     public static final int P_DEP_FILENAME          = 0x06;
     public static final int P_DEP_START             = 0x0A;
