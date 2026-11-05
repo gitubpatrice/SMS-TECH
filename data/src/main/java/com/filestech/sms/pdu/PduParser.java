@@ -39,8 +39,10 @@ public class PduParser {
     private static final int THE_LAST_PART          = 1;
 
     private final ByteArrayInputStream mPduDataStream;
-    private byte[] mTypeParam; // last content-type's "type" parameter (for SMIL root id)
-    private byte[] mStartParam;
+    /** Far above any real Content-Type's parameters; what a PDU announces beyond this is skipped, not copied. */
+    private static final int MAX_CONTENT_TYPE_PARAMETERS = 4096;
+
+    private int mCharsetParam = CharacterSets.ANY_CHARSET; // last content-type's "charset" parameter
 
     public PduParser(byte[] data) {
         mPduDataStream = new ByteArrayInputStream(data);
@@ -335,6 +337,7 @@ public class PduParser {
      * parameters). For our purposes we only need the MIME string.
      */
     private byte[] parseContentType(ByteArrayInputStream in, HashMapPlaceholder unused) {
+        mCharsetParam = CharacterSets.ANY_CHARSET;
         in.mark(1);
         int first = extractByteValue(in);
         if (first == -1) return null;
@@ -361,36 +364,64 @@ public class PduParser {
                 in.reset();
                 ct = parseWapString(in, TYPE_TEXT_STRING);
             }
-            // Parameters: type, start, name, etc. Skip whatever bytes remain in the value-length window.
+            // Parameters are read from their own value-length window: a value of unexpected form can no
+            // longer run past it and swallow the headers that follow.
             int consumed = startAvail - in.available();
-            int remaining = length - consumed;
-            // Within remaining bytes we look for "type" (0x83 → P_CT_MR_TYPE) and "start" (0x99) tokens.
-            mTypeParam = null;
-            mStartParam = null;
-            while (remaining > 0 && in.available() > 0) {
-                int paramTok = extractByteValue(in); remaining--;
-                if (paramTok == (PduPart.P_TYPE | 0x80) || paramTok == (PduPart.P_CT_MR_TYPE | 0x80)) {
-                    byte[] paramVal = parseWapString(in, TYPE_TEXT_STRING);
-                    int used = paramVal == null ? 1 : paramVal.length + 1;
-                    remaining -= used;
-                    mTypeParam = paramVal;
-                } else if (paramTok == (PduPart.P_START | 0x80) || paramTok == (PduPart.P_DEP_START | 0x80)) {
-                    byte[] paramVal = parseWapString(in, TYPE_TEXT_STRING);
-                    int used = paramVal == null ? 1 : paramVal.length + 1;
-                    remaining -= used;
-                    mStartParam = paramVal;
-                } else {
-                    // Unknown parameter — skip a text-string
-                    byte[] skip = parseWapString(in, TYPE_TEXT_STRING);
-                    int used = skip == null ? 1 : skip.length + 1;
-                    remaining -= used;
-                }
-            }
+            // The length comes from the PDU: only a bounded window is copied, however much it announces.
+            int remaining = Math.min(Math.max(length - consumed, 0), in.available());
+            byte[] window = new byte[Math.min(remaining, MAX_CONTENT_TYPE_PARAMETERS)];
+            int windowRead = in.read(window, 0, window.length);
+            if (windowRead > 0) parseContentTypeParameters(new ByteArrayInputStream(window, 0, windowRead));
+            skipNBytes(in, remaining - window.length);
             return ct;
         }
         // text-string form
         in.reset();
         return parseWapString(in, TYPE_TEXT_STRING);
+    }
+
+    /**
+     * Keeps `charset`, written as a well-known token or by name (Typed- or Untyped-parameter); any other
+     * parameter is skipped according to the form of its value, not assumed to be a Text-string.
+     */
+    private void parseContentTypeParameters(ByteArrayInputStream params) {
+        while (params.available() > 0) {
+            params.mark(1);
+            int token = extractByteValue(params);
+            boolean isCharset;
+            if ((token & 0x80) != 0) {
+                isCharset = token == (PduPart.P_CHARSET | 0x80);
+            } else {
+                params.reset();
+                isCharset = "charset".equalsIgnoreCase(new String(parseWapString(params, TYPE_TEXT_STRING)));
+            }
+            if (isCharset) {
+                mCharsetParam = parseCharset(params);
+            } else {
+                skipUnknownValue(params);
+            }
+        }
+    }
+
+    /**
+     * Well-known-charset: Any-charset (0x80, read as 0) or Integer-value; some gateways write the name as
+     * a Text-string instead, as AOSP's parser allows. An unknown name or a missing value reads as 0,
+     * "any charset".
+     */
+    private static int parseCharset(ByteArrayInputStream params) {
+        if (params.available() == 0) return CharacterSets.ANY_CHARSET;
+        params.mark(1);
+        int first = extractByteValue(params);
+        params.reset();
+        if ((first >= 0x20 && first <= 0x7F) || first == 0) {
+            byte[] name = parseWapString(params, TYPE_TEXT_STRING);
+            try {
+                return CharacterSets.getMibEnumValue(new String(name));
+            } catch (java.io.UnsupportedEncodingException e) {
+                return CharacterSets.ANY_CHARSET;
+            }
+        }
+        return parseIntegerValue(params);
     }
 
     /* ─── Body parsing (multipart) ─────────────────────────────────────────── */
@@ -447,7 +478,7 @@ public class PduParser {
         // First: Content-Type (value-length + content-type-value + parameters)
         byte[] ct = parseContentType(in, null);
         if (ct != null) part.setContentType(ct);
-        if (mTypeParam != null) part.setContentType(mTypeParam); // not really used
+        if (mCharsetParam != CharacterSets.ANY_CHARSET) part.setCharset(mCharsetParam);
         // Remaining: well-known header fields (P_CONTENT_LOCATION, P_CONTENT_ID, etc.)
         while (in.available() > 0) {
             int hdr = extractByteValue(in);

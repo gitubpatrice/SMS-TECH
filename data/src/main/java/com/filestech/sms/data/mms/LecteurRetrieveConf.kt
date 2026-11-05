@@ -137,6 +137,9 @@ object LecteurRetrieveConf {
         valeurs?.map { it.string.stripMmsAddressSuffix().stripInvisibleChars() }.orEmpty()
 
     private fun jeuDeCaracteres(mibEnum: Int): java.nio.charset.Charset {
+        // L'ASCII est un sous-ensemble de l'UTF-8 : le vrai ASCII se lit à l'identique, et un texte accentué
+        // étiqueté `us-ascii` à tort garde ses accents au lieu de les perdre.
+        if (mibEnum == CharacterSets.US_ASCII) return Charsets.UTF_8
         val nom = runCatching { CharacterSets.getMimeName(mibEnum) }.getOrNull()
         if (nom.isNullOrEmpty() || nom == "*") return Charsets.UTF_8
         return runCatching { charset(nom) }.getOrDefault(Charsets.UTF_8)

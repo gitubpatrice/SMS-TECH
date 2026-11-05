@@ -95,13 +95,17 @@ class MmsBuilder @Inject constructor(
         val recipientValues = ArrayList<EncodedStringValue>(recipients.size)
         for (raw in recipients) {
             val formatted = formatAddressForMms(raw) ?: return null
-            recipientValues += EncodedStringValue(formatted)
+            recipientValues += utf8(formatted)
         }
         if (!attachRecipientsCompat(req, recipientValues)) {
             Timber.w("MmsBuilder: neither setTo(array) nor addTo(value) available on this OEM's SendReq")
             return null
         }
-        if (!subject.isNullOrBlank()) req.subject = EncodedStringValue(subject)
+        if (!subject.isNullOrBlank()) req.subject = utf8(subject)
+        // Optional for the standard, but sent by AOSP Messaging on every MMS: same values (issue #53).
+        req.messageClass = PduHeaders.MESSAGE_CLASS_PERSONAL_STR.toByteArray()
+        req.expiry = EXPIRY_SECONDS
+        req.priority = PduHeaders.PRIORITY_NORMAL
         req.deliveryReport = if (requestDeliveryReport) PduHeaders.VALUE_YES else PduHeaders.VALUE_NO
         req.readReport = PduHeaders.VALUE_NO
 
@@ -148,8 +152,8 @@ class MmsBuilder @Inject constructor(
             contentType = "application/smil".toByteArray()
             contentId = "smil".toByteArray()
             contentLocation = "smil.xml".toByteArray()
+            // No charset, as in AOSP Messaging: file names are reduced to ASCII by safeAttachmentName.
             data = smilXml.toByteArray(Charsets.UTF_8)
-            charset = CharacterSets.UTF_8
         }
         appendPart(body, 0, smilPart)
         totalSize += smilPart.data.size
@@ -175,29 +179,48 @@ class MmsBuilder @Inject constructor(
      *
      * Audit S-P2-5: every filename is XML-escaped via [xmlEscape] before interpolation so an
      * attacker-controlled name (future share-target intent) cannot break out of the attribute.
+     *
+     * Regions and elements are those of AOSP Messaging (`MmsUtils`), so that a carrier's gateway reading
+     * the SMIL finds the layout it sees from Android's own client (issue #53).
      */
     private fun buildSmil(
         attachments: List<Pair<String, MmsAttachment.Kind>>,
         includeText: Boolean,
     ): String {
         val parts = buildString {
-            if (includeText) append("""<par dur="3000ms"><text src="text.txt"/></par>""")
+            if (includeText) append("""<par dur="5000ms"><text src="text.txt" region="Text" /></par>""")
             for ((rawName, kind) in attachments) {
                 val safe = xmlEscape(rawName)
-                val element = when (kind) {
-                    MmsAttachment.Kind.AUDIO -> """<audio src="$safe"/>"""
-                    MmsAttachment.Kind.IMAGE -> """<img src="$safe"/>"""
-                    MmsAttachment.Kind.VIDEO -> """<video src="$safe"/>"""
-                    MmsAttachment.Kind.OTHER -> """<ref src="$safe"/>"""
-                }
-                val dur = if (kind == MmsAttachment.Kind.AUDIO || kind == MmsAttachment.Kind.VIDEO) {
-                    "60000ms"
-                } else "5000ms"
-                append("""<par dur="$dur">$element</par>""")
+                append(
+                    when (kind) {
+                        MmsAttachment.Kind.AUDIO ->
+                            """<par dur="60000ms"><audio src="$safe" dur="60000ms" /></par>"""
+                        MmsAttachment.Kind.IMAGE ->
+                            """<par dur="5000ms"><img src="$safe" region="Image" /></par>"""
+                        MmsAttachment.Kind.VIDEO ->
+                            """<par dur="60000ms"><video src="$safe" dur="60000ms" region="Image" /></par>"""
+                        MmsAttachment.Kind.OTHER ->
+                            """<par dur="5000ms"><ref src="$safe" /></par>"""
+                    },
+                )
             }
         }
-        return """<smil><head><layout><root-layout/></layout></head><body>$parts</body></smil>"""
+        val hasVisual = attachments.any { (_, kind) ->
+            kind == MmsAttachment.Kind.IMAGE || kind == MmsAttachment.Kind.VIDEO
+        }
+        val regions = when {
+            hasVisual && includeText ->
+                """<region id="Image" fit="meet" top="0" left="0" height="80%" width="100%"/>""" +
+                    """<region id="Text" top="80%" left="0" height="20%" width="100%"/>"""
+            hasVisual -> """<region id="Image" fit="meet" top="0" left="0" height="100%" width="100%"/>"""
+            includeText -> """<region id="Text" top="0" left="0" height="100%" width="100%"/>"""
+            else -> ""
+        }
+        return """<smil><head><layout><root-layout/>$regions</layout></head><body>$parts</body></smil>"""
     }
+
+    /** UTF-8, as AOSP does: `EncodedStringValue(String)` here means ISO-8859-1. */
+    private fun utf8(text: String) = EncodedStringValue(CharacterSets.UTF_8, text.toByteArray(Charsets.UTF_8))
 
     /**
      * Cross-OEM helper to append a [PduPart] at the end of a [PduBody]. Samsung One UI 6 also
@@ -310,6 +333,9 @@ class MmsBuilder @Inject constructor(
     }
 
     private companion object {
+        /** Seven days, AOSP Messaging's `DEFAULT_EXPIRY_TIME_IN_SECONDS`. */
+        private const val EXPIRY_SECONDS = 7L * 24L * 60L * 60L
+
         /** v1.3.10 (P3) — Regex patterns hoisted to module-level constants. `Regex(...)` compiles
          *  an NFA at construction; running it from the hot path of every recipient × every
          *  attachment allocated a fresh automaton each time. Single shared instances are safe

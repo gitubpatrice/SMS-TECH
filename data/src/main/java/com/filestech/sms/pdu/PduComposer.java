@@ -30,8 +30,9 @@ import java.util.HashMap;
  * Serialises a [GenericPdu] (typically a [SendReq] or [NotifyRespInd]) into the binary OMA-MMS
  * encoding suitable for SmsManager.sendMultimediaMessage.
  *
- * The encoding follows WAP-230-WSP + OMA-TS-MMS-ENC-V1_3. The class mirrors AOSP PduComposer
- * with the rarely-used SMIL / DRM paths stripped.
+ * The encoding follows WAP-230-WSP + OMA-TS-MMS-ENC-V1_3. This is a shorter rewrite of AOSP's
+ * PduComposer, not a copy: an m-send.req must come out byte for byte as AOSP's would, which
+ * MmsBuilderFormatTest checks against bytes produced by AOSP's own composer (issue #53).
  */
 public class PduComposer {
     private static final String TAG = "PduComposer";
@@ -120,13 +121,19 @@ public class PduComposer {
 
     /** Long-integer: length octet (1..8) followed by big-endian bytes (no leading zeros). */
     private void appendLongInteger(long value) {
-        long temp = value;
-        int size = 0;
-        do { temp >>>= 8; size++; } while (temp > 0);
+        int size = longIntegerSize(value);
         mMessage.write(size & 0xFF);
         for (int i = size - 1; i >= 0; i--) {
             mMessage.write((int) ((value >>> (i * 8)) & 0xFF));
         }
+    }
+
+    /** Number of octets of a Long-integer's value (at least one, no leading zeros). */
+    private static int longIntegerSize(long value) {
+        long temp = value;
+        int size = 0;
+        do { temp >>>= 8; size++; } while (temp > 0);
+        return size;
     }
 
     /**
@@ -187,15 +194,7 @@ public class PduComposer {
         }
         // Value-length [charset] text-string
         ByteArrayOutputStream sub = new ByteArrayOutputStream();
-        // charset as Short-integer (allowed up to 127 → MIB-enum)
-        if (cs > 0 && cs <= SHORT_INTEGER_MAX) {
-            sub.write((cs | 0x80) & 0xFF);
-        } else {
-            // Integer-value: length + bytes
-            int n = 0; long t = cs; do { t >>>= 8; n++; } while (t > 0);
-            sub.write(n);
-            for (int i = n - 1; i >= 0; i--) sub.write((int) ((cs >>> (i * 8)) & 0xFF));
-        }
+        writeCharset(sub, cs);
         if ((data.length > 0) && ((data[0] & 0xFF) > TEXT_MAX)) {
             sub.write(0x7F);
         }
@@ -204,6 +203,34 @@ public class PduComposer {
         byte[] subBytes = sub.toByteArray();
         appendValueLength(subBytes.length);
         mMessage.write(subBytes, 0, subBytes.length);
+    }
+
+    /** Charset as an Integer-value: Short-integer (MIB-enum up to 127), else length + bytes. */
+    private static void writeCharset(ByteArrayOutputStream target, int charset) {
+        if (charset > 0 && charset <= SHORT_INTEGER_MAX) {
+            target.write((charset | 0x80) & 0xFF);
+        } else {
+            int n = longIntegerSize(charset);
+            target.write(n);
+            for (int i = n - 1; i >= 0; i--) target.write((charset >>> (i * 8)) & 0xFF);
+        }
+    }
+
+    /** Text-string written to [target]: null-terminated, quoted with 0x7F if the first byte is >= 0x80. */
+    private static void writeTextString(ByteArrayOutputStream target, byte[] value) {
+        if (value.length > 0 && (value[0] & 0xFF) > TEXT_MAX) target.write(0x7F);
+        target.write(value, 0, value.length);
+        target.write(0);
+    }
+
+    /** A content type as a well-known Short-integer when the WSP table has it, else as a Text-string. */
+    private static void writeContentType(ByteArrayOutputStream target, byte[] contentType) {
+        Integer known = mContentTypeMap.get(new String(contentType));
+        if (known != null) {
+            target.write((known | 0x80) & 0xFF);
+        } else {
+            writeTextString(target, contentType);
+        }
     }
 
     private void appendQuotedString(byte[] value) {
@@ -252,26 +279,23 @@ public class PduComposer {
             appendHeader(PduHeaders.DATE);
             appendLongInteger(date);
 
-            // From: insert-address-token (let the MMSC fill in)
+            // From: insert-address-token (let the MMSC fill in), or the address itself
             appendHeader(PduHeaders.FROM);
             EncodedStringValue from = mPduHeader.getEncodedStringValue(PduHeaders.FROM);
-            ByteArrayOutputStream fromValue = new ByteArrayOutputStream();
             if (from == null || PduHeaders.FROM_INSERT_ADDRESS_TOKEN_STR.equals(from.getString())) {
-                fromValue.write(PduHeaders.FROM_INSERT_ADDRESS_TOKEN);
+                appendValueLength(1);
+                appendOctet(PduHeaders.FROM_INSERT_ADDRESS_TOKEN);
             } else {
-                fromValue.write(PduHeaders.FROM_ADDRESS_PRESENT_TOKEN);
-                // encoded-string-value inside the value-length wrapper
-                appendValueLength(fromValue.size() + encodedStringValueSize(from));
+                // Written aside first: the value-length needs the exact encoded size.
+                ByteArrayOutputStream message = mMessage;
+                mMessage = new ByteArrayOutputStream();
                 appendOctet(PduHeaders.FROM_ADDRESS_PRESENT_TOKEN);
                 appendEncodedString(from);
-                // continue with the rest of the headers (skip the fromValue branch below)
-                // ─ Recipients
-                appendRecipientsAndRest(date);
-                return PDU_COMPOSE_SUCCESS;
+                byte[] value = mMessage.toByteArray();
+                mMessage = message;
+                appendValueLength(value.length);
+                mMessage.write(value, 0, value.length);
             }
-            byte[] fb = fromValue.toByteArray();
-            appendValueLength(fb.length);
-            mMessage.write(fb, 0, fb.length);
 
             appendRecipientsAndRest(date);
             return PDU_COMPOSE_SUCCESS;
@@ -299,38 +323,76 @@ public class PduComposer {
             appendEncodedString(v);
         }
 
-        // X-Mms-Read-Report (optional)
-        int rr = mPduHeader.getOctet(PduHeaders.READ_REPORT);
-        if (rr != 0) { appendHeader(PduHeaders.READ_REPORT); appendOctet(rr); }
-        // X-Mms-Delivery-Report (optional)
-        int dr = mPduHeader.getOctet(PduHeaders.DELIVERY_REPORT);
-        if (dr != 0) { appendHeader(PduHeaders.DELIVERY_REPORT); appendOctet(dr); }
-
         // Subject (optional)
         EncodedStringValue subject = mPduHeader.getEncodedStringValue(PduHeaders.SUBJECT);
         if (subject != null) { appendHeader(PduHeaders.SUBJECT); appendEncodedString(subject); }
 
+        // X-Mms-Message-Class (optional)
+        byte[] messageClass = mPduHeader.getTextString(PduHeaders.MESSAGE_CLASS);
+        if (messageClass != null) {
+            appendHeader(PduHeaders.MESSAGE_CLASS);
+            if (java.util.Arrays.equals(messageClass, PduHeaders.MESSAGE_CLASS_PERSONAL_STR.getBytes())) {
+                appendOctet(PduHeaders.MESSAGE_CLASS_PERSONAL);
+            } else {
+                appendTextString(messageClass);
+            }
+        }
+        // X-Mms-Expiry (optional): Value-length, relative token, Long-integer
+        long expiry = mPduHeader.getLongInteger(PduHeaders.EXPIRY);
+        if (expiry != -1L) {
+            appendHeader(PduHeaders.EXPIRY);
+            appendValueLength(2 + longIntegerSize(expiry));
+            appendOctet(PduHeaders.VALUE_RELATIVE_TOKEN);
+            appendLongInteger(expiry);
+        }
+        // X-Mms-Priority (optional)
+        int priority = mPduHeader.getOctet(PduHeaders.PRIORITY);
+        if (priority != 0) { appendHeader(PduHeaders.PRIORITY); appendOctet(priority); }
+        // X-Mms-Delivery-Report (optional)
+        int dr = mPduHeader.getOctet(PduHeaders.DELIVERY_REPORT);
+        if (dr != 0) { appendHeader(PduHeaders.DELIVERY_REPORT); appendOctet(dr); }
+        // X-Mms-Read-Report (optional)
+        int rr = mPduHeader.getOctet(PduHeaders.READ_REPORT);
+        if (rr != 0) { appendHeader(PduHeaders.READ_REPORT); appendOctet(rr); }
+
         // Content-Type — last header, then the body bytes follow.
+        PduBody body = ((MultimediaMessagePdu) mPdu).getBody();
         appendHeader(PduHeaders.CONTENT_TYPE);
         byte[] contentType = mPduHeader.getTextString(PduHeaders.CONTENT_TYPE);
         if (contentType == null) contentType = "application/vnd.wap.multipart.related".getBytes();
-        Integer ctIdx = mContentTypeMap.get(new String(contentType));
-        if (ctIdx != null) {
-            appendShortInteger(ctIdx);
-        } else {
-            appendTextString(contentType);
+        if (body == null || body.getPartsNum() == 0) {
+            // No root part to name: the bare type, then a part count of zero, as AOSP writes it.
+            writeContentType(mMessage, contentType);
+            appendUintvarInteger(0);
+            return;
         }
+        appendMessageContentType(contentType, body.getPart(0));
 
         // Multipart body
-        PduBody body = ((MultimediaMessagePdu) mPdu).getBody();
-        if (body != null && body.getPartsNum() > 0) {
-            appendMultipart(body);
-        }
+        appendMultipart(body);
     }
 
-    /** Approximates the encoded size of an EncodedStringValue (charset short-int + bytes + nul). */
-    private static int encodedStringValueSize(EncodedStringValue v) {
-        return 2 + v.getTextString().length + 1;
+    /**
+     * The message's Content-type-value, naming its root part. RFC 2387 §3.1 requires `type` on
+     * multipart/related, and OMA-TS-MMS-ENC §7.3.11 asks for `start`: without them a carrier's server
+     * may answer Error-permanent-message-format-corrupt, 0xE2 (issue #53, a refusal that other
+     * carriers' servers do not raise).
+     */
+    private void appendMessageContentType(byte[] contentType, PduPart root) {
+        ByteArrayOutputStream value = new ByteArrayOutputStream();
+        writeContentType(value, contentType);
+        byte[] start = root.getContentId();
+        if (start != null) {
+            value.write(PduPart.P_DEP_START | 0x80);
+            writeTextString(value, ("<" + new String(start) + ">").getBytes());
+        }
+        byte[] rootType = root.getContentType();
+        if (rootType != null) {
+            value.write(PduPart.P_CT_MR_TYPE | 0x80);
+            writeTextString(value, rootType);
+        }
+        appendValueLength(value.size());
+        mMessage.write(value.toByteArray(), 0, value.size());
     }
 
     /** Encodes the [body] as application/vnd.wap.multipart.related (RFC 2387 binary form). */
@@ -351,19 +413,23 @@ public class PduComposer {
         // ── Content-Type (well-known short-int or text) + parameters
         byte[] ct = part.getContentType();
         if (ct == null) ct = "application/octet-stream".getBytes();
-        Integer ctIdx = mContentTypeMap.get(new String(ct));
 
         ByteArrayOutputStream ctBuf = new ByteArrayOutputStream();
-        if (ctIdx != null) {
-            ctBuf.write((ctIdx | 0x80) & 0xFF);
-        } else {
-            for (byte b : ct) ctBuf.write(b);
-            ctBuf.write(0);
+        writeContentType(ctBuf, ct);
+        // Name: the same value as the file name or Content-Location, written with the WSP 1.1 code
+        // (0x85), the one every gateway knows, as AOSP does (the WSP 1.4 code is 0x97).
+        byte[] name = part.getName();
+        if (name == null) name = part.getFilename();
+        if (name == null) name = part.getContentLocation();
+        if (name != null) {
+            ctBuf.write(PduPart.P_DEP_NAME | 0x80);
+            writeTextString(ctBuf, name);
         }
-        if (part.getName() != null) {
-            ctBuf.write(PduPart.P_NAME | 0x80);
-            for (byte b : part.getName()) ctBuf.write(b);
-            ctBuf.write(0);
+        // Charset: without it a caption's UTF-8 bytes reach the recipient undeclared.
+        int charset = part.getCharset();
+        if (charset != 0) {
+            ctBuf.write(PduPart.P_CHARSET | 0x80);
+            writeCharset(ctBuf, charset);
         }
 
         byte[] ctBytes = ctBuf.toByteArray();
@@ -371,12 +437,6 @@ public class PduComposer {
         writeValueLengthTo(headers, ctBytes.length);
         try { headers.write(ctBytes); } catch (Exception e) { /* unreachable */ }
 
-        // ── Content-Location
-        if (part.getContentLocation() != null) {
-            headers.write(PduPart.P_CONTENT_LOCATION & 0xFF);
-            for (byte b : part.getContentLocation()) headers.write(b);
-            headers.write(0);
-        }
         // ── Content-Id  (encoded as quoted-string)
         if (part.getContentId() != null) {
             headers.write(PduPart.P_CONTENT_ID & 0xFF);
@@ -384,6 +444,12 @@ public class PduComposer {
             headers.write('<');
             for (byte b : part.getContentId()) headers.write(b);
             headers.write('>');
+            headers.write(0);
+        }
+        // ── Content-Location
+        if (part.getContentLocation() != null) {
+            headers.write(PduPart.P_CONTENT_LOCATION & 0xFF);
+            for (byte b : part.getContentLocation()) headers.write(b);
             headers.write(0);
         }
         // ── Content-Disposition (optional)

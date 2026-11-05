@@ -131,6 +131,13 @@ public class PduHeaders {
     public static final int VALUE_YES = 0x80;
     public static final int VALUE_NO  = 0x81;
 
+    public static final int VALUE_RELATIVE_TOKEN = 0x81;
+
+    public static final int MESSAGE_CLASS_PERSONAL = 0x80;
+    public static final String MESSAGE_CLASS_PERSONAL_STR = "personal";
+
+    public static final int PRIORITY_NORMAL = 0x81;
+
     public static final int CURRENT_MMS_VERSION = 0x12; // 1.2
 
     public static final int FROM_ADDRESS_PRESENT_TOKEN            = 0x80;
