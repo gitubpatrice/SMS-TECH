@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.filestech.sms.data.local.db.entity.AttachmentEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AttachmentDao {
@@ -34,6 +35,23 @@ interface AttachmentDao {
         """,
     )
     suspend fun findForConversation(conversationId: Long): List<AttachmentEntity>
+
+    /**
+     * Issue #59 — les photos et vidéos d'une conversation, les plus récentes d'abord, pour l'écran du
+     * même nom. Seules les pièces jointes sont lues, pas l'historique des messages. `hidden = 0` : les
+     * mêmes messages que le fil (`MessageDao.observeForConversation`).
+     */
+    @Query(
+        """
+        SELECT a.* FROM attachments a
+        JOIN messages m ON m.id = a.message_id
+        WHERE m.conversation_id = :conversationId
+          AND m.hidden = 0
+          AND (a.mime_type LIKE 'image/%' OR a.mime_type LIKE 'video/%')
+        ORDER BY m.date DESC, m.id DESC, a.id ASC
+        """,
+    )
+    fun observeMediaForConversation(conversationId: Long): Flow<List<AttachmentEntity>>
 
     @Query("DELETE FROM attachments WHERE message_id = :messageId")
     suspend fun deleteForMessage(messageId: Long)

@@ -1,6 +1,7 @@
 package com.filestech.sms.domain.repository
 
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.domain.model.Attachment
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.MessageSearchHit
@@ -35,6 +36,12 @@ interface ConversationRepository {
      * @param limit emits the current window size; raising it widens the window in place.
      */
     fun observeMessagesWindow(conversationId: Long, limit: Flow<Int>): Flow<MessageWindow>
+
+    /**
+     * Issue #59 — the photos and videos of a conversation, most recent first. Empty when the vault
+     * hides the conversation, under the same rule as [observeMessages].
+     */
+    fun observeMedia(conversationId: Long): Flow<List<Attachment>>
 
     fun observeUnreadConversationCount(): Flow<Int>
 

@@ -269,6 +269,21 @@ class ConversationRepositoryImpl @Inject constructor(
         }
     }
 
+    /** Issue #59 — même masquage que [observeMessages] : un fil caché ne montre pas non plus ses photos. */
+    override fun observeMedia(conversationId: Long): Flow<List<Attachment>> =
+        combine(
+            conversationDao.observeById(conversationId).map { it?.inVault == true }.distinctUntilChanged(),
+            attachmentDao.observeMediaForConversation(conversationId),
+            appLock.state,
+            vaultSession.unlocked,
+        ) { inVault, rows, lockState, vaultOpen ->
+            if (inVault && (lockState is AppLockManager.LockState.PanicDecoy || !vaultOpen)) {
+                emptyList()
+            } else {
+                rows.map { it.toDomain() }
+            }
+        }.flowOn(io)
+
     /**
      * Bounded counterpart of [observeMessages] — see [MessageDao.observeWindowForConversation] for
      * why the thread UI must not read the whole history on every emission.

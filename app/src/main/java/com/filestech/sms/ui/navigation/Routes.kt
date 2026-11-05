@@ -21,6 +21,12 @@ import kotlinx.serialization.Serializable
 @Serializable data object EmergencySetup : Route
 @Serializable data class Thread(val conversationId: Long) : Route
 
+/**
+ * Issue #59 — les photos et vidéos d'une conversation. Pas de « Thread » dans le nom : `AppRoot` repère
+ * l'écran de fil par `route.contains("Thread")`.
+ */
+@Serializable data class MediaGallery(val conversationId: Long) : Route
+
 /** v1.28.3 — `groupe` : le composeur s'ouvre en mode groupe, toucher un contact ajoute une puce. */
 @Serializable data class Compose(val initialAddress: String? = null, val groupe: Boolean = false) : Route
 

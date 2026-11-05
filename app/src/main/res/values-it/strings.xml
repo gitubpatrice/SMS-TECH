@@ -614,6 +614,8 @@
     <string name="reaction_send_confirm_fallback_recipient">questo contatto</string>
     <string name="attachment_image_label">Immagine</string>
     <string name="attachment_video_label">Video</string>
+    <string name="media_gallery_title">Foto e video</string>
+    <string name="media_gallery_empty">Nessuna foto o video in questa conversazione.</string>
     <string name="attachment_file_label">File</string>
     <string name="bubble_mms_parts_missing">Allegato non ripristinato</string>
     <string name="bubble_sender_self">Io</string>

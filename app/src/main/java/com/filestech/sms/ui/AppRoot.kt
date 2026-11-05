@@ -31,6 +31,7 @@ import com.filestech.sms.ui.navigation.Conversations
 import com.filestech.sms.ui.navigation.Emergency
 import com.filestech.sms.ui.navigation.EmergencySetup
 import com.filestech.sms.ui.navigation.Lock
+import com.filestech.sms.ui.navigation.MediaGallery
 import com.filestech.sms.ui.navigation.Migration
 import com.filestech.sms.ui.navigation.SafetyCallSetup
 import com.filestech.sms.ui.navigation.ScheduledMessages
@@ -43,6 +44,7 @@ import com.filestech.sms.ui.screens.blocked.BlockedNumbersScreen
 import com.filestech.sms.ui.screens.compose.ComposeScreen
 import com.filestech.sms.ui.screens.conversations.ConversationsScreen
 import com.filestech.sms.ui.screens.lock.LockScreen
+import com.filestech.sms.ui.screens.media.MediaGalleryScreen
 import com.filestech.sms.ui.screens.migration.MigrationScreen
 import com.filestech.sms.ui.screens.settings.SettingsScreen
 import com.filestech.sms.ui.screens.splash.SplashScreen
@@ -442,8 +444,10 @@ fun AppRoot() {
                     nav.popBackStack()
                     nav.navigate(Compose())
                 },
+                onOpenMedia = { nav.navigate(MediaGallery(args.conversationId)) },
             )
         }
+        composable<MediaGallery> { MediaGalleryScreen(onBack = { nav.popBackStack() }) }
         composable<Compose> { backStackEntry ->
             val args = backStackEntry.toRoute<Compose>()
             ComposeScreen(
