@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -20,6 +22,9 @@ import java.io.File
 /**
  * 2026-11-06 (issue #76) — la visionneuse affiche la photo dans l'app, rend « Ouvrir avec » et « Fermer »,
  * et dit quand une image ne peut pas être affichée au lieu de montrer un écran noir.
+ *
+ * Le chargement est ATTENDU avant de conclure (relecture du 2026-11-06) : `onError` est asynchrone, et
+ * vérifier l'absence du message d'erreur tout de suite passerait même si rien n'était jamais décodé.
  */
 class VisionneuseImageTest {
 
@@ -51,6 +56,12 @@ class VisionneuseImageTest {
         fichier.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    private fun attendreLaFinDuChargement() {
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodes(hasTestTag(TAG_CHARGEMENT)).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     @Test
     fun laPhotoSAfficheEtLesDeuxBoutonsRepondent() {
         ecrirePng()
@@ -60,8 +71,9 @@ class VisionneuseImageTest {
             VisionneuseImage(image(fichier.absolutePath), onOuvrirAvec = { ouvertAvec = true }, onFermer = { ferme = true })
         }
 
-        compose.onNodeWithContentDescription("photo.png").assertIsDisplayed()
+        attendreLaFinDuChargement()
         compose.onNodeWithText(context.getString(R.string.image_viewer_error)).assertDoesNotExist()
+        compose.onNodeWithContentDescription(context.getString(R.string.attachment_image_label)).assertIsDisplayed()
 
         compose.onNodeWithContentDescription(context.getString(R.string.image_viewer_open_with)).performClick()
         compose.onNodeWithContentDescription(context.getString(R.string.action_close)).performClick()
@@ -77,12 +89,10 @@ class VisionneuseImageTest {
             VisionneuseImage(image(File(context.cacheDir, "absent.png").absolutePath), onOuvrirAvec = {}, onFermer = {})
         }
 
+        attendreLaFinDuChargement()
         compose.waitUntil(timeoutMillis = 5_000) {
-            compose.onAllNodesWithTextExists(context.getString(R.string.image_viewer_error))
+            compose.onAllNodes(hasText(context.getString(R.string.image_viewer_error))).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText(context.getString(R.string.image_viewer_error)).assertIsDisplayed()
     }
 }
-
-private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onAllNodesWithTextExists(texte: String): Boolean =
-    onAllNodes(androidx.compose.ui.test.hasText(texte)).fetchSemanticsNodes().isNotEmpty()

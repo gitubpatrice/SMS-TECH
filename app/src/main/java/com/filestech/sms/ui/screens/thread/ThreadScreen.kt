@@ -135,6 +135,8 @@ import com.filestech.sms.ui.components.MessageBubble
 import com.filestech.sms.ui.components.ReplyQuotePreview
 import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.SmsTechSnackbarVisuals
+import com.filestech.sms.ui.components.VisionneuseDesPiecesJointes
+import com.filestech.sms.ui.components.rememberOuvertureDesPiecesJointes
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.components.toPlaybackUri
 import com.filestech.sms.ui.security.copyToClipboardSensitive
@@ -273,6 +275,9 @@ fun ThreadScreen(
     var forwardingMessage by remember { mutableStateOf<Message?>(null) }
 
     var menuOpen by remember { mutableStateOf(false) }
+    // 2026-11-06 (issue #76) — la visionneuse des photos est tenue par l'ÉCRAN : une bulle sort de la
+    // composition dès que la liste défile, et la visionneuse se serait fermée avec elle.
+    val ouverture = rememberOuvertureDesPiecesJointes()
     var detailsOpen by remember { mutableStateOf(false) }
     // v1.11.0 — Sujet 5 apparence : dialog ouvert depuis l'overflow menu.
     var appearanceOpen by remember { mutableStateOf(false) }
@@ -733,6 +738,7 @@ fun ThreadScreen(
             ThreadMessageItemActions(
                 onTogglePlayback = { audio -> viewModel.togglePlayback(audio.localUri, audio.toPlaybackUri()) },
                 onSeekPlayback = viewModel::seekPlaybackTo,
+                onOpenAttachment = ouverture::ouvrir,
                 onTapFailed = { msg ->
                     // Audit R3 (v1.14.8) — WATCHDOG_TIMEOUT → confirmation dialog (risque doublon).
                     // SYNCHRONOUS = rejeté radio, retry direct sans risque.
@@ -1117,6 +1123,8 @@ fun ThreadScreen(
             },
         )
     }
+    // 2026-11-06 (issue #76) — la photo touchée, affichée dans l'app.
+    VisionneuseDesPiecesJointes(ouverture)
     // v1.28.3 — nommer le groupe.
     if (renameOpen) {
         com.filestech.sms.ui.components.RenameGroupDialog(
@@ -2148,6 +2156,8 @@ private class ThreadMessageItemActions(
     val onTogglePlayback: (com.filestech.sms.domain.model.Attachment) -> Unit,
     // Position en millisecondes ; aligné sur la signature [ThreadViewModel.seekPlaybackTo].
     val onSeekPlayback: (Int) -> Unit,
+    /** 2026-11-06 (issue #76) — une photo dans la visionneuse de l'écran, le reste dans l'app du système. */
+    val onOpenAttachment: (com.filestech.sms.domain.model.Attachment) -> Unit,
     /** Tap sur bulle FAILED — l'action interne distingue WATCHDOG_TIMEOUT vs SYNCHRONOUS. */
     val onTapFailed: (Message) -> Unit,
     val onDelete: (Message) -> Unit,
@@ -2267,6 +2277,7 @@ private fun ThreadMessageItem(
                     message = msg,
                     attachment = mediaAttachment,
                     autres = mediaAttachments.drop(1),
+                    onOuvrirPieceJointe = actions.onOpenAttachment,
                     showTimestamp = showTimestamp,
                     onDelete = { actions.onDelete(msg) },
                     onReply = { actions.onReply(msg) },

@@ -77,6 +77,8 @@ fun MediaAttachmentBubble(
      * d'affichage.
      */
     autres: List<Attachment> = emptyList(),
+    /** 2026-11-06 (issue #76) — ouvrir une pièce jointe : fourni par l'écran, qui tient la visionneuse. */
+    onOuvrirPieceJointe: (Attachment) -> Unit,
     showTimestamp: Boolean,
     onDelete: () -> Unit,
     onReply: () -> Unit,
@@ -110,11 +112,9 @@ fun MediaAttachmentBubble(
     val bgColor = if (isOut) cs.primary else bubbleIncomingColor(cs)
     val shape = RoundedCornerShape(18.dp)
 
-    // X-04 — une seule fonction d'ouverture, paramétrée par la pièce jointe touchée.
-    // 2026-11-06 (issue #76) — une photo dans la visionneuse de l'app, le reste dans l'app du système.
-    val ouverture = rememberOuvertureDesPiecesJointes()
-    VisionneuseDesPiecesJointes(ouverture)
-    val ouvrir: (Attachment) -> Unit = ouverture::ouvrir
+    // X-04 — une seule fonction d'ouverture, paramétrée par la pièce jointe touchée. 2026-11-06 (issue #76) —
+    // fournie par l'écran : une photo dans sa visionneuse, le reste dans l'app du système.
+    val ouvrir: (Attachment) -> Unit = onOuvrirPieceJointe
 
     Row(
         modifier = Modifier
@@ -258,7 +258,7 @@ private fun MediaPreview(
     }
 }
 
-/** Thumbnail image via Coil. Tap = ACTION_VIEW. */
+/** Thumbnail image via Coil. Tap = la visionneuse de l'écran ([VisionneuseImage]). */
 @Composable
 private fun ImagePreview(
     attachment: Attachment,
