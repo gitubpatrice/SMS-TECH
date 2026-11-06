@@ -222,7 +222,9 @@
     <string name="emergency_call_police_label">Police</string>
     <string name="emergency_call_fire_label">Pompiers</string>
     <string name="emergency_call_medical_label">Urgence médicale</string>
-    <string name="emergency_section_call_title">Appeler directement</string>
+    <!-- 2026-11-06 — était « Appeler directement » : Android ne laisse que l\'app Téléphone appeler les secours directement ; toute autre app obtient le composeur. -->
+    <string name="emergency_section_call_title">Appels d\'urgence</string>
+    <string name="emergency_section_call_hint">Le numéro s\'ouvre dans l\'app Téléphone : touchez son bouton d\'appel. Android ne laisse que l\'app Téléphone appeler les secours directement. Si votre téléphone propose le SOS d\'urgence (réglages d\'Android), il peut les appeler sans que vous touchiez l\'écran.</string>
     <string name="emergency_section_sms_title">Envoyer un SOS aux proches</string>
     <string name="emergency_section_other_title">Autres actions</string>
     <string name="emergency_disable_button">Désactiver le mode urgence</string>
@@ -736,7 +738,7 @@
     <string name="about_perm_record_audio">Enregistrer les messages vocaux joints aux MMS sortants.</string>
     <string name="about_perm_foreground_service">Migration et sauvegarde de longue durée.</string>
     <string name="about_perm_location">Mode urgence uniquement, si vous l\'activez : une position au moment de l\'alerte, exacte ou approximative.</string>
-    <string name="about_perm_call_phone">Tuiles d\'appel d\'urgence : appel direct. Refusée, elles ouvrent le composeur.</string>
+    <string name="about_perm_call_phone">Page Urgence, « Appeler un proche » : appel direct. Si elle est refusée, le composeur s\'ouvre. Les numéros des secours ouvrent toujours le composeur : Android réserve leur appel direct à l\'app Téléphone.</string>
     <string name="about_permissions_title">Permissions utilisées</string>
     <string name="about_security_title">Sécurité &amp; limites</string>
     <string name="about_security_body">SMS et MMS circulent en clair sur le réseau opérateur — c\'est une limite du protocole, pas un choix. SMS Tech ne protège que ce qui est stocké sur l\'appareil. Pour du chiffrement de bout en bout, utilisez Signal ou Matrix.</string>
@@ -926,7 +928,7 @@
     <string name="about_help_translate_step4">Si aucune n\'est installée, un message vous invite à en installer une</string>
     <string name="about_help_emergency_title">Utiliser le mode urgence</string>
     <string name="about_help_emergency_step1">Réglages → Mode urgence : activer + ajouter au moins 1 contact Safety call</string>
-    <string name="about_help_emergency_step2">Page Urgence : appels directs vers les numéros d\'urgence de votre pays ; bouton rouge tenu 3 s → SMS aux proches</string>
+    <string name="about_help_emergency_step2">Page Urgence : les numéros d\'urgence de votre pays s\'ouvrent dans l\'app Téléphone, prêts à être appelés ; bouton rouge tenu 3 s → SMS aux proches</string>
     <string name="about_help_emergency_step3">Notification écran verrouillé (opt-in) : raccourcis vers le 112 et, le cas échéant, vers le numéro d\'urgence propre à votre pays, sans déverrouiller</string>
     <string name="about_help_emergency_step4">« Je vais bien » dans la liste des conversations réinitialise le délai et, sauf si vous avez désactivé le SMS, prévient vos contacts que c\'était une fausse alerte</string>
     <string name="about_help_update_title">Vérifier une mise à jour</string>

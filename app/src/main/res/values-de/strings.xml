@@ -230,7 +230,9 @@
     <string name="emergency_call_police_label">Polizei</string>
     <string name="emergency_call_fire_label">Feuerwehr</string>
     <string name="emergency_call_medical_label">Rettungsdienst</string>
-    <string name="emergency_section_call_title">Direkt anrufen</string>
+    <!-- 2026-11-06 — was "Direkt anrufen": Android lets only the Phone app call emergency numbers directly; any other app gets the dialer. -->
+    <string name="emergency_section_call_title">Notrufe</string>
+    <string name="emergency_section_call_hint">Die Nummer öffnet sich in der Telefon-App: Tippen Sie dort auf Anrufen. Android erlaubt nur der Telefon-App, Notrufe direkt zu wählen. Bietet Ihr Telefon Notfall-SOS an (Android-Einstellungen), kann es den Notruf wählen, ohne dass Sie den Bildschirm berühren.</string>
     <string name="emergency_section_sms_title">SOS-SMS senden</string>
     <string name="emergency_section_other_title">Weitere Aktionen</string>
     <string name="emergency_disable_button">Notfallmodus deaktivieren</string>
@@ -744,7 +746,7 @@
     <string name="about_perm_record_audio">Sprachnachrichten aufnehmen, die an ausgehende MMS angehängt werden.</string>
     <string name="about_perm_foreground_service">Lang laufende Migration bzw. Sicherung.</string>
     <string name="about_perm_location">Nur Notfallmodus, wenn Sie ihn aktivieren: eine Position im Moment des Alarms, genau oder ungefähr.</string>
-    <string name="about_perm_call_phone">Notruf-Kacheln: direkter Anruf. Verweigert, öffnen sie stattdessen die Telefon-App.</string>
+    <string name="about_perm_call_phone">Notrufseite, „Angehörige anrufen“: direkter Anruf. Wird sie verweigert, öffnet sich die Telefon-App. Notrufnummern öffnen immer die Telefon-App: Android behält direkte Notrufe der Telefon-App vor.</string>
     <string name="about_permissions_title">Berechtigungen, die wir verwenden</string>
     <string name="about_security_title">Sicherheit &amp; Grenzen</string>
     <string name="about_security_body">SMS und MMS laufen unverschlüsselt über das Netz des Anbieters — das ist eine Grenze des Protokolls, keine Entscheidung. SMS Tech schützt nur, was auf Ihrem Gerät gespeichert ist. Für Ende-zu-Ende-verschlüsselte Nachrichten verwenden Sie Signal oder Matrix.</string>
@@ -940,7 +942,7 @@
     <string name="about_help_translate_step4">Ist keine installiert, lädt eine Meldung dazu ein, eine zu installieren</string>
     <string name="about_help_emergency_title">Den Notfallmodus verwenden</string>
     <string name="about_help_emergency_step1">Einstellungen → Notfallmodus: aktivieren und mindestens einen Safety-Call-Kontakt hinzufügen</string>
-    <string name="about_help_emergency_step2">Notrufseite: Direktanrufe zu den Notrufnummern Ihres Landes; rote Schaltfläche 3 s halten → SMS an Angehörige</string>
+    <string name="about_help_emergency_step2">Notrufseite: die Notrufnummern Ihres Landes öffnen sich wählbereit in der Telefon-App; rote Schaltfläche 3 s halten → SMS an Angehörige</string>
     <string name="about_help_emergency_step3">Benachrichtigung auf dem Sperrbildschirm (auf Wunsch): Verknüpfungen zu 112 und, sofern vorhanden, zur landeseigenen Notrufnummer, ohne zu entsperren</string>
     <string name="about_help_emergency_step4">\"Mir geht es gut\" in der Liste der Unterhaltungen setzt die Sperrzeit zurück und teilt Ihren Kontakten mit, dass es ein Fehlalarm war – sofern Sie die SMS nicht abgeschaltet haben</string>
     <string name="about_help_update_title">Nach einer Aktualisierung suchen</string>

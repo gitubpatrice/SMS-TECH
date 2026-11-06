@@ -40,14 +40,12 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- v1.14.0 — Mode urgence : appel direct 112 / 17 sur hold-3s opt-in.
-         Permission demandée RUNTIME uniquement quand l'user active explicitement
-         `emergencyCallBehavior = HOLD_3S_DIRECT_CALL` dans Réglages. Default
-         `DIALER_ONLY` (ACTION_DIAL composeur pré-rempli, zéro permission).
-         Si refusée → fallback automatique vers DIALER_ONLY + warning. Aucun
-         appel automatique : hold-3s est anti-pocket-dial. Numéros 112 et 17
-         hardcodés dans `EmergencyCallHelper.placeEmergencyCall(number)`,
-         pas de paramètre user-modifiable. -->
+    <!-- Page Urgence, « Appeler un proche » : appel direct (ACTION_CALL) d'un contact Safety call,
+         demandé au premier appui ; refusée, le composeur s'ouvre (EmergencyCallHelper).
+         2026-11-06 — elle ne sert PLUS aux numéros des secours. Elle était déclarée en v1.14.0 pour
+         « appel direct 112 / 17 », qu'Android ne permet qu'à l'app Téléphone : pour toute autre app,
+         un ACTION_CALL vers un numéro d'urgence ouvre le composeur (mesuré sur émulateur API 34). Les
+         tuiles des secours font donc ACTION_DIAL, sans permission. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
 
     <!-- v1.3.5 G3 audit fix — SCHEDULE_EXACT_ALARM + USE_EXACT_ALARM retirées :

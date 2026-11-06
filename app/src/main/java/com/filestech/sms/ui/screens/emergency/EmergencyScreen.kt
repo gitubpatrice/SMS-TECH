@@ -113,14 +113,17 @@ fun EmergencyScreen(
     //
     // L'appel en attente est sauvegardé : la boîte de dialogue système peut survivre à une
     // recréation de l'activité, et la réponse doit retrouver le numéro touché.
+    //
+    // 2026-11-06 — ce chemin ne sert plus qu'à « Appeler un proche ». Les numéros des secours ouvrent
+    // le composeur sans rien demander : Android interdit à toute autre app que l'app Téléphone de les
+    // appeler directement (cf. [EmergencyCallHelper]), et le `placeCall` d'avant aboutissait déjà au
+    // composeur — après une demande de permission inutile, sous un titre « Appeler directement ».
     var numeroEnAttente by rememberSaveable { mutableStateOf<String?>(null) }
-    var procheEnAttente by rememberSaveable { mutableStateOf(false) }
-    fun appeler(numero: String, proche: Boolean, appelDirect: Boolean) {
-        val outcome = when {
-            appelDirect && proche -> EmergencyCallHelper.placeTrustedContactCall(ctx, numero)
-            appelDirect -> EmergencyCallHelper.placeCall(ctx, numero)
-            proche -> EmergencyCallHelper.openTrustedContactDialer(ctx, numero)
-            else -> EmergencyCallHelper.openDialer(ctx, numero)
+    fun appelerUnProche(numero: String, appelDirect: Boolean) {
+        val outcome = if (appelDirect) {
+            EmergencyCallHelper.placeTrustedContactCall(ctx, numero)
+        } else {
+            EmergencyCallHelper.openTrustedContactDialer(ctx, numero)
         }
         handleCallOutcome(outcome, scope, snackbarHost, noDialerMsg, permDeniedMsg, osErrorMsg)
         // Le composeur s'est ouvert À LA PLACE de l'appel direct : on dit pourquoi.
@@ -135,16 +138,15 @@ fun EmergencyScreen(
     ) { accordee ->
         val numero = numeroEnAttente ?: return@rememberLauncherForActivityResult
         numeroEnAttente = null
-        appeler(numero, proche = procheEnAttente, appelDirect = accordee)
+        appelerUnProche(numero, appelDirect = accordee)
     }
-    fun appelerOuDemander(numero: String, proche: Boolean) {
+    fun appelerUnProcheOuDemander(numero: String) {
         val accordee = ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE) ==
             PackageManager.PERMISSION_GRANTED
         if (accordee) {
-            appeler(numero, proche, appelDirect = true)
+            appelerUnProche(numero, appelDirect = true)
         } else {
             numeroEnAttente = numero
-            procheEnAttente = proche
             callPhonePermLauncher.launch(Manifest.permission.CALL_PHONE)
         }
     }
@@ -214,16 +216,26 @@ fun EmergencyScreen(
     ) { inner ->
         // v1.14.1 — refonte page complète. Toutes les actions urgence visibles
         // en une seule page, gros boutons couleurs, scroll vertical si besoin.
-        // Ordre : (a) section Appel direct (4 tuiles + bouton proche),
+        // Ordre : (a) section Appels d'urgence (tuiles + bouton proche),
         // (b) section SMS aux proches (hold-3s + preview), (c) actions
         // secondaires (Tester sans envoyer, Désactiver mode).
         val cooldownActive = state.isInAntiSpamWindow()
         val canTrigger = state.enabled && contactsCount > 0 && !cooldownActive
 
-        // Numéros d'urgence : `placeCall` / `openDialer` (liste blanche). Proche SafetyCall :
-        // `placeTrustedContactCall` / `openTrustedContactDialer`. Cf. [appelerOuDemander].
-        val callEmergency: (String) -> Unit = { number -> appelerOuDemander(number, proche = false) }
-        val callRelative: (String) -> Unit = { phone -> appelerOuDemander(phone, proche = true) }
+        // Numéros d'urgence : `openDialer` (liste blanche), toujours — c'est tout ce qu'Android permet.
+        // Proche SafetyCall : `placeTrustedContactCall` / `openTrustedContactDialer`, cf.
+        // [appelerUnProcheOuDemander].
+        val callEmergency: (String) -> Unit = { number ->
+            handleCallOutcome(
+                EmergencyCallHelper.openDialer(ctx, number),
+                scope,
+                snackbarHost,
+                noDialerMsg,
+                permDeniedMsg,
+                osErrorMsg,
+            )
+        }
+        val callRelative: (String) -> Unit = { phone -> appelerUnProcheOuDemander(phone) }
 
         // Scroll vertical au cas où l'écran est petit (< 360dp height utile).
         Column(
@@ -233,11 +245,19 @@ fun EmergencyScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 16.dp),
         ) {
-            // ── SECTION 1 — Appel direct d'urgence ──
+            // ── SECTION 1 — Appels d'urgence ──
             Text(
                 text = stringResource(R.string.emergency_section_call_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+            )
+            // 2026-11-06 — dire ce qui va se passer, et ce qui marche sans toucher l'écran : le titre
+            // promettait « Appeler directement », Android ne le permet qu'à l'app Téléphone.
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.emergency_section_call_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
 
@@ -313,7 +333,7 @@ fun EmergencyScreen(
             // celui-ci est là où l'on déclenche ». Il n'avait pas été appliqué à la précondition
             // voisine, le même jour.
             //
-            // ⚠️ Placée devant la SECTION 2 et non devant la 1 : les appels directs (112, police)
+            // ⚠️ Placée devant la SECTION 2 et non devant la 1 : les appels (112, police)
             // ne passent pas par SMS et fonctionnent sans ce rôle. L'annoncer plus haut ferait
             // croire que le numéro d'urgence lui-même est hors service.
             //
@@ -474,9 +494,9 @@ fun EmergencyScreen(
 }
 
 /**
- * v1.14.0 — gère le résultat d'un `EmergencyCallHelper.openDialer` ou
- * `placeCall` côté UI : un seul snackbar différentié selon l'outcome.
- * SUCCESS = silencieux (l'OS prend le relais et affiche le dialer/call).
+ * v1.14.0 — gère côté UI le résultat d'un appel lancé par [EmergencyCallHelper] : un seul snackbar
+ * différencié selon l'outcome. SUCCESS = silencieux (l'OS prend le relais : composeur ou appel).
+ * PERMISSION_DENIED ne vient que de l'appel direct d'un proche : `openDialer` ne demande rien.
  */
 private fun handleCallOutcome(
     outcome: com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome,
@@ -528,8 +548,8 @@ private fun couleurDuService(service: EmergencyNumbers.Service): Color = when (s
 
 /**
  * v1.14.1 — Tuile d'appel d'urgence : un gros bouton plein couleur, numéro
- * en gras à gauche + label à droite. Tap → onClick (caller décide direct
- * call vs dialer fallback selon permission). Hauteur fixe 72dp pour tap
+ * en gras à gauche + label à droite. Tap → onClick, fourni par l'appelant : composeur pour les
+ * secours, appel direct ou composeur pour un proche. Hauteur fixe 72dp pour tap
  * target accessible + uniformité visuelle.
  *
  * Couleur de fond fournie par caller, texte blanc systématique. Toutes les
