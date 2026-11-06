@@ -1,6 +1,10 @@
 package com.filestech.sms.ui.screens.thread
 
 import android.content.Context
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -47,6 +51,9 @@ class ConversationDetailsDialogTest {
 
         assertThat(copie).isEqualTo("+33612345678")
         compose.onNodeWithContentDescription(context.getString(R.string.thread_details_number_copied)).assertIsDisplayed()
+        // Annoncé par TalkBack : un libellé qui change sans région vivante passe sous silence.
+        compose.onNodeWithContentDescription(context.getString(R.string.thread_details_number_copied))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
         compose.onNodeWithContentDescription(context.getString(R.string.thread_details_copy_number)).assertDoesNotExist()
     }
 

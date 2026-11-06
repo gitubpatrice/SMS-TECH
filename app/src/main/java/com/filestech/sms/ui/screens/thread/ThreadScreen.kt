@@ -107,6 +107,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -1399,7 +1402,8 @@ private fun ThreadActionsMenu(
 /**
  * 2026-11-06 — le numéro se copie d'un geste : bouton à droite de sa ligne (demande de Patrice). La copie
  * passe par l'appelant ([copyToClipboardSensitive], marqué sensible comme toute copie de l'application,
- * invariant N4) ; l'icône devient une coche, car un snackbar s'afficherait SOUS la fenêtre.
+ * invariant N4) ; l'icône devient une coche, car un snackbar s'afficherait SOUS la fenêtre, et TalkBack
+ * l'annonce (région vivante).
  */
 @Composable
 internal fun ConversationDetailsDialog(
@@ -1426,7 +1430,7 @@ internal fun ConversationDetailsDialog(
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.padding(top = 8.dp))
                 if (!phoneNumber.isNullOrBlank()) {
-                    var copie by remember { mutableStateOf(false) }
+                    var copie by remember(phoneNumber) { mutableStateOf(false) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.thread_details_number, phoneNumber),
@@ -1438,6 +1442,8 @@ internal fun ConversationDetailsDialog(
                                 onCopyNumber(phoneNumber)
                                 copie = true
                             },
+                            // TalkBack lit « Numéro copié » : sans région vivante, le libellé changerait en silence.
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                         ) {
                             val libelle = if (copie) {
                                 R.string.thread_details_number_copied
