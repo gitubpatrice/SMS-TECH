@@ -32,12 +32,14 @@ Versions : [GitHub Releases](https://github.com/gitubpatrice/SMS-TECH/releases/l
   vous fixez. Ces fonctions sont une aide ; elles ne remplacent pas les services d'urgence — voir les
   [conditions d'utilisation](TERMS.fr.md).
 - **Messages vocaux** enregistrés sur l'appareil et envoyés en MMS audio.
-- Groupes nommés et MMS de groupe, réponses contextuelles avec citation, réponse directe depuis les
-  notifications.
+- Les photos s'ouvrent dans l'application (zoom, GIF animés) ; toutes les photos et vidéos d'une
+  conversation au même endroit.
+- Groupes nommés et MMS de groupe — un message envoyé à plusieurs personnes montre ses destinataires —,
+  réponses contextuelles avec citation, réponse directe depuis les notifications.
 - **Détection d'arnaque** hors ligne (liens raccourcis, formules d'urgence, numéros surtaxés, domaines
   usurpés), fondée sur des règles : elle peut se tromper dans les deux sens.
-- Blocage synchronisé avec la liste de blocage de Téléphone / Samsung Messages ; blocage facultatif
-  des numéros inconnus.
+- Blocage synchronisé avec la liste de blocage de Téléphone / Samsung Messages, conversations bloquées
+  dans leur propre dossier ; blocage facultatif des numéros inconnus.
 - Recherche plein texte (FTS4), **export PDF** d'une conversation, envoi programmé (WorkManager).
 - Sauvegarde et restauration manuelles au format `.smsbk` (AES-256-GCM + PBKDF2). Les pièces jointes
   ne font pas partie de la sauvegarde.

@@ -433,7 +433,7 @@
     <string name="settings_group_mms_hint">One MMS to everyone, and every reply comes back to the group. Messages sent from a group then always go as MMS, text included. Set \"My phone number\" so received group messages can leave you out of the member list.</string>
     <string name="settings_my_number">My phone number</string>
     <string name="settings_my_number_dialog_title">Your phone number</string>
-    <string name="settings_my_number_dialog_body">Optional. If set, this number replaces the AOSP placeholder \"insert-address-token\" in the sender address of outgoing MMS, so other SMS apps display you correctly.</string>
+    <string name="settings_my_number_dialog_body">Optional. If set, this number replaces the AOSP placeholder \"insert-address-token\" in the sender address of outgoing MMS, so other SMS apps display you correctly. It also recognises you among the recipients of a group MMS, and Group MMS needs it.</string>
     <string name="settings_my_number_placeholder">+44 7XXX XXX XXX</string>
     <string name="settings_my_number_detect">Auto-detect from SIM</string>
     <string name="settings_my_number_not_set">Not set</string>
@@ -899,11 +899,13 @@
     <string name="about_badge_no_collection">No data collected</string>
     <string name="about_badge_no_sharing">Zero sharing</string>
 
-    <!-- Features (15) -->
+    <!-- Features (17) -->
     <string name="about_feat_sms_label">SMS &amp; MMS</string>
     <string name="about_feat_sms_desc">Default SMS app for Android 8 → 15+. Full history import, no duplicates.</string>
     <string name="about_feat_voice_label">Voice messages</string>
     <string name="about_feat_voice_desc">Push-to-talk over MMS. Capped at 120 s / 280 KB for compatibility with all French carriers.</string>
+    <string name="about_feat_media_label">Photos and videos</string>
+    <string name="about_feat_media_desc">Photos open in the app (zoom, animated GIFs). Every photo and video of a conversation in one place.</string>
     <string name="about_feat_vault_label">Encrypted vault</string>
     <string name="about_feat_vault_desc">Sensitive conversations in a SQLCipher vault, key wrapped in the Android Keystore.</string>
     <string name="about_feat_panic_label">Decoy PIN</string>
@@ -914,10 +916,12 @@
     <string name="about_feat_biometric_desc">Fingerprint or face to unlock, with a mandatory fallback PIN.</string>
     <string name="about_feat_reply_label">Contextual reply</string>
     <string name="about_feat_reply_desc">Mini-card above the composer + reply bubble with quote in the thread.</string>
+    <string name="about_feat_groups_label">Groups</string>
+    <string name="about_feat_groups_desc">Named groups and group MMS. A message sent to several people shows its recipients.</string>
     <string name="about_feat_translate_label">Delegated translation</string>
     <string name="about_feat_translate_desc">Long-press → \"Translate\" delegates to your installed translation app (Google Translate, DeepL, Aves Translate FLOSS …) via system Intent. No model bundled.</string>
     <string name="about_feat_block_label">Synchronized blocking</string>
-    <string name="about_feat_block_desc">Auto-import of Phone / Samsung Messages blocked numbers. Retroactive purge.</string>
+    <string name="about_feat_block_desc">Auto-import of Phone / Samsung Messages blocked numbers. Retroactive purge. Blocked conversations have their own folder.</string>
     <string name="about_feat_search_label">FTS search</string>
     <string name="about_feat_search_desc">SQLite FTS4 full-text search over bodies, numbers, and contact names.</string>
     <string name="about_feat_pdf_label">PDF export</string>

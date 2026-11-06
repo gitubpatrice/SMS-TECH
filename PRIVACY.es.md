@@ -1,6 +1,6 @@
 # Política de privacidad — SMS Tech
 
-_Última actualización: 26 de octubre de 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md)
+_Última actualización: 6 de noviembre de 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md)
 
 > **Traducción.** Esta traducción al español se facilita a título informativo. Solo las versiones
 > [inglesa](PRIVACY.md) y [francesa](PRIVACY.fr.md) de esta política hacen fe; en caso de
@@ -63,10 +63,11 @@ El desarrollador nunca los recibe.
   de comprobación a los mismos contactos. No contiene ninguna posición.
 - **Llamada de emergencia.** Los botones de llamada de la pantalla de emergencia proponen los
   números de emergencia del país en el que su teléfono está registrado en la red (el 112 figura
-  siempre). Cuando toca uno, la aplicación solicita el permiso de llamada (`CALL_PHONE`) y, si lo
-  concede, realiza la llamada ella misma; si lo deniega, abre el marcador telefónico ya rellenado,
-  que no requiere ningún permiso. El acceso directo en la pantalla de bloqueo abre siempre el
-  marcador telefónico.
+  siempre). Un botón abre el marcador telefónico ya rellenado, que no requiere ningún permiso:
+  Android solo permite a la aplicación de teléfono llamar directamente a un número de emergencia. El
+  permiso de llamada (`CALL_PHONE`) solo lo solicita «Llamar a un ser querido», que entonces llama
+  directamente a su contacto de Safety call; si lo deniega, se abre el marcador en su lugar. El
+  acceso directo en la pantalla de bloqueo abre siempre el marcador telefónico.
 - Ninguna de estas funciones se ejecuta en la sesión señuelo abierta por el código de pánico.
 - Estos mensajes son SMS ordinarios: su operador puede cobrarlos según su plan.
 

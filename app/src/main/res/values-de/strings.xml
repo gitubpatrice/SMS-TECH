@@ -434,7 +434,7 @@
     <string name="settings_group_mms_hint">Eine MMS an alle, und jede Antwort kommt an die Gruppe zurück. Nachrichten aus einer Gruppe gehen dann immer als MMS, auch reiner Text. Setzen Sie \"Meine Rufnummer\", damit empfangene Gruppennachrichten Sie aus der Mitgliederliste auslassen können.</string>
     <string name="settings_my_number">Meine Rufnummer</string>
     <string name="settings_my_number_dialog_title">Ihre Rufnummer</string>
-    <string name="settings_my_number_dialog_body">Optional. Wenn gesetzt, ersetzt diese Nummer den AOSP-Platzhalter \"insert-address-token\" in der Absenderadresse ausgehender MMS, damit andere SMS-Apps Sie richtig anzeigen.</string>
+    <string name="settings_my_number_dialog_body">Optional. Wenn gesetzt, ersetzt diese Nummer den AOSP-Platzhalter \"insert-address-token\" in der Absenderadresse ausgehender MMS, damit andere SMS-Apps Sie richtig anzeigen. Sie erkennt Sie außerdem unter den Empfängern einer Gruppen-MMS, und Gruppen-MMS braucht sie.</string>
     <string name="settings_my_number_placeholder">+49 1XX XXXXXXX</string>
     <string name="settings_my_number_detect">Automatisch von der SIM lesen</string>
     <string name="settings_my_number_not_set">Nicht gesetzt</string>
@@ -904,11 +904,13 @@
     <string name="about_badge_no_collection">Keine Datensammlung</string>
     <string name="about_badge_no_sharing">Keine Weitergabe</string>
 
-    <!-- Features (15) -->
+    <!-- Features (17) -->
     <string name="about_feat_sms_label">SMS &amp; MMS</string>
     <string name="about_feat_sms_desc">Standard-SMS-App für Android 8 → 15+. Vollständiger Import des Verlaufs, keine Duplikate.</string>
     <string name="about_feat_voice_label">Sprachnachrichten</string>
     <string name="about_feat_voice_desc">Sprechtaste über MMS. Begrenzt auf 120 s / 280 KB zur Kompatibilität mit allen französischen Mobilfunkanbietern.</string>
+    <string name="about_feat_media_label">Fotos und Videos</string>
+    <string name="about_feat_media_desc">Fotos öffnen sich in der App (Zoom, animierte GIFs). Alle Fotos und Videos einer Unterhaltung an einem Ort.</string>
     <string name="about_feat_vault_label">Verschlüsselter Tresor</string>
     <string name="about_feat_vault_desc">Vertrauliche Unterhaltungen in einem SQLCipher-Tresor, Schlüssel im Android-Keystore verpackt.</string>
     <string name="about_feat_panic_label">Tarn-PIN</string>
@@ -919,10 +921,12 @@
     <string name="about_feat_biometric_desc">Fingerabdruck oder Gesicht zum Entsperren, mit zwingender PIN als Rückfallebene.</string>
     <string name="about_feat_reply_label">Antwort mit Bezug</string>
     <string name="about_feat_reply_desc">Kleine Karte über dem Eingabefeld und Antwortblase mit Zitat im Verlauf.</string>
+    <string name="about_feat_groups_label">Gruppen</string>
+    <string name="about_feat_groups_desc">Benannte Gruppen und Gruppen-MMS. Eine Nachricht an mehrere Personen zeigt ihre Empfänger.</string>
     <string name="about_feat_translate_label">Übersetzung über andere Apps</string>
     <string name="about_feat_translate_desc">Lange drücken → \"Übersetzen\" übergibt an Ihre installierte Übersetzungs-App (Google Übersetzer, DeepL, Aves Translate FLOSS …) per System-Intent. Kein Modell mitgeliefert.</string>
     <string name="about_feat_block_label">Synchronisiertes Blockieren</string>
-    <string name="about_feat_block_desc">Automatischer Import der blockierten Nummern von Telefon / Samsung Messages. Rückwirkende Bereinigung.</string>
+    <string name="about_feat_block_desc">Automatischer Import der blockierten Nummern von Telefon / Samsung Messages. Rückwirkende Bereinigung. Blockierte Unterhaltungen haben einen eigenen Ordner.</string>
     <string name="about_feat_search_label">Volltextsuche</string>
     <string name="about_feat_search_desc">Volltextsuche mit SQLite FTS4 über Texte, Nummern und Kontaktnamen.</string>
     <string name="about_feat_pdf_label">PDF-Export</string>

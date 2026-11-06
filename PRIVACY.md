@@ -1,6 +1,6 @@
 # Privacy Policy — SMS Tech
 
-_Last updated: 26 October 2026_ · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
+_Last updated: 6 November 2026_ · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
 
 > **Reference versions.** The English and [French](PRIVACY.fr.md) versions of this policy are both
 > authoritative. The German, Italian and Spanish translations are provided for information; in case
@@ -60,10 +60,11 @@ never receives them.
 - **Safety call.** If you do not use the app before the delay you set, SMS Tech sends a check-in
   SMS to the same contacts. It carries no location.
 - **Emergency call.** The call tiles of the Emergency screen offer the emergency numbers of the
-  country where your phone is registered on the network (112 is always there). When you tap one,
-  the app asks for the call permission (`CALL_PHONE`) and, if you grant it, places the call itself;
-  if you refuse, it opens the phone dialer pre-filled, which needs no permission. The lock-screen
-  shortcut always opens the dialer.
+  country where your phone is registered on the network (112 is always there). A tile opens the
+  phone dialer pre-filled, which needs no permission: Android lets only the Phone app call an
+  emergency number directly. The call permission (`CALL_PHONE`) is asked only by "Call a relative",
+  which then calls your Safety call contact directly; if you refuse, the dialer opens instead. The
+  lock-screen shortcut always opens the dialer.
 - None of these run in the decoy session opened by the panic code.
 - These messages are ordinary SMS: your carrier may charge them according to your plan.
 
