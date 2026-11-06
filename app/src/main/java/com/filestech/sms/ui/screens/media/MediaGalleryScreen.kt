@@ -41,8 +41,9 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.filestech.sms.R
 import com.filestech.sms.domain.model.Attachment
+import com.filestech.sms.ui.components.VisionneuseDesPiecesJointes
 import com.filestech.sms.ui.components.modeleImage
-import com.filestech.sms.ui.components.ouvrirPieceJointe
+import com.filestech.sms.ui.components.rememberOuvertureDesPiecesJointes
 
 /** Issue #59 — la grille des photos et vidéos. Toucher une vignette ouvre le fichier comme depuis la bulle. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,7 +54,8 @@ fun MediaGalleryScreen(
 ) {
     val media by viewModel.media.collectAsStateWithLifecycle()
     val vaultHidden by viewModel.vaultHidden.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val ouverture = rememberOuvertureDesPiecesJointes()
+    VisionneuseDesPiecesJointes(ouverture)
     // `withResumed`, comme `ThreadScreen` : dépiler pendant qu'un autre écran est devant viserait le voisin.
     val navOwner = LocalLifecycleOwner.current
     LaunchedEffect(vaultHidden) {
@@ -74,7 +76,8 @@ fun MediaGalleryScreen(
             )
         },
     ) { padding ->
-        MediaGalleryContent(media, padding) { ouvrirPieceJointe(context, it) }
+        // 2026-11-06 (issue #76) — une photo dans la visionneuse de l'app, une vidéo dans l'app du système.
+        MediaGalleryContent(media, padding, ouverture::ouvrir)
     }
 }
 

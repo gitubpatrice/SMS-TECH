@@ -632,6 +632,9 @@
     <string name="attachment_video_label">Vídeo</string>
     <string name="media_gallery_title">Fotos y vídeos</string>
     <string name="media_gallery_empty">No hay fotos ni vídeos en esta conversación.</string>
+    <!-- 2026-11-06 (issue #76) — visionneuse de photos dans l'app -->
+    <string name="image_viewer_open_with">Abrir con otra app</string>
+    <string name="image_viewer_error">Esta imagen no se puede mostrar aquí.</string>
     <string name="attachment_file_label">Archivo</string>
     <string name="bubble_mms_parts_missing">Archivo adjunto no restaurado</string>
     <string name="bubble_sender_self">Yo</string>

@@ -23,7 +23,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,12 +45,13 @@ import java.io.File
 /**
  * v1.3.3 bug #2 — bulle dédiée aux pièces jointes **non-audio** (image / vidéo /
  * fichier). Le tap ouvre la PJ via [Intent.ACTION_VIEW] + FileProvider URI dans
- * l'app système associée au MIME type (Galerie pour image, lecteur vidéo, etc.).
+ * l'app système associée au MIME type (lecteur vidéo, etc.). 2026-11-06 (issue #76) — une IMAGE
+ * s'ouvre dans l'app ([VisionneuseImage]) : la Galerie de GrapheneOS restait noire.
  *
  * Architecture :
  *
  *   - **Image** : thumbnail rendu par Coil ([AsyncImage]) avec contentScale = Crop,
- *     max 240×320 dp pour cohérence avec [MessageBubble]. Tap → `ACTION_VIEW`.
+ *     max 240×320 dp pour cohérence avec [MessageBubble]. Tap → [VisionneuseImage].
  *   - **Vidéo** : icône play + nom de fichier (pas de preview frame extraite pour
  *     éviter la dépendance MediaMetadataRetriever — overkill pour v1.3.3). Tap →
  *     `ACTION_VIEW` ouvre le player système.
@@ -77,6 +77,8 @@ fun MediaAttachmentBubble(
      * d'affichage.
      */
     autres: List<Attachment> = emptyList(),
+    /** 2026-11-06 (issue #76) — ouvrir une pièce jointe : fourni par l'écran, qui tient la visionneuse. */
+    onOuvrirPieceJointe: (Attachment) -> Unit,
     showTimestamp: Boolean,
     onDelete: () -> Unit,
     onReply: () -> Unit,
@@ -103,7 +105,6 @@ fun MediaAttachmentBubble(
     /** v1.3.3 #7 — étiquette d'expéditeur ; voir [MessageBubble] pour la sémantique. */
     senderLabel: String? = null,
 ) {
-    val context = LocalContext.current
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
     // Outgoing : primary (couleur de marque) ; Incoming : slate-blue d'app (cohérent
@@ -111,10 +112,9 @@ fun MediaAttachmentBubble(
     val bgColor = if (isOut) cs.primary else bubbleIncomingColor(cs)
     val shape = RoundedCornerShape(18.dp)
 
-    // X-04 — une seule fonction d'ouverture, paramétrée par la pièce jointe touchée.
-    val ouvrir: (Attachment) -> Unit = remember(message.id) {
-        fun(cible: Attachment) = ouvrirPieceJointe(context, cible)
-    }
+    // X-04 — une seule fonction d'ouverture, paramétrée par la pièce jointe touchée. 2026-11-06 (issue #76) —
+    // fournie par l'écran : une photo dans sa visionneuse, le reste dans l'app du système.
+    val ouvrir: (Attachment) -> Unit = onOuvrirPieceJointe
 
     Row(
         modifier = Modifier
@@ -258,7 +258,7 @@ private fun MediaPreview(
     }
 }
 
-/** Thumbnail image via Coil. Tap = ACTION_VIEW. */
+/** Thumbnail image via Coil. Tap = la visionneuse de l'écran ([VisionneuseImage]). */
 @Composable
 private fun ImagePreview(
     attachment: Attachment,
