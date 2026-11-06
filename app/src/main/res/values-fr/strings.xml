@@ -129,6 +129,9 @@
     <string name="thread_details_last">Dernier message : %1$s</string>
     <string name="thread_details_participants">Participants : %1$d</string>
     <string name="thread_details_number">Numéro : %1$s</string>
+    <!-- 2026-11-06 — bouton copier à côté du numéro, dans les détails de la conversation. -->
+    <string name="thread_details_copy_number">Copier le numéro</string>
+    <string name="thread_details_number_copied">Numéro copié</string>
 
     <string name="tab_archived">Archivées</string>
     <string name="tab_vault">Coffre-fort</string>

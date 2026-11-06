@@ -131,6 +131,9 @@
     <string name="thread_details_last">Ultimo messaggio: %1$s</string>
     <string name="thread_details_participants">Partecipanti: %1$d</string>
     <string name="thread_details_number">Numero: %1$s</string>
+    <!-- 2026-11-06 — copy button next to the number in the conversation details. -->
+    <string name="thread_details_copy_number">Copia il numero</string>
+    <string name="thread_details_number_copied">Numero copiato</string>
 
     <!-- Tabs / sections -->
     <string name="tab_archived">Archiviate</string>
