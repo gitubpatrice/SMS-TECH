@@ -951,9 +951,19 @@
 
     <!-- v1.14.8 R1/R2 — incoming MMS failure notification (size cap or MMSC error). -->
     <string name="mms_failure_notification_title">MMS non ricevuto</string>
-    <string name="mms_failure_notification_body_too_large">Messaggio da %1$s troppo grande (%2$d KB). Tocchi per aprire le impostazioni MMS.</string>
-    <string name="mms_failure_notification_body_download_failed">Impossibile scaricare l\'MMS da %1$s. Controlli la copertura e riprovi.</string>
+    <!-- 2026-11-06 — no longer promises "MMS settings" (there are none) nor a retry (none is possible): the tap opens the explanation below. -->
+    <string name="mms_failure_notification_body_too_large">Messaggio da %1$s troppo grande per essere ricevuto (%2$d KB). Tocchi per i dettagli.</string>
+    <string name="mms_failure_notification_body_download_failed">Impossibile scaricare l\'MMS da %1$s. Tocchi per i dettagli.</string>
+    <string name="mms_failure_notification_body_media_not_saved">Impossibile salvare un file dell\'MMS da %1$s. Tocchi per i dettagli.</string>
+    <string name="mms_failure_notification_body_carrier_error">Il suo operatore non ha potuto consegnare l\'MMS da %1$s. Tocchi per i dettagli.</string>
     <string name="mms_failure_notification_body_unknown_sender">un contatto sconosciuto</string>
+    <!-- 2026-11-06 — window opened by tapping the notification. %1$d = the size SMS Tech can receive, in MB. -->
+    <string name="mms_failure_dialog_body_too_large">Un messaggio multimediale che le è stato inviato supera la dimensione che SMS Tech può ricevere (%1$d MB). Non è stato possibile riceverlo e non potrà essere recuperato in seguito.\n\nChieda al mittente di inviarlo di nuovo in dimensioni più ridotte, ad esempio una foto per messaggio.</string>
+    <string name="mms_failure_dialog_body_media_not_saved">Il messaggio è nella conversazione, ma uno dei suoi file non è stato salvato su questo telefono, di solito perché la memoria è piena.\n\nLiberi spazio: SMS Tech riproverà da solo nelle prossime ore.</string>
+    <string name="mms_failure_dialog_body_carrier_error">Il suo operatore segnala di non aver potuto consegnare un messaggio multimediale che le è stato inviato, ad esempio perché è scaduto prima di poter essere scaricato.\n\nChieda al mittente di inviarlo di nuovo.</string>
+    <string name="mms_failure_dialog_storage_settings">Memoria</string>
+    <string name="mms_failure_dialog_body_download_failed">Non è stato possibile scaricare dal suo operatore un messaggio multimediale che le è stato inviato. Gli MMS passano di solito dai dati mobili: controlli di avere copertura e che i dati mobili siano attivi, oppure che il telefono consenta gli MMS con i dati mobili disattivati.\n\nSMS Tech non può riprovare il download da solo. Il suo operatore potrebbe inviare di nuovo il messaggio; altrimenti chieda al mittente di inviarlo di nuovo.</string>
+    <string name="mms_failure_dialog_network_settings">Impostazioni di rete</string>
 
     <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->
     <string name="thread_retry_watchdog_title">Rinviare questo messaggio?</string>

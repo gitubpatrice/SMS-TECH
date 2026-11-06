@@ -5,6 +5,7 @@ import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.pdu.CharacterSets
 import com.filestech.sms.pdu.EncodedStringValue
 import com.filestech.sms.pdu.PduBody
+import com.filestech.sms.pdu.PduHeaders
 import com.filestech.sms.pdu.PduPart
 import com.filestech.sms.pdu.RetrieveConf
 
@@ -46,6 +47,19 @@ object LecteurRetrieveConf {
 
     /** La date d'un PDU est en secondes. */
     private const val MS_PAR_SECONDE = 1000L
+
+    /**
+     * 2026-11-06 — le MMSC dit-il que le retrait a ÉCHOUÉ ? [statut] est l'`X-Mms-Retrieve-Status` du
+     * `RetrieveConf` (OMA-MMS-ENC §7.3.50), lu 0 quand il manque.
+     *
+     * - absent ou `0x80` : réussite. L'en-tête est facultatif et beaucoup de MMSC l'omettent ;
+     * - `0xC0` à `0xDF` : échec passager ; `0xE0` à `0xFF` : échec définitif (message expiré,
+     *   introuvable, contenu refusé…). AOSP Messaging n'écrit pas un tel message ; SMS Tech l'écrivait
+     *   comme un message ordinaire, vide ou porteur du texte d'erreur de l'opérateur ;
+     * - `0x81` à `0xBF`, valeurs non attribuées : PAS un échec. AOSP les range en échec définitif ;
+     *   ici, entre écrire un message douteux et en perdre un vrai, on choisit d'écrire.
+     */
+    fun retraitEnEchec(statut: Int): Boolean = statut >= PduHeaders.RETRIEVE_STATUS_ERROR_TRANSIENT_FAILURE
 
     /**
      * @param indiceExpediteur l'expéditeur annoncé par la notification WAP-Push, quand le `RetrieveConf`

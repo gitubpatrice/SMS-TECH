@@ -14,6 +14,9 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.mms.MmsAttachment
 import com.filestech.sms.domain.mms.MmsDispatcher
+import com.filestech.sms.pdu.NotifyRespInd
+import com.filestech.sms.pdu.PduComposer
+import com.filestech.sms.pdu.PduHeaders
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
@@ -240,6 +243,64 @@ class MmsSender @Inject constructor(
     }
 
     /**
+     * 2026-11-06 — **RÉPOND AU MMSC** : le `m-notifyresp.ind` que la norme demande au client pour
+     * chaque `m-notification.ind`.
+     *
+     * SMS Tech n'en envoyait aucun. Le service MMS d'Android ne le fait pas à notre place : son
+     * `DownloadRequest` télécharge, rien d'autre (relu dans AOSP le 2026-11-06). C'est l'app SMS par
+     * défaut qui répond, et AOSP Messaging envoie `STATUS_RETRIEVED` après chaque retrait
+     * (`MmsUtils.insertDownloadedMessageAndSendResponse`). Sans réponse, le MMSC ne sait pas que le
+     * message est arrivé : selon l'opérateur, il renvoie sa notification, ou l'expéditeur n'apprend
+     * jamais la remise.
+     *
+     * - [PduHeaders.STATUS_RETRIEVED] : le message a été retiré, et son sort est réglé ;
+     * - [PduHeaders.STATUS_REJECTED] : SMS Tech ne peut pas le recevoir (plus gros que
+     *   [PdusEnAttente.PLAFOND_OCTETS]) et ne le recevra jamais ; le MMSC peut cesser de le proposer.
+     *
+     * Le PDU est celui d'AOSP octet pour octet (`NotifyRespFormatTest`), et son adresse suit la même
+     * règle ([adresseDeLaReponse]). Au mieux de l'effort : un échec ne change rien au message reçu, il
+     * est seulement journalisé, et c'est pourquoi aucun accusé n'est demandé (`sentIntent` nul). Le
+     * fichier du PDU, que le service MMS lit après notre retour, part avec les deux balayages par âge
+     * de `mms_outgoing/` : une heure au verrouillage (`AutoLockObserver.purgeStaleOutgoingPdus`), un
+     * jour sinon (`TelephonySyncWorker.pruneStaleOutboundCaches`). Il ne porte que l'identifiant de
+     * transaction.
+     *
+     * @param transactionId le `transactionId` de la NOTIFICATION, en octets, tel qu'elle l'a porté.
+     * @param contentLocation l'adresse de téléchargement du message.
+     */
+    fun repondreAuMmsc(transactionId: ByteArray?, contentLocation: String?, statut: Int, subId: Int?): Outcome<Unit> {
+        if (transactionId == null || transactionId.isEmpty()) {
+            return Outcome.Failure(AppError.Validation("no transaction id"))
+        }
+        val pdu = runCatching {
+            PduComposer(context, NotifyRespInd(PduHeaders.CURRENT_MMS_VERSION, transactionId, statut)).make()
+        }.getOrNull() ?: return Outcome.Failure(AppError.Telephony("m-notifyresp.ind encoding failed"))
+        val pduFile = writePduFile(pdu, prefixe = "notifyresp").getOrElse { t ->
+            return Outcome.Failure(AppError.Storage(t))
+        }
+        return try {
+            val pduUri = pduFileProviderUri(pduFile).getOrThrow()
+            val sm = subscriptionAwareManager(subId)
+            val viaAdresseDeTelechargement = runCatching {
+                sm.carrierConfigValues.getBoolean(SmsManager.MMS_CONFIG_NOTIFY_WAP_MMSC_ENABLED, false)
+            }.getOrDefault(false)
+            sm.sendMultimediaMessage(
+                context,
+                pduUri,
+                adresseDeLaReponse(viaAdresseDeTelechargement, contentLocation),
+                null,
+                null,
+            )
+            Timber.i("m-notifyresp.ind handed to the MMS service (status=0x%02x)", statut)
+            Outcome.Success(Unit)
+        } catch (t: Throwable) {
+            runCatching { pduFile.delete() }
+            Timber.w(t, "m-notifyresp.ind not sent (status=0x%02x)", statut)
+            Outcome.Failure(AppError.Telephony("m-notifyresp.ind not sent", t))
+        }
+    }
+
+    /**
      * Best-effort rollback of any side-effect we may have already produced. Called on every
      * failure branch of [dispatchMms]. Idempotent — safe to invoke even when nothing was
      * created (e.g. `mmsSystemId == -1L`, `pduFile == null`).
@@ -259,12 +320,13 @@ class MmsSender @Inject constructor(
     /**
      * Writes [pdu] bytes to a uniquely-named cache file under `mms_outgoing/`. Caller is
      * responsible for deleting the returned [File] on any subsequent failure (handled by the
-     * dispatch engine).
+     * dispatch engine). [prefixe] : `send` pour un message, `notifyresp` pour une réponse au MMSC.
      */
-    private fun writePduFile(pdu: ByteArray): Result<File> {
+    private fun writePduFile(pdu: ByteArray, prefixe: String = "send"): Result<File> {
         return runCatching {
             val pduDir = File(context.cacheDir, MMS_OUT_DIR).apply { mkdirs() }
-            val pduFile = File(pduDir, "send-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.pdu")
+            val nom = "$prefixe-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}.pdu"
+            val pduFile = File(pduDir, nom)
             pduFile.writeBytes(pdu)
             pduFile
         }
@@ -318,6 +380,16 @@ class MmsSender @Inject constructor(
         private const val MMS_OUT_DIR: String = "mms_outgoing"
     }
 }
+
+/**
+ * 2026-11-06 — où envoyer la réponse au MMSC. `null` : au MMSC de l'APN, choisi par Android, le cas
+ * général. Un opérateur peut la vouloir à l'adresse de téléchargement
+ * (`SmsManager.MMS_CONFIG_NOTIFY_WAP_MMSC_ENABLED`) : même règle qu'AOSP Messaging
+ * (`getNotifyWapMMSC() ? contentLocation : null`), et seulement vers une adresse `http(s)`, comme le
+ * téléchargement lui-même ([MmsDownloader.adresseHttp]).
+ */
+internal fun adresseDeLaReponse(viaAdresseDeTelechargement: Boolean, contentLocation: String?): String? =
+    contentLocation?.takeIf { viaAdresseDeTelechargement && MmsDownloader.adresseHttp(it) }
 
 /**
  * 2026-10-29 (issue #53) — drapeaux de l'accusé d'envoi MMS : MUTABLE, et c'est le cœur du correctif.

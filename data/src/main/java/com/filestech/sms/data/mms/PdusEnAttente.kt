@@ -102,8 +102,24 @@ class PdusEnAttente @Inject constructor(
          * legitime, y compris venu d'un operateur plus permissif, tout en bornant ce qu'un fichier
          * aberrant peut faire allouer. v1.28.9 — déplacé ici depuis `MmsDownloadedReceiver` : la reprise
          * lit les mêmes fichiers, sous la même borne.
+         *
+         * 2026-11-06 — c'est aussi la borne de l'ANNONCE, cf. [tailleAnnonceeAcceptable].
          */
         const val PLAFOND_OCTETS: Long = 4L * 1024 * 1024
+
+        /**
+         * 2026-11-06 — un MMS dont la notification WAP-Push annonce cette taille peut-il être téléchargé ?
+         *
+         * Une seule borne pour l'annonce et pour la lecture : [PLAFOND_OCTETS]. Jusqu'ici la porte de
+         * `MmsWapPushReceiver` était de 1 Mio, posée en v1.2.0 pour les seuls messages vocaux, et refusait
+         * AVANT téléchargement des photos que la lecture aurait acceptées : signalé par une utilisatrice
+         * (Pixel 8, LineageOS) qui recevait « trop volumineux » pour chaque photo, et perdait le message.
+         *
+         * Une taille nulle ou négative veut dire « inconnue » : l'en-tête `X-Mms-Message-Size` est
+         * facultatif (OMA-MMS-ENC §7.3.21, lu -1 quand il manque) ou mal encodé (lu 0). On télécharge
+         * alors, et la lecture bornée tranche sur le fichier réel.
+         */
+        fun tailleAnnonceeAcceptable(taille: Long): Boolean = taille <= PLAFOND_OCTETS
 
         /** Préfixe et extension des PDU entrants, partagés avec [MmsDownloader]. */
         private const val PREFIXE = "in-"

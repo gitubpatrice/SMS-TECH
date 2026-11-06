@@ -62,7 +62,10 @@ class TraitementMmsRecuTest {
 
         val issue = traitement.traiter(conf(), CLE, 1, null) { true }
 
-        assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = false, consigner = false))
+        // 2026-11-06 — marqué bloqué : le receveur ne répondra pas au MMSC.
+        assertThat(issue).isEqualTo(
+            TraitementMmsRecu.Issue(garderLePdu = false, consigner = false, expediteurBloque = true),
+        )
         coVerify(exactly = 0) { integration.integrer(any(), any(), any(), any(), any()) }
     }
 
@@ -109,7 +112,9 @@ class TraitementMmsRecuTest {
         val issue = traiter(Resultat.EcritIncomplet(ID))
 
         assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = true, consigner = true))
-        coVerify(exactly = 1) { echecs.notifyFailure(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, ALICE, any()) }
+        // 2026-11-06 — le message est arrivé : c'est le stockage qui a manqué, pas le téléchargement.
+        coVerify(exactly = 1) { echecs.notifyFailure(MmsFailureNotifier.Reason.MEDIA_NOT_SAVED, ALICE, any()) }
+        coVerify(exactly = 0) { echecs.notifyFailure(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, any(), any()) }
         coVerify(exactly = 1) { notifier.notifyIncoming(ALICE, any(), ID, CONVERSATION) }
     }
 

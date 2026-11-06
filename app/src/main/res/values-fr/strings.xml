@@ -936,9 +936,19 @@
 
     <!-- v1.14.8 R1/R2 — notification d\'échec MMS entrant (taille trop grande ou erreur MMSC). -->
     <string name="mms_failure_notification_title">MMS non reçu</string>
-    <string name="mms_failure_notification_body_too_large">MMS de %1$s trop volumineux (%2$d Ko). Touchez pour ouvrir les paramètres MMS.</string>
-    <string name="mms_failure_notification_body_download_failed">Échec du téléchargement du MMS de %1$s. Vérifiez la couverture réseau et réessayez.</string>
+    <!-- 2026-11-06 — ne promet plus de « paramètres MMS » (il n\'y en a pas) ni de nouvel essai (aucun n\'est possible) : le tap ouvre l\'explication ci-dessous. « envoyé par » plutôt que « de » : « de un contact inconnu » était fautif. -->
+    <string name="mms_failure_notification_body_too_large">MMS envoyé par %1$s trop volumineux pour être reçu (%2$d Ko). Touchez pour en savoir plus.</string>
+    <string name="mms_failure_notification_body_download_failed">Le MMS envoyé par %1$s n\'a pas pu être téléchargé. Touchez pour en savoir plus.</string>
+    <string name="mms_failure_notification_body_media_not_saved">Un fichier du MMS envoyé par %1$s n\'a pas pu être enregistré. Touchez pour en savoir plus.</string>
+    <string name="mms_failure_notification_body_carrier_error">Votre opérateur n\'a pas pu remettre le MMS envoyé par %1$s. Touchez pour en savoir plus.</string>
     <string name="mms_failure_notification_body_unknown_sender">un contact inconnu</string>
+    <!-- 2026-11-06 — fenêtre ouverte par le tap de la notification. %1$d = la taille que SMS Tech peut recevoir, en Mo. -->
+    <string name="mms_failure_dialog_body_too_large">Un message multimédia qui vous a été envoyé dépasse la taille que SMS Tech peut recevoir (%1$d Mo). Il n\'a pas pu être reçu et ne pourra pas être récupéré plus tard.\n\nDemandez à l\'expéditeur de vous le renvoyer en plus petit, par exemple une photo par message.</string>
+    <string name="mms_failure_dialog_body_media_not_saved">Le message est dans la conversation, mais l\'un de ses fichiers n\'a pas pu être enregistré sur ce téléphone, le plus souvent parce que le stockage est plein.\n\nLibérez de l\'espace : SMS Tech réessaiera de lui-même au cours des prochaines heures.</string>
+    <string name="mms_failure_dialog_body_carrier_error">Votre opérateur indique qu\'il n\'a pas pu remettre un message multimédia qui vous a été envoyé, par exemple parce qu\'il a expiré avant d\'avoir pu être téléchargé.\n\nDemandez à l\'expéditeur de vous le renvoyer.</string>
+    <string name="mms_failure_dialog_storage_settings">Stockage</string>
+    <string name="mms_failure_dialog_body_download_failed">Un message multimédia qui vous a été envoyé n\'a pas pu être téléchargé auprès de votre opérateur. Les MMS passent en général par les données mobiles : vérifiez que vous avez du réseau et que les données mobiles sont activées, ou que votre téléphone autorise les MMS quand elles sont coupées.\n\nSMS Tech ne peut pas relancer le téléchargement de lui-même. Votre opérateur peut renvoyer le message ; sinon, demandez à l\'expéditeur de vous le renvoyer.</string>
+    <string name="mms_failure_dialog_network_settings">Réglages réseau</string>
 
     <!-- v1.14.8 R3 — confirmation avant retry d\'un message en timeout watchdog (risque doublon). -->
     <string name="thread_retry_watchdog_title">Renvoyer ce message ?</string>

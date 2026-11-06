@@ -945,9 +945,19 @@
 
     <!-- v1.14.8 R1/R2 — incoming MMS failure notification (size cap or MMSC error). -->
     <string name="mms_failure_notification_title">MMS not received</string>
-    <string name="mms_failure_notification_body_too_large">Message from %1$s too large (%2$d KB). Tap to open MMS settings.</string>
-    <string name="mms_failure_notification_body_download_failed">Failed to download MMS from %1$s. Check signal coverage and retry.</string>
+    <!-- 2026-11-06 — no longer promises "MMS settings" (there are none) nor a retry (none is possible): the tap opens the explanation below. -->
+    <string name="mms_failure_notification_body_too_large">Message from %1$s too large to be received (%2$d KB). Tap for details.</string>
+    <string name="mms_failure_notification_body_download_failed">The MMS from %1$s could not be downloaded. Tap for details.</string>
+    <string name="mms_failure_notification_body_media_not_saved">A file in the MMS from %1$s could not be saved. Tap for details.</string>
+    <string name="mms_failure_notification_body_carrier_error">Your carrier could not deliver the MMS from %1$s. Tap for details.</string>
     <string name="mms_failure_notification_body_unknown_sender">an unknown contact</string>
+    <!-- 2026-11-06 — window opened by tapping the notification. %1$d = the size SMS Tech can receive, in MB. -->
+    <string name="mms_failure_dialog_body_too_large">A multimedia message sent to you is larger than SMS Tech can receive (%1$d MB). It could not be received and cannot be retrieved later.\n\nAsk the sender to send it again in a smaller size, for example one photo per message.</string>
+    <string name="mms_failure_dialog_body_media_not_saved">The message is in the conversation, but one of its files could not be saved on this phone, usually because storage is full.\n\nFree up some space: SMS Tech will try again on its own over the next few hours.</string>
+    <string name="mms_failure_dialog_body_carrier_error">Your carrier reported that it could not deliver a multimedia message sent to you, for example because it expired before it could be downloaded.\n\nAsk the sender to send it again.</string>
+    <string name="mms_failure_dialog_storage_settings">Storage</string>
+    <string name="mms_failure_dialog_body_download_failed">A multimedia message sent to you could not be downloaded from your carrier. MMS usually travel over mobile data: check that you have signal and that mobile data is on, or that your phone allows MMS while mobile data is off.\n\nSMS Tech cannot retry the download on its own. Your carrier may send the message again; otherwise, ask the sender to send it again.</string>
+    <string name="mms_failure_dialog_network_settings">Network settings</string>
 
     <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->
     <string name="thread_retry_watchdog_title">Resend this message?</string>

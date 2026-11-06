@@ -159,6 +159,10 @@ public class PduHeaders {
     public static final int RETRIEVE_STATUS_ERROR_TRANSIENT_FAILURE     = 0xC0;
     public static final int RETRIEVE_STATUS_ERROR_PERMANENT_FAILURE     = 0xE0;
 
+    /** X-Mms-Status of an m-notifyresp.ind, with AOSP's values. */
+    public static final int STATUS_RETRIEVED                            = 0x81;
+    public static final int STATUS_REJECTED                             = 0x82;
+
     /* ─── Internal storage ─────────────────────────────────────────────────── */
     private final Map<Integer, Object> mHeaderMap;
 

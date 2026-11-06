@@ -30,11 +30,17 @@ class MmsDownloader @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
+    /**
+     * @param transactionIdOctets 2026-11-06 — le `transactionId` de la notification, en OCTETS : la
+     *   réponse au MMSC ([MmsSender.repondreAuMmsc]) doit le rendre à l'identique, ce que la chaîne
+     *   [transactionId] (décodée en UTF-8, et qui fait la clé du PDU) ne garantit pas.
+     */
     fun download(
         contentLocation: String,
         transactionId: String?,
         senderAddress: String?,
         subId: Int? = null,
+        transactionIdOctets: ByteArray? = null,
     ): Outcome<Unit> {
         if (contentLocation.isBlank()) return Outcome.Failure(AppError.Validation("empty contentLocation"))
         // v1.3.10 (SEC-05) — defense in depth: reject any contentLocation whose scheme is
@@ -42,8 +48,8 @@ class MmsDownloader @Inject constructor(
         // every production AOSP telephony stack rejects non-HTTP schemes downstream, but
         // some legacy OEM stacks were observed honouring `file://` / `content://` URIs —
         // we'd rather fail the download loudly than let `SmsManager` chase an arbitrary URI.
-        val scheme = contentLocation.substringBefore("://", missingDelimiterValue = "").lowercase()
-        if (scheme != "http" && scheme != "https") {
+        if (!adresseHttp(contentLocation)) {
+            val scheme = contentLocation.substringBefore("://", missingDelimiterValue = "").lowercase()
             Timber.w("Rejected MMS contentLocation with non-HTTP scheme: %s", scheme)
             return Outcome.Failure(AppError.Validation("contentLocation scheme not allowed: $scheme"))
         }
@@ -91,6 +97,10 @@ class MmsDownloader @Inject constructor(
                 // ([MmsDownloadedReceiver]). `null` (mono-SIM ou ROM sans extra) est encodé
                 // comme INVALID_SUBSCRIPTION_ID et retraduit en `null` côté réception.
                 putExtra(EXTRA_SUBSCRIPTION_ID, subId ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+                // 2026-11-06 — de quoi répondre au MMSC une fois le message traité (m-notifyresp.ind).
+                // L'intent est explicite, vers un receveur non exporté ; l'adresse ne va pas au journal.
+                putExtra(EXTRA_CONTENT_LOCATION, contentLocation)
+                putExtra(EXTRA_NOTIFICATION_TRANSACTION_ID, transactionIdOctets)
             }
         val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
         val pi = PendingIntent.getBroadcast(
@@ -128,6 +138,21 @@ class MmsDownloader @Inject constructor(
         const val EXTRA_SENDER: String = "com.filestech.sms.extra.SENDER"
         /** v1.22.0 — SIM d'arrivée du MMS, propagée du WAP push jusqu'au write-back Room. */
         const val EXTRA_SUBSCRIPTION_ID: String = "com.filestech.sms.extra.SUBSCRIPTION_ID"
+
+        /** 2026-11-06 — l'adresse de téléchargement, pour la réponse au MMSC. */
+        const val EXTRA_CONTENT_LOCATION: String = "com.filestech.sms.extra.CONTENT_LOCATION"
+
+        /** 2026-11-06 — le `transactionId` de la notification, en octets, pour la réponse au MMSC. */
+        const val EXTRA_NOTIFICATION_TRANSACTION_ID: String = "com.filestech.sms.extra.NOTIFICATION_TRANSACTION_ID"
+
+        /**
+         * v1.3.10 (SEC-05) — `http://` ou `https://`, rien d'autre. 2026-11-06 — sortie du corps de
+         * [download] : la réponse au MMSC, qui peut viser cette même adresse, applique la même règle.
+         */
+        fun adresseHttp(url: String): Boolean {
+            val scheme = url.substringBefore("://", missingDelimiterValue = "").lowercase()
+            return scheme == "http" || scheme == "https"
+        }
 
         /**
          * Cache subdirectory (relative to [Context.getCacheDir]) where this class drops the

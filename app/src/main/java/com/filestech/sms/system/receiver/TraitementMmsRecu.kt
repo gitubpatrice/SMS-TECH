@@ -45,7 +45,12 @@ class TraitementMmsRecu @Inject constructor(
     private val failureNotifier: MmsFailureNotifier,
 ) {
 
-    data class Issue(val garderLePdu: Boolean, val consigner: Boolean)
+    /**
+     * @property expediteurBloque 2026-11-06 — écarté par la liste noire ou par « bloquer les inconnus ». Le
+     *   receveur ne répond alors PAS au MMSC, comme pour un expéditeur bloqué dès l'annonce : répondre
+     *   « retrieved » pourrait valoir accusé de remise auprès de celui qu'on a bloqué.
+     */
+    data class Issue(val garderLePdu: Boolean, val consigner: Boolean, val expediteurBloque: Boolean = false)
 
     /**
      * @param cle la clé de transaction lue dans le nom du PDU, ou `null` : rien ne reconnaîtra alors un
@@ -80,7 +85,7 @@ class TraitementMmsRecu @Inject constructor(
             // Rejet DÉLIBÉRÉ, sur un `true` franc : le message ne doit pas être conservé. Une ERREUR de
             // consultation rend `false` et n'arrive jamais ici.
             Timber.i("Dropping downloaded MMS from blocked sender")
-            return Issue(garderLePdu = false, consigner = false)
+            return Issue(garderLePdu = false, consigner = false, expediteurBloque = true)
         }
         return when (val resultat = integration.integrer(contenu, subId, membresDuGroupe(contenu), cle, pduPresent)) {
             is Resultat.Ecrit -> {
@@ -153,9 +158,12 @@ class TraitementMmsRecu @Inject constructor(
         }.onFailure { Timber.w(it, "MMS: notification d'arrivee non postee") }
     }
 
+    // 2026-11-06 — MEDIA_NOT_SAVED, et non plus DOWNLOAD_FAILED : le message EST arrivé et sa ligne est écrite ; c'est
+    // le stockage qui a manqué. Sous l'ancien motif, la notification disait « n'a pas pu être téléchargé », et la
+    // fenêtre d'explication aurait conseillé de vérifier les données mobiles.
     private suspend fun signalerMediaNonEcrit(contenu: ContenuMmsRecu) {
         runCatchingCancellable {
-            failureNotifier.notifyFailure(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, senderAddress = contenu.expediteur)
+            failureNotifier.notifyFailure(MmsFailureNotifier.Reason.MEDIA_NOT_SAVED, senderAddress = contenu.expediteur)
         }.onFailure { Timber.w(it, "MMS: notification d'echec non postee") }
     }
 }
