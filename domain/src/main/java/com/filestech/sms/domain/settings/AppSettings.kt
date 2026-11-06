@@ -530,7 +530,8 @@ data class AdvancedSettings(
      * 2026-11-06 (v1.30.0) — les fils de GROUPE du fournisseur que l'import d'avant la 1.30.0 avait versés dans
      * la 1-à-1 d'un de leurs membres ont été rangés dans leur conversation de groupe
      * ([com.filestech.sms.data.sync.FilsDeGroupe.regrouper]). Posé seulement quand la passe a abouti : tant
-     * que le fournisseur ne se lit pas, elle recommence à la synchronisation suivante.
+     * que le fournisseur ne se lit pas, elle recommence à la synchronisation suivante. « Resynchroniser depuis le
+     * téléphone » le remet à `false` : la passe, rejouable, sert alors de rattrapage.
      */
     val groupThreadsRegroupedV1300: Boolean = false,
     /**

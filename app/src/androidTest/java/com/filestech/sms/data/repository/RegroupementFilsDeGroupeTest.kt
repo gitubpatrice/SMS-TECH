@@ -62,23 +62,32 @@ class RegroupementFilsDeGroupeTest {
         override suspend fun listAll(): List<Contact> = emptyList()
     }
 
+    /** Chaque numéro a un nom : le titre d'un groupe n'est alors plus `null`. */
+    private object AvecNoms : ContactRepository {
+        override suspend fun lookupByPhone(rawPhone: String): Contact? =
+            Contact(id = 1L, displayName = "Nom de $rawPhone", phones = listOf(PhoneAddress.of(rawPhone)))
+        override suspend fun listAll(): List<Contact> = emptyList()
+    }
+
     @Before
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        mirror = ConversationMirror(
-            db,
-            db.conversationDao(),
-            db.messageDao(),
-            db.scheduledMessageDao(),
-            db.attachmentDao(),
-            SansContacts,
-            PhoneIdentity(PhoneNumberWireFormatter(context, SettingsRepository(context, portee))),
-            notifications,
-            Dispatchers.IO,
-        )
+        mirror = miroir(SansContacts)
     }
+
+    private fun miroir(contacts: ContactRepository) = ConversationMirror(
+        db,
+        db.conversationDao(),
+        db.messageDao(),
+        db.scheduledMessageDao(),
+        db.attachmentDao(),
+        contacts,
+        PhoneIdentity(PhoneNumberWireFormatter(context, SettingsRepository(context, portee))),
+        notifications,
+        Dispatchers.IO,
+    )
 
     @After
     fun tearDown() {
@@ -226,6 +235,56 @@ class RegroupementFilsDeGroupeTest {
         assertThat(conversationDe("content://mms/7")).isEqualTo(existant)
     }
 
+    /**
+     * 2e relecture du 2026-11-06 — le groupe existait (reçu en direct, « MMS de groupe » activé) et son dernier
+     * message est sa propre photo : il garde son aperçu, que le recalcul vidait.
+     */
+    @Test
+    fun unGroupeQuiAvaitDejaSaPhotoGardeSonApercu(): Unit = runBlocking {
+        val existant = conversation("$ALICE;$BOB", threadId = null) {
+            it.copy(lastMessageAt = 3_000L, lastMessagePreview = "🖼️ a.jpg")
+        }
+        message(existant, "content://mms/5", BOB, texte = "", date = 3_000L)
+        val bob = conversation(BOB, threadId = FIL_GROUPE)
+        message(bob, "content://mms/7", ALICE, "du groupe", date = 2_000L)
+
+        mirror.regrouperFil(FIL_GROUPE, membres, listOf("content://mms/7"))
+
+        assertThat(db.conversationDao().findById(existant)?.lastMessagePreview).isEqualTo("🖼️ a.jpg")
+    }
+
+    /** 2e relecture du 2026-11-06 — la 1-à-1 qui reste, dont le dernier message est une photo privée, garde son aperçu. */
+    @Test
+    fun uneUnAUnQuiResteGardeLApercuDeSaPhoto(): Unit = runBlocking {
+        val bob = conversation(BOB, threadId = FIL_GROUPE) {
+            it.copy(lastMessageAt = 5_000L, lastMessagePreview = "🖼️ b.jpg")
+        }
+        message(bob, "content://mms/3", BOB, texte = "", date = 5_000L)
+        message(bob, "content://mms/7", ALICE, "du groupe", date = 2_000L)
+
+        mirror.regrouperFil(FIL_GROUPE, membres, listOf("content://mms/7"))
+
+        assertThat(conversationDe("content://mms/3")).isEqualTo(bob)
+        assertThat(db.conversationDao().findById(bob)?.lastMessagePreview).isEqualTo("🖼️ b.jpg")
+    }
+
+    /**
+     * 2e relecture du 2026-11-06 — le groupe au Coffre, retrouvé par ses membres : rien n'y entre. Il prend le fil,
+     * comme le prendrait le prochain import (règle de `ensureConversationByThread`, documentée).
+     */
+    @Test
+    fun unGroupeAuCoffreRetrouveParSesMembresNeRecoitRien(): Unit = runBlocking {
+        val auCoffre = conversation("$ALICE;$BOB", threadId = null, auCoffre = true)
+        val bob = conversation(BOB, threadId = FIL_GROUPE)
+        message(bob, "content://mms/7", ALICE, "du groupe", date = 2_000L)
+
+        assertThat(mirror.regrouperFil(FIL_GROUPE, membres, listOf("content://mms/7"))).isEqualTo(0)
+
+        assertThat(conversationDe("content://mms/7")).isEqualTo(bob)
+        assertThat(db.messageDao().countSince(auCoffre, Long.MIN_VALUE)).isEqualTo(0)
+        assertThat(db.conversationDao().findById(auCoffre)?.threadId).isEqualTo(FIL_GROUPE)
+    }
+
     @Test
     fun unGroupeExistantEcritAutrementEstRetrouve(): Unit = runBlocking {
         val existant = conversation("$BOB;$ALICE", threadId = null)
@@ -276,9 +335,11 @@ class RegroupementFilsDeGroupeTest {
     fun limportNeSortRienDuCoffre(): Unit = runBlocking {
         val bob = conversation(BOB, threadId = FIL_GROUPE, auCoffre = true)
         message(bob, "content://sms/5", ALICE, "secret", date = 4_000L)
+        // Avec des noms : sans eux le titre du groupe vaudrait `null`, et l'assertion sur le nom ne prouverait rien.
+        val avecNoms = miroir(AvecNoms)
 
-        mirror.bulkImportFromTelephony(listOf(smsDuGroupe("content://sms/5", "secret")), mapOf(FIL_GROUPE to membres))
-        mirror.bulkImportMmsFromTelephony(lignesDuGroupe(), mapOf(FIL_GROUPE to membres))
+        avecNoms.bulkImportFromTelephony(listOf(smsDuGroupe("content://sms/5", "secret")), mapOf(FIL_GROUPE to membres))
+        avecNoms.bulkImportMmsFromTelephony(lignesDuGroupe(), mapOf(FIL_GROUPE to membres))
 
         assertThat(db.conversationDao().snapshotGroupConversations()).isEmpty()
         val resteBob = checkNotNull(db.conversationDao().findById(bob))

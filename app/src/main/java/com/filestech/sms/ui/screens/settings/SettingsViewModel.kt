@@ -471,11 +471,17 @@ class SettingsViewModel @Inject constructor(
         //
         // Les DEUX marqueurs sont donc invalides dans la meme ecriture, et c'est le manager —
         // seul porteur du pipeline complet SMS + MMS — qui est sollicite.
+        //
+        // 2026-11-06 — et le marqueur du regroupement des fils de groupe (`FilsDeGroupe`) : ce geste
+        // devient le rattrapage d'un fil que la passe unique a manque (fil en echec, fournisseur
+        // illisible ce jour-la, « Mon numero » renseigne apres coup). La passe est rejouable : ce qui
+        // est deja dans son groupe ne bouge pas.
         settings.update {
             it.copy(
                 advanced = it.advanced.copy(
                     lastSyncedSmsId = 0L,
                     mmsImportCompleted = false,
+                    groupThreadsRegroupedV1300 = false,
                 ),
             )
         }

@@ -41,7 +41,9 @@ class FilsDuFournisseurContratTest {
         val cree = runCatching { Telephony.Threads.getOrCreateThreadId(context, setOf(A, B)) }.getOrNull()
         assumeTrue("fil non cree — READ_SMS ou role SMS absent", cree != null && cree > 0L)
         val fil = cree!!
-        val insere = runCatching { insererDans(fil) }.getOrNull()
+        // Sans le rôle, l'écriture n'échoue pas : `ContentProvider.rejectInsert` rend une fausse URI finissant par
+        // `/0` (2e relecture du 2026-11-06). Elle compte comme refusée, sinon le test échouerait au lieu d'être ignoré.
+        val insere = runCatching { insererDans(fil) }.getOrNull()?.takeIf { it.lastPathSegment != "0" }
         assumeTrue("ecriture dans content://sms refusee — cette application n'a pas le role SMS", insere != null)
         // Forme canonique : Android 10 rend `content://sms/sent/<id>` (cf. `SystemProviderContractTest`).
         val sms = Uri.parse("content://sms/${insere!!.lastPathSegment}")

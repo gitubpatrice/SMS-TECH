@@ -1159,16 +1159,18 @@ class ConversationMirror @Inject constructor(
      * ([ConversationDao.deleteIfEmpty] garde brouillon, envoi programmé et Coffre). Une seule transaction :
      * déplacement et recalculs ensemble, ou rien.
      *
-     * **Le Coffre n'est touché dans aucun sens** : ses messages ne sortent pas (SQL de [MessageDao.findRefsByTelephonyUris]
-     * et de [MessageDao.deplacerHorsCoffre]), et rien n'y entre — un groupe au Coffre ne reçoit pas les messages
-     * restés hors du Coffre.
+     * **Aucun message n'entre au Coffre ni n'en sort** : ceux du Coffre ne sont pas relevés (SQL de
+     * [MessageDao.findRefsByTelephonyUris] et de [MessageDao.deplacerHorsCoffre]), et un groupe au Coffre ne reçoit pas
+     * ceux restés dehors. Les liens de `thread_id`, eux, suivent la règle de l'import ([ensureConversationByThread]) :
+     * un groupe au Coffre retrouvé par ses membres prend le fil, comme le prendrait le prochain import. Une 1-à-1 au
+     * Coffre qui tient le fil le garde : les nouvelles lignes de ce fil y entrent, comme avant la 1.30.0.
      *
      * Relecture Claude du 2026-11-06 : quand une 1-à-1 n'avait reçu QUE des messages du groupe, c'était le groupe aux
      * yeux de l'utilisateur. Supprimée, elle lègue au groupe qu'on vient d'ouvrir ce qu'il y avait réglé (épinglée,
      * en sourdine, archivée, nom, couleur, avatar) — sinon un groupe mis en sourdine se remettait à sonner — et,
      * après la validation, ses notifications sont retirées (un tap ouvrait un fil supprimé, cf.
-     * [dedupeSameNumberConversations]). L'aperçu d'une photo sans légende n'existe que dans la conversation qui l'a
-     * reçue (`touchConversation`) : le groupe le reprend quand [MessageDao.refreshConversationPreview] le laisse vide.
+     * [dedupeSameNumberConversations]). Les aperçus que [MessageDao.refreshConversationPreview] vide (photo sans
+     * légende) sont rétablis : [retablirLesApercus].
      *
      * @return le nombre de messages déplacés.
      */
@@ -1188,7 +1190,7 @@ class ConversationMirror @Inject constructor(
             if (aDeplacer.isEmpty()) return@withTransaction 0
             val groupeEtaitVide = messageDao.countSince(groupe, Long.MIN_VALUE) == 0
             val quittees = aDeplacer.map { it.conversationId }.toSet()
-            val avant = quittees.mapNotNull { conversationDao.findById(it) }
+            val avant = (quittees + groupe).mapNotNull { conversationDao.findById(it) }
             val deplaces = aDeplacer.chunked(LOT_SQL).sumOf { lot ->
                 messageDao.deplacerHorsCoffre(lot.map { it.id }, groupe)
             }
@@ -1197,31 +1199,56 @@ class ConversationMirror @Inject constructor(
                 conversationDao.recomputeUnreadCount(conversation)
             }
             quittees.filterTo(supprimees) { conversationDao.deleteIfEmpty(it) > 0 }
-            val legue = avant.singleOrNull()?.takeIf { groupeEtaitVide && it.id in supprimees }
-            reporterSurLeGroupe(groupe, avant, legue)
+            retablirLesApercus(groupe, avant)
+            // Seulement vers un groupe qui n'avait encore rien : un groupe déjà en usage garde SES réglages, `false`
+            // compris — lui léguer « en sourdine » ou « archivée » le ferait taire ou disparaître (2e relecture).
+            val legue = avant.singleOrNull { it.id != groupe }?.takeIf { groupeEtaitVide && it.id in supprimees }
+            if (legue != null) leguerLesReglages(groupe, legue)
             deplaces
         }
-        for (id in supprimees) notifications.cancelAllForConversation(id)
+        // Après la validation ; une notification qui résiste ne fait pas compter le fil, déjà rangé, comme en échec.
+        for (id in supprimees) {
+            runCatching { notifications.cancelAllForConversation(id) }
+                .onFailure { Timber.w(it, "regrouperFil : notifications non retirees") }
+        }
         deplaces
     }
 
     /**
-     * [regrouperFil] — l'aperçu d'une photo sans légende, et ce que la conversation [legue] avait réglé.
-     * Champ par champ, le groupe garde ce qu'il avait déjà.
+     * [regrouperFil] — `refreshConversationPreview` écrit `messages.body`, vide pour une photo sans légende : son
+     * libellé (« 🖼️ … ») ne vivait que dans l'aperçu de la conversation. Pour chaque conversation restante dont
+     * l'aperçu est devenu vide : son dernier message n'a pas changé → son aperçu d'avant ; le groupe, dont le dernier
+     * message vient d'une conversation quittée → l'aperçu qu'avait celle-ci, si c'est bien son dernier message qui est
+     * parti (2e relecture : une date égale seule pourrait désigner un message privé resté sur place).
      */
-    private suspend fun reporterSurLeGroupe(groupe: Long, avant: List<ConversationEntity>, legue: ConversationEntity?) {
+    private suspend fun retablirLesApercus(groupe: Long, avant: List<ConversationEntity>) {
+        val apres = avant.associate { it.id to conversationDao.findById(it.id) }
+        for (ancienne in avant) {
+            val actuelle = apres[ancienne.id] ?: continue
+            if (!actuelle.lastMessagePreview.isNullOrBlank()) continue
+            val apercu = when {
+                actuelle.lastMessageAt == ancienne.lastMessageAt -> ancienne.lastMessagePreview
+                actuelle.id == groupe -> avant.firstOrNull { source ->
+                    source.id != groupe &&
+                        source.lastMessageAt == actuelle.lastMessageAt &&
+                        apres[source.id]?.lastMessageAt != source.lastMessageAt
+                }?.lastMessagePreview
+                else -> null
+            }
+            if (!apercu.isNullOrBlank()) conversationDao.update(actuelle.copy(lastMessagePreview = apercu))
+        }
+    }
+
+    /** [regrouperFil] — ce que la conversation [legue] avait réglé ; champ par champ, le groupe garde le sien. */
+    private suspend fun leguerLesReglages(groupe: Long, legue: ConversationEntity) {
         val apres = conversationDao.findById(groupe) ?: return
-        val apercu = apres.lastMessagePreview.takeUnless { it.isNullOrBlank() }
-            ?: avant.firstOrNull { it.lastMessageAt == apres.lastMessageAt && !it.lastMessagePreview.isNullOrBlank() }
-                ?.lastMessagePreview
         val complete = apres.copy(
-            lastMessagePreview = apercu,
-            pinned = apres.pinned || legue?.pinned == true,
-            archived = apres.archived || legue?.archived == true,
-            muted = apres.muted || legue?.muted == true,
-            customName = apres.customName ?: legue?.customName,
-            bubbleColorArgb = apres.bubbleColorArgb ?: legue?.bubbleColorArgb,
-            avatarUri = apres.avatarUri ?: legue?.avatarUri,
+            pinned = apres.pinned || legue.pinned,
+            archived = apres.archived || legue.archived,
+            muted = apres.muted || legue.muted,
+            customName = apres.customName ?: legue.customName,
+            bubbleColorArgb = apres.bubbleColorArgb ?: legue.bubbleColorArgb,
+            avatarUri = apres.avatarUri ?: legue.avatarUri,
         )
         if (complete != apres) conversationDao.update(complete)
     }

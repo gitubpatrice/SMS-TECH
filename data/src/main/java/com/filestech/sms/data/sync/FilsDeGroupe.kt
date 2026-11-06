@@ -63,7 +63,8 @@ class FilsDeGroupe @Inject constructor(
      *
      * Chaque fil a sa transaction, et l'échec d'un fil n'arrête pas les autres (relecture Claude du 2026-11-06) :
      * sinon un seul fil en échec durable empêchait de poser le marqueur, et chaque synchronisation relisait tout le
-     * fournisseur pour échouer au même endroit. Un fil en échec reste comme avant la 1.30.0 ; le journal le compte.
+     * fournisseur pour échouer au même endroit. Un fil en échec reste comme avant la 1.30.0 ; le journal le compte, et
+     * « Resynchroniser depuis le téléphone » rejoue la passe (`SettingsViewModel.forceResyncFromTelephony`).
      *
      * @return `true` si la passe a abouti — le marqueur peut être posé ; `false` si les messages des fils n'ont pas
      *   pu être lus : rien n'a bougé, la passe suivante recommencera.
