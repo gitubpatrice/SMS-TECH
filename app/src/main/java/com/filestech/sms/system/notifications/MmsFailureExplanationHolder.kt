@@ -20,7 +20,8 @@ import javax.inject.Singleton
  * code saisi, jamais en session leurre. Singleton de process, en mémoire : `set` / `consume` / `clear`.
  *
  * Il porte un [MmsFailureNotifier.Reason], jamais un texte : la phrase est résolue côté composition,
- * dans la langue du moment. Ni expéditeur ni taille : la fenêtre n'a rien à cacher.
+ * dans la langue du moment. Ni expéditeur ni taille : la fenêtre n'a rien à cacher. 2026-11-06 — et, pour
+ * un téléchargement manqué, l'[MmsFailureNotifier.ErreurAndroid] validée : deux entiers bornés.
  */
 @Singleton
 class MmsFailureExplanationHolder @Inject constructor() {
@@ -29,11 +30,13 @@ class MmsFailureExplanationHolder @Inject constructor() {
      * @property affichee la fenêtre a paru à l'écran : elle ne périme plus, et reste jusqu'à sa fermeture —
      *   même après une rotation ou un retour par le verrou (relecture Claude et Gemini du 2026-11-06). Gardé
      *   ICI, dans la seule source, et non dans un `rememberSaveable` qui en ferait une seconde.
+     * @property erreur 2026-11-06 — ce qu'Android a dit du téléchargement manqué, ou `null`.
      */
     data class Pending(
         val reason: MmsFailureNotifier.Reason,
         val postedAt: Long = System.currentTimeMillis(),
         val affichee: Boolean = false,
+        val erreur: MmsFailureNotifier.ErreurAndroid? = null,
     ) {
         fun isExpired(now: Long = System.currentTimeMillis()): Boolean = !affichee && now - postedAt > PENDING_TTL_MS
     }
@@ -41,9 +44,16 @@ class MmsFailureExplanationHolder @Inject constructor() {
     private val _pending = MutableStateFlow<Pending?>(null)
     val pending: StateFlow<Pending?> = _pending.asStateFlow()
 
-    /** Écrase la précédente : le dernier tap décide. [nowMs] est injectable, comme chez les jumeaux. */
-    fun set(reason: MmsFailureNotifier.Reason, nowMs: Long = System.currentTimeMillis()) {
-        _pending.value = Pending(reason, postedAt = nowMs)
+    /**
+     * Écrase la précédente : le dernier tap décide, erreur comprise — un tap sans code n'hérite pas de celui
+     * du tap d'avant. [nowMs] est injectable, comme chez les jumeaux.
+     */
+    fun set(
+        reason: MmsFailureNotifier.Reason,
+        nowMs: Long = System.currentTimeMillis(),
+        erreur: MmsFailureNotifier.ErreurAndroid? = null,
+    ) {
+        _pending.value = Pending(reason, postedAt = nowMs, erreur = erreur)
     }
 
     /** La fenêtre a paru : elle ne périme plus. Sans effet sur un porteur vide ou déjà marqué. */

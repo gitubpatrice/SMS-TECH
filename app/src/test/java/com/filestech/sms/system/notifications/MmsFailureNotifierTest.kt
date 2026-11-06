@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -40,8 +41,16 @@ class MmsFailureNotifierTest {
         coEvery { visibilite.ecranVerrouille() } returns CorrespondentVisibilityPolicy.EcranVerrouille.PRIVE
     }
 
-    private fun poste(reason: MmsFailureNotifier.Reason, expediteur: String?, taille: Long? = null): Notification {
-        runBlocking { MmsFailureNotifier(contexte, visibilite).notifyFailure(reason, expediteur, taille) }
+    private fun poste(
+        reason: MmsFailureNotifier.Reason,
+        expediteur: String?,
+        taille: Long? = null,
+        codeAndroid: Int? = null,
+        codeHttp: Int? = null,
+    ): Notification {
+        runBlocking {
+            MmsFailureNotifier(contexte, visibilite).notifyFailure(reason, expediteur, taille, codeAndroid, codeHttp)
+        }
         return shadowOf(nm).allNotifications.single()
     }
 
@@ -84,6 +93,62 @@ class MmsFailureNotifierTest {
                 .isEqualTo(reason)
             assertThat(tap.extras?.keySet()).containsExactly(MmsFailureNotifier.EXTRA_REASON)
         }
+    }
+
+    /**
+     * 2026-11-06 — Visible/Verizon : chaque MMS reçu échoue. Le code d'Android et le statut HTTP vont de la
+     * notification POSTÉE jusqu'à la lecture que fait `MainActivity`, sans adb.
+     */
+    @Test
+    fun `echec de telechargement - le tap porte le code d'Android et le statut HTTP`() {
+        val echec = MmsFailureNotifier.Reason.DOWNLOAD_FAILED
+        val notification = poste(echec, "+15551234567", codeAndroid = 4, codeHttp = 403)
+        val tap = shadowOf(notification.contentIntent).savedIntent
+
+        assertThat(tap.getIntExtra(MmsFailureNotifier.EXTRA_CODE_ANDROID, 0)).isEqualTo(4)
+        assertThat(tap.getIntExtra(MmsFailureNotifier.EXTRA_STATUT_HTTP, 0)).isEqualTo(403)
+        assertThat(MmsFailureNotifier.erreurDepuisExtras(echec, tap))
+            .isEqualTo(MmsFailureNotifier.ErreurAndroid(4, 403))
+    }
+
+    /** Contrôle négatif : hors plage (-1 est `RESULT_OK`), ou pour un autre motif, l'intent ne porte que le motif. */
+    @Test
+    fun `code hors plage ou autre motif - l'intent ne porte que le motif`() {
+        listOf(
+            MmsFailureNotifier.Reason.DOWNLOAD_FAILED to -1,
+            MmsFailureNotifier.Reason.DOWNLOAD_FAILED to 0,
+            MmsFailureNotifier.Reason.TOO_LARGE to 4,
+            MmsFailureNotifier.Reason.CARRIER_ERROR to 4,
+        ).forEach { (reason, code) ->
+            nm.cancelAll()
+            val notification = poste(reason, "+15551234567", codeAndroid = code, codeHttp = 403)
+            val tap = shadowOf(notification.contentIntent).savedIntent
+
+            assertThat(tap.extras?.keySet()).containsExactly(MmsFailureNotifier.EXTRA_REASON)
+        }
+    }
+
+    /** `MainActivity` est exportée : un intent forgé ne fait jamais afficher une chaîne ni un nombre hors plage. */
+    @Test
+    fun `intent forge - chaine, autre type ou hors plage, rien`() {
+        val echec = MmsFailureNotifier.Reason.DOWNLOAD_FAILED
+        fun forge(remplir: Intent.() -> Unit) = Intent(MmsFailureNotifier.ACTION_EXPLAIN_MMS_FAILURE).apply(remplir)
+        fun lu(reason: MmsFailureNotifier.Reason = echec, remplir: Intent.() -> Unit) =
+            MmsFailureNotifier.erreurDepuisExtras(reason, forge(remplir))
+        val code = MmsFailureNotifier.EXTRA_CODE_ANDROID
+
+        assertThat(lu {}).isNull()
+        assertThat(lu { putExtra(code, "4") }).isNull()
+        assertThat(lu { putExtra(code, 4L) }).isNull()
+        assertThat(lu { putExtra(code, 1_000) }).isNull()
+        // Un statut forgé en chaîne est écarté ; le code valide reste.
+        val statutEnChaine = lu {
+            putExtra(code, 4)
+            putExtra(MmsFailureNotifier.EXTRA_STATUT_HTTP, "403 <b>appelez le 0800…</b>")
+        }
+        assertThat(statutEnChaine).isEqualTo(MmsFailureNotifier.ErreurAndroid(4))
+        // Un code valide pour un autre motif ne passe pas.
+        assertThat(lu(MmsFailureNotifier.Reason.TOO_LARGE) { putExtra(code, 4) }).isNull()
     }
 
     /** L'en-tête `From:` d'un PDU porte le suffixe de passerelle : il s'affichait tel quel. */

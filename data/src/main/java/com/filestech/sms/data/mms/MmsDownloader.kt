@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import androidx.core.content.FileProvider
@@ -103,14 +104,22 @@ class MmsDownloader @Inject constructor(
                 putExtra(EXTRA_NOTIFICATION_TRANSACTION_ID, transactionIdOctets)
             }
         val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
+        // 2026-11-06 — MUTABLE, sans quoi le statut HTTP d'un échec n'arrive jamais : cf.
+        // [drapeauxDuResultatDeTelechargement].
         val pi = PendingIntent.getBroadcast(
-            context, reqCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            context,
+            reqCode,
+            intent,
+            drapeauxDuResultatDeTelechargement(Build.VERSION.SDK_INT),
         )
 
         return try {
             subscriptionAwareManager(subId).downloadMultimediaMessage(
-                context, contentLocation, pduUri, null, pi,
+                context,
+                contentLocation,
+                pduUri,
+                surchargesDeLOperateur(subId),
+                pi,
             )
             Outcome.Success(Unit)
         } catch (t: Throwable) {
@@ -118,6 +127,46 @@ class MmsDownloader @Inject constructor(
             pduFile.delete()
             Outcome.Failure(AppError.Telephony("downloadMultimediaMessage failed", t))
         }
+    }
+
+    /**
+     * 2026-11-06 (courriel d'un utilisateur Visible/Verizon) — l'adresse à télécharger, complétée de
+     * l'identifiant de transaction quand l'opérateur l'attend ([AdresseDeTelechargement]). Le service MMS
+     * d'Android ne le fait pas : c'est à l'application, comme dans AOSP Messaging. La même adresse sert au
+     * téléchargement, à la clé du PDU gardé et à la réponse au MMSC.
+     */
+    fun adresseATelecharger(contentLocation: String, transactionId: String?, subId: Int?): String {
+        val parLaConfiguration = runCatching {
+            subscriptionAwareManager(subId).carrierConfigValues
+                .getBoolean(SmsManager.MMS_CONFIG_APPEND_TRANSACTION_ID, false)
+        }.getOrDefault(false)
+        val ajouter = parLaConfiguration || FamilleVerizon.contient(operateurSim(context, subId))
+        val adresse = AdresseDeTelechargement.completer(contentLocation, transactionId, ajouter)
+        // Sans l'adresse : elle peut porter un jeton de session (cf. audit SEC-06 du receveur).
+        Timber.i(
+            "MMS: identifiant de transaction ajoute=%b (configuration=%b, operateur=%b)",
+            adresse != contentLocation,
+            parLaConfiguration,
+            ajouter && !parLaConfiguration,
+        )
+        return adresse
+    }
+
+    /**
+     * 2026-11-06 (Visible/Verizon) — les en-têtes HTTP que le MMSC de [FamilleVerizon] attend, quand la configuration
+     * de l'opérateur ne les donne pas (Visible n'en porte aucun) ; `null` partout ailleurs, comme avant. Le service
+     * MMS fusionne ces surcharges dans sa configuration (`putAll`) : rien d'autre ne change. Même recette que les
+     * applications libres qui reçoivent sur Visible (`android-smsmms`, `DownloadManager`).
+     */
+    private fun surchargesDeLOperateur(subId: Int?): Bundle? {
+        val operateur = operateurSim(context, subId)
+        if (!FamilleVerizon.contient(operateur)) return null
+        val fournis = runCatching {
+            subscriptionAwareManager(subId).carrierConfigValues.getString(SmsManager.MMS_CONFIG_HTTP_PARAMS)
+        }.getOrNull()
+        val enTetes = FamilleVerizon.enTetesAAjouter(operateur, fournis) ?: return null
+        Timber.i("MMS: en-tetes HTTP de l'operateur ajoutes au telechargement")
+        return Bundle().apply { putString(SmsManager.MMS_CONFIG_HTTP_PARAMS, enTetes) }
     }
 
     private fun subscriptionAwareManager(subId: Int?): SmsManager = when {
@@ -163,3 +212,19 @@ class MmsDownloader @Inject constructor(
         const val MMS_IN_DIR: String = "mms_incoming"
     }
 }
+
+/**
+ * 2026-11-06 — drapeaux du résultat de téléchargement MMS : MUTABLE, pour la même raison que l'accusé
+ * d'envoi ([drapeauxDeLAccuseDEnvoi], issue #53).
+ *
+ * Quand le téléchargement échoue sur une erreur HTTP (`SmsManager.MMS_ERROR_HTTP_FAILURE`), le service MMS
+ * d'Android joint le statut rendu par le MMSC (`SmsManager.EXTRA_MMS_HTTP_STATUS`) par un fill-in au moment
+ * d'envoyer ce PendingIntent (AOSP `MmsRequest.processResult`). IMMUTABLE le jetait : seul le code de
+ * résultat arrivait. Un utilisateur américain (Visible, réseau Verizon) voit échouer chaque MMS reçu, et ces
+ * deux nombres sont le seul indice qu'il puisse nous transmettre sans adb.
+ *
+ * ⚠️ Ne pas « durcir » en IMMUTABLE : sans risque ici — intent explicite vers un receveur non exporté, et
+ * `Intent.fillIn` garde nos propres extras (chemin du PDU, SIM, adresse) prioritaires. Avant Android 12, un
+ * PendingIntent est mutable par défaut. Une seule règle pour les deux PendingIntent remis au service MMS.
+ */
+internal fun drapeauxDuResultatDeTelechargement(sdk: Int): Int = drapeauxDeLAccuseDEnvoi(sdk)

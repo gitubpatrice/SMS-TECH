@@ -281,9 +281,11 @@ class MmsSender @Inject constructor(
         return try {
             val pduUri = pduFileProviderUri(pduFile).getOrThrow()
             val sm = subscriptionAwareManager(subId)
+            // 2026-11-06 (Visible/Verizon) — la famille Verizon attend la réponse à l'adresse de téléchargement
+            // (`enabledNotifyWapMMSC`), même quand la configuration de l'opérateur ne le dit pas : cf. [FamilleVerizon].
             val viaAdresseDeTelechargement = runCatching {
                 sm.carrierConfigValues.getBoolean(SmsManager.MMS_CONFIG_NOTIFY_WAP_MMSC_ENABLED, false)
-            }.getOrDefault(false)
+            }.getOrDefault(false) || FamilleVerizon.contient(operateurSim(context, subId))
             sm.sendMultimediaMessage(
                 context,
                 pduUri,

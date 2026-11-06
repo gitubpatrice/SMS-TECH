@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import com.filestech.sms.core.io.LectureBornee
 import com.filestech.sms.data.mms.LecteurRetrieveConf
@@ -94,6 +95,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         val contentLocation = intent.getStringExtra(MmsDownloader.EXTRA_CONTENT_LOCATION)
         val notificationTransactionId = intent.getByteArrayExtra(MmsDownloader.EXTRA_NOTIFICATION_TRANSACTION_ID)
         val rc = resultCode
+        // 2026-11-06 — le statut HTTP du MMSC, joint par le service MMS quand l'échec est une erreur HTTP
+        // (`MMS_ERROR_HTTP_FAILURE`), 0 sinon. Il n'arrive que parce que [MmsDownloader] rend son
+        // PendingIntent MUTABLE : en IMMUTABLE, Android jetait cet extra.
+        val statutHttp = intent.getIntExtra(SmsManager.EXTRA_MMS_HTTP_STATUS, 0)
         val appContext = context.applicationContext
 
         val entry = try {
@@ -135,12 +140,18 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
             // signalé par le MMSC). Restent muets, et c'est voulu : l'expéditeur bloqué, et le message sans
             // aucune adresse (v1.28.9, `TraitementMmsRecu`). `senderHint` peut être null : le notifier écrit
             // alors « un contact inconnu ».
-            suspend fun signalerPerte(raison: MmsFailureNotifier.Reason, taille: Long? = null) =
-                entry.mmsFailureNotifier().notifyFailure(
-                    reason = raison,
-                    senderAddress = senderHint,
-                    sizeBytes = taille,
-                )
+            suspend fun signalerPerte(
+                raison: MmsFailureNotifier.Reason,
+                taille: Long? = null,
+                codeAndroid: Int? = null,
+                codeHttp: Int? = null,
+            ) = entry.mmsFailureNotifier().notifyFailure(
+                reason = raison,
+                senderAddress = senderHint,
+                sizeBytes = taille,
+                codeAndroid = codeAndroid,
+                codeHttp = codeHttp,
+            )
             try {
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
@@ -149,8 +160,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     // 2026-11-06 — ce commentaire promettait un « retry depuis l'app système » : il n'y en a
                     // aucun quand SMS Tech est l'app SMS par défaut, et l'application n'en fait pas. La
                     // fenêtre ouverte par le tap dit ce qui reste possible.
-                    Timber.w("MMS download failed rc=%d path=%s", rc, pduPath)
-                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
+                    // 2026-11-06 — et elle montre les deux codes, qu'un utilisateur peut nous transmettre sans
+                    // adb (Visible/Verizon : chaque MMS reçu échoue, sans autre indice). Au journal, ni numéro
+                    // ni adresse : le chemin est celui de notre cache, nommé par une empreinte.
+                    Timber.w("MMS download failed rc=%d http=%d path=%s", rc, statutHttp, pduPath)
+                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, codeAndroid = rc, codeHttp = statutHttp)
                     return@launch
                 }
                 val pduFile = pduPath?.let { File(it) }

@@ -527,6 +527,14 @@ data class AdvancedSettings(
      */
     val emptyConversationsPurgedV1272: Boolean = false,
     /**
+     * 2026-11-06 (v1.30.0) — les fils de GROUPE du fournisseur que l'import d'avant la 1.30.0 avait versés dans
+     * la 1-à-1 d'un de leurs membres ont été rangés dans leur conversation de groupe
+     * ([com.filestech.sms.data.sync.FilsDeGroupe.regrouper]). Posé seulement quand la passe a abouti : tant
+     * que le fournisseur ne se lit pas, elle recommence à la synchronisation suivante. « Resynchroniser depuis le
+     * téléphone » le remet à `false` : la passe, rejouable, sert alors de rattrapage.
+     */
+    val groupThreadsRegroupedV1300: Boolean = false,
+    /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante
      * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour

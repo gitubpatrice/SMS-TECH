@@ -971,6 +971,9 @@
     <string name="mms_failure_dialog_body_carrier_error">Votre opérateur indique qu\'il n\'a pas pu remettre un message multimédia qui vous a été envoyé, par exemple parce qu\'il a expiré avant d\'avoir pu être téléchargé.\n\nDemandez à l\'expéditeur de vous le renvoyer.</string>
     <string name="mms_failure_dialog_storage_settings">Stockage</string>
     <string name="mms_failure_dialog_body_download_failed">Un message multimédia qui vous a été envoyé n\'a pas pu être téléchargé auprès de votre opérateur. Les MMS passent en général par les données mobiles : vérifiez que vous avez du réseau et que les données mobiles sont activées, ou que votre téléphone autorise les MMS quand elles sont coupées.\n\nSMS Tech ne peut pas relancer le téléchargement de lui-même. Votre opérateur peut renvoyer le message ; sinon, demandez à l\'expéditeur de vous le renvoyer.</string>
+    <!-- 2026-11-06 — ligne sous le texte ci-dessus quand Android a rendu un code. %1$d = son code d\'erreur MMS (SmsManager.MMS_ERROR_*), %2$d = le statut HTTP du serveur MMS de l\'opérateur. -->
+    <string name="mms_failure_dialog_android_error">Code d\'erreur Android : %1$d</string>
+    <string name="mms_failure_dialog_android_error_http">Code d\'erreur Android : %1$d (HTTP %2$d)</string>
     <string name="mms_failure_dialog_network_settings">Réglages réseau</string>
 
     <!-- v1.14.8 R3 — confirmation avant retry d\'un message en timeout watchdog (risque doublon). -->

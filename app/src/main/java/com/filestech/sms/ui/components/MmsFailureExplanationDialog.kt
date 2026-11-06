@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
 import com.filestech.sms.data.mms.PdusEnAttente
@@ -56,11 +58,15 @@ fun MmsFailureExplanationOverlay(
     if (isPanicDecoy || showLock || expire) return
     // Clé du TAP (motif et instant), pas du marquage : marquer change `current`, et ne doit pas relancer l'effet.
     LaunchedEffect(current.reason, current.postedAt) { holder.marquerAffichee() }
-    MmsFailureExplanationDialog(reason = current.reason, onDismiss = { holder.consume() })
+    MmsFailureExplanationDialog(reason = current.reason, erreur = current.erreur, onDismiss = { holder.consume() })
 }
 
 @Composable
-internal fun MmsFailureExplanationDialog(reason: MmsFailureNotifier.Reason, onDismiss: () -> Unit) {
+internal fun MmsFailureExplanationDialog(
+    reason: MmsFailureNotifier.Reason,
+    erreur: MmsFailureNotifier.ErreurAndroid?,
+    onDismiss: () -> Unit,
+) {
     val context = LocalContext.current
     val body = when (reason) {
         MmsFailureNotifier.Reason.TOO_LARGE -> stringResource(
@@ -70,6 +76,14 @@ internal fun MmsFailureExplanationDialog(reason: MmsFailureNotifier.Reason, onDi
         MmsFailureNotifier.Reason.DOWNLOAD_FAILED -> stringResource(R.string.mms_failure_dialog_body_download_failed)
         MmsFailureNotifier.Reason.MEDIA_NOT_SAVED -> stringResource(R.string.mms_failure_dialog_body_media_not_saved)
         MmsFailureNotifier.Reason.CARRIER_ERROR -> stringResource(R.string.mms_failure_dialog_body_carrier_error)
+    }
+    // 2026-11-06 — le code qu'Android a rendu pour un téléchargement manqué, à nous transmettre : seulement des
+    // entiers validés (`MmsFailureNotifier.ErreurAndroid.valide`), dans une phrase fixe. Pour aucun autre motif.
+    val ligneErreur = when {
+        erreur == null || reason != MmsFailureNotifier.Reason.DOWNLOAD_FAILED -> null
+        erreur.statutHttp != null ->
+            stringResource(R.string.mms_failure_dialog_android_error_http, erreur.code, erreur.statutHttp)
+        else -> stringResource(R.string.mms_failure_dialog_android_error, erreur.code)
     }
     // Un bouton seulement là où il mène à quelque chose d'utile : le réseau pour un téléchargement manqué, le
     // stockage pour un fichier non enregistré. Trop volumineux, refusé par l'opérateur : rien à régler ici.
@@ -85,7 +99,10 @@ internal fun MmsFailureExplanationDialog(reason: MmsFailureNotifier.Reason, onDi
         title = { Text(stringResource(R.string.mms_failure_notification_title)) },
         // Défilant : le texte compte plusieurs phrases, et la fenêtre doit tenir à grande police.
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) { Text(body) }
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(body)
+                ligneErreur?.let { Text(it, modifier = Modifier.padding(top = 12.dp)) }
+            }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }

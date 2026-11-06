@@ -105,8 +105,8 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                     )
                     return@launch
                 }
-                val contentLocation = parsed.contentLocation?.let { String(it) }
-                if (contentLocation.isNullOrBlank()) {
+                val adresseAnnoncee = parsed.contentLocation?.let { String(it) }
+                if (adresseAnnoncee.isNullOrBlank()) {
                     Timber.w("NotificationInd has no contentLocation")
                     return@launch
                 }
@@ -136,6 +136,11 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                     Timber.i("Dropping incoming MMS from blocked sender")
                     return@launch
                 }
+                val transactionId = parsed.transactionId?.let { String(it) }
+                // 2026-11-06 (Visible/Verizon) — le MMSC peut annoncer une adresse qui attend l'identifiant de
+                // transaction en fin de ligne : sans lui, chaque téléchargement échouait (404). Cf. [MmsDownloader
+                // .adresseATelecharger]. Cette adresse sert à tout ce qui suit, réponse au MMSC comprise.
+                val contentLocation = downloader.adresseATelecharger(adresseAnnoncee, transactionId, subId)
                 // OMA-MMS-ENC §7.3.21: `X-Mms-Message-Size` is OPTIONAL in m-notification.ind.
                 // [PduHeaders.getLongInteger] returns -1 when the header is absent — observed
                 // in the wild on several MVNOs (Lebara, Lycamobile) and a number of non-EU
@@ -145,7 +150,6 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 val size = parsed.messageSize
                 val sender = parsed.from?.string
                 if (PdusEnAttente.tailleAnnonceeAcceptable(size)) {
-                    val transactionId = parsed.transactionId?.let { String(it) }
                     val res = downloader.download(contentLocation, transactionId, sender, subId, parsed.transactionId)
                     // v1.6.1 (audit SEC-06) — `loc=%s` retiré : `contentLocation` est
                     // l'URL MMSC opérateur qui peut contenir un token de session ou un
