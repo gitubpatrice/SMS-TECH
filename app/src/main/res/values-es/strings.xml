@@ -135,6 +135,9 @@
     <!-- 2026-11-06 — copy button next to the number in the conversation details. -->
     <string name="thread_details_copy_number">Copiar el número</string>
     <string name="thread_details_number_copied">Número copiado</string>
+    <!-- 2026-11-06 (issue #76) — visionneuse de photos dans l'app -->
+    <string name="image_viewer_open_with">Abrir con otra app</string>
+    <string name="image_viewer_error">Esta imagen no se puede mostrar aquí.</string>
 
     <!-- Tabs / sections -->
     <string name="tab_archived">Archivadas</string>
