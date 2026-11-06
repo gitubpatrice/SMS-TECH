@@ -1,6 +1,6 @@
 # Informativa sulla privacy — SMS Tech
 
-_Ultimo aggiornamento: 26 ottobre 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇪🇸 [Español](PRIVACY.es.md)
+_Ultimo aggiornamento: 6 novembre 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇪🇸 [Español](PRIVACY.es.md)
 
 > **Traduzione.** Questa traduzione italiana è fornita a titolo informativo. Fanno fede le versioni
 > [inglese](PRIVACY.md) e [francese](PRIVACY.fr.md) di questa informativa; in caso di discrepanza,
@@ -66,10 +66,12 @@ Lo sviluppatore non li riceve mai.
   SMS di verifica agli stessi contatti. Non contiene alcuna posizione.
 - **Chiamata di emergenza.** I riquadri di chiamata della schermata Emergenza propongono i numeri di
   emergenza del paese in cui il suo telefono è registrato sulla rete (il 112 è sempre presente).
-  Quando ne tocca uno, l'applicazione chiede l'autorizzazione alle chiamate (`CALL_PHONE`) e, se lei
-  la concede, effettua la chiamata direttamente; se la rifiuta, apre il tastierino telefonico con il
-  numero già inserito, che non richiede alcuna autorizzazione. La scorciatoia sulla schermata di
-  blocco apre sempre il tastierino telefonico.
+  Un riquadro apre il tastierino telefonico con il numero già inserito, che non richiede alcuna
+  autorizzazione: Android consente solo all'app Telefono di chiamare direttamente un numero di
+  emergenza. L'autorizzazione alle chiamate (`CALL_PHONE`) viene chiesta solo da «Chiamare una
+  persona cara», che chiama allora direttamente il suo contatto Safety call; se la rifiuta, si apre
+  invece il tastierino telefonico. La scorciatoia sulla schermata di blocco apre sempre il
+  tastierino telefonico.
 - Nessuna di queste funzioni viene eseguita nella sessione esca aperta dal codice di panico.
 - Questi messaggi sono normali SMS: il suo operatore può addebitarli in base al suo piano tariffario.
 

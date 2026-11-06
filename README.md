@@ -30,11 +30,13 @@ Releases: [GitHub Releases](https://github.com/gitubpatrice/SMS-TECH/releases/la
   do not open the app within a delay you set. These features help; they do not replace emergency
   services — see the [terms of use](TERMS.md).
 - **Voice messages** recorded on the device and sent as audio MMS.
-- Named groups and group MMS, contextual replies with quotes, inline reply from notifications.
+- Photos open in the app (zoom, animated GIFs); every photo and video of a conversation in one place.
+- Named groups and group MMS — a message sent to several people shows its recipients — contextual
+  replies with quotes, inline reply from notifications.
 - Offline **scam detection** (shortened links, urgency wording, premium numbers, spoofed domains), on
   rules: it can be wrong both ways.
-- Blocking synchronized with the Phone / Samsung Messages blocklist; optional blocking of unknown
-  numbers.
+- Blocking synchronized with the Phone / Samsung Messages blocklist, blocked conversations in their
+  own folder; optional blocking of unknown numbers.
 - Full-text search (FTS4), **PDF export** of a conversation, scheduled sending (WorkManager).
 - Manual backup &amp; restore in `.smsbk` (AES-256-GCM + PBKDF2). Attachments are not part of the
   backup.

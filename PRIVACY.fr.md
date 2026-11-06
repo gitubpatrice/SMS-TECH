@@ -1,6 +1,6 @@
 # Politique de confidentialité — SMS Tech
 
-_Dernière mise à jour : 26 octobre 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
+_Dernière mise à jour : 6 novembre 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇩🇪 [Deutsch](PRIVACY.de.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
 
 > **Versions de référence.** Les versions française et anglaise de cette politique font foi. Les
 > traductions allemande, italienne et espagnole sont fournies à titre d'information ; en cas de
@@ -61,10 +61,12 @@ de SMS. Le développeur ne les reçoit jamais.
 - **Safety call.** Si vous n'utilisez pas l'application avant le délai que vous avez fixé, SMS Tech
   envoie un SMS de vérification aux mêmes contacts. Il ne contient aucune position.
 - **Appel d'urgence.** Les tuiles d'appel de l'écran Urgence proposent les numéros d'urgence du pays
-  où votre téléphone est enregistré sur le réseau (le 112 figure toujours). Quand vous en touchez une,
-  l'application demande la permission d'appel (`CALL_PHONE`) et, si vous l'accordez, passe l'appel
-  elle-même ; si vous la refusez, elle ouvre le composeur pré-rempli, qui ne demande aucune
-  permission. Le raccourci de l'écran verrouillé ouvre toujours le composeur.
+  où votre téléphone est enregistré sur le réseau (le 112 figure toujours). Une tuile ouvre le
+  composeur pré-rempli, qui ne demande aucune permission : Android ne laisse que l'app Téléphone
+  appeler directement un numéro d'urgence. La permission d'appel (`CALL_PHONE`) n'est demandée que
+  par « Appeler un proche », qui appelle alors directement votre contact Safety call ; si vous la
+  refusez, le composeur s'ouvre à la place. Le raccourci de l'écran verrouillé ouvre toujours le
+  composeur.
 - Aucune de ces fonctions ne s'exécute dans la session leurre ouverte par le code panique.
 - Ces messages sont des SMS ordinaires : votre opérateur peut les facturer selon votre forfait.
 

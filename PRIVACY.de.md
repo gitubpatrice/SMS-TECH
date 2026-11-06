@@ -1,6 +1,6 @@
 # Datenschutzerklärung — SMS Tech
 
-_Zuletzt aktualisiert: 26. Oktober 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
+_Zuletzt aktualisiert: 6. November 2026_ · 🇬🇧 [English](PRIVACY.md) · 🇫🇷 [Français](PRIVACY.fr.md) · 🇮🇹 [Italiano](PRIVACY.it.md) · 🇪🇸 [Español](PRIVACY.es.md)
 
 > **Übersetzung.** Diese deutsche Fassung ist eine Übersetzung, die zur Information bereitgestellt
 > wird. Verbindlich sind die [englische](PRIVACY.md) und die [französische](PRIVACY.fr.md) Fassung
@@ -63,10 +63,12 @@ Mobilfunkanbieters. Der Entwickler erhält sie nie.
 - **Safety call.** Wenn Sie die App nicht vor Ablauf der von Ihnen festgelegten Frist verwenden,
   sendet SMS Tech eine Kontroll-SMS an dieselben Kontakte. Sie enthält keinen Standort.
 - **Notruf.** Die Anrufkacheln der Notrufseite bieten die Notrufnummern des Landes an, in dem Ihr
-  Telefon im Netz registriert ist (die 112 ist immer dabei). Wenn Sie eine davon antippen, fragt die
-  App nach der Anrufberechtigung (`CALL_PHONE`) und führt den Anruf, wenn Sie sie erteilen, selbst
-  aus; wenn Sie sie verweigern, öffnet sie die Telefon-App mit bereits eingetragener Nummer, wofür
-  keine Berechtigung nötig ist. Die Verknüpfung auf dem Sperrbildschirm öffnet immer die Telefon-App.
+  Telefon im Netz registriert ist (die 112 ist immer dabei). Eine Kachel öffnet die Telefon-App mit
+  bereits eingetragener Nummer, wofür keine Berechtigung nötig ist: Android erlaubt nur der
+  Telefon-App, eine Notrufnummer direkt anzurufen. Die Anrufberechtigung (`CALL_PHONE`) wird nur für
+  „Angehörige anrufen“ erfragt, das Ihren Safety-call-Kontakt dann direkt anruft; verweigern Sie sie,
+  öffnet sich stattdessen die Telefon-App. Die Verknüpfung auf dem Sperrbildschirm öffnet immer die
+  Telefon-App.
 - Keine dieser Funktionen läuft im Tarnmodus, der durch die Tarn-PIN geöffnet wird.
 - Diese Nachrichten sind gewöhnliche SMS: Ihr Mobilfunkanbieter kann sie gemäß Ihrem Tarif
   berechnen.

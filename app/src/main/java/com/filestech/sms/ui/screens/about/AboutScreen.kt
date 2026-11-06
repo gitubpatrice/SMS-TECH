@@ -34,8 +34,10 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Public
@@ -664,6 +666,12 @@ private data class Feature(
 private fun features(isPanicDecoy: Boolean): List<Feature> = listOf(
     Feature(Icons.Outlined.ChatBubbleOutline, stringResource(R.string.about_feat_sms_label), stringResource(R.string.about_feat_sms_desc)),
     Feature(Icons.Outlined.Mic, stringResource(R.string.about_feat_voice_label), stringResource(R.string.about_feat_voice_desc)),
+    // 2026-11-06 (v1.30.0) — visionneuse dans l'app et galerie de la conversation.
+    Feature(
+        Icons.Outlined.PhotoLibrary,
+        stringResource(R.string.about_feat_media_label),
+        stringResource(R.string.about_feat_media_desc),
+    ),
     Feature(
         Icons.Outlined.Security,
         stringResource(R.string.about_feat_vault_label),
@@ -684,6 +692,12 @@ private fun features(isPanicDecoy: Boolean): List<Feature> = listOf(
     ),
     Feature(Icons.Outlined.Fingerprint, stringResource(R.string.about_feat_biometric_label), stringResource(R.string.about_feat_biometric_desc)),
     Feature(Icons.AutoMirrored.Outlined.Reply, stringResource(R.string.about_feat_reply_label), stringResource(R.string.about_feat_reply_desc)),
+    // 2026-11-06 (v1.30.0) — destinataires d'un MMS de groupe, membres dans les détails.
+    Feature(
+        Icons.Outlined.Group,
+        stringResource(R.string.about_feat_groups_label),
+        stringResource(R.string.about_feat_groups_desc),
+    ),
     Feature(Icons.Outlined.Translate, stringResource(R.string.about_feat_translate_label), stringResource(R.string.about_feat_translate_desc)),
     Feature(Icons.Outlined.Block, stringResource(R.string.about_feat_block_label), stringResource(R.string.about_feat_block_desc)),
     Feature(Icons.Outlined.Search, stringResource(R.string.about_feat_search_label), stringResource(R.string.about_feat_search_desc)),

@@ -434,7 +434,7 @@
     <string name="settings_group_mms_hint">Un solo MMS para todos, y cada respuesta vuelve al grupo. Los mensajes enviados desde un grupo salen entonces siempre como MMS, texto incluido. Configure «Mi número de teléfono» para que los mensajes de grupo recibidos puedan dejarle fuera de la lista de miembros.</string>
     <string name="settings_my_number">Mi número de teléfono</string>
     <string name="settings_my_number_dialog_title">Su número de teléfono</string>
-    <string name="settings_my_number_dialog_body">Opcional. Si se configura, este número sustituye al marcador AOSP «insert-address-token» en la dirección del remitente de los MMS salientes, para que las demás apps de SMS le muestren correctamente.</string>
+    <string name="settings_my_number_dialog_body">Opcional. Si se configura, este número sustituye al marcador AOSP «insert-address-token» en la dirección del remitente de los MMS salientes, para que las demás apps de SMS le muestren correctamente. También sirve para reconocerle entre los destinatarios de un MMS de grupo, y el MMS de grupo lo necesita.</string>
     <string name="settings_my_number_placeholder">+34 6XX XXX XXX</string>
     <string name="settings_my_number_detect">Detectar automáticamente desde la SIM</string>
     <string name="settings_my_number_not_set">Sin configurar</string>
@@ -905,11 +905,13 @@
     <string name="about_badge_no_collection">Sin recogida de datos</string>
     <string name="about_badge_no_sharing">Cero compartición</string>
 
-    <!-- Features (15) -->
+    <!-- Features (17) -->
     <string name="about_feat_sms_label">SMS y MMS</string>
     <string name="about_feat_sms_desc">App de SMS predeterminada para Android 8 → 15+. Importación completa del historial, sin duplicados.</string>
     <string name="about_feat_voice_label">Mensajes de voz</string>
     <string name="about_feat_voice_desc">Pulsar y hablar, por MMS. Limitado a 120 s / 280 KB por compatibilidad con todos los operadores franceses.</string>
+    <string name="about_feat_media_label">Fotos y vídeos</string>
+    <string name="about_feat_media_desc">Las fotos se abren en la app (zoom, GIF animados). Todas las fotos y vídeos de una conversación en un solo lugar.</string>
     <string name="about_feat_vault_label">Caja fuerte cifrada</string>
     <string name="about_feat_vault_desc">Conversaciones sensibles en una caja fuerte SQLCipher, con la clave protegida por el Keystore de Android.</string>
     <string name="about_feat_panic_label">PIN señuelo</string>
@@ -920,10 +922,12 @@
     <string name="about_feat_biometric_desc">Huella o rostro para desbloquear, con un PIN de reserva obligatorio.</string>
     <string name="about_feat_reply_label">Respuesta contextual</string>
     <string name="about_feat_reply_desc">Mini-ficha sobre la ventana de escritura + globo de respuesta con cita en la conversación.</string>
+    <string name="about_feat_groups_label">Grupos</string>
+    <string name="about_feat_groups_desc">Grupos con nombre y MMS de grupo. Un mensaje enviado a varias personas muestra sus destinatarios.</string>
     <string name="about_feat_translate_label">Traducción delegada</string>
     <string name="about_feat_translate_desc">Pulsación larga → «Traducir» delega en la app de traducción que tenga instalada (Google Traductor, DeepL, Aves Translate FLOSS…) mediante un Intent del sistema. No se incluye ningún modelo.</string>
     <string name="about_feat_block_label">Bloqueo sincronizado</string>
-    <string name="about_feat_block_desc">Importación automática de los números bloqueados en Teléfono / Samsung Messages. Limpieza retroactiva.</string>
+    <string name="about_feat_block_desc">Importación automática de los números bloqueados en Teléfono / Samsung Messages. Limpieza retroactiva. Las conversaciones bloqueadas tienen su propia carpeta.</string>
     <string name="about_feat_search_label">Búsqueda FTS</string>
     <string name="about_feat_search_desc">Búsqueda de texto completo SQLite FTS4 en los textos, los números y los nombres de los contactos.</string>
     <string name="about_feat_pdf_label">Exportación a PDF</string>

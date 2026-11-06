@@ -423,7 +423,7 @@
     <string name="settings_group_mms_hint">Un seul MMS à tous, et chaque réponse revient au groupe. Les messages envoyés depuis un groupe partent alors toujours en MMS, texte compris. Renseignez « Mon numéro » pour que les groupes reçus ne vous comptent pas parmi les membres.</string>
     <string name="settings_my_number">Mon numéro</string>
     <string name="settings_my_number_dialog_title">Votre numéro de téléphone</string>
-    <string name="settings_my_number_dialog_body">Optionnel. Si renseigné, ce numéro remplace le placeholder AOSP \"insert-address-token\" dans la chaîne d\'expéditeur des MMS sortants — les autres apps SMS vous affichent alors correctement.</string>
+    <string name="settings_my_number_dialog_body">Optionnel. Si renseigné, ce numéro remplace le placeholder AOSP \"insert-address-token\" dans la chaîne d\'expéditeur des MMS sortants — les autres apps SMS vous affichent alors correctement. Il sert aussi à vous reconnaître parmi les destinataires d\'un MMS de groupe, et le MMS de groupe en a besoin.</string>
     <string name="settings_my_number_placeholder">+33 6 XX XX XX XX</string>
     <string name="settings_my_number_detect">Détecter depuis la SIM</string>
     <string name="settings_my_number_not_set">Non renseigné</string>
@@ -890,11 +890,13 @@
     <string name="about_badge_no_collection">Aucune collecte</string>
     <string name="about_badge_no_sharing">Zéro partage</string>
 
-    <!-- Features (15) -->
+    <!-- Features (17) -->
     <string name="about_feat_sms_label">SMS &amp; MMS</string>
     <string name="about_feat_sms_desc">App SMS par défaut Android 8 → 15+. Import historique complet, sans duplication.</string>
     <string name="about_feat_voice_label">Messages vocaux</string>
     <string name="about_feat_voice_desc">Push-to-talk en MMS. Cap 120 s / 280 Ko pour passer chez tous les opérateurs FR.</string>
+    <string name="about_feat_media_label">Photos et vidéos</string>
+    <string name="about_feat_media_desc">Les photos s\'ouvrent dans l\'app (zoom, GIF animés). Toutes les photos et vidéos d\'une conversation au même endroit.</string>
     <string name="about_feat_vault_label">Coffre chiffré</string>
     <string name="about_feat_vault_desc">Conversations sensibles dans un coffre SQLCipher, clé enveloppée dans le Keystore Android.</string>
     <string name="about_feat_panic_label">PIN leurre</string>
@@ -905,10 +907,12 @@
     <string name="about_feat_biometric_desc">Empreinte ou visage pour déverrouiller, avec PIN de secours obligatoire.</string>
     <string name="about_feat_reply_label">Réponse contextuelle</string>
     <string name="about_feat_reply_desc">Mini-cartouche au-dessus du composer + bulle réponse avec quote dans le thread.</string>
+    <string name="about_feat_groups_label">Groupes</string>
+    <string name="about_feat_groups_desc">Groupes nommés et MMS de groupe. Un message envoyé à plusieurs personnes montre ses destinataires.</string>
     <string name="about_feat_translate_label">Traduction déléguée</string>
     <string name="about_feat_translate_desc">Long-press → \"Traduire\" délègue à l\'app de traduction installée (Google Translate, DeepL, Aves Translate FLOSS …) via Intent système. Aucun modèle bundlé.</string>
     <string name="about_feat_block_label">Blocage synchronisé</string>
-    <string name="about_feat_block_desc">Import auto des numéros bloqués Téléphone / Samsung Messages. Purge rétroactive.</string>
+    <string name="about_feat_block_desc">Import auto des numéros bloqués Téléphone / Samsung Messages. Purge rétroactive. Les conversations bloquées ont leur propre dossier.</string>
     <string name="about_feat_search_label">Recherche FTS</string>
     <string name="about_feat_search_desc">Plein texte SQLite FTS4 sur corps, numéros et noms de contact.</string>
     <string name="about_feat_pdf_label">Export PDF</string>
