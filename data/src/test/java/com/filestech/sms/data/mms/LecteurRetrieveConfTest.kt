@@ -2,6 +2,7 @@ package com.filestech.sms.data.mms
 
 import com.filestech.sms.pdu.EncodedStringValue
 import com.filestech.sms.pdu.PduBody
+import com.filestech.sms.pdu.PduParser
 import com.filestech.sms.pdu.PduPart
 import com.filestech.sms.pdu.RetrieveConf
 import com.google.common.truth.Truth.assertThat
@@ -144,6 +145,54 @@ class LecteurRetrieveConfTest {
         )
 
         assertThat(contenu.legende).isEqualTo("été")
+    }
+
+    /**
+     * 2026-11-06 — le statut de retrait n'était jamais lu : la réponse d'erreur d'un MMSC (message expiré,
+     * introuvable) s'écrivait comme un message ordinaire.
+     */
+    @Test
+    fun `retrait - echec passager et definitif reconnus`() {
+        listOf(0xC0, 0xC1, 0xDF, 0xE0, 0xE1, 0xE3, 0xFF).forEach { statut ->
+            assertThat(LecteurRetrieveConf.retraitEnEchec(statut)).isTrue()
+        }
+    }
+
+    /** L'en-tête est facultatif : absent (lu 0), c'est une réussite. Sinon tout MMS serait refusé. */
+    @Test
+    fun `retrait - absent ou OK, ce n'est pas un echec`() {
+        assertThat(LecteurRetrieveConf.retraitEnEchec(0)).isFalse()
+        assertThat(LecteurRetrieveConf.retraitEnEchec(0x80)).isFalse()
+    }
+
+    /** Valeurs non attribuées : on écrit le message plutôt que de risquer d'en perdre un vrai. */
+    @Test
+    fun `retrait - valeurs non attribuees, pas un echec`() {
+        listOf(0x81, 0x9F, 0xBF).forEach { statut ->
+            assertThat(LecteurRetrieveConf.retraitEnEchec(statut)).isFalse()
+        }
+    }
+
+    /**
+     * Du PDU à la garde : un `m-retrieve.conf` complet dans sa forme — `8c 84` type, `98 … 00`
+     * Transaction-Id, `8d 92` version, `85 04 …` Date, `99 xx` X-Mms-Retrieve-Status, puis `84 a3`
+     * Content-Type (multipart/mixed, en dernier comme le veut WSP) et `00` partie — passé par le parseur,
+     * puis par la garde.
+     */
+    @Test
+    fun `retrait - statut lu par le parseur, du PDU a la garde`() {
+        fun lu(statut: Int?): RetrieveConf {
+            val entete = intArrayOf(0x8C, 0x84, 0x98, 0x54, 0x30, 0x00, 0x8D, 0x92, 0x85, 0x04, 0x65, 0x4B, 0x3A, 0x00)
+            val retrait = if (statut == null) intArrayOf() else intArrayOf(0x99, statut)
+            val octets = entete + retrait + intArrayOf(0x84, 0xA3, 0x00)
+            return PduParser(ByteArray(octets.size) { octets[it].toByte() }).parse() as RetrieveConf
+        }
+
+        assertThat(LecteurRetrieveConf.retraitEnEchec(lu(0xE1).retrieveStatus)).isTrue()
+        assertThat(LecteurRetrieveConf.retraitEnEchec(lu(0xC0).retrieveStatus)).isTrue()
+        assertThat(LecteurRetrieveConf.retraitEnEchec(lu(0x80).retrieveStatus)).isFalse()
+        // Contrôle négatif : sans l'en-tête, rien n'est refusé.
+        assertThat(LecteurRetrieveConf.retraitEnEchec(lu(null).retrieveStatus)).isFalse()
     }
 
     private companion object {

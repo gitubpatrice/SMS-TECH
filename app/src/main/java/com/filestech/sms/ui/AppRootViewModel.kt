@@ -43,6 +43,11 @@ class AppRootViewModel @Inject constructor(
      */
     val safetyCallAck: SafetyCallAckHolder,
     /**
+     * 2026-11-06 — exposé pour que [AppRoot] ouvre la fenêtre d'explication après un tap sur la
+     * notification « MMS non reçu », cf. [com.filestech.sms.system.notifications.MmsFailureExplanationHolder].
+     */
+    val mmsFailureExplanation: com.filestech.sms.system.notifications.MmsFailureExplanationHolder,
+    /**
      * v1.26.1 (audit H2) — authentifie l'intent d'ouverture de conversation avant toute
      * navigation. Voir [isNotificationIntentAuthentic].
      */

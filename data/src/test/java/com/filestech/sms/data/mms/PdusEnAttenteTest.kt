@@ -169,6 +169,33 @@ class PdusEnAttenteTest {
         assertThat(service.existePourCles(listOf(cle))).isTrue()
     }
 
+    /**
+     * 2026-11-06 — une seule borne pour l'annonce et pour la lecture. La porte de l'annonce était de
+     * 1 Mio et refusait, avant téléchargement, des photos que la lecture acceptait (courriel d'une
+     * utilisatrice : « too large » pour chaque photo, message perdu).
+     */
+    @Test
+    fun `taille annoncee - acceptee jusqu'au plafond de lecture inclus, refusee au-dela`() {
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(1L)).isTrue()
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(PdusEnAttente.PLAFOND_OCTETS)).isTrue()
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(PdusEnAttente.PLAFOND_OCTETS + 1)).isFalse()
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(Long.MAX_VALUE)).isFalse()
+    }
+
+    /** Contrôle négatif : avec l'ancienne porte de 1 Mio, ce test échoue. */
+    @Test
+    fun `taille annoncee - une photo de 1,5 Mio passe`() {
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(1024L * 1024L + 1)).isTrue()
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(1_572_864L)).isTrue()
+    }
+
+    /** En-tête absent (lu -1) ou mal encodé (lu 0) : taille inconnue, on télécharge. */
+    @Test
+    fun `taille annoncee inconnue - telechargee`() {
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(-1L)).isTrue()
+        assertThat(PdusEnAttente.tailleAnnonceeAcceptable(0L)).isTrue()
+    }
+
     @Test
     fun `presence de PDU, dossier absent non, dossier illisible oui`() {
         val cle = "e".repeat(64)

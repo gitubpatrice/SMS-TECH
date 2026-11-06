@@ -75,6 +75,9 @@ class MainActivity : FragmentActivity() {
      */
     @Inject lateinit var safetyCallAck: SafetyCallAckHolder
 
+    /** 2026-11-06 — la fenêtre à ouvrir après un tap sur la notification « MMS non reçu ». */
+    @Inject lateinit var mmsFailureExplanation: com.filestech.sms.system.notifications.MmsFailureExplanationHolder
+
     /**
      * v1.27.3 (relecture Codex du 2026-08-06, SC-1273-06) — republication de la notification du
      * Safety call quand une écriture échoue **après** que son nonce a été consommé.
@@ -221,7 +224,7 @@ class MainActivity : FragmentActivity() {
         // v1.3.3 bug #4 — partage entrant ACTION_SEND / ACTION_SEND_MULTIPLE depuis le
         // chooser système (Galerie, navigateur, fichiers…). On parse l'intent et on stocke
         // dans le holder ; AppRoot l'observe pour basculer en mode "pick to share".
-        handleSharedIntent(intent)
+        handleSharedIntent(intent, recreation = savedInstanceState != null)
 
         // Audit P-P0-5: the previous `runBlocking(IO) { settings.flow.first() }` blocked the main
         // thread 50-200 ms on DataStore to know whether to apply FLAG_SECURE. We now apply it
@@ -496,10 +499,32 @@ class MainActivity : FragmentActivity() {
      *     confiance au type MIME fourni. La correction est notée ici parce qu'un commentaire
      *     faussement rassurant est pire que pas de commentaire : il détourne le prochain
      *     auditeur d'un contrôle qui n'existe pas.
+     *
+     * @param recreation 2026-11-06 — `true` quand `onCreate` reçoit un état sauvegardé (rotation,
+     *   thème, processus recréé) : l'intent est alors celui du lancement d'origine, déjà traité. Seule
+     *   la fenêtre « MMS non reçu » en tient compte ; les autres branches gardent leur comportement.
      */
-    private fun handleSharedIntent(intent: Intent?) {
+    private fun handleSharedIntent(intent: Intent?, recreation: Boolean = false) {
         if (intent == null) return
         when (intent.action) {
+            com.filestech.sms.system.notifications.MmsFailureNotifier.ACTION_EXPLAIN_MMS_FAILURE -> {
+                // 2026-11-06 — tap sur « MMS non reçu » : la fenêtre qui explique le motif, ouverte par
+                // AppRoot une fois l'application réellement ouverte (verrou levé, jamais en leurre).
+                //
+                // ⚠️ Ni sur une recréation, ni sur une relance depuis les apps récentes : dans les deux cas
+                // l'intent est celui du tap d'origine, et la fenêtre, déjà fermée, reviendrait. Une fenêtre
+                // encore ouverte, elle, survit seule : le porteur n'est vidé qu'à sa fermeture.
+                //
+                // Pas de `incomingShare.clear()` ici, à la différence des branches qui naviguent : la fenêtre
+                // s'ouvre par-dessus l'écran courant, et l'action étant exportée, n'importe quelle application
+                // pourrait sinon effacer un partage en cours (relecture Claude du 2026-11-06).
+                if (recreation || (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+                com.filestech.sms.system.notifications.MmsFailureNotifier
+                    .raisonDepuisExtra(
+                        intent.getStringExtra(com.filestech.sms.system.notifications.MmsFailureNotifier.EXTRA_REASON),
+                    )
+                    ?.let { mmsFailureExplanation.set(it) }
+            }
             Intent.ACTION_SEND -> {
                 val uri = intent.extraStream()
                 val text = intent.getStringExtra(Intent.EXTRA_TEXT)

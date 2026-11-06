@@ -6,9 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.telephony.SubscriptionManager
 import com.filestech.sms.core.io.LectureBornee
+import com.filestech.sms.data.mms.LecteurRetrieveConf
 import com.filestech.sms.data.mms.MmsDownloader
+import com.filestech.sms.data.mms.MmsSender
 import com.filestech.sms.data.mms.PdusEnAttente
 import com.filestech.sms.di.ApplicationScope
+import com.filestech.sms.pdu.PduHeaders
 import com.filestech.sms.pdu.PduParser
 import com.filestech.sms.pdu.RetrieveConf
 import com.filestech.sms.system.notifications.MmsFailureNotifier
@@ -21,6 +24,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
+
+/**
+ * 2026-11-06 — la réponse due au MMSC une fois le message traité.
+ *
+ * `STATUS_RETRIEVED` quand le retrait a eu lieu et que son sort est réglé : écrit, déjà là, écrit sans un
+ * média que le PDU gardé porte encore, ou écarté faute de toute adresse — un nouvel envoi de la notification
+ * n'y changerait rien. `null` pour un expéditeur BLOQUÉ, comme à l'annonce (`MmsWapPushReceiver`) :
+ * « retrieved » pourrait valoir accusé de remise auprès de celui qu'on a bloqué.
+ */
+internal fun reponseApresTraitement(issue: TraitementMmsRecu.Issue): Int? =
+    if (issue.expediteurBloque) null else PduHeaders.STATUS_RETRIEVED
 
 /**
  * v1.28.3 (F17) — etat d'une transaction MMS en cours de traitement.
@@ -59,6 +73,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // partagés avec la reprise des PDU gardés.
         fun traitementMmsRecu(): TraitementMmsRecu
 
+        // 2026-11-06 — la réponse au MMSC. ⚠️ Résolu DANS la coroutine : il tire `AppDatabase`.
+        fun mmsSender(): MmsSender
+
         @ApplicationScope
         fun applicationScope(): CoroutineScope
     }
@@ -73,6 +90,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         val subId = intent
             .getIntExtra(MmsDownloader.EXTRA_SUBSCRIPTION_ID, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
             .takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+        // 2026-11-06 — de quoi répondre au MMSC (m-notifyresp.ind), posé par [MmsDownloader].
+        val contentLocation = intent.getStringExtra(MmsDownloader.EXTRA_CONTENT_LOCATION)
+        val notificationTransactionId = intent.getByteArrayExtra(MmsDownloader.EXTRA_NOTIFICATION_TRANSACTION_ID)
         val rc = resultCode
         val appContext = context.applicationContext
 
@@ -104,25 +124,39 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // transaction. Sans quoi un echec de persistance laissait le txId marque, et le rejeu
         // qui aurait pu rattraper le message etait ecarte comme un doublon.
         var txIdPourReprise: String? = null
+        // 2026-11-06 — la réponse due au MMSC, décidée en route et envoyée UNE fois, dans le `finally`.
+        // `null` : pas de réponse — le téléchargement ou le traitement a échoué, et sans réponse l'opérateur
+        // peut renvoyer sa notification : c'est la seule seconde chance qui existe (même choix qu'AOSP
+        // Messaging, qui ne répond qu'à un retrait réussi).
+        var reponseAuMmsc: Int? = null
         scope.launch {
+            // 2026-11-06 — AUCUNE PERTE MUETTE. Toute sortie qui abandonne un MMS annoncé le dit ; six se
+            // taisaient (chemin absent, hors bac à sable, fichier vide, trop gros, contenu illisible, échec
+            // signalé par le MMSC). Restent muets, et c'est voulu : l'expéditeur bloqué, et le message sans
+            // aucune adresse (v1.28.9, `TraitementMmsRecu`). `senderHint` peut être null : le notifier écrit
+            // alors « un contact inconnu ».
+            suspend fun signalerPerte(raison: MmsFailureNotifier.Reason, taille: Long? = null) =
+                entry.mmsFailureNotifier().notifyFailure(
+                    reason = raison,
+                    senderAddress = senderHint,
+                    sizeBytes = taille,
+                )
             try {
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
                     // pas qu'un MMS lui était destiné. Maintenant on poste une notification
-                    // sur le canal FAILED pour l'inviter à vérifier le signal et retry depuis
-                    // l'app système (ou ressayer plus tard). `senderHint` peut être null si
-                    // MmsDownloader n'a pas pu l'extraire — le notifier fallback alors sur
-                    // "un contact inconnu".
+                    // sur le canal FAILED.
+                    // 2026-11-06 — ce commentaire promettait un « retry depuis l'app système » : il n'y en a
+                    // aucun quand SMS Tech est l'app SMS par défaut, et l'application n'en fait pas. La
+                    // fenêtre ouverte par le tap dit ce qui reste possible.
                     Timber.w("MMS download failed rc=%d path=%s", rc, pduPath)
-                    entry.mmsFailureNotifier().notifyFailure(
-                        reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
-                        senderAddress = senderHint,
-                    )
+                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
                     return@launch
                 }
                 val pduFile = pduPath?.let { File(it) }
                 if (pduFile == null) {
                     Timber.w("MMS PDU missing or empty: %s", pduPath)
+                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
                     return@launch
                 }
                 // v1.3.10 (SEC-04) — sandbox check: the EXTRA_PDU_FILE path is set by
@@ -140,6 +174,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     !canonicalPdu.toPath().startsWith(sandboxDir.toPath())
                 ) {
                     Timber.w("MMS PDU path outside sandbox: %s", pduPath)
+                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
                     return@launch
                 }
                 validatedPdu = canonicalPdu
@@ -153,6 +188,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     Timber.w("MMS PDU missing or empty: %s", pduPath)
                     // Rien à préserver : le fichier est absent ou vide.
                     pduConsumed = true
+                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
                     return@launch
                 }
                 // v1.28.3 (F27) — la lecture du PDU est BORNEE.
@@ -168,6 +204,11 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     Timber.w("MMS PDU too large (%d B): %s", canonicalPdu.length(), pduPath)
                     // Definitivement inexploitable : le conserver n'ouvrirait aucune reprise.
                     pduConsumed = true
+                    // 2026-11-06 — annoncé sous la borne (ou sans taille annoncée), plus gros à l'arrivée.
+                    // Même sort qu'un message refusé à l'annonce : REJECTED, sinon l'opérateur renverrait
+                    // sa notification et chaque essai retéléchargerait ces mégaoctets pour rien.
+                    reponseAuMmsc = PduHeaders.STATUS_REJECTED
+                    signalerPerte(MmsFailureNotifier.Reason.TOO_LARGE, canonicalPdu.length())
                     return@launch
                 }
                 // v1.28.4 (F27) — la lecture passe par la borne TESTÉE (`LectureBornee.lire`),
@@ -183,6 +224,17 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     Timber.w("MMS PDU is not RetrieveConf (parsed=%s)", parsed?.javaClass?.simpleName)
                     // Contenu définitivement inexploitable : le conserver ne mènerait à rien.
                     pduConsumed = true
+                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
+                    return@launch
+                }
+                // 2026-11-06 — LE MMSC A DIT QUE LE RETRAIT A ÉCHOUÉ (message expiré, introuvable, refusé…),
+                // cf. [LecteurRetrieveConf.retraitEnEchec]. Ce statut n'était jamais lu : la réponse
+                // d'erreur s'écrivait comme un message ordinaire. AOSP Messaging ne l'écrit pas ; ici non
+                // plus. Pas de réponse au MMSC : il vient lui-même de signaler l'échec.
+                if (LecteurRetrieveConf.retraitEnEchec(parsed.retrieveStatus)) {
+                    Timber.w("MMS retrieve refused by the MMSC (status=0x%02x)", parsed.retrieveStatus)
+                    pduConsumed = true
+                    signalerPerte(MmsFailureNotifier.Reason.CARRIER_ERROR)
                     return@launch
                 }
 
@@ -218,6 +270,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                             // Le PDU du rejeu ne part QUE si l'exemplaire precedent a reellement
                             // abouti. Sinon on le conserve : il est la seule copie du media.
                             pduConsumed = deja.consigne
+                            // 2026-11-06 — un rejeu dit que l'opérateur n'a peut-être pas reçu notre
+                            // réponse : on la redonne, si le premier exemplaire a abouti. Encore en
+                            // cours, c'est lui qui répondra.
+                            if (deja.consigne) reponseAuMmsc = PduHeaders.STATUS_RETRIEVED
                             return@launch
                         }
                         processedTransactions[txId] = EtatTransaction(vu = now, consigne = false)
@@ -232,6 +288,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 val cle = PdusEnAttente.lireNom(canonicalPdu.name)?.cle
                 val issue = entry.traitementMmsRecu()
                     .traiter(parsed, cle, subId, senderHint) { canonicalPdu.exists() }
+                // 2026-11-06 — le sort du message est réglé, cf. [reponseApresTraitement].
+                reponseAuMmsc = reponseApresTraitement(issue)
                 // v1.27.2 (relecture Codex 2026-08-04) — le message est en base : le PDU a rempli son
                 // office et peut être supprimé. v1.28.3 (F15) — sauf si un média n'a pas pu être écrit :
                 // le PDU le porte encore, et le supprimer le perdrait ; v1.28.9 — la reprise le rouvrira.
@@ -296,6 +354,12 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     // 24 h sans que rien ne le rouvre : le média perdu l'était pour de bon.
                     runCatching { RepriseMmsWorker.planifier(appContext) }
                         .onFailure { Timber.w(it, "Reprise MMS: planification echouee") }
+                }
+                // 2026-11-06 — la réponse au MMSC, au mieux de l'effort : son échec ne touche pas au message.
+                reponseAuMmsc?.let { statut ->
+                    runCatching {
+                        entry.mmsSender().repondreAuMmsc(notificationTransactionId, contentLocation, statut, subId)
+                    }.onFailure { Timber.w(it, "m-notifyresp.ind: sender unavailable") }
                 }
                 pending.finish()
             }

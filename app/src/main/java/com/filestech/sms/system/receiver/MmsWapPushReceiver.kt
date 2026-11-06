@@ -4,9 +4,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
+import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.data.mms.MmsDownloader
+import com.filestech.sms.data.mms.MmsSender
+import com.filestech.sms.data.mms.PdusEnAttente
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.pdu.NotificationInd
+import com.filestech.sms.pdu.PduHeaders
 import com.filestech.sms.pdu.PduParser
 import com.filestech.sms.system.notifications.MmsFailureNotifier
 import dagger.hilt.EntryPoint
@@ -34,9 +38,12 @@ import timber.log.Timber
  *
  * Audit notes:
  *   - Malformed / truncated PDUs simply log a warning and bail (no crash).
- *   - We DO NOT auto-download messages larger than [MAX_AUTO_DOWNLOAD_BYTES] (default 1 MB) to
- *     guard against runaway data usage — the user can re-trigger from the conversation later.
- *     For SMS Tech's voice-only flow we should never hit that ceiling (clips capped at 300 KB).
+ *   - 2026-11-06 — a message announced larger than [PdusEnAttente.PLAFOND_OCTETS] (4 MiB) is not
+ *     downloaded, because the reader would refuse it anyway ([PdusEnAttente.tailleAnnonceeAcceptable]).
+ *     The gate used to be its own 1 MiB constant, set in v1.2.0 for voice clips: it refused, before
+ *     download, pictures the reader accepted, and this KDoc promised the user could "re-trigger from
+ *     the conversation later". Nothing keeps the message's address: a refused message is LOST. So the
+ *     MMSC is told REJECTED ([MmsSender.repondreAuMmsc]), and the user is told why.
  */
 class MmsWapPushReceiver : BroadcastReceiver() {
 
@@ -49,6 +56,9 @@ class MmsWapPushReceiver : BroadcastReceiver() {
         fun incomingBlockPolicy(): IncomingBlockPolicy
         // Audit R1 (v1.14.8) — notification user lorsque le MMS dépasse le cap auto-download.
         fun mmsFailureNotifier(): MmsFailureNotifier
+
+        // 2026-11-06 — la réponse au MMSC. ⚠️ Résolu DANS la coroutine : il tire `AppDatabase`.
+        fun mmsSender(): MmsSender
 
         // v1.26.1 (audit H5) — filtrage des MMS entrants par la liste noire, cf. `onReceive`.
 
@@ -120,6 +130,8 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 // v1.27.2 (audit externe 2026-08-04 #5) — cf. [isBlockedFailOpen] : même repli
                 // ouvert qu'avant, sans avaler `CancellationException`.
                 // v1.28.3 (F26) — couvre aussi « bloquer les numeros inconnus ».
+                // 2026-11-06 — et SANS répondre au MMSC : ni « retrieved », faux et qui pourrait valoir accusé
+                // de remise auprès de celui qu'on a bloqué, ni « rejected », qui lui révélerait le blocage.
                 if (!fromAddress.isNullOrBlank() && blockPolicy.doitEcarter(fromAddress)) {
                     Timber.i("Dropping incoming MMS from blocked sender")
                     return@launch
@@ -129,30 +141,49 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 // in the wild on several MVNOs (Lebara, Lycamobile) and a number of non-EU
                 // carriers. Treat "absent" identically to "present and within cap"; only an
                 // explicitly oversized PDU is skipped.
+                // 2026-11-06 — the cap is the reader's, cf. [PdusEnAttente.tailleAnnonceeAcceptable].
                 val size = parsed.messageSize
-                val sizeUnknown = size <= 0L
-                val sizeAcceptable = size in 1..MAX_AUTO_DOWNLOAD_BYTES
-                if (sizeUnknown || sizeAcceptable) {
+                val sender = parsed.from?.string
+                if (PdusEnAttente.tailleAnnonceeAcceptable(size)) {
                     val transactionId = parsed.transactionId?.let { String(it) }
-                    val sender = parsed.from?.string
-                    val res = downloader.download(contentLocation, transactionId, sender, subId)
+                    val res = downloader.download(contentLocation, transactionId, sender, subId, parsed.transactionId)
                     // v1.6.1 (audit SEC-06) — `loc=%s` retiré : `contentLocation` est
                     // l'URL MMSC opérateur qui peut contenir un token de session ou un
                     // identifiant de transaction dans le path/query. En debug logcat
                     // c'était lisible par toute app détentrice de READ_LOGS.
                     Timber.i("MMS auto-download triggered size=%d outcome=%s", size, res)
+                    // 2026-11-06 — le téléchargement n'a même pas DÉMARRÉ (adresse refusée, fichier
+                    // impossible à créer, `SmsManager` qui lève) : aucun accusé ne viendra jamais, et
+                    // `MmsDownloadedReceiver` ne saura rien de ce message. C'était une perte muette.
+                    if (res is Outcome.Failure) {
+                        failureNotifier.notifyFailure(
+                            reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+                            senderAddress = sender,
+                        )
+                    }
                 } else {
-                    // Audit R1 (v1.14.8) — avant : silence total côté user. Maintenant on
-                    // notifie : "MMS de %sender% trop volumineux (%size% KB) — touchez pour
-                    // ouvrir les paramètres MMS". L'user peut soit augmenter le cap dans les
-                    // settings opérateur, soit demander à l'expéditeur de réduire/refragmenter.
-                    Timber.w("MMS auto-download skipped (size=%d > %d)", size, MAX_AUTO_DOWNLOAD_BYTES)
-                    val sender = parsed.from?.string
+                    // Audit R1 (v1.14.8) — avant : silence total côté user.
+                    // 2026-11-06 — la notification promettait des « paramètres MMS » qui n'existent pas,
+                    // et ce commentaire un plafond réglable : il ne l'est nulle part. Le message ne sera
+                    // jamais téléchargé, ni maintenant ni plus tard. On le dit à l'opérateur (REJECTED :
+                    // il peut cesser de le proposer, et ne renvoie pas sa notification en boucle), puis
+                    // à l'utilisateur, avec une fenêtre qui explique quoi faire.
+                    Timber.w("MMS not downloaded (size=%d > %d)", size, PdusEnAttente.PLAFOND_OCTETS)
+                    // L'utilisateur D'ABORD : fournir `MmsSender` ouvre la base, et si cela lève, la réponse
+                    // au MMSC est perdue — pas la notification (relecture Claude du 2026-11-06).
                     failureNotifier.notifyFailure(
                         reason = MmsFailureNotifier.Reason.TOO_LARGE,
                         senderAddress = sender,
                         sizeBytes = size,
                     )
+                    runCatching {
+                        entry.mmsSender().repondreAuMmsc(
+                            transactionId = parsed.transactionId,
+                            contentLocation = contentLocation,
+                            statut = PduHeaders.STATUS_REJECTED,
+                            subId = subId,
+                        )
+                    }.onFailure { Timber.w(it, "m-notifyresp.ind: sender unavailable") }
                 }
             } catch (t: Throwable) {
                 // Symétrie avec SmsDeliverReceiver/MmsDownloadedReceiver/MmsSentReceiver :
@@ -165,10 +196,5 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }
-    }
-
-    companion object {
-        /** 1 MiB safety ceiling. SMS Tech voice clips are ≤ 300 KB, this is a defence in depth. */
-        private const val MAX_AUTO_DOWNLOAD_BYTES: Long = 1024L * 1024L
     }
 }

@@ -493,6 +493,16 @@ fun AppRoot() {
         isPanicDecoy = isPanicDecoy,
     )
 
+    // 2026-11-06 — la fenêtre « MMS non reçu », ouverte par le tap de sa notification. Mêmes deux
+    // gardes, mêmes raisons : effacée en session leurre, en attente tant que l'application est
+    // verrouillée. Nom complet plutôt qu'un import : la liste d'imports de ce fichier est une clé de
+    // `app/detekt-baseline.xml`.
+    com.filestech.sms.ui.components.MmsFailureExplanationOverlay(
+        holder = rootViewModel.mmsFailureExplanation,
+        showLock = showLock,
+        isPanicDecoy = isPanicDecoy,
+    )
+
     // Splash de première ouverture, rendu EN OVERLAY au-dessus du graphe (le Surface parent empile
     // ses enfants). N'apparaît qu'à la 1ʳᵉ ouverture (SplashViewModel.shouldShow) ; pour toutes les
     // suivantes, SplashScreen ne rend rien. Il n'est plus une destination du NavHost afin que

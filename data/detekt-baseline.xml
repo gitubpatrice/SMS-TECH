@@ -64,7 +64,7 @@
     <ID>ParameterListWrapping:ConversationRepositoryImpl.kt$ConversationRepositoryImpl$(id: Long, inVault: Boolean)</ID>
     <ID>ReturnCount:LocationResolver.kt$LocationResolver$suspend fun getCurrentLocation( timeoutMs: Long = DEFAULT_TIMEOUT_MS, ): Location?</ID>
     <ID>ReturnCount:MmsBuilder.kt$MmsBuilder$fun buildMultipartSendReq( attachments: List&lt;MmsAttachment&gt;, textBody: String?, recipients: List&lt;String&gt;, subject: String? = null, requestDeliveryReport: Boolean = false, ): ByteArray?</ID>
-    <ID>ReturnCount:MmsDownloader.kt$MmsDownloader$fun download( contentLocation: String, transactionId: String?, senderAddress: String?, subId: Int? = null, ): Outcome&lt;Unit&gt;</ID>
+    <ID>ReturnCount:MmsDownloader.kt$MmsDownloader$fun download( contentLocation: String, transactionId: String?, senderAddress: String?, subId: Int? = null, transactionIdOctets: ByteArray? = null, ): Outcome&lt;Unit&gt;</ID>
     <ID>SpacingBetweenDeclarationsWithComments:AppDatabase.kt$AppDatabase.Companion$// v2 (2026-05-15): adds `messages.reply_to_message_id` + matching index for the</ID>
     <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.Locked$/** Lock is configured ON and user has not unlocked yet. UI must be hidden. */</ID>
     <ID>SpacingBetweenDeclarationsWithComments:AppLockManager.kt$AppLockManager.LockState.LockedOut$/** Too many failed attempts — UI shows the countdown, no PIN accepted yet. */</ID>
