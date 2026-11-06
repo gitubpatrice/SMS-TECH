@@ -86,6 +86,8 @@ class TelephonySyncManager @Inject constructor(
      * rapide (~50 ms typique d'après doc `MainApplication.kt`).
      */
     private val blockedNumbersImporter: com.filestech.sms.data.blocking.BlockedNumbersImporter,
+    // 2026-11-06 (issue #76) — les destinataires des MMS importés avant la v15.
+    private val rattrapageDestinataires: RattrapageDestinatairesMms,
     @ApplicationScope private val appScope: CoroutineScope,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
@@ -224,7 +226,9 @@ class TelephonySyncManager @Inject constructor(
                     // 5-10 s. The chunk size is 200, balancing transaction lock duration
                     // against per-page overhead.
                     var imported = 0
-                    val complete = telephonyReader.readMmsBatched(pageSize = 200) { page ->
+                    // 2026-11-06 (issue #76) — la clé d'identité rapproche les destinataires d'un envoi groupé.
+                    val identite = phoneIdentity.snapshot()
+                    val complete = telephonyReader.readMmsBatched(pageSize = 200, cle = identite::key) { page ->
                         // v1.8.0 (post-audit fix badges fresh install S24) — au 1er
                         // sync (Room vide), tous les messages historiques sont
                         // considérés comme déjà vus. Sans ça, l'user voit des
@@ -276,6 +280,16 @@ class TelephonySyncManager @Inject constructor(
                     if (it is kotlinx.coroutines.CancellationException) throw it
                     Timber.w(it, "MMS import failed")
                 }
+            }
+            // 2026-11-06 (issue #76) — une tranche du rattrapage des destinataires à chaque passe ; ne lit
+            // plus rien une fois l'historique regardé. Son échec n'arrête pas la synchronisation des SMS.
+            runCatching {
+                val identite = phoneIdentity.snapshot()
+                val regardees = rattrapageDestinataires.rattraper(identite::key)
+                if (regardees > 0) Timber.i("runSync(%s) destinataires MMS regardes : %d", reason, regardees)
+            }.onFailure {
+                if (it is kotlinx.coroutines.CancellationException) throw it
+                Timber.w(it, "Rattrapage des destinataires MMS en echec")
             }
             // Union the Room mirror with a fresh read of the system blocklist. The Room snapshot
             // covers app-initiated blocks; the live system read covers entries the user already

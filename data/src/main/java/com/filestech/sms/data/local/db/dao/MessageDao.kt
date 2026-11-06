@@ -503,6 +503,25 @@ interface MessageDao {
     @Query("SELECT EXISTS(SELECT 1 FROM messages WHERE type = 1 LIMIT 1)")
     suspend fun hasAnyMms(): Boolean
 
+    /**
+     * 2026-11-06 (issue #76) — les MMS dont les destinataires n'ont pas encore été regardés (`mms_recipients`
+     * NULL) et qui ont une copie dans le fournisseur du système : `RattrapageDestinatairesMms` les relit dans
+     * `addr`. Par tranches de [limite], pour qu'un gros historique ne retienne pas une synchronisation.
+     */
+    @Query(
+        """
+        SELECT id, telephony_uri, direction FROM messages
+        WHERE type = 1 AND mms_recipients IS NULL AND telephony_uri LIKE 'content://mms/%'
+        ORDER BY id
+        LIMIT :limite
+        """,
+    )
+    suspend fun mmsSansDestinatairesVerifies(limite: Int): List<MmsAVerifier>
+
+    /** 2026-11-06 (issue #76) — cf. [mmsSansDestinatairesVerifies]. */
+    @Query("UPDATE messages SET mms_recipients = :valeur WHERE id = :id")
+    suspend fun setMmsRecipients(id: Long, valeur: String)
+
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun delete(id: Long)
 
@@ -920,3 +939,10 @@ interface MessageDao {
     )
     suspend fun countOlderThan(olderThan: Long): Int
 }
+
+/** 2026-11-06 (issue #76) — une ligne de [MessageDao.mmsSansDestinatairesVerifies]. */
+data class MmsAVerifier(
+    val id: Long,
+    @androidx.room.ColumnInfo(name = "telephony_uri") val telephonyUri: String,
+    val direction: com.filestech.sms.domain.model.MessageDirection,
+)

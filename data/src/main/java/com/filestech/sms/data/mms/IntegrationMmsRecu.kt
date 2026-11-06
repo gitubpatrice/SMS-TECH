@@ -7,7 +7,6 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.repository.FichiersDePiecesJointes
 import com.filestech.sms.data.repository.IncomingAttachment
-import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.model.PhoneAddress
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.NonCancellable
@@ -91,6 +90,9 @@ class IntegrationMmsRecu @VisibleForTesting constructor(
         subId: Int?,
         membres: List<PhoneAddress>?,
         cle: String?,
+        // 2026-11-06 (issue #76) — calculés par l'appelant, qui a la clé d'identité des numéros. Avant
+        // `pduPresent` : les appelants passent celui-ci en lambda finale.
+        destinataires: List<String>? = null,
         pduPresent: () -> Boolean,
     ): Resultat {
         if (cle != null) {
@@ -110,7 +112,7 @@ class IntegrationMmsRecu @VisibleForTesting constructor(
                 groupMembers = membres,
                 transactionKey = cle,
                 encoreVoulu = pduPresent,
-                recipients = DestinatairesMms.of(contenu.destinataires, contenu.copies),
+                recipients = destinataires,
             )
         } catch (t: Throwable) {
             // Transaction annulée : aucune ligne ne cite ces fichiers.

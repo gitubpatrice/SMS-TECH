@@ -105,7 +105,8 @@ abstract class AppDatabase : RoomDatabase() {
         //   deja ecrit au lieu de le dupliquer ou de le ressusciter (F17). Strictement additive.
         // v15 (2026-11-06, v1.30.0): ajoute `messages.mms_recipients TEXT` — les destinataires d'un MMS
         //   adresse a plusieurs, que rien ne gardait quand le message tombait dans la conversation de son
-        //   expediteur (issue #76). Strictement additive ; aucun rattrapage possible pour les MMS recus.
+        //   expediteur (issue #76). Strictement additive ; les MMS du fournisseur systeme sont rattrapes
+        //   par `RattrapageDestinatairesMms`, ceux recus en direct ne peuvent pas l'etre.
         const val SCHEMA_VERSION = 15
     }
 }

@@ -47,6 +47,27 @@ class DestinatairesMmsTest {
         assertThat(r).containsExactly(MOI, PAT).inOrder()
     }
 
+    /** Un opérateur recopie parfois l'expéditeur dans `To` : il n'en devient pas un destinataire. */
+    @Test
+    fun `l'expediteur recopie dans to n'est pas un destinataire`() {
+        assertThat(DestinatairesMms.of(to = listOf(MOI, PAT), cc = emptyList(), expediteur = PAT)).isNull()
+        assertThat(DestinatairesMms.of(to = listOf(MOI, PAT, MARIE), cc = emptyList(), expediteur = PAT))
+            .containsExactly(MOI, MARIE).inOrder()
+    }
+
+    /** Deux écritures du même numéro ne font qu'un destinataire : la première forme est gardée. */
+    @Test
+    fun `rapprochement par la cle d'identite`() {
+        val cle: (String) -> String = { brut -> brut.filter { it.isDigit() }.takeLast(9) }
+
+        val r = DestinatairesMms.of(to = listOf(MOI, "06 07 23 15 41", PAT), cc = emptyList(), cle = cle)
+
+        assertThat(r).containsExactly(MOI, PAT).inOrder()
+        // La même clé retire aussi l'expéditeur écrit autrement.
+        assertThat(DestinatairesMms.of(listOf(MOI, PAT, MARIE), emptyList(), expediteur = "06 17 33 27 29", cle = cle))
+            .containsExactly(MOI, MARIE).inOrder()
+    }
+
     @Test
     fun `la colonne se relit telle qu'elle a ete ecrite`() {
         val ecrite = DestinatairesMms.encoder(listOf(MOI, PAT, MARIE))
@@ -61,5 +82,6 @@ class DestinatairesMmsTest {
         assertThat(DestinatairesMms.encoder(listOf(MOI))).isNull()
         assertThat(DestinatairesMms.decoder(null)).isEmpty()
         assertThat(DestinatairesMms.decoder(" ; ")).isEmpty()
+        assertThat(DestinatairesMms.decoder(DestinatairesMms.VERIFIE_SANS_GROUPE)).isEmpty()
     }
 }

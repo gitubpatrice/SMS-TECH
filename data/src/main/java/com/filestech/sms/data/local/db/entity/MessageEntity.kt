@@ -150,7 +150,9 @@ data class MessageEntity(
     /**
      * Schema v15 (2026-11-06, issue #76) — **les destinataires d'un MMS adressé à plusieurs**, `To` puis
      * `Cc`, l'utilisateur compris, séparés par `;` ([com.filestech.sms.domain.mms.DestinatairesMms]).
-     * `null` pour un seul destinataire, pour tout SMS, et pour les MMS écrits avant la v15.
+     * `null` pour un seul destinataire, pour tout SMS, et pour les MMS écrits avant la v15 ; `""`
+     * ([com.filestech.sms.domain.mms.DestinatairesMms.VERIFIE_SANS_GROUPE]) pour un MMS que le rattrapage a
+     * regardé sans y trouver d'envoi groupé — `NULL` y veut dire « pas encore regardé ».
      *
      * Rangé dans la conversation de son expéditeur (mode groupe coupé, ou « Mon numéro » absent), un MMS de
      * groupe perdait sinon ses autres destinataires : le PDU, seul à les porter, est effacé après traitement.

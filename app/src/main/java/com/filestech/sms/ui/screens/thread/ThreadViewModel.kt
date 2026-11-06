@@ -329,6 +329,12 @@ class ThreadViewModel @Inject constructor(
     }
 
     private val _state = MutableStateFlow(UiState())
+
+    /**
+     * Les adresses déjà passées par [resoudreNoms], trouvées ou non. Lue et écrite sur le fil principal.
+     * Déclarée AVANT `init` : les collectes qu'il lance peuvent y écrire dès la construction.
+     */
+    private val nomsCherches = HashSet<String>()
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     private val _events = oneShotEvents<Event>()
@@ -1471,8 +1477,9 @@ class ThreadViewModel @Inject constructor(
      * l'adresse reste alors sans nom, l'écran montre le numéro.
      */
     private fun resoudreNoms(adresses: List<String>) {
-        val connus = _state.value.memberNames
-        val inconnus = adresses.filter { it.isNotBlank() && it !in connus }.distinct()
+        // Une adresse sans contact n'est cherchée qu'une fois : sinon chaque émission de la fenêtre de
+        // messages la relancerait, pour chaque destinataire de chaque message de groupe.
+        val inconnus = adresses.filter { it.isNotBlank() && nomsCherches.add(it) }
         if (inconnus.isEmpty()) return
         viewModelScope.launch {
             val noms = inconnus.mapNotNull { a ->
@@ -1492,20 +1499,20 @@ class ThreadViewModel @Inject constructor(
      * qu'il faut régler pour que les prochains messages de groupe ouvrent une conversation avec tous.
      */
     fun ouvrirDestinataires(message: Message) {
-        val bruts = message.mmsRecipients
-        if (bruts.size < 2) return
+        if (message.mmsRecipients.size < 2) return
         viewModelScope.launch {
             val envoi = cachedSettings.value.sending
             val identite = com.filestech.sms.core.result
                 .runCatchingCancellable { phoneIdentity.snapshot() }
                 .getOrNull()
-            val cleMoi = envoi.userMsisdn?.takeIf { it.isNotBlank() }
-                ?.let { moi -> identite?.key(moi) }
-                ?.takeIf { it.isNotBlank() }
-            val liste = destinatairesAffiches(bruts) { brut -> cleMoi != null && identite?.key(brut) == cleMoi }
-            _state.update {
-                it.copy(destinataires = DestinatairesUi(liste, aideGroupe(envoi.groupMms, cleMoi != null)))
-            }
+            val ui = preparerDestinataires(
+                destinataires = message.mmsRecipients,
+                envoye = message.isOutgoing,
+                monNumero = envoi.userMsisdn,
+                mmsDeGroupe = envoi.groupMms,
+                cle = identite?.let { it::key },
+            )
+            _state.update { it.copy(destinataires = ui) }
         }
     }
 

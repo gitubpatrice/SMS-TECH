@@ -1472,7 +1472,7 @@ internal fun ConversationDetailsDialog(
                         principal = nom ?: numero,
                         secondaire = numero.takeIf { nom != null },
                         numero = numero,
-                        descriptionCopie = stringResource(R.string.thread_details_copy_number_of, nom ?: numero),
+                        descriptionCopie = stringResource(R.string.thread_details_copy_number_of, numero),
                         onCopy = onCopyNumber,
                     )
                 }

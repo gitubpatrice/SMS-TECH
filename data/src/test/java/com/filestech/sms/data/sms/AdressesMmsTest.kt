@@ -79,9 +79,12 @@ class AdressesMmsTest {
             .containsExactly(MOI, MARIE).inOrder()
     }
 
-    /** Le type 129 sert de repli d'EXPÉDITEUR sur certaines ROM : il ne doit pas devenir un destinataire. */
+    /**
+     * Le type 129 est `Bcc` (`PduHeaders.BCC`), mais des ROM y rangent l'EXPÉDITEUR (mesuré sur un Galaxy S9) :
+     * il reste un repli d'adresse et n'entre pas dans la liste des destinataires.
+     */
     @Test
-    fun `le type generique reste l'expediteur, pas un destinataire`() {
+    fun `le type 129 sert de repli d'expediteur et n'est pas un destinataire`() {
         val r = resolver(EXPEDITEUR to GENERIQUE, MOI to TO, MARIE to TO)
 
         val a = checkNotNull(readMmsAddresses(r, 1L, MessageDirection.INCOMING))
@@ -90,8 +93,21 @@ class AdressesMmsTest {
         assertThat(a.destinataires).containsExactly(MOI, MARIE).inOrder()
     }
 
+    /** L'expéditeur recopié dans `To`, et un numéro écrit sous deux formes, ne font pas de faux groupe. */
     @Test
-    fun `readMmsAddress rend la meme adresse`() {
+    fun `recu - expediteur recopie et doublon d'ecriture ne comptent pas`() {
+        val cle: (String) -> String = { brut -> brut.filter { it.isDigit() }.takeLast(9) }
+        val r = resolver(EXPEDITEUR to FROM, MOI to TO, EXPEDITEUR to TO, "06 07 23 15 41" to CC)
+
+        val a = checkNotNull(readMmsAddresses(r, 1L, MessageDirection.INCOMING, cle))
+
+        assertThat(a.adresse).isEqualTo(EXPEDITEUR)
+        assertThat(a.destinataires).isNull()
+    }
+
+    /** Ce cas ne vérifie que la règle d'adresse, identique à celle d'avant ce changement (relue dans le code). */
+    @Test
+    fun `readMmsAddress rend l'adresse attendue dans les deux sens`() {
         val lignes = arrayOf<Pair<String?, Int>>(EXPEDITEUR to FROM, MOI to TO, MARIE to TO)
 
         assertThat(readMmsAddress(resolver(*lignes), 1L, MessageDirection.INCOMING)).isEqualTo(EXPEDITEUR)

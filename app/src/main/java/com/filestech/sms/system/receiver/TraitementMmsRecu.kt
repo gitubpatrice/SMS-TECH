@@ -7,6 +7,7 @@ import com.filestech.sms.data.mms.IntegrationMmsRecu
 import com.filestech.sms.data.mms.IntegrationMmsRecu.Resultat
 import com.filestech.sms.data.mms.LecteurRetrieveConf
 import com.filestech.sms.data.sms.PhoneIdentity
+import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.mms.GroupMmsMembers
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.settings.AppSettingsSource
@@ -87,7 +88,15 @@ class TraitementMmsRecu @Inject constructor(
             Timber.i("Dropping downloaded MMS from blocked sender")
             return Issue(garderLePdu = false, consigner = false, expediteurBloque = true)
         }
-        return when (val resultat = integration.integrer(contenu, subId, membresDuGroupe(contenu), cle, pduPresent)) {
+        val resultat = integration.integrer(
+            contenu = contenu,
+            subId = subId,
+            membres = membresDuGroupe(contenu),
+            cle = cle,
+            destinataires = destinatairesDuMessage(contenu),
+            pduPresent = pduPresent,
+        )
+        return when (resultat) {
             is Resultat.Ecrit -> {
                 notifierArrivee(contenu, resultat.messageId)
                 Issue(garderLePdu = false, consigner = true)
@@ -135,6 +144,21 @@ class TraitementMmsRecu @Inject constructor(
             membres?.size,
         )
         return membres
+    }
+
+    /**
+     * 2026-11-06 (issue #76) — les destinataires à garder avec le message, rapprochés par la même clé
+     * d'identité que [membresDuGroupe] et sans l'expéditeur, cf. [DestinatairesMms.of]. Région introuvable :
+     * adresses brutes, comme le fait [GroupMmsMembers] sans clé.
+     */
+    private suspend fun destinatairesDuMessage(contenu: ContenuMmsRecu): List<String>? {
+        val identite = runCatchingCancellable { phoneIdentity.snapshot() }.getOrNull()
+        return DestinatairesMms.of(
+            to = contenu.destinataires,
+            cc = contenu.copies,
+            expediteur = contenu.expediteur,
+            cle = identite?.let { it::key } ?: { it },
+        )
     }
 
     /**

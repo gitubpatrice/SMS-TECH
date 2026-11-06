@@ -135,12 +135,13 @@
     <string name="thread_details_copy_number">Copia il numero</string>
     <string name="thread_details_number_copied">Numero copiato</string>
     <!-- 2026-11-06 (issue #76) — membres d'un groupe et destinataires d'un message adressé à plusieurs -->
-    <string name="thread_details_copy_number_of">Copia il numero di %1$s</string>
+    <string name="thread_details_copy_number_of">Copia %1$s</string>
     <string name="mms_recipients_title">Destinatari di questo messaggio</string>
-    <string name="mms_recipients_you">%1$s (lei)</string>
+    <string name="mms_recipients_you">%1$s (Lei)</string>
     <string name="mms_recipients_hint_enable">Per avere un\'unica conversazione con tutti e rispondere a tutti: %3$s → %4$s, attivi «%1$s» e compili «%2$s».</string>
-    <string name="mms_recipients_hint_number">«%1$s» è attivo, ma «%2$s» è vuoto: senza, SMS Tech non può toglierla dai membri, quindi il messaggio è rimasto nella conversazione del mittente. Lo compili in %3$s → %4$s.</string>
-    <string name="mms_recipients_hint_before">Questo messaggio è rimasto nella conversazione del mittente: è arrivato prima della configurazione di «%1$s», oppure è stato importato da un\'altra app.</string>
+    <string name="mms_recipients_hint_number">«%1$s» è attivo, ma «%2$s» è vuoto: senza questo numero, SMS Tech non può escluderla dai membri, quindi il messaggio è rimasto nella conversazione del mittente. Lo compili in %3$s → %4$s.</string>
+    <string name="mms_recipients_hint_before">Questo messaggio è rimasto nella conversazione del mittente: è arrivato prima della configurazione di «%1$s» e «%2$s», oppure è stato importato da un\'altra app.</string>
+    <string name="mms_recipients_hint_outgoing">Ha inviato questo messaggio a più persone. SMS Tech lo mostra nella conversazione del suo primo destinatario.</string>
 
     <!-- Tabs / sections -->
     <string name="tab_archived">Archiviate</string>

@@ -135,12 +135,13 @@
     <string name="thread_details_copy_number">Copy the number</string>
     <string name="thread_details_number_copied">Number copied</string>
     <!-- 2026-11-06 (issue #76) — membres d'un groupe et destinataires d'un message adressé à plusieurs -->
-    <string name="thread_details_copy_number_of">Copy the number of %1$s</string>
+    <string name="thread_details_copy_number_of">Copy %1$s</string>
     <string name="mms_recipients_title">Recipients of this message</string>
     <string name="mms_recipients_you">%1$s (you)</string>
     <string name="mms_recipients_hint_enable">To get one conversation with all of them, and reply to everyone: %3$s → %4$s, turn on “%1$s” and fill in “%2$s”.</string>
-    <string name="mms_recipients_hint_number">“%1$s” is on, but “%2$s” is empty: without it, SMS Tech cannot leave you out of the members, so the message stayed in the sender\'s conversation. Fill it in under %3$s → %4$s.</string>
-    <string name="mms_recipients_hint_before">This message stayed in the sender\'s conversation: it arrived before “%1$s” was set up, or it was imported from another app.</string>
+    <string name="mms_recipients_hint_number">“%1$s” is on, but “%2$s” is empty: without it, SMS Tech cannot tell which recipient is you, so the message stayed in the sender\'s conversation. Fill it in under %3$s → %4$s.</string>
+    <string name="mms_recipients_hint_before">This message stayed in the sender\'s conversation: it arrived before “%1$s” and “%2$s” were set up, or it was imported from another app.</string>
+    <string name="mms_recipients_hint_outgoing">You sent this message to several people. SMS Tech shows it in the conversation of its first recipient.</string>
 
     <!-- Tabs / sections -->
     <string name="tab_archived">Archived</string>

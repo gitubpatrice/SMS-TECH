@@ -133,12 +133,13 @@
     <string name="thread_details_copy_number">Copier le numéro</string>
     <string name="thread_details_number_copied">Numéro copié</string>
     <!-- 2026-11-06 (issue #76) — membres d'un groupe et destinataires d'un message adressé à plusieurs -->
-    <string name="thread_details_copy_number_of">Copier le numéro de %1$s</string>
+    <string name="thread_details_copy_number_of">Copier %1$s</string>
     <string name="mms_recipients_title">Destinataires de ce message</string>
     <string name="mms_recipients_you">%1$s (vous)</string>
     <string name="mms_recipients_hint_enable">Pour avoir une seule conversation avec tous, et répondre à tout le monde : %3$s → %4$s, activez « %1$s » et renseignez « %2$s ».</string>
     <string name="mms_recipients_hint_number">« %1$s » est activé, mais « %2$s » est vide : sans lui, SMS Tech ne peut pas vous retirer des membres, et le message est resté dans la conversation de l\'expéditeur. Renseignez-le dans %3$s → %4$s.</string>
-    <string name="mms_recipients_hint_before">Ce message est resté dans la conversation de l\'expéditeur : il est arrivé avant le réglage de « %1$s », ou il vient d\'une autre app.</string>
+    <string name="mms_recipients_hint_before">Ce message est resté dans la conversation de l\'expéditeur : il est arrivé avant le réglage de « %1$s » et de « %2$s », ou il vient d\'une autre app.</string>
+    <string name="mms_recipients_hint_outgoing">Vous avez envoyé ce message à plusieurs personnes. SMS Tech l\'affiche dans la conversation de son premier destinataire.</string>
 
     <string name="tab_archived">Archivées</string>
     <string name="tab_vault">Coffre-fort</string>

@@ -12,35 +12,57 @@ package com.filestech.sms.domain.mms
  * La liste est gardée telle que l'en-tête la porte, l'utilisateur compris : c'est l'écran qui le reconnaît
  * quand il connaît son numéro. Retirer ici un numéro qu'on ne sait pas toujours identifier rendrait une
  * liste tantôt complète, tantôt amputée, sans que rien ne le dise.
+ *
+ * Les adresses sont rapprochées par leur **clé d'identité** ([of], paramètre `cle`), la règle de
+ * [GroupMmsMembers] : un PDU peut écrire `+33612345678` et `06 12 34 56 78` pour la même personne.
+ * L'expéditeur, qu'un opérateur recopie parfois dans `To`, n'est pas un destinataire.
  */
 object DestinatairesMms {
 
     /** Séparateur de la colonne `messages.mms_recipients`, le même que celui de `conversations.addresses_csv`. */
     const val SEPARATEUR = ";"
 
+    /**
+     * Valeur de la colonne pour un message **vérifié** sans envoi groupé, posée par le rattrapage des MMS
+     * importés : `NULL` y veut dire « pas encore regardé ». Se relit comme une liste vide.
+     */
+    const val VERIFIE_SANS_GROUPE = ""
+
     /** Jeton réservé d'AOSP, posé à la place d'une adresse que le système complète lui-même. */
     private const val JETON_AOSP = "insert-address-token"
 
     /**
-     * Les destinataires (`To` puis `Cc`), sans doublon ni jeton réservé, ou `null` s'il en reste moins de
-     * deux : un MMS adressé à une seule personne n'est pas un envoi groupé.
+     * Les destinataires (`To` puis `Cc`) sans doublon ni jeton réservé, ni [expediteur], ou `null` s'il en reste
+     * moins de deux : un MMS adressé à une seule personne n'est pas un envoi groupé.
+     *
+     * @param cle la clé d'identité d'une adresse (`PhoneIdentity.Snapshot.key`) ; par défaut l'adresse elle-même.
+     *   Une clé vide (adresse non reconnue) se rabat sur l'adresse.
      */
-    fun of(to: List<String>, cc: List<String>): List<String>? {
-        val vus = LinkedHashSet<String>()
-        for (brut in to + cc) {
-            val adresse = brut.trim()
+    fun of(
+        to: List<String>,
+        cc: List<String>,
+        expediteur: String? = null,
+        cle: (String) -> String = { it },
+    ): List<String>? {
+        fun cleDe(adresse: String) = cle(adresse).ifBlank { adresse }
+        val cleExpediteur = expediteur?.trim()?.takeIf { it.isNotEmpty() }?.let(::cleDe)
+        val vus = LinkedHashMap<String, String>()
+        (to.asSequence() + cc.asSequence())
+            .map { it.trim() }
             // Une adresse qui contient le séparateur ne se relirait pas : elle est écartée, pas coupée.
-            if (adresse.isEmpty() || adresse == JETON_AOSP || SEPARATEUR in adresse) continue
-            vus += adresse
-        }
-        return vus.toList().takeIf { it.size >= 2 }
+            .filter { it.isNotEmpty() && it != JETON_AOSP && SEPARATEUR !in it }
+            .forEach { adresse ->
+                val k = cleDe(adresse)
+                if (k != cleExpediteur) vus.putIfAbsent(k, adresse)
+            }
+        return vus.values.toList().takeIf { it.size >= 2 }
     }
 
     /** La valeur de la colonne : `null` hors envoi groupé. */
     fun encoder(destinataires: List<String>?): String? =
         destinataires?.takeIf { it.size >= 2 }?.joinToString(SEPARATEUR)
 
-    /** La liste lue de la colonne ; vide pour `null`. */
+    /** La liste lue de la colonne ; vide pour `null` comme pour [VERIFIE_SANS_GROUPE]. */
     fun decoder(colonne: String?): List<String> =
         colonne?.split(SEPARATEUR)?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
 }

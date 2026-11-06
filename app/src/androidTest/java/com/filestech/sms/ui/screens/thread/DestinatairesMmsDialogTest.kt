@@ -48,7 +48,7 @@ class DestinatairesMmsDialogTest {
         compose.onNodeWithText("Marie").assertIsDisplayed()
         compose.onNodeWithText("+33611223344").assertIsDisplayed()
 
-        compose.onNodeWithContentDescription(context.getString(R.string.thread_details_copy_number_of, "Marie"))
+        compose.onNodeWithContentDescription(context.getString(R.string.thread_details_copy_number_of, "+33698765432"))
             .performClick()
         compose.waitForIdle()
         assertThat(copie).isEqualTo("+33698765432")
@@ -72,5 +72,22 @@ class DestinatairesMmsDialogTest {
 
         compose.onNodeWithText(context.getString(R.string.settings_title)).assertDoesNotExist()
         compose.onNodeWithText(context.getString(R.string.action_close)).assertIsDisplayed()
+    }
+
+    /** Un message ENVOYÉ : les réglages n'y changent rien, la fenêtre le dit et n'y renvoie pas. */
+    @Test
+    fun messageEnvoyeNiReglagesNiConversationDeLExpediteur() {
+        compose.setContent {
+            DestinatairesMmsDialog(
+                ui = DestinatairesUi(liste, AideGroupe.ENVOI_SORTANT),
+                noms = emptyMap(),
+                onCopy = {},
+                onOpenSettings = {},
+                onDismiss = {},
+            )
+        }
+
+        compose.onNodeWithText(context.getString(R.string.mms_recipients_hint_outgoing)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.settings_title)).assertDoesNotExist()
     }
 }

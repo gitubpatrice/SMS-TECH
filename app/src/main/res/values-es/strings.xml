@@ -136,12 +136,13 @@
     <string name="thread_details_copy_number">Copiar el número</string>
     <string name="thread_details_number_copied">Número copiado</string>
     <!-- 2026-11-06 (issue #76) — membres d'un groupe et destinataires d'un message adressé à plusieurs -->
-    <string name="thread_details_copy_number_of">Copiar el número de %1$s</string>
+    <string name="thread_details_copy_number_of">Copiar %1$s</string>
     <string name="mms_recipients_title">Destinatarios de este mensaje</string>
     <string name="mms_recipients_you">%1$s (usted)</string>
     <string name="mms_recipients_hint_enable">Para tener una sola conversación con todos y responder a todo el mundo: %3$s → %4$s, active «%1$s» y rellene «%2$s».</string>
-    <string name="mms_recipients_hint_number">«%1$s» está activado, pero «%2$s» está vacío: sin él, SMS Tech no puede quitarle de los miembros, así que el mensaje se quedó en la conversación del remitente. Rellénelo en %3$s → %4$s.</string>
-    <string name="mms_recipients_hint_before">Este mensaje se quedó en la conversación del remitente: llegó antes de configurar «%1$s», o se importó de otra app.</string>
+    <string name="mms_recipients_hint_number">«%1$s» está activado, pero «%2$s» está vacío: sin él, SMS Tech no puede excluirle de los miembros, así que el mensaje se quedó en la conversación del remitente. Rellénelo en %3$s → %4$s.</string>
+    <string name="mms_recipients_hint_before">Este mensaje se quedó en la conversación del remitente: llegó antes de configurar «%1$s» y «%2$s», o se importó de otra app.</string>
+    <string name="mms_recipients_hint_outgoing">Usted envió este mensaje a varias personas. SMS Tech lo muestra en la conversación de su primer destinatario.</string>
 
     <!-- Tabs / sections -->
     <string name="tab_archived">Archivadas</string>

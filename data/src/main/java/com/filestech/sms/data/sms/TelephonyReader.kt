@@ -423,6 +423,13 @@ class TelephonyReader @Inject constructor(
         val recipients: List<String>? = null,
     )
 
+    /**
+     * 2026-11-06 (issue #76) — l'adresse et les destinataires d'UN MMS du fournisseur, pour le rattrapage des
+     * MMS importés avant la v15 (`RattrapageDestinatairesMms`). `null` = lecture en échec.
+     */
+    internal fun lireAdressesMms(systemId: Long, direction: MessageDirection, cle: (String) -> String): AdressesMms? =
+        readMmsAddresses(resolver, systemId, direction, cle)
+
     /** One attachment part of an MMS — referenced by its `content://mms/part/{id}` URI. */
     data class MmsPartImport(
         val partId: Long,
@@ -455,7 +462,12 @@ class TelephonyReader @Inject constructor(
      * meme motif que `readAllSmsIds()` rendant un tableau vide sur echec — le jumeau qui n'avait
      * pas ete corrige.
      */
-    suspend fun readMmsBatched(pageSize: Int, onPage: suspend (List<MmsImportRow>) -> Unit): Boolean {
+    suspend fun readMmsBatched(
+        pageSize: Int,
+        // 2026-11-06 (issue #76) — clé d'identité des numéros, pour les destinataires d'un envoi groupé.
+        cle: (String) -> String = { it },
+        onPage: suspend (List<MmsImportRow>) -> Unit,
+    ): Boolean {
         if (pageSize <= 0) return false
         var complete = true
         // v1.2.7 audit P5 — 2 passes par page : on collecte d'abord les métadonnées + adresse
@@ -490,7 +502,7 @@ class TelephonyReader @Inject constructor(
 
                 // Adresse FROM/TO reste N+1 (URI `addr` non-batchable de façon fiable côté AOSP).
                 // 2026-11-06 (issue #76) — la même lecture rend aussi les destinataires d'un envoi groupé.
-                val adresses = readMmsAddresses(resolver, mmsId, direction)
+                val adresses = readMmsAddresses(resolver, mmsId, direction, cle)
                 val resolvedAddress = adresses?.adresse
                 if (resolvedAddress == null) {
                     // v1.27.2 (audit Codex, C-05) — la requete d'adresse a ECHOUE. Ce n'est pas

@@ -32,6 +32,58 @@ class DestinatairesDuMessageTest {
         assertThat(liste.none { it.estMoi }).isTrue()
     }
 
+    /** La clé d'identité, pas l'écriture brute : « Mon numéro » saisi en national reconnaît le +33 de l'en-tête. */
+    @Test
+    fun `preparer - l'utilisateur reconnu a sa cle, pas a son ecriture`() {
+        val cle: (String) -> String = { brut -> brut.filter { it.isDigit() }.takeLast(9) }
+
+        val ui = checkNotNull(
+            preparerDestinataires(
+                destinataires = listOf("+33607231541", "+33698765432"),
+                envoye = false,
+                monNumero = "06 07 23 15 41",
+                mmsDeGroupe = true,
+                cle = cle,
+            ),
+        )
+
+        assertThat(ui.destinataires.map { it.estMoi }).containsExactly(true, false).inOrder()
+        assertThat(ui.aide).isEqualTo(AideGroupe.DEJA_REGLE)
+    }
+
+    /** Contrôle négatif : « Mon numéro » vide ou sans clé, personne n'est marqué, et l'aide le demande. */
+    @Test
+    fun `preparer - sans mon numero, personne n'est marque`() {
+        val bruts = listOf("+33607231541", "+33698765432")
+
+        for (monNumero in listOf(null, "", "   ")) {
+            val ui = checkNotNull(preparer(bruts, monNumero = monNumero, mmsDeGroupe = true))
+            assertThat(ui.destinataires.none { it.estMoi }).isTrue()
+            assertThat(ui.aide).isEqualTo(AideGroupe.RENSEIGNER_MON_NUMERO)
+        }
+        val sansCle = checkNotNull(preparerDestinataires(bruts, false, "+33607231541", true, cle = null))
+        assertThat(sansCle.destinataires.none { it.estMoi }).isTrue()
+    }
+
+    @Test
+    fun `preparer - un message envoye n'a pas d'aide aux reglages`() {
+        val ui = preparer(listOf("+331", "+332"), envoye = true)
+
+        assertThat(ui?.aide).isEqualTo(AideGroupe.ENVOI_SORTANT)
+    }
+
+    @Test
+    fun `preparer - un seul destinataire, pas de fenetre`() {
+        assertThat(preparer(listOf("+331"))).isNull()
+    }
+
+    private fun preparer(
+        bruts: List<String>,
+        envoye: Boolean = false,
+        monNumero: String? = null,
+        mmsDeGroupe: Boolean = false,
+    ) = preparerDestinataires(bruts, envoye, monNumero, mmsDeGroupe) { it }
+
     @Test
     fun `l'aide nomme le reglage qui manque`() {
         assertThat(aideGroupe(mmsDeGroupe = false, monNumeroConnu = false)).isEqualTo(AideGroupe.ACTIVER_MMS_DE_GROUPE)
