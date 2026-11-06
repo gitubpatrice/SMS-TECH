@@ -159,11 +159,12 @@ class MmsDownloader @Inject constructor(
      * applications libres qui reçoivent sur Visible (`android-smsmms`, `DownloadManager`).
      */
     private fun surchargesDeLOperateur(subId: Int?): Bundle? {
-        val enTetes = FamilleVerizon.enTetesHttp(operateurSim(context, subId)) ?: return null
+        val operateur = operateurSim(context, subId)
+        if (!FamilleVerizon.contient(operateur)) return null
         val fournis = runCatching {
             subscriptionAwareManager(subId).carrierConfigValues.getString(SmsManager.MMS_CONFIG_HTTP_PARAMS)
         }.getOrNull()
-        if (!fournis.isNullOrBlank()) return null
+        val enTetes = FamilleVerizon.enTetesAAjouter(operateur, fournis) ?: return null
         Timber.i("MMS: en-tetes HTTP de l'operateur ajoutes au telechargement")
         return Bundle().apply { putString(SmsManager.MMS_CONFIG_HTTP_PARAMS, enTetes) }
     }

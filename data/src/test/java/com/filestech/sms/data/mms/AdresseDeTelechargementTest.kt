@@ -67,4 +67,13 @@ class AdresseDeTelechargementTest {
         assertThat(FamilleVerizon.enTetesHttp("20801")).isNull()
         assertThat(FamilleVerizon.enTetesHttp(null)).isNull()
     }
+
+    /** Les en-têtes de la configuration de l'opérateur priment : la famille ne complète que leur absence. */
+    @Test
+    fun `en-tetes a ajouter - seulement quand la configuration n'en donne aucun`() {
+        assertThat(FamilleVerizon.enTetesAAjouter("311480", null)).isEqualTo(FamilleVerizon.EN_TETES_VERIZON)
+        assertThat(FamilleVerizon.enTetesAAjouter("311480", " ")).isEqualTo(FamilleVerizon.EN_TETES_VERIZON)
+        assertThat(FamilleVerizon.enTetesAAjouter("311480", "X-Autre: 1")).isNull()
+        assertThat(FamilleVerizon.enTetesAAjouter("20801", null)).isNull()
+    }
 }

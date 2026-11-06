@@ -987,8 +987,8 @@
     <string name="mms_failure_dialog_storage_settings">Almacenamiento</string>
     <string name="mms_failure_dialog_body_download_failed">No se ha podido descargar de su operador un mensaje multimedia que le han enviado. Los MMS suelen usar los datos móviles: compruebe que tiene cobertura y que los datos móviles están activados, o que su teléfono permite los MMS con los datos móviles desactivados.\n\nSMS Tech no puede reintentar la descarga por sí mismo. Su operador puede volver a enviar el mensaje; si no, pida al remitente que se lo vuelva a enviar.</string>
     <!-- 2026-11-06 — line under the text above when Android returned a code. %1$d = its MMS error code (SmsManager.MMS_ERROR_*), %2$d = the HTTP status of the carrier's MMS server. -->
-    <string name="mms_failure_dialog_android_error">Error notificado por Android: %1$d</string>
-    <string name="mms_failure_dialog_android_error_http">Error notificado por Android: %1$d (HTTP %2$d)</string>
+    <string name="mms_failure_dialog_android_error">Código de error de Android: %1$d</string>
+    <string name="mms_failure_dialog_android_error_http">Código de error de Android: %1$d (HTTP %2$d)</string>
     <string name="mms_failure_dialog_network_settings">Ajustes de red</string>
 
     <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->

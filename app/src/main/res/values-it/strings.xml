@@ -987,8 +987,8 @@
     <string name="mms_failure_dialog_storage_settings">Memoria</string>
     <string name="mms_failure_dialog_body_download_failed">Non è stato possibile scaricare dal suo operatore un messaggio multimediale che le è stato inviato. Gli MMS passano di solito dai dati mobili: controlli di avere copertura e che i dati mobili siano attivi, oppure che il telefono consenta gli MMS con i dati mobili disattivati.\n\nSMS Tech non può riprovare il download da solo. Il suo operatore potrebbe inviare di nuovo il messaggio; altrimenti chieda al mittente di inviarlo di nuovo.</string>
     <!-- 2026-11-06 — line under the text above when Android returned a code. %1$d = its MMS error code (SmsManager.MMS_ERROR_*), %2$d = the HTTP status of the carrier's MMS server. -->
-    <string name="mms_failure_dialog_android_error">Errore segnalato da Android: %1$d</string>
-    <string name="mms_failure_dialog_android_error_http">Errore segnalato da Android: %1$d (HTTP %2$d)</string>
+    <string name="mms_failure_dialog_android_error">Codice di errore Android: %1$d</string>
+    <string name="mms_failure_dialog_android_error_http">Codice di errore Android: %1$d (HTTP %2$d)</string>
     <string name="mms_failure_dialog_network_settings">Impostazioni di rete</string>
 
     <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->

@@ -229,9 +229,11 @@ class TelephonySyncWorker @AssistedInject constructor(
         // v1.27.2 (audit Codex final, F-01) — instantane pris APRES hydratation, une seule fois.
         val isBlockedAddress = phoneIdentity.snapshot()
             .blockedMatcher(roomBlocked + systemBlocked)
-        // 2026-11-06 — les fils de groupe ne se lisent que pour un import complet (curseur à zéro) : une passe
-        // ordinaire retrouve un fil de groupe déjà importé par son `thread_id`, tenu par la conversation du groupe.
-        val fils = if (sinceId == 0L) filsDeGroupe.lire().orEmpty() else emptyMap()
+        // 2026-11-06 — les fils de groupe, lus une fois par passe dès qu'il y a des lignes à importer (on est passé
+        // le `return` ci-dessus) : un fil de groupe apparu depuis le dernier import n'est tenu par aucune conversation,
+        // et sans eux il retomberait dans la 1-à-1 de l'adresse de sa première ligne (relecture Claude du 2026-11-06).
+        // Jumeau de `TelephonySyncManager`.
+        val fils = filsDeGroupe.lire().orEmpty()
         var imported = 0
         val maxSeen = reader.readSmsSince(sinceId = sinceId, pageSize = 500) { page ->
             val filtered = page.filterNot { isBlockedAddress(it.entity.address) }

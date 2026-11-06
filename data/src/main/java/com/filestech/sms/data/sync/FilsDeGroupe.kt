@@ -38,6 +38,11 @@ class FilsDeGroupe @Inject constructor(
      * Les fils de groupe du fournisseur : `thread_id` → membres (au moins deux, « Mon numéro » retiré, cf.
      * [DestinatairesMms.membresDuFil]). `null` si le fournisseur n'a pas pu être lu : l'appelant importe alors
      * comme avant, et la réparation attend le passage suivant.
+     *
+     * Sans « Mon numéro », rien n'est retiré, et c'est voulu (relecture Claude du 2026-11-06, qui proposait d'écarter
+     * les fils à deux membres) : le fournisseur tient les fils tels que l'application d'origine les affichait, et une
+     * réponse y partait aux mêmes destinataires. Un fil {moi, Alice}, s'il existe, y était déjà une conversation à
+     * part ; le reproduire ne change rien à ce que l'utilisateur voyait. Le retirer exige de savoir qui il est.
      */
     suspend fun lire(): Map<Long, List<String>>? = runCatchingCancellable {
         val fils = telephonyReader.lireFilsDuFournisseur() ?: return null
@@ -56,6 +61,10 @@ class FilsDeGroupe @Inject constructor(
     /**
      * Range chaque fil de [filsDeGroupe] dans la conversation de son groupe (`ConversationMirror.regrouperFil`).
      *
+     * Chaque fil a sa transaction, et l'échec d'un fil n'arrête pas les autres (relecture Claude du 2026-11-06) :
+     * sinon un seul fil en échec durable empêchait de poser le marqueur, et chaque synchronisation relisait tout le
+     * fournisseur pour échouer au même endroit. Un fil en échec reste comme avant la 1.30.0 ; le journal le compte.
+     *
      * @return `true` si la passe a abouti — le marqueur peut être posé ; `false` si les messages des fils n'ont pas
      *   pu être lus : rien n'a bougé, la passe suivante recommencera.
      */
@@ -65,12 +74,23 @@ class FilsDeGroupe @Inject constructor(
             .onFailure { Timber.w(it, "Messages des fils de groupe illisibles") }
             .getOrNull() ?: return false
         var deplaces = 0
+        var enEchec = 0
         for ((fil, uris) in messages) {
             val membres = filsDeGroupe[fil] ?: continue
-            deplaces += mirror.regrouperFil(fil, membres, uris)
+            runCatchingCancellable { mirror.regrouperFil(fil, membres, uris) }
+                .onSuccess { deplaces += it }
+                .onFailure {
+                    enEchec++
+                    Timber.w(it, "Fil de groupe non regroupe")
+                }
         }
         // Sans numéro : des nombres seulement.
-        Timber.i("Fils de groupe : %d fil(s), %d message(s) range(s) dans leur groupe", filsDeGroupe.size, deplaces)
+        Timber.i(
+            "Fils de groupe : %d fil(s), %d message(s) range(s) dans leur groupe, %d fil(s) en echec",
+            filsDeGroupe.size,
+            deplaces,
+            enEchec,
+        )
         return true
     }
 }

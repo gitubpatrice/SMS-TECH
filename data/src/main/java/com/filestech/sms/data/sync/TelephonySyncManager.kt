@@ -220,9 +220,8 @@ class TelephonySyncManager @Inject constructor(
             val hasAnyMms = runCatching { messageDao.hasAnyMms() }.getOrDefault(false)
             val needsMmsImport = !advanced.mmsImportCompleted || isFirstRun || !hasAnyMms
             // 2026-11-06 — les fils de groupe du fournisseur, lus une fois par passe quand un import complet ou la
-            // réparation en a besoin. Une synchronisation ordinaire s'en passe : un fil de groupe déjà importé est
-            // retrouvé par son `thread_id`, que tient désormais la conversation du groupe. `null` = illisible :
-            // l'import range alors comme avant, et la réparation attend le passage suivant.
+            // réparation en a besoin. Une synchronisation ordinaire ne les lit que si elle a des SMS à importer (plus
+            // bas). `null` = illisible : l'import range alors comme avant, et la réparation attend le passage suivant.
             val filsLus = if (needsMmsImport || isFirstRun || !advanced.groupThreadsRegroupedV1300) {
                 filsDeGroupe.lire()
             } else {
@@ -343,6 +342,10 @@ class TelephonySyncManager @Inject constructor(
 
             var imported = 0
             var skipped = 0
+            // Relecture Claude du 2026-11-06 — un fil de groupe apparu depuis le dernier import n'est tenu par aucune
+            // conversation : sans ses membres, ses SMS retomberaient dans la 1-à-1 de l'adresse de leur première
+            // ligne. Lus à la première page qui importe, une fois par passe. Jumeau de `TelephonySyncWorker`.
+            var filsPourLesSms: Map<Long, List<String>>? = filsLus
             val newCursor = try {
                 telephonyReader.readSmsSince(sinceId = current, pageSize = 500) { page ->
                     val filtered = page.filterNot { isBlockedAddress(it.entity.address) }
@@ -362,7 +365,8 @@ class TelephonySyncManager @Inject constructor(
                         } else {
                             filtered.map { it.entity }
                         }
-                        mirror.bulkImportFromTelephony(entitiesForImport, fils)
+                        val filsDesSms = filsPourLesSms ?: filsDeGroupe.lire().orEmpty().also { filsPourLesSms = it }
+                        mirror.bulkImportFromTelephony(entitiesForImport, filsDesSms)
                         imported += filtered.size
                     }
                     _state.value = State.Running(isFirstRun = isFirstRun, importedSoFar = imported)

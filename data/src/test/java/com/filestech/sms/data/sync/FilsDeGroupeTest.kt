@@ -88,6 +88,21 @@ class FilsDeGroupeTest {
         coVerify { mirror.regrouperFil(70L, listOf(BOB, ALICE), listOf("content://mms/9")) }
     }
 
+    /** Un fil en échec n'arrête pas les autres, et la passe aboutit : sinon chaque synchronisation la rejouerait. */
+    @Test
+    fun `un fil en echec - les autres sont ranges, la passe aboutit`() = runTest {
+        every { reader.lireMessagesDesFils(setOf(50L, 70L)) } returns mapOf(
+            50L to listOf("content://mms/7"),
+            70L to listOf("content://mms/9"),
+        )
+        coEvery { mirror.regrouperFil(50L, any(), any()) } throws IllegalStateException("contrainte")
+        coEvery { mirror.regrouperFil(70L, any(), any()) } returns 1
+
+        assertThat(fils().regrouper(mapOf(50L to listOf(ALICE, BOB), 70L to listOf(BOB, ALICE)))).isTrue()
+
+        coVerify { mirror.regrouperFil(70L, listOf(BOB, ALICE), listOf("content://mms/9")) }
+    }
+
     @Test
     fun `messages illisibles - false, rien ne bouge`() = runTest {
         every { reader.lireMessagesDesFils(any()) } returns null

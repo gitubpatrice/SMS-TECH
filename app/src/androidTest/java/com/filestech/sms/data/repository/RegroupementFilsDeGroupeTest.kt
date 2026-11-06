@@ -50,6 +50,7 @@ class RegroupementFilsDeGroupeTest {
 
     private lateinit var db: AppDatabase
     private lateinit var mirror: ConversationMirror
+    private val notifications = AnnulateurDeNotificationsEspion()
     private val portee = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val membres = listOf(ALICE, BOB)
 
@@ -74,7 +75,7 @@ class RegroupementFilsDeGroupeTest {
             db.attachmentDao(),
             SansContacts,
             PhoneIdentity(PhoneNumberWireFormatter(context, SettingsRepository(context, portee))),
-            AnnulateurDeNotificationsEspion(),
+            notifications,
             Dispatchers.IO,
         )
     }
@@ -142,6 +143,7 @@ class RegroupementFilsDeGroupeTest {
         assertThat(db.conversationDao().findById(bob)?.draft).isEqualTo("pas encore envoye")
     }
 
+    /** Les messages du Coffre ne sont même pas relevés (`findRefsByTelephonyUris`) : la passe s'arrête là. */
     @Test
     fun rienNeSortDuCoffre(): Unit = runBlocking {
         val bob = conversation(BOB, threadId = FIL_GROUPE, auCoffre = true)
@@ -153,6 +155,75 @@ class RegroupementFilsDeGroupeTest {
         assertThat(db.conversationDao().findById(bob)?.threadId).isEqualTo(FIL_GROUPE)
         // Aucune coquille de groupe créée pour rien.
         assertThat(db.conversationDao().snapshotGroupConversations()).isEmpty()
+    }
+
+    /**
+     * Relecture Claude du 2026-11-06 — le fil du groupe tenu par une 1-à-1 au Coffre, et un de ses messages resté
+     * dans la 1-à-1 d'Alice, hors du Coffre. La 1-à-1 au Coffre garde le fil, et rien n'entre dans le Coffre.
+     */
+    @Test
+    fun rienNEntreDansLeCoffre(): Unit = runBlocking {
+        val bob = conversation(BOB, threadId = FIL_GROUPE, auCoffre = true)
+        message(bob, "content://mms/7", ALICE, "du groupe", date = 2_000L)
+        val alice = conversation(ALICE, threadId = null)
+        message(alice, "content://mms/9", ALICE, "du groupe aussi", date = 3_000L)
+
+        assertThat(mirror.regrouperFil(FIL_GROUPE, membres, listOf("content://mms/7", "content://mms/9")))
+            .isEqualTo(0)
+
+        assertThat(conversationDe("content://mms/9")).isEqualTo(alice)
+        assertThat(conversationDe("content://mms/7")).isEqualTo(bob)
+        assertThat(db.conversationDao().findById(bob)?.threadId).isEqualTo(FIL_GROUPE)
+        assertThat(db.conversationDao().snapshotGroupConversations()).isEmpty()
+    }
+
+    /**
+     * Relecture Claude du 2026-11-06 — une 1-à-1 qui ne tenait QUE le groupe était le groupe pour l'utilisateur :
+     * elle lui lègue ses réglages, l'aperçu de sa photo sans légende, et ses notifications sont retirées.
+     */
+    @Test
+    fun uneUnAUnQuiNeTenaitQueLeGroupeLuiLegueSesReglages(): Unit = runBlocking {
+        val bob = conversation(BOB, threadId = FIL_GROUPE) {
+            it.copy(
+                pinned = true,
+                muted = true,
+                archived = true,
+                customName = "Famille",
+                bubbleColorArgb = 0x112233,
+                avatarUri = "content://avatar/1",
+                lastMessageAt = 2_000L,
+                lastMessagePreview = "🖼️ photo.jpg",
+            )
+        }
+        message(bob, "content://mms/7", ALICE, texte = "", date = 2_000L)
+
+        mirror.regrouperFil(FIL_GROUPE, membres, listOf("content://mms/7"))
+
+        assertThat(db.conversationDao().findById(bob)).isNull()
+        val groupe = checkNotNull(db.conversationDao().findByThreadId(FIL_GROUPE))
+        assertThat(groupe.pinned).isTrue()
+        assertThat(groupe.muted).isTrue()
+        assertThat(groupe.archived).isTrue()
+        assertThat(groupe.customName).isEqualTo("Famille")
+        assertThat(groupe.bubbleColorArgb).isEqualTo(0x112233)
+        assertThat(groupe.avatarUri).isEqualTo("content://avatar/1")
+        assertThat(groupe.lastMessagePreview).isEqualTo("🖼️ photo.jpg")
+        assertThat(notifications.conversations).containsExactly(bob)
+    }
+
+    /** Contrôle du précédent : un groupe qui avait déjà ses messages garde ses réglages, et la 1-à-1 rien à léguer. */
+    @Test
+    fun unGroupeDejaRempliGardeSesReglages(): Unit = runBlocking {
+        val existant = conversation("$ALICE;$BOB", threadId = null)
+        message(existant, "content://mms/5", BOB, "deja la", date = 1_000L)
+        val bob = conversation(BOB, threadId = FIL_GROUPE) { it.copy(muted = true) }
+        message(bob, "content://mms/7", ALICE, "du groupe", date = 2_000L)
+
+        mirror.regrouperFil(FIL_GROUPE, membres, listOf("content://mms/7"))
+
+        assertThat(db.conversationDao().findById(bob)).isNull()
+        assertThat(db.conversationDao().findById(existant)?.muted).isFalse()
+        assertThat(conversationDe("content://mms/7")).isEqualTo(existant)
     }
 
     @Test
@@ -194,6 +265,29 @@ class RegroupementFilsDeGroupeTest {
 
         assertThat(conversationDe("content://mms/7")).isEqualTo(bob)
         assertThat(db.conversationDao().snapshotGroupConversations()).isEmpty()
+    }
+
+    /**
+     * Relecture Claude du 2026-11-06 — une 1-à-1 au Coffre qui tient le fil du groupe le GARDE à l'import : le lui
+     * reprendre ouvrait une conversation de groupe hors du Coffre, où l'import SMS recopiait l'aperçu d'un message du
+     * Coffre (`touchConversation` sans insertion). Les deux chemins d'import.
+     */
+    @Test
+    fun limportNeSortRienDuCoffre(): Unit = runBlocking {
+        val bob = conversation(BOB, threadId = FIL_GROUPE, auCoffre = true)
+        message(bob, "content://sms/5", ALICE, "secret", date = 4_000L)
+
+        mirror.bulkImportFromTelephony(listOf(smsDuGroupe("content://sms/5", "secret")), mapOf(FIL_GROUPE to membres))
+        mirror.bulkImportMmsFromTelephony(lignesDuGroupe(), mapOf(FIL_GROUPE to membres))
+
+        assertThat(db.conversationDao().snapshotGroupConversations()).isEmpty()
+        val resteBob = checkNotNull(db.conversationDao().findById(bob))
+        assertThat(resteBob.threadId).isEqualTo(FIL_GROUPE)
+        assertThat(resteBob.displayName).isNull()
+        assertThat(conversationDe("content://mms/7")).isEqualTo(bob)
+        val toutes = db.conversationDao().snapshotGroupConversations() +
+            db.conversationDao().snapshotOneToOneConversations()
+        assertThat(toutes.filterNot { it.inVault }.map { it.lastMessagePreview }).doesNotContain("secret")
     }
 
     @Test
@@ -249,20 +343,36 @@ class RegroupementFilsDeGroupeTest {
             attachments = emptyList(),
         )
 
+    /** Un SMS du fil du groupe tel que le lit l'import : `conversationId` porte le `thread_id` système. */
+    private fun smsDuGroupe(uri: String, texte: String) = MessageEntity(
+        conversationId = FIL_GROUPE,
+        telephonyUri = uri,
+        address = ALICE,
+        body = texte,
+        type = MessageType.SMS,
+        direction = MessageDirection.INCOMING,
+        date = 4_000L,
+        dateSent = 4_000L,
+        status = MessageStatus.RECEIVED,
+    )
+
     private suspend fun conversation(
         csv: String,
         threadId: Long?,
         auCoffre: Boolean = false,
         brouillon: String? = null,
+        reglages: (ConversationEntity) -> ConversationEntity = { it },
     ): Long = db.conversationDao().insert(
-        ConversationEntity(
-            threadId = threadId,
-            addressesCsv = csv,
-            displayName = null,
-            lastMessageAt = 0L,
-            lastMessagePreview = null,
-            inVault = auCoffre,
-            draft = brouillon,
+        reglages(
+            ConversationEntity(
+                threadId = threadId,
+                addressesCsv = csv,
+                displayName = null,
+                lastMessageAt = 0L,
+                lastMessagePreview = null,
+                inVault = auCoffre,
+                draft = brouillon,
+            ),
         ),
     )
 

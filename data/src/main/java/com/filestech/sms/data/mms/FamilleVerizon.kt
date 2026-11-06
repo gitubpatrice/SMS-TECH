@@ -46,18 +46,26 @@ internal object FamilleVerizon {
         in US_CELLULAR -> EN_TETES_US_CELLULAR
         else -> null
     }
+
+    /**
+     * Les en-têtes à AJOUTER au téléchargement : ceux de la famille, seulement quand la configuration de l'opérateur
+     * n'en donne aucun ([enTetesDeLaConfiguration], `MMS_CONFIG_HTTP_PARAMS`) — la sienne prime. `null` : rien à
+     * ajouter, le téléchargement part comme avant.
+     */
+    fun enTetesAAjouter(operateurSim: String?, enTetesDeLaConfiguration: String?): String? =
+        if (enTetesDeLaConfiguration.isNullOrBlank()) enTetesHttp(operateurSim) else null
 }
 
 /**
- * 2026-11-06 — MCC+MNC de la SIM de [subId] (`311480`…), ou `null` ; aucune permission requise. Une lecture qui lève
- * (ROM, mode avion en transition) rend `null` : l'appelant se comporte alors comme hors de [FamilleVerizon].
+ * 2026-11-06 — MCC+MNC de la SIM de [subId] (`311480`…), ou `null` ; aucune permission requise. Sans [subId], la SIM
+ * des SMS par défaut, celle de `SmsManager.getDefault()` qui télécharge alors (relecture Claude du 2026-11-06 : le
+ * `TelephonyManager` par défaut suit la SIM des données, une autre sur un double SIM). Une lecture qui lève (ROM,
+ * mode avion en transition) rend `null` : l'appelant se comporte alors comme hors de [FamilleVerizon].
  */
 internal fun operateurSim(context: Context, subId: Int?): String? = runCatching {
     val base = context.getSystemService(TelephonyManager::class.java) ?: return null
-    val tm = if (subId != null && subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-        base.createForSubscriptionId(subId)
-    } else {
-        base
-    }
+    val sim = subId?.takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+        ?: SubscriptionManager.getDefaultSmsSubscriptionId()
+    val tm = if (sim != SubscriptionManager.INVALID_SUBSCRIPTION_ID) base.createForSubscriptionId(sim) else base
     tm.simOperator?.takeIf { it.isNotBlank() }
 }.getOrNull()

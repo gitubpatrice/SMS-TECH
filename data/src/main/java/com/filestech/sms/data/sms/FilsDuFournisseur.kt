@@ -20,11 +20,14 @@ import com.filestech.sms.core.ext.stripMmsAddressSuffix
  */
 internal object FilsDuFournisseur {
 
-    /** `canonical_addresses` : `_id` → adresse nettoyée comme celles d'un PDU ; les adresses vides sont omises. */
+    /**
+     * `canonical_addresses` : `_id` → adresse nettoyée comme celles d'un PDU ; les adresses vides sont omises. Même
+     * ordre que `MmsFailureNotifier` : les invisibles, puis le suffixe de passerelle.
+     */
     fun adresses(curseur: Cursor): Map<Long, String> {
         val adresses = HashMap<Long, String>()
         while (curseur.moveToNext()) {
-            val adresse = curseur.getString(1)?.stripMmsAddressSuffix()?.stripInvisibleChars()?.trim()
+            val adresse = curseur.getString(1)?.stripInvisibleChars()?.stripMmsAddressSuffix()?.trim()
             if (!adresse.isNullOrEmpty()) adresses[curseur.getLong(0)] = adresse
         }
         return adresses

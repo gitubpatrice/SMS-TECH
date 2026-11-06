@@ -1034,12 +1034,16 @@ class ConversationMirror @Inject constructor(
         val resolved = if (addresses.size == 1) resolveDisplayName(addresses.first().raw) else nomDeGroupe(addresses)
         val parFil = if (systemThreadId > 0L) conversationDao.findByThreadId(systemThreadId) else null
         if (parFil != null) {
-            if (addresses.size > 1 && PhoneAddress.list(parFil.addressesCsv).size < 2) {
+            val unAUnQuiTientUnGroupe = addresses.size > 1 && PhoneAddress.list(parFil.addressesCsv).size < 2
+            if (unAUnQuiTientUnGroupe && !parFil.inVault) {
                 // 2026-11-06 — un fil de GROUPE tenu par une 1-à-1 : l'import d'avant la 1.30.0 le lui avait
                 // donné. Elle le rend, et le groupe le prend plus bas, sous l'index UNIQUE de `thread_id`.
                 conversationDao.clearThreadId(parFil.id)
             } else {
-                if (parFil.displayName == null && resolved != null) {
+                // Au Coffre, la 1-à-1 GARDE le fil (relecture Claude du 2026-11-06) : le lui reprendre créait une
+                // conversation de groupe hors du Coffre, où l'import SMS recopiait l'aperçu d'un message du Coffre.
+                // Elle ne prend pas non plus le nom du groupe.
+                if (!unAUnQuiTientUnGroupe && parFil.displayName == null && resolved != null) {
                     conversationDao.update(parFil.copy(displayName = resolved))
                 }
                 return parFil.id
@@ -1155,6 +1159,17 @@ class ConversationMirror @Inject constructor(
      * ([ConversationDao.deleteIfEmpty] garde brouillon, envoi programmé et Coffre). Une seule transaction :
      * déplacement et recalculs ensemble, ou rien.
      *
+     * **Le Coffre n'est touché dans aucun sens** : ses messages ne sortent pas (SQL de [MessageDao.findRefsByTelephonyUris]
+     * et de [MessageDao.deplacerHorsCoffre]), et rien n'y entre — un groupe au Coffre ne reçoit pas les messages
+     * restés hors du Coffre.
+     *
+     * Relecture Claude du 2026-11-06 : quand une 1-à-1 n'avait reçu QUE des messages du groupe, c'était le groupe aux
+     * yeux de l'utilisateur. Supprimée, elle lègue au groupe qu'on vient d'ouvrir ce qu'il y avait réglé (épinglée,
+     * en sourdine, archivée, nom, couleur, avatar) — sinon un groupe mis en sourdine se remettait à sonner — et,
+     * après la validation, ses notifications sont retirées (un tap ouvrait un fil supprimé, cf.
+     * [dedupeSameNumberConversations]). L'aperçu d'une photo sans légende n'existe que dans la conversation qui l'a
+     * reçue (`touchConversation`) : le groupe le reprend quand [MessageDao.refreshConversationPreview] le laisse vide.
+     *
      * @return le nombre de messages déplacés.
      */
     suspend fun regrouperFil(
@@ -1162,23 +1177,53 @@ class ConversationMirror @Inject constructor(
         membres: List<String>,
         telephonyUris: List<String>,
     ): Int = withContext(io) {
-        database.withTransaction {
+        val supprimees = ArrayList<Long>()
+        val deplaces = database.withTransaction {
             val lignes = telephonyUris.chunked(LOT_SQL).flatMap { messageDao.findRefsByTelephonyUris(it) }
             if (lignes.isEmpty()) return@withTransaction 0
             val groupe = ensureConversationByThread(systemThreadId, membres.map(PhoneAddress::of))
+            val cible = conversationDao.findById(groupe)
+            if (cible == null || cible.inVault) return@withTransaction 0
             val aDeplacer = lignes.filter { it.conversationId != groupe }
             if (aDeplacer.isEmpty()) return@withTransaction 0
+            val groupeEtaitVide = messageDao.countSince(groupe, Long.MIN_VALUE) == 0
+            val quittees = aDeplacer.map { it.conversationId }.toSet()
+            val avant = quittees.mapNotNull { conversationDao.findById(it) }
             val deplaces = aDeplacer.chunked(LOT_SQL).sumOf { lot ->
                 messageDao.deplacerHorsCoffre(lot.map { it.id }, groupe)
             }
-            val quittees = aDeplacer.map { it.conversationId }.toSet()
             for (conversation in quittees + groupe) {
                 messageDao.refreshConversationPreview(conversation)
                 conversationDao.recomputeUnreadCount(conversation)
             }
-            quittees.forEach { conversationDao.deleteIfEmpty(it) }
+            quittees.filterTo(supprimees) { conversationDao.deleteIfEmpty(it) > 0 }
+            val legue = avant.singleOrNull()?.takeIf { groupeEtaitVide && it.id in supprimees }
+            reporterSurLeGroupe(groupe, avant, legue)
             deplaces
         }
+        for (id in supprimees) notifications.cancelAllForConversation(id)
+        deplaces
+    }
+
+    /**
+     * [regrouperFil] — l'aperçu d'une photo sans légende, et ce que la conversation [legue] avait réglé.
+     * Champ par champ, le groupe garde ce qu'il avait déjà.
+     */
+    private suspend fun reporterSurLeGroupe(groupe: Long, avant: List<ConversationEntity>, legue: ConversationEntity?) {
+        val apres = conversationDao.findById(groupe) ?: return
+        val apercu = apres.lastMessagePreview.takeUnless { it.isNullOrBlank() }
+            ?: avant.firstOrNull { it.lastMessageAt == apres.lastMessageAt && !it.lastMessagePreview.isNullOrBlank() }
+                ?.lastMessagePreview
+        val complete = apres.copy(
+            lastMessagePreview = apercu,
+            pinned = apres.pinned || legue?.pinned == true,
+            archived = apres.archived || legue?.archived == true,
+            muted = apres.muted || legue?.muted == true,
+            customName = apres.customName ?: legue?.customName,
+            bubbleColorArgb = apres.bubbleColorArgb ?: legue?.bubbleColorArgb,
+            avatarUri = apres.avatarUri ?: legue?.avatarUri,
+        )
+        if (complete != apres) conversationDao.update(complete)
     }
 
     /**
