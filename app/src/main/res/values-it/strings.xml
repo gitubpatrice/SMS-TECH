@@ -134,9 +134,6 @@
     <!-- 2026-11-06 — copy button next to the number in the conversation details. -->
     <string name="thread_details_copy_number">Copia il numero</string>
     <string name="thread_details_number_copied">Numero copiato</string>
-    <!-- 2026-11-06 (issue #76) — visionneuse de photos dans l'app -->
-    <string name="image_viewer_open_with">Apri con un\'altra app</string>
-    <string name="image_viewer_error">Questa immagine non può essere visualizzata qui.</string>
 
     <!-- Tabs / sections -->
     <string name="tab_archived">Archiviate</string>
@@ -627,6 +624,9 @@
     <string name="attachment_video_label">Video</string>
     <string name="media_gallery_title">Foto e video</string>
     <string name="media_gallery_empty">Nessuna foto o video in questa conversazione.</string>
+    <!-- 2026-11-06 (issue #76) — visionneuse de photos dans l'app -->
+    <string name="image_viewer_open_with">Apri con un\'altra app</string>
+    <string name="image_viewer_error">Questa immagine non può essere visualizzata qui.</string>
     <string name="attachment_file_label">File</string>
     <string name="bubble_mms_parts_missing">Allegato non ripristinato</string>
     <string name="bubble_sender_self">Io</string>
