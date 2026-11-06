@@ -23,7 +23,7 @@ the library publishes — not from memory.
 | kotlinx.coroutines, kotlinx.serialization | 1.11.0 / 1.11.0 | JetBrains | Apache 2.0 |
 | JetBrains annotations, JSpecify | 23.0.0 / 1.0.0 | JetBrains / JSpecify | Apache 2.0 |
 | `javax.inject`, `jakarta.inject-api` | 1 / 2.0.1 | JSR-330 / Eclipse Foundation | Apache 2.0 |
-| Coil (image loading) | 2.7.0 | Coil contributors | Apache 2.0 |
+| Coil (image loading; `coil-gif` for animated images in the photo viewer, since 1.30.0) | 2.7.0 | Coil contributors | Apache 2.0 |
 | OkHttp, Okio (pulled in by Coil) | 4.12.0 / 3.9.1 | Square | Apache 2.0 |
 | Timber | 5.0.1 | Jake Wharton | Apache 2.0 |
 | **SQLCipher for Android** | 4.19.0 | Zetetic LLC | **BSD-3-Clause** — full text below |

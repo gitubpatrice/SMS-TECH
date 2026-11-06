@@ -1,6 +1,7 @@
 package com.filestech.sms.ui.components
 
 import android.content.Context
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -43,7 +44,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.filestech.sms.R
 import com.filestech.sms.domain.model.Attachment
@@ -59,7 +64,8 @@ import com.filestech.sms.domain.model.Attachment
  * (`SecureFlagPolicy.Inherit`, le défaut de [Dialog]). Les vidéos et les fichiers vont toujours à l'app du
  * système.
  *
- * Un GIF s'affiche fixe : l'animation demanderait le décodeur `coil-gif`, une dépendance de plus.
+ * Un GIF s'anime ([chargeurAnime], décodeur `coil-gif`, ajouté pour cela à la demande de Patrice) ; les vignettes
+ * du fil restent fixes, pour ne pas animer toute une liste.
  */
 @Composable
 fun VisionneuseImage(image: Attachment, onOuvrirAvec: () -> Unit, onFermer: () -> Unit) {
@@ -136,17 +142,20 @@ private fun ImageZoomable(image: Attachment, onEtat: (EtatImage) -> Unit) {
     var echelle by remember(image.id) { mutableFloatStateOf(1f) }
     var decalage by remember(image.id) { mutableStateOf(Offset.Zero) }
     var tailleImage by remember(image.id) { mutableStateOf<Size?>(null) }
+    val contexte = LocalContext.current
+    val chargeur = remember(contexte) { chargeurAnime(contexte) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val ecran = Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
         val affichee = tailleAffichee(tailleImage, ecran)
         AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
+            model = ImageRequest.Builder(contexte)
                 .data(image.modeleImage())
                 // Assez pour agrandir sans flou visible, sans décoder une photo de 48 Mpx en pleine taille.
                 .size(TAILLE_MAX_PX)
                 .build(),
             // Le nom d'un fichier de MMS (« image000000.jpg ») ne dit rien : « Image » le dit mieux.
             contentDescription = stringResource(R.string.attachment_image_label),
+            imageLoader = chargeur,
             contentScale = ContentScale.Fit,
             onSuccess = { succes ->
                 tailleImage = succes.painter.intrinsicSize.takeIf { it.isSpecified() }
@@ -191,6 +200,22 @@ private fun ImageZoomable(image: Attachment, onEtat: (EtatImage) -> Unit) {
         )
     }
 }
+
+/**
+ * Le chargeur de la visionneuse : celui de l'application (mêmes caches, `newBuilder`), plus le décodage des
+ * images animées — `ImageDecoderDecoder` à partir d'Android 9 (GIF, WebP et HEIF animés), `GifDecoder`
+ * avant.
+ */
+internal fun chargeurAnime(context: Context): ImageLoader =
+    context.imageLoader.newBuilder()
+        .components {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                add(ImageDecoderDecoder.Factory())
+            } else {
+                add(GifDecoder.Factory())
+            }
+        }
+        .build()
 
 private fun Size.isSpecified(): Boolean = width.isFinite() && height.isFinite() && width > 0f && height > 0f
 

@@ -134,6 +134,8 @@ hilt-android-testing = { module = "com.google.dagger:hilt-android-testing", vers
 
 # Coil
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+# 2026-11-06 (issue #76) — GIF animés dans la visionneuse de photos ; même version que coil-compose.
+coil-gif = { module = "io.coil-kt:coil-gif", version.ref = "coil" }
 
 # Accompanist
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanist" }
