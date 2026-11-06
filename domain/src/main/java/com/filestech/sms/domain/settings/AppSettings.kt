@@ -281,6 +281,12 @@ data class SecuritySettings(
      *
      * Niveau 2 (tap unique → call direct) volontairement non implémenté
      * v1.14.0 : risque pocket-dial trop élevé pour gain marginal.
+     *
+     * ⚠️ 2026-11-06 — CHAMP MORT, et sa promesse impossible : rien ne le lit depuis la v1.14.1 (clé
+     * DataStore gardée pour la compatibilité des sauvegardes), et `HOLD_3S_DIRECT_CALL` ne pouvait pas
+     * tenir. Android n'autorise que l'app Téléphone à appeler un numéro d'urgence directement ; pour
+     * toute autre app, un `ACTION_CALL` vers le 112 ouvre le composeur (mesuré sur émulateur API 34,
+     * cf. `EmergencyCallHelper`). Les tuiles des secours ouvrent donc toujours le composeur.
      */
     val emergencyCallBehavior: EmergencyCallBehavior = EmergencyCallBehavior.DIALER_ONLY,
     /**

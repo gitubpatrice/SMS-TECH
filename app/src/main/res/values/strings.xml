@@ -230,7 +230,9 @@
     <string name="emergency_call_police_label">Police</string>
     <string name="emergency_call_fire_label">Fire brigade</string>
     <string name="emergency_call_medical_label">Medical emergency</string>
-    <string name="emergency_section_call_title">Call directly</string>
+    <!-- 2026-11-06 — was "Call directly": Android lets only the Phone app call emergency numbers directly; any other app gets the dialer. -->
+    <string name="emergency_section_call_title">Emergency calls</string>
+    <string name="emergency_section_call_hint">The number opens in your Phone app: tap its call button. Android lets only the Phone app call emergency services directly. To call them without touching the screen, turn on your phone\'s Emergency SOS in Android settings.</string>
     <string name="emergency_section_sms_title">Send SOS SMS</string>
     <string name="emergency_section_other_title">Other actions</string>
     <string name="emergency_disable_button">Disable emergency mode</string>
@@ -741,7 +743,7 @@
     <string name="about_perm_record_audio">Record audio messages attached to outgoing MMS.</string>
     <string name="about_perm_foreground_service">Long-running migration / backup.</string>
     <string name="about_perm_location">Emergency mode only, if you turn it on: one position at the moment of the alert, precise or approximate.</string>
-    <string name="about_perm_call_phone">Emergency call tiles: call directly. Refused, they open the dialer instead.</string>
+    <string name="about_perm_call_phone">Emergency page, “Call a relative”: direct call. Refused, the dialer opens instead. Emergency numbers always open the dialer: Android reserves direct emergency calls to the Phone app.</string>
     <string name="about_permissions_title">Permissions we use</string>
     <string name="about_security_title">Security &amp; limits</string>
     <string name="about_security_body">SMS and MMS travel unencrypted across the carrier network — this is a protocol limitation, not a choice. SMS Tech only protects what is stored on your device. For end-to-end encrypted messaging, use Signal or Matrix.</string>
@@ -935,7 +937,7 @@
     <string name="about_help_translate_step4">If none is installed, a message invites you to install one</string>
     <string name="about_help_emergency_title">Use Emergency mode</string>
     <string name="about_help_emergency_step1">Settings → Emergency mode: enable + add at least one Safety call contact</string>
-    <string name="about_help_emergency_step2">Emergency page: direct calls to your country\'s emergency numbers; red button held 3 s → SMS to relatives</string>
+    <string name="about_help_emergency_step2">Emergency page: your country\'s emergency numbers open in the Phone app, ready to call; red button held 3 s → SMS to relatives</string>
     <string name="about_help_emergency_step3">Lockscreen notification (opt-in): shortcuts to 112 and, where there is one, to the emergency number for your country, without unlocking</string>
     <string name="about_help_emergency_step4">\"I am OK\" in the conversation list resets the cooldown and, unless you turned the SMS off, tells your contacts it was a false alert</string>
     <string name="about_help_update_title">Check for an update</string>

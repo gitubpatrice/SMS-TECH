@@ -13,12 +13,17 @@ import timber.log.Timber
  * v1.28.12 — les numéros ne sont plus français : ils viennent de [EmergencyNumbers],
  * selon le pays où le téléphone est enregistré.
  *
- * Deux flows possibles selon `EmergencyCallBehavior` :
- *  - `DIALER_ONLY` → [openDialer] : `ACTION_DIAL` ouvre le composeur pré-rempli,
- *    l'user confirme par tap "vert". Pas de permission requise. Default.
- *  - `HOLD_3S_DIRECT_CALL` → [placeCall] : `ACTION_CALL` avec `CALL_PHONE`
- *    permission, appel direct sans confirmation système. Le hold-3s est
- *    déclenché côté UI via un `EmergencyHoldButton` qui anti-pocket-dial.
+ * Deux chemins, et la règle d'Android qui les sépare :
+ *  - **numéros des secours** → [openDialer] : `ACTION_DIAL`, composeur pré-rempli, l'utilisateur touche
+ *    « Appeler ». Aucune permission. C'est TOUT ce qu'Android permet à une application qui n'est pas
+ *    l'app Téléphone : un `ACTION_CALL` vers un numéro d'urgence n'est pas passé, Telecom ouvre le
+ *    composeur à la place (`NewOutgoingCallIntentBroadcaster` : « Cannot call potential emergency
+ *    number … unless caller is system or default dialer », relu dans AOSP et MESURÉ sur l'émulateur
+ *    API 34 le 2026-11-06, permission `CALL_PHONE` accordée). L'ancien `placeCall` (v1.14.0) ne passait
+ *    donc jamais d'appel : il aboutissait au même composeur après avoir demandé une permission inutile,
+ *    et l'écran l'annonçait « Appeler directement ». Supprimé le 2026-11-06.
+ *  - **un proche** → [placeTrustedContactCall] : `ACTION_CALL` avec `CALL_PHONE`, appel direct, permis
+ *    pour un numéro ordinaire. Refusée : [openTrustedContactDialer].
  *
  * **Sécurité** :
  *  - **Whitelist stricte** des numéros : seuls ceux de [EmergencyNumbers.NUMEROS_AUTORISES]
@@ -59,7 +64,7 @@ object EmergencyCallHelper {
         SUCCESS,
         /** Numéro non dans la whitelist. Caller bug. */
         INVALID_NUMBER,
-        /** CALL_PHONE non accordée alors qu'on tente placeCall. */
+        /** CALL_PHONE non accordée alors qu'on tente l'appel direct d'un proche. */
         PERMISSION_DENIED,
         /** Aucun dialer installé (rare, stripped AOSP / corporate MDM). */
         NO_DIALER,
@@ -95,23 +100,6 @@ object EmergencyCallHelper {
     }
 
     /**
-     * `ACTION_CALL` — appel DIRECT via CALL_PHONE permission. Whitelist
-     * stricte aux numéros d'urgence officiels (112 / 15 / 17 / 18) :
-     * un numéro hors whitelist est rejeté AVANT toute interaction avec
-     * `startActivity`. Anti redirect via Intent extra forgé.
-     *
-     * Retourne `PERMISSION_DENIED` si la permission n'est pas accordée — le
-     * caller doit fallback en `openDialer` et afficher un warning UX.
-     */
-    fun placeCall(context: Context, number: String): CallOutcome {
-        if (number !in ALLOWED_NUMBERS) {
-            Timber.w("EmergencyCallHelper.placeCall: rejected non-whitelisted number %s", number)
-            return CallOutcome.INVALID_NUMBER
-        }
-        return executeCall(context, number, isWhitelistedEmergency = true)
-    }
-
-    /**
      * v1.14.1 — appel DIRECT à un contact SafetyCall configuré par l'user
      * (`AppSettings.security.safetyCall.contacts`). PAS de whitelist sur
      * le numéro : le contact est sous le contrôle de l'user, persisté en
@@ -119,9 +107,9 @@ object EmergencyCallHelper {
      * `phoneNumber` vient bien d'un `SafetyCallContact.phoneNumber` lu
      * depuis Settings — JAMAIS d'une source non-contrôlée.
      *
-     * Même flow PERMISSION_DENIED / OS_ERROR que [placeCall]. Si refusé, le caller se replie
-     * sur [openTrustedContactDialer] — et non sur [openDialer], qui écarte tout numéro hors de
-     * la liste blanche des services d'urgence.
+     * Rend PERMISSION_DENIED sans `CALL_PHONE`, OS_ERROR si Android refuse. Le caller se replie
+     * alors sur [openTrustedContactDialer] — et non sur [openDialer], qui écarte tout numéro hors
+     * de la liste blanche des services d'urgence.
      */
     fun placeTrustedContactCall(context: Context, phoneNumber: String): CallOutcome {
         val cleaned = phoneNumber.trim()
@@ -129,7 +117,7 @@ object EmergencyCallHelper {
             Timber.w("EmergencyCallHelper.placeTrustedContactCall: blank number rejected")
             return CallOutcome.INVALID_NUMBER
         }
-        return executeCall(context, cleaned, isWhitelistedEmergency = false)
+        return executeCall(context, cleaned)
     }
 
     /**
@@ -151,20 +139,15 @@ object EmergencyCallHelper {
     }
 
     /**
-     * Common back-end: permission check + ACTION_CALL intent + try/catch.
-     * Le paramètre `isWhitelistedEmergency` n'a aucun effet runtime — il
-     * sert uniquement à différencier les logs en cas d'erreur.
+     * Back-end de [placeTrustedContactCall] : permission, `ACTION_CALL`, try/catch. Réservé aux
+     * numéros ordinaires — pour un numéro d'urgence, Android ouvrirait le composeur, cf. KDoc de l'objet.
      */
-    private fun executeCall(
-        context: Context,
-        number: String,
-        isWhitelistedEmergency: Boolean,
-    ): CallOutcome {
+    private fun executeCall(context: Context, number: String): CallOutcome {
         val granted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.CALL_PHONE,
         ) == PackageManager.PERMISSION_GRANTED
         if (!granted) {
-            Timber.w("EmergencyCallHelper.placeCall: CALL_PHONE not granted (emergency=%s)", isWhitelistedEmergency)
+            Timber.w("EmergencyCallHelper.placeTrustedContactCall: CALL_PHONE not granted")
             return CallOutcome.PERMISSION_DENIED
         }
         val intent = Intent(Intent.ACTION_CALL).apply {
@@ -175,10 +158,10 @@ object EmergencyCallHelper {
             context.startActivity(intent)
             CallOutcome.SUCCESS
         } catch (se: SecurityException) {
-            Timber.w(se, "EmergencyCallHelper.placeCall: SecurityException (emergency=%s)", isWhitelistedEmergency)
+            Timber.w(se, "EmergencyCallHelper.placeTrustedContactCall: SecurityException")
             CallOutcome.OS_ERROR
         } catch (t: Throwable) {
-            Timber.w(t, "EmergencyCallHelper.placeCall: failed (emergency=%s)", isWhitelistedEmergency)
+            Timber.w(t, "EmergencyCallHelper.placeTrustedContactCall: failed")
             CallOutcome.OS_ERROR
         }
     }

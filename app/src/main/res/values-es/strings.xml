@@ -231,7 +231,9 @@
     <string name="emergency_call_police_label">Policía</string>
     <string name="emergency_call_fire_label">Bomberos</string>
     <string name="emergency_call_medical_label">Emergencia sanitaria</string>
-    <string name="emergency_section_call_title">Llamar directamente</string>
+    <!-- 2026-11-06 — was "Llamar directamente": Android lets only the Phone app call emergency numbers directly; any other app gets the dialer. -->
+    <string name="emergency_section_call_title">Llamadas de emergencia</string>
+    <string name="emergency_section_call_hint">El número se abre en la app de teléfono: toque su botón de llamada. Android solo permite a la app de teléfono llamar directamente a los servicios de emergencia. Para llamarlos sin tocar la pantalla, active el SOS de emergencia de su teléfono en los ajustes de Android.</string>
     <string name="emergency_section_sms_title">Enviar un SMS de SOS</string>
     <string name="emergency_section_other_title">Otras acciones</string>
     <string name="emergency_disable_button">Desactivar el modo emergencia</string>
@@ -747,7 +749,7 @@
     <string name="about_perm_record_audio">Grabar mensajes de audio adjuntos a los MMS salientes.</string>
     <string name="about_perm_foreground_service">Migración o copia de seguridad de larga duración.</string>
     <string name="about_perm_location">Solo modo emergencia, si lo activa: una posición en el momento de la alerta, precisa o aproximada.</string>
-    <string name="about_perm_call_phone">Botones de llamada de emergencia: llamada directa. Si se deniega, abren la app de teléfono.</string>
+    <string name="about_perm_call_phone">Página de Emergencia, «Llamar a un ser querido»: llamada directa. Si se deniega, se abre la app de teléfono. Los números de emergencia siempre abren la app de teléfono: Android reserva su llamada directa a la app de teléfono.</string>
     <string name="about_permissions_title">Permisos que usamos</string>
     <string name="about_security_title">Seguridad y límites</string>
     <string name="about_security_body">Los SMS y los MMS viajan sin cifrar por la red del operador: es un límite del protocolo, no una elección. SMS Tech solo protege lo que está guardado en su dispositivo. Para mensajería cifrada de extremo a extremo, use Signal o Matrix.</string>
@@ -941,7 +943,7 @@
     <string name="about_help_translate_step4">Si no tiene ninguna, un mensaje le invita a instalar una</string>
     <string name="about_help_emergency_title">Usar el modo emergencia</string>
     <string name="about_help_emergency_step1">Ajustes → Modo emergencia: actívelo y añada al menos un contacto de Safety call</string>
-    <string name="about_help_emergency_step2">Página de Emergencia: llamadas directas a los números de emergencia de su país; botón rojo mantenido 3 s → SMS a sus seres queridos</string>
+    <string name="about_help_emergency_step2">Página de Emergencia: los números de emergencia de su país se abren en la app de teléfono, listos para llamar; botón rojo mantenido 3 s → SMS a sus seres queridos</string>
     <string name="about_help_emergency_step3">Notificación en la pantalla de bloqueo (opcional): accesos directos al 112 y, si existe, al número de emergencia propio de su país, sin desbloquear</string>
     <string name="about_help_emergency_step4">«Estoy bien» en la lista de conversaciones reinicia el tiempo de espera y, si no ha desactivado el SMS, avisa a sus contactos de que era una falsa alarma</string>
     <string name="about_help_update_title">Buscar una actualización</string>

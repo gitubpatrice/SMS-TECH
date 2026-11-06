@@ -172,6 +172,8 @@ fun SettingsScreen(
     // Retiré v1.14.1 : la page Mode urgence v1.14.1 utilise direct call avec
     // fallback automatique → picker Settings devenait orphelin (dead setting).
     // Clé DataStore préservée pour compat ascendante mais non lue par UI.
+    // 2026-11-06 — « direct call » était faux pour les secours : Android ouvre le composeur pour
+    // toute app autre que l'app Téléphone. Cf. EmergencyCallHelper.
 
     val defaultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* no-op */ }
 
@@ -3730,6 +3732,8 @@ private fun EmergencySection(
             // automatique au composeur si permission refusée. Le picker UI ici n'aurait
             // plus d'effet → supprimé pour cohérence UX. La clé DataStore reste pour
             // compat ascendante mais devient un dead field.
+            // 2026-11-06 — et ce « direct call » n'a jamais joint les secours : pour une app autre que
+            // l'app Téléphone, Android ouvre le composeur. Seul l'appel d'un proche est direct.
             //
             // v1.14.0 — opt-in SMS "Je vais bien" sur kill-switch.
             ToggleRow(
