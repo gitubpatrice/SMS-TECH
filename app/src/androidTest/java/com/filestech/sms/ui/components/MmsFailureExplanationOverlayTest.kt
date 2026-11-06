@@ -41,6 +41,10 @@ class MmsFailureExplanationOverlayTest {
     private val boutonStockage: String get() = context.getString(R.string.mms_failure_dialog_storage_settings)
     private val boutonFermer: String get() = context.getString(R.string.action_close)
 
+    /** 2026-11-06 — la ligne attendue pour l'erreur (4, 403) : `MMS_ERROR_HTTP_FAILURE`, HTTP 403. */
+    private val ligneCodeEtStatutHttp: String
+        get() = context.getString(R.string.mms_failure_dialog_android_error_http, 4, 403)
+
     @Test
     fun tropVolumineuxLaFenetreExpliqueSansBoutonReseauEtSeFerme() {
         val holder = MmsFailureExplanationHolder().apply { set(MmsFailureNotifier.Reason.TOO_LARGE) }
@@ -67,6 +71,41 @@ class MmsFailureExplanationOverlayTest {
         compose.onNodeWithText(boutonReseau).assertIsDisplayed()
         compose.onNodeWithText(boutonStockage).assertDoesNotExist()
         compose.onNodeWithText(boutonFermer).assertIsDisplayed()
+    }
+
+    /** 2026-11-06 — Visible/Verizon : le code d'Android et le statut HTTP, que l'utilisateur peut nous transmettre. */
+    @Test
+    fun echecDeTelechargementAvecCodeLaFenetreAfficheLeCodeEtLeStatutHttp() {
+        val holder = MmsFailureExplanationHolder().apply {
+            set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, erreur = MmsFailureNotifier.ErreurAndroid(4, 403))
+        }
+        compose.setContent { MmsFailureExplanationOverlay(holder, showLock = false, isPanicDecoy = false) }
+
+        compose.onNodeWithText(texteEchec).assertIsDisplayed()
+        compose.onNodeWithText(ligneCodeEtStatutHttp).assertIsDisplayed()
+    }
+
+    @Test
+    fun echecDeTelechargementSansStatutHttpLaFenetreAfficheLeCodeSeul() {
+        val holder = MmsFailureExplanationHolder().apply {
+            set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, erreur = MmsFailureNotifier.ErreurAndroid(8))
+        }
+        compose.setContent { MmsFailureExplanationOverlay(holder, showLock = false, isPanicDecoy = false) }
+
+        val ligneCodeSeul = context.getString(R.string.mms_failure_dialog_android_error, 8)
+        compose.onNodeWithText(ligneCodeSeul).assertIsDisplayed()
+    }
+
+    /** Contrôle négatif : une erreur portée par un autre motif ne s'affiche pas. */
+    @Test
+    fun autreMotifAvecErreurLaFenetreNAfficheAucunCode() {
+        val holder = MmsFailureExplanationHolder().apply {
+            set(MmsFailureNotifier.Reason.TOO_LARGE, erreur = MmsFailureNotifier.ErreurAndroid(4, 403))
+        }
+        compose.setContent { MmsFailureExplanationOverlay(holder, showLock = false, isPanicDecoy = false) }
+
+        compose.onNodeWithText(texteTropVolumineux).assertIsDisplayed()
+        compose.onNodeWithText(ligneCodeEtStatutHttp).assertDoesNotExist()
     }
 
     /** Le message est arrivé : c'est le stockage qu'il faut regarder, pas le réseau. */

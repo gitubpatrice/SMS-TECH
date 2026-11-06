@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
  * Le défaut corrigé était un tap qui ne menait nulle part : la notification promettait des « paramètres
  * MMS » inexistants et ouvrait la liste des conversations. Un porteur qui perdrait son motif rétablirait
  * ce silence sans qu'aucun écran ne le montre ; d'où le sens du repli testé, et pas seulement le chemin
- * heureux.
+ * heureux. 2026-11-06 — et la validation du code d'Android qu'il porte pour un téléchargement manqué.
  */
 class MmsFailureExplanationHolderTest {
 
@@ -133,5 +133,70 @@ class MmsFailureExplanationHolderTest {
         listOf(null, "", "too_large", "TOO_LARGE ", "SETTINGS", "0").forEach { valeur ->
             assertThat(MmsFailureNotifier.raisonDepuisExtra(valeur)).isNull()
         }
+    }
+
+    // 2026-11-06 — le code d'Android d'un téléchargement manqué, porté jusqu'à la fenêtre (Visible/Verizon).
+
+    @Test
+    fun `l'erreur posee avec le motif est rendue`() {
+        val holder = MmsFailureExplanationHolder()
+
+        holder.set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, T0, MmsFailureNotifier.ErreurAndroid(4, 403))
+
+        assertThat(holder.consume(T0)?.erreur).isEqualTo(MmsFailureNotifier.ErreurAndroid(4, 403))
+    }
+
+    /** Le dernier tap décide, erreur comprise : sinon la fenêtre afficherait le code d'un autre message. */
+    @Test
+    fun `un tap sans code n'herite pas du code du tap precedent`() {
+        val holder = MmsFailureExplanationHolder()
+        holder.set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, T0, MmsFailureNotifier.ErreurAndroid(4, 403))
+
+        holder.set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, T0)
+
+        assertThat(holder.consume(T0)?.erreur).isNull()
+    }
+
+    @Test
+    fun `erreur d'Android - code et statut HTTP dans leurs plages, gardes tels quels`() {
+        val echec = MmsFailureNotifier.Reason.DOWNLOAD_FAILED
+        assertThat(MmsFailureNotifier.ErreurAndroid.valide(echec, 1, null))
+            .isEqualTo(MmsFailureNotifier.ErreurAndroid(1))
+        assertThat(MmsFailureNotifier.ErreurAndroid.valide(echec, 99, 0))
+            .isEqualTo(MmsFailureNotifier.ErreurAndroid(99))
+        listOf(100, 403, 599).forEach { http ->
+            assertThat(MmsFailureNotifier.ErreurAndroid.valide(echec, 4, http))
+                .isEqualTo(MmsFailureNotifier.ErreurAndroid(4, http))
+        }
+    }
+
+    /**
+     * Contrôle négatif : `MainActivity` est exportée. -1 est `Activity.RESULT_OK`, 0 un extra absent ou d'un
+     * autre type (`getIntExtra`) : ni l'un ni l'autre n'est une erreur à montrer.
+     */
+    @Test
+    fun `erreur d'Android - code hors plage, rien, meme avec un statut HTTP valide`() {
+        listOf(null, 0, -1, 100, 403, Int.MIN_VALUE, Int.MAX_VALUE).forEach { code ->
+            assertThat(MmsFailureNotifier.ErreurAndroid.valide(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, code, 403))
+                .isNull()
+        }
+    }
+
+    @Test
+    fun `erreur d'Android - statut HTTP hors plage, seul le code reste`() {
+        listOf(0, -1, 99, 600, 1_000, Int.MIN_VALUE, Int.MAX_VALUE).forEach { http ->
+            assertThat(MmsFailureNotifier.ErreurAndroid.valide(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, 4, http))
+                .isEqualTo(MmsFailureNotifier.ErreurAndroid(4))
+        }
+    }
+
+    /** Seul un téléchargement manqué naît d'un code de résultat d'Android. */
+    @Test
+    fun `erreur d'Android - tout autre motif, rien`() {
+        MmsFailureNotifier.Reason.entries
+            .filter { it != MmsFailureNotifier.Reason.DOWNLOAD_FAILED }
+            .forEach { reason ->
+                assertThat(MmsFailureNotifier.ErreurAndroid.valide(reason, 4, 403)).isNull()
+            }
     }
 }

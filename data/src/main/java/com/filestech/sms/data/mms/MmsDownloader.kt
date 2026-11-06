@@ -104,9 +104,13 @@ class MmsDownloader @Inject constructor(
                 putExtra(EXTRA_NOTIFICATION_TRANSACTION_ID, transactionIdOctets)
             }
         val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
+        // 2026-11-06 — MUTABLE, sans quoi le statut HTTP d'un échec n'arrive jamais : cf.
+        // [drapeauxDuResultatDeTelechargement].
         val pi = PendingIntent.getBroadcast(
-            context, reqCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            context,
+            reqCode,
+            intent,
+            drapeauxDuResultatDeTelechargement(Build.VERSION.SDK_INT),
         )
 
         return try {
@@ -198,3 +202,19 @@ class MmsDownloader @Inject constructor(
         const val MMS_IN_DIR: String = "mms_incoming"
     }
 }
+
+/**
+ * 2026-11-06 — drapeaux du résultat de téléchargement MMS : MUTABLE, pour la même raison que l'accusé
+ * d'envoi ([drapeauxDeLAccuseDEnvoi], issue #53).
+ *
+ * Quand le téléchargement échoue sur une erreur HTTP (`SmsManager.MMS_ERROR_HTTP_FAILURE`), le service MMS
+ * d'Android joint le statut rendu par le MMSC (`SmsManager.EXTRA_MMS_HTTP_STATUS`) par un fill-in au moment
+ * d'envoyer ce PendingIntent (AOSP `MmsRequest.processResult`). IMMUTABLE le jetait : seul le code de
+ * résultat arrivait. Un utilisateur américain (Visible, réseau Verizon) voit échouer chaque MMS reçu, et ces
+ * deux nombres sont le seul indice qu'il puisse nous transmettre sans adb.
+ *
+ * ⚠️ Ne pas « durcir » en IMMUTABLE : sans risque ici — intent explicite vers un receveur non exporté, et
+ * `Intent.fillIn` garde nos propres extras (chemin du PDU, SIM, adresse) prioritaires. Avant Android 12, un
+ * PendingIntent est mutable par défaut. Une seule règle pour les deux PendingIntent remis au service MMS.
+ */
+internal fun drapeauxDuResultatDeTelechargement(sdk: Int): Int = drapeauxDeLAccuseDEnvoi(sdk)

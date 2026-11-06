@@ -980,6 +980,9 @@
     <string name="mms_failure_dialog_body_carrier_error">Your carrier reported that it could not deliver a multimedia message sent to you, for example because it expired before it could be downloaded.\n\nAsk the sender to send it again.</string>
     <string name="mms_failure_dialog_storage_settings">Storage</string>
     <string name="mms_failure_dialog_body_download_failed">A multimedia message sent to you could not be downloaded from your carrier. MMS usually travel over mobile data: check that you have signal and that mobile data is on, or that your phone allows MMS while mobile data is off.\n\nSMS Tech cannot retry the download on its own. Your carrier may send the message again; otherwise, ask the sender to send it again.</string>
+    <!-- 2026-11-06 — line under the text above when Android returned a code. %1$d = its MMS error code (SmsManager.MMS_ERROR_*), %2$d = the HTTP status of the carrier's MMS server. -->
+    <string name="mms_failure_dialog_android_error">Error reported by Android: %1$d</string>
+    <string name="mms_failure_dialog_android_error_http">Error reported by Android: %1$d (HTTP %2$d)</string>
     <string name="mms_failure_dialog_network_settings">Network settings</string>
 
     <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->

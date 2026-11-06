@@ -985,6 +985,9 @@
     <string name="mms_failure_dialog_body_carrier_error">Ihr Mobilfunkanbieter meldet, dass er eine an Sie gesendete Multimedia-Nachricht nicht zustellen konnte, zum Beispiel weil sie abgelaufen ist, bevor sie heruntergeladen werden konnte.\n\nBitten Sie den Absender, sie erneut zu senden.</string>
     <string name="mms_failure_dialog_storage_settings">Speicher</string>
     <string name="mms_failure_dialog_body_download_failed">Eine an Sie gesendete Multimedia-Nachricht konnte nicht von Ihrem Mobilfunkanbieter heruntergeladen werden. MMS werden in der Regel über mobile Daten übertragen: Prüfen Sie, ob Sie Empfang haben und mobile Daten eingeschaltet sind oder ob Ihr Telefon MMS bei ausgeschalteten mobilen Daten zulässt.\n\nSMS Tech kann den Download nicht selbst wiederholen. Ihr Anbieter sendet die Nachricht möglicherweise erneut; andernfalls bitten Sie den Absender, sie noch einmal zu senden.</string>
+    <!-- 2026-11-06 — line under the text above when Android returned a code. %1$d = its MMS error code (SmsManager.MMS_ERROR_*), %2$d = the HTTP status of the carrier's MMS server. -->
+    <string name="mms_failure_dialog_android_error">Von Android gemeldeter Fehler: %1$d</string>
+    <string name="mms_failure_dialog_android_error_http">Von Android gemeldeter Fehler: %1$d (HTTP %2$d)</string>
     <string name="mms_failure_dialog_network_settings">Netzwerkeinstellungen</string>
 
     <!-- v1.14.8 R3 — confirmation before retrying a watchdog-timed-out message (potential duplicate). -->

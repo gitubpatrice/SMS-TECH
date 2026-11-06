@@ -76,6 +76,36 @@ class MmsFailureNotifier @Inject constructor(
     }
 
     /**
+     * 2026-11-06 — ce qu'Android a dit d'un téléchargement manqué : son code de résultat
+     * (`SmsManager.MMS_ERROR_*`) et, pour une erreur HTTP, le statut rendu par le MMSC. Un utilisateur
+     * américain (Visible, réseau Verizon) voit échouer chaque MMS reçu ; la fenêtre d'explication lui montre
+     * ces deux nombres, qu'il peut nous transmettre sans adb.
+     *
+     * Rien que des entiers : la fenêtre les place dans une phrase fixe. Ne s'obtient d'un intent que par
+     * [valide].
+     */
+    data class ErreurAndroid(val code: Int, val statutHttp: Int? = null) {
+        companion object {
+            /** Les codes publics `SmsManager.MMS_ERROR_*` vont de 1 à 12 (API 37) ; la marge couvre les suivants. */
+            private val CODES_ANDROID = 1..99
+
+            /** Les statuts HTTP, de 100 à 599. */
+            private val STATUTS_HTTP = 100..599
+
+            /**
+             * L'erreur, ou `null`. `MainActivity` est exportée (rôle SMS) : une autre application peut lui
+             * envoyer n'importe quels extras. Seuls passent un entier dans [CODES_ANDROID] et, avec lui, un
+             * entier dans [STATUTS_HTTP] ; hors plage, le statut seul est écarté. Seul [Reason.DOWNLOAD_FAILED]
+             * naît d'un code de résultat d'Android : pour tout autre motif, rien.
+             */
+            fun valide(reason: Reason, code: Int?, statutHttp: Int?): ErreurAndroid? {
+                if (reason != Reason.DOWNLOAD_FAILED || code == null || code !in CODES_ANDROID) return null
+                return ErreurAndroid(code, statutHttp?.takeIf { it in STATUTS_HTTP })
+            }
+        }
+    }
+
+    /**
      * v1.28.3 (F08) — **applique enfin la politique de confidentialite des notifications.**
      *
      * Cette notification construisait son texte avec l'adresse BRUTE de l'expediteur et la
@@ -97,8 +127,18 @@ class MmsFailureNotifier @Inject constructor(
      *  - **`previewMode`** : l'expediteur devient generique des que l'utilisateur a demande que
      *    les apercus soient masques. Le motif de l'echec, lui, reste visible — c'est
      *    l'information utile, et elle ne designe personne.
+     *
+     * @param codeAndroid 2026-11-06 — le code de résultat rendu par Android pour un téléchargement manqué.
+     * @param codeHttp 2026-11-06 — le statut HTTP du MMSC qui l'accompagne, quand Android le joint.
+     *   Tous deux passent par [ErreurAndroid.valide] avant d'entrer dans l'intent du tap.
      */
-    suspend fun notifyFailure(reason: Reason, senderAddress: String?, sizeBytes: Long? = null) {
+    suspend fun notifyFailure(
+        reason: Reason,
+        senderAddress: String?,
+        sizeBytes: Long? = null,
+        codeAndroid: Int? = null,
+        codeHttp: Int? = null,
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     context, Manifest.permission.POST_NOTIFICATIONS,
@@ -129,11 +169,16 @@ class MmsFailureNotifier @Inject constructor(
             Reason.MEDIA_NOT_SAVED -> context.getString(R.string.mms_failure_notification_body_media_not_saved, sender)
             Reason.CARRIER_ERROR -> context.getString(R.string.mms_failure_notification_body_carrier_error, sender)
         }
-        // 2026-11-06 — le tap ouvre la fenêtre qui explique CE motif. L'intent ne porte que le motif :
-        // ni expéditeur ni taille, rien que la fenêtre aurait à cacher en session leurre.
+        // 2026-11-06 — le tap ouvre la fenêtre qui explique CE motif. L'intent ne porte que le motif et, pour un
+        // téléchargement manqué, les codes d'Android : ni expéditeur ni taille, rien que la fenêtre aurait à
+        // cacher en session leurre.
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_EXPLAIN_MMS_FAILURE
             putExtra(EXTRA_REASON, reason.name)
+            ErreurAndroid.valide(reason, codeAndroid, codeHttp)?.let { erreur ->
+                putExtra(EXTRA_CODE_ANDROID, erreur.code)
+                erreur.statutHttp?.let { putExtra(EXTRA_STATUT_HTTP, it) }
+            }
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pi = PendingIntent.getActivity(
@@ -182,7 +227,25 @@ class MmsFailureNotifier @Inject constructor(
          * application peut lui envoyer cette action avec n'importe quelle valeur. Une valeur inconnue ne
          * produit rien ; une valeur connue n'affiche qu'un texte fixe, sans donnée ni écriture — c'est
          * pourquoi ce chemin, à la différence de l'ouverture d'une conversation, ne porte pas de jeton.
+         * 2026-11-06 — au plus deux entiers bornés s'y ajoutent, cf. [erreurDepuisExtras].
          */
         fun raisonDepuisExtra(valeur: String?): Reason? = Reason.entries.firstOrNull { it.name == valeur }
+
+        /** 2026-11-06 — [ErreurAndroid.code], en entier. */
+        const val EXTRA_CODE_ANDROID: String = "com.filestech.sms.extra.MMS_FAILURE_ANDROID_CODE"
+
+        /** 2026-11-06 — [ErreurAndroid.statutHttp], en entier. */
+        const val EXTRA_STATUT_HTTP: String = "com.filestech.sms.extra.MMS_FAILURE_HTTP_STATUS"
+
+        /**
+         * 2026-11-06 — l'[ErreurAndroid] portée par l'intent, ou `null`. Même méfiance que [raisonDepuisExtra] :
+         * `getIntExtra` rend 0, hors de toute plage, pour un extra absent ou d'un autre type (une chaîne
+         * forgée ne s'affiche donc jamais), et [ErreurAndroid.valide] écarte le reste.
+         */
+        fun erreurDepuisExtras(reason: Reason, intent: Intent): ErreurAndroid? = ErreurAndroid.valide(
+            reason = reason,
+            code = intent.getIntExtra(EXTRA_CODE_ANDROID, 0),
+            statutHttp = intent.getIntExtra(EXTRA_STATUT_HTTP, 0),
+        )
     }
 }

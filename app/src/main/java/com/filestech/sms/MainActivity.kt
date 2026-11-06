@@ -523,7 +523,15 @@ class MainActivity : FragmentActivity() {
                     .raisonDepuisExtra(
                         intent.getStringExtra(com.filestech.sms.system.notifications.MmsFailureNotifier.EXTRA_REASON),
                     )
-                    ?.let { mmsFailureExplanation.set(it) }
+                    ?.let { raison ->
+                        // 2026-11-06 — avec le motif, le code d'Android d'un téléchargement manqué : des entiers
+                        // bornés, validés par `erreurDepuisExtras`, jamais une chaîne venue de l'intent.
+                        mmsFailureExplanation.set(
+                            raison,
+                            erreur = com.filestech.sms.system.notifications.MmsFailureNotifier
+                                .erreurDepuisExtras(raison, intent),
+                        )
+                    }
             }
             Intent.ACTION_SEND -> {
                 val uri = intent.extraStream()

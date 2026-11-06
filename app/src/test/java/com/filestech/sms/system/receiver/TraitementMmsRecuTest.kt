@@ -104,7 +104,7 @@ class TraitementMmsRecuTest {
 
         assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = false, consigner = true))
         coVerify(exactly = 1) { notifier.notifyIncoming(ALICE, any(), ID, CONVERSATION) }
-        coVerify(exactly = 0) { echecs.notifyFailure(any(), any(), any()) }
+        coVerify(exactly = 0) { echecs.notifyFailure(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -114,7 +114,9 @@ class TraitementMmsRecuTest {
         assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = true, consigner = true))
         // 2026-11-06 — le message est arrivé : c'est le stockage qui a manqué, pas le téléchargement.
         coVerify(exactly = 1) { echecs.notifyFailure(MmsFailureNotifier.Reason.MEDIA_NOT_SAVED, ALICE, any()) }
-        coVerify(exactly = 0) { echecs.notifyFailure(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, any(), any()) }
+        coVerify(exactly = 0) {
+            echecs.notifyFailure(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, any(), any(), any(), any())
+        }
         coVerify(exactly = 1) { notifier.notifyIncoming(ALICE, any(), ID, CONVERSATION) }
     }
 
@@ -124,7 +126,7 @@ class TraitementMmsRecuTest {
 
         assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = true, consigner = true))
         coVerify(exactly = 0) { notifier.notifyIncoming(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { echecs.notifyFailure(any(), any(), any()) }
+        coVerify(exactly = 0) { echecs.notifyFailure(any(), any(), any(), any(), any()) }
     }
 
     /** Un message supprimé depuis est consigné lui aussi : son exemplaire suivant ne doit pas le ressusciter. */
@@ -134,7 +136,7 @@ class TraitementMmsRecuTest {
             assertThat(traiter(resultat)).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = false, consigner = true))
         }
         coVerify(exactly = 0) { notifier.notifyIncoming(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { echecs.notifyFailure(any(), any(), any()) }
+        coVerify(exactly = 0) { echecs.notifyFailure(any(), any(), any(), any(), any()) }
     }
 
     @Test
