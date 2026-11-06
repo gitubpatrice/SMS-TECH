@@ -224,7 +224,7 @@
     <string name="emergency_call_medical_label">Urgence médicale</string>
     <!-- 2026-11-06 — était « Appeler directement » : Android ne laisse que l\'app Téléphone appeler les secours directement ; toute autre app obtient le composeur. -->
     <string name="emergency_section_call_title">Appels d\'urgence</string>
-    <string name="emergency_section_call_hint">Le numéro s\'ouvre dans l\'app Téléphone : touchez son bouton d\'appel. Android ne laisse que l\'app Téléphone appeler les secours directement. Pour les appeler sans toucher l\'écran, activez le SOS d\'urgence de votre téléphone dans les réglages d\'Android.</string>
+    <string name="emergency_section_call_hint">Le numéro s\'ouvre dans l\'app Téléphone : touchez son bouton d\'appel. Android ne laisse que l\'app Téléphone appeler les secours directement. Si votre téléphone propose le SOS d\'urgence (réglages d\'Android), il peut les appeler sans que vous touchiez l\'écran.</string>
     <string name="emergency_section_sms_title">Envoyer un SOS aux proches</string>
     <string name="emergency_section_other_title">Autres actions</string>
     <string name="emergency_disable_button">Désactiver le mode urgence</string>
@@ -738,7 +738,7 @@
     <string name="about_perm_record_audio">Enregistrer les messages vocaux joints aux MMS sortants.</string>
     <string name="about_perm_foreground_service">Migration et sauvegarde de longue durée.</string>
     <string name="about_perm_location">Mode urgence uniquement, si vous l\'activez : une position au moment de l\'alerte, exacte ou approximative.</string>
-    <string name="about_perm_call_phone">Page Urgence, « Appeler un proche » : appel direct. Refusée, le composeur s\'ouvre. Les numéros des secours ouvrent toujours le composeur : Android réserve leur appel direct à l\'app Téléphone.</string>
+    <string name="about_perm_call_phone">Page Urgence, « Appeler un proche » : appel direct. Si elle est refusée, le composeur s\'ouvre. Les numéros des secours ouvrent toujours le composeur : Android réserve leur appel direct à l\'app Téléphone.</string>
     <string name="about_permissions_title">Permissions utilisées</string>
     <string name="about_security_title">Sécurité &amp; limites</string>
     <string name="about_security_body">SMS et MMS circulent en clair sur le réseau opérateur — c\'est une limite du protocole, pas un choix. SMS Tech ne protège que ce qui est stocké sur l\'appareil. Pour du chiffrement de bout en bout, utilisez Signal ou Matrix.</string>

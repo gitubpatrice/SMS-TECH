@@ -232,7 +232,7 @@
     <string name="emergency_call_medical_label">Rettungsdienst</string>
     <!-- 2026-11-06 — was "Direkt anrufen": Android lets only the Phone app call emergency numbers directly; any other app gets the dialer. -->
     <string name="emergency_section_call_title">Notrufe</string>
-    <string name="emergency_section_call_hint">Die Nummer öffnet sich in der Telefon-App: Tippen Sie dort auf Anrufen. Android erlaubt nur der Telefon-App, Notrufe direkt zu wählen. Um ohne Berühren des Bildschirms anzurufen, aktivieren Sie das Notfall-SOS Ihres Telefons in den Android-Einstellungen.</string>
+    <string name="emergency_section_call_hint">Die Nummer öffnet sich in der Telefon-App: Tippen Sie dort auf Anrufen. Android erlaubt nur der Telefon-App, Notrufe direkt zu wählen. Bietet Ihr Telefon Notfall-SOS an (Android-Einstellungen), kann es den Notruf wählen, ohne dass Sie den Bildschirm berühren.</string>
     <string name="emergency_section_sms_title">SOS-SMS senden</string>
     <string name="emergency_section_other_title">Weitere Aktionen</string>
     <string name="emergency_disable_button">Notfallmodus deaktivieren</string>
@@ -746,7 +746,7 @@
     <string name="about_perm_record_audio">Sprachnachrichten aufnehmen, die an ausgehende MMS angehängt werden.</string>
     <string name="about_perm_foreground_service">Lang laufende Migration bzw. Sicherung.</string>
     <string name="about_perm_location">Nur Notfallmodus, wenn Sie ihn aktivieren: eine Position im Moment des Alarms, genau oder ungefähr.</string>
-    <string name="about_perm_call_phone">Notrufseite, „Angehörige anrufen“: direkter Anruf. Verweigert, öffnet sich die Telefon-App. Notrufnummern öffnen immer die Telefon-App: Android behält direkte Notrufe der Telefon-App vor.</string>
+    <string name="about_perm_call_phone">Notrufseite, „Angehörige anrufen“: direkter Anruf. Wird sie verweigert, öffnet sich die Telefon-App. Notrufnummern öffnen immer die Telefon-App: Android behält direkte Notrufe der Telefon-App vor.</string>
     <string name="about_permissions_title">Berechtigungen, die wir verwenden</string>
     <string name="about_security_title">Sicherheit &amp; Grenzen</string>
     <string name="about_security_body">SMS und MMS laufen unverschlüsselt über das Netz des Anbieters — das ist eine Grenze des Protokolls, keine Entscheidung. SMS Tech schützt nur, was auf Ihrem Gerät gespeichert ist. Für Ende-zu-Ende-verschlüsselte Nachrichten verwenden Sie Signal oder Matrix.</string>

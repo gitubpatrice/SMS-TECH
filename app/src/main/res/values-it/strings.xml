@@ -233,7 +233,7 @@
     <string name="emergency_call_medical_label">Emergenza sanitaria</string>
     <!-- 2026-11-06 — was "Chiamare direttamente": Android lets only the Phone app call emergency numbers directly; any other app gets the dialer. -->
     <string name="emergency_section_call_title">Chiamate di emergenza</string>
-    <string name="emergency_section_call_hint">Il numero si apre nell\'app Telefono: tocchi il pulsante di chiamata. Android consente solo all\'app Telefono di chiamare direttamente i soccorsi. Per chiamarli senza toccare lo schermo, attivi l\'SOS di emergenza del telefono nelle impostazioni di Android.</string>
+    <string name="emergency_section_call_hint">Il numero si apre nell\'app Telefono: tocchi il pulsante di chiamata. Android consente solo all\'app Telefono di chiamare direttamente i soccorsi. Se il telefono offre l\'SOS di emergenza (impostazioni di Android), può chiamarli senza che lei debba toccare lo schermo.</string>
     <string name="emergency_section_sms_title">Inviare un SMS SOS</string>
     <string name="emergency_section_other_title">Altre azioni</string>
     <string name="emergency_disable_button">Disattiva la modalità emergenza</string>

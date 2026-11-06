@@ -232,7 +232,7 @@
     <string name="emergency_call_medical_label">Medical emergency</string>
     <!-- 2026-11-06 — was "Call directly": Android lets only the Phone app call emergency numbers directly; any other app gets the dialer. -->
     <string name="emergency_section_call_title">Emergency calls</string>
-    <string name="emergency_section_call_hint">The number opens in your Phone app: tap its call button. Android lets only the Phone app call emergency services directly. To call them without touching the screen, turn on your phone\'s Emergency SOS in Android settings.</string>
+    <string name="emergency_section_call_hint">The number opens in your Phone app: tap its call button. Android lets only the Phone app call emergency services directly. If your phone offers Emergency SOS (in Android settings), it can call them without you touching the screen.</string>
     <string name="emergency_section_sms_title">Send SOS SMS</string>
     <string name="emergency_section_other_title">Other actions</string>
     <string name="emergency_disable_button">Disable emergency mode</string>
@@ -743,7 +743,7 @@
     <string name="about_perm_record_audio">Record audio messages attached to outgoing MMS.</string>
     <string name="about_perm_foreground_service">Long-running migration / backup.</string>
     <string name="about_perm_location">Emergency mode only, if you turn it on: one position at the moment of the alert, precise or approximate.</string>
-    <string name="about_perm_call_phone">Emergency page, “Call a relative”: direct call. Refused, the dialer opens instead. Emergency numbers always open the dialer: Android reserves direct emergency calls to the Phone app.</string>
+    <string name="about_perm_call_phone">Emergency page, “Call a relative”: direct call. If refused, the dialer opens instead. Emergency numbers always open the dialer: Android reserves direct emergency calls for the Phone app.</string>
     <string name="about_permissions_title">Permissions we use</string>
     <string name="about_security_title">Security &amp; limits</string>
     <string name="about_security_body">SMS and MMS travel unencrypted across the carrier network — this is a protocol limitation, not a choice. SMS Tech only protects what is stored on your device. For end-to-end encrypted messaging, use Signal or Matrix.</string>

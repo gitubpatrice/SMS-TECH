@@ -18,7 +18,11 @@ import org.robolectric.annotation.Config
  * un `ACTION_CALL` vers le 112 ouvre le composeur (mesuré sur émulateur API 34 :
  * « Cannot call potential emergency number 112 with CALL Intent »). L'écran l'annonçait pourtant
  * « Appeler directement », et l'ancien `placeCall` demandait `CALL_PHONE` pour rien. Ces tests figent le
- * contrat honnête : les secours → `ACTION_DIAL` ; un proche → `ACTION_CALL` si la permission est accordée.
+ * contrat du HELPER : les secours → `ACTION_DIAL` ; un proche → `ACTION_CALL` si la permission est accordée.
+ *
+ * Ils ne voient pas l'écran. Ce qui empêche `EmergencyScreen` d'appeler les secours par `ACTION_CALL`, c'est
+ * la construction : `placeCall` n'existe plus, et la seule voie `ACTION_CALL` du helper (`executeCall`,
+ * privée) ne s'atteint que par `placeTrustedContactCall`, la fonction des proches.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34])

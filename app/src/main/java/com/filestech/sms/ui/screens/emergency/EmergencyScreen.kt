@@ -494,9 +494,9 @@ fun EmergencyScreen(
 }
 
 /**
- * v1.14.0 — gère le résultat d'un `EmergencyCallHelper.openDialer` ou
- * `placeCall` côté UI : un seul snackbar différentié selon l'outcome.
- * SUCCESS = silencieux (l'OS prend le relais et affiche le dialer/call).
+ * v1.14.0 — gère côté UI le résultat d'un appel lancé par [EmergencyCallHelper] : un seul snackbar
+ * différencié selon l'outcome. SUCCESS = silencieux (l'OS prend le relais : composeur ou appel).
+ * PERMISSION_DENIED ne vient que de l'appel direct d'un proche : `openDialer` ne demande rien.
  */
 private fun handleCallOutcome(
     outcome: com.filestech.sms.system.emergency.EmergencyCallHelper.CallOutcome,
@@ -548,8 +548,8 @@ private fun couleurDuService(service: EmergencyNumbers.Service): Color = when (s
 
 /**
  * v1.14.1 — Tuile d'appel d'urgence : un gros bouton plein couleur, numéro
- * en gras à gauche + label à droite. Tap → onClick (caller décide direct
- * call vs dialer fallback selon permission). Hauteur fixe 72dp pour tap
+ * en gras à gauche + label à droite. Tap → onClick, fourni par l'appelant : composeur pour les
+ * secours, appel direct ou composeur pour un proche. Hauteur fixe 72dp pour tap
  * target accessible + uniformité visuelle.
  *
  * Couleur de fond fournie par caller, texte blanc systématique. Toutes les

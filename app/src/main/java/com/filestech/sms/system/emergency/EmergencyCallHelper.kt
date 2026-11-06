@@ -33,8 +33,8 @@ import timber.log.Timber
  *    BroadcastReceiver via EmergencyShortcutReceiver).
  *  - `try/catch` sur SecurityException + ActivityNotFoundException : pas de
  *    crash si l'OS refuse au runtime.
- *  - Retourne [Outcome] explicite pour que l'UI affiche un snackbar
- *    différentié (PERMISSION_DENIED vs NO_DIALER vs SUCCESS).
+ *  - Rend un [CallOutcome] explicite pour que l'UI affiche un message différencié
+ *    (NO_DIALER, OS_ERROR ; PERMISSION_DENIED pour l'appel direct d'un proche seulement).
  *
  * **Hors scope** :
  *  - Pas d'enregistrement de l'appel (RECORD_AUDIO réservé voice MMS).
