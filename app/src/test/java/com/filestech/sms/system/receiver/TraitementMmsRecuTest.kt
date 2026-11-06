@@ -51,7 +51,7 @@ class TraitementMmsRecuTest {
     }
 
     private suspend fun traiter(resultat: Resultat, conf: RetrieveConf = conf()): TraitementMmsRecu.Issue {
-        coEvery { integration.integrer(any(), any(), any(), any(), any()) } returns resultat
+        coEvery { integration.integrer(any(), any(), any(), any(), any(), any()) } returns resultat
         return traitement.traiter(conf, CLE, 1, null) { true }
     }
 
@@ -66,7 +66,7 @@ class TraitementMmsRecuTest {
         assertThat(issue).isEqualTo(
             TraitementMmsRecu.Issue(garderLePdu = false, consigner = false, expediteurBloque = true),
         )
-        coVerify(exactly = 0) { integration.integrer(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { integration.integrer(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -79,14 +79,14 @@ class TraitementMmsRecuTest {
         val issue = traitement.traiter(sansFrom, CLE, 1, null) { true }
 
         assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = false, consigner = false))
-        coVerify(exactly = 0) { integration.integrer(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { integration.integrer(any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { notifier.notifyIncoming(any(), any(), any(), any()) }
     }
 
     /** Contrôle : sans `From:`, l'indice de la notification WAP-Push suffit — le garde ne doit pas l'écarter. */
     @Test
     fun `sans From, l'indice WAP-Push donne l'expediteur et le message est ecrit`() = runTest {
-        coEvery { integration.integrer(any(), any(), any(), any(), any()) } returns Resultat.Ecrit(ID)
+        coEvery { integration.integrer(any(), any(), any(), any(), any(), any()) } returns Resultat.Ecrit(ID)
         val sansFrom = RetrieveConf().apply {
             setDate(1_700_000_000L)
             setBody(PduBody())
@@ -149,8 +149,8 @@ class TraitementMmsRecuTest {
     @Test
     fun `la cle, la SIM et la porte du PDU vont jusqu'a l'ecriture`() = runTest {
         var porteLue = false
-        coEvery { integration.integrer(any(), 1, null, CLE, any()) } answers {
-            porteLue = arg<() -> Boolean>(4).invoke()
+        coEvery { integration.integrer(any(), 1, null, CLE, any(), any()) } answers {
+            porteLue = arg<() -> Boolean>(5).invoke()
             Resultat.DejaComplet(ID)
         }
 
@@ -166,7 +166,7 @@ class TraitementMmsRecuTest {
             coEvery { reglages.hydratedOrNull() } returns
                 AppSettings(sending = SendingSettings(groupMms = true, userMsisdn = MOI))
             val vus = mutableListOf<List<PhoneAddress>?>()
-            coEvery { integration.integrer(any(), any(), captureNullable(vus), any(), any()) } returns
+            coEvery { integration.integrer(any(), any(), captureNullable(vus), any(), any(), any()) } returns
                 Resultat.DejaComplet(ID)
             val conf = conf().apply {
                 addTo(EncodedStringValue(MOI))
@@ -181,7 +181,7 @@ class TraitementMmsRecuTest {
     @Test
     fun `sans le reglage, le meme MMS reste une conversation ordinaire`() = runTest {
         val vus = mutableListOf<List<PhoneAddress>?>()
-        coEvery { integration.integrer(any(), any(), captureNullable(vus), any(), any()) } returns
+        coEvery { integration.integrer(any(), any(), captureNullable(vus), any(), any(), any()) } returns
             Resultat.DejaComplet(ID)
         val conf = conf().apply {
             addTo(EncodedStringValue(MOI))
@@ -191,6 +191,32 @@ class TraitementMmsRecuTest {
         traitement.traiter(conf, CLE, 1, null) { true }
 
         assertThat(vus).containsExactly(null)
+    }
+
+    /**
+     * 2026-11-06 (issue #76) — les destinataires vont jusqu'à l'écriture, mode groupe coupé : sans l'expéditeur
+     * qu'un opérateur recopie dans `To`, et sans compter deux fois le même numéro écrit autrement.
+     */
+    @Test
+    fun `les destinataires vont jusqu'a l'ecriture, sans l'expediteur ni doublon d'ecriture`() = runTest {
+        // La vraie clé passe par `PhoneNumberUtils`, un bouchon sur la JVM : une règle explicite la remplace
+        // (les neuf derniers chiffres), pour vérifier que le traitement se sert bien de la clé.
+        coEvery { identite.snapshot() } returns mockk {
+            every { key(any()) } answers { firstArg<String>().filter { it.isDigit() }.takeLast(9) }
+        }
+        val destinataires = mutableListOf<List<String>?>()
+        coEvery { integration.integrer(any(), any(), any(), any(), captureNullable(destinataires), any()) } returns
+            Resultat.DejaComplet(ID)
+        val conf = conf().apply {
+            addTo(EncodedStringValue(MOI))
+            addTo(EncodedStringValue(BOB))
+            addTo(EncodedStringValue(ALICE))
+            addCc(EncodedStringValue("06 00 00 00 02"))
+        }
+
+        traitement.traiter(conf, CLE, 1, null) { true }
+
+        assertThat(destinataires.single()).containsExactly(MOI, BOB).inOrder()
     }
 
     private companion object {

@@ -90,6 +90,9 @@ class IntegrationMmsRecu @VisibleForTesting constructor(
         subId: Int?,
         membres: List<PhoneAddress>?,
         cle: String?,
+        // 2026-11-06 (issue #76) — calculés par l'appelant, qui a la clé d'identité des numéros. Avant
+        // `pduPresent` : les appelants passent celui-ci en lambda finale.
+        destinataires: List<String>? = null,
         pduPresent: () -> Boolean,
     ): Resultat {
         if (cle != null) {
@@ -109,6 +112,7 @@ class IntegrationMmsRecu @VisibleForTesting constructor(
                 groupMembers = membres,
                 transactionKey = cle,
                 encoreVoulu = pduPresent,
+                recipients = destinataires,
             )
         } catch (t: Throwable) {
             // Transaction annulée : aucune ligne ne cite ces fichiers.

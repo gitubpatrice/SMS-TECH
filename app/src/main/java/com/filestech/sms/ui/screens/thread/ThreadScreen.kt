@@ -30,17 +30,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Group
@@ -107,9 +107,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -178,6 +175,8 @@ fun ThreadScreen(
      */
     onForwardToNewContact: () -> Unit = {},
     onOpenMedia: () -> Unit = {},
+    /** 2026-11-06 (issue #76) — depuis la liste des destinataires : régler « MMS de groupe » et « Mon numéro ». */
+    onOpenSettings: () -> Unit = {},
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -757,6 +756,7 @@ fun ThreadScreen(
                 // v1.26.1 (audit F2) — bascule sur l'état courant du message.
                 onToggleStar = { msg -> viewModel.toggleMessageStarred(msg.id, !msg.starred) },
                 onPhoneClick = onPhoneClick,
+                onShowRecipients = { msg -> viewModel.ouvrirDestinataires(msg) },
             )
         }
         // v1.22.0 (double SIM) — résolveur SIM (subId → libellé) calculé une fois pour tout le
@@ -828,6 +828,7 @@ fun ThreadScreen(
                     // d'envoi par défaut) mais afficher "Vous · SIM 2" sur chaque burst sortant
                     // serait du bruit non sollicité.
                     simLabel = if (msg.isIncoming) simLabeler(msg.subId) else null,
+                    montrerEnvoiGroupe = state.conversation?.isGroup == false,
                     actions = itemActions,
                 )
             }
@@ -1103,6 +1104,26 @@ fun ThreadScreen(
             lastAt = state.lastMessageAt,
             formatters = formatters,
             onDismiss = { detailsOpen = false },
+            // 2026-11-06 (issue #76) — un groupe liste ses membres ; les noms viennent de `memberNames`.
+            membres = state.conversation?.takeIf { it.isGroup }?.addresses
+                ?.map { it.raw to state.memberNames[it.raw] }
+                .orEmpty(),
+        )
+    }
+    // 2026-11-06 (issue #76) — les destinataires d'un message adressé à plusieurs.
+    state.destinataires?.let { ui ->
+        DestinatairesMmsDialog(
+            ui = ui,
+            noms = state.memberNames,
+            onCopy = { numero ->
+                context.copyToClipboardSensitive(label = "phone", text = numero)
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            },
+            onOpenSettings = {
+                viewModel.fermerDestinataires()
+                onOpenSettings()
+            },
+            onDismiss = viewModel::fermerDestinataires,
         )
     }
     // v1.11.0 — Sujet 5 apparence : dialog couleur bulle + avatar.
@@ -1403,15 +1424,18 @@ private fun ThreadActionsMenu(
  * 2026-11-06 — le numéro se copie d'un geste : bouton à droite de sa ligne (demande de Patrice). La copie
  * passe par l'appelant ([copyToClipboardSensitive], marqué sensible comme toute copie de l'application,
  * invariant N4) ; l'icône devient une coche, car un snackbar s'afficherait SOUS la fenêtre, et TalkBack
- * l'annonce (région vivante).
+ * l'annonce (région vivante). Cf. [LigneNumeroCopiable].
+ *
+ * 2026-11-06 (issue #76) — un groupe montre ses [membres], nom et numéro, chacun copiable : le seul
+ * nombre de participants ne disait pas qui ils étaient.
  */
 @Composable
 internal fun ConversationDetailsDialog(
     title: String,
     /**
-     * v1.22.x — numéro du correspondant pour une conversation 1-to-1 (`null` pour un groupe :
-     * le compteur de participants suffit alors). Permet de distinguer deux conversations d'un
-     * même contact portant des numéros différents (ex. FR vs LU).
+     * v1.22.x — numéro du correspondant pour une conversation 1-to-1 (`null` pour un groupe, qui
+     * passe ses [membres]). Permet de distinguer deux conversations d'un même contact portant des
+     * numéros différents (ex. FR vs LU).
      */
     phoneNumber: String?,
     onCopyNumber: (String) -> Unit,
@@ -1421,46 +1445,37 @@ internal fun ConversationDetailsDialog(
     lastAt: Long?,
     formatters: com.filestech.sms.ui.util.ChatFormatters,
     onDismiss: () -> Unit,
+    /** Les membres d'un groupe, numéro brut → nom de contact s'il est connu ; vide pour une conversation à deux. */
+    membres: List<Pair<String, String?>> = emptyList(),
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.action_details)) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.padding(top = 8.dp))
                 if (!phoneNumber.isNullOrBlank()) {
-                    var copie by remember(phoneNumber) { mutableStateOf(false) }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            stringResource(R.string.thread_details_number, phoneNumber),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(
-                            onClick = {
-                                onCopyNumber(phoneNumber)
-                                copie = true
-                            },
-                            // TalkBack lit « Numéro copié » : sans région vivante, le libellé changerait en silence.
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                        ) {
-                            val libelle = if (copie) {
-                                R.string.thread_details_number_copied
-                            } else {
-                                R.string.thread_details_copy_number
-                            }
-                            Icon(
-                                imageVector = if (copie) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
-                                contentDescription = stringResource(libelle),
-                            )
-                        }
-                    }
+                    LigneNumeroCopiable(
+                        principal = stringResource(R.string.thread_details_number, phoneNumber),
+                        numero = phoneNumber,
+                        descriptionCopie = stringResource(R.string.thread_details_copy_number),
+                        onCopy = onCopyNumber,
+                    )
                 }
                 Text(
                     stringResource(R.string.thread_details_participants, participants),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                membres.forEach { (numero, nom) ->
+                    LigneNumeroCopiable(
+                        principal = nom ?: numero,
+                        secondaire = numero.takeIf { nom != null },
+                        numero = numero,
+                        descriptionCopie = stringResource(R.string.thread_details_copy_number_of, numero),
+                        onCopy = onCopyNumber,
+                    )
+                }
                 Text(
                     stringResource(R.string.thread_details_messages, messages),
                     style = MaterialTheme.typography.bodyMedium,
@@ -2162,6 +2177,8 @@ private class ThreadMessageItemActions(
     /** v1.26.1 (audit F2) — bascule « favori » ; le drapeau protège déjà de la purge auto. */
     val onToggleStar: (Message) -> Unit,
     val onPhoneClick: (String) -> Unit,
+    /** 2026-11-06 (issue #76) — la liste des destinataires d'un message adressé à plusieurs. */
+    val onShowRecipients: (Message) -> Unit,
 )
 
 /**
@@ -2201,6 +2218,11 @@ private fun ThreadMessageItem(
      * `sub_id` : aucun tag n'est alors ajouté. Résolu par le parent via [rememberSimLabeler].
      */
     simLabel: String? = null,
+    /**
+     * 2026-11-06 (issue #76) — `true` hors conversation de groupe : un message adressé à plusieurs y porte la
+     * ligne qui ouvre ses destinataires. Dans un groupe, la conversation les montre déjà.
+     */
+    montrerEnvoiGroupe: Boolean = false,
     actions: ThreadMessageItemActions,
 ) {
     // Taille du texte des messages : tout l'élément (séparateur, bulle, citation, horodatage).
@@ -2308,6 +2330,13 @@ private fun ThreadMessageItem(
                     smishingReasons = smishingReasons,
                 )
             }
+        }
+        if (montrerEnvoiGroupe && msg.mmsRecipients.size >= 2) {
+            LigneMessageDeGroupe(
+                nombre = msg.mmsRecipients.size,
+                isOutgoing = msg.isOutgoing,
+                onClick = { actions.onShowRecipients(msg) },
+            )
         }
     }
 }

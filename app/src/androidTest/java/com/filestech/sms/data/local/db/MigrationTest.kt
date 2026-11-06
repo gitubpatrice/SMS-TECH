@@ -752,4 +752,41 @@ class MigrationTest {
         // Contrôle positif : une autre clé passe.
         db.execSQL("UPDATE messages SET mms_transaction_key = 'cle-b' WHERE id = 2")
     }
+
+    /** 2026-11-06 (issue #76) — la colonne des destinataires arrive nulle, sans toucher aux messages. */
+    @Test
+    fun migrate14To15_ajouteLesDestinatairesMms_nullesSurLExistant() {
+        helper.createDatabase(TEST_DB, 14).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO conversations
+                    (id, thread_id, addresses_csv, display_name, last_message_at,
+                     last_message_preview, unread_count, pinned, archived, muted, in_vault)
+                VALUES (1, 7, '+33600000001', 'Alice', 1700000000000, 'a', 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversation_id, telephony_uri, address, body, type, direction, date,
+                     date_sent, read, starred, status, attachments_count)
+                VALUES (1, 1, NULL, '+33600000001', 'photo', 1, 0, 1700000000000, NULL, 1, 0, 4, 1)
+                """.trimIndent(),
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 15, true, Migrations.MIGRATION_14_15)
+
+        db.query("SELECT body, mms_recipients FROM messages WHERE id = 1").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getString(0)).isEqualTo("photo")
+            assertThat(c.isNull(1)).isTrue()
+        }
+        // Contrôle positif : la colonne s'écrit et se relit.
+        db.execSQL("UPDATE messages SET mms_recipients = '+33600000002;+33600000003' WHERE id = 1")
+        db.query("SELECT mms_recipients FROM messages WHERE id = 1").use { c ->
+            assertThat(c.moveToFirst()).isTrue()
+            assertThat(c.getString(0)).isEqualTo("+33600000002;+33600000003")
+        }
+    }
 }

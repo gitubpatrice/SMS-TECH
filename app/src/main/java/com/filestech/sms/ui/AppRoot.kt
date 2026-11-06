@@ -447,6 +447,7 @@ fun AppRoot() {
                     nav.navigate(Compose())
                 },
                 onOpenMedia = { nav.navigate(MediaGallery(args.conversationId)) },
+                onOpenSettings = { nav.navigate(Settings) },
             )
         }
         composable<MediaGallery> { MediaGalleryScreen(onBack = { nav.popBackStack() }) }

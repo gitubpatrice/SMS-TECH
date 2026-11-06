@@ -3,6 +3,9 @@ package com.filestech.sms.data.sms
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
+import com.filestech.sms.core.ext.stripInvisibleChars
+import com.filestech.sms.core.ext.stripMmsAddressSuffix
+import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.model.MessageDirection
 
 /**
@@ -48,11 +51,12 @@ internal const val MMS_BOX_COLUMN = "msg_box"
  * Picks the relevant address from `content://mms/{id}/addr`:
  *  - FROM (type 137) for incoming
  *  - the first TO (type 151) for outgoing
- *  - fallback to "FROM-generic" (type 129) when neither 137 nor 151 yields
- *    anything — observed on some OEM ROMs (older Samsung One UI, Xiaomi MIUI
- *    legacy) that store the originator under the generic AOSP type 129
- *    instead of the standard 137. Without this fallback, those MMS were
- *    silently skipped at import time (v1.8.0 bug 1).
+ *  - fallback to type 129 when neither 137 nor 151 yields anything — observed
+ *    on some OEM ROMs (older Samsung One UI, Xiaomi MIUI legacy) that store the
+ *    originator under 129 instead of the standard 137. Without this fallback,
+ *    those MMS were silently skipped at import time (v1.8.0 bug 1).
+ *    2026-11-06 — 129 is `PduHeaders.BCC` (0x81), not a "generic FROM" (FROM is
+ *    0x89 = 137): those ROMs misuse the BCC type for the sender.
  *
  * Skips the AOSP placeholder `insert-address-token`.
  *
@@ -75,10 +79,34 @@ internal fun readMmsAddress(
     resolver: ContentResolver,
     mmsId: Long,
     direction: MessageDirection,
-): String? {
+): String? = readMmsAddresses(resolver, mmsId, direction)?.adresse
+
+/**
+ * 2026-11-06 (issue #76) — ce que lit [readMmsAddress], plus les destinataires d'un envoi groupé, en UNE
+ * lecture de `addr`. [adresse] suit exactement la règle de [readMmsAddress] ; [destinataires] réunit les
+ * `To` (151) puis les `Cc` (130), cf. [DestinatairesMms.of] — `null` hors envoi groupé ; l'expéditeur d'un
+ * MMS reçu en est retiré. Le type 129 (`Bcc`) n'y entre pas : des ROM y rangent l'EXPÉDITEUR (mesuré sur un
+ * Galaxy S9), si bien qu'on ne peut pas le tenir pour un destinataire.
+ */
+internal data class AdressesMms(val adresse: String, val destinataires: List<String>?)
+
+/**
+ * Voir [AdressesMms]. `null` = la requête d'adresse a ÉCHOUÉ, comme pour [readMmsAddress].
+ *
+ * @param cle la clé d'identité des numéros (`PhoneIdentity.Snapshot.key`), pour rapprocher deux écritures
+ *   du même destinataire ; sans elle, l'adresse brute.
+ */
+internal fun readMmsAddresses(
+    resolver: ContentResolver,
+    mmsId: Long,
+    direction: MessageDirection,
+    cle: (String) -> String = { it },
+): AdressesMms? {
     var from = ""
     var firstTo = ""
     var fallbackGeneric = ""
+    val tos = ArrayList<String>(2)
+    val ccs = ArrayList<String>(0)
     val cursor = resolver.query(
         Uri.parse("content://mms/$mmsId/addr"),
         arrayOf("address", "type"),
@@ -95,22 +123,30 @@ internal fun readMmsAddress(
             val type = c.getInt(1)
             when (type) {
                 137 -> if (from.isBlank()) from = addr
-                151 -> if (firstTo.isBlank()) firstTo = addr
-                // v1.8.0 (bug 1 fix) — type 129 = "FROM" générique AOSP
-                // (constante non publique `PduHeaders.FROM` = 0x89 = 129).
-                // Certains OEM (Samsung One UI < 5 sur S9 d'après le retour
-                // user, MIUI legacy) y stockent l'originateur au lieu du
-                // type 137. Capturé en fallback : utilisé uniquement si
-                // ni 137 (FROM) ni 151 (TO) ne donnent rien.
+                151 -> {
+                    if (firstTo.isBlank()) firstTo = addr
+                    tos += addr.stripMmsAddressSuffix().stripInvisibleChars()
+                }
+                130 -> ccs += addr.stripMmsAddressSuffix().stripInvisibleChars()
+                // v1.8.0 (bug 1 fix) — type 129. Certains OEM (Samsung One UI < 5
+                // sur S9 d'après le retour user, MIUI legacy) y stockent l'originateur
+                // au lieu du type 137. Capturé en fallback : utilisé uniquement si
+                // ni 137 (FROM) ni 151 (TO) ne donnent rien. 2026-11-06 — 129 est en
+                // fait `PduHeaders.BCC` (0x81) ; FROM vaut 0x89 = 137.
                 129 -> if (fallbackGeneric.isBlank()) fallbackGeneric = addr
             }
         }
     }
-    // Pour l'incoming, ordre de préférence : 137 (FROM standard) → 129 (FROM générique OEM).
+    // Pour l'incoming, ordre de préférence : 137 (FROM standard) → 129 (repli OEM).
     // Pour l'outgoing, ordre : 151 (TO premier) → 137 (FROM de l'utilisateur lui-même) → 129.
-    return if (direction == MessageDirection.INCOMING) {
+    val adresse = if (direction == MessageDirection.INCOMING) {
         from.ifBlank { fallbackGeneric }
     } else {
         firstTo.ifBlank { from.ifBlank { fallbackGeneric } }
     }
+    // Nettoyé comme les destinataires, pour que leurs clés se comparent.
+    val expediteur = adresse.takeIf { direction == MessageDirection.INCOMING }
+        ?.stripMmsAddressSuffix()
+        ?.stripInvisibleChars()
+    return AdressesMms(adresse, DestinatairesMms.of(tos, ccs, expediteur = expediteur, cle = cle))
 }

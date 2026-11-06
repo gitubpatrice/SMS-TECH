@@ -244,6 +244,7 @@ class ContactsRefusesTest {
             context = context,
             io = dispatcher,
             appLock = appLock,
+            phoneIdentity = mockk(relaxed = true),
         )
     }
 }
