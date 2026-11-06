@@ -227,15 +227,15 @@ class ConversationsViewModel @Inject constructor(
     private val selectedIds = MutableStateFlow<Set<Long>>(emptySet())
 
     /**
-     * 2026-11-06 — ce que la vue montre, et l'état du dossier des bloquées, cf. [repartir]. Les deux
-     * lectures (actives, archivées) servent dans TOUTES les vues : une conversation bloquée quitte les
-     * Archives pour le dossier, et l'icône du dossier doit la voir même archivée. Partagé entre [state] et
-     * [messageHits], qui en tire les conversations à écarter de la recherche.
+     * 2026-11-06 — ce que la vue montre, et l'état du dossier des bloquées, cf. [repartir]. Toutes les vues
+     * lisent TOUTES les conversations hors coffre, archivées comprises : une conversation bloquée quitte les
+     * Archives pour le dossier, et l'icône du dossier doit la voir même archivée. Une seule lecture, pas
+     * deux combinées : celles-ci se rafraîchissaient l'une après l'autre, et une conversation archivée
+     * depuis le dossier en sortait le temps d'une émission (état vide affiché un instant). Partagé entre
+     * [state] et [messageHits], qui en tire les conversations à écarter de la recherche.
      */
-    private val repartition: Flow<Repartition> = combine(
-        repo.observeAll(includeArchived = false),
-        repo.observeAll(includeArchived = true),
-    ) { actives, archivees -> repartir(vue, actives, archivees) }
+    private val repartition: Flow<Repartition> = repo.observeAllNonVault()
+        .map { horsCoffre -> repartir(vue, horsCoffre) }
         .flowOn(io)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), replay = 1)
 

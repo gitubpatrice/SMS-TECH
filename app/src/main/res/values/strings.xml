@@ -80,7 +80,7 @@
          while the action ALSO wiped the conversation from Room and from the system SMS database;
          the deletion has been removed rather than merely documented. -->
     <string name="conversation_block_confirm_title">Block this conversation?</string>
-    <string name="conversation_block_confirm_body">Every number in this conversation will be blocked. The conversation moves to the blocked conversations folder (icon at the top of the list), and nothing is deleted. You can unblock it at any time.</string>
+    <string name="conversation_block_confirm_body">Every number in this conversation will be blocked. The conversation moves to the blocked conversations folder (icon at the top of the main list), and nothing is deleted. You can unblock it at any time.</string>
     <!-- 2026-11-06 — blocked conversations now have their own folder (icon next to the vault); the "Blocked" header at the bottom of the list is gone. -->
     <string name="conversations_blocked_title">Blocked conversations</string>
     <string name="conversations_blocked_empty">No blocked conversations.</string>
@@ -928,7 +928,7 @@
     <string name="about_help_vault_step2">Unlock: PIN, passphrase or biometrics depending on your setting</string>
     <string name="about_help_vault_step3">Settings → Security to configure the vault</string>
     <string name="about_help_block_title">Block a number</string>
-    <string name="about_help_block_step1">In a conversation: menu ⋮ → Block (= blocks every number; the conversation is kept, under \"Blocked\")</string>
+    <string name="about_help_block_step1">In a conversation: menu ⋮ → Block (= blocks every number; the conversation is kept, in the blocked conversations folder)</string>
     <string name="about_help_block_step2">Long-press a conversation in the list → Block (keeps history)</string>
     <string name="about_help_block_step3">The number is added to the system blocklist, shared with the Phone app</string>
     <string name="about_help_translate_title">Translate a received message</string>

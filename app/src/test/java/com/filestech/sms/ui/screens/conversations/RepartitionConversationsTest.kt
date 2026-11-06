@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test
  * Une conversation bloquée n'apparaît QUE dans le dossier, archivée ou non ; la liste principale et les
  * Archives n'en montrent aucune ; l'icône du dossier s'affiche dès qu'il en existe une, même archivée ; et
  * la recherche dans les messages ne ramène pas le texte d'une conversation bloquée dans la liste.
+ *
+ * [repartir] reçoit UNE lecture de toutes les conversations hors coffre, dans l'ordre de la requête : les
+ * jeux ci-dessous mêlent donc archivées et non archivées, comme la base.
  */
 class RepartitionConversationsTest {
 
@@ -30,12 +33,17 @@ class RepartitionConversationsTest {
         blocked = blocked,
     )
 
-    private val actives = listOf(conv(1), conv(2, blocked = true), conv(3))
-    private val archivees = listOf(conv(4, archived = true), conv(5, archived = true, blocked = true))
+    private val horsCoffre = listOf(
+        conv(5, archived = true, blocked = true),
+        conv(1),
+        conv(4, archived = true),
+        conv(2, blocked = true),
+        conv(3),
+    )
 
     @Test
-    fun `liste principale - les actives non bloquees, et l'icone du dossier`() {
-        val r = repartir(VueConversations.PRINCIPALE, actives, archivees)
+    fun `liste principale - les actives non bloquees, dans l'ordre de la lecture, et l'icone du dossier`() {
+        val r = repartir(VueConversations.PRINCIPALE, horsCoffre)
 
         assertThat(r.conversations.map { it.id }).containsExactly(1L, 3L).inOrder()
         assertThat(r.bloqueesExistent).isTrue()
@@ -43,24 +51,24 @@ class RepartitionConversationsTest {
 
     @Test
     fun `archives - les archivees non bloquees`() {
-        val r = repartir(VueConversations.ARCHIVES, actives, archivees)
+        val r = repartir(VueConversations.ARCHIVES, horsCoffre)
 
         assertThat(r.conversations.map { it.id }).containsExactly(4L)
     }
 
     /** Une bloquée archivée quitte les Archives pour le dossier : elle n'est pas perdue entre les deux. */
     @Test
-    fun `dossier - toutes les bloquees, archivees ou non`() {
-        val r = repartir(VueConversations.BLOQUEES, actives, archivees)
+    fun `dossier - toutes les bloquees, archivees ou non, dans l'ordre de la lecture`() {
+        val r = repartir(VueConversations.BLOQUEES, horsCoffre)
 
-        assertThat(r.conversations.map { it.id }).containsExactly(2L, 5L)
+        assertThat(r.conversations.map { it.id }).containsExactly(5L, 2L).inOrder()
         assertThat(r.idsBloques).containsExactly(2L, 5L)
     }
 
     /** Seule une bloquée ARCHIVÉE existe : l'icône doit quand même s'afficher, sinon elle est introuvable. */
     @Test
     fun `icone - une seule bloquee, archivee, suffit`() {
-        val r = repartir(VueConversations.PRINCIPALE, listOf(conv(1)), listOf(conv(5, archived = true, blocked = true)))
+        val r = repartir(VueConversations.PRINCIPALE, listOf(conv(1), conv(5, archived = true, blocked = true)))
 
         assertThat(r.bloqueesExistent).isTrue()
         assertThat(r.conversations.map { it.id }).containsExactly(1L)
@@ -69,20 +77,23 @@ class RepartitionConversationsTest {
     /** Contrôle négatif : sans conversation bloquée, pas d'icône, et la liste est intacte. */
     @Test
     fun `aucune bloquee - pas d'icone, liste intacte`() {
-        val r = repartir(VueConversations.PRINCIPALE, listOf(conv(1), conv(3)), listOf(conv(4, archived = true)))
+        val r = repartir(VueConversations.PRINCIPALE, listOf(conv(1), conv(4, archived = true), conv(3)))
 
         assertThat(r.bloqueesExistent).isFalse()
         assertThat(r.idsBloques).isEmpty()
         assertThat(r.conversations.map { it.id }).containsExactly(1L, 3L).inOrder()
-        assertThat(repartir(VueConversations.BLOQUEES, listOf(conv(1)), emptyList()).conversations).isEmpty()
+        assertThat(repartir(VueConversations.BLOQUEES, listOf(conv(1))).conversations).isEmpty()
     }
 
-    /** Défense : une conversation lue deux fois n'apparaît qu'une fois dans le dossier. */
+    /** Archiver la seule bloquée depuis le dossier : elle y reste, et l'icône aussi. */
     @Test
-    fun `dossier - pas de doublon`() {
-        val r = repartir(VueConversations.BLOQUEES, listOf(conv(2, blocked = true)), listOf(conv(2, blocked = true)))
+    fun `dossier - archiver une bloquee ne la fait pas sortir du dossier`() {
+        val avant = repartir(VueConversations.BLOQUEES, listOf(conv(1), conv(2, blocked = true)))
+        val apres = repartir(VueConversations.BLOQUEES, listOf(conv(1), conv(2, archived = true, blocked = true)))
 
-        assertThat(r.conversations.map { it.id }).containsExactly(2L)
+        assertThat(avant.conversations.map { it.id }).containsExactly(2L)
+        assertThat(apres.conversations.map { it.id }).containsExactly(2L)
+        assertThat(apres.bloqueesExistent).isTrue()
     }
 
     @Test

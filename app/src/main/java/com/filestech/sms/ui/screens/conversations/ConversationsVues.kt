@@ -30,19 +30,15 @@ internal data class Repartition(
 )
 
 /**
- * Répartit les conversations hors coffre entre les trois vues. [actives] et [archivees] sont les deux
- * lectures de `ConversationRepository.observeAll` ; une conversation ne peut figurer que dans l'une des deux,
- * le dédoublonnage par identifiant n'est qu'une défense.
+ * Répartit les conversations hors coffre entre les trois vues. [horsCoffre] est UNE lecture
+ * (`ConversationRepository.observeAllNonVault`), archivées comprises : chaque vue part du même instantané,
+ * et l'ordre de la lecture est conservé dans chacune.
  */
-internal fun repartir(
-    vue: VueConversations,
-    actives: List<Conversation>,
-    archivees: List<Conversation>,
-): Repartition {
-    val bloquees = (actives + archivees).filter { it.blocked }.distinctBy { it.id }
+internal fun repartir(vue: VueConversations, horsCoffre: List<Conversation>): Repartition {
+    val bloquees = horsCoffre.filter { it.blocked }
     val visibles = when (vue) {
-        VueConversations.PRINCIPALE -> actives.filterNot { it.blocked }
-        VueConversations.ARCHIVES -> archivees.filterNot { it.blocked }
+        VueConversations.PRINCIPALE -> horsCoffre.filter { !it.archived && !it.blocked }
+        VueConversations.ARCHIVES -> horsCoffre.filter { it.archived && !it.blocked }
         VueConversations.BLOQUEES -> bloquees
     }
     return Repartition(
