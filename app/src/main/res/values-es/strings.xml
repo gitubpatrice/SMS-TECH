@@ -81,8 +81,11 @@
          while the action ALSO wiped the conversation from Room and from the system SMS database;
          the deletion has been removed rather than merely documented. -->
     <string name="conversation_block_confirm_title">¿Bloquear esta conversación?</string>
-    <string name="conversation_block_confirm_body">Se bloquearán todos los números de esta conversación. La conversación permanece en su lista, marcada como bloqueada, y no se elimina nada. Puede desbloquearla en cualquier momento.</string>
-    <string name="conversations_section_blocked">Bloqueadas</string>
+    <string name="conversation_block_confirm_body">Se bloquearán todos los números de esta conversación. La conversación pasa a la carpeta de conversaciones bloqueadas (icono en la parte superior de la lista) y no se elimina nada. Puede desbloquearla en cualquier momento.</string>
+    <!-- 2026-11-06 — blocked conversations now have their own folder (icon next to the vault). -->
+    <string name="conversations_blocked_title">Conversaciones bloqueadas</string>
+    <string name="conversations_blocked_empty">No hay conversaciones bloqueadas.</string>
+    <string name="conversations_blocked_info">Los mensajes nuevos de estos números se eliminan nada más llegar. Aquí solo están los mensajes de antes del bloqueo.</string>
     <string name="conversations_section_messages">Mensajes</string>
     <string name="conversation_blocked_label">Bloqueada</string>
     <string name="settings_purge_blocked">Eliminar las conversaciones bloqueadas</string>

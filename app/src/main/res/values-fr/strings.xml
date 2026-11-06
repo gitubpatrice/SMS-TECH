@@ -78,8 +78,11 @@
          que l'action effaçait AUSSI la conversation de Room et de la base SMS du système ; la
          suppression a été retirée plutôt que simplement documentée. -->
     <string name="conversation_block_confirm_title">Bloquer cette conversation ?</string>
-    <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. La conversation reste dans votre liste, signalée comme bloquée, et rien n\'est supprimé. Vous pourrez la débloquer à tout moment.</string>
-    <string name="conversations_section_blocked">Bloquées</string>
+    <string name="conversation_block_confirm_body">Tous les numéros de cette conversation seront bloqués. La conversation passe dans le dossier des conversations bloquées (icône en haut de la liste), et rien n\'est supprimé. Vous pourrez la débloquer à tout moment.</string>
+    <!-- 2026-11-06 — les conversations bloquées ont leur dossier (icône à côté du coffre) ; l\'en-tête « Bloquées » en bas de liste a disparu. -->
+    <string name="conversations_blocked_title">Conversations bloquées</string>
+    <string name="conversations_blocked_empty">Aucune conversation bloquée.</string>
+    <string name="conversations_blocked_info">Les nouveaux messages de ces numéros sont supprimés dès leur arrivée. Seuls les messages d\'avant le blocage sont ici.</string>
     <string name="conversations_section_messages">Messages</string>
     <string name="conversation_blocked_label">Bloquée</string>
     <string name="settings_purge_blocked">Purger les conversations bloquées</string>

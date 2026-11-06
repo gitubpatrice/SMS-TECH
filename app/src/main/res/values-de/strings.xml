@@ -79,8 +79,11 @@
          while the action ALSO wiped the conversation from Room and from the system SMS database;
          the deletion has been removed rather than merely documented. -->
     <string name="conversation_block_confirm_title">Diese Unterhaltung blockieren?</string>
-    <string name="conversation_block_confirm_body">Alle Nummern dieser Unterhaltung werden blockiert. Die Unterhaltung bleibt in Ihrer Liste, als blockiert markiert, und nichts wird gelöscht. Sie können die Blockierung jederzeit aufheben.</string>
-    <string name="conversations_section_blocked">Blockiert</string>
+    <string name="conversation_block_confirm_body">Alle Nummern dieser Unterhaltung werden blockiert. Die Unterhaltung wandert in den Ordner der blockierten Unterhaltungen (Symbol oben in der Liste), und nichts wird gelöscht. Sie können die Blockierung jederzeit aufheben.</string>
+    <!-- 2026-11-06 — blocked conversations now have their own folder (icon next to the vault). -->
+    <string name="conversations_blocked_title">Blockierte Unterhaltungen</string>
+    <string name="conversations_blocked_empty">Keine blockierten Unterhaltungen.</string>
+    <string name="conversations_blocked_info">Neue Nachrichten von diesen Nummern werden sofort beim Eingang gelöscht. Hier stehen nur die Nachrichten von vor der Blockierung.</string>
     <string name="conversations_section_messages">Nachrichten</string>
     <string name="conversation_blocked_label">Blockiert</string>
     <string name="settings_purge_blocked">Blockierte Unterhaltungen bereinigen</string>
