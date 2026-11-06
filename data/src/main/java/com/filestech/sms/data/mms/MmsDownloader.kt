@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
+import android.telephony.TelephonyManager
 import androidx.core.content.FileProvider
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
@@ -119,6 +120,40 @@ class MmsDownloader @Inject constructor(
             Outcome.Failure(AppError.Telephony("downloadMultimediaMessage failed", t))
         }
     }
+
+    /**
+     * 2026-11-06 (courriel d'un utilisateur Visible/Verizon) — l'adresse à télécharger, complétée de
+     * l'identifiant de transaction quand l'opérateur l'attend ([AdresseDeTelechargement]). Le service MMS
+     * d'Android ne le fait pas : c'est à l'application, comme dans AOSP Messaging. La même adresse sert au
+     * téléchargement, à la clé du PDU gardé et à la réponse au MMSC.
+     */
+    fun adresseATelecharger(contentLocation: String, transactionId: String?, subId: Int?): String {
+        val parLaConfiguration = runCatching {
+            subscriptionAwareManager(subId).carrierConfigValues
+                .getBoolean(SmsManager.MMS_CONFIG_APPEND_TRANSACTION_ID, false)
+        }.getOrDefault(false)
+        val ajouter = parLaConfiguration || AdresseDeTelechargement.operateurAttendLIdentifiant(operateurSim(subId))
+        val adresse = AdresseDeTelechargement.completer(contentLocation, transactionId, ajouter)
+        // Sans l'adresse : elle peut porter un jeton de session (cf. audit SEC-06 du receveur).
+        Timber.i(
+            "MMS: identifiant de transaction ajoute=%b (configuration=%b, operateur=%b)",
+            adresse != contentLocation,
+            parLaConfiguration,
+            ajouter && !parLaConfiguration,
+        )
+        return adresse
+    }
+
+    /** MCC+MNC de la SIM de [subId] (`310004`…), ou `null` ; aucune permission requise. */
+    private fun operateurSim(subId: Int?): String? = runCatching {
+        val base = context.getSystemService(TelephonyManager::class.java) ?: return null
+        val tm = if (subId != null && subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+            base.createForSubscriptionId(subId)
+        } else {
+            base
+        }
+        tm.simOperator?.takeIf { it.isNotBlank() }
+    }.getOrNull()
 
     private fun subscriptionAwareManager(subId: Int?): SmsManager = when {
         subId == null -> @Suppress("DEPRECATION") SmsManager.getDefault()
