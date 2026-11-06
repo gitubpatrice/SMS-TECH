@@ -75,6 +75,8 @@ class ThreadViewModel @Inject constructor(
     // Settings + filtre nav AppRoot). En decoy, l'item NE DOIT PAS
     // apparaître (l'agresseur ne doit pas savoir qu'un coffre existe).
     private val appLock: com.filestech.sms.security.AppLockManager,
+    // 2026-11-06 (issue #76) — reconnaître « Mon numéro » parmi les destinataires d'un message.
+    private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
 ) : ViewModel() {
 
     /** Live playback state, surfaced for the composer's preview UI. */
@@ -172,9 +174,14 @@ class ThreadViewModel @Inject constructor(
         val isExporting: Boolean = false,
         /**
          * v1.28.4 — noms de contact des expéditeurs, par adresse brute de message : c'est le nom
-         * que chaque bulle reçue d'un GROUPE affiche. Inutilisé pour une conversation ordinaire.
+         * que chaque bulle reçue d'un GROUPE affiche.
+         *
+         * 2026-11-06 (issue #76) — aussi les membres d'un groupe (fenêtre des détails) et les
+         * destinataires d'un message adressé à plusieurs (fenêtre des destinataires).
          */
         val memberNames: Map<String, String> = emptyMap(),
+        /** 2026-11-06 (issue #76) — la fenêtre des destinataires ouverte, cf. [ouvrirDestinataires]. */
+        val destinataires: DestinatairesUi? = null,
         val draftSeeded: Boolean = false,
         val hasContact: Boolean = false,
         val messageCount: Int = 0,
@@ -439,6 +446,8 @@ class ThreadViewModel @Inject constructor(
                     draftSeeded = st.draftSeeded || conv != null,
                 )
             }
+            // 2026-11-06 (issue #76) — la fenêtre des détails d'un groupe nomme ses membres.
+            if (conv?.isGroup == true) resoudreNoms(conv.addresses.map { it.raw })
         }.launchIn(viewModelScope)
         convFlow
             .map { conv -> conv?.addresses?.firstOrNull()?.raw }
@@ -1451,22 +1460,57 @@ class ThreadViewModel @Inject constructor(
      * possède, et `lookupByPhone` applique déjà la règle de rapprochement des numéros.
      */
     private fun resoudreNomsDesExpediteurs(msgs: List<Message>) {
+        // 2026-11-06 (issue #76) — avec les destinataires des messages adressés à plusieurs.
+        resoudreNoms(
+            msgs.filter { it.isIncoming }.map { it.address } + msgs.flatMap { it.mmsRecipients },
+        )
+    }
+
+    /**
+     * Nomme, une fois chacune, les adresses brutes encore inconnues. Sans `READ_CONTACTS`, la recherche lève :
+     * l'adresse reste alors sans nom, l'écran montre le numéro.
+     */
+    private fun resoudreNoms(adresses: List<String>) {
         val connus = _state.value.memberNames
-        val inconnus = msgs.asSequence()
-            .filter { it.isIncoming }
-            .map { it.address }
-            .filter { it.isNotBlank() && it !in connus }
-            .distinct()
-            .toList()
+        val inconnus = adresses.filter { it.isNotBlank() && it !in connus }.distinct()
         if (inconnus.isEmpty()) return
         viewModelScope.launch {
             val noms = inconnus.mapNotNull { a ->
-                runCatching { contactRepo.lookupByPhone(a)?.displayName }.getOrNull()
+                com.filestech.sms.core.result
+                    .runCatchingCancellable { contactRepo.lookupByPhone(a)?.displayName }
+                    .getOrNull()
                     ?.takeIf { it.isNotBlank() }
                     ?.let { a to it }
             }.toMap()
             if (noms.isNotEmpty()) _state.update { it.copy(memberNames = it.memberNames + noms) }
         }
+    }
+
+    /**
+     * 2026-11-06 (issue #76) — prépare la fenêtre des destinataires de [message] : l'utilisateur y est marqué
+     * quand « Mon numéro » est renseigné (même règle d'identité que `GroupMmsMembers`), et l'aide dit ce
+     * qu'il faut régler pour que les prochains messages de groupe ouvrent une conversation avec tous.
+     */
+    fun ouvrirDestinataires(message: Message) {
+        val bruts = message.mmsRecipients
+        if (bruts.size < 2) return
+        viewModelScope.launch {
+            val envoi = cachedSettings.value.sending
+            val identite = com.filestech.sms.core.result
+                .runCatchingCancellable { phoneIdentity.snapshot() }
+                .getOrNull()
+            val cleMoi = envoi.userMsisdn?.takeIf { it.isNotBlank() }
+                ?.let { moi -> identite?.key(moi) }
+                ?.takeIf { it.isNotBlank() }
+            val liste = destinatairesAffiches(bruts) { brut -> cleMoi != null && identite?.key(brut) == cleMoi }
+            _state.update {
+                it.copy(destinataires = DestinatairesUi(liste, aideGroupe(envoi.groupMms, cleMoi != null)))
+            }
+        }
+    }
+
+    fun fermerDestinataires() {
+        _state.update { it.copy(destinataires = null) }
     }
 
     fun setAppearance(bubbleColorArgb: Int?, avatarUri: String?) {

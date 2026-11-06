@@ -3,6 +3,9 @@ package com.filestech.sms.data.sms
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
+import com.filestech.sms.core.ext.stripInvisibleChars
+import com.filestech.sms.core.ext.stripMmsAddressSuffix
+import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.model.MessageDirection
 
 /**
@@ -75,10 +78,27 @@ internal fun readMmsAddress(
     resolver: ContentResolver,
     mmsId: Long,
     direction: MessageDirection,
-): String? {
+): String? = readMmsAddresses(resolver, mmsId, direction)?.adresse
+
+/**
+ * 2026-11-06 (issue #76) — ce que lit [readMmsAddress], plus les destinataires d'un envoi groupé, en UNE
+ * lecture de `addr`. [adresse] suit exactement la règle de [readMmsAddress] ; [destinataires] réunit les
+ * `To` (151) puis les `Cc` (130), cf. [DestinatairesMms.of] — `null` hors envoi groupé. Le type 129, que
+ * certaines ROM donnent à l'expéditeur, n'y entre pas.
+ */
+internal data class AdressesMms(val adresse: String, val destinataires: List<String>?)
+
+/** Voir [AdressesMms]. `null` = la requête d'adresse a ÉCHOUÉ, comme pour [readMmsAddress]. */
+internal fun readMmsAddresses(
+    resolver: ContentResolver,
+    mmsId: Long,
+    direction: MessageDirection,
+): AdressesMms? {
     var from = ""
     var firstTo = ""
     var fallbackGeneric = ""
+    val tos = ArrayList<String>(2)
+    val ccs = ArrayList<String>(0)
     val cursor = resolver.query(
         Uri.parse("content://mms/$mmsId/addr"),
         arrayOf("address", "type"),
@@ -95,7 +115,11 @@ internal fun readMmsAddress(
             val type = c.getInt(1)
             when (type) {
                 137 -> if (from.isBlank()) from = addr
-                151 -> if (firstTo.isBlank()) firstTo = addr
+                151 -> {
+                    if (firstTo.isBlank()) firstTo = addr
+                    tos += addr.stripMmsAddressSuffix().stripInvisibleChars()
+                }
+                130 -> ccs += addr.stripMmsAddressSuffix().stripInvisibleChars()
                 // v1.8.0 (bug 1 fix) — type 129 = "FROM" générique AOSP
                 // (constante non publique `PduHeaders.FROM` = 0x89 = 129).
                 // Certains OEM (Samsung One UI < 5 sur S9 d'après le retour
@@ -108,9 +132,10 @@ internal fun readMmsAddress(
     }
     // Pour l'incoming, ordre de préférence : 137 (FROM standard) → 129 (FROM générique OEM).
     // Pour l'outgoing, ordre : 151 (TO premier) → 137 (FROM de l'utilisateur lui-même) → 129.
-    return if (direction == MessageDirection.INCOMING) {
+    val adresse = if (direction == MessageDirection.INCOMING) {
         from.ifBlank { fallbackGeneric }
     } else {
         firstTo.ifBlank { from.ifBlank { fallbackGeneric } }
     }
+    return AdressesMms(adresse, DestinatairesMms.of(tos, ccs))
 }

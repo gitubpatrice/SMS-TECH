@@ -103,6 +103,9 @@ abstract class AppDatabase : RoomDatabase() {
         // v14 (2026-09-14, v1.28.9): ajoute `messages.mms_transaction_key TEXT` + index UNIQUE — la cle
         //   de transaction d'un MMS entrant, pour que la reprise d'un PDU garde reconnaisse un message
         //   deja ecrit au lieu de le dupliquer ou de le ressusciter (F17). Strictement additive.
-        const val SCHEMA_VERSION = 14
+        // v15 (2026-11-06, v1.30.0): ajoute `messages.mms_recipients TEXT` — les destinataires d'un MMS
+        //   adresse a plusieurs, que rien ne gardait quand le message tombait dans la conversation de son
+        //   expediteur (issue #76). Strictement additive ; aucun rattrapage possible pour les MMS recus.
+        const val SCHEMA_VERSION = 15
     }
 }

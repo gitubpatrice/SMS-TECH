@@ -7,6 +7,7 @@ import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.repository.FichiersDePiecesJointes
 import com.filestech.sms.data.repository.IncomingAttachment
+import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.model.PhoneAddress
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.NonCancellable
@@ -109,6 +110,7 @@ class IntegrationMmsRecu @VisibleForTesting constructor(
                 groupMembers = membres,
                 transactionKey = cle,
                 encoreVoulu = pduPresent,
+                recipients = DestinatairesMms.of(contenu.destinataires, contenu.copies),
             )
         } catch (t: Throwable) {
             // Transaction annulée : aucune ligne ne cite ces fichiers.

@@ -6,6 +6,7 @@ import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.local.db.entity.QuickReplyEntity
 import com.filestech.sms.data.local.db.entity.ScheduledMessageEntity
+import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.model.Attachment
 import com.filestech.sms.domain.model.BlockedNumber
 import com.filestech.sms.domain.model.Conversation
@@ -83,6 +84,7 @@ fun MessageEntity.toDomain(attachments: List<Attachment> = emptyList()): Message
     attachments = attachments,
     replyToMessageId = replyToMessageId,
     reactionEmoji = reactionEmoji,
+    mmsRecipients = DestinatairesMms.decoder(mmsRecipients),
 )
 
 /**

@@ -438,6 +438,17 @@ object Migrations {
         }
     }
 
+    /**
+     * 2026-11-06 (v1.30.0, issue #76) — `messages.mms_recipients TEXT`, nulle sur l'existant. Additive.
+     * Aucun rattrapage pour les MMS reçus : leurs destinataires n'étaient que dans le PDU, effacé après
+     * traitement. Ceux qu'importe la synchronisation à partir de cette version les portent.
+     */
+    val MIGRATION_14_15: Migration = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `messages` ADD COLUMN `mms_recipients` TEXT")
+        }
+    }
+
     /** All migrations registered in [DatabaseFactory]. Append new ones here in version order. */
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2,
@@ -453,5 +464,6 @@ object Migrations {
         MIGRATION_11_12,
         MIGRATION_12_13,
         MIGRATION_13_14,
+        MIGRATION_14_15,
     )
 }

@@ -29,6 +29,12 @@ data class Message(
      * — purement local pour annoter son propre fil.
      */
     val reactionEmoji: String? = null,
+    /**
+     * 2026-11-06 (issue #76) — les destinataires d'un MMS adressé à plusieurs, l'utilisateur compris, tels
+     * que l'en-tête les portait ; vide pour un message à un seul destinataire. Cf.
+     * [com.filestech.sms.domain.mms.DestinatairesMms].
+     */
+    val mmsRecipients: List<String> = emptyList(),
 ) {
     enum class Type { SMS, MMS }
     enum class Direction { INCOMING, OUTGOING }

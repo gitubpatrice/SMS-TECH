@@ -147,4 +147,18 @@ data class MessageEntity(
      */
     @kotlinx.serialization.Transient
     @ColumnInfo(name = "mms_transaction_key") val mmsTransactionKey: String? = null,
+    /**
+     * Schema v15 (2026-11-06, issue #76) — **les destinataires d'un MMS adressé à plusieurs**, `To` puis
+     * `Cc`, l'utilisateur compris, séparés par `;` ([com.filestech.sms.domain.mms.DestinatairesMms]).
+     * `null` pour un seul destinataire, pour tout SMS, et pour les MMS écrits avant la v15.
+     *
+     * Rangé dans la conversation de son expéditeur (mode groupe coupé, ou « Mon numéro » absent), un MMS de
+     * groupe perdait sinon ses autres destinataires : le PDU, seul à les porter, est effacé après traitement.
+     *
+     * `@Transient` pour la sauvegarde, comme [mmsTransactionKey] : le parseur strict d'une version
+     * antérieure refuserait la clé, et le format doit rester lisible par elles. Une restauration rend donc
+     * ces messages sans leur liste, comme elle les rend déjà sans leurs pièces jointes.
+     */
+    @kotlinx.serialization.Transient
+    @ColumnInfo(name = "mms_recipients") val mmsRecipients: String? = null,
 )

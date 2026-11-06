@@ -134,6 +134,13 @@
     <!-- 2026-11-06 — copy button next to the number in the conversation details. -->
     <string name="thread_details_copy_number">Nummer kopieren</string>
     <string name="thread_details_number_copied">Nummer kopiert</string>
+    <!-- 2026-11-06 (issue #76) — membres d'un groupe et destinataires d'un message adressé à plusieurs -->
+    <string name="thread_details_copy_number_of">Nummer von %1$s kopieren</string>
+    <string name="mms_recipients_title">Empfänger dieser Nachricht</string>
+    <string name="mms_recipients_you">%1$s (Sie)</string>
+    <string name="mms_recipients_hint_enable">Für eine gemeinsame Unterhaltung mit allen, in der Ihre Antworten an alle gehen: %3$s → %4$s, „%1$s“ einschalten und „%2$s“ eintragen.</string>
+    <string name="mms_recipients_hint_number">„%1$s“ ist eingeschaltet, aber „%2$s“ ist leer: Ohne sie kann SMS Tech Sie nicht aus der Mitgliederliste nehmen, deshalb blieb die Nachricht in der Unterhaltung des Absenders. Tragen Sie sie unter %3$s → %4$s ein.</string>
+    <string name="mms_recipients_hint_before">Diese Nachricht blieb in der Unterhaltung des Absenders: Sie kam an, bevor „%1$s“ eingerichtet war, oder wurde aus einer anderen App übernommen.</string>
 
     <!-- Tabs / sections -->
     <string name="tab_archived">Archiviert</string>
@@ -979,6 +986,11 @@
     <string name="thread_retry_watchdog_cancel">Abbrechen</string>
 
     <!-- v1.14.8 R4 — floating chip shown when new messages arrive while scrolled up. -->
+    <plurals name="thread_group_message_recipients">
+        <item quantity="one">Gruppennachricht · %d Empfänger</item>
+        <item quantity="other">Gruppennachricht · %d Empfänger</item>
+    </plurals>
+
     <plurals name="thread_unseen_messages">
         <item quantity="one">↓ %d neue Nachricht</item>
         <item quantity="other">↓ %d neue Nachrichten</item>

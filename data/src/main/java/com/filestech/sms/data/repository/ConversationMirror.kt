@@ -13,6 +13,7 @@ import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.sms.PhoneIdentity
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.mms.MediaAttachmentSpec
 import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.domain.model.MessageStatus
@@ -732,6 +733,8 @@ class ConversationMirror @Inject constructor(
         groupMembers: List<PhoneAddress>? = null,
         transactionKey: String? = null,
         encoreVoulu: () -> Boolean = { true },
+        // 2026-11-06 (issue #76) — les destinataires d'un envoi groupé, gardés même hors conversation de groupe.
+        recipients: List<String>? = null,
     ): InscriptionMmsRecu? = withContext(io) {
         val storedBody = caption?.trim().orEmpty()
         database.withTransaction {
@@ -756,6 +759,7 @@ class ConversationMirror @Inject constructor(
                 scheduledAt = null,
                 attachmentsCount = pieces.size,
                 mmsTransactionKey = transactionKey,
+                mmsRecipients = DestinatairesMms.encoder(recipients),
             )
             val msgId = messageDao.insert(msg)
             if (msgId == -1L) {
@@ -902,6 +906,7 @@ class ConversationMirror @Inject constructor(
                         subId = row.subId,
                         scheduledAt = null,
                         attachmentsCount = row.attachments.size,
+                        mmsRecipients = DestinatairesMms.encoder(row.recipients),
                     )
                     val insertedId = messageDao.insert(msg)
                     // Insert id < 0 → conflict, row already mirrored; skip part insertion.

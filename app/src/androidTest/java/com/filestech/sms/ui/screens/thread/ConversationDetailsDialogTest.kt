@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.filestech.sms.R
@@ -75,5 +76,34 @@ class ConversationDetailsDialogTest {
         }
 
         compose.onNodeWithContentDescription(context.getString(R.string.thread_details_copy_number)).assertDoesNotExist()
+    }
+
+    /** 2026-11-06 (issue #76) — un groupe montre ses membres, nom et numéro, chacun copiable. */
+    @Test
+    fun groupeListeSesMembresChacunCopiable() {
+        var copie: String? = null
+        compose.setContent {
+            ConversationDetailsDialog(
+                title = "Groupe",
+                phoneNumber = null,
+                onCopyNumber = { copie = it },
+                participants = 2,
+                messages = 3,
+                firstAt = null,
+                lastAt = null,
+                formatters = rememberChatFormatters(),
+                onDismiss = {},
+                membres = listOf("+33698765432" to "Marie", "+33611223344" to null),
+            )
+        }
+
+        compose.onNodeWithText("Marie").assertIsDisplayed()
+        compose.onNodeWithText("+33698765432").assertIsDisplayed()
+        compose.onNodeWithText("+33611223344").assertIsDisplayed()
+        compose.onNodeWithContentDescription(context.getString(R.string.thread_details_copy_number_of, "+33611223344"))
+            .performClick()
+        compose.waitForIdle()
+
+        assertThat(copie).isEqualTo("+33611223344")
     }
 }
