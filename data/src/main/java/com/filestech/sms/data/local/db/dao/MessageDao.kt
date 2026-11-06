@@ -325,6 +325,22 @@ interface MessageDao {
     @Query("UPDATE messages SET conversation_id = :toConversationId WHERE conversation_id = :fromConversationId")
     suspend fun reparentMessages(fromConversationId: Long, toConversationId: Long)
 
+    /**
+     * 2026-11-06 — déplace des messages vers la conversation de leur groupe (regroupement des fils de groupe
+     * importés avant la 1.30.0). Le Coffre est exclu DANS LE SQL, évalué avec l'écriture : un fil mis au Coffre
+     * entre la lecture des lignes et ce déplacement n'en sort rien.
+     *
+     * @return le nombre de messages déplacés.
+     */
+    @Query(
+        """
+        UPDATE messages SET conversation_id = :versConversationId
+        WHERE id IN (:ids)
+          AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+        """,
+    )
+    suspend fun deplacerHorsCoffre(ids: List<Long>, versConversationId: Long): Int
+
     /** Inverse de [setMmsSystemId] — utilisé par le retry pour récupérer la row à purger. */
     @Query("SELECT mms_system_id FROM messages WHERE id = :id")
     suspend fun findMmsSystemId(id: Long): Long?

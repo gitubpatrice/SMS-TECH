@@ -58,6 +58,18 @@ object DestinatairesMms {
         return vus.values.toList().takeIf { it.size >= 2 }
     }
 
+    /**
+     * 2026-11-06 — **les membres d'un fil de groupe du fournisseur Android** (table `threads`), qui en fait une
+     * conversation de groupe à l'import. Le fournisseur les tient sans l'utilisateur, sauf quand l'application qui
+     * a écrit le fil n'a pas su le reconnaître : [soi] (« Mon numéro ») est donc retiré s'il est connu.
+     *
+     * Même nettoyage et même rapprochement que [of] ; `null` sous deux membres : le fil n'est pas un groupe. Une
+     * adresse qui porte une virgule est écartée, comme celle qui porte le séparateur : `addresses_csv` se coupe
+     * sur les deux (`PhoneAddress.list`).
+     */
+    fun membresDuFil(destinataires: List<String>, soi: String?, cle: (String) -> String = { it }): List<String>? =
+        of(destinataires.filterNot { ',' in it }, emptyList(), expediteur = soi, cle = cle)
+
     /** La valeur de la colonne : `null` hors envoi groupé. */
     fun encoder(destinataires: List<String>?): String? =
         destinataires?.takeIf { it.size >= 2 }?.joinToString(SEPARATEUR)

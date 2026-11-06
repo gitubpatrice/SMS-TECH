@@ -88,6 +88,8 @@ class TelephonySyncManager @Inject constructor(
     private val blockedNumbersImporter: com.filestech.sms.data.blocking.BlockedNumbersImporter,
     // 2026-11-06 (issue #76) — les destinataires des MMS importés avant la v15.
     private val rattrapageDestinataires: RattrapageDestinatairesMms,
+    // 2026-11-06 — fils de groupe du fournisseur : import en groupe, et réparation des imports d'avant.
+    private val filsDeGroupe: FilsDeGroupe,
     @ApplicationScope private val appScope: CoroutineScope,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
@@ -217,6 +219,16 @@ class TelephonySyncManager @Inject constructor(
             // la DERNIÈRE page. Tant qu'il manque, on rejoue — l'insertion est idempotente.
             val hasAnyMms = runCatching { messageDao.hasAnyMms() }.getOrDefault(false)
             val needsMmsImport = !advanced.mmsImportCompleted || isFirstRun || !hasAnyMms
+            // 2026-11-06 — les fils de groupe du fournisseur, lus une fois par passe quand un import complet ou la
+            // réparation en a besoin. Une synchronisation ordinaire s'en passe : un fil de groupe déjà importé est
+            // retrouvé par son `thread_id`, que tient désormais la conversation du groupe. `null` = illisible :
+            // l'import range alors comme avant, et la réparation attend le passage suivant.
+            val filsLus = if (needsMmsImport || isFirstRun || !advanced.groupThreadsRegroupedV1300) {
+                filsDeGroupe.lire()
+            } else {
+                null
+            }
+            val fils = filsLus.orEmpty()
             if (needsMmsImport) {
                 runCatching {
                     // v1.2.4 audit P3: paged read + per-chunk insert. The previous
@@ -241,7 +253,7 @@ class TelephonySyncManager @Inject constructor(
                         val pageForImport = if (isFirstRun) {
                             page.map { it.copy(read = true) }
                         } else page
-                        mirror.bulkImportMmsFromTelephony(pageForImport)
+                        mirror.bulkImportMmsFromTelephony(pageForImport, fils)
                         imported += pageForImport.size
                     }
                     // 🔴 v1.27.2 (audit Codex du 2026-08-05, C-05) — LE RETOUR NE PROUVAIT RIEN.
@@ -291,6 +303,19 @@ class TelephonySyncManager @Inject constructor(
                 if (it is kotlinx.coroutines.CancellationException) throw it
                 Timber.w(it, "Rattrapage des destinataires MMS en echec")
             }
+            // 2026-11-06 — réparation UNIQUE des fils de groupe que l'import d'avant la 1.30.0 a versés dans la 1-à-1
+            // d'un de leurs membres. Après l'import des MMS, avant celui des SMS : ceux-ci trouvent alors le
+            // `thread_id` du groupe déjà tenu par sa conversation.
+            if (!advanced.groupThreadsRegroupedV1300 && filsLus != null) {
+                runCatching {
+                    if (filsDeGroupe.regrouper(filsLus)) {
+                        settings.update { s -> s.copy(advanced = s.advanced.copy(groupThreadsRegroupedV1300 = true)) }
+                    }
+                }.onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    Timber.w(it, "Regroupement des fils de groupe en echec")
+                }
+            }
             // Union the Room mirror with a fresh read of the system blocklist. The Room snapshot
             // covers app-initiated blocks; the live system read covers entries the user already
             // had in Téléphone / Samsung Messages before the importer had a chance to mirror them.
@@ -337,7 +362,7 @@ class TelephonySyncManager @Inject constructor(
                         } else {
                             filtered.map { it.entity }
                         }
-                        mirror.bulkImportFromTelephony(entitiesForImport)
+                        mirror.bulkImportFromTelephony(entitiesForImport, fils)
                         imported += filtered.size
                     }
                     _state.value = State.Running(isFirstRun = isFirstRun, importedSoFar = imported)

@@ -866,7 +866,11 @@ class ConversationMirror @Inject constructor(
      * Attachments are inserted only on a fresh row (the `insertedId == -1L` path means the row
      * was a duplicate, so the existing attachments already exist).
      */
-    suspend fun bulkImportMmsFromTelephony(rows: List<com.filestech.sms.data.sms.TelephonyReader.MmsImportRow>) = withContext(io) {
+    suspend fun bulkImportMmsFromTelephony(
+        rows: List<com.filestech.sms.data.sms.TelephonyReader.MmsImportRow>,
+        // 2026-11-06 — fils de groupe du fournisseur (`thread_id` → membres), cf. [adressesDuFil].
+        filsDeGroupe: Map<Long, List<String>> = emptyMap(),
+    ) = withContext(io) {
         if (rows.isEmpty()) return@withContext
         // v1.2.4 audit P2: group by AOSP `thread_id` so each conversation gets exactly one
         // `findById + update` (= one `touchConversation`) per chunk instead of one per row.
@@ -883,7 +887,7 @@ class ConversationMirror @Inject constructor(
                 val first = group.first()
                 val convId = ensureConversationByThread(
                     systemThreadId = first.threadId,
-                    addresses = listOf(PhoneAddress.of(first.address)),
+                    addresses = adressesDuFil(first.threadId, first.address, filsDeGroupe),
                 )
                 var maxDate = 0L
                 var lastPreview = ""
@@ -964,7 +968,11 @@ class ConversationMirror @Inject constructor(
      * `messages.telephony_uri` has a UNIQUE index + `OnConflictStrategy.IGNORE`, so re-running
      * the import is idempotent: existing rows stay put, only fresh URIs add new rows.
      */
-    suspend fun bulkImportFromTelephony(messages: List<MessageEntity>) = withContext(io) {
+    suspend fun bulkImportFromTelephony(
+        messages: List<MessageEntity>,
+        // 2026-11-06 — le jumeau du paramètre de [bulkImportMmsFromTelephony].
+        filsDeGroupe: Map<Long, List<String>> = emptyMap(),
+    ) = withContext(io) {
         if (messages.isEmpty()) return@withContext
         // Audit P-P0-1 bis: the cache is no longer cleared at the start of a bulk import.
         // (1) Now that the underlying store is a `ConcurrentHashMap`, the clear / put race that
@@ -985,7 +993,7 @@ class ConversationMirror @Inject constructor(
                 val first = group.first()
                 val convId = ensureConversationByThread(
                     systemThreadId = systemThreadId,
-                    addresses = listOf(PhoneAddress.of(first.address)),
+                    addresses = adressesDuFil(systemThreadId, first.address, filsDeGroupe),
                 )
                 val withConv = group.map { it.copy(conversationId = convId) }
                 // v1.8.0 (bug 2 fix) — Room's @Insert(OnConflictStrategy.IGNORE) returns
@@ -1024,12 +1032,17 @@ class ConversationMirror @Inject constructor(
         addresses: List<PhoneAddress>,
     ): Long {
         val resolved = if (addresses.size == 1) resolveDisplayName(addresses.first().raw) else nomDeGroupe(addresses)
-        if (systemThreadId > 0L) {
-            conversationDao.findByThreadId(systemThreadId)?.let { existing ->
-                if (existing.displayName == null && resolved != null) {
-                    conversationDao.update(existing.copy(displayName = resolved))
+        val parFil = if (systemThreadId > 0L) conversationDao.findByThreadId(systemThreadId) else null
+        if (parFil != null) {
+            if (addresses.size > 1 && PhoneAddress.list(parFil.addressesCsv).size < 2) {
+                // 2026-11-06 — un fil de GROUPE tenu par une 1-à-1 : l'import d'avant la 1.30.0 le lui avait
+                // donné. Elle le rend, et le groupe le prend plus bas, sous l'index UNIQUE de `thread_id`.
+                conversationDao.clearThreadId(parFil.id)
+            } else {
+                if (parFil.displayName == null && resolved != null) {
+                    conversationDao.update(parFil.copy(displayName = resolved))
                 }
-                return existing.id
+                return parFil.id
             }
         }
         val csv = addresses.sortedBy { it.normalized }.toCsv()
@@ -1116,6 +1129,56 @@ class ConversationMirror @Inject constructor(
                 unreadCount = 0,
             ),
         )
+    }
+
+    /**
+     * 2026-11-06 (courriel d'un utilisateur Visible/Verizon) — **les adresses d'une conversation importée.** Un
+     * fil de groupe du fournisseur ([filsDeGroupe], déjà filtré par `FilsDeGroupe.lire`) devient la conversation
+     * de ses membres ; tout autre fil, celle de l'adresse de sa première ligne, comme avant. L'import ouvrait
+     * jusqu'ici chaque groupe sur cette seule adresse : il devenait la conversation d'un de ses membres, mêlée à
+     * ses échanges privés, et une réponse n'allait qu'à lui.
+     */
+    private fun adressesDuFil(
+        systemThreadId: Long,
+        premiere: String,
+        filsDeGroupe: Map<Long, List<String>>,
+    ): List<PhoneAddress> =
+        filsDeGroupe[systemThreadId]?.map(PhoneAddress::of) ?: listOf(PhoneAddress.of(premiere))
+
+    /**
+     * 2026-11-06 — **range dans la conversation de son groupe un fil de groupe que l'import d'avant la 1.30.0
+     * avait versé dans une 1-à-1.** [telephonyUris] sont les messages du fil côté fournisseur ; seuls ceux que
+     * l'application a importés, hors Coffre, bougent. La conversation du groupe n'est créée que s'il y a quelque
+     * chose à y ranger : sinon une coquille vide resterait dans la liste.
+     *
+     * Les conversations quittées sont recalculées (aperçu, non-lus) et supprimées si plus rien ne les justifie
+     * ([ConversationDao.deleteIfEmpty] garde brouillon, envoi programmé et Coffre). Une seule transaction :
+     * déplacement et recalculs ensemble, ou rien.
+     *
+     * @return le nombre de messages déplacés.
+     */
+    suspend fun regrouperFil(
+        systemThreadId: Long,
+        membres: List<String>,
+        telephonyUris: List<String>,
+    ): Int = withContext(io) {
+        database.withTransaction {
+            val lignes = telephonyUris.chunked(LOT_SQL).flatMap { messageDao.findRefsByTelephonyUris(it) }
+            if (lignes.isEmpty()) return@withTransaction 0
+            val groupe = ensureConversationByThread(systemThreadId, membres.map(PhoneAddress::of))
+            val aDeplacer = lignes.filter { it.conversationId != groupe }
+            if (aDeplacer.isEmpty()) return@withTransaction 0
+            val deplaces = aDeplacer.chunked(LOT_SQL).sumOf { lot ->
+                messageDao.deplacerHorsCoffre(lot.map { it.id }, groupe)
+            }
+            val quittees = aDeplacer.map { it.conversationId }.toSet()
+            for (conversation in quittees + groupe) {
+                messageDao.refreshConversationPreview(conversation)
+                conversationDao.recomputeUnreadCount(conversation)
+            }
+            quittees.forEach { conversationDao.deleteIfEmpty(it) }
+            deplaces
+        }
     }
 
     /**
@@ -1381,6 +1444,9 @@ class ConversationMirror @Inject constructor(
 
     private companion object {
         const val MAX_PREVIEW = 240
+
+        /** 2026-11-06 — lignes par requête de [regrouperFil], sous la limite de 999 paramètres de SQLite. */
+        const val LOT_SQL = 500
 
         /**
          * v1.3.7 (F5 audit) — borne LRU du cache `displayNameCache`. 1000 entrées couvre largement

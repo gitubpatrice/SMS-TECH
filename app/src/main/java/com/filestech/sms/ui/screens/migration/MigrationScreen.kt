@@ -42,6 +42,8 @@ class MigrationViewModel @Inject constructor(
     private val reader: TelephonyReader,
     private val mirror: ConversationMirror,
     private val settings: SettingsRepository,
+    // 2026-11-06 — un fil de groupe du fournisseur s'importe dans la conversation de son groupe.
+    private val filsDeGroupe: com.filestech.sms.data.sync.FilsDeGroupe,
 ) : ViewModel() {
     // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
     @androidx.compose.runtime.Stable
@@ -82,8 +84,10 @@ class MigrationViewModel @Inject constructor(
         viewModelScope.launch {
             var count = 0
             try {
+                // Lus une fois pour tout l'import ; illisibles, l'import range comme avant.
+                val fils = filsDeGroupe.lire().orEmpty()
                 reader.readSmsBatched(pageSize = 500) { batch ->
-                    mirror.bulkImportFromTelephony(batch)
+                    mirror.bulkImportFromTelephony(batch, fils)
                     count += batch.size
                     _state.value = _state.value.copy(imported = count)
                 }

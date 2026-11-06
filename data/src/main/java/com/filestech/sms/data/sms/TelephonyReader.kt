@@ -430,6 +430,51 @@ class TelephonyReader @Inject constructor(
     internal fun lireAdressesMms(systemId: Long, direction: MessageDirection, cle: (String) -> String): AdressesMms? =
         readMmsAddresses(resolver, systemId, direction, cle)
 
+    /**
+     * 2026-11-06 — les destinataires de chaque fil du fournisseur (`thread_id` → adresses), cf.
+     * [FilsDuFournisseur]. `null` si l'une des deux lectures est impossible (fournisseur indisponible) ; une
+     * exception du fournisseur remonte à l'appelant.
+     */
+    fun lireFilsDuFournisseur(): Map<Long, List<String>>? {
+        val adresses = resolver.query(
+            Uri.parse("content://mms-sms/canonical-addresses"),
+            arrayOf("_id", "address"),
+            null,
+            null,
+            null,
+        )?.use(FilsDuFournisseur::adresses) ?: return null
+        return resolver.query(
+            Uri.parse("content://mms-sms/conversations?simple=true"),
+            arrayOf("_id", "recipient_ids"),
+            null,
+            null,
+            null,
+        )?.use { FilsDuFournisseur.fils(it, adresses) }
+    }
+
+    /**
+     * 2026-11-06 — les SMS et MMS du fournisseur rangés dans [fils] : `thread_id` → leurs `telephony_uri`, sous la
+     * forme qu'écrit l'import (`content://sms/<id>`, `content://mms/<id>`). `null` si une lecture est impossible.
+     */
+    fun lireMessagesDesFils(fils: Collection<Long>): Map<Long, List<String>>? {
+        val parFil = HashMap<Long, MutableList<String>>()
+        for (lot in fils.chunked(LOT_DE_FILS)) {
+            val selection = "thread_id IN (${lot.joinToString(",") { "?" }})"
+            val arguments = lot.map(Long::toString).toTypedArray()
+            for (table in listOf("sms", "mms")) {
+                val curseur = resolver.query(
+                    Uri.parse("content://$table"),
+                    arrayOf("_id", "thread_id"),
+                    selection,
+                    arguments,
+                    null,
+                ) ?: return null
+                curseur.use { FilsDuFournisseur.messages(it, "content://$table/", parFil) }
+            }
+        }
+        return parFil
+    }
+
     /** One attachment part of an MMS — referenced by its `content://mms/part/{id}` URI. */
     data class MmsPartImport(
         val partId: Long,
@@ -699,6 +744,9 @@ class TelephonyReader @Inject constructor(
     }
 
     companion object {
+        /** 2026-11-06 — fils par requête de [lireMessagesDesFils], sous la limite de 999 paramètres de SQLite. */
+        private const val LOT_DE_FILS = 500
+
         /**
          * v1.28.9 (audit de cohérence du 2026-09-14, C2) — la partie est-elle du texte que le fournisseur
          * range dans sa colonne `text` ? `PduPersister` n'y met que `text/plain` et `text/html` ; tout autre

@@ -407,6 +407,7 @@ class SettingsRepository(
                 reactionFormatMigreV12812 = p[K.reactionFormatMigreV12812] ?: false,
                 identityDedupRepairedV1272 = p[K.identityDedupRepairedV1272] ?: false,
                 emptyConversationsPurgedV1272 = p[K.emptyConversationsPurgedV1272] ?: false,
+                groupThreadsRegroupedV1300 = p[K.groupThreadsRegroupedV1300] ?: false,
             ),
         )
     }
@@ -531,6 +532,7 @@ class SettingsRepository(
         this[K.reactionFormatMigreV12812] = s.advanced.reactionFormatMigreV12812
         this[K.identityDedupRepairedV1272] = s.advanced.identityDedupRepairedV1272
         this[K.emptyConversationsPurgedV1272] = s.advanced.emptyConversationsPurgedV1272
+        this[K.groupThreadsRegroupedV1300] = s.advanced.groupThreadsRegroupedV1300
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -710,5 +712,9 @@ class SettingsRepository(
         /** v1.27.2 (audit Codex, LP-07) — purge des coquilles deja creees. */
         val emptyConversationsPurgedV1272 =
             booleanPreferencesKey("advanced.emptyConversationsPurgedV1272")
+
+        /** 2026-11-06 (v1.30.0) — fils de groupe rangés dans leur conversation, cf. `FilsDeGroupe`. */
+        val groupThreadsRegroupedV1300 =
+            booleanPreferencesKey("advanced.groupThreadsRegroupedV1300")
     }
 }

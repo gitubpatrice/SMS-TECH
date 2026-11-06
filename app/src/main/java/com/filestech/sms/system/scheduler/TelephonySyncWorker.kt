@@ -60,6 +60,8 @@ class TelephonySyncWorker @AssistedInject constructor(
     // v1.26.1 (audit H9) — nécessaire pour rendre la purge automatique atomique, cf. plus bas.
     // v1.28.9 (F17) — pour replanifier la reprise des PDU gardés, cf. plus bas.
     private val pdusEnAttente: com.filestech.sms.data.mms.PdusEnAttente,
+    // 2026-11-06 — jumeau de `TelephonySyncManager` : un import COMPLET range un fil de groupe dans son groupe.
+    private val filsDeGroupe: com.filestech.sms.data.sync.FilsDeGroupe,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -227,11 +229,14 @@ class TelephonySyncWorker @AssistedInject constructor(
         // v1.27.2 (audit Codex final, F-01) — instantane pris APRES hydratation, une seule fois.
         val isBlockedAddress = phoneIdentity.snapshot()
             .blockedMatcher(roomBlocked + systemBlocked)
+        // 2026-11-06 — les fils de groupe ne se lisent que pour un import complet (curseur à zéro) : une passe
+        // ordinaire retrouve un fil de groupe déjà importé par son `thread_id`, tenu par la conversation du groupe.
+        val fils = if (sinceId == 0L) filsDeGroupe.lire().orEmpty() else emptyMap()
         var imported = 0
         val maxSeen = reader.readSmsSince(sinceId = sinceId, pageSize = 500) { page ->
             val filtered = page.filterNot { isBlockedAddress(it.entity.address) }
             if (filtered.isNotEmpty()) {
-                mirror.bulkImportFromTelephony(filtered.map { it.entity })
+                mirror.bulkImportFromTelephony(filtered.map { it.entity }, fils)
             }
             imported += filtered.size
         }

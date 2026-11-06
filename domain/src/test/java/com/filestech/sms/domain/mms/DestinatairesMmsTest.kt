@@ -84,4 +84,39 @@ class DestinatairesMmsTest {
         assertThat(DestinatairesMms.decoder(" ; ")).isEmpty()
         assertThat(DestinatairesMms.decoder(DestinatairesMms.VERIFIE_SANS_GROUPE)).isEmpty()
     }
+
+    // 2026-11-06 — membres d'un fil de groupe du fournisseur (import en groupe).
+
+    @Test
+    fun `fil de groupe - ses membres, dans l'ordre du fournisseur`() {
+        assertThat(DestinatairesMms.membresDuFil(listOf(PAT, MARIE), soi = null)).containsExactly(PAT, MARIE).inOrder()
+    }
+
+    /** Contrôle négatif : un fil à un destinataire est une 1-à-1, pas un groupe. */
+    @Test
+    fun `fil a un seul destinataire - pas un groupe`() {
+        assertThat(DestinatairesMms.membresDuFil(listOf(PAT), soi = null)).isNull()
+    }
+
+    @Test
+    fun `mon numero laisse dans le fil est retire, et le fil a deux redevient une 1-a-1`() {
+        val aTrois = DestinatairesMms.membresDuFil(listOf(MOI, PAT, MARIE), soi = MOI)
+
+        assertThat(aTrois).containsExactly(PAT, MARIE).inOrder()
+        assertThat(DestinatairesMms.membresDuFil(listOf(MOI, PAT), soi = MOI)).isNull()
+    }
+
+    @Test
+    fun `une meme personne ecrite deux fois ne fait pas un groupe`() {
+        val cle: (String) -> String = { it.filter(Char::isDigit).takeLast(9) }
+
+        assertThat(DestinatairesMms.membresDuFil(listOf(PAT, "06 17 33 27 29"), soi = null, cle = cle)).isNull()
+    }
+
+    /** `addresses_csv` se coupe aussi sur la virgule : une telle adresse ferait un membre de trop. */
+    @Test
+    fun `une adresse qui porte un separateur est ecartee`() {
+        assertThat(DestinatairesMms.membresDuFil(listOf(PAT, "a,b", "c;d", MARIE), soi = null))
+            .containsExactly(PAT, MARIE).inOrder()
+    }
 }

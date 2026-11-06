@@ -243,6 +243,13 @@ interface ConversationDao {
     suspend fun setThreadId(id: Long, threadId: Long)
 
     /**
+     * 2026-11-06 — retire son `thread_id` à une conversation 1-à-1 qui tenait celui d'un fil de GROUPE (import
+     * d'avant la 1.30.0), pour que la conversation du groupe puisse le prendre sous l'index UNIQUE.
+     */
+    @Query("UPDATE conversations SET thread_id = NULL WHERE id = :id")
+    suspend fun clearThreadId(id: Long)
+
+    /**
      * v1.8.0 (post-audit fix) — recalcule `unread_count` à partir des `messages.read=0`
      * réellement présents dans Room. Corrige l'état legacy hérité de v1.7.1 où les
      * syncs successifs incrémentaient le compteur même pour les rows déjà mirror-ées
