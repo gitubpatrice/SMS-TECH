@@ -85,13 +85,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun ConversationsScreen(
     archived: Boolean = false,
+    blocked: Boolean = false,
     onOpenThread: (Long) -> Unit,
     onCompose: () -> Unit,
     onComposeGroup: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenVault: () -> Unit,
     onOpenArchived: () -> Unit,
-    onOpenBlocked: () -> Unit,
+    onOpenBlockedConversations: () -> Unit,
     onOpenAbout: () -> Unit = {},
     onBack: (() -> Unit)? = null,
     viewModel: ConversationsViewModel = hiltViewModel(),
@@ -103,6 +104,8 @@ fun ConversationsScreen(
     val isPanicDecoy by viewModel.isPanicDecoy.collectAsStateWithLifecycle()
     val messageHits by viewModel.messageHits.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
+    // 2026-11-06 — Archives et dossier des bloquées : une sous-page, sans logo ni icônes de la barre.
+    val sousDossier = archived || blocked
 
     val defaultAppLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -279,28 +282,7 @@ fun ConversationsScreen(
                 return@topBar
             }
             TopAppBar(
-                title = {
-                    androidx.compose.foundation.layout.Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // Brand logo in front of the title. Hidden on the archived sub-page so the
-                        // crumb stays unambiguous (logo = home). cacheWidth equivalent: the image
-                        // is fixed at 28 dp on screen, Coil/painterResource decodes once.
-                        if (!archived) {
-                            androidx.compose.foundation.Image(
-                                painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_app_logo),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .padding(end = 10.dp),
-                            )
-                        }
-                        Text(
-                            text = if (archived) stringResource(R.string.tab_archived)
-                            else stringResource(R.string.app_name),
-                        )
-                    }
-                },
+                title = { TitreDeLaListe(archived = archived, blocked = blocked) },
                 navigationIcon = {
                     onBack?.let {
                         IconButton(onClick = it) {
@@ -312,26 +294,14 @@ fun ConversationsScreen(
                     }
                 },
                 actions = {
-                    if (!archived) {
-                        // Audit S-P0-1: the panic-decoy session must not expose any vault entry
-                        // point. We hide the icon entirely (rather than disable it) so the feature
-                        // looks like it doesn't exist to a coerced observer — matches the decoy
-                        // illusion. Defense in depth: the AppRoot navigation guard and the
-                        // repository-level filter back-stop this UI gate.
-                        if (!isPanicDecoy) {
-                            IconButton(onClick = onOpenVault) {
-                                Icon(
-                                    Icons.Outlined.Lock,
-                                    contentDescription = stringResource(R.string.tab_vault),
-                                )
-                            }
-                        }
-                        IconButton(onClick = onOpenArchived) {
-                            Icon(
-                                Icons.Outlined.Inventory2,
-                                contentDescription = stringResource(R.string.tab_archived),
-                            )
-                        }
+                    if (!sousDossier) {
+                        IconesDeLaListe(
+                            isPanicDecoy = isPanicDecoy,
+                            hasBlocked = state.hasBlocked,
+                            onOpenVault = onOpenVault,
+                            onOpenBlockedConversations = onOpenBlockedConversations,
+                            onOpenArchived = onOpenArchived,
+                        )
                         // v1.2.6 polish : icône Numéros bloqués retirée du topbar (redondante).
                         // L'accès se fait via Réglages → Numéros bloqués (NavigationRow déjà câblée).
                     }
@@ -431,15 +401,18 @@ fun ConversationsScreen(
             // v1.2.3 audit U6: use the theme's primary (which auto-adapts to Dark Tech /
             // Material You / Light) rather than a hardcoded blue that desaturated wrong on
             // the deep-slate Dark Tech palette.
-            FloatingActionButton(
-                onClick = onCompose,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) {
-                Icon(
-                    Icons.Outlined.Edit,
-                    contentDescription = stringResource(R.string.action_new_message),
-                )
+            // 2026-11-06 — pas dans le dossier des bloquées : on n'y écrit pas.
+            if (!blocked) {
+                FloatingActionButton(
+                    onClick = onCompose,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = stringResource(R.string.action_new_message),
+                    )
+                }
             }
         },
     ) { padding ->
@@ -452,7 +425,7 @@ fun ConversationsScreen(
                 onQueryChange = viewModel::setQuery,
                 onClear = viewModel::clearQuery,
             )
-            if (!state.isDefaultSmsApp && !archived) {
+            if (!state.isDefaultSmsApp && !sousDossier) {
                 DefaultAppBanner(onSetDefault = {
                     viewModel.buildChangeDefaultIntent()?.let { intent ->
                         defaultAppLauncher.launch(intent)
@@ -495,6 +468,7 @@ fun ConversationsScreen(
                 state.isLoading -> Unit
                 state.sansAucunResultat(messageHits) -> EmptyState(
                     archived = archived,
+                    blocked = blocked,
                     filtered = state.filtered,
                     onCompose = onCompose,
                 )
@@ -509,14 +483,13 @@ fun ConversationsScreen(
                     val dividerColor = cs.outlineVariant.copy(alpha = 0.4f)
 
                     // v1.25.3 — les conversations dont tous les numéros sont bloqués ne sont plus
-                    // ni supprimées ni masquées : elles descendent en fin de liste sous un
-                    // en-tête dédié. Le tri d'origine est conservé à l'intérieur de chaque groupe
-                    // (`partition` est stable), donc rien ne bouge pour qui n'a rien bloqué.
-                    val (activeConversations, blockedConversations) =
-                        state.conversations.partition { !it.blocked }
+                    // ni supprimées ni masquées. 2026-11-06 — elles ont quitté le bas de cette liste
+                    // pour leur propre dossier (cf. [VueConversations]) : le ViewModel n'envoie ici
+                    // que celles de la vue, et le dossier les rend avec leurs actions propres, plus bas.
+                    val lignesActives = if (blocked) emptyList() else state.conversations
 
                     items(
-                        activeConversations,
+                        lignesActives,
                         key = { it.id },
                         // Audit PERF-M2 (v1.14.8) — `contentType` stable indique au recycleur
                         // que toutes les rows partagent le même layout. Sans ce hint, Compose
@@ -583,46 +556,16 @@ fun ConversationsScreen(
                         HorizontalDivider(color = dividerColor)
                     }
 
-                    if (blockedConversations.isNotEmpty()) {
-                        item(key = "header-blocked", contentType = "header") {
-                            Text(
-                                text = stringResource(R.string.conversations_section_blocked),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = com.filestech.sms.ui.theme.BrandBlocked,
-                                modifier = Modifier.padding(
-                                    start = 16.dp,
-                                    end = 16.dp,
-                                    top = 20.dp,
-                                    bottom = 6.dp,
-                                ),
-                            )
-                        }
-                        items(
-                            blockedConversations,
-                            key = { it.id },
-                            contentType = { "blocked-row" },
-                        ) { conv ->
-                            // Ligne simple, sans balayage : le geste de balayage sert à répondre
-                            // et à supprimer sur une conversation active. Sur une bloquée, les
-                            // deux actions utiles sont explicites — corbeille rouge ici,
-                            // « Débloquer » dans la feuille d'appui long.
-                            ConversationRow(
-                                conversation = conv,
-                                showAvatars = state.settings.conversations.showAvatars,
-                                previewLines = state.settings.conversations.previewLines
-                                    .coerceIn(1, 2),
-                                // v1.25.3 — les lignes bloquées ne participent PAS au mode
-                                // sélection : elles utilisent `ConversationRow` nu, sans l'état
-                                // visuel de sélection de `SwipeableConversationRow`. Les y
-                                // inclure permettrait de sélectionner sans le voir, et une
-                                // action groupée porterait sur des fils invisiblement cochés.
-                                // Elles ont leurs deux actions propres, explicites.
-                                onClick = { onOpenThread(conv.id) },
-                                onLongClick = { blockedActionsFor = conv },
-                                onDelete = { pendingDeleteBlocked = conv },
-                            )
-                            HorizontalDivider(color = dividerColor)
-                        }
+                    if (blocked) {
+                        blockedConversationsSection(
+                            conversations = state.conversations,
+                            showAvatars = state.settings.conversations.showAvatars,
+                            previewLines = state.settings.conversations.previewLines.coerceIn(1, 2),
+                            dividerColor = dividerColor,
+                            onOpenThread = onOpenThread,
+                            onLongClick = { conv -> blockedActionsFor = conv },
+                            onDelete = { conv -> pendingDeleteBlocked = conv },
+                        )
                     }
 
                     // v1.28.8 (issue #17) — les messages dont le TEXTE correspond, sous les
@@ -1370,11 +1313,73 @@ private fun ImportingPlaceholder(count: Int) {
  * with an outlined icon picked from the user's context (search, archive, chat). Centered title
  * + supportive body underneath. Replaces the previous two-line text dump.
  */
+/**
+ * Le titre de la liste : le logo et le nom de l'application, ou le nom de la sous-page. 2026-11-06 — sorti
+ * de [ConversationsScreen], avec [IconesDeLaListe], pour la garder sous le seuil de complexité de detekt
+ * quand le dossier des bloquées y est entré.
+ */
 @Composable
-private fun EmptyState(archived: Boolean, filtered: Boolean, onCompose: () -> Unit) {
+private fun TitreDeLaListe(archived: Boolean, blocked: Boolean) {
+    androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+        // Brand logo in front of the title. Hidden on the archived and blocked sub-pages so the crumb
+        // stays unambiguous (logo = home). cacheWidth equivalent: the image is fixed at 28 dp on
+        // screen, Coil/painterResource decodes once.
+        if (!archived && !blocked) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_app_logo),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(28.dp)
+                    .padding(end = 10.dp),
+            )
+        }
+        Text(
+            text = when {
+                blocked -> stringResource(R.string.conversations_blocked_title)
+                archived -> stringResource(R.string.tab_archived)
+                else -> stringResource(R.string.app_name)
+            },
+        )
+    }
+}
+
+/** Les icônes de la barre, sur la liste principale seulement. */
+@Composable
+private fun IconesDeLaListe(
+    isPanicDecoy: Boolean,
+    hasBlocked: Boolean,
+    onOpenVault: () -> Unit,
+    onOpenBlockedConversations: () -> Unit,
+    onOpenArchived: () -> Unit,
+) {
+    // Audit S-P0-1: the panic-decoy session must not expose any vault entry point. We hide the icon
+    // entirely (rather than disable it) so the feature looks like it doesn't exist to a coerced
+    // observer — matches the decoy illusion. Defense in depth: the AppRoot navigation guard and the
+    // repository-level filter back-stop this UI gate.
+    if (!isPanicDecoy) {
+        IconButton(onClick = onOpenVault) {
+            Icon(Icons.Outlined.Lock, contentDescription = stringResource(R.string.tab_vault))
+        }
+    }
+    // 2026-11-06 — le dossier des conversations bloquées, à côté du coffre (idée de Patrice). Seulement
+    // s'il en existe une : sinon l'icône prendrait de la place dans la barre de tout le monde pour un
+    // dossier vide.
+    if (hasBlocked) {
+        IconButton(onClick = onOpenBlockedConversations) {
+            Icon(Icons.Outlined.Block, contentDescription = stringResource(R.string.conversations_blocked_title))
+        }
+    }
+    IconButton(onClick = onOpenArchived) {
+        Icon(Icons.Outlined.Inventory2, contentDescription = stringResource(R.string.tab_archived))
+    }
+}
+
+@Composable
+private fun EmptyState(archived: Boolean, blocked: Boolean, filtered: Boolean, onCompose: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val emblemIcon = when {
         filtered -> Icons.Outlined.SearchOff
+        blocked -> Icons.Outlined.Block
         archived -> Icons.Outlined.Inventory2
         else -> Icons.Outlined.ChatBubbleOutline
     }
@@ -1411,6 +1416,7 @@ private fun EmptyState(archived: Boolean, filtered: Boolean, onCompose: () -> Un
         Text(
             text = when {
                 filtered -> stringResource(R.string.conversations_no_match)
+                blocked -> stringResource(R.string.conversations_blocked_empty)
                 archived -> stringResource(R.string.conversations_archived_empty)
                 else -> stringResource(R.string.conversations_empty_title)
             },
@@ -1418,7 +1424,7 @@ private fun EmptyState(archived: Boolean, filtered: Boolean, onCompose: () -> Un
             color = cs.onSurface,
             textAlign = TextAlign.Center,
         )
-        if (!archived && !filtered) {
+        if (!archived && !blocked && !filtered) {
             Spacer(Modifier.size(8.dp))
             Text(
                 text = stringResource(R.string.conversations_empty_body),

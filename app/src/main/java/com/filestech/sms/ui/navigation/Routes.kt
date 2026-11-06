@@ -4,7 +4,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable sealed interface Route
 
-@Serializable data class Conversations(val archived: Boolean = false) : Route
+// 2026-11-06 — `blocked` : le dossier des conversations bloquées (cf. `VueConversations`).
+@Serializable data class Conversations(val archived: Boolean = false, val blocked: Boolean = false) : Route
 @Serializable data object Vault : Route
 @Serializable data object Blocked : Route
 @Serializable data object Settings : Route

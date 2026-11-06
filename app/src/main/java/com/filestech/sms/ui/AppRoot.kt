@@ -325,6 +325,7 @@ fun AppRoot() {
             val args = entry.toRoute<Conversations>()
             ConversationsScreen(
                 archived = args.archived,
+                blocked = args.blocked,
                 // v1.23.2 — `launchSingleTop` : filet de sécurité contre l'empilement de
                 // destinations Thread(id) identiques. La liste peut émettre plusieurs fois
                 // l'ouverture pour un seul geste (swipe gauche = « répondre »), et chaque
@@ -339,9 +340,10 @@ fun AppRoot() {
                 onOpenSettings = { nav.navigate(Settings) },
                 onOpenVault = { nav.navigate(Vault) },
                 onOpenArchived = { nav.navigate(Conversations(archived = true)) },
-                onOpenBlocked = { nav.navigate(Blocked) },
+                // 2026-11-06 — le dossier des conversations bloquées (icône à côté du coffre).
+                onOpenBlockedConversations = { nav.navigate(Conversations(blocked = true)) },
                 onOpenAbout = { nav.navigate(About) },
-                onBack = if (args.archived) ({ nav.popBackStack() }) else null,
+                onBack = if (args.archived || args.blocked) ({ nav.popBackStack() }) else null,
             )
         }
         composable<Vault> {

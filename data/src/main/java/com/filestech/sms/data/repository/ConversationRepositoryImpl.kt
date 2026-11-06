@@ -83,6 +83,7 @@ class ConversationRepositoryImpl @Inject constructor(
      * suppression que déclenchait l'action « Bloquer », l'utilisateur n'avait aucun moyen de
      * distinguer « masqué » de « effacé », et aucun retour lui confirmant que le blocage avait
      * pris. Elles restent désormais visibles, regroupées et signalées par l'écran de liste.
+     * Depuis le 2026-11-06, regroupées dans un dossier à part (cf. [observeAllNonVault]).
      *
      * v1.25.4 — le marquage reproduit **exactement** le test que fait `BlockedNumberRepository.
      * isBlocked` : appartenance de `raw.blockKey()` à l'ensemble des clés enregistrées. C'est la
@@ -105,8 +106,15 @@ class ConversationRepositoryImpl @Inject constructor(
      * réception dans `SmsDeliverReceiver` écarte déjà les messages du seul participant bloqué.
      */
     override fun observeAll(includeArchived: Boolean): Flow<List<Conversation>> =
+        avecBlocage(conversationDao.observe(includeArchived))
+
+    override fun observeAllNonVault(): Flow<List<Conversation>> =
+        avecBlocage(conversationDao.observeAllNonVault())
+
+    /** Le marquage [Conversation.blocked] décrit sur [observeAll], commun aux deux lectures. */
+    private fun avecBlocage(lignes: Flow<List<ConversationEntity>>): Flow<List<Conversation>> =
         combine(
-            conversationDao.observe(includeArchived),
+            lignes,
             blockedRepo.observe(),
         ) { rows, blocked ->
             // v1.27.2 (audit Codex du 2026-08-05, C-08) — MEME comparaison que le filtre de

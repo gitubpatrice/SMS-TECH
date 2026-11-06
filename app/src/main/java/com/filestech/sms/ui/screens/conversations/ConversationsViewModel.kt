@@ -37,9 +37,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -83,6 +85,13 @@ class ConversationsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val archivedFlag: Boolean = savedStateHandle.get<Boolean>("archived") ?: false
+
+    /** 2026-11-06 — la vue montrée : liste principale, Archives, ou dossier des bloquées. */
+    private val vue: VueConversations = when {
+        savedStateHandle.get<Boolean>("blocked") == true -> VueConversations.BLOQUEES
+        archivedFlag -> VueConversations.ARCHIVES
+        else -> VueConversations.PRINCIPALE
+    }
 
     /**
      * v1.27.9 — **texte saisi dans le champ de recherche, en état Compose (snapshot).**
@@ -140,6 +149,10 @@ class ConversationsViewModel @Inject constructor(
         val settings: AppSettings = AppSettings(),
         val isDefaultSmsApp: Boolean = true,
         val archived: Boolean = false,
+        /** 2026-11-06 — la vue est le dossier des conversations bloquées, cf. [VueConversations]. */
+        val blockedView: Boolean = false,
+        /** 2026-11-06 — au moins une conversation bloquée existe : l'icône du dossier s'affiche. */
+        val hasBlocked: Boolean = false,
         /**
          * v1.27.9 — le texte saisi **n'est plus** dans [UiState] : il vit dans
          * [ConversationsViewModel.searchInput] (état Compose), seul moyen de le rendre au
@@ -213,8 +226,21 @@ class ConversationsViewModel @Inject constructor(
      */
     private val selectedIds = MutableStateFlow<Set<Long>>(emptySet())
 
+    /**
+     * 2026-11-06 — ce que la vue montre, et l'état du dossier des bloquées, cf. [repartir]. Toutes les vues
+     * lisent TOUTES les conversations hors coffre, archivées comprises : une conversation bloquée quitte les
+     * Archives pour le dossier, et l'icône du dossier doit la voir même archivée. Une seule lecture, pas
+     * deux combinées : celles-ci se rafraîchissaient l'une après l'autre, et une conversation archivée
+     * depuis le dossier en sortait le temps d'une émission (état vide affiché un instant). Partagé entre
+     * [state] et [messageHits], qui en tire les conversations à écarter de la recherche.
+     */
+    private val repartition: Flow<Repartition> = repo.observeAllNonVault()
+        .map { horsCoffre -> repartir(vue, horsCoffre) }
+        .flowOn(io)
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), replay = 1)
+
     val state: StateFlow<UiState> = combine(
-        repo.observeAll(includeArchived = archivedFlag),
+        repartition,
         settings.flow,
         debouncedQuery,
         // v1.13.0 — Triple : on packe defaultRefreshTick + appLock.state + selectedIds
@@ -224,9 +250,9 @@ class ConversationsViewModel @Inject constructor(
             lockState to sel
         },
         syncManager.state,
-    ) { rows, s, q, lockAndSelection, syncState ->
+    ) { rep, s, q, lockAndSelection, syncState ->
         val (lockState, sel) = lockAndSelection
-        val matched = filterConversations(rows, q)
+        val matched = filterConversations(rep.conversations, q)
         val sorted = trierConversations(matched, s.conversations.sortMode)
         val nomsPartages = sorted
             .mapNotNull { it.displayName?.takeIf { n -> n.isNotBlank() } }
@@ -259,6 +285,8 @@ class ConversationsViewModel @Inject constructor(
             settings = s,
             isDefaultSmsApp = defaultAppManager.isDefault(),
             archived = archivedFlag,
+            blockedView = vue == VueConversations.BLOQUEES,
+            hasBlocked = rep.bloqueesExistent,
             filtered = q.isNotBlank(),
             duplicateDisplayNames = nomsPartages,
             // Show the "Importing your SMS…" banner only during the very first sync — after that,
@@ -284,16 +312,26 @@ class ConversationsViewModel @Inject constructor(
      * Hors coffre, donc aussi en session leurre, qui voit la même liste. Une requête qui échoue ne
      * rend une liste vide que pour ELLE : l'erreur est absorbée dans `flatMapLatest`, pas après,
      * sans quoi la première erreur couperait toutes les recherches suivantes.
+     *
+     * 2026-11-06 — sans les messages des conversations bloquées, qui ne sont plus dans la liste
+     * ([sansConversationsBloquees]). Le dossier des bloquées ne cherche que dans les noms et les numéros :
+     * la recherche plein texte porte sur les conversations actives OU archivées, et les siennes sont les deux.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val messageHits: StateFlow<List<MessageSearchHit>> = debouncedQuery
-        .flatMapLatest { q ->
-            repo.observeMessageSearch(q, archivedOnly = archivedFlag)
-                .catch { t ->
-                    Timber.w(t, "ConversationsViewModel: recherche de messages en echec")
-                    emit(emptyList())
-                }
-        }
+    val messageHits: StateFlow<List<MessageSearchHit>> = combine(
+        debouncedQuery.flatMapLatest { q ->
+            if (vue == VueConversations.BLOQUEES) {
+                flowOf(emptyList())
+            } else {
+                repo.observeMessageSearch(q, archivedOnly = archivedFlag)
+                    .catch { t ->
+                        Timber.w(t, "ConversationsViewModel: recherche de messages en echec")
+                        emit(emptyList())
+                    }
+            }
+        },
+        repartition,
+    ) { hits, rep -> sansConversationsBloquees(hits, rep.idsBloques) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
     /** Forces a re-evaluation of [DefaultSmsAppManager.isDefault]. Call from ON_RESUME / role result. */

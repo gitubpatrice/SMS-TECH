@@ -21,6 +21,20 @@ interface ConversationDao {
     fun observe(includeArchived: Boolean = false): Flow<List<ConversationEntity>>
 
     /**
+     * 2026-11-06 — le flux jumeau de [snapshotAllNonVault] : toutes les conversations hors coffre,
+     * archivées ou non, en une requête. La liste des conversations les répartit elle-même entre ses
+     * vues (cf. `ConversationRepository.observeAllNonVault`).
+     */
+    @Query(
+        """
+        SELECT * FROM conversations
+        WHERE in_vault = 0
+        ORDER BY pinned DESC, last_message_at DESC
+        """,
+    )
+    fun observeAllNonVault(): Flow<List<ConversationEntity>>
+
+    /**
      * One-shot **unfiltered** snapshot of every non-vault conversation (both archived and not).
      * Used by [com.filestech.sms.data.blocking.BlockedNumbersImporter.purgeMatchingConversations].
      *

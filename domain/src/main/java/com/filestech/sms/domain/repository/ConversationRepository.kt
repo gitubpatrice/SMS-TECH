@@ -11,6 +11,14 @@ import kotlinx.coroutines.flow.Flow
 
 interface ConversationRepository {
     fun observeAll(includeArchived: Boolean = false): Flow<List<Conversation>>
+
+    /**
+     * 2026-11-06 — toutes les conversations hors coffre, archivées ou non, en UNE lecture, marquées
+     * comme [observeAll]. La liste des conversations répartit cette lecture entre ses trois vues
+     * (principale, Archives, bloquées). Deux lectures combinées se rafraîchissaient l'une après
+     * l'autre : une conversation qui changeait de liste manquait aux deux le temps d'une émission.
+     */
+    fun observeAllNonVault(): Flow<List<Conversation>>
     fun observeVault(): Flow<List<Conversation>>
     fun observeOne(id: Long): Flow<Conversation?>
 
