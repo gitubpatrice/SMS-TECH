@@ -43,11 +43,14 @@ class FilsDeGroupe @Inject constructor(
         val fils = telephonyReader.lireFilsDuFournisseur() ?: return null
         val soi = settings.flow.first().sending.userMsisdn?.takeIf { it.isNotBlank() }
         val cle = phoneIdentity.snapshot()::key
-        buildMap {
+        val groupes = buildMap {
             for ((fil, destinataires) in fils) {
                 DestinatairesMms.membresDuFil(destinataires, soi, cle)?.let { put(fil, it) }
             }
         }
+        // Des nombres seulement : la preuve que le fournisseur de ce téléphone se lit, même sans aucun groupe.
+        Timber.i("Fils du fournisseur : %d, dont %d de groupe", fils.size, groupes.size)
+        groupes
     }.onFailure { Timber.w(it, "Fils du fournisseur illisibles") }.getOrNull()
 
     /**

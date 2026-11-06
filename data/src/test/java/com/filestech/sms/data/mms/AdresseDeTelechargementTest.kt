@@ -48,12 +48,23 @@ class AdresseDeTelechargementTest {
     @Test
     fun `familles Verizon et US Cellular - et elles seules`() {
         listOf("311480", "310004", "310005", "311012", "311220", "311229", "311580", "311589").forEach {
-            assertThat(AdresseDeTelechargement.operateurAttendLIdentifiant(it)).isTrue()
+            assertThat(FamilleVerizon.contient(it)).isTrue()
         }
         // Orange France, T-Mobile US, AT&T, voisins immédiats des plages, et l'absence de SIM.
         listOf("20801", "310260", "310410", "311219", "311230", "311590", "311481", "").forEach {
-            assertThat(AdresseDeTelechargement.operateurAttendLIdentifiant(it)).isFalse()
+            assertThat(FamilleVerizon.contient(it)).isFalse()
         }
-        assertThat(AdresseDeTelechargement.operateurAttendLIdentifiant(null)).isFalse()
+        assertThat(FamilleVerizon.contient(null)).isFalse()
+    }
+
+    /** Les en-têtes de `android-smsmms` : Verizon et US Cellular n'attendent pas les mêmes. */
+    @Test
+    fun `en-tetes HTTP - ceux de chaque operateur, aucun ailleurs`() {
+        assertThat(FamilleVerizon.enTetesHttp("311480")).isEqualTo(FamilleVerizon.EN_TETES_VERIZON)
+        assertThat(FamilleVerizon.enTetesHttp("310004")).isEqualTo(FamilleVerizon.EN_TETES_VERIZON)
+        assertThat(FamilleVerizon.enTetesHttp("311225")).isEqualTo(FamilleVerizon.EN_TETES_US_CELLULAR)
+        assertThat(FamilleVerizon.enTetesHttp("311585")).isEqualTo(FamilleVerizon.EN_TETES_US_CELLULAR)
+        assertThat(FamilleVerizon.enTetesHttp("20801")).isNull()
+        assertThat(FamilleVerizon.enTetesHttp(null)).isNull()
     }
 }

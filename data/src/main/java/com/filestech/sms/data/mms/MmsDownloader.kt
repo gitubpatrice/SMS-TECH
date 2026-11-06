@@ -4,9 +4,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
-import android.telephony.TelephonyManager
 import androidx.core.content.FileProvider
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
@@ -115,7 +115,11 @@ class MmsDownloader @Inject constructor(
 
         return try {
             subscriptionAwareManager(subId).downloadMultimediaMessage(
-                context, contentLocation, pduUri, null, pi,
+                context,
+                contentLocation,
+                pduUri,
+                surchargesDeLOperateur(subId),
+                pi,
             )
             Outcome.Success(Unit)
         } catch (t: Throwable) {
@@ -136,7 +140,7 @@ class MmsDownloader @Inject constructor(
             subscriptionAwareManager(subId).carrierConfigValues
                 .getBoolean(SmsManager.MMS_CONFIG_APPEND_TRANSACTION_ID, false)
         }.getOrDefault(false)
-        val ajouter = parLaConfiguration || AdresseDeTelechargement.operateurAttendLIdentifiant(operateurSim(subId))
+        val ajouter = parLaConfiguration || FamilleVerizon.contient(operateurSim(context, subId))
         val adresse = AdresseDeTelechargement.completer(contentLocation, transactionId, ajouter)
         // Sans l'adresse : elle peut porter un jeton de session (cf. audit SEC-06 du receveur).
         Timber.i(
@@ -148,16 +152,21 @@ class MmsDownloader @Inject constructor(
         return adresse
     }
 
-    /** MCC+MNC de la SIM de [subId] (`310004`…), ou `null` ; aucune permission requise. */
-    private fun operateurSim(subId: Int?): String? = runCatching {
-        val base = context.getSystemService(TelephonyManager::class.java) ?: return null
-        val tm = if (subId != null && subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-            base.createForSubscriptionId(subId)
-        } else {
-            base
-        }
-        tm.simOperator?.takeIf { it.isNotBlank() }
-    }.getOrNull()
+    /**
+     * 2026-11-06 (Visible/Verizon) — les en-têtes HTTP que le MMSC de [FamilleVerizon] attend, quand la configuration
+     * de l'opérateur ne les donne pas (Visible n'en porte aucun) ; `null` partout ailleurs, comme avant. Le service
+     * MMS fusionne ces surcharges dans sa configuration (`putAll`) : rien d'autre ne change. Même recette que les
+     * applications libres qui reçoivent sur Visible (`android-smsmms`, `DownloadManager`).
+     */
+    private fun surchargesDeLOperateur(subId: Int?): Bundle? {
+        val enTetes = FamilleVerizon.enTetesHttp(operateurSim(context, subId)) ?: return null
+        val fournis = runCatching {
+            subscriptionAwareManager(subId).carrierConfigValues.getString(SmsManager.MMS_CONFIG_HTTP_PARAMS)
+        }.getOrNull()
+        if (!fournis.isNullOrBlank()) return null
+        Timber.i("MMS: en-tetes HTTP de l'operateur ajoutes au telechargement")
+        return Bundle().apply { putString(SmsManager.MMS_CONFIG_HTTP_PARAMS, enTetes) }
+    }
 
     private fun subscriptionAwareManager(subId: Int?): SmsManager = when {
         subId == null -> @Suppress("DEPRECATION") SmsManager.getDefault()
