@@ -38,7 +38,9 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Group
@@ -1087,6 +1089,11 @@ fun ThreadScreen(
             // v1.22.x — numéro affiché uniquement pour une conversation 1-to-1 (une seule
             // adresse). `singleOrNull` renvoie null pour un groupe → pas de ligne numéro.
             phoneNumber = state.conversation?.addresses?.singleOrNull()?.raw,
+            // 2026-11-06 — même canal que la copie d'un message : marqué sensible (N4).
+            onCopyNumber = { numero ->
+                context.copyToClipboardSensitive(label = "phone", text = numero)
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            },
             participants = state.conversation?.addresses?.size ?: 0,
             messages = state.messageCount,
             firstAt = state.firstMessageAt,
@@ -1389,8 +1396,13 @@ private fun ThreadActionsMenu(
     }
 }
 
+/**
+ * 2026-11-06 — le numéro se copie d'un geste : bouton à droite de sa ligne (demande de Patrice). La copie
+ * passe par l'appelant ([copyToClipboardSensitive], marqué sensible comme toute copie de l'application,
+ * invariant N4) ; l'icône devient une coche, car un snackbar s'afficherait SOUS la fenêtre.
+ */
 @Composable
-private fun ConversationDetailsDialog(
+internal fun ConversationDetailsDialog(
     title: String,
     /**
      * v1.22.x — numéro du correspondant pour une conversation 1-to-1 (`null` pour un groupe :
@@ -1398,6 +1410,7 @@ private fun ConversationDetailsDialog(
      * même contact portant des numéros différents (ex. FR vs LU).
      */
     phoneNumber: String?,
+    onCopyNumber: (String) -> Unit,
     participants: Int,
     messages: Int,
     firstAt: Long?,
@@ -1413,10 +1426,30 @@ private fun ConversationDetailsDialog(
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.padding(top = 8.dp))
                 if (!phoneNumber.isNullOrBlank()) {
-                    Text(
-                        stringResource(R.string.thread_details_number, phoneNumber),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                    var copie by remember { mutableStateOf(false) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.thread_details_number, phoneNumber),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = {
+                                onCopyNumber(phoneNumber)
+                                copie = true
+                            },
+                        ) {
+                            val libelle = if (copie) {
+                                R.string.thread_details_number_copied
+                            } else {
+                                R.string.thread_details_copy_number
+                            }
+                            Icon(
+                                imageVector = if (copie) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                                contentDescription = stringResource(libelle),
+                            )
+                        }
+                    }
                 }
                 Text(
                     stringResource(R.string.thread_details_participants, participants),
