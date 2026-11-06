@@ -66,6 +66,10 @@ class EagerInjectionGuardTest {
             // It cannot reach a DAO because it depends on nothing. Added here rather than
             // wrapped in Lazy, which is the decision this test asks for.
             "com.filestech.sms.system.notifications.SafetyCallAckHolder",
+            // 2026-11-06 — the twin of SafetyCallAckHolder, for the "MMS not received" window:
+            // `@Inject constructor()` with no arguments, a MutableStateFlow and nothing else. It
+            // cannot reach a DAO because it depends on nothing.
+            "com.filestech.sms.system.notifications.MmsFailureExplanationHolder",
             // v1.28.12 — meme raisonnement que dans `MainApplication` ci-dessus :
             // `DefaultSmsAppManager` ne depend que du `Context` applicatif. Consulte ici par
             // `republishSafetyCallNotice`, pour que l'ecran cesse d'afficher « arme » quand le
