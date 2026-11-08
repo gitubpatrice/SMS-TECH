@@ -3,6 +3,68 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.30.0] — 2026-11-08
+
+### Added
+
+- **Photos open in the app** (#78, issue #76). Tapping a photo opens it full screen in SMS Tech, with pinch
+  and double-tap zoom, and animated GIFs play (new dependency `coil-gif` 2.7.0, local only). "Open with
+  another app" keeps the previous path; videos and files still open in the system app. On GrapheneOS, the
+  Gallery app showed a black screen for received photos.
+- **A conversation's photos and videos** (#71, issue #59), from the conversation's menu, most recent first.
+  Received MMS are not kept in Android's own message store, so this is where to find them again. A
+  conversation in the vault shows nothing while the vault is closed.
+- **Blocked conversations have their own folder** (#74), opened by an icon next to the vault, shown only
+  when a blocked conversation exists. The main list and Archives no longer show them, and message search no
+  longer brings their text back there.
+- **Who a group MMS was sent to** (#77, issue #76). Such an MMS in a one-to-one conversation shows "Group
+  message · N recipients", which opens the list of recipients; the details of a group conversation list
+  every member. Each number can be copied. Messages received before this version cannot get their
+  recipients back.
+- **Copy the number** from the conversation details (#75).
+- **Android's error code** when an incoming MMS cannot be downloaded: the explanation shows "Android error
+  code: N (HTTP M)", so it can be reported (#80).
+
+### Fixed
+
+- **Group chats copied from the previous app stay groups** (#80; reported by e-mail on Visible, and in
+  issue #76). The import opened each provider thread on the address of its first message and merged it into
+  that person's own conversation: group messages were mixed with private ones, and a reply went to that
+  person only. Each thread's members are now read from Android (`content://mms-sms/conversations`), without
+  the user's own number when "My phone number" is set. Existing installs are repaired once, at the first
+  start: messages already imported into a one-to-one move to their group. Nothing enters or leaves the
+  vault; a caption-less photo keeps its preview; a conversation left empty is removed unless it holds a
+  draft or a scheduled message, and a group that had no messages yet takes its pinned, muted and archived
+  state. "Resync from phone" runs the repair again.
+- **Incoming MMS on Verizon and Visible** (#80; reported by e-mail). Verizon's server announces a download
+  address ending in `message-id=` and expects the app to append the transaction ID, send its HTTP headers
+  and answer at that address. Verizon's Android carrier configuration says so; Visible's does not, the most
+  likely reason every download failed. SMS Tech now does it for SIMs of the Verizon family and US Cellular,
+  with the values of the open-source apps that work on these networks. Other carriers' addresses are never
+  changed (checked on a French network). Not measured on Verizon: the user who reported it will confirm.
+- **Pictures up to 4 MiB are received** (#72; reported by e-mail, Pixel 8, LineageOS). Any MMS announced
+  above 1 MiB, a limit set for voice clips, was refused before download and lost, and the notification
+  pointed to MMS settings that do not exist. One bound of 4 MiB now applies, every path that gives up a
+  message says so, the notification opens an explanation of the failure, and the app answers the carrier's
+  server (`m-notifyresp.ind`), which it never did.
+- **Outgoing MMS follow Android's own format** (#70, issue #53). The message Content-Type carries `start`
+  and `type`, text parts declare UTF-8, every part is named, and the SMIL has regions, as AOSP composes
+  them. A carrier refused every picture with `0xE2` (message format corrupt); that this was the cause is not
+  proven yet. Incoming MMS: a caption's declared charset is read (ISO-8859-1 and UTF-16 came out garbled),
+  and a picture whose type was in short form no longer vanishes.
+- **Emergency tiles open the Phone app** (#73). Android lets only the Phone app call an emergency number
+  directly: from any other app, a call to 112 opens the dialer with the number typed. The tiles said "Call
+  directly"; they now open the dialer without asking for a permission, and the page says so. "Call a
+  relative" keeps its direct call.
+
+### Changed
+
+- **Texts** (#79): the privacy policy, the F-Droid description, the README and About describe the new
+  features and no longer promise a direct emergency call, in the five languages.
+- **Database schema 15** (#77): one column added (`messages.mms_recipients`), additive migration.
+- **Build** (#69): AGP 9.5.0, WorkManager 2.12.0, DataStore 1.3.0, kotlinx.serialization 1.12.0, core-ktx
+  1.19.1. No visible change.
+
 ## [1.29.2] — 2026-11-03
 
 ### Fixed
