@@ -6,7 +6,7 @@ agp = "9.5.0"
 # Kotlin plafonne SOUS 2.4.20 : CodeQL 2.27 refuse de compiler a partir de la (« Kotlin version
 # 2.4.20 is too recent »), mesure sur Agenda Tech. `codeql.yml` tourne aussi sur ce depot.
 kotlin = "2.4.10"
-ksp = "2.3.12"
+ksp = "2.3.13"
 java = "17"
 
 # AndroidX / Compose
