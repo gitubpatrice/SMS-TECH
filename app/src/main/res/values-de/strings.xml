@@ -1092,5 +1092,5 @@
     <string name="thread_sim_selected">Ausgewählt</string>
     <string name="settings_default_sim_title">SIM zum Senden</string>
     <string name="settings_default_sim_android">Wie Android</string>
-    <string name="settings_default_sim_hint">Wird für automatische Nachrichten (Notfallmodus, Safety call) und für Unterhaltungen verwendet, die noch keine SIM genutzt haben. In einer Unterhaltung wird die SIM über dem Eingabefeld verwendet: standardmäßig die der letzten Nachricht. Tippen Sie darauf, um sie zu ändern.</string>
+    <string name="settings_default_sim_hint">Wird für automatische Nachrichten (Notfallmodus, Safety call) und für Unterhaltungen verwendet, die noch keine SIM genutzt haben. In einer Unterhaltung wird die SIM über dem Eingabefeld verwendet: standardmäßig die der letzten Nachricht. Tippen Sie darauf, um sie zu ändern. Ein Notfallalarm geht nur über die hier gewählte SIM: Hat sie kein Netz, wird die andere nicht versucht.</string>
 </resources>

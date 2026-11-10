@@ -1,6 +1,7 @@
 package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SimActive
 import com.filestech.sms.domain.settings.AppSettings
@@ -57,6 +58,29 @@ class ChoixDeSimTest {
         // Liste volontairement dans le désordre : c'est l'emplacement qui compte, pas l'ordre rendu.
         assertThat(ChoixDeSim.pourConversation(listOf(sim2, sim1), emptyList(), reglage = null, simAndroid = null))
             .isEqualTo(11)
+    }
+
+    @Test
+    fun `l'historique va du plus recent au plus ancien, quel que soit l'ordre recu`() {
+        fun m(date: Long, subId: Int?) = Message(
+            id = date,
+            conversationId = 1L,
+            address = "+33611111111",
+            body = "",
+            type = Message.Type.SMS,
+            direction = Message.Direction.INCOMING,
+            date = date,
+            dateSent = date,
+            read = true,
+            starred = false,
+            status = Message.Status.RECEIVED,
+            errorCode = null,
+            attachmentsCount = 0,
+            subId = subId,
+            scheduledAt = null,
+        )
+        assertThat(ChoixDeSim.historique(listOf(m(1_000L, 11), m(3_000L, 33), m(2_000L, 22))))
+            .containsExactly(33, 22, 11).inOrder()
     }
 
     // ── ChoixDeSim.valider ──

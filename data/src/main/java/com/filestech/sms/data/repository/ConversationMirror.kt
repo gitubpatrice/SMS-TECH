@@ -142,7 +142,7 @@ class ConversationMirror @Inject constructor(
             // 2026-11-10 (issue #87) — le conflit n'est plus supposé être CE message : une ligne périmée
             // qui porte encore l'adresse rendait son id, et le SMS reçu n'était écrit nulle part chez
             // nous. Cf. [insererApresEcritureSysteme].
-            val inscription = insererApresEcritureSysteme(msg)
+            val inscription = insererApresEcritureSysteme(msg, corpsSysteme = body)
             // Déjà là (miroité par une synchronisation) : on ne touche pas au compteur.
             if (inscription.nouveau) touchConversation(convId, date, body, deltaUnread = +1)
             inscription.id
@@ -161,8 +161,8 @@ class ConversationMirror @Inject constructor(
      * `-1`, si bien que son accusé et son échec se perdaient (issue #87, symptôme 3).
      *
      * Le fournisseur vient de créer une ligne sous cette adresse : une ligne de chez nous qui la porte déjà
-     * est donc l'un de deux cas, distingués par le sens et l'heure, que la copie système reprend à
-     * l'identique (`DATE` = celle qu'on a écrite) :
+     * est donc l'un de deux cas, distingués par le sens, l'heure et le texte, que la copie système reprend
+     * à l'identique (`DATE` et `BODY` = ceux qu'on a écrits, [corpsSysteme]) :
      *  - **le même message**, miroité par une synchronisation entre l'écriture système et cet appel : on
      *    rend sa ligne, `nouveau = false` ;
      *  - **un lien périmé** : la ligne système qu'elle désignait n'existe plus, puisque son identifiant
@@ -170,25 +170,41 @@ class ConversationMirror @Inject constructor(
      *    KEY` SANS `AUTOINCREMENT` (AOSP `MmsSmsDatabaseHelper.CREATE_SMS_TABLE_STRING`, lu le 2026-11-10 ;
      *    les tables MMS, elles, en ont un) : supprimer le SMS le plus récent rend son identifiant au
      *    suivant. On retire à l'ancienne ligne ce lien, qui ferait effacer chez Android le message neuf
-     *    quand on supprimerait l'ancien, et l'on écrit le nouveau.
+     *    quand on supprimerait l'ancien, et l'on écrit le nouveau. Cette ligne n'a plus de copie système :
+     *    la réconciliation ne la touche plus, la suppression ne touche qu'elle (relectures du 2026-11-10).
+     *
+     * **Dans le doute, on écrit.** Si un fournisseur réécrivait la date d'une ligne, le même message serait
+     * pris pour un lien périmé : un doublon visible, qui s'efface. Le choix inverse — rendre une ligne
+     * trop vite tenue pour la même — perdrait le message neuf, ce que faisait l'ancien code. C'est le
+     * compromis déjà écrit dans `SmsDeliverReceiver` : un doublon se voit, une perte est définitive.
      *
      * À appeler DANS la transaction de l'appelant : la recherche et la réécriture ne doivent pas pouvoir être
      * séparées par une synchronisation.
+     *
+     * @param corpsSysteme le texte écrit dans la copie système. Pour une réaction sortante, la ligne de chez
+     *   nous porte un corps vide ([upsertOutgoingSms], `localMirrorBody`), la copie système le vrai texte.
      */
-    private suspend fun insererApresEcritureSysteme(msg: MessageEntity): Inscription {
+    private suspend fun insererApresEcritureSysteme(msg: MessageEntity, corpsSysteme: String): Inscription {
         val id = messageDao.insert(msg)
         if (id > 0L) return Inscription(id, nouveau = true)
-        // Sans adresse, aucun index unique ne peut refuser la ligne (deux NULL sont distincts).
-        val uri = checkNotNull(msg.telephonyUri) { "ligne refusée par un index unique sans adresse système" }
-        val existant = checkNotNull(messageDao.findByTelephonyUri(uri)) { "conflit sans ligne existante" }
-        if (existant.direction == msg.direction && existant.date == msg.date) {
-            return Inscription(existant.id, nouveau = false)
-        }
+        // Aucune exception ici (relecture Claude du 2026-11-10) : lever annulerait la transaction de l'envoi, et
+        // le SMS — d'urgence compris — ne partirait pas. Un état impossible rend `-1` : l'appelant n'écrit
+        // alors aucun aperçu, et l'envoi part sans suivi, comme avant ce correctif.
+        // Sans adresse, aucun index unique ne peut refuser la ligne (deux NULL sont distincts) ; `IGNORE`
+        // couvre aussi NOT NULL et CHECK, que les types Kotlin rendent inatteignables.
+        val existant = msg.telephonyUri?.let { messageDao.findByTelephonyUri(it) }
+            ?: return impossible("conflit sans ligne qui porte l'adresse système")
+        if (estLeMemeMessage(existant, msg, corpsSysteme)) return Inscription(existant.id, nouveau = false)
         Timber.w("Lien système périmé retiré du message %d : son adresse vient d'être rendue à un autre", existant.id)
         messageDao.detacherDuSysteme(existant.id)
         val reessai = messageDao.insert(msg)
-        check(reessai > 0L) { "message refusé après retrait du lien périmé" }
-        return Inscription(reessai, nouveau = true)
+        return if (reessai > 0L) Inscription(reessai, nouveau = true) else impossible("refusé après retrait du lien")
+    }
+
+    /** 2026-11-10 — un conflit qu'aucun index connu ne peut produire : journalisé, et sans ligne (`-1`). */
+    private fun impossible(raison: String): Inscription {
+        Timber.e("ConversationMirror : %s", raison)
+        return Inscription(-1L, nouveau = false)
     }
 
     /**
@@ -445,13 +461,14 @@ class ConversationMirror @Inject constructor(
             )
             // 2026-11-10 (issue #87) — le `-1` d'un conflit n'est plus rendu comme un id : l'aperçu
             // annonçait un message absent du fil, et l'envoi suivait sous l'id `-1`.
-            val msgId = insererApresEcritureSysteme(msg).id
+            val msgId = insererApresEcritureSysteme(msg, corpsSysteme = body).id
             // v1.4.1 — when the row is a hidden reaction sentinel (mirrorBody=""),
             // we don't bump `lastMessageAt` / `lastMessagePreview` either, otherwise
             // the conversation list would show a blank preview line and the wrong
             // sort order (sentinel timestamp masking the real last message). For
             // regular SMS, [touchConversation] behaviour is unchanged.
-            if (mirrorBody.isNotEmpty()) {
+            // 2026-11-10 (issue #87) — et jamais sans ligne : c'est l'aperçu d'un message absent du fil.
+            if (msgId > 0L && mirrorBody.isNotEmpty()) {
                 touchConversation(convId, date, mirrorBody, deltaUnread = 0)
             }
             msgId
@@ -1605,3 +1622,16 @@ class ConversationMirror @Inject constructor(
  * dériver et rouvrir l'asymétrie réception/composition que ce correctif ferme.
  */
 internal const val CONV_MATCH_MIN_DIGITS = 8
+
+/**
+ * 2026-11-10 (issue #87) — [existant], qui porte l'adresse système de [msg], est-il ce même message, miroité par
+ * une synchronisation ? Le sens, l'heure, l'adresse et le texte : la date d'un SMS reçu est celle du centre SMS,
+ * à la seconde, et deux SMS différents peuvent la partager (relectures du 2026-11-10). Le moindre écart fait
+ * écrire le message : cf. « Dans le doute, on écrit » dans `ConversationMirror.insererApresEcritureSysteme`.
+ * Hors de la classe, qui est au plafond de fonctions de detekt ; elle n'en utilise rien.
+ */
+private fun estLeMemeMessage(existant: MessageEntity, msg: MessageEntity, corpsSysteme: String): Boolean =
+    existant.direction == msg.direction &&
+        existant.date == msg.date &&
+        existant.address == msg.address &&
+        (existant.body == corpsSysteme || existant.body == msg.body)

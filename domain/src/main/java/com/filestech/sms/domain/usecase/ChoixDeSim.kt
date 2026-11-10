@@ -6,9 +6,10 @@ import com.filestech.sms.domain.model.SimActive
 /**
  * 2026-11-10 (choix de la SIM d'envoi, v1.30.1) — les deux règles du choix de SIM, sans Android.
  *
- * Avant la 1.30.1, tout partait par la SIM SMS d'Android : `SendingSettings.defaultSubId` était lu par
- * chaque voie d'envoi, mais aucun écran ne l'écrivait. On répondait donc par la SIM 1 à un message reçu
- * sur la SIM 2 (courriel d'un utilisateur à deux SIM, 2026-11-10), alors que `PERMISSIONS.md`, l'écran
+ * Avant la 1.30.1, `SendingSettings.defaultSubId` était lu par chaque voie d'envoi, mais aucun écran ne
+ * l'avait jamais écrit (historique Git relu le 2026-11-10) et la sauvegarde ne le restaure pas : en
+ * pratique, tout partait par la SIM SMS d'Android. On répondait donc par la SIM 1 à un message reçu sur la
+ * SIM 2 (courriel d'un utilisateur à deux SIM, 2026-11-10), alors que `PERMISSIONS.md`, l'écran
  * « À propos » et le site annonçaient le choix de la SIM.
  */
 object ChoixDeSim {

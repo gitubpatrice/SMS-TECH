@@ -372,8 +372,20 @@ class ThreadViewModel @Inject constructor(
      */
     private val cachedSettings: StateFlow<AppSettings> get() = settings.state
 
+    /**
+     * 2026-11-10 (v1.30.1) — l'état sauvegardé de l'écran. La SIM choisie au composeur y vit : un ViewModel
+     * survit à la rotation, pas à la mort du processus en arrière-plan, fréquente sur un téléphone d'entrée
+     * de gamme. Sans lui, la SIM choisie redevenait en silence celle de l'historique au retour dans le fil
+     * (relecture Gemini du 2026-11-10).
+     */
+    private val etatSauve: SavedStateHandle = savedStateHandle
+
     /** 2026-11-10 (v1.30.1) — la SIM choisie au composeur pendant cette visite ; `null` = pas de choix. */
-    private var simChoisie: Int? = null
+    private var simChoisie: Int?
+        get() = etatSauve[CLE_SIM_CHOISIE]
+        set(valeur) {
+            etatSauve[CLE_SIM_CHOISIE] = valeur
+        }
 
     /** 2026-11-10 (v1.30.1) — la SIM SMS d'Android, lue avec la liste des SIM. */
     private var simAndroid: Int? = null
@@ -395,6 +407,20 @@ class ThreadViewModel @Inject constructor(
             )
             if (sim == s.simEnvoi) s else s.copy(simEnvoi = sim)
         }
+    }
+
+    /** 2026-11-10 (v1.30.1) — la lecture des SIM lancée à l'ouverture du fil, cf. [simPourEnvoi]. */
+    private var lectureSims: Job? = null
+
+    /**
+     * 2026-11-10 (v1.30.1) — la SIM du prochain envoi, une fois la liste des SIM lue. Un envoi fait dans les
+     * millisecondes qui suivent l'ouverture du fil (depuis un partage, par exemple) partait sinon par le réglage
+     * ou par Android, puis la pastille affichait une autre SIM (relecture Claude du 2026-11-10). L'attente est
+     * bornée : une lecture qui gèle ne bloque pas l'envoi.
+     */
+    private suspend fun simPourEnvoi(): Int? {
+        withTimeoutOrNull(ATTENTE_LECTURE_SIMS_MS) { lectureSims?.join() }
+        return _state.value.simEnvoi
     }
 
     /** 2026-11-10 (v1.30.1) — l'utilisateur choisit la SIM d'envoi au composeur, pour cette visite du fil. */
@@ -542,7 +568,8 @@ class ThreadViewModel @Inject constructor(
                     lastMessageAt = window.lastMessageAt,
                 )
             }
-            // 2026-11-10 (v1.30.1) — un message reçu sur l'autre SIM change la SIM de réponse.
+            // 2026-11-10 (v1.30.1) — un message reçu sur l'autre SIM change la SIM de réponse, sauf si une SIM a
+            // été choisie au composeur pendant la visite : ce choix l'emporte.
             recalculerSim()
             // v1.11.0 audit P1 — recompute les verdicts smishing sur IO
             // dispatcher quand la liste de messages change (ajout, suppression,
@@ -559,7 +586,7 @@ class ThreadViewModel @Inject constructor(
 
         // 2026-11-10 (v1.30.1) — les SIM, lues une fois par visite et hors du fil principal (appel binder).
         // Une SIM retirée pendant la visite est rattrapée à l'envoi (`SimDEnvoi`).
-        viewModelScope.launch {
+        lectureSims = viewModelScope.launch {
             val (sims, android) = withContext(io) {
                 com.filestech.sms.core.result
                     .runCatchingCancellable { simsActives.lister() to simsActives.simSmsDAndroid() }
@@ -725,7 +752,7 @@ class ThreadViewModel @Inject constructor(
             }
             // 2026-11-10 (v1.30.1) — la SIM qu'affiche le composeur ; `null` (une seule SIM) laisse l'envoi
             // programmé retomber, à l'heure dite, sur le réglage puis sur Android (`SimDEnvoi`).
-            val effectiveSubId = _state.value.simEnvoi
+            val effectiveSubId = simPourEnvoi()
             // v1.26.0 — les pieces jointes en attente partent AVEC l'envoi programme.
             //
             // Elles etaient purement ignorees : on pouvait joindre une photo, programmer, et
@@ -793,7 +820,7 @@ class ThreadViewModel @Inject constructor(
                 // v1.28.4 — le routeur decide : MMS de groupe si le reglage est actif et que
                 // la conversation est un groupe, SMS sinon (cf. [EnvoyerMessageUseCase]).
                 // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
-                envoyer.invoke(conv.addresses, body, subId = _state.value.simEnvoi, replyToMessageId = replyTargetId)
+                envoyer.invoke(conv.addresses, body, subId = simPourEnvoi(), replyToMessageId = replyTargetId)
             }
             when (res) {
                 is Outcome.Success -> {
@@ -1028,7 +1055,7 @@ class ThreadViewModel @Inject constructor(
         recentlySentReactionFor[messageId] = ReactionDispatch(emoji = emoji, timestamp = now)
         // 2026-11-10 (v1.30.1) — la réaction part par la SIM du fil, comme une réponse : depuis l'autre SIM, elle
         // viendrait d'un numéro que le correspondant ne relie pas à cette conversation.
-        return when (val res = sendReaction(messageId, emoji, format, subId = _state.value.simEnvoi)) {
+        return when (val res = sendReaction(messageId, emoji, format, subId = simPourEnvoi())) {
             is Outcome.Success -> DispatchOutcome.Sent
             is Outcome.Failure -> {
                 _events.tryEmit(Event.SendError(res.error))
@@ -1216,7 +1243,7 @@ class ThreadViewModel @Inject constructor(
         val res = try {
             withContext(NonCancellable) {
                 // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
-                envoyer.invoke(conv.addresses, textBody, attachments = payloads, subId = _state.value.simEnvoi)
+                envoyer.invoke(conv.addresses, textBody, attachments = payloads, subId = simPourEnvoi())
             }
         } finally {
             _state.update { it.copy(isSending = false) }
@@ -1730,7 +1757,7 @@ class ThreadViewModel @Inject constructor(
             mimeType = reviewing.mimeType,
             durationMs = reviewing.durationMs,
             // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
-            subId = _state.value.simEnvoi,
+            subId = simPourEnvoi(),
         )) {
             is Outcome.Success -> {
                 _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }
@@ -2046,6 +2073,12 @@ class ThreadViewModel @Inject constructor(
         context.getString(com.filestech.sms.R.string.snack_block_partial, blocked, total)
 
     private companion object {
+        /** 2026-11-10 (v1.30.1) — la clé de [simChoisie] dans l'état sauvegardé. */
+        const val CLE_SIM_CHOISIE: String = "simChoisie"
+
+        /** 2026-11-10 (v1.30.1) — l'attente maximale de la lecture des SIM avant un envoi. */
+        const val ATTENTE_LECTURE_SIMS_MS: Long = 2_000L
+
         /**
          * Messages loaded per page. 200 comfortably fills any screen, so the first paint looks
          * complete, while keeping the per-emission cost flat on very long threads: before v1.24.0

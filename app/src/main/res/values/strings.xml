@@ -1106,5 +1106,5 @@
     <string name="thread_sim_selected">Selected</string>
     <string name="settings_default_sim_title">SIM for sending</string>
     <string name="settings_default_sim_android">Same as Android</string>
-    <string name="settings_default_sim_hint">Used for automatic messages (emergency mode, Safety call) and for conversations that have not used a SIM yet. In a conversation, the SIM shown above the text field is the one used: by default, the SIM of its last message. Tap it to change it.</string>
+    <string name="settings_default_sim_hint">Used for automatic messages (emergency mode, Safety call) and for conversations that have not used a SIM yet. In a conversation, the SIM shown above the text field is the one used: by default, the SIM of its last message. Tap it to change it. An emergency alert goes only through the SIM chosen here: if it has no network, the other one is not tried.</string>
 </resources>

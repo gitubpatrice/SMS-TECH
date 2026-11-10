@@ -1094,5 +1094,5 @@
     <string name="thread_sim_selected">Sélectionnée</string>
     <string name="settings_default_sim_title">SIM d\'envoi</string>
     <string name="settings_default_sim_android">Comme Android</string>
-    <string name="settings_default_sim_hint">Utilisée pour les messages automatiques (mode urgence, Safety call) et pour les conversations qui n\'ont encore utilisé aucune SIM. Dans une conversation, c\'est la SIM affichée au-dessus du champ de saisie qui part : par défaut, celle du dernier message. Touchez-la pour en changer.</string>
+    <string name="settings_default_sim_hint">Utilisée pour les messages automatiques (mode urgence, Safety call) et pour les conversations qui n\'ont encore utilisé aucune SIM. Dans une conversation, c\'est la SIM affichée au-dessus du champ de saisie qui part : par défaut, celle du dernier message. Touchez-la pour en changer. Une alerte d\'urgence ne part que par la SIM choisie ici : sans réseau, l\'autre n\'est pas essayée.</string>
 </resources>

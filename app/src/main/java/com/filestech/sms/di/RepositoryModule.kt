@@ -87,8 +87,8 @@ abstract class RepositoryModule {
     @Binds @Singleton
     abstract fun bindSmsSender(impl: SmsSenderImpl): SmsSender
 
-    // 2026-11-10 (v1.30.1) — la liste des SIM, lue en un seul endroit : choix de SIM, validation a
-    // l'envoi, etiquettes des bulles.
+    // 2026-11-10 (v1.30.1) — la liste des SIM du choix de SIM, de la validation a l'envoi et des
+    // etiquettes des bulles.
     @Binds @Singleton
     abstract fun bindSimsActives(impl: SimsActivesAndroid): SimsActives
 

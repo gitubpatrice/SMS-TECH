@@ -58,8 +58,8 @@ fun rememberSimsActives(): List<SimActive> {
 }
 
 private fun buildSimLabelMap(context: Context): Map<Int, String> {
-    // 2026-11-10 (v1.30.1) — la liste vient de [SimsActivesAndroid], la seule lecture des SIM de
-    // l'application (permission vérifiée avant l'appel binder, comme ici depuis la v1.22.0).
+    // 2026-11-10 (v1.30.1) — la liste vient de [SimsActivesAndroid], celle du choix de SIM et de la
+    // validation à l'envoi (permission vérifiée avant l'appel binder, comme ici depuis la v1.22.0).
     val sims = SimsActivesAndroid(context.applicationContext).lister()
     // Mono-SIM (ou aucune) : rien à distinguer, donc aucun tag.
     if (sims.size < 2) return emptyMap()

@@ -64,7 +64,8 @@ class ThreadSimEnvoiTest {
     @Test
     fun `la SIM du dernier message est retenue, et c'est elle qui part`() = runTest(dispatcher) {
         // Le plus récent a été reçu sur la SIM 2 ; Android, lui, envoie par la SIM 1.
-        val historique = listOf(message(2_000L, 22), message(1_000L, 11))
+        // Dans l'ordre chronologique, exprès : c'est à la règle de trouver le plus récent (relecture Claude).
+        val historique = listOf(message(1_000L, 11), message(2_000L, 22))
         val vm = threadViewModel(sims = listOf(sim1, sim2), historique = historique)
 
         assertThat(vm.state.value.sims).containsExactly(sim1, sim2).inOrder()
@@ -87,6 +88,18 @@ class ThreadSimEnvoiTest {
         vm.send()
 
         coVerify(exactly = 1) { envoyer.invoke(any(), "Bonjour", any(), 11, any()) }
+    }
+
+    @Test
+    fun `le choix survit a la mort du processus, par l'etat sauvegarde`() = runTest(dispatcher) {
+        // Un premier ViewModel enregistre le choix ; Android tue l'appli et recrée l'écran avec l'état sauvegardé.
+        val etat = SavedStateHandle(mapOf("conversationId" to 7L))
+        threadViewModel(sims = listOf(sim1, sim2), historique = listOf(message(2_000L, 22)), etat = etat)
+            .choisirSim(11)
+
+        val recree = threadViewModel(sims = listOf(sim1, sim2), historique = listOf(message(2_000L, 22)), etat = etat)
+
+        assertThat(recree.state.value.simEnvoi).isEqualTo(11)
     }
 
     @Test
@@ -127,7 +140,11 @@ class ThreadSimEnvoiTest {
         scheduledAt = null,
     )
 
-    private fun threadViewModel(sims: List<SimActive>, historique: List<Message>): ThreadViewModel {
+    private fun threadViewModel(
+        sims: List<SimActive>,
+        historique: List<Message>,
+        etat: SavedStateHandle = SavedStateHandle(mapOf("conversationId" to 7L)),
+    ): ThreadViewModel {
         val conversation = Conversation(
             id = 7L,
             threadId = null,
@@ -160,7 +177,7 @@ class ThreadSimEnvoiTest {
             every { simSmsDAndroid() } returns 11
         }
         return ThreadViewModel(
-            savedStateHandle = SavedStateHandle(mapOf("conversationId" to conversation.id)),
+            savedStateHandle = etat,
             repo = repo,
             envoyer = envoyer,
             sendVoiceMms = mockk(relaxed = true),

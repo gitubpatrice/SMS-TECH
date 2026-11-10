@@ -30,7 +30,7 @@ import org.junit.runner.RunWith
  * conversation (message visible dans la liste, absent du fil) et partait sous l'id `-1` ; la réception rendait
  * l'id de l'ANCIENNE ligne, et le SMS reçu n'était écrit nulle part chez nous.
  *
- * Les deux cas d'un conflit, que [ConversationMirror] distingue par le sens et l'heure :
+ * Les deux cas d'un conflit, que [ConversationMirror] distingue par le sens, l'heure et le texte :
  *  - un lien PÉRIMÉ (autre message) : le nouveau est écrit, l'ancien perd son lien ;
  *  - le MÊME message, déjà miroité : sa ligne est rendue, sans doublon ni double compte.
  */
@@ -95,6 +95,20 @@ class EcritureSystemeConflitTest {
     }
 
     @Test
+    fun unEnvoiApresUnEnvoiSupprimeSousLaMemeAdresseEstEcrit(): Unit = runBlocking {
+        // Relecture Claude du 2026-11-10 : un envoi, sa suppression chez Android, un nouvel envoi qui reçoit le
+        // même identifiant. Même sens, même texte, autre heure : deux messages.
+        val ancien = envoyer("ok", date = 1_000L, uri = URI)
+
+        val nouveau = envoyer("ok", date = 2_000L, uri = URI)
+
+        assertThat(nouveau).isGreaterThan(0L)
+        assertThat(nouveau).isNotEqualTo(ancien)
+        assertThat(db.messageDao().findById(nouveau)!!.telephonyUri).isEqualTo(URI)
+        assertThat(db.messageDao().findById(ancien)!!.telephonyUri).isNull()
+    }
+
+    @Test
     fun unEnvoiDejaMiroiteRendSaLigneSansDoublon(): Unit = runBlocking {
         val premier = envoyer("bonjour", date = 2_000L, uri = URI)
 
@@ -124,6 +138,34 @@ class EcritureSystemeConflitTest {
     }
 
     @Test
+    fun unSmsRecuALaMemeHeureMaisDUnAutreTexteEstEcrit(): Unit = runBlocking {
+        // Relectures GPT et Gemini du 2026-11-10 : le sens et l'heure seuls auraient rendu l'ancienne ligne,
+        // et le texte neuf aurait été perdu. Dans le doute, on écrit.
+        val ancien = mirror.upsertIncomingSms(ALICE, "ancien", date = 3_000L, telephonyUri = URI)
+
+        val recu = mirror.upsertIncomingSms(ALICE, "nouveau", date = 3_000L, telephonyUri = URI)
+
+        assertThat(recu).isGreaterThan(0L)
+        assertThat(recu).isNotEqualTo(ancien)
+        assertThat(db.messageDao().findById(recu)!!.body).isEqualTo("nouveau")
+        assertThat(db.messageDao().findById(recu)!!.telephonyUri).isEqualTo(URI)
+        assertThat(db.messageDao().findById(ancien)!!.telephonyUri).isNull()
+    }
+
+    @Test
+    fun leMemeTexteALaMemeSecondeDUnAutreNumeroEstEcrit(): Unit = runBlocking {
+        // La date d'un SMS reçu est celle du centre SMS, à la seconde : « ok » de deux numéros peut la partager.
+        val ancien = mirror.upsertIncomingSms(ALICE, "ok", date = 3_000L, telephonyUri = URI)
+
+        val recu = mirror.upsertIncomingSms(BOB, "ok", date = 3_000L, telephonyUri = URI)
+
+        assertThat(recu).isGreaterThan(0L)
+        assertThat(recu).isNotEqualTo(ancien)
+        assertThat(db.messageDao().findById(recu)!!.address).isEqualTo(BOB)
+        assertThat(db.messageDao().findById(ancien)!!.telephonyUri).isNull()
+    }
+
+    @Test
     fun unSmsRecuDejaMiroiteNeCompteQuUneFois(): Unit = runBlocking {
         val premier = mirror.upsertIncomingSms(ALICE, "salut", date = 3_000L, telephonyUri = URI)
 
@@ -148,6 +190,7 @@ class EcritureSystemeConflitTest {
 
     private companion object {
         const val ALICE = "+33612345678"
+        const val BOB = "+33698765432"
         const val URI = "content://sms/42"
     }
 }
