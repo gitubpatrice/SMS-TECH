@@ -3,6 +3,43 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.30.1] — 2026-11-12
+
+### Added
+
+- **Choose the SIM for sending** (reported by e-mail, TECNO Spark 40 Pro, Android 16, two SIMs). With two
+  SIMs or more, the SIM a message will go through is shown above the text field ("SIM 2 · carrier"), and
+  tapping it opens the list. A conversation answers by the SIM of its last message, so by the SIM that
+  received it, and a choice made there is carried by the message sent. A reply from a notification follows
+  the same rule, and so do pictures, voice messages, scheduled messages and reactions. Settings > Sending >
+  SIM for sending covers automatic messages (emergency mode, Safety call) and conversations that have not
+  used a SIM yet; "Same as Android" keeps the previous behaviour. An emergency alert goes only through that
+  SIM and does not try the other one, as the setting's help says. When Android is set to ask every time
+  and neither the conversation nor the setting names a SIM, SIM 1 is shown and used until another is
+  picked. Listing the SIMs needs the Phone permission, which SMS Tech asks for at start: without it, no
+  SIM is shown or offered. The setting existed internally, but no screen wrote it, while About and
+  PERMISSIONS.md announced the choice. With one SIM, nothing changes.
+
+### Fixed
+
+- **A SIM no longer in the phone no longer makes sending fail.** The SIM asked for (setting, scheduled
+  message, retry) is checked against the active SIMs; when it is gone, Android's SMS SIM is used.
+- **A sent message always appears in its conversation** (issue #87, Android 8). When the address Android
+  gave to the new copy was still held by an older message in SMS Tech, the app's insert was ignored: the
+  conversation list showed the message, the conversation did not, and its delivery report and failure were
+  lost. The same conflict on a received SMS returned the older message, and the new one was not written in
+  the app. The older message now loses its stale link, and the new one is written. Android's `sms` table
+  has no `AUTOINCREMENT`: the id of its most recent row is reused once that row is deleted. A row is taken
+  for the same message only with the same direction, time, address and text; when in doubt the message is
+  written, since a duplicate can be deleted and a lost message cannot.
+- **A copy Android refused to keep is no longer recorded as one** (issue #87). A refused write does not
+  fail, it returns the address followed by `/0`; that was stored as a real address, and the next refused
+  write collided with it. An outgoing MMS is no longer written under `content://mms/0`.
+
+### Not fixed yet
+
+- Issue #87, messages shown twice: the cause is not found; the reporter's answers are awaited.
+
 ## [1.30.0] — 2026-11-08
 
 ### Added
