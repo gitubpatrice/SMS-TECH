@@ -234,9 +234,14 @@ class TelephonyReader @Inject constructor(
         // Voir [canonicalTelephonyUri] : selon la version d'Android, `insert` rend ici
         // `content://sms/sent/<id>` ou `content://sms/<id>`, et la premiere est a la fois
         // refusee en suppression et invisible pour la deduplication de l'import.
-        return resolver.insert(Telephony.Sms.Sent.CONTENT_URI, cv)
-            ?.toString()
-            ?.let(::canonicalTelephonyUri)
+        // 2026-11-10 (issue #87) — et `null` pour une écriture refusée (`…/0`), cf. [uriDeLigneCreee].
+        val brut = resolver.insert(Telephony.Sms.Sent.CONTENT_URI, cv)?.toString()
+        return uriDeLigneCreee(brut).also { if (it == null && brut != null) journaliserRefus("envoyé") }
+    }
+
+    /** 2026-11-10 (issue #87) — une écriture refusée par `content://sms` se voit au journal, sans adresse ni texte. */
+    private fun journaliserRefus(dossier: String) {
+        Timber.w("content://sms a refusé l'écriture d'un SMS %s : aucune copie chez Android", dossier)
     }
 
     /** Insert an incoming SMS into the system inbox. Required from SmsDeliverReceiver. */
@@ -257,8 +262,11 @@ class TelephonyReader @Inject constructor(
             subId?.let { put(Telephony.Sms.SUBSCRIPTION_ID, it) }
         }
         // v1.27.11 — meme normalisation que pour l'envoi, et pour les memes deux raisons.
-        return resolver.insert(Telephony.Sms.Inbox.CONTENT_URI, cv)
-            ?.let { Uri.parse(canonicalTelephonyUri(it.toString())) }
+        // 2026-11-10 (issue #87) — et la même lecture d'un refus (`…/0`).
+        val brut = resolver.insert(Telephony.Sms.Inbox.CONTENT_URI, cv)?.toString()
+        return uriDeLigneCreee(brut)
+            .also { if (it == null && brut != null) journaliserRefus("reçu") }
+            ?.let(Uri::parse)
     }
 
     fun markMessageRead(uri: Uri) {

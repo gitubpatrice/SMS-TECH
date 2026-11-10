@@ -138,16 +138,54 @@ class ConversationMirror @Inject constructor(
             //
             // Le chemin en MASSE avait été corrigé pour ce motif exact en v1.8.0 ; le chemin
             // unitaire ne l'avait pas été.
-            val insertedId = messageDao.insert(msg)
-            if (insertedId > 0L) {
-                touchConversation(convId, date, body, deltaUnread = +1)
-                insertedId
-            } else {
-                // Conflit : on rend l'id de la ligne DÉJÀ présente pour que l'appelant puisse
-                // quand même notifier, et on ne touche pas au compteur.
-                telephonyUri?.let { messageDao.findByTelephonyUri(it)?.id } ?: -1L
-            }
+            //
+            // 2026-11-10 (issue #87) — le conflit n'est plus supposé être CE message : une ligne périmée
+            // qui porte encore l'adresse rendait son id, et le SMS reçu n'était écrit nulle part chez
+            // nous. Cf. [insererApresEcritureSysteme].
+            val inscription = insererApresEcritureSysteme(msg)
+            // Déjà là (miroité par une synchronisation) : on ne touche pas au compteur.
+            if (inscription.nouveau) touchConversation(convId, date, body, deltaUnread = +1)
+            inscription.id
         }
+    }
+
+    /** 2026-11-10 (issue #87) — la ligne qui porte un message après [insererApresEcritureSysteme]. */
+    private data class Inscription(val id: Long, val nouveau: Boolean)
+
+    /**
+     * 2026-11-10 (issue #87) — insère la ligne d'un message dont la copie système vient d'être CRÉÉE, et
+     * dont [MessageEntity.telephonyUri] est l'adresse que le fournisseur a rendue (ou `null`).
+     *
+     * L'insertion est en `IGNORE` sur `UNIQUE(telephony_uri)` : un conflit rend `-1`, et l'envoi l'ignorait.
+     * L'aperçu de la conversation annonçait alors un message absent du fil, et l'envoi partait avec l'id
+     * `-1`, si bien que son accusé et son échec se perdaient (issue #87, symptôme 3).
+     *
+     * Le fournisseur vient de créer une ligne sous cette adresse : une ligne de chez nous qui la porte déjà
+     * est donc l'un de deux cas, distingués par le sens et l'heure, que la copie système reprend à
+     * l'identique (`DATE` = celle qu'on a écrite) :
+     *  - **le même message**, miroité par une synchronisation entre l'écriture système et cet appel : on
+     *    rend sa ligne, `nouveau = false` ;
+     *  - **un lien périmé** : la ligne système qu'elle désignait n'existe plus, puisque son identifiant
+     *    vient d'être rendu pour une autre. On lui retire ce lien, qui ferait effacer chez Android le
+     *    message neuf quand on supprimerait l'ancien, et l'on écrit le nouveau.
+     *
+     * À appeler DANS la transaction de l'appelant : la recherche et la réécriture ne doivent pas pouvoir être
+     * séparées par une synchronisation.
+     */
+    private suspend fun insererApresEcritureSysteme(msg: MessageEntity): Inscription {
+        val id = messageDao.insert(msg)
+        if (id > 0L) return Inscription(id, nouveau = true)
+        // Sans adresse, aucun index unique ne peut refuser la ligne (deux NULL sont distincts).
+        val uri = checkNotNull(msg.telephonyUri) { "ligne refusée par un index unique sans adresse système" }
+        val existant = checkNotNull(messageDao.findByTelephonyUri(uri)) { "conflit sans ligne existante" }
+        if (existant.direction == msg.direction && existant.date == msg.date) {
+            return Inscription(existant.id, nouveau = false)
+        }
+        Timber.w("Lien système périmé retiré d'un message (id=%d) : l'adresse vient d'être rendue pour un autre", existant.id)
+        messageDao.detacherDuSysteme(existant.id)
+        val reessai = messageDao.insert(msg)
+        check(reessai > 0L) { "message refusé après retrait du lien périmé" }
+        return Inscription(reessai, nouveau = true)
     }
 
     /**
@@ -402,7 +440,9 @@ class ConversationMirror @Inject constructor(
                 // v1.28.4 — la sentinelle de réaction sortante se DÉCLARE, elle n'est plus devinée.
                 hidden = localMirrorBody != null && localMirrorBody.isEmpty(),
             )
-            val msgId = messageDao.insert(msg)
+            // 2026-11-10 (issue #87) — le `-1` d'un conflit n'est plus rendu comme un id : l'aperçu
+            // annonçait un message absent du fil, et l'envoi suivait sous l'id `-1`.
+            val msgId = insererApresEcritureSysteme(msg).id
             // v1.4.1 — when the row is a hidden reaction sentinel (mirrorBody=""),
             // we don't bump `lastMessageAt` / `lastMessagePreview` either, otherwise
             // the conversation list would show a blank preview line and the wrong

@@ -59,4 +59,31 @@ class TelephonyUriTest {
         assertThat(canonicalTelephonyUri("content://sms/12/34"))
             .isEqualTo("content://sms/12/34") // deux segments numeriques : pas un dossier
     }
+
+    // ── 2026-11-10 (issue #87) — [uriDeLigneCreee] : une écriture refusée n'est pas une ligne ──
+
+    @Test
+    fun `une ligne creee rend sa forme canonique`() {
+        // Le cas ordinaire : la ligne existe, on garde son adresse — sous la forme canonique.
+        assertThat(uriDeLigneCreee("content://sms/sent/9164")).isEqualTo("content://sms/9164")
+        assertThat(uriDeLigneCreee("content://sms/inbox/1")).isEqualTo("content://sms/1")
+        assertThat(uriDeLigneCreee("content://sms/42")).isEqualTo("content://sms/42")
+        assertThat(uriDeLigneCreee("content://sms/10")).isEqualTo("content://sms/10") // finit par 0, n'est pas 0
+    }
+
+    @Test
+    fun `un refus du fournisseur ne donne aucune adresse`() {
+        // `ContentProvider.rejectInsert` : l'URI demandé suivi de `/0`.
+        assertThat(uriDeLigneCreee("content://sms/sent/0")).isNull()
+        assertThat(uriDeLigneCreee("content://sms/inbox/0")).isNull()
+        assertThat(uriDeLigneCreee("content://sms/0")).isNull()
+        assertThat(uriDeLigneCreee(null)).isNull()
+        assertThat(uriDeLigneCreee("")).isNull()
+    }
+
+    @Test
+    fun `un dernier segment non numerique traverse`() {
+        // Même prudence que la forme canonique : on ne jette pas ce qu'on ne sait pas lire.
+        assertThat(uriDeLigneCreee("content://sms/sent/abc")).isEqualTo("content://sms/sent/abc")
+    }
 }
