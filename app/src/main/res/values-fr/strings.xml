@@ -1089,4 +1089,10 @@
         <item quantity="other">%1$d jours</item>
     </plurals>
     <string name="duration_days_hours">%1$d j %2$d h</string>
+    <!-- 2026-11-10 (v1.30.1) - choix de la SIM d'envoi, affiché à partir de deux SIM. -->
+    <string name="thread_sim_change">Changer de SIM</string>
+    <string name="thread_sim_selected">Sélectionnée</string>
+    <string name="settings_default_sim_title">SIM d\'envoi</string>
+    <string name="settings_default_sim_android">Comme Android</string>
+    <string name="settings_default_sim_hint">Utilisée pour les messages automatiques (mode urgence, Safety call) et pour les conversations qui n\'ont encore utilisé aucune SIM. Dans une conversation, c\'est la SIM affichée au-dessus du champ de saisie qui part : par défaut, celle du dernier message. Touchez-la pour en changer.</string>
 </resources>

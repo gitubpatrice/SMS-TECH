@@ -658,6 +658,10 @@ fun ThreadScreen(
                         onRemove = { id -> viewModel.removePendingAttachment(id) },
                     )
                 }
+                // 2026-11-10 (v1.30.1) — la SIM d'envoi, juste au-dessus du composeur : le texte, les pièces
+                // jointes et le vocal partent tous par elle. Rien du tout avec une seule SIM. Placée ici, comme
+                // la bande des pièces jointes, elle monte avec le clavier (`imePadding` du composeur).
+                ChoixDeSimComposeur(sims = state.sims, simEnvoi = state.simEnvoi, onChoisir = viewModel::choisirSim)
                 ComposerBar(
                     voice = state.voice,
                     playback = playbackState,

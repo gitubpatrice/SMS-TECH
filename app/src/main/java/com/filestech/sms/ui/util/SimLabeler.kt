@@ -1,14 +1,12 @@
 package com.filestech.sms.ui.util
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.content.pm.PackageManager
-import android.telephony.SubscriptionManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
+import com.filestech.sms.data.sms.SimsActivesAndroid
+import com.filestech.sms.domain.model.SimActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -47,36 +45,43 @@ fun rememberSimLabeler(): (Int?) -> String? {
     }
 }
 
-@SuppressLint("MissingPermission")
-private fun buildSimLabelMap(context: Context): Map<Int, String> {
-    // Check runtime AVANT l'appel binder (cf. detectMsisdn / SettingsScreen) : on rate proprement
-    // plutôt que de laisser une SecurityException se faire avaler dans un catch.
-    val granted = ContextCompat.checkSelfPermission(
-        context,
-        android.Manifest.permission.READ_PHONE_STATE,
-    ) == PackageManager.PERMISSION_GRANTED
-    if (!granted) return emptyMap()
-
-    val sm = context.getSystemService(SubscriptionManager::class.java) ?: return emptyMap()
-    val infos = runCatching { sm.activeSubscriptionInfoList }.getOrNull().orEmpty()
-    // Mono-SIM (ou aucune) : rien à distinguer, donc aucun tag.
-    if (infos.size < 2) return emptyMap()
-
-    return infos.associate { info ->
-        val label = info.displayName?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-            ?: info.carrierName?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-            ?: "SIM ${info.simSlotIndex + 1}"
-        // `displayName` est un nom saisi librement par l'user dans les réglages Android (non
-        // plafonné) : on borne le libellé pour qu'un nom à rallonge ne fasse pas wrapper la
-        // bulle sur 2 lignes une fois suffixé au nom de l'expéditeur.
-        val capped = if (label.length > MAX_SIM_LABEL_LEN) {
-            label.take(MAX_SIM_LABEL_LEN - 1).trimEnd() + "…"
-        } else {
-            label
-        }
-        info.subscriptionId to capped
-    }
+/**
+ * 2026-11-10 (v1.30.1) — les SIM actives, lues hors du fil principal par la même lecture que les étiquettes
+ * ci-dessus. Vide tant que la lecture n'est pas revenue, ou si la permission Téléphone est refusée.
+ */
+@Composable
+fun rememberSimsActives(): List<SimActive> {
+    val context = LocalContext.current
+    return produceState(initialValue = emptyList<SimActive>(), context) {
+        value = withContext(Dispatchers.IO) { SimsActivesAndroid(context.applicationContext).lister() }
+    }.value
 }
+
+private fun buildSimLabelMap(context: Context): Map<Int, String> {
+    // 2026-11-10 (v1.30.1) — la liste vient de [SimsActivesAndroid], la seule lecture des SIM de
+    // l'application (permission vérifiée avant l'appel binder, comme ici depuis la v1.22.0).
+    val sims = SimsActivesAndroid(context.applicationContext).lister()
+    // Mono-SIM (ou aucune) : rien à distinguer, donc aucun tag.
+    if (sims.size < 2) return emptyMap()
+    // `nom` est saisi librement dans les réglages d'Android (non plafonné) : borné pour qu'un nom à
+    // rallonge ne fasse pas passer la bulle sur deux lignes une fois suffixé au nom de l'expéditeur.
+    return sims.associate { sim -> sim.subId to borner(sim.nom ?: "SIM ${sim.emplacement + 1}") }
+}
+
+/**
+ * 2026-11-10 (v1.30.1) — le libellé d'une SIM dans le choix de SIM (composeur, réglages) : « SIM 2 · Orange ».
+ *
+ * Le numéro d'emplacement vient d'abord, parce que c'est ainsi que l'utilisateur désigne ses cartes
+ * (« la SIM 2 ») ; le nom suit quand Android en donne un.
+ */
+fun libelleDeSim(sim: SimActive): String {
+    val numero = "SIM ${sim.emplacement + 1}"
+    val nom = sim.nom?.takeIf { !it.equals(numero, ignoreCase = true) } ?: return numero
+    return "$numero · ${borner(nom)}"
+}
+
+private fun borner(libelle: String): String =
+    if (libelle.length > MAX_SIM_LABEL_LEN) libelle.take(MAX_SIM_LABEL_LEN - 1).trimEnd() + "…" else libelle
 
 /** Longueur max du libellé SIM affiché (au-delà : tronqué + « … »). */
 private const val MAX_SIM_LABEL_LEN = 16

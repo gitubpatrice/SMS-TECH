@@ -166,8 +166,11 @@ class ConversationMirror @Inject constructor(
      *  - **le même message**, miroité par une synchronisation entre l'écriture système et cet appel : on
      *    rend sa ligne, `nouveau = false` ;
      *  - **un lien périmé** : la ligne système qu'elle désignait n'existe plus, puisque son identifiant
-     *    vient d'être rendu pour une autre. On lui retire ce lien, qui ferait effacer chez Android le
-     *    message neuf quand on supprimerait l'ancien, et l'on écrit le nouveau.
+     *    vient d'être rendu pour une autre. La table `sms` d'Android est créée avec `_id INTEGER PRIMARY
+     *    KEY` SANS `AUTOINCREMENT` (AOSP `MmsSmsDatabaseHelper.CREATE_SMS_TABLE_STRING`, lu le 2026-11-10 ;
+     *    les tables MMS, elles, en ont un) : supprimer le SMS le plus récent rend son identifiant au
+     *    suivant. On retire à l'ancienne ligne ce lien, qui ferait effacer chez Android le message neuf
+     *    quand on supprimerait l'ancien, et l'on écrit le nouveau.
      *
      * À appeler DANS la transaction de l'appelant : la recherche et la réécriture ne doivent pas pouvoir être
      * séparées par une synchronisation.
@@ -181,7 +184,7 @@ class ConversationMirror @Inject constructor(
         if (existant.direction == msg.direction && existant.date == msg.date) {
             return Inscription(existant.id, nouveau = false)
         }
-        Timber.w("Lien système périmé retiré d'un message (id=%d) : l'adresse vient d'être rendue pour un autre", existant.id)
+        Timber.w("Lien système périmé retiré du message %d : son adresse vient d'être rendue à un autre", existant.id)
         messageDao.detacherDuSysteme(existant.id)
         val reessai = messageDao.insert(msg)
         check(reessai > 0L) { "message refusé après retrait du lien périmé" }

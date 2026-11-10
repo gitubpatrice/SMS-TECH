@@ -1087,4 +1087,10 @@
         <item quantity="other">%1$d Tage</item>
     </plurals>
     <string name="duration_days_hours">%1$d T %2$d Std.</string>
+    <!-- 2026-11-10 (v1.30.1) - Wahl der Sende-SIM, ab zwei SIMs angezeigt. -->
+    <string name="thread_sim_change">SIM ändern</string>
+    <string name="thread_sim_selected">Ausgewählt</string>
+    <string name="settings_default_sim_title">SIM zum Senden</string>
+    <string name="settings_default_sim_android">Wie Android</string>
+    <string name="settings_default_sim_hint">Wird für automatische Nachrichten (Notfallmodus, Safety call) und für Unterhaltungen verwendet, die noch keine SIM genutzt haben. In einer Unterhaltung wird die SIM über dem Eingabefeld verwendet: standardmäßig die der letzten Nachricht. Tippen Sie darauf, um sie zu ändern.</string>
 </resources>

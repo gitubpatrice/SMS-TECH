@@ -77,6 +77,8 @@ class ThreadViewModel @Inject constructor(
     private val appLock: com.filestech.sms.security.AppLockManager,
     // 2026-11-06 (issue #76) — reconnaître « Mon numéro » parmi les destinataires d'un message.
     private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
+    // 2026-11-10 (v1.30.1) — les SIM du téléphone, pour le choix de la SIM d'envoi.
+    private val simsActives: com.filestech.sms.domain.sender.SimsActives,
 ) : ViewModel() {
 
     /** Live playback state, surfaced for the composer's preview UI. */
@@ -268,6 +270,17 @@ class ThreadViewModel @Inject constructor(
          * pas apparaître (preserve l'illusion app SMS ordinaire).
          */
         val isPanicDecoy: Boolean = false,
+        /**
+         * 2026-11-10 (v1.30.1) — les SIM actives, par emplacement. Le choix de SIM ne s'affiche qu'à partir
+         * de deux ; vide tant qu'elles ne sont pas lues, ou si la permission Téléphone est refusée.
+         */
+        val sims: List<com.filestech.sms.domain.model.SimActive> = emptyList(),
+        /**
+         * 2026-11-10 (v1.30.1) — la SIM par laquelle partira le prochain envoi de ce fil : celle qu'affiche le
+         * composeur, et celle que reçoivent les cinq envois (texte, pièces jointes, vocal, programmé,
+         * réaction). `null` avec moins de deux SIM : Android choisit, comme avant. Cf. [recalculerSim].
+         */
+        val simEnvoi: Int? = null,
     )
 
     /** Staged attachment awaiting user confirmation in the composer. */
@@ -359,6 +372,38 @@ class ThreadViewModel @Inject constructor(
      */
     private val cachedSettings: StateFlow<AppSettings> get() = settings.state
 
+    /** 2026-11-10 (v1.30.1) — la SIM choisie au composeur pendant cette visite ; `null` = pas de choix. */
+    private var simChoisie: Int? = null
+
+    /** 2026-11-10 (v1.30.1) — la SIM SMS d'Android, lue avec la liste des SIM. */
+    private var simAndroid: Int? = null
+
+    /**
+     * 2026-11-10 (v1.30.1) — recalcule [UiState.simEnvoi] : le choix fait au composeur s'il désigne encore une
+     * SIM active, sinon la règle de [com.filestech.sms.domain.usecase.ChoixDeSim] (SIM du dernier message,
+     * réglage, SIM d'Android, première SIM). Synchrone, sur le fil principal, comme toute écriture de
+     * l'état : deux recalculs ne peuvent pas se croiser.
+     */
+    private fun recalculerSim() {
+        _state.update { s ->
+            val choisie = simChoisie?.takeIf { id -> s.sims.any { it.subId == id } }
+            val sim = choisie ?: com.filestech.sms.domain.usecase.ChoixDeSim.pourConversation(
+                actives = s.sims,
+                historique = com.filestech.sms.domain.usecase.ChoixDeSim.historique(s.messages),
+                reglage = cachedSettings.value.sending.defaultSubId,
+                simAndroid = simAndroid,
+            )
+            if (sim == s.simEnvoi) s else s.copy(simEnvoi = sim)
+        }
+    }
+
+    /** 2026-11-10 (v1.30.1) — l'utilisateur choisit la SIM d'envoi au composeur, pour cette visite du fil. */
+    fun choisirSim(subId: Int) {
+        if (_state.value.sims.none { it.subId == subId }) return
+        simChoisie = subId
+        recalculerSim()
+    }
+
     /**
      * v1.11.0 audit P1 — recompute smishing verdicts sur IO dispatcher. Le
      * calcul des regex + Levenshtein peut prendre 3-15 ms par message sur
@@ -419,6 +464,8 @@ class ThreadViewModel @Inject constructor(
             settings.state.collect { snapshot ->
                 val enabled = snapshot.security.smishingDetectionEnabled
                 _state.update { it.copy(smishingDetectionEnabled = enabled) }
+                // 2026-11-10 (v1.30.1) — la « SIM d'envoi par défaut » peut avoir changé.
+                recalculerSim()
                 // Audit P1 : recompute sur IO lorsque le toggle change.
                 if (enabled) {
                     recomputeSmishingVerdicts(_state.value.messages)
@@ -495,6 +542,8 @@ class ThreadViewModel @Inject constructor(
                     lastMessageAt = window.lastMessageAt,
                 )
             }
+            // 2026-11-10 (v1.30.1) — un message reçu sur l'autre SIM change la SIM de réponse.
+            recalculerSim()
             // v1.11.0 audit P1 — recompute les verdicts smishing sur IO
             // dispatcher quand la liste de messages change (ajout, suppression,
             // edit). Le calcul reste limité aux INCOMING messages qui n'ont
@@ -507,6 +556,19 @@ class ThreadViewModel @Inject constructor(
                 markRead.invoke(conversationId)
             }
         }.launchIn(viewModelScope)
+
+        // 2026-11-10 (v1.30.1) — les SIM, lues une fois par visite et hors du fil principal (appel binder).
+        // Une SIM retirée pendant la visite est rattrapée à l'envoi (`SimDEnvoi`).
+        viewModelScope.launch {
+            val (sims, android) = withContext(io) {
+                com.filestech.sms.core.result
+                    .runCatchingCancellable { simsActives.lister() to simsActives.simSmsDAndroid() }
+                    .getOrDefault(emptyList<com.filestech.sms.domain.model.SimActive>() to null)
+            }
+            simAndroid = android
+            _state.update { it.copy(sims = sims) }
+            recalculerSim()
+        }
 
         // Best-effort: drop yesterday's orphan recordings from the cache on screen open.
         voiceRecorder.pruneOld()
@@ -661,7 +723,9 @@ class ThreadViewModel @Inject constructor(
                 ))
                 return@launch
             }
-            val effectiveSubId = cachedSettings.value.sending.defaultSubId
+            // 2026-11-10 (v1.30.1) — la SIM qu'affiche le composeur ; `null` (une seule SIM) laisse l'envoi
+            // programmé retomber, à l'heure dite, sur le réglage puis sur Android (`SimDEnvoi`).
+            val effectiveSubId = _state.value.simEnvoi
             // v1.26.0 — les pieces jointes en attente partent AVEC l'envoi programme.
             //
             // Elles etaient purement ignorees : on pouvait joindre une photo, programmer, et
@@ -728,7 +792,8 @@ class ThreadViewModel @Inject constructor(
             val res = withContext(NonCancellable) {
                 // v1.28.4 — le routeur decide : MMS de groupe si le reglage est actif et que
                 // la conversation est un groupe, SMS sinon (cf. [EnvoyerMessageUseCase]).
-                envoyer.invoke(conv.addresses, body, replyToMessageId = replyTargetId)
+                // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
+                envoyer.invoke(conv.addresses, body, subId = _state.value.simEnvoi, replyToMessageId = replyTargetId)
             }
             when (res) {
                 is Outcome.Success -> {
@@ -961,7 +1026,9 @@ class ThreadViewModel @Inject constructor(
             return DispatchOutcome.DedupSkipped
         }
         recentlySentReactionFor[messageId] = ReactionDispatch(emoji = emoji, timestamp = now)
-        return when (val res = sendReaction(messageId, emoji, format)) {
+        // 2026-11-10 (v1.30.1) — la réaction part par la SIM du fil, comme une réponse : depuis l'autre SIM, elle
+        // viendrait d'un numéro que le correspondant ne relie pas à cette conversation.
+        return when (val res = sendReaction(messageId, emoji, format, subId = _state.value.simEnvoi)) {
             is Outcome.Success -> DispatchOutcome.Sent
             is Outcome.Failure -> {
                 _events.tryEmit(Event.SendError(res.error))
@@ -1148,7 +1215,8 @@ class ThreadViewModel @Inject constructor(
         _state.update { it.copy(isSending = true) }
         val res = try {
             withContext(NonCancellable) {
-                envoyer.invoke(conv.addresses, textBody, attachments = payloads)
+                // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
+                envoyer.invoke(conv.addresses, textBody, attachments = payloads, subId = _state.value.simEnvoi)
             }
         } finally {
             _state.update { it.copy(isSending = false) }
@@ -1661,6 +1729,8 @@ class ThreadViewModel @Inject constructor(
             audioFile = reviewing.file,
             mimeType = reviewing.mimeType,
             durationMs = reviewing.durationMs,
+            // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
+            subId = _state.value.simEnvoi,
         )) {
             is Outcome.Success -> {
                 _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }

@@ -82,6 +82,8 @@ class SendReactionUseCase @Inject constructor(
         messageId: Long,
         emoji: String,
         format: ReactionFormat,
+        /** 2026-11-10 (v1.30.1) — la SIM du fil ; `null` = le réglage, puis Android, comme les autres envois. */
+        subId: Int? = null,
     ): Outcome<SendReport> {
         if (emoji.isBlank()) return Outcome.Failure(AppError.Validation("empty reaction emoji"))
 
@@ -155,6 +157,8 @@ class SendReactionUseCase @Inject constructor(
             // writeback still carry the full Tapback so the correspondent's app
             // (SMS Tech, iMessage, Google Messages) can fold or render it.
             localMirrorBody = "",
+            // 2026-11-10 (v1.30.1) — la SIM du fil, comme une réponse.
+            subId = subId,
         )
     }
 

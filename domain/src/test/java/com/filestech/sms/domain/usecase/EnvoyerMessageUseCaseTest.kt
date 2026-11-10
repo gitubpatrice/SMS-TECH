@@ -44,6 +44,7 @@ class EnvoyerMessageUseCaseTest {
                 sender = mms,
                 settings = reglages,
                 attachmentStore = PassthroughAttachmentStore(),
+                simDEnvoi = simDEnvoiNeutre(),
             ),
             settings = reglages,
         )

@@ -1101,4 +1101,10 @@
         <item quantity="other">%1$d days</item>
     </plurals>
     <string name="duration_days_hours">%1$d d %2$d h</string>
+    <!-- 2026-11-10 (v1.30.1) - choice of the sending SIM, shown with two SIMs or more. -->
+    <string name="thread_sim_change">Change the SIM</string>
+    <string name="thread_sim_selected">Selected</string>
+    <string name="settings_default_sim_title">SIM for sending</string>
+    <string name="settings_default_sim_android">Same as Android</string>
+    <string name="settings_default_sim_hint">Used for automatic messages (emergency mode, Safety call) and for conversations that have not used a SIM yet. In a conversation, the SIM shown above the text field is the one used: by default, the SIM of its last message. Tap it to change it.</string>
 </resources>

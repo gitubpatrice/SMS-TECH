@@ -245,6 +245,7 @@ class ContactsRefusesTest {
             io = dispatcher,
             appLock = appLock,
             phoneIdentity = mockk(relaxed = true),
+            simsActives = mockk(relaxed = true),
         )
     }
 }

@@ -62,7 +62,8 @@ internal fun canonicalTelephonyUri(raw: String): String {
  * forme canonique, ou `null` quand le fournisseur n'a rien créé.
  *
  * Un fournisseur qui refuse une écriture ne lève pas : `ContentProvider.rejectInsert` rend l'URI
- * demandé suivi de `/0` (`content://sms/sent/0`), et 0 n'est l'identifiant d'aucune ligne (SQLite
+ * demandé suivi de `/0` (`content://sms/sent/0` ; AOSP `ContentProvider.java`, lu le 2026-11-10 :
+ * « the base URI with a '0' tagged on to it »), et 0 n'est l'identifiant d'aucune ligne (SQLite
  * numérote à partir de 1). C'est ce que rend `content://sms` à une application qui n'est pas
  * l'application SMS par défaut (vu sans rôle sur émulateur, PR #80). Enregistrée telle quelle, cette
  * fausse adresse :

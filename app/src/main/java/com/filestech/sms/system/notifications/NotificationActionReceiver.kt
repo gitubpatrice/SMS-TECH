@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.RemoteInput
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.usecase.SendSmsUseCase
+import com.filestech.sms.domain.usecase.SimPourConversationUseCase
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +51,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     /** v1.28.3 — action « Renvoyer » de la notification d'echec d'envoi. `Lazy` : cf. ci-dessus. */
     @Inject lateinit var retrySendLazy: dagger.Lazy<com.filestech.sms.domain.usecase.RetrySendUseCase>
+
+    /**
+     * 2026-11-10 (v1.30.1) — la SIM de la conversation, pour que la reponse rapide parte par la SIM qui a
+     * recu, comme depuis le fil. `Lazy` : elle lit les messages, donc atteint un DAO (cf. ci-dessus).
+     */
+    @Inject lateinit var simPourConversationLazy: dagger.Lazy<SimPourConversationUseCase>
 
     @Inject lateinit var appLock: AppLockManager
 
@@ -108,7 +116,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
                             ?.let { conversationRepoLazy.get().findById(it)?.addresses }
                             ?.takeIf { it.isNotEmpty() }
                             ?: listOf(PhoneAddress.of(adresse))
-                        envoyerLazy.get().invoke(recipients = destinataires, body = text)
+                        // 2026-11-10 (v1.30.1) — par la SIM de la conversation (celle du dernier message,
+                        // donc d'ordinaire celle qui vient de recevoir), comme le composeur du fil.
+                        val subId = runCatchingCancellable {
+                            simPourConversationLazy.get().pourConversation(conversationIdOuNull)
+                        }.getOrNull()
+                        envoyerLazy.get().invoke(recipients = destinataires, body = text, subId = subId)
                         // Marquer comme lu (et donc clear notifs via le notifier câblé
                         // dans markRead). Cohérent : répondre = avoir vu le message.
                         markReadAndCancelNotifs(adresse, conversationIdOuNull)
