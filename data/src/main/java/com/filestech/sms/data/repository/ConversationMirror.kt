@@ -101,10 +101,15 @@ class ConversationMirror @Inject constructor(
     private suspend fun nomDeGroupe(addresses: List<PhoneAddress>): String? =
         com.filestech.sms.domain.model.GroupTitle.of(addresses.map { a -> a.raw to resolveDisplayName(a.raw) })
 
+    /**
+     * 2026-11-11 (issue #89) — [date] est l'heure d'ARRIVÉE, [dateSent] celle du réseau : les mêmes valeurs que la
+     * copie système écrite juste avant (`TelephonyReader.insertInboxSms`), que l'import relit à l'identique.
+     */
     suspend fun upsertIncomingSms(
         address: String,
         body: String,
         date: Long,
+        dateSent: Long?,
         telephonyUri: String?,
         subId: Int? = null,
     ): Long = withContext(io) {
@@ -118,7 +123,7 @@ class ConversationMirror @Inject constructor(
                 type = MessageType.SMS,
                 direction = MessageDirection.INCOMING,
                 date = date,
-                dateSent = date,
+                dateSent = dateSent,
                 read = false,
                 starred = false,
                 status = MessageStatus.RECEIVED,
@@ -230,6 +235,8 @@ class ConversationMirror @Inject constructor(
         address: String,
         telephonyUri: String?,
         date: Long,
+        // 2026-11-11 (issue #89, relecture GPT) — les deux heures de la copie système, comme `upsertIncomingSms`.
+        dateSent: Long?,
     ) = withContext(io) {
         if (telephonyUri.isNullOrBlank()) return@withContext
         database.withTransaction {
@@ -242,7 +249,7 @@ class ConversationMirror @Inject constructor(
                 type = MessageType.SMS,
                 direction = MessageDirection.INCOMING,
                 date = date,
-                dateSent = date,
+                dateSent = dateSent,
                 read = true,
                 starred = false,
                 status = MessageStatus.RECEIVED,
@@ -1625,8 +1632,9 @@ internal const val CONV_MATCH_MIN_DIGITS = 8
 
 /**
  * 2026-11-10 (issue #87) — [existant], qui porte l'adresse système de [msg], est-il ce même message, miroité par
- * une synchronisation ? Le sens, l'heure, l'adresse et le texte : la date d'un SMS reçu est celle du centre SMS,
- * à la seconde, et deux SMS différents peuvent la partager (relectures du 2026-11-10). Le moindre écart fait
+ * une synchronisation ? Le sens, l'heure, l'adresse et le texte : deux SMS différents peuvent partager la date
+ * (relectures du 2026-11-10) — celle du centre SMS, à la seconde, pour un SMS reçu avant la 1.30.1 ; son heure
+ * d'arrivée depuis, identique dans sa copie système (issue #89). Le moindre écart fait
  * écrire le message : cf. « Dans le doute, on écrit » dans `ConversationMirror.insererApresEcritureSysteme`.
  * Hors de la classe, qui est au plafond de fonctions de detekt ; elle n'en utilise rien.
  */

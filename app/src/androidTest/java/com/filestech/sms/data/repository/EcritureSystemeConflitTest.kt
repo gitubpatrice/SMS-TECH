@@ -74,7 +74,7 @@ class EcritureSystemeConflitTest {
 
     @Test
     fun unEnvoiSurUneAdressePerimeeEstEcritEtLAncienneLigneDetachee(): Unit = runBlocking {
-        val ancien = mirror.upsertIncomingSms(ALICE, "ancien", date = 1_000L, telephonyUri = URI)
+        val ancien = mirror.upsertIncomingSms(ALICE, "ancien", date = 1_000L, dateSent = null, telephonyUri = URI)
 
         val nouveau = envoyer("nouveau", date = 2_000L, uri = URI)
 
@@ -124,7 +124,7 @@ class EcritureSystemeConflitTest {
     fun unSmsRecuSurUneAdressePerimeeEstEcrit(): Unit = runBlocking {
         val ancien = envoyer("parti il y a longtemps", date = 1_000L, uri = URI)
 
-        val recu = mirror.upsertIncomingSms(ALICE, "reçu", date = 3_000L, telephonyUri = URI)
+        val recu = mirror.upsertIncomingSms(ALICE, "reçu", date = 3_000L, dateSent = null, telephonyUri = URI)
 
         assertThat(recu).isGreaterThan(0L)
         assertThat(recu).isNotEqualTo(ancien)
@@ -141,9 +141,9 @@ class EcritureSystemeConflitTest {
     fun unSmsRecuALaMemeHeureMaisDUnAutreTexteEstEcrit(): Unit = runBlocking {
         // Relectures GPT et Gemini du 2026-11-10 : le sens et l'heure seuls auraient rendu l'ancienne ligne,
         // et le texte neuf aurait été perdu. Dans le doute, on écrit.
-        val ancien = mirror.upsertIncomingSms(ALICE, "ancien", date = 3_000L, telephonyUri = URI)
+        val ancien = mirror.upsertIncomingSms(ALICE, "ancien", date = 3_000L, dateSent = null, telephonyUri = URI)
 
-        val recu = mirror.upsertIncomingSms(ALICE, "nouveau", date = 3_000L, telephonyUri = URI)
+        val recu = mirror.upsertIncomingSms(ALICE, "nouveau", date = 3_000L, dateSent = null, telephonyUri = URI)
 
         assertThat(recu).isGreaterThan(0L)
         assertThat(recu).isNotEqualTo(ancien)
@@ -155,9 +155,9 @@ class EcritureSystemeConflitTest {
     @Test
     fun leMemeTexteALaMemeSecondeDUnAutreNumeroEstEcrit(): Unit = runBlocking {
         // La date d'un SMS reçu est celle du centre SMS, à la seconde : « ok » de deux numéros peut la partager.
-        val ancien = mirror.upsertIncomingSms(ALICE, "ok", date = 3_000L, telephonyUri = URI)
+        val ancien = mirror.upsertIncomingSms(ALICE, "ok", date = 3_000L, dateSent = null, telephonyUri = URI)
 
-        val recu = mirror.upsertIncomingSms(BOB, "ok", date = 3_000L, telephonyUri = URI)
+        val recu = mirror.upsertIncomingSms(BOB, "ok", date = 3_000L, dateSent = null, telephonyUri = URI)
 
         assertThat(recu).isGreaterThan(0L)
         assertThat(recu).isNotEqualTo(ancien)
@@ -167,9 +167,9 @@ class EcritureSystemeConflitTest {
 
     @Test
     fun unSmsRecuDejaMiroiteNeCompteQuUneFois(): Unit = runBlocking {
-        val premier = mirror.upsertIncomingSms(ALICE, "salut", date = 3_000L, telephonyUri = URI)
+        val premier = mirror.upsertIncomingSms(ALICE, "salut", date = 3_000L, dateSent = null, telephonyUri = URI)
 
-        val second = mirror.upsertIncomingSms(ALICE, "salut", date = 3_000L, telephonyUri = URI)
+        val second = mirror.upsertIncomingSms(ALICE, "salut", date = 3_000L, dateSent = null, telephonyUri = URI)
 
         assertThat(premier).isGreaterThan(0L)
         assertThat(second).isEqualTo(premier)

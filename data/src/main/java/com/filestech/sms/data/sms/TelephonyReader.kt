@@ -244,18 +244,25 @@ class TelephonyReader @Inject constructor(
         Timber.w("content://sms a refusé l'écriture d'un SMS %s : aucune copie chez Android", dossier)
     }
 
-    /** Insert an incoming SMS into the system inbox. Required from SmsDeliverReceiver. */
+    /**
+     * Insert an incoming SMS into the system inbox. Required from SmsDeliverReceiver.
+     *
+     * 2026-11-11 (issue #89) — [date] est l'heure d'ARRIVÉE et [dateSent] celle du réseau, ou `null` (la
+     * colonne garde alors son défaut, 0, que l'import relit comme « absente ») ; cf.
+     * `com.filestech.sms.domain.sms.HorodatageSmsRecu`. Les deux colonnes recevaient l'heure du réseau.
+     */
     fun insertInboxSms(
         address: String,
         body: String,
         date: Long,
+        dateSent: Long?,
         subId: Int? = null,
     ): Uri? {
         val cv = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, address)
             put(Telephony.Sms.BODY, body)
             put(Telephony.Sms.DATE, date)
-            put(Telephony.Sms.DATE_SENT, date)
+            dateSent?.let { put(Telephony.Sms.DATE_SENT, it) }
             put(Telephony.Sms.READ, 0)
             put(Telephony.Sms.SEEN, 0)
             put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
