@@ -652,6 +652,8 @@
     <string name="settings_signature_placeholder">z. B. Pat</string>
     <string name="action_star">Markieren</string>
     <string name="action_unstar">Markierung entfernen</string>
+    <string name="action_show_time">Uhrzeit und Status anzeigen</string>
+    <string name="action_hide_time">Uhrzeit und Status ausblenden</string>
     <string name="reaction_picker_other">Anderes Emoji</string>
     <string name="reaction_picker_other_title">Eigenes Emoji</string>
     <string name="reaction_picker_other_body">Emoji eingeben oder einfügen</string>

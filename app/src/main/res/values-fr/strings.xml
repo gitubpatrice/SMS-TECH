@@ -644,6 +644,8 @@
     <string name="settings_signature_placeholder">ex. Pat</string>
     <string name="action_star">Mettre en favori</string>
     <string name="action_unstar">Retirer des favoris</string>
+    <string name="action_show_time">Afficher l\'heure et l\'état</string>
+    <string name="action_hide_time">Masquer l\'heure et l\'état</string>
     <string name="reaction_picker_other">Autre emoji</string>
     <string name="reaction_picker_other_title">Emoji personnalisé</string>
     <string name="reaction_picker_other_body">Tapez ou collez un emoji</string>

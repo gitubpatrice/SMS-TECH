@@ -649,6 +649,8 @@
     <string name="settings_signature_placeholder">e.g. Pat</string>
     <string name="action_star">Star</string>
     <string name="action_unstar">Remove from starred</string>
+    <string name="action_show_time">Show time and status</string>
+    <string name="action_hide_time">Hide time and status</string>
     <string name="reaction_picker_other">Other emoji</string>
     <string name="reaction_picker_other_title">Custom emoji</string>
     <string name="reaction_picker_other_body">Type or paste an emoji</string>

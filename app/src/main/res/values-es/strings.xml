@@ -654,6 +654,8 @@
     <string name="settings_signature_placeholder">p. ej. Pat</string>
     <string name="action_star">Destacar</string>
     <string name="action_unstar">Quitar de destacados</string>
+    <string name="action_show_time">Mostrar hora y estado</string>
+    <string name="action_hide_time">Ocultar hora y estado</string>
     <string name="reaction_picker_other">Otro emoji</string>
     <string name="reaction_picker_other_title">Emoji personalizado</string>
     <string name="reaction_picker_other_body">Escriba o pegue un emoji</string>
