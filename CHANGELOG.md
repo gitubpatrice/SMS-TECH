@@ -3,7 +3,7 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
-## [1.30.1] — 2026-11-12
+## [1.30.1] — 2026-11-13
 
 ### Added
 
@@ -35,6 +35,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 - **A copy Android refused to keep is no longer recorded as one** (issue #87). A refused write does not
   fail, it returns the address followed by `/0`; that was stored as a real address, and the next refused
   write collided with it. An outgoing MMS is no longer written under `content://mms/0`.
+- **The conversation list no longer stays blank at launch** (issue #90, Motorola edge 2025, Android 16).
+  Each time the list opened, SMS Tech looked up a contact name for every conversation without one, one call
+  to Android's contacts per conversation, inside a database write. A new list cannot show its first result
+  while a write is in progress (Room sets up its change tracking through the write connection), so the list
+  waited for every lookup. Numbers that are not contacts never get a name, so the cost came back at every
+  launch. The lookups now run outside the write, and a name given meanwhile is kept. While the list loads,
+  a progress indicator now shows after 0.4 s instead of an empty screen. The same pass gave a group without
+  a name the name of its first member only; it now gets its members' names, as when a group is created.
+- **A received SMS is dated when it arrives** (issue #89). It took the time written by the carrier's
+  message center, while a sent message takes the phone's clock, and conversations are ordered by that date.
+  That time is a local time with a time-zone offset; a carrier that does not update the offset for daylight
+  saving time put its messages an hour away from the user's replies. The carrier's time is kept as the
+  sent time, as Android's own messaging app does. Messages received before this version keep their date:
+  their arrival time was never recorded. MMS are not affected: their date is a universal time.
 
 ### Not fixed yet
 
