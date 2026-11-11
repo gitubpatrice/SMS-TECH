@@ -19,6 +19,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   picked. Listing the SIMs needs the Phone permission, which SMS Tech asks for at start: without it, no
   SIM is shown or offered. The setting existed internally, but no screen wrote it, while About and
   PERMISSIONS.md announced the choice. With one SIM, nothing changes.
+- **The time and status of every message** (issue #87). The line "time • status" under a message was shown only on
+  the first message of a burst (more than 5 minutes after the previous one) and on a failure: three SMS sent in a row
+  showed one "Delivered", under the first, and the other two looked undelivered. It now also shows under the last
+  message sent in a series (the next message is received, more than 5 minutes later, on another day, or none yet);
+  a new day also starts a new burst, as its date separator already did for the bubbles. For any other
+  message, tapping a text bubble shows or hides it; a failed message keeps tap-to-retry. The bubble menu (⋮) has a
+  "Show time and status" entry on text, voice and picture messages alike — the only way for voice messages and
+  pictures, whose tap plays them or opens them. The tap is named for screen readers. Links stay tappable: turning
+  them off on a failed message is only there because a tap on a link could also resend it.
 
 ### Fixed
 
