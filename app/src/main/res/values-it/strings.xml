@@ -154,6 +154,7 @@
     <string name="conversations_archived_empty">Nessuna conversazione archiviata.</string>
     <string name="conversations_importing_title">Importazione dei suoi messaggi</string>
     <string name="conversations_importing_body">Lettura degli SMS già presenti — accade una sola volta.</string>
+    <string name="conversations_loading">Caricamento delle conversazioni…</string>
     <string name="conversations_importing_count">%1$d messaggi importati…</string>
     <string name="conversations_delete_confirm_title">Eliminare questa conversazione?</string>
     <string name="conversations_delete_confirm_body">Tutti i messaggi di questa conversazione saranno rimossi definitivamente da questo dispositivo. Le altre conversazioni non sono toccate.</string>

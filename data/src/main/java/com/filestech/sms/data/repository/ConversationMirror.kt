@@ -908,19 +908,51 @@ class ConversationMirror @Inject constructor(
      * One-shot pass that walks every conversation with a missing display name and resolves it via
      * the contacts provider. Called from [ConversationsViewModel] at screen init so newly granted
      * READ_CONTACTS permission immediately updates the list — no reinstall needed.
+     *
+     * 2026-11-11 (issue #90) — **les recherches se font HORS de la transaction.** Elles s'y faisaient,
+     * une par conversation sans nom, chacune un appel au fournisseur de contacts. Or un nouvel
+     * observateur Room pose ses déclencheurs par la connexion d'écriture (room-runtime 2.8.5,
+     * `syncTriggers` → `useConnection(isReadOnly = false)`) : la liste de l'écran qui venait de lancer
+     * ce passage attendait la fin de toutes les recherches avant sa première émission, et restait
+     * blanche. Les numéros inconnus ne trouvant jamais de nom, le coût revenait à chaque ouverture,
+     * surtout sur un processus froid. Mesuré par `NomsDeContactsSansBloquerLaListeTest`.
+     *
+     * La transaction ne porte plus que les écritures, et chacune relit d'abord la ligne : un nom donné
+     * pendant les recherches (renommage d'un groupe) n'est pas écrasé par celui du contact, et un nom
+     * calculé pour d'autres membres n'est pas posé sur un groupe qui a changé entre-temps.
+     *
+     * 2026-11-11 (relecture GPT) — un GROUPE reçoit le titre de ses membres ([nomDeGroupe]), la règle de sa
+     * création (`ensureConversation`) : ce passage lui donnait le nom de son seul premier membre.
      */
     suspend fun refreshContactNames() = withContext(io) {
         displayNameCache.evictAll()
         val missing = conversationDao.findMissingDisplayName()
         if (missing.isEmpty()) return@withContext
+        val trouves = missing.mapNotNull { conv ->
+            val addresses = PhoneAddress.list(conv.addressesCsv)
+            val resolved = if (addresses.size == 1) {
+                resolveDisplayName(addresses.first().raw)
+            } else {
+                nomDeGroupe(addresses)
+            }
+            resolved?.let { name -> NomTrouve(conv.id, conv.addressesCsv, name) }
+        }
+        if (trouves.isEmpty()) return@withContext
         database.withTransaction {
-            for (conv in missing) {
-                val firstAddr = PhoneAddress.list(conv.addressesCsv).firstOrNull()?.raw ?: continue
-                val name = resolveDisplayName(firstAddr) ?: continue
-                conversationDao.setDisplayName(conv.id, name)
+            for (trouve in trouves) {
+                // Supprimée pendant les recherches : rien à nommer (relecture Gemini du 2026-11-11 — un
+                // `?.displayName.isNullOrEmpty()` aurait valu `true` sur une ligne absente).
+                val conv = conversationDao.findById(trouve.id) ?: continue
+                // Même critère que `findMissingDisplayName` (nul ou vide), et les mêmes membres qu'à la recherche.
+                if (conv.displayName.isNullOrEmpty() && conv.addressesCsv == trouve.addressesCsv) {
+                    conversationDao.setDisplayName(trouve.id, trouve.name)
+                }
             }
         }
     }
+
+    /** 2026-11-11 (issue #90) — un nom trouvé par [refreshContactNames], avec les membres pour qui il l'a été. */
+    private data class NomTrouve(val id: Long, val addressesCsv: String, val name: String)
 
     /**
      * Mirror every row returned by [com.filestech.sms.data.sms.TelephonyReader.readMmsBatched]

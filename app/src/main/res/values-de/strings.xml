@@ -154,6 +154,7 @@
     <string name="conversations_archived_empty">Keine archivierten Unterhaltungen.</string>
     <string name="conversations_importing_title">Ihre Nachrichten werden importiert</string>
     <string name="conversations_importing_body">Ihre vorhandenen SMS werden gelesen — das geschieht nur einmal.</string>
+    <string name="conversations_loading">Unterhaltungen werden geladen…</string>
     <string name="conversations_importing_count">%1$d Nachrichten importiert…</string>
     <string name="conversations_delete_confirm_title">Diese Unterhaltung löschen?</string>
     <string name="conversations_delete_confirm_body">Alle Nachrichten dieser Unterhaltung werden endgültig von diesem Gerät entfernt. Andere Unterhaltungen sind nicht betroffen.</string>
