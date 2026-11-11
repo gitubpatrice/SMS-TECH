@@ -3,7 +3,7 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
-## [1.30.1] — 2026-11-13
+## [1.30.1] — 2026-11-14
 
 ### Added
 
