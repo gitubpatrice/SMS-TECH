@@ -28,8 +28,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   "Show time and status" entry on text, voice and picture messages alike — the only way for voice messages and
   pictures, whose tap plays them or opens them. The tap is named for screen readers. Links stay tappable: turning
   them off on a failed message is only there because a tap on a link could also resend it.
+- **A received MMS that failed to download is tried again** (reported by e-mail on 1.30.0, de-Googled
+  phone). On Wi-Fi, some received MMS failed with "Android error code: 3": Android's MMS service needs the
+  carrier's MMS connection over mobile data, and when it cannot get it, it gives up without another try.
+  SMS Tech dropped the message, although the carrier keeps it until it expires. A temporary failure is now
+  tried again three times (after 2, 10 and 30 minutes) while its notification is shown, and the notification
+  and its explanation have a Retry button. Swiping the notification away, or the panic wipe, stops the
+  attempts, and a download started before a panic wipe brings nothing back after it. One attempt runs at a
+  time per message. Nothing is written to storage: the attempts live in Android's pending intents and end
+  with a restart, like the notification. The explanation suggests turning Wi-Fi off for a moment.
+- **Each recipient added to a new group is confirmed** ("Added: name (N in total)"), a contact already in
+  the list says so, and a number from the block list is announced and its chip marked "blocked".
 
 ### Fixed
+
+- **Every recipient of a new group is visible.** Recipients were shown on a single line that never wrapped:
+  from the 4th one, a recipient was added but invisible, so it could not be checked or removed. They now
+  wrap onto new lines, the area scrolls past three lines, and the last one added is brought into view.
+- **A group member who is blocked is announced before sending**, and the screen then follows the message.
+  A group MMS is not sent to blocked members and, since 1.28.5, goes into the conversation of the members
+  actually reached: a group of 56 with one number from Android's block list sent to 55, in a new group,
+  and left the original group empty without a word. The warning names the blocked members; a message
+  scheduled for such a group is warned about when it is scheduled.
+- **"Sent to 1 recipient(s)" for a group MMS sent to 55 people**: the banner counted the MMS, not people.
 
 - **A SIM no longer in the phone no longer makes sending fail.** The SIM asked for (setting, scheduled
   message, retry) is checked against the active SIMs; when it is gone, Android's SMS SIM is used.
