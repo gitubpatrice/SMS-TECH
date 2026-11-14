@@ -8,6 +8,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.filestech.sms.R
+import com.filestech.sms.system.receiver.RelanceMms
+import com.filestech.sms.system.receiver.RelanceMmsReceiver
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -182,5 +185,167 @@ class MmsFailureNotifierTest {
         }
 
         assertThat(shadowOf(nm).allNotifications).isEmpty()
+    }
+
+    // ── 2026-11-14 — le nouvel essai (courriel : MMS perdus en Wi-Fi, code 3) ──────────────────────────────────
+
+    private fun demande(transactionId: String = "T1") = requireNotNull(
+        RelanceMms.Demande.creer(
+            adresse = "http://mmsc.example/a",
+            transactionId = transactionId,
+            expediteur = "+15551234567",
+            subId = 1,
+            transactionIdOctets = byteArrayOf(1),
+            tentative = 0,
+        ),
+    )
+
+    private fun posteAvecRelance(
+        demande: RelanceMms.Demande,
+        nouvelEssaiPrevu: Boolean,
+        reason: MmsFailureNotifier.Reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+    ): Boolean = runBlocking {
+        MmsFailureNotifier(contexte, visibilite).notifyFailure(
+            reason = reason,
+            senderAddress = "+15551234567",
+            codeAndroid = 3,
+            relance = demande,
+            nouvelEssaiPrevu = nouvelEssaiPrevu,
+        )
+    }
+
+    @Test
+    fun `echec avec essai prevu - le texte l'annonce, le bouton Reessayer redemande CE message`() {
+        val d = demande()
+
+        assertThat(posteAvecRelance(d, nouvelEssaiPrevu = true)).isTrue()
+        val notification = shadowOf(nm).allNotifications.single()
+
+        assertThat(notification.texte()).isEqualTo(
+            contexte.getString(R.string.mms_failure_notification_body_download_retrying, "+15551234567"),
+        )
+        val action = notification.actions.single()
+        assertThat(action.title.toString()).isEqualTo(contexte.getString(R.string.action_retry))
+        val bouton = shadowOf(action.actionIntent).savedIntent
+        assertThat(bouton.component?.className).isEqualTo(RelanceMmsReceiver::class.java.name)
+        assertThat(bouton.action).isEqualTo(RelanceMmsReceiver.ACTION_MANUELLE)
+        assertThat(RelanceMms.Demande.depuis(bouton)?.etiquette).isEqualTo(d.etiquette)
+        assertThat(shadowOf(action.actionIntent).isImmutable).isTrue()
+    }
+
+    /** Elle représente un message qui attend : un tap pour lire les détails ne doit pas arrêter les essais. */
+    @Test
+    fun `echec avec bouton - la notification reste apres un tap, et l'essai automatique la trouve`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true)
+        val notification = shadowOf(nm).allNotifications.single()
+        val notifier = MmsFailureNotifier(contexte, visibilite)
+
+        assertThat(notification.flags and Notification.FLAG_AUTO_CANCEL).isEqualTo(0)
+        assertThat(notifier.relanceAffichee(d.etiquette)).isTrue()
+
+        notifier.retirerRelance(d.etiquette)
+
+        assertThat(shadowOf(nm).allNotifications).isEmpty()
+        assertThat(notifier.relanceAffichee(d.etiquette)).isFalse()
+    }
+
+    /** Plus d'essai automatique : le texte ne promet rien, le bouton reste. */
+    @Test
+    fun `echec sans essai prevu - texte d'echec, bouton quand meme`() {
+        posteAvecRelance(demande(), nouvelEssaiPrevu = false)
+        val notification = shadowOf(nm).allNotifications.single()
+
+        assertThat(notification.texte()).isEqualTo(
+            contexte.getString(R.string.mms_failure_notification_body_download_failed, "+15551234567"),
+        )
+        assertThat(notification.actions).hasLength(1)
+    }
+
+    /** Le tap transmet le bouton à la fenêtre, et seule cette lecture le laisse passer. */
+    @Test
+    fun `le tap transmet le bouton du message a la fenetre`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true)
+        val tap = shadowOf(shadowOf(nm).allNotifications.single().contentIntent).savedIntent
+
+        val paquet = contexte.packageName
+        val relance = MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, tap, paquet)
+
+        assertThat(relance).isNotNull()
+        assertThat(RelanceMms.Demande.depuis(shadowOf(relance).savedIntent)?.etiquette).isEqualTo(d.etiquette)
+        // Contrôle négatif : pour un autre motif, rien.
+        assertThat(MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.TOO_LARGE, tap, paquet)).isNull()
+    }
+
+    /**
+     * Avant : une notification par EXPÉDITEUR. Avec un bouton, le second échec aurait remplacé le premier, et
+     * « Réessayer » sur l'un aurait redemandé l'autre.
+     */
+    @Test
+    fun `deux messages du meme expediteur - deux notifications, deux boutons distincts`() {
+        val a = demande("A")
+        val b = demande("B")
+        posteAvecRelance(a, nouvelEssaiPrevu = true)
+        posteAvecRelance(b, nouvelEssaiPrevu = true)
+
+        val etiquettes = shadowOf(nm).allNotifications.map { notification ->
+            val tap = shadowOf(notification.contentIntent).savedIntent
+            val relance = MmsFailureNotifier.relanceDepuisExtras(
+                reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+                intent = tap,
+                paquet = contexte.packageName,
+            )
+            RelanceMms.Demande.depuis(shadowOf(relance).savedIntent)?.etiquette
+        }
+
+        assertThat(etiquettes).containsExactly(a.etiquette, b.etiquette)
+    }
+
+    /** Contrôle négatif : seul un téléchargement manqué se redemande. */
+    @Test
+    fun `autre motif avec une demande - ni bouton ni etiquette`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true, reason = MmsFailureNotifier.Reason.CARRIER_ERROR)
+        val notification = shadowOf(nm).allNotifications.single()
+
+        assertThat(notification.actions).isNull()
+        assertThat(notification.flags and Notification.FLAG_AUTO_CANCEL).isNotEqualTo(0)
+        assertThat(MmsFailureNotifier(contexte, visibilite).relanceAffichee(d.etiquette)).isFalse()
+    }
+
+    /** Sans notification, l'appelant n'arme aucun essai : il lui faut le savoir. */
+    @Test
+    fun `coffre ou session leurre - rien de poste, et l'appelant le sait`() {
+        coEvery { visibilite.verdictPour(any(), any()) } returns CorrespondentVisibilityPolicy.Verdict.TAIRE
+
+        assertThat(posteAvecRelance(demande(), nouvelEssaiPrevu = true)).isFalse()
+        assertThat(shadowOf(nm).allNotifications).isEmpty()
+    }
+
+    /**
+     * `MainActivity` est exportée : une autre application peut y glisser un `PendingIntent` à elle, qui s'exécuterait
+     * sous son identité au clic sur « Réessayer ». Seul celui que notre paquet a créé passe.
+     */
+    @Test
+    fun `bouton forge par une autre application - refuse`() {
+        // Simulé : sous Robolectric, un `PendingIntent` créé par un contexte « étranger » garde le paquet de
+        // l'application de test comme créateur. Sur un téléphone, il viendrait d'un autre processus.
+        val etranger = mockk<android.app.PendingIntent> {
+            io.mockk.every { creatorPackage } returns "com.exemple.malveillant"
+        }
+        val cle = MmsFailureNotifier.EXTRA_RELANCE
+        val forge = Intent(MmsFailureNotifier.ACTION_EXPLAIN_MMS_FAILURE).putExtra(cle, etranger)
+        val notreBouton = RelanceMmsReceiver.intentionManuelle(contexte, demande())
+        val legitime = Intent(MmsFailureNotifier.ACTION_EXPLAIN_MMS_FAILURE).putExtra(cle, notreBouton)
+        val enChaine = Intent("x").putExtra(cle, "x")
+        val echec = MmsFailureNotifier.Reason.DOWNLOAD_FAILED
+        val paquet = contexte.packageName
+
+        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, forge, paquet)).isNull()
+        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, Intent("x"), paquet)).isNull()
+        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, enChaine, paquet)).isNull()
+        // Témoin positif : le même chemin accepte notre propre bouton.
+        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, legitime, paquet)).isNotNull()
     }
 }

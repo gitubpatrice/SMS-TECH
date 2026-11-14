@@ -94,6 +94,17 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // 2026-11-06 — de quoi répondre au MMSC (m-notifyresp.ind), posé par [MmsDownloader].
         val contentLocation = intent.getStringExtra(MmsDownloader.EXTRA_CONTENT_LOCATION)
         val notificationTransactionId = intent.getByteArrayExtra(MmsDownloader.EXTRA_NOTIFICATION_TRANSACTION_ID)
+        // 2026-11-14 — de quoi redemander ce message s'il n'arrive pas, cf. [RelanceMms] : exactement ce que le
+        // téléchargement a reçu, et son rang. `null` sans adresse http(s) : rien à redemander.
+        val tentative = RelanceMms.tentativeDepuis(intent)
+        val relance = RelanceMms.Demande.creer(
+            adresse = contentLocation,
+            transactionId = intent.getStringExtra(MmsDownloader.EXTRA_TRANSACTION_ID),
+            expediteur = senderHint,
+            subId = subId,
+            transactionIdOctets = notificationTransactionId,
+            tentative = tentative,
+        )
         val rc = resultCode
         // 2026-11-06 — le statut HTTP du MMSC, joint par le service MMS quand l'échec est une erreur HTTP
         // (`MMS_ERROR_HTTP_FAILURE`), 0 sinon. Il n'arrive que parce que [MmsDownloader] rend son
@@ -140,31 +151,50 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
             // signalé par le MMSC). Restent muets, et c'est voulu : l'expéditeur bloqué, et le message sans
             // aucune adresse (v1.28.9, `TraitementMmsRecu`). `senderHint` peut être null : le notifier écrit
             // alors « un contact inconnu ».
+            // 2026-11-14 — un téléchargement manqué porte désormais de quoi le redemander ([relance]), et
+            // [nouvelEssaiPrevu] quand un essai automatique va suivre. Rend `true` si la notification est postée.
             suspend fun signalerPerte(
                 raison: MmsFailureNotifier.Reason,
                 taille: Long? = null,
                 codeAndroid: Int? = null,
                 codeHttp: Int? = null,
-            ) = entry.mmsFailureNotifier().notifyFailure(
+                nouvelEssaiPrevu: Boolean = false,
+            ): Boolean = entry.mmsFailureNotifier().notifyFailure(
                 reason = raison,
                 senderAddress = senderHint,
                 sizeBytes = taille,
                 codeAndroid = codeAndroid,
                 codeHttp = codeHttp,
+                relance = relance,
+                nouvelEssaiPrevu = nouvelEssaiPrevu,
             )
             try {
                 if (rc != Activity.RESULT_OK) {
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
                     // pas qu'un MMS lui était destiné. Maintenant on poste une notification
                     // sur le canal FAILED.
-                    // 2026-11-06 — ce commentaire promettait un « retry depuis l'app système » : il n'y en a
-                    // aucun quand SMS Tech est l'app SMS par défaut, et l'application n'en fait pas. La
-                    // fenêtre ouverte par le tap dit ce qui reste possible.
                     // 2026-11-06 — et elle montre les deux codes, qu'un utilisateur peut nous transmettre sans
                     // adb (Visible/Verizon : chaque MMS reçu échoue, sans autre indice). Au journal, ni numéro
                     // ni adresse : le chemin est celui de notre cache, nommé par une empreinte.
-                    Timber.w("MMS download failed rc=%d http=%d path=%s", rc, statutHttp, pduPath)
-                    signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, codeAndroid = rc, codeHttp = statutHttp)
+                    // 2026-11-14 — ET LE MESSAGE N'EST PLUS ABANDONNÉ : un échec passager arme un essai automatique,
+                    // et tout échec garde le bouton « Réessayer », cf. [RelanceMms]. Un essai n'est armé que si la
+                    // notification l'est : c'est sa présence que l'essai vérifiera.
+                    Timber.w("MMS download failed rc=%d http=%d attempt=%d path=%s", rc, statutHttp, tentative, pduPath)
+                    val decision = RelanceMms.apresEchec(rc, statutHttp, tentative)
+                    val prochain = (decision as? RelanceMms.Decision.Automatique)?.takeIf { relance != null }
+                    val postee = signalerPerte(
+                        MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+                        codeAndroid = rc,
+                        codeHttp = statutHttp,
+                        nouvelEssaiPrevu = prochain != null,
+                    )
+                    if (postee && relance != null && prochain != null) {
+                        RelanceMmsReceiver.planifier(
+                            context = appContext,
+                            demande = relance.avecTentative(prochain.tentative),
+                            delaiMs = prochain.delaiMs,
+                        )
+                    }
                     return@launch
                 }
                 val pduFile = pduPath?.let { File(it) }
@@ -222,6 +252,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     // Même sort qu'un message refusé à l'annonce : REJECTED, sinon l'opérateur renverrait
                     // sa notification et chaque essai retéléchargerait ces mégaoctets pour rien.
                     reponseAuMmsc = PduHeaders.STATUS_REJECTED
+                    // 2026-11-14 — un nouvel essai retéléchargerait les mêmes mégaoctets : plus de bouton.
+                    relance?.let { entry.mmsFailureNotifier().retirerRelance(it.etiquette) }
                     signalerPerte(MmsFailureNotifier.Reason.TOO_LARGE, canonicalPdu.length())
                     return@launch
                 }
@@ -241,6 +273,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                     signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
                     return@launch
                 }
+                // 2026-11-14 — le MMSC a répondu : ce message n'attend plus de nouvel essai, quoi qu'il advienne
+                // ensuite (écrit, déjà là, bloqué, refusé par le MMSC). Sa notification d'échec part, et avec elle
+                // tout essai automatique encore armé, qui ne trouvera plus rien à quoi s'accrocher.
+                relance?.let { entry.mmsFailureNotifier().retirerRelance(it.etiquette) }
                 // 2026-11-06 — LE MMSC A DIT QUE LE RETRAIT A ÉCHOUÉ (message expiré, introuvable, refusé…),
                 // cf. [LecteurRetrieveConf.retraitEnEchec]. Ce statut n'était jamais lu : la réponse
                 // d'erreur s'écrivait comme un message ordinaire. AOSP Messaging ne l'écrit pas ; ici non

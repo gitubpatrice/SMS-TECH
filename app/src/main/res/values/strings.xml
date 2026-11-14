@@ -825,6 +825,12 @@
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
     <string name="send_partial">Sent to %1$d recipient(s); %2$d could not be reached.</string>
     <string name="send_partial_blocked">Sent to %1$d recipient(s); %2$d skipped because you blocked them.</string>
+    <string name="thread_group_blocked_title">Blocked contact in this group</string>
+    <string name="thread_group_blocked_body">In your block list: %1$s.\n\nThis message will only go to the %2$d other members, in a group conversation without the blocked contacts, which opens after sending.</string>
+    <string name="compose_recipient_blocked">%1$s · blocked</string>
+    <string name="compose_recipient_added">Added: %1$s (%2$d in total)</string>
+    <string name="compose_recipient_added_blocked">Added: %1$s (%2$d in total). This number is in your block list: it will not receive your messages.</string>
+    <string name="compose_recipient_already">%1$s is already in the list</string>
 
     <!-- v1.14.8 ARCH-M2 — thread snackbars (i18n) — extracted from hardcoded VM strings. -->
     <string name="snack_thread_max_duration">Limit reached: %1$d s</string>
@@ -974,6 +980,7 @@
     <!-- 2026-11-06 — no longer promises "MMS settings" (there are none) nor a retry (none is possible): the tap opens the explanation below. -->
     <string name="mms_failure_notification_body_too_large">Message from %1$s too large to be received (%2$d KB). Tap for details.</string>
     <string name="mms_failure_notification_body_download_failed">The MMS from %1$s could not be downloaded. Tap for details.</string>
+    <string name="mms_failure_notification_body_download_retrying">The MMS from %1$s could not be downloaded yet. SMS Tech will try again. Tap for details.</string>
     <string name="mms_failure_notification_body_media_not_saved">A file in the MMS from %1$s could not be saved. Tap for details.</string>
     <string name="mms_failure_notification_body_carrier_error">Your carrier could not deliver the MMS from %1$s. Tap for details.</string>
     <string name="mms_failure_notification_body_unknown_sender">an unknown contact</string>
@@ -983,6 +990,8 @@
     <string name="mms_failure_dialog_body_carrier_error">Your carrier reported that it could not deliver a multimedia message sent to you, for example because it expired before it could be downloaded.\n\nAsk the sender to send it again.</string>
     <string name="mms_failure_dialog_storage_settings">Storage</string>
     <string name="mms_failure_dialog_body_download_failed">A multimedia message sent to you could not be downloaded from your carrier. MMS usually travel over mobile data: check that you have signal and that mobile data is on, or that your phone allows MMS while mobile data is off.\n\nSMS Tech cannot retry the download on its own. Your carrier may send the message again; otherwise, ask the sender to send it again.</string>
+    <string name="mms_failure_dialog_body_download_failed_retry">A multimedia message sent to you could not be downloaded from your carrier. MMS usually travel over mobile data, even when Wi-Fi is on: check that you have signal and that mobile data is on, or that your phone allows MMS while mobile data is off.\n\nOn some phones, the MMS connection fails while Wi-Fi is on. If that happens to you, turn Wi-Fi off for a moment, then tap Retry.\n\nAfter a temporary failure, SMS Tech also tries again on its own, as long as the notification is shown. If nothing works, ask the sender to send it again.</string>
+    <string name="mms_failure_retry_started">Downloading the MMS again…</string>
     <!-- 2026-11-06 — line under the text above when Android returned a code. %1$d = its MMS error code (SmsManager.MMS_ERROR_*), %2$d = the HTTP status of the carrier's MMS server. -->
     <string name="mms_failure_dialog_android_error">Android error code: %1$d</string>
     <string name="mms_failure_dialog_android_error_http">Android error code: %1$d (HTTP %2$d)</string>

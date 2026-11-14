@@ -1,9 +1,11 @@
 package com.filestech.sms.ui.components
 
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -30,9 +32,9 @@ import timber.log.Timber
  * 2026-11-06 — la fenêtre ouverte par un tap sur la notification « MMS non reçu ».
  *
  * Elle dit ce qui s'est passé et ce que l'utilisateur peut faire, sans rien promettre que l'application
- * ne tienne : aucun réglage MMS n'existe, et aucun nouvel essai n'est possible pour un message refusé ou
- * dont le téléchargement a échoué — son adresse n'est gardée nulle part. Seul un fichier non enregistré
- * est repris, par `RepriseMmsWorker`.
+ * ne tienne : aucun réglage MMS n'existe, et aucun nouvel essai n'est possible pour un message refusé.
+ * Un fichier non enregistré est repris par `RepriseMmsWorker` ; 2026-11-14 — un téléchargement manqué se
+ * redemande par le bouton « Réessayer » que la notification transmet (`RelanceMms`).
  *
  * Mêmes gardes que [com.filestech.sms.ui.AppRoot] applique à la confirmation Safety call, et pour les
  * mêmes raisons :
@@ -58,22 +60,47 @@ fun MmsFailureExplanationOverlay(
     if (isPanicDecoy || showLock || expire) return
     // Clé du TAP (motif et instant), pas du marquage : marquer change `current`, et ne doit pas relancer l'effet.
     LaunchedEffect(current.reason, current.postedAt) { holder.marquerAffichee() }
-    MmsFailureExplanationDialog(reason = current.reason, erreur = current.erreur, onDismiss = { holder.consume() })
+    val context = LocalContext.current
+    MmsFailureExplanationDialog(
+        reason = current.reason,
+        erreur = current.erreur,
+        onDismiss = { holder.consume() },
+        // 2026-11-14 — le bouton « Réessayer » du message, quand la notification l'a transmis.
+        onRelancer = current.relance?.let { relance ->
+            {
+                relancer(context, relance)
+                holder.consume()
+            }
+        },
+    )
 }
 
+/**
+ * @param onRelancer 2026-11-14 — redemande le message ; `null` quand rien ne permet de le redemander. Seul un
+ *   téléchargement manqué l'utilise : texte qui mène à ce bouton, et « Réessayer » en action principale.
+ */
 @Composable
 internal fun MmsFailureExplanationDialog(
     reason: MmsFailureNotifier.Reason,
     erreur: MmsFailureNotifier.ErreurAndroid?,
     onDismiss: () -> Unit,
+    onRelancer: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val relance = onRelancer?.takeIf { reason == MmsFailureNotifier.Reason.DOWNLOAD_FAILED }
     val body = when (reason) {
         MmsFailureNotifier.Reason.TOO_LARGE -> stringResource(
             R.string.mms_failure_dialog_body_too_large,
             (PdusEnAttente.PLAFOND_OCTETS / OCTETS_PAR_MIO).toInt(),
         )
-        MmsFailureNotifier.Reason.DOWNLOAD_FAILED -> stringResource(R.string.mms_failure_dialog_body_download_failed)
+        // 2026-11-14 — sans bouton, l'ancien texte reste vrai (« ne peut pas relancer ») ; avec, il mène au bouton.
+        MmsFailureNotifier.Reason.DOWNLOAD_FAILED -> stringResource(
+            if (relance != null) {
+                R.string.mms_failure_dialog_body_download_failed_retry
+            } else {
+                R.string.mms_failure_dialog_body_download_failed
+            },
+        )
         MmsFailureNotifier.Reason.MEDIA_NOT_SAVED -> stringResource(R.string.mms_failure_dialog_body_media_not_saved)
         MmsFailureNotifier.Reason.CARRIER_ERROR -> stringResource(R.string.mms_failure_dialog_body_carrier_error)
     }
@@ -104,20 +131,52 @@ internal fun MmsFailureExplanationDialog(
                 ligneErreur?.let { Text(it, modifier = Modifier.padding(top = 12.dp)) }
             }
         },
+        // 2026-11-14 — avec un bouton « Réessayer », il devient l'action principale ; « Fermer » rejoint les
+        // réglages. Sans lui, rien ne change.
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
-        },
-        dismissButton = reglages?.let { (libelle, action) ->
-            {
-                TextButton(
-                    onClick = {
-                        ouvrirReglages(context, action)
-                        onDismiss()
-                    },
-                ) { Text(libelle) }
+            if (relance != null) {
+                TextButton(onClick = relance) { Text(stringResource(R.string.action_retry)) }
+            } else {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
             }
         },
+        dismissButton = when {
+            relance != null -> {
+                {
+                    reglages?.let { (libelle, action) -> BoutonReglages(context, libelle, action, onDismiss) }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
+                }
+            }
+            reglages != null -> {
+                { BoutonReglages(context, reglages.first, reglages.second, onDismiss) }
+            }
+            else -> null
+        },
     )
+}
+
+@Composable
+private fun BoutonReglages(context: Context, libelle: String, action: String, onDismiss: () -> Unit) {
+    TextButton(
+        onClick = {
+            ouvrirReglages(context, action)
+            onDismiss()
+        },
+    ) { Text(libelle) }
+}
+
+/**
+ * 2026-11-14 — envoie le bouton « Réessayer » du message ([MmsFailureNotifier.relanceDepuisExtras] l'a validé),
+ * et le dit d'un toast : la fenêtre se ferme, et le résultat viendra par une notification. Un `PendingIntent`
+ * annulé entre-temps ne fait rien de plus que se taire.
+ */
+private fun relancer(context: Context, relance: PendingIntent) {
+    try {
+        relance.send()
+        Toast.makeText(context, R.string.mms_failure_retry_started, Toast.LENGTH_SHORT).show()
+    } catch (e: PendingIntent.CanceledException) {
+        Timber.w(e, "MMS: bouton Reessayer annule")
+    }
 }
 
 /**

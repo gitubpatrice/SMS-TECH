@@ -831,6 +831,12 @@
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
     <string name="send_partial">Enviado a %1$d destinatario(s); no se ha podido alcanzar a %2$d.</string>
     <string name="send_partial_blocked">Enviado a %1$d destinatario(s); %2$d omitidos porque usted los ha bloqueado.</string>
+    <string name="thread_group_blocked_title">Contacto bloqueado en este grupo</string>
+    <string name="thread_group_blocked_body">En su lista de bloqueo: %1$s.\n\nEste mensaje solo se enviará a los otros %2$d miembros, en una conversación de grupo sin los contactos bloqueados, que se abrirá después del envío.</string>
+    <string name="compose_recipient_blocked">%1$s · bloqueado</string>
+    <string name="compose_recipient_added">Añadido: %1$s (%2$d en total)</string>
+    <string name="compose_recipient_added_blocked">Añadido: %1$s (%2$d en total). Este número está en su lista de bloqueo: no recibirá sus mensajes.</string>
+    <string name="compose_recipient_already">%1$s ya está en la lista</string>
 
     <!-- v1.14.8 ARCH-M2 — thread snackbars (i18n) — extracted from hardcoded VM strings. -->
     <string name="snack_thread_max_duration">Límite alcanzado: %1$d s</string>
@@ -980,6 +986,7 @@
     <!-- 2026-11-06 — no longer promises "MMS settings" (there are none) nor a retry (none is possible): the tap opens the explanation below. -->
     <string name="mms_failure_notification_body_too_large">Mensaje de %1$s demasiado grande para recibirlo (%2$d KB). Toque para ver los detalles.</string>
     <string name="mms_failure_notification_body_download_failed">No se ha podido descargar el MMS de %1$s. Toque para ver los detalles.</string>
+    <string name="mms_failure_notification_body_download_retrying">Todavía no se ha podido descargar el MMS de %1$s. SMS Tech volverá a intentarlo. Toque para ver los detalles.</string>
     <string name="mms_failure_notification_body_media_not_saved">No se ha podido guardar un archivo del MMS de %1$s. Toque para ver los detalles.</string>
     <string name="mms_failure_notification_body_carrier_error">Su operador no ha podido entregar el MMS de %1$s. Toque para ver los detalles.</string>
     <string name="mms_failure_notification_body_unknown_sender">un contacto desconocido</string>
@@ -989,6 +996,8 @@
     <string name="mms_failure_dialog_body_carrier_error">Su operador indica que no ha podido entregar un mensaje multimedia que le han enviado, por ejemplo porque caducó antes de poder descargarse.\n\nPida al remitente que se lo vuelva a enviar.</string>
     <string name="mms_failure_dialog_storage_settings">Almacenamiento</string>
     <string name="mms_failure_dialog_body_download_failed">No se ha podido descargar de su operador un mensaje multimedia que le han enviado. Los MMS suelen usar los datos móviles: compruebe que tiene cobertura y que los datos móviles están activados, o que su teléfono permite los MMS con los datos móviles desactivados.\n\nSMS Tech no puede reintentar la descarga por sí mismo. Su operador puede volver a enviar el mensaje; si no, pida al remitente que se lo vuelva a enviar.</string>
+    <string name="mms_failure_dialog_body_download_failed_retry">No se ha podido descargar de su operador un mensaje multimedia que le han enviado. Los MMS suelen usar los datos móviles, incluso con el Wi-Fi activado: compruebe que tiene cobertura y que los datos móviles están activados, o que su teléfono permite los MMS con los datos móviles desactivados.\n\nEn algunos teléfonos, la conexión MMS falla con el Wi-Fi activado. Si es su caso, desactive el Wi-Fi un momento y luego toque Reintentar.\n\nTras un fallo pasajero, SMS Tech también vuelve a intentarlo por sí mismo mientras se muestre la notificación. Si nada funciona, pida al remitente que se lo vuelva a enviar.</string>
+    <string name="mms_failure_retry_started">Volviendo a descargar el MMS…</string>
     <!-- 2026-11-06 — line under the text above when Android returned a code. %1$d = its MMS error code (SmsManager.MMS_ERROR_*), %2$d = the HTTP status of the carrier's MMS server. -->
     <string name="mms_failure_dialog_android_error">Código de error de Android: %1$d</string>
     <string name="mms_failure_dialog_android_error_http">Código de error de Android: %1$d (HTTP %2$d)</string>

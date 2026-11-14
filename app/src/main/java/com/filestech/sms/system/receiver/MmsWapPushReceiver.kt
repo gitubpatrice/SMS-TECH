@@ -44,6 +44,7 @@ import timber.log.Timber
  *     download, pictures the reader accepted, and this KDoc promised the user could "re-trigger from
  *     the conversation later". Nothing keeps the message's address: a refused message is LOST. So the
  *     MMSC is told REJECTED ([MmsSender.repondreAuMmsc]), and the user is told why.
+ *   - 2026-11-14 — a FAILED download, unlike a refused one, can be asked for again: see [RelanceMms].
  */
 class MmsWapPushReceiver : BroadcastReceiver() {
 
@@ -159,10 +160,20 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                     // 2026-11-06 — le téléchargement n'a même pas DÉMARRÉ (adresse refusée, fichier
                     // impossible à créer, `SmsManager` qui lève) : aucun accusé ne viendra jamais, et
                     // `MmsDownloadedReceiver` ne saura rien de ce message. C'était une perte muette.
+                    // 2026-11-14 — avec le bouton « Réessayer » (fichier impossible à créer, `SmsManager` qui lève :
+                    // plus tard, cela peut passer). Une adresse refusée n'en reçoit pas, cf. [RelanceMms.Demande.creer].
                     if (res is Outcome.Failure) {
                         failureNotifier.notifyFailure(
                             reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
                             senderAddress = sender,
+                            relance = RelanceMms.Demande.creer(
+                                adresse = contentLocation,
+                                transactionId = transactionId,
+                                expediteur = sender,
+                                subId = subId,
+                                transactionIdOctets = parsed.transactionId,
+                                tentative = 0,
+                            ),
                         )
                     }
                 } else {

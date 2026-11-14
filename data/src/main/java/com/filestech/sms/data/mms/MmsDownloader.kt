@@ -35,6 +35,8 @@ class MmsDownloader @Inject constructor(
      * @param transactionIdOctets 2026-11-06 — le `transactionId` de la notification, en OCTETS : la
      *   réponse au MMSC ([MmsSender.repondreAuMmsc]) doit le rendre à l'identique, ce que la chaîne
      *   [transactionId] (décodée en UTF-8, et qui fait la clé du PDU) ne garantit pas.
+     * @param tentative 2026-11-14 — 0 pour le téléchargement annoncé par l'opérateur, puis le rang du nouvel essai
+     *   (`RelanceMms`) : rendu tel quel au receveur du résultat, qui décide de l'essai suivant.
      */
     fun download(
         contentLocation: String,
@@ -42,18 +44,25 @@ class MmsDownloader @Inject constructor(
         senderAddress: String?,
         subId: Int? = null,
         transactionIdOctets: ByteArray? = null,
+        tentative: Int = 0,
     ): Outcome<Unit> {
-        if (contentLocation.isBlank()) return Outcome.Failure(AppError.Validation("empty contentLocation"))
         // v1.3.10 (SEC-05) — defense in depth: reject any contentLocation whose scheme is
         // not `http(s)://`. The WAP push receiver is OS-protected (BROADCAST_WAP_PUSH), and
         // every production AOSP telephony stack rejects non-HTTP schemes downstream, but
         // some legacy OEM stacks were observed honouring `file://` / `content://` URIs —
         // we'd rather fail the download loudly than let `SmsManager` chase an arbitrary URI.
-        if (!adresseHttp(contentLocation)) {
-            val scheme = contentLocation.substringBefore("://", missingDelimiterValue = "").lowercase()
-            Timber.w("Rejected MMS contentLocation with non-HTTP scheme: %s", scheme)
-            return Outcome.Failure(AppError.Validation("contentLocation scheme not allowed: $scheme"))
+        // 2026-11-14 — les deux refus en un seul `return` (règle ReturnCount, le paramètre `tentative` ayant
+        // changé la signature) : mêmes refus, mêmes messages.
+        val refus = when {
+            contentLocation.isBlank() -> AppError.Validation("empty contentLocation")
+            !adresseHttp(contentLocation) -> {
+                val scheme = contentLocation.substringBefore("://", missingDelimiterValue = "").lowercase()
+                Timber.w("Rejected MMS contentLocation with non-HTTP scheme: %s", scheme)
+                AppError.Validation("contentLocation scheme not allowed: $scheme")
+            }
+            else -> null
         }
+        if (refus != null) return Outcome.Failure(refus)
 
         val dir = File(context.cacheDir, MMS_IN_DIR).apply { mkdirs() }
         // v1.28.9 (F17) — le nom porte la clé de transaction et la SIM : si le traitement échoue et que le
@@ -102,6 +111,7 @@ class MmsDownloader @Inject constructor(
                 // L'intent est explicite, vers un receveur non exporté ; l'adresse ne va pas au journal.
                 putExtra(EXTRA_CONTENT_LOCATION, contentLocation)
                 putExtra(EXTRA_NOTIFICATION_TRANSACTION_ID, transactionIdOctets)
+                putExtra(EXTRA_TENTATIVE, tentative)
             }
         val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
         // 2026-11-06 — MUTABLE, sans quoi le statut HTTP d'un échec n'arrive jamais : cf.
@@ -193,6 +203,9 @@ class MmsDownloader @Inject constructor(
 
         /** 2026-11-06 — le `transactionId` de la notification, en octets, pour la réponse au MMSC. */
         const val EXTRA_NOTIFICATION_TRANSACTION_ID: String = "com.filestech.sms.extra.NOTIFICATION_TRANSACTION_ID"
+
+        /** 2026-11-14 — le rang du téléchargement : 0 à l'annonce, puis celui du nouvel essai (`RelanceMms`). */
+        const val EXTRA_TENTATIVE: String = "com.filestech.sms.extra.MMS_DOWNLOAD_ATTEMPT"
 
         /**
          * v1.3.10 (SEC-05) — `http://` ou `https://`, rien d'autre. 2026-11-06 — sortie du corps de
