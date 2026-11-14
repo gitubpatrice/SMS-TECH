@@ -8,6 +8,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
@@ -63,7 +64,7 @@ class PucesDestinatairesTest {
             }
         }
 
-        compose.onNodeWithText(numeros[3]).performClick()
+        compose.onNodeWithText(numeros[3]).performScrollTo().performClick()
 
         assertThat(retires).containsExactly(numeros[3])
     }

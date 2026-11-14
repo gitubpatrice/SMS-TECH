@@ -327,7 +327,9 @@ internal fun PucesDestinataires(
     // Seulement quand la zone GRANDIT : une puce ajoutée, ou une marque « bloqué » qui allonge la dernière (elle
     // arrive après l'ajout). Retirer une puce ne fait pas défiler : l'utilisateur garde sa place (relectures Claude
     // et GPT du 2026-11-14).
-    val tailles = remember { intArrayOf(destinataires.size, bloques.size) }
+    // Partir de zéro : la première composition compte comme une croissance, et la dernière puce est amenée en vue
+    // (mesuré sur émulateur API 34 : sans cela, six puces dépassaient la hauteur et la dernière restait cachée).
+    val tailles = remember { intArrayOf(0, 0) }
     LaunchedEffect(destinataires.size, bloques.size) {
         val grandit = destinataires.size > tailles[0] || bloques.size > tailles[1]
         tailles[0] = destinataires.size
