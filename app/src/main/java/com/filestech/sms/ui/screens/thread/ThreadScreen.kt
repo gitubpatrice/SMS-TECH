@@ -440,6 +440,9 @@ fun ThreadScreen(
                         partialFmt.format(e.sent, e.failed + e.blocked)
                     },
                 )
+                // 2026-11-14 — le message est parti dans la conversation des membres non bloqués : même geste que
+                // le transfert vers une conversation existante, ce fil est remplacé par celle-là.
+                is ThreadViewModel.Event.OuvrirConversation -> onForwardToConversation(e.conversationId)
                 is ThreadViewModel.Event.OpenAddContact -> {
                     val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {
                         type = ContactsContract.Contacts.CONTENT_ITEM_TYPE
@@ -1230,6 +1233,35 @@ fun ThreadScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelPendingSend() }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    // 2026-11-14 (groupe de 56 sur le S24 de Patrice) — un MMS de groupe écarterait des membres bloqués, et partirait
+    // dans une autre conversation : on le dit AVANT. Accepter envoie (sans seconde confirmation) ; annuler ne touche à
+    // rien. Cf. [ThreadViewModel.EnvoiSansBloques].
+    state.envoiSansBloques?.let { attente ->
+        AlertDialog(
+            onDismissRequest = { viewModel.annulerEnvoiSansBloques() },
+            title = { Text(stringResource(R.string.thread_group_blocked_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.thread_group_blocked_body,
+                        attente.bloques.joinToString(", "),
+                        attente.servis,
+                    ),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(onClick = { viewModel.confirmerEnvoiSansBloques() }) {
+                    Text(stringResource(R.string.action_send))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.annulerEnvoiSansBloques() }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },

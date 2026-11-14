@@ -31,6 +31,12 @@ data class SendReport(
     val failed: List<PhoneAddress>,
     /** Destinataires écartés parce qu'ils figurent dans la liste de blocage de l'utilisateur. */
     val blocked: List<PhoneAddress>,
+    /**
+     * 2026-11-14 — le nombre de PERSONNES servies. Un message par destinataire : autant que de messages remis.
+     * Un MMS de groupe : UN message pour toutes ses cibles — l'écran annonçait « Envoyé à 1 destinataire(s) »
+     * pour un MMS parti à 55 personnes (mesuré sur le S24 de Patrice).
+     */
+    val servis: Int = dispatched.size,
 ) {
     /** Tous les destinataires visés ont été remis à la pile. */
     val isComplete: Boolean get() = failed.isEmpty() && blocked.isEmpty()

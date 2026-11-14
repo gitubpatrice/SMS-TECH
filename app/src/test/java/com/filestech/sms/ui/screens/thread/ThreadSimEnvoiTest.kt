@@ -2,27 +2,15 @@ package com.filestech.sms.ui.screens.thread
 
 import androidx.lifecycle.SavedStateHandle
 import com.filestech.sms.core.result.Outcome
-import com.filestech.sms.data.local.datastore.SettingsRepository
-import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
-import com.filestech.sms.domain.model.MessageWindow
-import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.model.SimActive
-import com.filestech.sms.domain.repository.ConversationRepository
-import com.filestech.sms.domain.sender.SimsActives
-import com.filestech.sms.domain.settings.AppSettings
-import com.filestech.sms.domain.settings.SendingSettings
 import com.filestech.sms.domain.usecase.EnvoyerMessageUseCase
-import com.filestech.sms.security.AppLockManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -144,62 +132,11 @@ class ThreadSimEnvoiTest {
         sims: List<SimActive>,
         historique: List<Message>,
         etat: SavedStateHandle = SavedStateHandle(mapOf("conversationId" to 7L)),
-    ): ThreadViewModel {
-        val conversation = Conversation(
-            id = 7L,
-            threadId = null,
-            addresses = listOf(PhoneAddress.of("+33612345678")),
-            displayName = null,
-            lastMessageAt = 0L,
-            lastMessagePreview = null,
-            unreadCount = 0,
-            pinned = false,
-            archived = false,
-            muted = false,
-            inVault = false,
-            draft = null,
-        )
-        val repo: ConversationRepository = mockk(relaxed = true) {
-            every { observeOne(any()) } returns flowOf(conversation)
-            every { observeVaultHidden(any()) } returns flowOf(false)
-            every { observeMessagesWindow(any(), any()) } returns flowOf(MessageWindow(messages = historique))
-        }
-        val settings: SettingsRepository = mockk(relaxed = true) {
-            // Sans confirmation : `send()` envoie tout de suite.
-            every { state } returns MutableStateFlow(AppSettings(sending = SendingSettings(confirmBeforeBroadcast = false)))
-        }
-        val appLock: AppLockManager = mockk(relaxed = true) {
-            every { state } returns MutableStateFlow(AppLockManager.LockState.Unlocked)
-        }
-        val simsActives: SimsActives = mockk {
-            every { lister() } returns sims
-            // Android enverrait par la SIM 1 : la SIM 2 retenue ne peut donc venir que de l'historique.
-            every { simSmsDAndroid() } returns 11
-        }
-        return ThreadViewModel(
-            savedStateHandle = etat,
-            repo = repo,
-            envoyer = envoyer,
-            sendVoiceMms = mockk(relaxed = true),
-            retrySend = mockk(relaxed = true),
-            markRead = mockk(relaxed = true),
-            segCounter = mockk(relaxed = true),
-            exportPdf = mockk(relaxed = true),
-            voiceRecorder = mockk(relaxed = true),
-            playbackController = mockk(relaxed = true),
-            settings = settings,
-            blockNumber = mockk(relaxed = true),
-            toggleConvState = mockk(relaxed = true),
-            contactRepo = mockk(relaxed = true),
-            sendReaction = mockk(relaxed = true),
-            scheduleMessage = mockk(relaxed = true),
-            incomingShare = mockk(relaxed = true),
-            activeConversationTracker = mockk(relaxed = true),
-            context = mockk(relaxed = true),
-            io = dispatcher,
-            appLock = appLock,
-            phoneIdentity = mockk(relaxed = true),
-            simsActives = simsActives,
-        )
-    }
+    ): ThreadViewModel = threadViewModelDeTest(
+        dispatcher = dispatcher,
+        envoyer = envoyer,
+        historique = historique,
+        sims = sims,
+        etat = etat,
+    )
 }

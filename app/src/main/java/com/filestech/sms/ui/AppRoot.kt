@@ -432,7 +432,8 @@ fun AppRoot() {
                 // v1.4.0 (F5 forward feature) — forward to existing conversation. Pop the source thread
                 // so the back stack reads [Conversations -> Thread(dest)] instead of
                 // [Conversations -> Thread(source) -> Thread(dest)] which would surprise
-                // the user on back press.
+                // the user on back press. 2026-11-14 — also used when a group MMS lands in the
+                // conversation of its non-blocked members (`ThreadViewModel.Event.OuvrirConversation`).
                 onForwardToConversation = { destId ->
                     nav.popBackStack()
                     nav.navigate(Thread(destId))

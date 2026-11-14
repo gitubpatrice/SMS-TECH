@@ -8,12 +8,14 @@ import com.filestech.sms.core.ext.asEvents
 import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.sms.SmsSegmentCounter
 import com.filestech.sms.data.voice.VoicePlaybackController
 import com.filestech.sms.data.voice.VoiceRecorder
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
+import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
 import com.filestech.sms.domain.settings.AppSettings
@@ -281,7 +283,26 @@ class ThreadViewModel @Inject constructor(
          * réaction). `null` avec moins de deux SIM : Android choisit, comme avant. Cf. [recalculerSim].
          */
         val simEnvoi: Int? = null,
+        /**
+         * 2026-11-14 — un envoi en MMS de groupe attend que l'utilisateur accepte d'écarter les membres bloqués,
+         * cf. [EnvoiSansBloques]. Accepter VAUT confirmation : la confirmation d'envoi habituelle ne suit pas.
+         */
+        val envoiSansBloques: EnvoiSansBloques? = null,
     )
+
+    /** 2026-11-14 — le chemin d'envoi qu'une confirmation [EnvoiSansBloques] tient en suspens. */
+    enum class SuiteEnvoi { TEXTE, PIECES_JOINTES, VOCAL }
+
+    /**
+     * 2026-11-14 (groupe de 56 sur le S24 de Patrice) — **prévenir avant qu'un MMS de groupe n'écarte un membre
+     * bloqué.** Le message part alors aux seuls [servis], et dans la conversation de ces membres, pas dans celle-ci
+     * (`EnvoiParDestinataire.enGroupe`) : Patrice a vu son groupe rester vide et un second apparaître, sans savoir
+     * qu'un de ses contacts figurait dans la liste de blocage importée d'Android. Après l'envoi, l'écran ouvre la
+     * conversation où le message est parti ([Event.OuvrirConversation]).
+     *
+     * @property bloques les membres écartés, par leur nom de contact ou, à défaut, leur numéro.
+     */
+    data class EnvoiSansBloques(val bloques: List<String>, val servis: Int, val suite: SuiteEnvoi)
 
     /** Staged attachment awaiting user confirmation in the composer. */
     data class PendingAttachment(
@@ -339,6 +360,12 @@ class ThreadViewModel @Inject constructor(
          * pourrait envoyer un emoji obsolète).
          */
         data class RequestReactionConfirm(val messageId: Long, val emoji: String) : Event
+
+        /**
+         * 2026-11-14 — le message vient de partir dans une AUTRE conversation : celle des membres non bloqués d'un
+         * groupe, cf. [EnvoiSansBloques]. L'écran la remplace par elle.
+         */
+        data class OuvrirConversation(val conversationId: Long) : Event
     }
 
     private val _state = MutableStateFlow(UiState())
@@ -649,6 +676,8 @@ class ThreadViewModel @Inject constructor(
         // double appui rapide produisait deux SMS (ou deux MMS) réellement envoyés et facturés.
         if (_state.value.isSending) return
         viewModelScope.launch {
+            // 2026-11-14 — un membre bloqué serait écarté du MMS de groupe : prévenir d'abord.
+            if (demanderSiBloques(if (hasAttachments) SuiteEnvoi.PIECES_JOINTES else SuiteEnvoi.TEXTE)) return@launch
             // v1.28.3 (F30) — la confirmation se lit AVANT de router, pour les deux chemins.
             //
             // Le réglage s'appelle `confirmBeforeBroadcast` en interne mais s'affiche
@@ -701,6 +730,60 @@ class ThreadViewModel @Inject constructor(
     /** Dismisses the pending-send confirmation without sending. */
     fun cancelPendingSend() {
         _state.update { it.copy(pendingSend = null) }
+    }
+
+    /**
+     * 2026-11-14 — ouvre la confirmation [EnvoiSansBloques] si le prochain envoi, en MMS de groupe, écarterait des
+     * membres bloqués ; `true` si l'envoi doit attendre la réponse. Une lecture impossible de la liste de blocage ne
+     * retient pas l'envoi : celui-ci appliquera lui-même la règle, comme avant.
+     */
+    private suspend fun demanderSiBloques(suite: SuiteEnvoi): Boolean {
+        val conv = _state.value.conversation ?: return false
+        val ecartes = runCatchingCancellable { envoyer.membresEcartesDuGroupe(conv.addresses) }
+            .onFailure { timber.log.Timber.w(it, "membres bloques du groupe illisibles") }
+            .getOrNull()
+            .orEmpty()
+        if (ecartes.isEmpty()) return false
+        val noms = ecartes.map { a -> _state.value.memberNames[a.raw] ?: a.raw }
+        _state.update {
+            it.copy(envoiSansBloques = EnvoiSansBloques(noms, conv.addresses.size - ecartes.size, suite))
+        }
+        return true
+    }
+
+    /** 2026-11-14 — l'utilisateur accepte d'envoyer sans les membres bloqués : l'envoi suspendu part. */
+    fun confirmerEnvoiSansBloques() {
+        val attente = _state.value.envoiSansBloques ?: return
+        _state.update { it.copy(envoiSansBloques = null) }
+        viewModelScope.launch {
+            when (attente.suite) {
+                SuiteEnvoi.TEXTE -> {
+                    val body = _state.value.draft.trim()
+                    if (body.isNotEmpty() && !_state.value.isSending) doSend(body)
+                }
+                SuiteEnvoi.PIECES_JOINTES -> if (!_state.value.isSending) dispatchPendingAttachments()
+                SuiteEnvoi.VOCAL -> if (!_state.value.isSendingVoice) doSendVoice()
+            }
+        }
+    }
+
+    /** 2026-11-14 — l'utilisateur renonce : rien ne part, brouillon, pièces jointes et enregistrement restent. */
+    fun annulerEnvoiSansBloques() {
+        _state.update { it.copy(envoiSansBloques = null) }
+    }
+
+    /**
+     * 2026-11-14 — un MMS de groupe dont des membres bloqués ont été écartés est rangé dans la conversation des
+     * autres : si ce n'est pas celle-ci, l'écran l'ouvre. `true` si c'est le cas — le bandeau d'envoi partiel est
+     * alors inutile, la confirmation [EnvoiSansBloques] ayant déjà tout dit.
+     */
+    private suspend fun suivreSiAilleurs(rapport: SendReport): Boolean {
+        if (rapport.blocked.isEmpty()) return false
+        val id = rapport.dispatched.singleOrNull() ?: return false
+        val ailleurs = runCatchingCancellable { repo.findMessageById(id)?.conversationId }.getOrNull()
+        if (ailleurs == null || ailleurs == conversationId) return false
+        _events.tryEmit(Event.OuvrirConversation(ailleurs))
+        return true
     }
 
     /**
@@ -836,10 +919,11 @@ class ThreadViewModel @Inject constructor(
                     // groupe, vivent chacune dans la conversation individuelle de son
                     // destinataire, c'est-à-dire là où l'expéditeur n'allait pas regarder.
                     val rapport = res.value
-                    if (!rapport.isComplete) {
+                    // 2026-11-14 — `servis` : des personnes ; et un message parti ailleurs y est suivi.
+                    if (!suivreSiAilleurs(rapport) && !rapport.isComplete) {
                         _events.tryEmit(
                             Event.PartialSend(
-                                sent = rapport.dispatched.size,
+                                sent = rapport.servis,
                                 failed = rapport.failed.size,
                                 blocked = rapport.blocked.size,
                             ),
@@ -1263,12 +1347,13 @@ class ThreadViewModel @Inject constructor(
                 // brouillon efface pendant qu'un destinataire n'a rien recu, c'est le meme
                 // silence que sur la voie SMS ; le corriger d'un seul cote serait reproduire le
                 // motif que cette relecture entiere combat.
-                if (res.value.isComplete) {
-                    _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
-                } else {
-                    _events.tryEmit(
+                // 2026-11-14 — même suite que le texte : `servis`, et suivre un message parti ailleurs.
+                when {
+                    suivreSiAilleurs(res.value) -> Unit
+                    res.value.isComplete -> _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
+                    else -> _events.tryEmit(
                         Event.PartialSend(
-                            sent = res.value.dispatched.size,
+                            sent = res.value.servis,
                             failed = res.value.failed.size,
                             blocked = res.value.blocked.size,
                         ),
@@ -1723,6 +1808,8 @@ class ThreadViewModel @Inject constructor(
         if (_state.value.voice !is VoiceState.Reviewing) return
         if (_state.value.isSendingVoice) return
         viewModelScope.launch {
+            // 2026-11-14 — même prévention que le texte et les pièces jointes.
+            if (demanderSiBloques(SuiteEnvoi.VOCAL)) return@launch
             val confirm = cachedSettings.value.sending.confirmBeforeBroadcast
             if (confirm) {
                 _state.update { it.copy(pendingVoiceConfirm = true) }
@@ -1762,12 +1849,13 @@ class ThreadViewModel @Inject constructor(
             is Outcome.Success -> {
                 _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }
                 // v1.28.3 (F21) — idem sur la voie vocale, troisieme chemin d'envoi.
-                if (res.value.isComplete) {
-                    _events.tryEmit(Event.ShowSnackbar(snackVoiceSent()))
-                } else {
-                    _events.tryEmit(
+                // 2026-11-14 — et, comme les deux autres, `servis` et le suivi d'un message parti ailleurs.
+                when {
+                    suivreSiAilleurs(res.value) -> Unit
+                    res.value.isComplete -> _events.tryEmit(Event.ShowSnackbar(snackVoiceSent()))
+                    else -> _events.tryEmit(
                         Event.PartialSend(
-                            sent = res.value.dispatched.size,
+                            sent = res.value.servis,
                             failed = res.value.failed.size,
                             blocked = res.value.blocked.size,
                         ),

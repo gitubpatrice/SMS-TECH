@@ -99,8 +99,9 @@ class EnvoiParDestinataire @Inject constructor(
         if (cibles.isEmpty()) return Outcome.Failure(AppError.RecipientBlocked)
         val localId = miroir(cibles)
         return when (envoi(localId, cibles)) {
+            // 2026-11-14 — `servis` : les personnes, pas le MMS (cf. [SendReport.servis]).
             is Outcome.Success -> Outcome.Success(
-                SendReport(dispatched = listOf(localId), failed = emptyList(), blocked = blocked),
+                SendReport(dispatched = listOf(localId), failed = emptyList(), blocked = blocked, servis = cibles.size),
             )
             is Outcome.Failure -> {
                 mirror.updateOutgoingStatus(localId, MessageStatus.FAILED, errorCode = SendErrorCode.SYNCHRONOUS)

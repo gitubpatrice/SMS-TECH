@@ -3,16 +3,21 @@ package com.filestech.sms.ui.screens.compose
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
@@ -38,9 +43,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -48,6 +55,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
+import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.system.settings.ouvrirLaFicheDeLApplication
 import com.filestech.sms.ui.components.Avatar
 import com.filestech.sms.ui.components.ContactIntents
@@ -70,10 +78,23 @@ fun ComposeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHost = remember { SnackbarHostState() }
+    // 2026-11-14 — gabarits lus dans la composition (sensibles à la configuration), mis en forme à l'annonce,
+    // comme les bandeaux d'envoi partiel de `ThreadScreen`.
+    val ajouteFmt = stringResource(R.string.compose_recipient_added)
+    val ajouteBloqueFmt = stringResource(R.string.compose_recipient_added_blocked)
+    val dejaFmt = stringResource(R.string.compose_recipient_already)
     LaunchedEffect(Unit) {
         viewModel.events.collect { e ->
             when (e) {
                 is ComposeViewModel.Event.ConversationCreated -> onConversationCreated(e.id)
+                // 2026-11-14 (Patrice) — chaque ajout est confirmé. Le bandeau précédent est remplacé, pas empilé :
+                // on ajoute souvent plusieurs contacts d'affilée.
+                is ComposeViewModel.Event.DestinataireAjoute -> annoncer(
+                    snackbarHost,
+                    (if (e.bloque) ajouteBloqueFmt else ajouteFmt).format(e.nom, e.total),
+                    scope,
+                )
+                is ComposeViewModel.Event.DejaChoisi -> annoncer(snackbarHost, dejaFmt.format(e.nom), scope)
             }
         }
     }
@@ -127,18 +148,11 @@ fun ComposeScreen(
                 Text(stringResource(R.string.compose_to_label), style = MaterialTheme.typography.titleSmall)
             }
             if (state.recipients.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    state.recipients.forEach { addr ->
-                        AssistChip(
-                            onClick = { viewModel.removeRecipient(addr) },
-                            label = { Text(addr.raw) },
-                            trailingIcon = { Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        )
-                    }
-                }
+                PucesDestinataires(
+                    destinataires = state.recipients,
+                    onRetirer = viewModel::removeRecipient,
+                    bloques = state.bloques,
+                )
                 Spacer(Modifier.size(8.dp))
             }
             OutlinedTextField(
@@ -263,7 +277,7 @@ fun ComposeScreen(
                         trailingContent = {
                             IconButton(
                                 onClick = {
-                                    viewModel.addRecipient(number)
+                                    viewModel.addRecipient(number, contact.displayName)
                                     viewModel.setQuery("")
                                 },
                                 enabled = number.isNotBlank(),
@@ -277,7 +291,7 @@ fun ComposeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(enabled = number.isNotBlank()) {
-                                viewModel.pickRecipient(number)
+                                viewModel.pickRecipient(number, contact.displayName)
                                 viewModel.setQuery("")
                             },
                     )
@@ -285,4 +299,66 @@ fun ComposeScreen(
             }
         }
     }
+}
+
+/**
+ * Les destinataires choisis, une puce chacun ; toucher une puce la retire.
+ *
+ * 2026-11-14 (signalé par Patrice, création d'un groupe) — **les puces passent à la ligne.** Elles vivaient dans
+ * une `Row`, qui ne passe jamais à la ligne : la ligne pleine, la puce suivante recevait la largeur restante, et
+ * son numéro se repliait caractère par caractère, à la verticale ; la quatrième recevait une largeur nulle. Le
+ * contact était pourtant AJOUTÉ (aucune limite dans `ComposeViewModel`) : invisible, impossible à retirer, il
+ * serait parti dans le groupe. Désormais `FlowRow`, une ligne de texte par puce, une hauteur bornée qui défile
+ * au-delà de [HAUTEUR_MAX_PUCES], et la dernière puce ajoutée amenée en vue.
+ *
+ * @param bloques 2026-11-14 — les destinataires de la liste de blocage (par [PhoneAddress.normalized]) : leur puce
+ *   le dit. Un des 56 contacts de Patrice y figurait sans que rien ne le montre.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun PucesDestinataires(
+    destinataires: List<PhoneAddress>,
+    onRetirer: (PhoneAddress) -> Unit,
+    modifier: Modifier = Modifier,
+    bloques: Set<String> = emptySet(),
+) {
+    val defilement = rememberScrollState()
+    LaunchedEffect(destinataires.size) {
+        // Une image d'attente : la hauteur à faire défiler n'est connue qu'après la mise en page de la puce ajoutée.
+        withFrameNanos { }
+        defilement.animateScrollTo(defilement.maxValue)
+    }
+    FlowRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(max = HAUTEUR_MAX_PUCES)
+            .verticalScroll(defilement)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        destinataires.forEach { addr ->
+            val libelle = if (addr.normalized in bloques) {
+                stringResource(R.string.compose_recipient_blocked, addr.raw)
+            } else {
+                addr.raw
+            }
+            AssistChip(
+                onClick = { onRetirer(addr) },
+                label = { Text(libelle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                trailingIcon = { Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(16.dp)) },
+            )
+        }
+    }
+}
+
+/** Trois rangées de puces environ ; au-delà, la zone défile et la liste des contacts garde sa place. */
+private val HAUTEUR_MAX_PUCES = 152.dp
+
+/**
+ * 2026-11-14 — un bandeau court, qui remplace celui encore affiché : `showSnackbar` met les messages en file, et dix
+ * contacts ajoutés d'affilée défileraient l'un après l'autre longtemps après le dernier geste.
+ */
+private fun annoncer(hote: SnackbarHostState, texte: String, scope: kotlinx.coroutines.CoroutineScope) {
+    hote.currentSnackbarData?.dismiss()
+    scope.launch { hote.showSnackbar(texte, duration = androidx.compose.material3.SnackbarDuration.Short) }
 }
