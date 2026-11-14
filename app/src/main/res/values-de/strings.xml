@@ -432,7 +432,7 @@
     <string name="settings_confirm_send_title">Diese Nachricht senden?</string>
     <string name="settings_delivery_reports">Zustellberichte</string>
     <string name="settings_group_mms">Gruppen-MMS</string>
-    <string name="settings_group_mms_hint">Eine MMS an alle, und jede Antwort kommt an die Gruppe zurück. Nachrichten aus einer Gruppe gehen dann immer als MMS, auch reiner Text. Setzen Sie \"Meine Rufnummer\", damit empfangene Gruppennachrichten Sie aus der Mitgliederliste auslassen können.</string>
+    <string name="settings_group_mms_hint">Eine MMS an alle, und jede Antwort kommt an die Gruppe zurück: Alle Empfänger sehen die Nummern der anderen und erhalten deren Antworten. Nachrichten aus einer Gruppe gehen dann immer als MMS, auch reiner Text. Ausgeschaltet: Jede Person erhält eine eigene SMS und antwortet nur Ihnen. Setzen Sie \"Meine Rufnummer\", damit empfangene Gruppennachrichten Sie aus der Mitgliederliste auslassen können.</string>
     <string name="settings_my_number">Meine Rufnummer</string>
     <string name="settings_my_number_dialog_title">Ihre Rufnummer</string>
     <string name="settings_my_number_dialog_body">Optional. Wenn gesetzt, ersetzt diese Nummer den AOSP-Platzhalter \"insert-address-token\" in der Absenderadresse ausgehender MMS, damit andere SMS-Apps Sie richtig anzeigen. Sie erkennt Sie außerdem unter den Empfängern einer Gruppen-MMS, und Gruppen-MMS braucht sie.</string>

@@ -432,7 +432,7 @@
     <string name="settings_confirm_send_title">¿Enviar este mensaje?</string>
     <string name="settings_delivery_reports">Informes de entrega</string>
     <string name="settings_group_mms">MMS de grupo</string>
-    <string name="settings_group_mms_hint">Un solo MMS para todos, y cada respuesta vuelve al grupo. Los mensajes enviados desde un grupo salen entonces siempre como MMS, texto incluido. Configure «Mi número de teléfono» para que los mensajes de grupo recibidos puedan dejarle fuera de la lista de miembros.</string>
+    <string name="settings_group_mms_hint">Un solo MMS para todos, y cada respuesta vuelve al grupo: todos los destinatarios ven los números de los demás y reciben sus respuestas. Los mensajes enviados desde un grupo salen entonces siempre como MMS, texto incluido. Desactivado: cada persona recibe un SMS aparte y solo le responde a usted. Configure «Mi número de teléfono» para que los mensajes de grupo recibidos puedan dejarle fuera de la lista de miembros.</string>
     <string name="settings_my_number">Mi número de teléfono</string>
     <string name="settings_my_number_dialog_title">Su número de teléfono</string>
     <string name="settings_my_number_dialog_body">Opcional. Si se configura, este número sustituye al marcador AOSP «insert-address-token» en la dirección del remitente de los MMS salientes, para que las demás apps de SMS le muestren correctamente. También sirve para reconocerle entre los destinatarios de un MMS de grupo, y el MMS de grupo lo necesita.</string>

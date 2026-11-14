@@ -432,7 +432,7 @@
     <string name="settings_confirm_send_title">Inviare questo messaggio?</string>
     <string name="settings_delivery_reports">Rapporti di consegna</string>
     <string name="settings_group_mms">MMS di gruppo</string>
-    <string name="settings_group_mms_hint">Un solo MMS a tutti, e ogni risposta torna al gruppo. I messaggi inviati da un gruppo partono allora sempre come MMS, testo compreso. Imposti «Il mio numero di telefono» perché i messaggi di gruppo ricevuti possano escluderla dall\'elenco dei membri.</string>
+    <string name="settings_group_mms_hint">Un solo MMS a tutti, e ogni risposta torna al gruppo: tutti i destinatari vedono i numeri degli altri e ricevono le loro risposte. I messaggi inviati da un gruppo partono allora sempre come MMS, testo compreso. Disattivato: ognuno riceve un SMS separato e risponde solo a lei. Imposti «Il mio numero di telefono» perché i messaggi di gruppo ricevuti possano escluderla dall\'elenco dei membri.</string>
     <string name="settings_my_number">Il mio numero di telefono</string>
     <string name="settings_my_number_dialog_title">Il suo numero di telefono</string>
     <string name="settings_my_number_dialog_body">Facoltativo. Se impostato, questo numero sostituisce il segnaposto AOSP «insert-address-token» nell\'indirizzo del mittente degli MMS in uscita, così le altre app SMS la mostrano correttamente. Serve anche a riconoscerla tra i destinatari di un MMS di gruppo, e l\'MMS di gruppo ne ha bisogno.</string>
