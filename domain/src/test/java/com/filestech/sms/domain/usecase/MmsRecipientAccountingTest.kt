@@ -104,6 +104,7 @@ class MmsRecipientAccountingTest {
             sender = dispatcher,
             settings = DefaultSettings(),
             attachmentStore = PassthroughStore(),
+            simDEnvoi = simDEnvoiNeutre(),
         )
 
         val out = runBlocking {
@@ -135,6 +136,7 @@ class MmsRecipientAccountingTest {
             sender = RecordingDispatcher(),
             settings = DefaultSettings(),
             attachmentStore = PassthroughStore(),
+            simDEnvoi = simDEnvoiNeutre(),
         )
 
         val out = runBlocking {
@@ -160,6 +162,7 @@ class MmsRecipientAccountingTest {
             sender = RecordingDispatcher(),
             settings = DefaultSettings(),
             attachmentStore = PassthroughStore(),
+            simDEnvoi = simDEnvoiNeutre(),
         )
 
         val out = runBlocking {
@@ -190,6 +193,7 @@ class MmsRecipientAccountingTest {
             sender = dispatcher,
             settings = DefaultSettings(),
             attachmentStore = PassthroughStore(),
+            simDEnvoi = simDEnvoiNeutre(),
         )
 
         val out = runBlocking {
@@ -219,6 +223,7 @@ class MmsRecipientAccountingTest {
             sender = RecordingDispatcher(),
             settings = DefaultSettings(),
             attachmentStore = PassthroughStore(),
+            simDEnvoi = simDEnvoiNeutre(),
         )
 
         val out = runBlocking {
@@ -248,6 +253,7 @@ class MmsRecipientAccountingTest {
             sender = RecordingDispatcher(Outcome.Failure(AppError.Telephony("no radio"))),
             settings = DefaultSettings(),
             attachmentStore = PassthroughStore(),
+            simDEnvoi = simDEnvoiNeutre(),
         )
 
         val out = runBlocking {

@@ -35,7 +35,14 @@ class RetrySendMmsGuardTest {
     private val mirror = mockk<OutgoingMessageMirror>()
     private val blocked = mockk<BlockedNumberRepository>()
 
-    private fun useCase() = RetrySendUseCase(repo, sender, mirror, blocked)
+    // 2026-11-10 (v1.30.1) — liste des SIM inconnue (doublure détendue) : la SIM du message passe telle quelle.
+    private fun useCase() = RetrySendUseCase(
+        conversationRepo = repo,
+        sender = sender,
+        mirror = mirror,
+        blockedRepo = blocked,
+        simDEnvoi = SimDEnvoi(mockk(relaxed = true), kotlinx.coroutines.Dispatchers.Unconfined),
+    )
 
     private fun ligne(type: Message.Type) = Message(
         id = 42L,

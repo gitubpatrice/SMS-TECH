@@ -28,6 +28,8 @@ class RetrySendUseCase @Inject constructor(
     private val mirror: OutgoingMessageMirror,
     // v1.27.2 (audit de cohérence 2026-08-04) — cf. la garde de liste noire ci-dessous.
     private val blockedRepo: BlockedNumberRepository,
+    // 2026-11-10 (v1.30.1) — la SIM du message, si elle est encore active ; cf. [SimDEnvoi.valider].
+    private val simDEnvoi: SimDEnvoi,
 ) {
     suspend operator fun invoke(messageId: Long): Outcome<Unit> {
         val msg = conversationRepo.findMessageForResend(messageId)
@@ -93,7 +95,10 @@ class RetrySendUseCase @Inject constructor(
     }
 
     private suspend fun dispatcher(msg: Message, messageId: Long, attempt: Int): Outcome<Unit> {
-        return when (val r = sender.send(messageId, msg.address, msg.body, msg.subId, attempt = attempt)) {
+        // 2026-11-10 (v1.30.1) — la SIM du premier essai, tant qu'elle est là ; sinon celle d'Android, plutôt
+        // qu'un renvoi voué à l'échec sur une carte retirée.
+        val subId = simDEnvoi.valider(msg.subId)
+        return when (val r = sender.send(messageId, msg.address, msg.body, subId, attempt = attempt)) {
             is Outcome.Success -> Outcome.Success(Unit)
             is Outcome.Failure -> {
                 // `attempt` explicite : cet échec-ci est bien celui de la tentative qu'on vient

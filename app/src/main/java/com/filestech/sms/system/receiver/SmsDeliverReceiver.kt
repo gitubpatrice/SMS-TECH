@@ -11,6 +11,7 @@ import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.reaction.IncomingReactionDecoder
 import com.filestech.sms.domain.repository.ConversationRepository
+import com.filestech.sms.domain.sms.HorodatageSmsRecu
 import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -82,6 +83,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
             var salvageAddress: String? = null
             var salvageBody: String? = null
             var salvageTs = 0L
+            var salvageDateSent: Long? = null
             var persistedToSystem = false
             var droppedByBlocklist = false
             try {
@@ -94,7 +96,14 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 if (messages.isEmpty()) return@launch
                 val address = messages.first().displayOriginatingAddress?.stripInvisibleChars()
                     ?: return@launch
-                val ts = messages.firstOrNull()?.timestampMillis ?: System.currentTimeMillis()
+                // 2026-11-11 (issue #89) — daté à son ARRIVÉE, comme un message envoyé l'est à son départ : l'heure
+                // du réseau (`timestampMillis`) datait le message, et un opérateur au décalage horaire mal réglé
+                // le rangeait une heure à côté des réponses. Elle reste son heure d'envoi, cf. [HorodatageSmsRecu].
+                val horodatage = HorodatageSmsRecu.de(
+                    horlogeTelephone = System.currentTimeMillis(),
+                    horodatageReseau = messages.first().timestampMillis,
+                )
+                val ts = horodatage.date
                 // Audit F22: strip bidi overrides + zero-width chars that would let a spam SMS
                 // spoof its visible origin or sneak past content moderation.
                 val body = buildString {
@@ -105,6 +114,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 salvageAddress = address
                 salvageBody = body
                 salvageTs = ts
+                salvageDateSent = horodatage.dateSent
                 // Résolution ici, DANS le `try` : un échec doit passer par le `finally` qui appelle
                 // `pending.finish()`, sinon le broadcast n'est jamais libéré (ANR) et l'exception
                 // remonte au scope applicatif. Et sur le dispatcher IO : c'est `mirrorLazy` qui
@@ -172,7 +182,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                         // Still write the row to the system inbox so other SMS apps on
                         // the device see the message in their history (legal duty as
                         // default SMS app).
-                        val sysUri = telephonyReader.insertInboxSms(address, body, ts, subId)
+                        val sysUri = telephonyReader.insertInboxSms(address, body, ts, horodatage.dateSent, subId)
                         persistedToSystem = true
                         // v1.4.1 (SEC-01) — drop a poison-pill Room row carrying the
                         // same `telephonyUri` so the next [TelephonySyncManager] sweep
@@ -183,6 +193,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                             address = address,
                             telephonyUri = sysUri?.toString(),
                             date = ts,
+                            dateSent = horodatage.dateSent,
                         )
                         // v1.6.1 — fix : poste une notification système pour que
                         // l'expéditeur du message d'origine sache qu'on a réagi à son
@@ -230,12 +241,13 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     // blocklist-drop log just above, which also omits the address).
                     Timber.i("Tapback decoded but no matching outgoing message found")
                 }
-                val uri = telephonyReader.insertInboxSms(address, body, ts, subId)
+                val uri = telephonyReader.insertInboxSms(address, body, ts, horodatage.dateSent, subId)
                 persistedToSystem = true
                 val msgId = mirror.upsertIncomingSms(
                     address = address,
                     body = body,
                     date = ts,
+                    dateSent = horodatage.dateSent,
                     telephonyUri = uri?.toString(),
                     subId = subId,
                 )
@@ -288,7 +300,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     if (addr != null && text != null) {
                         try {
                             val salvaged = telephonyReaderLazy.get()
-                                .insertInboxSms(addr, text, salvageTs, subId)
+                                .insertInboxSms(addr, text, salvageTs, salvageDateSent, subId)
                             Timber.w("SmsDeliverReceiver: SMS salvaged into the system inbox (uri=%s)", salvaged)
                         } catch (t2: Throwable) {
                             Timber.e(t2, "SmsDeliverReceiver: salvage insert failed — the incoming SMS is lost")

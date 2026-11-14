@@ -465,7 +465,8 @@ fun ConversationsScreen(
             val duplicateDisplayNames = state.duplicateDisplayNames
             when {
                 state.isImporting -> ImportingPlaceholder(count = state.importedCount)
-                state.isLoading -> Unit
+                // 2026-11-11 (issue #90) — une attente qui dure se voit : cf. [ChargementDeLaListe].
+                state.isLoading -> ChargementDeLaListe()
                 state.sansAucunResultat(messageHits) -> EmptyState(
                     archived = archived,
                     blocked = blocked,

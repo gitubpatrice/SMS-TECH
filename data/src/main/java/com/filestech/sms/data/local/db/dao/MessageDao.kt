@@ -108,6 +108,14 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE telephony_uri = :uri LIMIT 1")
     suspend fun findByTelephonyUri(uri: String): MessageEntity?
 
+    /**
+     * 2026-11-10 (issue #87) — retire à une ligne son lien vers la base SMS d'Android, quand ce lien désigne
+     * une ligne système qui n'existe plus (cf. `ConversationMirror.insererApresEcritureSysteme`). Le message
+     * reste ; seule disparaît une adresse qui, sinon, ferait effacer chez Android le message d'un autre.
+     */
+    @Query("UPDATE messages SET telephony_uri = NULL WHERE id = :id")
+    suspend fun detacherDuSysteme(id: Long): Int
+
     /** One-shot suspend snapshot used by deletion paths that need each row's telephony URI. */
     @Query("SELECT * FROM messages WHERE conversation_id = :conversationId")
     suspend fun findByConversation(conversationId: Long): List<MessageEntity>

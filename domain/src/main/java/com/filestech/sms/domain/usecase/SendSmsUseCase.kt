@@ -33,6 +33,8 @@ class SendSmsUseCase @Inject constructor(
     private val mirror: OutgoingMessageMirror,
     private val blockedRepo: BlockedNumberRepository,
     private val settings: AppSettingsSource,
+    // 2026-11-10 (v1.30.1) — la SIM qui part, validée ; cf. [SimDEnvoi].
+    private val simDEnvoi: SimDEnvoi,
 ) {
     private val envoi = EnvoiParDestinataire(blockedRepo, mirror)
 
@@ -110,7 +112,8 @@ class SendSmsUseCase @Inject constructor(
         val signature = s.conversations.signature?.takeIf { it.isNotBlank() }
         val finalBody = if (appendSignature && signature != null) "$body\n--\n$signature" else body
         val deliveryReports = s.sending.deliveryReports
-        val effectiveSubId = subId ?: s.sending.defaultSubId
+        // 2026-11-10 (v1.30.1) — et validée : une SIM retirée depuis le réglage ne fait plus échouer l'envoi.
+        val effectiveSubId = simDEnvoi.pourEnvoi(subId, s)
 
         val now = System.currentTimeMillis()
         // v1.28.3 (F21) — un destinataire bloqué laisse une TRACE, dans le miroir local

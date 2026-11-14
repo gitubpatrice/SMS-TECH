@@ -8,6 +8,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.filestech.sms.R
+import com.filestech.sms.system.receiver.RelanceMms
+import com.filestech.sms.system.receiver.RelanceMmsReceiver
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -39,6 +42,19 @@ class MmsFailureNotifierTest {
         shadowOf(contexte as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         coEvery { visibilite.verdictPour(any(), any()) } returns CorrespondentVisibilityPolicy.Verdict.NOMMER
         coEvery { visibilite.ecranVerrouille() } returns CorrespondentVisibilityPolicy.EcranVerrouille.PRIVE
+        // Comme au démarrage de l'appli (`MainApplication`) : sans canal, Android 8+ n'affiche rien.
+        NotificationChannelInitializer(contexte).ensureDefaultChannels()
+    }
+
+    /** Seconde relecture GPT du 2026-11-14 : un canal absent n'affiche rien ; l'appelant ne doit pas croire le contraire. */
+    @Test
+    fun `canal des echecs absent - rien de poste, et l'appelant le sait`() {
+        nm.deleteNotificationChannel(NotificationChannelInitializer.CHANNEL_FAILED)
+
+        val notifier = MmsFailureNotifier(contexte, visibilite)
+        val postee = runBlocking { notifier.notifyFailure(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, "+15551234567") }
+
+        assertThat(postee).isFalse()
     }
 
     private fun poste(
@@ -182,5 +198,211 @@ class MmsFailureNotifierTest {
         }
 
         assertThat(shadowOf(nm).allNotifications).isEmpty()
+    }
+
+    // ── 2026-11-14 — le nouvel essai (courriel : MMS perdus en Wi-Fi, code 3) ──────────────────────────────────
+
+    private fun demande(transactionId: String = "T1") = requireNotNull(
+        RelanceMms.Demande.creer(
+            adresse = "http://mmsc.example/a",
+            transactionId = transactionId,
+            expediteur = "+15551234567",
+            subId = 1,
+            transactionIdOctets = byteArrayOf(1),
+            tentative = 0,
+        ),
+    )
+
+    private fun posteAvecRelance(
+        demande: RelanceMms.Demande,
+        nouvelEssaiPrevu: Boolean,
+        reason: MmsFailureNotifier.Reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+    ): Boolean = runBlocking {
+        MmsFailureNotifier(contexte, visibilite).notifyFailure(
+            reason = reason,
+            senderAddress = "+15551234567",
+            codeAndroid = 3,
+            relance = demande,
+            nouvelEssaiPrevu = nouvelEssaiPrevu,
+        )
+    }
+
+    @Test
+    fun `echec avec essai prevu - le texte l'annonce, le bouton Reessayer redemande CE message`() {
+        val d = demande()
+
+        assertThat(posteAvecRelance(d, nouvelEssaiPrevu = true)).isTrue()
+        val notification = shadowOf(nm).allNotifications.single()
+
+        assertThat(notification.texte()).isEqualTo(
+            contexte.getString(R.string.mms_failure_notification_body_download_retrying, "+15551234567"),
+        )
+        val action = notification.actions.single()
+        assertThat(action.title.toString()).isEqualTo(contexte.getString(R.string.action_retry))
+        val bouton = shadowOf(action.actionIntent).savedIntent
+        assertThat(bouton.component?.className).isEqualTo(RelanceMmsReceiver::class.java.name)
+        assertThat(bouton.action).isEqualTo(RelanceMmsReceiver.ACTION_MANUELLE)
+        assertThat(RelanceMms.Demande.depuis(bouton)?.etiquette).isEqualTo(d.etiquette)
+        assertThat(shadowOf(action.actionIntent).isImmutable).isTrue()
+    }
+
+    /** Elle représente un message qui attend : un tap pour lire les détails ne doit pas arrêter les essais. */
+    @Test
+    fun `echec avec bouton - la notification reste apres un tap, et l'essai automatique la trouve`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true)
+        val notification = shadowOf(nm).allNotifications.single()
+        val notifier = MmsFailureNotifier(contexte, visibilite)
+
+        assertThat(notification.flags and Notification.FLAG_AUTO_CANCEL).isEqualTo(0)
+        assertThat(notifier.relanceAffichee(d.etiquette)).isTrue()
+
+        notifier.retirerRelance(d.etiquette)
+
+        assertThat(shadowOf(nm).allNotifications).isEmpty()
+        assertThat(notifier.relanceAffichee(d.etiquette)).isFalse()
+    }
+
+    /** Plus d'essai automatique : le texte ne promet rien, le bouton reste. */
+    @Test
+    fun `echec sans essai prevu - texte d'echec, bouton quand meme`() {
+        posteAvecRelance(demande(), nouvelEssaiPrevu = false)
+        val notification = shadowOf(nm).allNotifications.single()
+
+        assertThat(notification.texte()).isEqualTo(
+            contexte.getString(R.string.mms_failure_notification_body_download_failed, "+15551234567"),
+        )
+        assertThat(notification.actions).hasLength(1)
+    }
+
+    /** Le tap transmet l'ÉTIQUETTE du message à la fenêtre, qui retrouve par elle le bouton que nous avons créé. */
+    @Test
+    fun `le tap transmet l'etiquette, et la fenetre retrouve le bouton du message`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true)
+        val tap = shadowOf(shadowOf(nm).allNotifications.single().contentIntent).savedIntent
+
+        assertThat(tap.getStringExtra(MmsFailureNotifier.EXTRA_RELANCE)).isEqualTo(d.etiquette)
+        val relance = MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, tap, contexte)
+
+        assertThat(relance).isNotNull()
+        assertThat(RelanceMms.Demande.depuis(shadowOf(relance).savedIntent)?.etiquette).isEqualTo(d.etiquette)
+        // Contrôle négatif : pour un autre motif, rien.
+        assertThat(MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.TOO_LARGE, tap, contexte)).isNull()
+    }
+
+    /**
+     * Avant : une notification par EXPÉDITEUR. Avec un bouton, le second échec aurait remplacé le premier, et
+     * « Réessayer » sur l'un aurait redemandé l'autre.
+     */
+    @Test
+    fun `deux messages du meme expediteur - deux notifications, deux boutons distincts`() {
+        val a = demande("A")
+        val b = demande("B")
+        posteAvecRelance(a, nouvelEssaiPrevu = true)
+        posteAvecRelance(b, nouvelEssaiPrevu = true)
+
+        val etiquettes = shadowOf(nm).allNotifications.map { notification ->
+            val tap = shadowOf(notification.contentIntent).savedIntent
+            val relance = MmsFailureNotifier.relanceDepuisExtras(
+                reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
+                intent = tap,
+                context = contexte,
+            )
+            RelanceMms.Demande.depuis(shadowOf(relance).savedIntent)?.etiquette
+        }
+
+        assertThat(etiquettes).containsExactly(a.etiquette, b.etiquette)
+    }
+
+    /** Contrôle négatif : seul un téléchargement manqué se redemande. */
+    @Test
+    fun `autre motif avec une demande - ni bouton ni etiquette`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true, reason = MmsFailureNotifier.Reason.CARRIER_ERROR)
+        val notification = shadowOf(nm).allNotifications.single()
+
+        assertThat(notification.actions).isNull()
+        assertThat(notification.flags and Notification.FLAG_AUTO_CANCEL).isNotEqualTo(0)
+        assertThat(MmsFailureNotifier(contexte, visibilite).relanceAffichee(d.etiquette)).isFalse()
+    }
+
+    /** Sans notification, l'appelant n'arme aucun essai : il lui faut le savoir. */
+    @Test
+    fun `coffre ou session leurre - rien de poste, et l'appelant le sait`() {
+        coEvery { visibilite.verdictPour(any(), any()) } returns CorrespondentVisibilityPolicy.Verdict.TAIRE
+
+        assertThat(posteAvecRelance(demande(), nouvelEssaiPrevu = true)).isFalse()
+        assertThat(shadowOf(nm).allNotifications).isEmpty()
+    }
+
+    /**
+     * Relecture Claude du 2026-11-14 : le correspondant passe au coffre APRÈS le premier échec. L'essai suivant, qui
+     * échoue aussi, ne peut plus le nommer — et la notification nominative déjà affichée ne doit pas rester.
+     */
+    @Test
+    fun `correspondant passe au coffre depuis - sa notification nominative part`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true)
+        assertThat(shadowOf(nm).allNotifications).hasSize(1)
+
+        coEvery { visibilite.verdictPour(any(), any()) } returns CorrespondentVisibilityPolicy.Verdict.TAIRE
+        // Seconde relecture GPT : même si les notifications ont été coupées entre-temps.
+        shadowOf(nm).setNotificationsEnabled(false)
+        assertThat(posteAvecRelance(d, nouvelEssaiPrevu = true)).isFalse()
+
+        assertThat(shadowOf(nm).allNotifications).isEmpty()
+    }
+
+    /**
+     * Relecture Claude du 2026-11-14 : notifications de l'appli coupées, ou canal des échecs réduit au silence —
+     * `notify` ne lève rien, mais rien ne s'affiche. L'appelant ne doit pas croire la notification postée (il
+     * armerait un essai que sa porte abandonnerait aussitôt).
+     */
+    @Test
+    fun `notifications coupees ou canal muet - rien de poste, et l'appelant le sait`() {
+        // Témoin positif : canal créé, notifications permises — la notification est postée.
+        NotificationChannelInitializer(contexte).ensureDefaultChannels()
+        assertThat(posteAvecRelance(demande("A"), nouvelEssaiPrevu = true)).isTrue()
+
+        shadowOf(nm).setNotificationsEnabled(false)
+        assertThat(posteAvecRelance(demande("B"), nouvelEssaiPrevu = true)).isFalse()
+
+        shadowOf(nm).setNotificationsEnabled(true)
+        nm.deleteNotificationChannel(NotificationChannelInitializer.CHANNEL_FAILED)
+        val muet = android.app.NotificationChannel(
+            NotificationChannelInitializer.CHANNEL_FAILED,
+            "x",
+            NotificationManager.IMPORTANCE_NONE,
+        )
+        nm.createNotificationChannel(muet)
+        assertThat(posteAvecRelance(demande("C"), nouvelEssaiPrevu = true)).isFalse()
+    }
+
+    /**
+     * `MainActivity` est exportée : l'intent peut venir de n'importe qui. Il ne porte qu'une étiquette ; le bouton est
+     * celui que NOUS avons créé pour ce message, ou rien. Un `PendingIntent` glissé dans l'intent n'est plus lu.
+     */
+    @Test
+    fun `intent forge vers la fenetre - etiquette inventee, mal formee ou PendingIntent, rien`() {
+        val cle = MmsFailureNotifier.EXTRA_RELANCE
+        val echec = MmsFailureNotifier.Reason.DOWNLOAD_FAILED
+        val inventee = "a".repeat(64)
+        val notreBouton = RelanceMmsReceiver.intentionManuelle(contexte, demande())
+
+        fun lu(intent: Intent) = MmsFailureNotifier.relanceDepuisExtras(echec, intent, contexte)
+
+        assertThat(lu(Intent("x"))).isNull()
+        assertThat(lu(Intent("x").putExtra(cle, inventee))).isNull()
+        assertThat(lu(Intent("x").putExtra(cle, "../../etc"))).isNull()
+        assertThat(lu(Intent("x").putExtra(cle, notreBouton))).isNull()
+        // Le bouton existe, mais sa notification n'est pas (ou plus) affichée : pas de bouton dans la fenêtre.
+        assertThat(lu(Intent("x").putExtra(cle, demande().etiquette))).isNull()
+        // Témoin positif : la vraie étiquette d'un message dont la notification, et donc le bouton, est là.
+        posteAvecRelance(demande(), nouvelEssaiPrevu = true)
+        assertThat(lu(Intent("x").putExtra(cle, demande().etiquette))).isNotNull()
+        // Le message arrive (sa notification part) : la fenêtre n'offre plus de bouton.
+        MmsFailureNotifier(contexte, visibilite).retirerRelance(demande().etiquette)
+        assertThat(lu(Intent("x").putExtra(cle, demande().etiquette))).isNull()
     }
 }

@@ -97,9 +97,18 @@ fun MessageBubble(
      * .SmishingDetector]) — MessageBubble ne fait que le rendu.
      */
     smishingReasons: List<com.filestech.sms.domain.smishing.SmishingReason> = emptyList(),
+    /**
+     * 2026-11-12 (issue #87) — afficher ou masquer l'heure et l'état, cf. [ActionHeure] : entrée du menu ⋮, et nom
+     * de l'action d'accessibilité du toucher, que l'appelant route vers elle hors échec ([onTap]).
+     */
+    actionHeure: ActionHeure? = null,
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
+    // Le nom que TalkBack annonce pour le toucher. Sur un échec, le toucher relance : pas ce nom-là.
+    val libelleToucher = actionHeure
+        ?.takeIf { message.status != com.filestech.sms.domain.model.Message.Status.FAILED }
+        ?.let { stringResource(it.libelle) }
 
     // Outgoing bubbles use a subtle vertical gradient on top of the primary color — gives the
     // bubble depth without committing to a hard shadow or a custom drawable. Incoming bubbles
@@ -143,6 +152,7 @@ fun MessageBubble(
                 onReact = onReact,
                 starred = message.starred,
                 onToggleStar = onToggleStar,
+                actionHeure = actionHeure,
                 onDelete = onDelete,
             )
         }
@@ -197,11 +207,12 @@ fun MessageBubble(
                         .then(
                             if (onSelectText != null) {
                                 Modifier.combinedClickable(
+                                    onClickLabel = libelleToucher,
                                     onClick = onTap,
                                     onLongClick = onSelectText,
                                 )
                             } else {
-                                Modifier.clickable(onClick = onTap)
+                                Modifier.clickable(onClickLabel = libelleToucher, onClick = onTap)
                             },
                         )
                         .padding(PaddingValues(horizontal = 14.dp, vertical = 10.dp)),
@@ -273,6 +284,7 @@ fun MessageBubble(
                 onReact = onReact,
                 starred = message.starred,
                 onToggleStar = onToggleStar,
+                actionHeure = actionHeure,
                 onDelete = onDelete,
             )
         }

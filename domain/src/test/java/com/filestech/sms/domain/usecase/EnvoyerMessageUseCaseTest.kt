@@ -33,19 +33,22 @@ class EnvoyerMessageUseCaseTest {
     private val mms = RecordingMmsDispatcher()
     private val miroir = NoopMirror()
 
-    private fun routeur(groupMms: Boolean): EnvoyerMessageUseCase {
+    private fun routeur(groupMms: Boolean, bloques: Set<String> = emptySet()): EnvoyerMessageUseCase {
         val reglages = Reglages(groupMms)
+        val liste = if (bloques.isEmpty()) NeverBlocked() else BlockedList(bloques)
         return EnvoyerMessageUseCase(
             sendSms = sendSmsUseCase(settings = reglages, sender = sms, mirror = miroir),
             sendMediaMms = SendMediaMmsUseCase(
                 defaultAppManager = alwaysDefaultSmsApp(),
-                blockedRepo = NeverBlocked(),
+                blockedRepo = liste,
                 mirror = miroir,
                 sender = mms,
                 settings = reglages,
                 attachmentStore = PassthroughAttachmentStore(),
+                simDEnvoi = simDEnvoiNeutre(),
             ),
             settings = reglages,
+            blockedRepo = liste,
         )
     }
 
@@ -97,5 +100,46 @@ class EnvoyerMessageUseCaseTest {
 
         assertThat(sms.sentTexts).hasSize(1)
         assertThat(mms.appels).isEqualTo(0)
+    }
+
+    // ── 2026-11-14 — le groupe de 56 du S24 de Patrice : un membre bloqué, un message parti ailleurs ──────────
+
+    private val trois = groupe + PhoneAddress.of("+33600000003")
+
+    @Test
+    fun `MMS de groupe - les membres bloques sont annonces avant l'envoi`() = runBlocking<Unit> {
+        val ecartes = routeur(groupMms = true, bloques = setOf("+33600000003")).membresEcartesDuGroupe(trois)
+
+        assertThat(ecartes.map { it.raw }).containsExactly("+33600000003")
+    }
+
+    /** Contrôle négatif : en SMS par destinataire, rien ne change de conversation — rien à annoncer ici. */
+    @Test
+    fun `reglage inactif ou destinataire seul - rien a annoncer`() = runBlocking {
+        val bloque = setOf("+33600000001")
+
+        assertThat(routeur(groupMms = false, bloques = bloque).membresEcartesDuGroupe(trois)).isEmpty()
+        assertThat(routeur(groupMms = true, bloques = bloque).membresEcartesDuGroupe(seul)).isEmpty()
+        assertThat(routeur(groupMms = true).membresEcartesDuGroupe(trois)).isEmpty()
+    }
+
+    /** « Envoyé à 1 destinataire(s) » pour un MMS parti à 55 personnes : le rapport compte désormais les personnes. */
+    @Test
+    fun `MMS de groupe - le rapport compte les personnes servies, pas le MMS`() = runBlocking<Unit> {
+        val res = routeur(groupMms = true, bloques = setOf("+33600000003")).invoke(trois, "salut")
+
+        val rapport = (res as Outcome.Success).value
+        assertThat(rapport.dispatched).hasSize(1)
+        assertThat(rapport.servis).isEqualTo(2)
+        assertThat(rapport.blocked.map { it.raw }).containsExactly("+33600000003")
+        assertThat(mms.destinatairesTentes).containsExactly("+33600000001", "+33600000002")
+    }
+
+    /** Contrôle : un message par destinataire, autant de personnes que de messages. */
+    @Test
+    fun `SMS par destinataire - servis vaut le nombre de messages`() = runBlocking {
+        val res = routeur(groupMms = false).invoke(trois, "salut")
+
+        assertThat((res as Outcome.Success).value.servis).isEqualTo(3)
     }
 }

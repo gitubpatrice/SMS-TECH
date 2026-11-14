@@ -104,6 +104,8 @@ fun MediaAttachmentBubble(
     repliedToPreview: com.filestech.sms.ui.components.ReplyQuotePreview? = null,
     /** v1.3.3 #7 — étiquette d'expéditeur ; voir [MessageBubble] pour la sémantique. */
     senderLabel: String? = null,
+    /** 2026-11-12 (issue #87) — l'heure et l'état à la demande, par le menu ⋮ seul : le toucher ouvre la pièce. */
+    actionHeure: ActionHeure? = null,
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
@@ -132,6 +134,7 @@ fun MediaAttachmentBubble(
                 onReact = onReact,
                 starred = message.starred,
                 onToggleStar = onToggleStar,
+                actionHeure = actionHeure,
                 onDelete = onDelete,
             )
         }
@@ -205,6 +208,7 @@ fun MediaAttachmentBubble(
                 onReact = onReact,
                 starred = message.starred,
                 onToggleStar = onToggleStar,
+                actionHeure = actionHeure,
                 onDelete = onDelete,
             )
         }

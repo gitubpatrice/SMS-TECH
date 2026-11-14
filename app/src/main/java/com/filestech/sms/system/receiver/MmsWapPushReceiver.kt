@@ -44,6 +44,7 @@ import timber.log.Timber
  *     download, pictures the reader accepted, and this KDoc promised the user could "re-trigger from
  *     the conversation later". Nothing keeps the message's address: a refused message is LOST. So the
  *     MMSC is told REJECTED ([MmsSender.repondreAuMmsc]), and the user is told why.
+ *   - 2026-11-14 — a FAILED download, unlike a refused one, can be asked for again: see [RelanceMms].
  */
 class MmsWapPushReceiver : BroadcastReceiver() {
 
@@ -150,6 +151,23 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                 val size = parsed.messageSize
                 val sender = parsed.from?.string
                 if (PdusEnAttente.tailleAnnonceeAcceptable(size)) {
+                    // 2026-11-14 — ce que le téléchargement reçoit, et ce qui le redemanderait ; son étiquette passe
+                    // par le registre des essais (seconde relecture Claude) : l'opérateur qui RENVOIE sa notification
+                    // pendant un nouvel essai ne lance pas un second téléchargement du même message, et le résultat
+                    // de celui-ci ne libère plus l'essai en cours.
+                    val demande = RelanceMms.Demande.creer(
+                        adresse = contentLocation,
+                        transactionId = transactionId,
+                        expediteur = sender,
+                        subId = subId,
+                        transactionIdOctets = parsed.transactionId,
+                        tentative = 0,
+                        lanceeA = android.os.SystemClock.elapsedRealtime(),
+                    )
+                    if (demande != null && !RelanceMms.EnCours.prendre(demande.etiquette)) {
+                        Timber.i("MMS: notification de l'operateur renvoyee pendant un essai, ignoree")
+                        return@launch
+                    }
                     val res = downloader.download(contentLocation, transactionId, sender, subId, parsed.transactionId)
                     // v1.6.1 (audit SEC-06) — `loc=%s` retiré : `contentLocation` est
                     // l'URL MMSC opérateur qui peut contenir un token de session ou un
@@ -159,10 +177,17 @@ class MmsWapPushReceiver : BroadcastReceiver() {
                     // 2026-11-06 — le téléchargement n'a même pas DÉMARRÉ (adresse refusée, fichier
                     // impossible à créer, `SmsManager` qui lève) : aucun accusé ne viendra jamais, et
                     // `MmsDownloadedReceiver` ne saura rien de ce message. C'était une perte muette.
+                    // 2026-11-14 — avec le bouton « Réessayer » (fichier impossible à créer, `SmsManager` qui lève :
+                    // plus tard, cela peut passer). Une adresse refusée n'en reçoit pas, cf. [RelanceMms.Demande.creer].
                     if (res is Outcome.Failure) {
+                        // Aucun résultat ne viendra rendre l'essai : il est rendu ici.
+                        demande?.let {
+                            RelanceMms.EnCours.rendre(it.etiquette, lanceA = android.os.SystemClock.elapsedRealtime())
+                        }
                         failureNotifier.notifyFailure(
                             reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
                             senderAddress = sender,
+                            relance = demande,
                         )
                     }
                 } else {

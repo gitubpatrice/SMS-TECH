@@ -15,6 +15,7 @@ import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Contact
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.repository.ConversationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,7 +30,11 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -39,6 +44,8 @@ class ComposeViewModel @Inject constructor(
     private val contactRepo: ContactRepository,
     private val conversationRepo: ConversationRepository,
     @IoDispatcher private val io: CoroutineDispatcher,
+    /** 2026-11-14 — pour marquer « bloqué » la puce d'un destinataire de la liste de blocage. */
+    private val blockedRepo: BlockedNumberRepository,
 ) : ViewModel() {
 
     // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
@@ -49,6 +56,12 @@ class ComposeViewModel @Inject constructor(
         val initialLoaded: Boolean = false,
         /** v1.28.13 — `READ_CONTACTS` refusée : la liste est vide parce qu'on n'a pas pu la lire. */
         val contactsRefused: Boolean = false,
+        /**
+         * 2026-11-14 (groupe de 56 sur le S24 de Patrice) — les destinataires choisis qui figurent dans la liste de
+         * blocage (par [PhoneAddress.normalized]). Un de ses contacts y était, importé de la liste d'Android, sans
+         * que rien ne le montre : sa puce le dit désormais. Le fil, lui, prévient avant d'envoyer.
+         */
+        val bloques: Set<String> = emptySet(),
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -74,6 +87,15 @@ class ComposeViewModel @Inject constructor(
 
     sealed interface Event {
         data class ConversationCreated(val id: Long) : Event
+
+        /**
+         * 2026-11-14 (Patrice : « chaque fois que j'en ajoute un, aucun message ne le confirme ») — un destinataire
+         * vient d'être ajouté : son [nom] (ou son numéro), le [total] des destinataires, et s'il est [bloque].
+         */
+        data class DestinataireAjoute(val nom: String, val total: Int, val bloque: Boolean) : Event
+
+        /** 2026-11-14 — ce destinataire était déjà choisi : rien n'a changé, et on le dit. */
+        data class DejaChoisi(val nom: String) : Event
     }
 
     /**
@@ -123,16 +145,58 @@ class ComposeViewModel @Inject constructor(
         searchInput = q
     }
 
-    fun addRecipient(rawNumber: String) {
-        val addr = PhoneAddress.of(rawNumber)
-        if (addr.normalized.isEmpty()) return
-        if (_state.value.recipients.any { it.normalized == addr.normalized }) return
-        _state.update { it.copy(recipients = it.recipients + addr) }
+    /** @param nom 2026-11-14 — le nom du contact, pour le dire à l'ajout ; à défaut, le numéro. */
+    fun addRecipient(rawNumber: String, nom: String? = null) {
+        ajouter(PhoneAddress.of(rawNumber), nom)
     }
 
     fun removeRecipient(addr: PhoneAddress) {
-        _state.update { it.copy(recipients = it.recipients - addr) }
+        _state.update { it.copy(recipients = it.recipients - addr, bloques = it.bloques - addr.normalized) }
     }
+
+    /**
+     * 2026-11-14 — **ajoute [addr], et le dit.** Signalé par Patrice en créant un groupe de 56 : aucun ajout n'était
+     * confirmé, et la quatrième puce, de largeur nulle, ne se voyait pas — il ne savait pas si son geste avait pris.
+     * L'écran annonce désormais le nom, le total, et un numéro de la liste de blocage (sa puce le marque aussi :
+     * même test que l'envoi, `BlockedNumberRepository.isBlocked` ; une lecture impossible ne marque rien, le fil
+     * prévient de toute façon avant un MMS de groupe). Un destinataire déjà choisi n'est pas ajouté deux fois, et
+     * on le dit plutôt que de ne rien faire.
+     *
+     * @return `true` si [addr] a été ajouté.
+     */
+    private fun ajouter(addr: PhoneAddress, nom: String?): Boolean {
+        if (addr.normalized.isEmpty()) return false
+        val libelle = nom?.takeIf { it.isNotBlank() } ?: addr.raw
+        if (_state.value.recipients.any { it.normalized == addr.normalized }) {
+            events.tryEmit(Event.DejaChoisi(libelle))
+            return false
+        }
+        // Le total au moment de L'AJOUT, pas de l'annonce (relecture Claude) : deux ajouts rapides annonçaient tous
+        // deux « 2 au total ».
+        val total = _state.updateAndGet { it.copy(recipients = it.recipients + addr) }.recipients.size
+        viewModelScope.launch {
+            // Une annonce après l'autre, dans l'ordre des ajouts : chaque lecture de la liste de blocage suspend, et
+            // deux lectures concurrentes pouvaient finir dans le désordre. `Mutex` sert dans l'ordre d'arrivée, et
+            // chaque coroutine le demande avant toute suspension (`Main.immediate`).
+            annonces.withLock {
+                val bloque = runCatchingCancellable { withContext(io) { blockedRepo.isBlocked(addr.raw) } }
+                    .onFailure { Timber.w(it, "Compose: liste de blocage illisible") }
+                    .getOrDefault(false)
+                // Toujours choisi ? Retiré pendant la lecture, il n'y a plus de puce à marquer ni d'ajout à annoncer.
+                val apres = _state.updateAndGet { s ->
+                    val choisi = s.recipients.any { it.normalized == addr.normalized }
+                    if (choisi && bloque) s.copy(bloques = s.bloques + addr.normalized) else s
+                }
+                if (apres.recipients.any { it.normalized == addr.normalized }) {
+                    events.tryEmit(Event.DestinataireAjoute(libelle, total, bloque))
+                }
+            }
+        }
+        return true
+    }
+
+    /** 2026-11-14 — met les annonces d'ajout en file, dans l'ordre des ajouts, cf. [ajouter]. */
+    private val annonces = Mutex()
 
     /**
      * v1.3.11 (F2) — "tap-to-pick" UX: when the picker is empty (the common single-recipient
@@ -144,17 +208,17 @@ class ComposeViewModel @Inject constructor(
      * Returns `true` when the tap triggered the navigation (caller can use this to dismiss
      * the keyboard / clear the query field), `false` when it just appended a chip.
      */
-    fun pickRecipient(rawNumber: String): Boolean {
+    fun pickRecipient(rawNumber: String, nom: String? = null): Boolean {
         val addr = PhoneAddress.of(rawNumber)
         if (addr.normalized.isEmpty()) return false
-        val wasEmpty = _state.value.recipients.isEmpty()
-        if (_state.value.recipients.none { it.normalized == addr.normalized }) {
+        if (_state.value.recipients.isEmpty() && !modeGroupe) {
+            // Le raccourci : la conversation s'ouvre, l'ouverture tient lieu de confirmation.
             _state.update { it.copy(recipients = it.recipients + addr) }
-        }
-        if (wasEmpty && !modeGroupe) {
             createConversation()
             return true
         }
+        // 2026-11-14 — sinon une puce de plus, annoncée (cf. [ajouter]).
+        ajouter(addr, nom)
         return false
     }
 

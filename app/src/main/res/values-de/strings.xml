@@ -154,6 +154,7 @@
     <string name="conversations_archived_empty">Keine archivierten Unterhaltungen.</string>
     <string name="conversations_importing_title">Ihre Nachrichten werden importiert</string>
     <string name="conversations_importing_body">Ihre vorhandenen SMS werden gelesen — das geschieht nur einmal.</string>
+    <string name="conversations_loading">Unterhaltungen werden geladen…</string>
     <string name="conversations_importing_count">%1$d Nachrichten importiert…</string>
     <string name="conversations_delete_confirm_title">Diese Unterhaltung löschen?</string>
     <string name="conversations_delete_confirm_body">Alle Nachrichten dieser Unterhaltung werden endgültig von diesem Gerät entfernt. Andere Unterhaltungen sind nicht betroffen.</string>
@@ -431,7 +432,7 @@
     <string name="settings_confirm_send_title">Diese Nachricht senden?</string>
     <string name="settings_delivery_reports">Zustellberichte</string>
     <string name="settings_group_mms">Gruppen-MMS</string>
-    <string name="settings_group_mms_hint">Eine MMS an alle, und jede Antwort kommt an die Gruppe zurück. Nachrichten aus einer Gruppe gehen dann immer als MMS, auch reiner Text. Setzen Sie \"Meine Rufnummer\", damit empfangene Gruppennachrichten Sie aus der Mitgliederliste auslassen können.</string>
+    <string name="settings_group_mms_hint">Eine MMS an alle, und jede Antwort kommt an die Gruppe zurück: Alle Empfänger sehen die Nummern der anderen und erhalten deren Antworten. Nachrichten aus einer Gruppe gehen dann immer als MMS, auch reiner Text. Ausgeschaltet: Jede Person erhält eine eigene SMS und antwortet nur Ihnen. Setzen Sie \"Meine Rufnummer\", damit empfangene Gruppennachrichten Sie aus der Mitgliederliste auslassen können.</string>
     <string name="settings_my_number">Meine Rufnummer</string>
     <string name="settings_my_number_dialog_title">Ihre Rufnummer</string>
     <string name="settings_my_number_dialog_body">Optional. Wenn gesetzt, ersetzt diese Nummer den AOSP-Platzhalter \"insert-address-token\" in der Absenderadresse ausgehender MMS, damit andere SMS-Apps Sie richtig anzeigen. Sie erkennt Sie außerdem unter den Empfängern einer Gruppen-MMS, und Gruppen-MMS braucht sie.</string>
@@ -651,6 +652,8 @@
     <string name="settings_signature_placeholder">z. B. Pat</string>
     <string name="action_star">Markieren</string>
     <string name="action_unstar">Markierung entfernen</string>
+    <string name="action_show_time">Uhrzeit und Status anzeigen</string>
+    <string name="action_hide_time">Uhrzeit und Status ausblenden</string>
     <string name="reaction_picker_other">Anderes Emoji</string>
     <string name="reaction_picker_other_title">Eigenes Emoji</string>
     <string name="reaction_picker_other_body">Emoji eingeben oder einfügen</string>
@@ -767,6 +770,7 @@
     <string name="about_permissions_title">Berechtigungen, die wir verwenden</string>
     <string name="about_security_title">Sicherheit &amp; Grenzen</string>
     <string name="about_security_body">SMS und MMS laufen unverschlüsselt über das Netz des Anbieters — das ist eine Grenze des Protokolls, keine Entscheidung. SMS Tech schützt nur, was auf Ihrem Gerät gespeichert ist. Für Ende-zu-Ende-verschlüsselte Nachrichten verwenden Sie Signal oder Matrix.</string>
+    <string name="about_thanks_body">Danke an alle, die einen Fehler melden, eine neue Version testen oder eine Idee vorschlagen: Mit Ihrer Hilfe wird SMS Tech besser.</string>
     <string name="about_credits_body">Erstellt von %1$s. Oberfläche inspiriert von den Bewegungsprinzipien von Material 3. Gebaut mit Kotlin, Compose, Hilt, Room und SQLCipher.</string>
     <string name="about_legal_body">© %1$s %2$s. Veröffentlicht unter der Apache License 2.0.</string>
     <string name="about_source_code">Quellcode</string>
@@ -826,6 +830,12 @@
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
     <string name="send_partial">An %1$d Empfänger gesendet; %2$d konnten nicht erreicht werden.</string>
     <string name="send_partial_blocked">An %1$d Empfänger gesendet; %2$d übersprungen, weil Sie sie blockiert haben.</string>
+    <string name="thread_group_blocked_title">Blockierter Kontakt in dieser Gruppe</string>
+    <string name="thread_group_blocked_body">In Ihrer Sperrliste: %1$s.\n\nDiese Nachricht geht nur an die %2$d anderen Mitglieder und erscheint in einer Gruppenunterhaltung ohne die blockierten Kontakte.</string>
+    <string name="compose_recipient_blocked">%1$s · blockiert</string>
+    <string name="compose_recipient_added">Hinzugefügt: %1$s (insgesamt %2$d)</string>
+    <string name="compose_recipient_added_blocked">Hinzugefügt: %1$s (insgesamt %2$d). Diese Nummer steht in Ihrer Sperrliste: Sie erhält Ihre Nachrichten nicht.</string>
+    <string name="compose_recipient_already">%1$s ist bereits in der Liste</string>
 
     <!-- v1.14.8 ARCH-M2 — thread snackbars (i18n) — extracted from hardcoded VM strings. -->
     <string name="snack_thread_max_duration">Grenze erreicht: %1$d s</string>
@@ -976,6 +986,7 @@
     <!-- 2026-11-06 — no longer promises "MMS settings" (there are none) nor a retry (none is possible): the tap opens the explanation below. -->
     <string name="mms_failure_notification_body_too_large">Nachricht von %1$s ist zu groß, um empfangen zu werden (%2$d KB). Tippen für Details.</string>
     <string name="mms_failure_notification_body_download_failed">Die MMS von %1$s konnte nicht heruntergeladen werden. Tippen für Details.</string>
+    <string name="mms_failure_notification_body_download_retrying">Die MMS von %1$s konnte noch nicht heruntergeladen werden. SMS Tech versucht es erneut. Tippen für Details.</string>
     <string name="mms_failure_notification_body_media_not_saved">Eine Datei der MMS von %1$s konnte nicht gespeichert werden. Tippen für Details.</string>
     <string name="mms_failure_notification_body_carrier_error">Ihr Mobilfunkanbieter konnte die MMS von %1$s nicht zustellen. Tippen für Details.</string>
     <string name="mms_failure_notification_body_unknown_sender">einem unbekannten Kontakt</string>
@@ -985,6 +996,8 @@
     <string name="mms_failure_dialog_body_carrier_error">Ihr Mobilfunkanbieter meldet, dass er eine an Sie gesendete Multimedia-Nachricht nicht zustellen konnte, zum Beispiel weil sie abgelaufen ist, bevor sie heruntergeladen werden konnte.\n\nBitten Sie den Absender, sie erneut zu senden.</string>
     <string name="mms_failure_dialog_storage_settings">Speicher</string>
     <string name="mms_failure_dialog_body_download_failed">Eine an Sie gesendete Multimedia-Nachricht konnte nicht von Ihrem Mobilfunkanbieter heruntergeladen werden. MMS werden in der Regel über mobile Daten übertragen: Prüfen Sie, ob Sie Empfang haben und mobile Daten eingeschaltet sind oder ob Ihr Telefon MMS bei ausgeschalteten mobilen Daten zulässt.\n\nSMS Tech kann den Download nicht selbst wiederholen. Ihr Anbieter sendet die Nachricht möglicherweise erneut; andernfalls bitten Sie den Absender, sie noch einmal zu senden.</string>
+    <string name="mms_failure_dialog_body_download_failed_retry">Eine an Sie gesendete Multimedia-Nachricht konnte nicht von Ihrem Mobilfunkanbieter heruntergeladen werden. MMS werden in der Regel über mobile Daten übertragen, auch wenn WLAN eingeschaltet ist: Prüfen Sie, ob Sie Empfang haben und mobile Daten eingeschaltet sind oder ob Ihr Telefon MMS bei ausgeschalteten mobilen Daten zulässt.\n\nAuf manchen Telefonen schlägt die MMS-Verbindung fehl, solange WLAN eingeschaltet ist. Schalten Sie in diesem Fall WLAN kurz aus und tippen Sie dann auf „Erneut versuchen“.\n\nNach einem vorübergehenden Fehler versucht SMS Tech es auch selbst erneut, solange die Benachrichtigung angezeigt wird. Wenn nichts hilft, bitten Sie den Absender, die Nachricht noch einmal zu senden.</string>
+    <string name="mms_failure_retry_started">Die MMS wird erneut heruntergeladen…</string>
     <!-- 2026-11-06 — line under the text above when Android returned a code. %1$d = its MMS error code (SmsManager.MMS_ERROR_*), %2$d = the HTTP status of the carrier's MMS server. -->
     <string name="mms_failure_dialog_android_error">Android-Fehlercode: %1$d</string>
     <string name="mms_failure_dialog_android_error_http">Android-Fehlercode: %1$d (HTTP %2$d)</string>
@@ -1087,4 +1100,10 @@
         <item quantity="other">%1$d Tage</item>
     </plurals>
     <string name="duration_days_hours">%1$d T %2$d Std.</string>
+    <!-- 2026-11-10 (v1.30.1) - Wahl der Sende-SIM, ab zwei SIMs angezeigt. -->
+    <string name="thread_sim_change">SIM ändern</string>
+    <string name="thread_sim_selected">Ausgewählt</string>
+    <string name="settings_default_sim_title">SIM zum Senden</string>
+    <string name="settings_default_sim_android">Wie Android</string>
+    <string name="settings_default_sim_hint">Wird für automatische Nachrichten (Notfallmodus, Safety call) und für Unterhaltungen verwendet, die noch keine SIM genutzt haben. In einer Unterhaltung wird die SIM über dem Eingabefeld verwendet: standardmäßig die der letzten Nachricht. Tippen Sie darauf, um sie zu ändern. Ein Notfallalarm geht nur über die hier gewählte SIM: Hat sie kein Netz, wird die andere nicht versucht.</string>
 </resources>

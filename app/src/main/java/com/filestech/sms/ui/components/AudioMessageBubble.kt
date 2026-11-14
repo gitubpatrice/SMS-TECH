@@ -86,6 +86,8 @@ fun AudioMessageBubble(
     showTimestamp: Boolean = false,
     /** v1.3.3 #7 — étiquette d'expéditeur ; voir [MessageBubble] pour la sémantique. */
     senderLabel: String? = null,
+    /** 2026-11-12 (issue #87) — l'heure et l'état à la demande, par le menu ⋮ seul : le toucher lance la lecture. */
+    actionHeure: ActionHeure? = null,
 ) {
     val isOut = message.isOutgoing
     val cs = MaterialTheme.colorScheme
@@ -151,6 +153,7 @@ fun AudioMessageBubble(
                 onForward = onForward,
                 starred = message.starred,
                 onToggleStar = onToggleStar,
+                actionHeure = actionHeure,
                 onDelete = onDelete,
             )
         }
@@ -315,6 +318,7 @@ fun AudioMessageBubble(
                 onForward = onForward,
                 starred = message.starred,
                 onToggleStar = onToggleStar,
+                actionHeure = actionHeure,
                 onDelete = onDelete,
             )
         }

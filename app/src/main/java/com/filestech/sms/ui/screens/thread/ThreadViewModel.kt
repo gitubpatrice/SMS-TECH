@@ -8,12 +8,14 @@ import com.filestech.sms.core.ext.asEvents
 import com.filestech.sms.core.ext.oneShotEvents
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.sms.SmsSegmentCounter
 import com.filestech.sms.data.voice.VoicePlaybackController
 import com.filestech.sms.data.voice.VoiceRecorder
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.Message
+import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.repository.SetReactionResult
 import com.filestech.sms.domain.settings.AppSettings
@@ -77,6 +79,8 @@ class ThreadViewModel @Inject constructor(
     private val appLock: com.filestech.sms.security.AppLockManager,
     // 2026-11-06 (issue #76) — reconnaître « Mon numéro » parmi les destinataires d'un message.
     private val phoneIdentity: com.filestech.sms.data.sms.PhoneIdentity,
+    // 2026-11-10 (v1.30.1) — les SIM du téléphone, pour le choix de la SIM d'envoi.
+    private val simsActives: com.filestech.sms.domain.sender.SimsActives,
 ) : ViewModel() {
 
     /** Live playback state, surfaced for the composer's preview UI. */
@@ -268,6 +272,43 @@ class ThreadViewModel @Inject constructor(
          * pas apparaître (preserve l'illusion app SMS ordinaire).
          */
         val isPanicDecoy: Boolean = false,
+        /**
+         * 2026-11-10 (v1.30.1) — les SIM actives, par emplacement. Le choix de SIM ne s'affiche qu'à partir
+         * de deux ; vide tant qu'elles ne sont pas lues, ou si la permission Téléphone est refusée.
+         */
+        val sims: List<com.filestech.sms.domain.model.SimActive> = emptyList(),
+        /**
+         * 2026-11-10 (v1.30.1) — la SIM par laquelle partira le prochain envoi de ce fil : celle qu'affiche le
+         * composeur, et celle que reçoivent les cinq envois (texte, pièces jointes, vocal, programmé,
+         * réaction). `null` avec moins de deux SIM : Android choisit, comme avant. Cf. [recalculerSim].
+         */
+        val simEnvoi: Int? = null,
+        /**
+         * 2026-11-14 — un envoi en MMS de groupe attend que l'utilisateur accepte d'écarter les membres bloqués,
+         * cf. [EnvoiSansBloques]. Accepter VAUT confirmation : la confirmation d'envoi habituelle ne suit pas.
+         */
+        val envoiSansBloques: EnvoiSansBloques? = null,
+    )
+
+    /** 2026-11-14 — le chemin d'envoi qu'une confirmation [EnvoiSansBloques] tient en suspens. */
+    enum class SuiteEnvoi { TEXTE, PIECES_JOINTES, VOCAL, PROGRAMMATION }
+
+    /**
+     * 2026-11-14 (groupe de 56 sur le S24 de Patrice) — **prévenir avant qu'un MMS de groupe n'écarte un membre
+     * bloqué.** Le message part alors aux seuls [servis], et dans la conversation de ces membres, pas dans celle-ci
+     * (`EnvoiParDestinataire.enGroupe`) : Patrice a vu son groupe rester vide et un second apparaître, sans savoir
+     * qu'un de ses contacts figurait dans la liste de blocage importée d'Android. Après l'envoi, l'écran ouvre la
+     * conversation où le message est parti ([Event.OuvrirConversation]).
+     *
+     * @property bloques les membres écartés, par leur nom de contact ou, à défaut, leur numéro.
+     * @property programmeA l'échéance d'un envoi programmé ([SuiteEnvoi.PROGRAMMATION]) : la règle s'y applique à
+     *   l'heure dite, l'avertissement vient donc à la programmation (relecture Claude).
+     */
+    data class EnvoiSansBloques(
+        val bloques: List<String>,
+        val servis: Int,
+        val suite: SuiteEnvoi,
+        val programmeA: Long? = null,
     )
 
     /** Staged attachment awaiting user confirmation in the composer. */
@@ -326,6 +367,12 @@ class ThreadViewModel @Inject constructor(
          * pourrait envoyer un emoji obsolète).
          */
         data class RequestReactionConfirm(val messageId: Long, val emoji: String) : Event
+
+        /**
+         * 2026-11-14 — le message vient de partir dans une AUTRE conversation : celle des membres non bloqués d'un
+         * groupe, cf. [EnvoiSansBloques]. L'écran la remplace par elle.
+         */
+        data class OuvrirConversation(val conversationId: Long) : Event
     }
 
     private val _state = MutableStateFlow(UiState())
@@ -343,6 +390,15 @@ class ThreadViewModel @Inject constructor(
     private var recorderJob: Job? = null
 
     /**
+     * 2026-11-14 — la vérification des membres bloqués d'un envoi est en cours (elle suspend). Posé et lu sur le fil
+     * principal, de façon synchrone, par les gardes contre le double appui de [send] et [sendVoiceMms].
+     */
+    private var verificationAvantEnvoi = false
+
+    /** 2026-11-14 — une programmation est en cours, cf. [scheduleSend]. Fil principal seulement. */
+    private var programmationEnCours = false
+
+    /**
      * v1.6.1 PERF-01 / v1.6.2 BUGFIX — snapshot chaud des AppSettings.
      *
      * **Bug v1.6.1** : la version précédente utilisait `stateIn(viewModelScope,
@@ -358,6 +414,64 @@ class ThreadViewModel @Inject constructor(
      * tout au long de la vie du processus, zero-I/O, sans race.
      */
     private val cachedSettings: StateFlow<AppSettings> get() = settings.state
+
+    /**
+     * 2026-11-10 (v1.30.1) — l'état sauvegardé de l'écran. La SIM choisie au composeur y vit : un ViewModel
+     * survit à la rotation, pas à la mort du processus en arrière-plan, fréquente sur un téléphone d'entrée
+     * de gamme. Sans lui, la SIM choisie redevenait en silence celle de l'historique au retour dans le fil
+     * (relecture Gemini du 2026-11-10).
+     */
+    private val etatSauve: SavedStateHandle = savedStateHandle
+
+    /** 2026-11-10 (v1.30.1) — la SIM choisie au composeur pendant cette visite ; `null` = pas de choix. */
+    private var simChoisie: Int?
+        get() = etatSauve[CLE_SIM_CHOISIE]
+        set(valeur) {
+            etatSauve[CLE_SIM_CHOISIE] = valeur
+        }
+
+    /** 2026-11-10 (v1.30.1) — la SIM SMS d'Android, lue avec la liste des SIM. */
+    private var simAndroid: Int? = null
+
+    /**
+     * 2026-11-10 (v1.30.1) — recalcule [UiState.simEnvoi] : le choix fait au composeur s'il désigne encore une
+     * SIM active, sinon la règle de [com.filestech.sms.domain.usecase.ChoixDeSim] (SIM du dernier message,
+     * réglage, SIM d'Android, première SIM). Synchrone, sur le fil principal, comme toute écriture de
+     * l'état : deux recalculs ne peuvent pas se croiser.
+     */
+    private fun recalculerSim() {
+        _state.update { s ->
+            val choisie = simChoisie?.takeIf { id -> s.sims.any { it.subId == id } }
+            val sim = choisie ?: com.filestech.sms.domain.usecase.ChoixDeSim.pourConversation(
+                actives = s.sims,
+                historique = com.filestech.sms.domain.usecase.ChoixDeSim.historique(s.messages),
+                reglage = cachedSettings.value.sending.defaultSubId,
+                simAndroid = simAndroid,
+            )
+            if (sim == s.simEnvoi) s else s.copy(simEnvoi = sim)
+        }
+    }
+
+    /** 2026-11-10 (v1.30.1) — la lecture des SIM lancée à l'ouverture du fil, cf. [simPourEnvoi]. */
+    private var lectureSims: Job? = null
+
+    /**
+     * 2026-11-10 (v1.30.1) — la SIM du prochain envoi, une fois la liste des SIM lue. Un envoi fait dans les
+     * millisecondes qui suivent l'ouverture du fil (depuis un partage, par exemple) partait sinon par le réglage
+     * ou par Android, puis la pastille affichait une autre SIM (relecture Claude du 2026-11-10). L'attente est
+     * bornée : une lecture qui gèle ne bloque pas l'envoi.
+     */
+    private suspend fun simPourEnvoi(): Int? {
+        withTimeoutOrNull(ATTENTE_LECTURE_SIMS_MS) { lectureSims?.join() }
+        return _state.value.simEnvoi
+    }
+
+    /** 2026-11-10 (v1.30.1) — l'utilisateur choisit la SIM d'envoi au composeur, pour cette visite du fil. */
+    fun choisirSim(subId: Int) {
+        if (_state.value.sims.none { it.subId == subId }) return
+        simChoisie = subId
+        recalculerSim()
+    }
 
     /**
      * v1.11.0 audit P1 — recompute smishing verdicts sur IO dispatcher. Le
@@ -419,6 +533,8 @@ class ThreadViewModel @Inject constructor(
             settings.state.collect { snapshot ->
                 val enabled = snapshot.security.smishingDetectionEnabled
                 _state.update { it.copy(smishingDetectionEnabled = enabled) }
+                // 2026-11-10 (v1.30.1) — la « SIM d'envoi par défaut » peut avoir changé.
+                recalculerSim()
                 // Audit P1 : recompute sur IO lorsque le toggle change.
                 if (enabled) {
                     recomputeSmishingVerdicts(_state.value.messages)
@@ -495,6 +611,9 @@ class ThreadViewModel @Inject constructor(
                     lastMessageAt = window.lastMessageAt,
                 )
             }
+            // 2026-11-10 (v1.30.1) — un message reçu sur l'autre SIM change la SIM de réponse, sauf si une SIM a
+            // été choisie au composeur pendant la visite : ce choix l'emporte.
+            recalculerSim()
             // v1.11.0 audit P1 — recompute les verdicts smishing sur IO
             // dispatcher quand la liste de messages change (ajout, suppression,
             // edit). Le calcul reste limité aux INCOMING messages qui n'ont
@@ -507,6 +626,19 @@ class ThreadViewModel @Inject constructor(
                 markRead.invoke(conversationId)
             }
         }.launchIn(viewModelScope)
+
+        // 2026-11-10 (v1.30.1) — les SIM, lues une fois par visite et hors du fil principal (appel binder).
+        // Une SIM retirée pendant la visite est rattrapée à l'envoi (`SimDEnvoi`).
+        lectureSims = viewModelScope.launch {
+            val (sims, android) = withContext(io) {
+                com.filestech.sms.core.result
+                    .runCatchingCancellable { simsActives.lister() to simsActives.simSmsDAndroid() }
+                    .getOrDefault(emptyList<com.filestech.sms.domain.model.SimActive>() to null)
+            }
+            simAndroid = android
+            _state.update { it.copy(sims = sims) }
+            recalculerSim()
+        }
 
         // Best-effort: drop yesterday's orphan recordings from the cache on screen open.
         voiceRecorder.pruneOld()
@@ -558,8 +690,20 @@ class ThreadViewModel @Inject constructor(
         if (!hasAttachments && body.isEmpty()) return
         // v1.26.1 (audit H7) — garde en vol, calqué sur celui du chemin vocal. Sans lui, un
         // double appui rapide produisait deux SMS (ou deux MMS) réellement envoyés et facturés.
-        if (_state.value.isSending) return
+        // 2026-11-14 (relecture Claude) — et pendant la vérification des membres bloqués, qui SUSPEND (réglages, liste
+        // de blocage) avant que `isSending` ne soit posé : sans ce second verrou, posé ici même, de façon synchrone, un
+        // double appui dans un groupe envoyait deux MMS.
+        if (_state.value.isSending || verificationAvantEnvoi) return
+        verificationAvantEnvoi = true
         viewModelScope.launch {
+            // 2026-11-14 — un membre bloqué serait écarté du MMS de groupe : prévenir d'abord.
+            val suite = if (hasAttachments) SuiteEnvoi.PIECES_JOINTES else SuiteEnvoi.TEXTE
+            val attendre = try {
+                demanderSiBloques(suite)
+            } finally {
+                verificationAvantEnvoi = false
+            }
+            if (attendre) return@launch
             // v1.28.3 (F30) — la confirmation se lit AVANT de router, pour les deux chemins.
             //
             // Le réglage s'appelle `confirmBeforeBroadcast` en interne mais s'affiche
@@ -615,6 +759,70 @@ class ThreadViewModel @Inject constructor(
     }
 
     /**
+     * 2026-11-14 — ouvre la confirmation [EnvoiSansBloques] si le prochain envoi, en MMS de groupe, écarterait des
+     * membres bloqués ; `true` si l'envoi doit attendre la réponse. Une lecture impossible de la liste de blocage ne
+     * retient pas l'envoi : celui-ci appliquera lui-même la règle, comme avant.
+     */
+    private suspend fun demanderSiBloques(suite: SuiteEnvoi, programmeA: Long? = null): Boolean {
+        val conv = _state.value.conversation ?: return false
+        val ecartes = runCatchingCancellable { envoyer.membresEcartesDuGroupe(conv.addresses) }
+            .onFailure { timber.log.Timber.w(it, "membres bloques du groupe illisibles") }
+            .getOrNull()
+            .orEmpty()
+        if (ecartes.isEmpty()) return false
+        val noms = ecartes.map { a -> _state.value.memberNames[a.raw] ?: a.raw }
+        _state.update {
+            it.copy(envoiSansBloques = EnvoiSansBloques(noms, conv.addresses.size - ecartes.size, suite, programmeA))
+        }
+        return true
+    }
+
+    /**
+     * 2026-11-14 — l'utilisateur accepte d'envoyer sans les membres bloqués : l'envoi suspendu part, et lui seul pourra
+     * suivre son message dans une autre conversation (`apresAvertissement`, cf. [suivreSiAilleurs]).
+     */
+    fun confirmerEnvoiSansBloques() {
+        val attente = _state.value.envoiSansBloques ?: return
+        _state.update { it.copy(envoiSansBloques = null) }
+        viewModelScope.launch {
+            when (attente.suite) {
+                SuiteEnvoi.TEXTE -> {
+                    val body = _state.value.draft.trim()
+                    if (body.isNotEmpty() && !_state.value.isSending) doSend(body, apresAvertissement = true)
+                }
+                SuiteEnvoi.PIECES_JOINTES ->
+                    if (!_state.value.isSending) dispatchPendingAttachments(apresAvertissement = true)
+                SuiteEnvoi.VOCAL -> if (!_state.value.isSendingVoice) doSendVoice(apresAvertissement = true)
+                // Un envoi programmé part plus tard, d'un autre écran : rien à suivre ici.
+                SuiteEnvoi.PROGRAMMATION -> attente.programmeA?.let { programmer(it) }
+            }
+        }
+    }
+
+    /** 2026-11-14 — l'utilisateur renonce : rien ne part, brouillon, pièces jointes et enregistrement restent. */
+    fun annulerEnvoiSansBloques() {
+        _state.update { it.copy(envoiSansBloques = null) }
+    }
+
+    /**
+     * 2026-11-14 — un MMS de groupe dont des membres bloqués ont été écartés est rangé dans la conversation des
+     * autres : si ce n'est pas celle-ci, l'écran l'ouvre. `true` si c'est le cas — le bandeau d'envoi partiel est
+     * alors inutile, la confirmation [EnvoiSansBloques] ayant déjà tout dit.
+     *
+     * Seulement [apresAvertissement] (relecture Claude) : sans fenêtre acceptée, rien n'a été dit. En SMS par
+     * destinataire, par exemple, le message rendu est celui d'un destinataire, rangé dans SA conversation
+     * individuelle : l'écran y serait parti à tort, en taisant le bandeau. Sans avertissement, le bandeau parle.
+     */
+    private suspend fun suivreSiAilleurs(rapport: SendReport, apresAvertissement: Boolean): Boolean {
+        if (!apresAvertissement || rapport.blocked.isEmpty()) return false
+        val id = rapport.dispatched.singleOrNull() ?: return false
+        val ailleurs = runCatchingCancellable { repo.findMessageById(id)?.conversationId }.getOrNull()
+        if (ailleurs == null || ailleurs == conversationId) return false
+        _events.tryEmit(Event.OuvrirConversation(ailleurs))
+        return true
+    }
+
+    /**
      * v1.15.1 — Programme l'envoi du draft courant pour une date/heure future. Le draft est
      * vidé après scheduling réussi (cohérent avec le comportement `send()` standard) ; l'user
      * peut consulter / annuler depuis Settings → Messages programmés.
@@ -648,65 +856,93 @@ class ThreadViewModel @Inject constructor(
             ))
             return
         }
+        // 2026-11-14 (seconde relecture GPT) — un double appui programmait deux fois le même message. Le verrou est
+        // posé ici, de façon synchrone, et tenu jusqu'à la fin de la programmation.
+        if (programmationEnCours) return
+        programmationEnCours = true
         viewModelScope.launch {
-            val conv = _state.value.conversation
-            // Les destinataires sont ceux de la conversation courante (cohérent avec sendSms).
-            // `conv.addresses` est la liste normalisée. Si conv est null (cas extrême : avant
-            // hydratation), on bail proprement.
-            val recipients = conv?.addresses ?: emptyList()
-            if (recipients.isEmpty()) {
-                _events.tryEmit(Event.ShowSnackbar(
-                    context.getString(com.filestech.sms.R.string.thread_schedule_failed),
-                    isError = true,
-                ))
-                return@launch
-            }
-            val effectiveSubId = cachedSettings.value.sending.defaultSubId
-            // v1.26.0 — les pieces jointes en attente partent AVEC l'envoi programme.
-            //
-            // Elles etaient purement ignorees : on pouvait joindre une photo, programmer, et
-            // seul le texte partait a l'heure dite — la photo restant dans le composeur, ce qui
-            // laissait croire qu'elle suivrait. `ScheduleMessageUseCase` les rend durables avant
-            // d'enregistrer, sans quoi le fichier aurait disparu bien avant l'echeance.
-            val pending = _state.value.pendingAttachments
-            val payloads = pending.map { p ->
-                SendMediaMmsUseCase.AttachmentPayload(file = p.file, mimeType = p.mimeType)
-            }
-            val revisionEnvoyee = draftRevision
-            val r = scheduleMessage(
-                conversationId = conversationId,
-                addresses = recipients,
-                body = body,
-                whenEpochMillis = epochMillis,
-                subId = effectiveSubId,
-                attachments = payloads,
-            )
-            when (r) {
-                is com.filestech.sms.core.result.Outcome.Success -> {
-                    // Vide le draft ET les pieces jointes retenues : elles appartiennent
-                    // desormais a l'envoi programme. Les laisser dans le composeur ferait croire
-                    // qu'elles sont encore a envoyer, et un envoi immediat les expedierait une
-                    // seconde fois.
-                    _state.update { it.copy(pendingAttachments = it.pendingAttachments - pending.toSet()) }
-                    // v1.28.3 (F22) — même garde que sur les deux chemins d'envoi : la fenêtre
-                    // est plus étroite ici (aucune attente radio), mais le motif est le même et
-                    // il ne doit pas rester un chemin qui efface sans regarder.
-                    effacerBrouillonSiIntact(revisionEnvoyee)
-                    _events.tryEmit(Event.ShowSnackbar(
-                        context.getString(com.filestech.sms.R.string.thread_schedule_success),
-                    ))
-                }
-                is com.filestech.sms.core.result.Outcome.Failure -> {
-                    _events.tryEmit(Event.ShowSnackbar(
-                        context.getString(com.filestech.sms.R.string.thread_schedule_failed),
-                        isError = true,
-                    ))
-                }
+            try {
+                // 2026-11-14 (relecture Claude) — à l'heure dite, un MMS de groupe écartera les membres bloqués et
+                // partira dans une autre conversation, sans personne devant l'écran : on le dit maintenant.
+                if (demanderSiBloques(SuiteEnvoi.PROGRAMMATION, programmeA = epochMillis)) return@launch
+                programmer(epochMillis)
+            } finally {
+                programmationEnCours = false
             }
         }
     }
 
-    private suspend fun doSend(body: String) {
+    /** La programmation elle-même, après les vérifications de [scheduleSend] (et, s'il y a lieu, l'avertissement). */
+    private suspend fun programmer(epochMillis: Long) {
+        // 2026-11-14 (seconde relecture Claude) — l'échéance a pu passer pendant que l'avertissement restait ouvert :
+        // même refus qu'à la saisie, plutôt qu'un envoi immédiat que personne n'a confirmé comme tel.
+        if (epochMillis <= System.currentTimeMillis()) {
+            _events.tryEmit(Event.ShowSnackbar(
+                context.getString(com.filestech.sms.R.string.thread_schedule_invalid_past),
+                isError = true,
+            ))
+            return
+        }
+        val body = _state.value.draft.trim()
+        val conv = _state.value.conversation
+        // Les destinataires sont ceux de la conversation courante (cohérent avec sendSms).
+        // `conv.addresses` est la liste normalisée. Si conv est null (cas extrême : avant
+        // hydratation), on bail proprement.
+        val recipients = conv?.addresses ?: emptyList()
+        if (recipients.isEmpty()) {
+            _events.tryEmit(Event.ShowSnackbar(
+                context.getString(com.filestech.sms.R.string.thread_schedule_failed),
+                isError = true,
+            ))
+            return
+        }
+        // 2026-11-10 (v1.30.1) — la SIM qu'affiche le composeur ; `null` (une seule SIM) laisse l'envoi
+        // programmé retomber, à l'heure dite, sur le réglage puis sur Android (`SimDEnvoi`).
+        val effectiveSubId = simPourEnvoi()
+        // v1.26.0 — les pieces jointes en attente partent AVEC l'envoi programme.
+        //
+        // Elles etaient purement ignorees : on pouvait joindre une photo, programmer, et
+        // seul le texte partait a l'heure dite — la photo restant dans le composeur, ce qui
+        // laissait croire qu'elle suivrait. `ScheduleMessageUseCase` les rend durables avant
+        // d'enregistrer, sans quoi le fichier aurait disparu bien avant l'echeance.
+        val pending = _state.value.pendingAttachments
+        val payloads = pending.map { p ->
+            SendMediaMmsUseCase.AttachmentPayload(file = p.file, mimeType = p.mimeType)
+        }
+        val revisionEnvoyee = draftRevision
+        val r = scheduleMessage(
+            conversationId = conversationId,
+            addresses = recipients,
+            body = body,
+            whenEpochMillis = epochMillis,
+            subId = effectiveSubId,
+            attachments = payloads,
+        )
+        when (r) {
+            is com.filestech.sms.core.result.Outcome.Success -> {
+                // Vide le draft ET les pieces jointes retenues : elles appartiennent
+                // desormais a l'envoi programme. Les laisser dans le composeur ferait croire
+                // qu'elles sont encore a envoyer, et un envoi immediat les expedierait une
+                // seconde fois.
+                _state.update { it.copy(pendingAttachments = it.pendingAttachments - pending.toSet()) }
+                // v1.28.3 (F22) — même garde que sur les deux chemins d'envoi : la fenêtre
+                // est plus étroite ici (aucune attente radio), mais le motif est le même et
+                // il ne doit pas rester un chemin qui efface sans regarder.
+                effacerBrouillonSiIntact(revisionEnvoyee)
+                _events.tryEmit(Event.ShowSnackbar(
+                    context.getString(com.filestech.sms.R.string.thread_schedule_success),
+                ))
+            }
+            is com.filestech.sms.core.result.Outcome.Failure -> {
+                _events.tryEmit(Event.ShowSnackbar(
+                    context.getString(com.filestech.sms.R.string.thread_schedule_failed),
+                    isError = true,
+                ))
+            }
+        }
+    }
+
+    private suspend fun doSend(body: String, apresAvertissement: Boolean = false) {
         val conv = _state.value.conversation ?: return
         val replyTargetId = _state.value.replyingTo?.id
         // v1.28.3 (F22) — capturée AVANT l'envoi : c'est elle qui dira, au retour, si le
@@ -728,7 +964,8 @@ class ThreadViewModel @Inject constructor(
             val res = withContext(NonCancellable) {
                 // v1.28.4 — le routeur decide : MMS de groupe si le reglage est actif et que
                 // la conversation est un groupe, SMS sinon (cf. [EnvoyerMessageUseCase]).
-                envoyer.invoke(conv.addresses, body, replyToMessageId = replyTargetId)
+                // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
+                envoyer.invoke(conv.addresses, body, subId = simPourEnvoi(), replyToMessageId = replyTargetId)
             }
             when (res) {
                 is Outcome.Success -> {
@@ -744,10 +981,11 @@ class ThreadViewModel @Inject constructor(
                     // groupe, vivent chacune dans la conversation individuelle de son
                     // destinataire, c'est-à-dire là où l'expéditeur n'allait pas regarder.
                     val rapport = res.value
-                    if (!rapport.isComplete) {
+                    // 2026-11-14 — `servis` : des personnes ; et un message parti ailleurs y est suivi.
+                    if (!suivreSiAilleurs(rapport, apresAvertissement) && !rapport.isComplete) {
                         _events.tryEmit(
                             Event.PartialSend(
-                                sent = rapport.dispatched.size,
+                                sent = rapport.servis,
                                 failed = rapport.failed.size,
                                 blocked = rapport.blocked.size,
                             ),
@@ -961,7 +1199,9 @@ class ThreadViewModel @Inject constructor(
             return DispatchOutcome.DedupSkipped
         }
         recentlySentReactionFor[messageId] = ReactionDispatch(emoji = emoji, timestamp = now)
-        return when (val res = sendReaction(messageId, emoji, format)) {
+        // 2026-11-10 (v1.30.1) — la réaction part par la SIM du fil, comme une réponse : depuis l'autre SIM, elle
+        // viendrait d'un numéro que le correspondant ne relie pas à cette conversation.
+        return when (val res = sendReaction(messageId, emoji, format, subId = simPourEnvoi())) {
             is Outcome.Success -> DispatchOutcome.Sent
             is Outcome.Failure -> {
                 _events.tryEmit(Event.SendError(res.error))
@@ -1118,7 +1358,7 @@ class ThreadViewModel @Inject constructor(
      * Si `pendingAttachments` est vide ET draft non vide : route vers le SMS texte
      * standard (pas via cette méthode — `doSend` est l'autre chemin pour texte pur).
      */
-    private suspend fun dispatchPendingAttachments() {
+    private suspend fun dispatchPendingAttachments(apresAvertissement: Boolean = false) {
         // v1.3.4 M2 — snapshot des PJ au moment du send. Si l'user ajoute une N+1ᵉ PJ
         // pendant que le dispatch est in-flight (1-5 s), elle ne sera PAS wipée par
         // le clear post-Success — on filtre uniquement les PJ effectivement envoyées.
@@ -1148,7 +1388,8 @@ class ThreadViewModel @Inject constructor(
         _state.update { it.copy(isSending = true) }
         val res = try {
             withContext(NonCancellable) {
-                envoyer.invoke(conv.addresses, textBody, attachments = payloads)
+                // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
+                envoyer.invoke(conv.addresses, textBody, attachments = payloads, subId = simPourEnvoi())
             }
         } finally {
             _state.update { it.copy(isSending = false) }
@@ -1168,12 +1409,13 @@ class ThreadViewModel @Inject constructor(
                 // brouillon efface pendant qu'un destinataire n'a rien recu, c'est le meme
                 // silence que sur la voie SMS ; le corriger d'un seul cote serait reproduire le
                 // motif que cette relecture entiere combat.
-                if (res.value.isComplete) {
-                    _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
-                } else {
-                    _events.tryEmit(
+                // 2026-11-14 — même suite que le texte : `servis`, et suivre un message parti ailleurs.
+                when {
+                    suivreSiAilleurs(res.value, apresAvertissement) -> Unit
+                    res.value.isComplete -> _events.tryEmit(Event.ShowSnackbar(snackAttachSent()))
+                    else -> _events.tryEmit(
                         Event.PartialSend(
-                            sent = res.value.dispatched.size,
+                            sent = res.value.servis,
                             failed = res.value.failed.size,
                             blocked = res.value.blocked.size,
                         ),
@@ -1626,8 +1868,17 @@ class ThreadViewModel @Inject constructor(
     fun sendVoiceMms() {
         if (_state.value.conversation == null) return
         if (_state.value.voice !is VoiceState.Reviewing) return
-        if (_state.value.isSendingVoice) return
+        // 2026-11-14 — même verrou synchrone que [send] pendant la vérification des membres bloqués.
+        if (_state.value.isSendingVoice || verificationAvantEnvoi) return
+        verificationAvantEnvoi = true
         viewModelScope.launch {
+            // 2026-11-14 — même prévention que le texte et les pièces jointes.
+            val attendre = try {
+                demanderSiBloques(SuiteEnvoi.VOCAL)
+            } finally {
+                verificationAvantEnvoi = false
+            }
+            if (attendre) return@launch
             val confirm = cachedSettings.value.sending.confirmBeforeBroadcast
             if (confirm) {
                 _state.update { it.copy(pendingVoiceConfirm = true) }
@@ -1649,7 +1900,7 @@ class ThreadViewModel @Inject constructor(
         _state.update { it.copy(pendingVoiceConfirm = false) }
     }
 
-    private suspend fun doSendVoice() {
+    private suspend fun doSendVoice(apresAvertissement: Boolean = false) {
         val conv = _state.value.conversation ?: return
         val reviewing = _state.value.voice as? VoiceState.Reviewing ?: return
         _state.update { it.copy(isSendingVoice = true) }
@@ -1661,16 +1912,19 @@ class ThreadViewModel @Inject constructor(
             audioFile = reviewing.file,
             mimeType = reviewing.mimeType,
             durationMs = reviewing.durationMs,
+            // 2026-11-10 (v1.30.1) — par la SIM qu'affiche le composeur.
+            subId = simPourEnvoi(),
         )) {
             is Outcome.Success -> {
                 _state.update { it.copy(voice = VoiceState.Idle, isSendingVoice = false) }
                 // v1.28.3 (F21) — idem sur la voie vocale, troisieme chemin d'envoi.
-                if (res.value.isComplete) {
-                    _events.tryEmit(Event.ShowSnackbar(snackVoiceSent()))
-                } else {
-                    _events.tryEmit(
+                // 2026-11-14 — et, comme les deux autres, `servis` et le suivi d'un message parti ailleurs.
+                when {
+                    suivreSiAilleurs(res.value, apresAvertissement) -> Unit
+                    res.value.isComplete -> _events.tryEmit(Event.ShowSnackbar(snackVoiceSent()))
+                    else -> _events.tryEmit(
                         Event.PartialSend(
-                            sent = res.value.dispatched.size,
+                            sent = res.value.servis,
                             failed = res.value.failed.size,
                             blocked = res.value.blocked.size,
                         ),
@@ -1976,6 +2230,12 @@ class ThreadViewModel @Inject constructor(
         context.getString(com.filestech.sms.R.string.snack_block_partial, blocked, total)
 
     private companion object {
+        /** 2026-11-10 (v1.30.1) — la clé de [simChoisie] dans l'état sauvegardé. */
+        const val CLE_SIM_CHOISIE: String = "simChoisie"
+
+        /** 2026-11-10 (v1.30.1) — l'attente maximale de la lecture des SIM avant un envoi. */
+        const val ATTENTE_LECTURE_SIMS_MS: Long = 2_000L
+
         /**
          * Messages loaded per page. 200 comfortably fills any screen, so the first paint looks
          * complete, while keeping the per-emission cost flat on very long threads: before v1.24.0

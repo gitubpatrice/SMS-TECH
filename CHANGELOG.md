@@ -3,6 +3,89 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.30.1] — 2026-11-14
+
+### Added
+
+- **Choose the SIM for sending** (reported by e-mail, TECNO Spark 40 Pro, Android 16, two SIMs). With two
+  SIMs or more, the SIM a message will go through is shown above the text field ("SIM 2 · carrier"), and
+  tapping it opens the list. A conversation answers by the SIM of its last message, so by the SIM that
+  received it, and a choice made there is carried by the message sent. A reply from a notification follows
+  the same rule, and so do pictures, voice messages, scheduled messages and reactions. Settings > Sending >
+  SIM for sending covers automatic messages (emergency mode, Safety call) and conversations that have not
+  used a SIM yet; "Same as Android" keeps the previous behaviour. An emergency alert goes only through that
+  SIM and does not try the other one, as the setting's help says. When Android is set to ask every time
+  and neither the conversation nor the setting names a SIM, SIM 1 is shown and used until another is
+  picked. Listing the SIMs needs the Phone permission, which SMS Tech asks for at start: without it, no
+  SIM is shown or offered. The setting existed internally, but no screen wrote it, while About and
+  PERMISSIONS.md announced the choice. With one SIM, nothing changes.
+- **The time and status of every message** (issue #87). The line "time • status" under a message was shown only on
+  the first message of a burst (more than 5 minutes after the previous one) and on a failure: three SMS sent in a row
+  showed one "Delivered", under the first, and the other two looked undelivered. It now also shows under the last
+  message sent in a series (the next message is received, more than 5 minutes later, on another day, or none yet);
+  a new day also starts a new burst, as its date separator already did for the bubbles. For any other
+  message, tapping a text bubble shows or hides it; a failed message keeps tap-to-retry. The bubble menu (⋮) has a
+  "Show time and status" entry on text, voice and picture messages alike — the only way for voice messages and
+  pictures, whose tap plays them or opens them. The tap is named for screen readers. Links stay tappable: turning
+  them off on a failed message is only there because a tap on a link could also resend it.
+- **A received MMS that failed to download is tried again** (reported by e-mail on 1.30.0, de-Googled
+  phone). On Wi-Fi, some received MMS failed with "Android error code: 3": Android's MMS service needs the
+  carrier's MMS connection over mobile data, and when it cannot get it, it gives up without another try.
+  SMS Tech dropped the message, although the carrier keeps it until it expires. A temporary failure is now
+  tried again three times (after 2, 10 and 30 minutes) while its notification is shown, and the notification
+  and its explanation have a Retry button. Swiping the notification away, or the panic wipe, stops the
+  attempts, and a download started before a panic wipe brings nothing back after it. One attempt runs at a
+  time per message. Nothing is written to storage: the attempts live in Android's pending intents and end
+  with a restart, like the notification. The explanation suggests turning Wi-Fi off for a moment.
+- **Each recipient added to a new group is confirmed** ("Added: name (N in total)"), a contact already in
+  the list says so, and a number from the block list is announced and its chip marked "blocked".
+- **A thank-you note in About**, above "Created by", to everyone who reports a problem, tests a new version
+  or suggests an idea. It names no one: nobody agreed to appear in the app.
+
+### Fixed
+
+- **Every recipient of a new group is visible.** Recipients were shown on a single line that never wrapped:
+  from the 4th one, a recipient was added but invisible, so it could not be checked or removed. They now
+  wrap onto new lines, the area scrolls past three lines, and the last one added is brought into view.
+- **A group member who is blocked is announced before sending**, and the screen then follows the message.
+  A group MMS is not sent to blocked members and, since 1.28.5, goes into the conversation of the members
+  actually reached: a group of 56 with one number from Android's block list sent to 55, in a new group,
+  and left the original group empty without a word. The warning names the blocked members; a message
+  scheduled for such a group is warned about when it is scheduled.
+- **"Sent to 1 recipient(s)" for a group MMS sent to 55 people**: the banner counted the MMS, not people.
+
+- **A SIM no longer in the phone no longer makes sending fail.** The SIM asked for (setting, scheduled
+  message, retry) is checked against the active SIMs; when it is gone, Android's SMS SIM is used.
+- **A sent message always appears in its conversation** (issue #87, Android 8). When the address Android
+  gave to the new copy was still held by an older message in SMS Tech, the app's insert was ignored: the
+  conversation list showed the message, the conversation did not, and its delivery report and failure were
+  lost. The same conflict on a received SMS returned the older message, and the new one was not written in
+  the app. The older message now loses its stale link, and the new one is written. Android's `sms` table
+  has no `AUTOINCREMENT`: the id of its most recent row is reused once that row is deleted. A row is taken
+  for the same message only with the same direction, time, address and text; when in doubt the message is
+  written, since a duplicate can be deleted and a lost message cannot.
+- **A copy Android refused to keep is no longer recorded as one** (issue #87). A refused write does not
+  fail, it returns the address followed by `/0`; that was stored as a real address, and the next refused
+  write collided with it. An outgoing MMS is no longer written under `content://mms/0`.
+- **The conversation list no longer stays blank at launch** (issue #90, Motorola edge 2025, Android 16).
+  Each time the list opened, SMS Tech looked up a contact name for every conversation without one, one call
+  to Android's contacts per conversation, inside a database write. A new list cannot show its first result
+  while a write is in progress (Room sets up its change tracking through the write connection), so the list
+  waited for every lookup. Numbers that are not contacts never get a name, so the cost came back at every
+  launch. The lookups now run outside the write, and a name given meanwhile is kept. While the list loads,
+  a progress indicator now shows after 0.4 s instead of an empty screen. The same pass gave a group without
+  a name the name of its first member only; it now gets its members' names, as when a group is created.
+- **A received SMS is dated when it arrives** (issue #89). It took the time written by the carrier's
+  message center, while a sent message takes the phone's clock, and conversations are ordered by that date.
+  That time is a local time with a time-zone offset; a carrier that does not update the offset for daylight
+  saving time put its messages an hour away from the user's replies. The carrier's time is kept as the
+  sent time, as Android's own messaging app does. Messages received before this version keep their date:
+  their arrival time was never recorded. MMS are not affected: their date is a universal time.
+
+### Not fixed yet
+
+- Issue #87, messages shown twice: the cause is not found; the reporter's answers are awaited.
+
 ## [1.30.0] — 2026-11-08
 
 ### Added
