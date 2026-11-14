@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -141,7 +144,13 @@ fun ComposeScreen(
         // et les contacts sous le clavier — le plus souvent celui qu'on cherchait, en bas de la
         // liste courte — étaient inatteignables. Le fil et la feuille de transfert le faisaient
         // déjà ; cet écran, non.
-        Column(modifier = Modifier.fillMaxSize().padding(padding).imePadding()) {
+        //
+        // 2026-11-14 (signalé par Patrice, mesuré sur le S9) — `consumeWindowInsets(padding)` : l'écart du `Scaffold`
+        // contient déjà la barre de navigation, et l'encart du clavier la contient aussi (il se mesure depuis le bas
+        // de l'écran). Sans cette consommation, la barre était comptée deux fois : la liste s'arrêtait à y = 1056 au
+        // lieu de 1200 (bord du clavier), 144 px vides, et le contact cherché restait à moitié caché. Le fil fait de
+        // même avec `navigationBarsPadding()` avant `imePadding()`.
+        Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -330,11 +339,16 @@ internal fun PucesDestinataires(
     // Partir de zéro : la première composition compte comme une croissance, et la dernière puce est amenée en vue
     // (mesuré sur émulateur API 34 : sans cela, six puces dépassaient la hauteur et la dernière restait cachée).
     val tailles = remember { intArrayOf(0, 0) }
-    LaunchedEffect(destinataires.size, bloques.size) {
+    // Mesuré sur le S9 le 2026-11-14 : clavier ouvert, trois rangées de puces ne laissaient presque plus de place à la
+    // liste, et la ligne « Ajouter au groupe » du numéro tapé passait sous le clavier. Pendant la saisie, la zone se
+    // réduit à une rangée, qui défile ; clavier fermé, elle reprend sa hauteur.
+    val clavierOuvert = WindowInsets.isImeVisible
+    LaunchedEffect(destinataires.size, bloques.size, clavierOuvert) {
         val grandit = destinataires.size > tailles[0] || bloques.size > tailles[1]
         tailles[0] = destinataires.size
         tailles[1] = bloques.size
-        if (!grandit) return@LaunchedEffect
+        // La zone rétrécit à l'ouverture du clavier : la dernière puce est ramenée en vue, elle aussi.
+        if (!grandit && !clavierOuvert) return@LaunchedEffect
         // Une image d'attente : la hauteur à faire défiler n'est connue qu'après la mise en page de la puce ajoutée.
         withFrameNanos { }
         defilement.animateScrollTo(defilement.maxValue)
@@ -342,7 +356,7 @@ internal fun PucesDestinataires(
     FlowRow(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = HAUTEUR_MAX_PUCES)
+            .heightIn(max = if (clavierOuvert) HAUTEUR_PUCES_CLAVIER_OUVERT else HAUTEUR_MAX_PUCES)
             .verticalScroll(defilement)
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -364,6 +378,9 @@ internal fun PucesDestinataires(
 
 /** Trois rangées de puces environ ; au-delà, la zone défile et la liste des contacts garde sa place. */
 private val HAUTEUR_MAX_PUCES = 152.dp
+
+/** Une rangée de puces (cible tactile de 48 dp et sa marge) quand le clavier est ouvert, cf. [PucesDestinataires]. */
+private val HAUTEUR_PUCES_CLAVIER_OUVERT = 56.dp
 
 /**
  * 2026-11-14 — un bandeau court, qui REMPLACE le précédent : `showSnackbar` met les messages en file, et dix contacts
