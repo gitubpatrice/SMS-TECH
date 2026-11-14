@@ -6,6 +6,7 @@ import com.filestech.sms.domain.repository.ContactRepository
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -95,6 +96,40 @@ class ComposeAjoutTest {
 
         assertThat(vm.state.value.recipients).hasSize(1)
         assertThat(annonces.last()).isEqualTo(ComposeViewModel.Event.DejaChoisi("Hélène"))
+    }
+
+    /**
+     * Relecture Claude du 2026-11-14 : chaque lecture de la liste de blocage suspend ; deux ajouts rapides pouvaient
+     * être annoncés dans le désordre, et tous deux « 2 au total ». Ici la lecture du second finit AVANT celle du premier.
+     */
+    @Test
+    fun `deux ajouts rapides - annonces dans l'ordre, chacune avec son total`() = runTest(dispatcher) {
+        val lectureA = CompletableDeferred<Boolean>()
+        val lectureB = CompletableDeferred<Boolean>()
+        val contacts = mockk<ContactRepository> { coEvery { listAll() } returns emptyList() }
+        val liste = mockk<BlockedNumberRepository> {
+            coEvery { isBlocked("+33600000001") } coAnswers { lectureA.await() }
+            coEvery { isBlocked("+33600000002") } coAnswers { lectureB.await() }
+        }
+        val vm = ComposeViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("groupe" to true)),
+            contactRepo = contacts,
+            conversationRepo = mockk(relaxed = true),
+            io = dispatcher,
+            blockedRepo = liste,
+        )
+        val annonces = mutableListOf<ComposeViewModel.Event>()
+        backgroundScope.launch { vm.events.collect { annonces += it } }
+
+        vm.addRecipient("+33600000001", "Hélène")
+        vm.addRecipient("+33600000002", "Lucie")
+        lectureB.complete(false)
+        lectureA.complete(false)
+
+        assertThat(annonces).containsExactly(
+            ComposeViewModel.Event.DestinataireAjoute("Hélène", 1, bloque = false),
+            ComposeViewModel.Event.DestinataireAjoute("Lucie", 2, bloque = false),
+        ).inOrder()
     }
 
     /** Retirer une puce retire aussi sa marque « bloqué ». */

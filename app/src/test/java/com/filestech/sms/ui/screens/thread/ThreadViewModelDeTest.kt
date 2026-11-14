@@ -12,6 +12,7 @@ import com.filestech.sms.domain.sender.SimsActives
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.SendingSettings
 import com.filestech.sms.domain.usecase.EnvoyerMessageUseCase
+import com.filestech.sms.domain.usecase.ScheduleMessageUseCase
 import com.filestech.sms.security.AppLockManager
 import io.mockk.every
 import io.mockk.mockk
@@ -33,6 +34,7 @@ internal fun threadViewModelDeTest(
     historique: List<Message> = emptyList(),
     sims: List<SimActive> = emptyList(),
     etat: SavedStateHandle = SavedStateHandle(mapOf("conversationId" to 7L)),
+    scheduleMessage: ScheduleMessageUseCase = mockk(relaxed = true),
     repo: ConversationRepository.() -> Unit = {},
 ): ThreadViewModel {
     val conversation = Conversation(
@@ -82,7 +84,7 @@ internal fun threadViewModelDeTest(
         toggleConvState = mockk(relaxed = true),
         contactRepo = mockk(relaxed = true),
         sendReaction = mockk(relaxed = true),
-        scheduleMessage = mockk(relaxed = true),
+        scheduleMessage = scheduleMessage,
         incomingShare = mockk(relaxed = true),
         activeConversationTracker = mockk(relaxed = true),
         context = mockk(relaxed = true),

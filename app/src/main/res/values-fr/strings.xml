@@ -817,7 +817,7 @@
     <string name="send_partial">Envoyé à %1$d destinataire(s) ; %2$d n\'ont pas pu être joints.</string>
     <string name="send_partial_blocked">Envoyé à %1$d destinataire(s) ; %2$d écarté(s) car vous les avez bloqués.</string>
     <string name="thread_group_blocked_title">Contact bloqué dans ce groupe</string>
-    <string name="thread_group_blocked_body">Dans votre liste de blocage : %1$s.\n\nCe message partira seulement aux %2$d autres membres, dans une conversation de groupe sans les contacts bloqués, qui s\'ouvrira après l\'envoi.</string>
+    <string name="thread_group_blocked_body">Dans votre liste de blocage : %1$s.\n\nCe message partira seulement aux %2$d autres membres, et il apparaîtra dans une conversation de groupe sans les contacts bloqués.</string>
     <string name="compose_recipient_blocked">%1$s · bloqué</string>
     <string name="compose_recipient_added">Ajouté : %1$s (%2$d au total)</string>
     <string name="compose_recipient_added_blocked">Ajouté : %1$s (%2$d au total). Ce numéro est dans votre liste de blocage : il ne recevra pas vos messages.</string>

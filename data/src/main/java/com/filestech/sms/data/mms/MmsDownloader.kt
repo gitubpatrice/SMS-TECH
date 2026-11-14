@@ -112,6 +112,9 @@ class MmsDownloader @Inject constructor(
                 putExtra(EXTRA_CONTENT_LOCATION, contentLocation)
                 putExtra(EXTRA_NOTIFICATION_TRANSACTION_ID, transactionIdOctets)
                 putExtra(EXTRA_TENTATIVE, tentative)
+                // 2026-11-14 — l'heure du lancement : un résultat arrivé après un effacement d'urgence, pour un
+                // téléchargement lancé avant lui, ne ressuscite rien (`DernierEffacement`).
+                putExtra(EXTRA_LANCE_A, System.currentTimeMillis())
             }
         val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
         // 2026-11-06 — MUTABLE, sans quoi le statut HTTP d'un échec n'arrive jamais : cf.
@@ -206,6 +209,9 @@ class MmsDownloader @Inject constructor(
 
         /** 2026-11-14 — le rang du téléchargement : 0 à l'annonce, puis celui du nouvel essai (`RelanceMms`). */
         const val EXTRA_TENTATIVE: String = "com.filestech.sms.extra.MMS_DOWNLOAD_ATTEMPT"
+
+        /** 2026-11-14 — l'heure (ms) à laquelle ce téléchargement a été lancé, cf. `DernierEffacement`. */
+        const val EXTRA_LANCE_A: String = "com.filestech.sms.extra.MMS_DOWNLOAD_STARTED_AT"
 
         /**
          * v1.3.10 (SEC-05) — `http://` ou `https://`, rien d'autre. 2026-11-06 — sortie du corps de

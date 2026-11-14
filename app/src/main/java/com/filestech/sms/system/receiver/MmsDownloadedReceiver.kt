@@ -7,6 +7,9 @@ import android.content.Intent
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import com.filestech.sms.core.io.LectureBornee
+import com.filestech.sms.core.result.runCatchingCancellable
+import com.filestech.sms.core.util.DernierEffacement
+import com.filestech.sms.data.local.db.dao.MessageDao
 import com.filestech.sms.data.mms.LecteurRetrieveConf
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.data.mms.MmsSender
@@ -77,6 +80,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // 2026-11-06 — la réponse au MMSC. ⚠️ Résolu DANS la coroutine : il tire `AppDatabase`.
         fun mmsSender(): MmsSender
 
+        // 2026-11-14 — « ce message est-il déjà arrivé ? », avant de dire qu'il ne l'est pas. ⚠️ Dans la coroutine.
+        fun messageDao(): MessageDao
+
         @ApplicationScope
         fun applicationScope(): CoroutineScope
     }
@@ -97,6 +103,8 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         // 2026-11-14 — de quoi redemander ce message s'il n'arrive pas, cf. [RelanceMms] : exactement ce que le
         // téléchargement a reçu, et son rang. `null` sans adresse http(s) : rien à redemander.
         val tentative = RelanceMms.tentativeDepuis(intent)
+        // 2026-11-14 — l'heure du lancement de ce téléchargement, cf. `DernierEffacement` ; 0 si absente.
+        val lanceA = intent.getLongExtra(MmsDownloader.EXTRA_LANCE_A, 0L)
         val relance = RelanceMms.Demande.creer(
             adresse = contentLocation,
             transactionId = intent.getStringExtra(MmsDownloader.EXTRA_TRANSACTION_ID),
@@ -104,6 +112,7 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
             subId = subId,
             transactionIdOctets = notificationTransactionId,
             tentative = tentative,
+            lanceeA = lanceA,
         )
         val rc = resultCode
         // 2026-11-06 — le statut HTTP du MMSC, joint par le service MMS quand l'échec est une erreur HTTP
@@ -169,7 +178,26 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 nouvelEssaiPrevu = nouvelEssaiPrevu,
             )
             try {
+                // 2026-11-14 — le résultat de cet essai est là : un autre essai du même message peut partir.
+                relance?.let { RelanceMms.EnCours.rendre(it.etiquette) }
+                // 2026-11-14 (relectures Claude, GPT, audit de sécurité) — un téléchargement lancé AVANT un
+                // effacement d'urgence ne ressuscite rien après lui : ni message écrit dans la base vidée, ni
+                // notification nominative, ni essai réarmé. Le PDU, s'il est arrivé, part avec (finally).
+                if (DernierEffacement.anterieur(lanceA)) {
+                    Timber.i("MMS: resultat d'un telechargement lance avant un effacement d'urgence, ecarte")
+                    relance?.let { entry.mmsFailureNotifier().retirerRelance(it.etiquette) }
+                    validatedPdu = pduDansLeBacASable(appContext, pduPath)
+                    pduConsumed = true
+                    return@launch
+                }
                 if (rc != Activity.RESULT_OK) {
+                    // 2026-11-14 (relecture Claude) — un autre chemin a déjà écrit ce message (l'opérateur a
+                    // renvoyé sa notification pendant un essai) : ne pas annoncer « non reçu », ni réarmer.
+                    if (dejaArrive(entry, pduPath)) {
+                        Timber.i("MMS: echec d'un essai pour un message deja arrive, ignore")
+                        relance?.let { entry.mmsFailureNotifier().retirerRelance(it.etiquette) }
+                        return@launch
+                    }
                     // Audit R2 (v1.14.8) — avant : log + return silencieux, l'user ne savait
                     // pas qu'un MMS lui était destiné. Maintenant on poste une notification
                     // sur le canal FAILED.
@@ -210,13 +238,9 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 // `cacheDir/mms_incoming/` sandbox so an accidental future regression (a new
                 // intent-filter, an `exported` flip, a test helper) cannot turn this receiver
                 // into a "read any file the app can see" primitive.
-                val sandboxDir = runCatching {
-                    File(appContext.cacheDir, MmsDownloader.MMS_IN_DIR).canonicalFile
-                }.getOrNull()
-                val canonicalPdu = runCatching { pduFile.canonicalFile }.getOrNull()
-                if (sandboxDir == null || canonicalPdu == null ||
-                    !canonicalPdu.toPath().startsWith(sandboxDir.toPath())
-                ) {
+                // 2026-11-14 — the check moved to [pduDansLeBacASable], shared with the post-wipe discard above.
+                val canonicalPdu = pduDansLeBacASable(appContext, pduFile.path)
+                if (canonicalPdu == null) {
                     Timber.w("MMS PDU path outside sandbox: %s", pduPath)
                     signalerPerte(MmsFailureNotifier.Reason.DOWNLOAD_FAILED)
                     return@launch
@@ -414,6 +438,28 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }
+    }
+
+    /**
+     * v1.3.10 (SEC-04) — le PDU désigné par [chemin], canonique, s'il vit dans `cacheDir/mms_incoming/` ; sinon
+     * `null`. Seul un fichier passé par cette garde est lu ou supprimé (2026-11-14 : sortie du corps d'`onReceive`,
+     * l'écartement après effacement d'urgence en a besoin aussi).
+     */
+    private fun pduDansLeBacASable(appContext: Context, chemin: String?): File? {
+        if (chemin == null) return null
+        val bac = runCatching { File(appContext.cacheDir, MmsDownloader.MMS_IN_DIR).canonicalFile }.getOrNull()
+        val canonique = runCatching { File(chemin).canonicalFile }.getOrNull()
+        if (bac == null || canonique == null) return null
+        return canonique.takeIf { it.toPath().startsWith(bac.toPath()) }
+    }
+
+    /**
+     * 2026-11-14 — un message de cette transaction est-il déjà en base ? La clé est lue dans le NOM du PDU, où
+     * [MmsDownloader] l'a écrite ([PdusEnAttente]) ; sans clé, ou lecture impossible : `false`, on signale comme avant.
+     */
+    private suspend fun dejaArrive(entry: MmsDownloadedEntryPoint, chemin: String?): Boolean {
+        val cle = chemin?.let { PdusEnAttente.lireNom(File(it).name)?.cle } ?: return false
+        return runCatchingCancellable { entry.messageDao().findIdByTransactionKey(cle) }.getOrNull() != null
     }
 
     // v1.26.1 (audit H5) — `stripMmsAddressSuffix` a déménagé dans `core/ext/StringExt.kt` :

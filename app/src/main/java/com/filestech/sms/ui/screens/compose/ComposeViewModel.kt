@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -169,22 +171,32 @@ class ComposeViewModel @Inject constructor(
             events.tryEmit(Event.DejaChoisi(libelle))
             return false
         }
-        _state.update { it.copy(recipients = it.recipients + addr) }
+        // Le total au moment de L'AJOUT, pas de l'annonce (relecture Claude) : deux ajouts rapides annonçaient tous
+        // deux « 2 au total ».
+        val total = _state.updateAndGet { it.copy(recipients = it.recipients + addr) }.recipients.size
         viewModelScope.launch {
-            val bloque = runCatchingCancellable { withContext(io) { blockedRepo.isBlocked(addr.raw) } }
-                .onFailure { Timber.w(it, "Compose: liste de blocage illisible") }
-                .getOrDefault(false)
-            // Toujours choisi ? Retiré pendant la lecture, il n'y a plus de puce à marquer ni d'ajout à annoncer.
-            val apres = _state.updateAndGet { s ->
-                val choisi = s.recipients.any { it.normalized == addr.normalized }
-                if (choisi && bloque) s.copy(bloques = s.bloques + addr.normalized) else s
-            }
-            if (apres.recipients.any { it.normalized == addr.normalized }) {
-                events.tryEmit(Event.DestinataireAjoute(libelle, apres.recipients.size, bloque))
+            // Une annonce après l'autre, dans l'ordre des ajouts : chaque lecture de la liste de blocage suspend, et
+            // deux lectures concurrentes pouvaient finir dans le désordre. `Mutex` sert dans l'ordre d'arrivée, et
+            // chaque coroutine le demande avant toute suspension (`Main.immediate`).
+            annonces.withLock {
+                val bloque = runCatchingCancellable { withContext(io) { blockedRepo.isBlocked(addr.raw) } }
+                    .onFailure { Timber.w(it, "Compose: liste de blocage illisible") }
+                    .getOrDefault(false)
+                // Toujours choisi ? Retiré pendant la lecture, il n'y a plus de puce à marquer ni d'ajout à annoncer.
+                val apres = _state.updateAndGet { s ->
+                    val choisi = s.recipients.any { it.normalized == addr.normalized }
+                    if (choisi && bloque) s.copy(bloques = s.bloques + addr.normalized) else s
+                }
+                if (apres.recipients.any { it.normalized == addr.normalized }) {
+                    events.tryEmit(Event.DestinataireAjoute(libelle, total, bloque))
+                }
             }
         }
         return true
     }
+
+    /** 2026-11-14 — met les annonces d'ajout en file, dans l'ordre des ajouts, cf. [ajouter]. */
+    private val annonces = Mutex()
 
     /**
      * v1.3.11 (F2) — "tap-to-pick" UX: when the picker is empty (the common single-recipient

@@ -530,10 +530,10 @@ class MainActivity : FragmentActivity() {
                             raison,
                             erreur = com.filestech.sms.system.notifications.MmsFailureNotifier
                                 .erreurDepuisExtras(raison, intent),
-                            // 2026-11-14 — le bouton « Réessayer » du message : seulement un `PendingIntent`
-                            // créé par NOTRE paquet, cf. `relanceDepuisExtras`.
+                            // 2026-11-14 — le bouton « Réessayer » du message, retrouvé par son étiquette parmi CEUX
+                            // que nous avons créés, cf. `relanceDepuisExtras`.
                             relance = com.filestech.sms.system.notifications.MmsFailureNotifier
-                                .relanceDepuisExtras(raison, intent, packageName),
+                                .relanceDepuisExtras(raison, intent, this),
                         )
                     }
             }

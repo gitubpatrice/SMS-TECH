@@ -832,7 +832,7 @@
     <string name="send_partial">Enviado a %1$d destinatario(s); no se ha podido alcanzar a %2$d.</string>
     <string name="send_partial_blocked">Enviado a %1$d destinatario(s); %2$d omitidos porque usted los ha bloqueado.</string>
     <string name="thread_group_blocked_title">Contacto bloqueado en este grupo</string>
-    <string name="thread_group_blocked_body">En su lista de bloqueo: %1$s.\n\nEste mensaje solo se enviará a los otros %2$d miembros, en una conversación de grupo sin los contactos bloqueados, que se abrirá después del envío.</string>
+    <string name="thread_group_blocked_body">En su lista de bloqueo: %1$s.\n\nEste mensaje solo se enviará a los otros %2$d miembros y aparecerá en una conversación de grupo sin los contactos bloqueados.</string>
     <string name="compose_recipient_blocked">%1$s · bloqueado</string>
     <string name="compose_recipient_added">Añadido: %1$s (%2$d en total)</string>
     <string name="compose_recipient_added_blocked">Añadido: %1$s (%2$d en total). Este número está en su lista de bloqueo: no recibirá sus mensajes.</string>

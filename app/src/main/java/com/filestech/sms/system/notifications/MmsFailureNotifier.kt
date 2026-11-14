@@ -10,7 +10,6 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.IntentCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
 import com.filestech.sms.core.ext.stripInvisibleChars
@@ -153,6 +152,8 @@ class MmsFailureNotifier @Inject constructor(
         relance: RelanceMms.Demande? = null,
         nouvelEssaiPrevu: Boolean = false,
     ): Boolean {
+        // 2026-11-14 — seul un téléchargement manqué se redemande.
+        val aRelancer = relance?.takeIf { reason == Reason.DOWNLOAD_FAILED }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     context, Manifest.permission.POST_NOTIFICATIONS,
@@ -161,9 +162,18 @@ class MmsFailureNotifier @Inject constructor(
                 return false
             }
         }
+        // 2026-11-14 (relecture Claude) — notifications de l'appli coupées (avant Android 13 : pas de permission,
+        // un interrupteur), ou canal des échecs réduit au silence : `notify` ne lève rien, mais rien ne s'affiche.
+        // L'appelant aurait armé un essai que sa porte (la notification affichée) aurait aussitôt abandonné.
+        if (!notificationsVisibles()) return false
         val anonyme = context.getString(R.string.mms_failure_notification_body_unknown_sender)
         val sender = when (visibilite.verdictPour(senderAddress)) {
-            CorrespondentVisibilityPolicy.Verdict.TAIRE -> return false
+            CorrespondentVisibilityPolicy.Verdict.TAIRE -> {
+                // 2026-11-14 (relecture Claude) — le correspondant est passé au coffre (ou une session leurre a
+                // commencé) depuis le premier échec : sa notification nominative ne reste pas affichée.
+                aRelancer?.let { retirerRelance(it.etiquette) }
+                return false
+            }
             CorrespondentVisibilityPolicy.Verdict.ANONYMISER -> anonyme
             // 2026-11-06 — l'adresse vient du PDU, donc de l'extérieur : sans le suffixe de passerelle
             // `/TYPE=PLMN`, qui s'affichait tel quel, ni caractère invisible (Bidi, RLO), comme
@@ -172,8 +182,6 @@ class MmsFailureNotifier @Inject constructor(
             CorrespondentVisibilityPolicy.Verdict.NOMMER ->
                 senderAddress.orEmpty().stripInvisibleChars().stripMmsAddressSuffix()
         }
-        // 2026-11-14 — seul un téléchargement manqué se redemande.
-        val aRelancer = relance?.takeIf { reason == Reason.DOWNLOAD_FAILED }
         val body = when (reason) {
             Reason.TOO_LARGE -> context.getString(
                 R.string.mms_failure_notification_body_too_large,
@@ -194,8 +202,9 @@ class MmsFailureNotifier @Inject constructor(
         val boutonRelance = aRelancer?.let { RelanceMmsReceiver.intentionManuelle(context, it) }
         // 2026-11-06 — le tap ouvre la fenêtre qui explique CE motif. L'intent ne porte que le motif et, pour un
         // téléchargement manqué, les codes d'Android : ni expéditeur ni taille, rien que la fenêtre aurait à
-        // cacher en session leurre. 2026-11-14 — et le bouton « Réessayer » de ce message, que la fenêtre propose
-        // à son tour : un `PendingIntent` opaque, vérifié à l'arrivée ([relanceDepuisExtras]).
+        // cacher en session leurre. 2026-11-14 — et l'ÉTIQUETTE du message (une empreinte), par laquelle la fenêtre
+        // retrouve elle-même son bouton « Réessayer » ([relanceDepuisExtras]) : aucun `PendingIntent` ne transite
+        // par `MainActivity`, exportée.
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_EXPLAIN_MMS_FAILURE
             putExtra(EXTRA_REASON, reason.name)
@@ -203,11 +212,11 @@ class MmsFailureNotifier @Inject constructor(
                 putExtra(EXTRA_CODE_ANDROID, erreur.code)
                 erreur.statutHttp?.let { putExtra(EXTRA_STATUT_HTTP, it) }
             }
-            if (aRelancer != null && boutonRelance != null) {
+            if (aRelancer != null) {
                 // L'identité du message : sans elle, deux échecs du même expéditeur partageraient ce
-                // `PendingIntent`, et le second remplacerait le bouton du premier (FLAG_UPDATE_CURRENT).
+                // `PendingIntent`, et le second remplacerait l'étiquette du premier (FLAG_UPDATE_CURRENT).
                 data = aRelancer.identite
-                putExtra(EXTRA_RELANCE, boutonRelance)
+                putExtra(EXTRA_RELANCE, aRelancer.etiquette)
             }
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -278,6 +287,16 @@ class MmsFailureNotifier @Inject constructor(
         }
     }
 
+    /**
+     * 2026-11-14 — une notification d'échec postée s'affichera-t-elle ? Notifications de l'appli autorisées, et canal
+     * des échecs non réduit au silence. Une lecture impossible répond `true` : on poste comme avant.
+     */
+    private fun notificationsVisibles(): Boolean = runCatching {
+        val nm = NotificationManagerCompat.from(context)
+        val canal = nm.getNotificationChannelCompat(NotificationChannelInitializer.CHANNEL_FAILED)
+        nm.areNotificationsEnabled() && canal?.importance != NotificationManagerCompat.IMPORTANCE_NONE
+    }.getOrDefault(true)
+
     companion object {
         // Plage dédiée [80_000 .. 89_999] — évite les collisions avec les autres notifiers
         // (incoming = 1xx, sent = 2xx, safety call = 5xx, emergency = 7xx).
@@ -292,21 +311,23 @@ class MmsFailureNotifier @Inject constructor(
 
         private fun etiquetteDeNotification(etiquette: String): String = "mms-relance:$etiquette"
 
-        /** 2026-11-14 — le bouton « Réessayer » du message, transmis à la fenêtre d'explication. */
+        /** 2026-11-14 — l'étiquette du message ([RelanceMms.Demande.etiquette]), transmise à la fenêtre d'explication. */
         const val EXTRA_RELANCE: String = "com.filestech.sms.extra.MMS_FAILURE_RETRY"
 
         /**
-         * 2026-11-14 — le bouton « Réessayer » porté par l'intent, ou `null`. `MainActivity` est exportée : une
-         * autre application peut y glisser un `PendingIntent` à elle. Seul passe celui que NOTRE paquet a créé
-         * ([paquet]) — un `PendingIntent` s'exécute sous l'identité de son créateur, et nul autre ne peut en
-         * fabriquer un au nom du nôtre. Seulement pour un téléchargement manqué.
+         * 2026-11-14 — le bouton « Réessayer » du message nommé par l'intent, ou `null`. Seulement pour un
+         * téléchargement manqué.
+         *
+         * `MainActivity` est exportée : l'intent peut venir de n'importe qui. Il ne porte donc qu'une ÉTIQUETTE, une
+         * chaîne vérifiée ([RelanceMms.etiquetteValide]) ; le bouton est celui que NOUS avons créé pour ce message,
+         * retrouvé par [RelanceMmsReceiver.boutonExistant]. Une étiquette inventée ne trouve rien ; une étiquette
+         * réelle ne déclenche que la reprise de ce message, sous les gardes de `relancerMms`. Relecture Claude du
+         * 2026-11-14 : la version précédente acceptait n'importe quel `PendingIntent` de notre paquet.
          */
-        fun relanceDepuisExtras(reason: Reason, intent: Intent, paquet: String): PendingIntent? {
+        fun relanceDepuisExtras(reason: Reason, intent: Intent, context: Context): PendingIntent? {
             if (reason != Reason.DOWNLOAD_FAILED) return null
-            val pi = runCatching {
-                IntentCompat.getParcelableExtra(intent, EXTRA_RELANCE, PendingIntent::class.java)
-            }.getOrNull() ?: return null
-            return pi.takeIf { it.creatorPackage == paquet }
+            val etiquette = runCatching { intent.getStringExtra(EXTRA_RELANCE) }.getOrNull() ?: return null
+            return RelanceMmsReceiver.boutonExistant(context, etiquette)
         }
 
         /** 2026-11-06 — tap de la notification : `MainActivity` ouvre la fenêtre d'explication. */

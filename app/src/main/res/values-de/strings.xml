@@ -830,7 +830,7 @@
     <string name="send_partial">An %1$d Empfänger gesendet; %2$d konnten nicht erreicht werden.</string>
     <string name="send_partial_blocked">An %1$d Empfänger gesendet; %2$d übersprungen, weil Sie sie blockiert haben.</string>
     <string name="thread_group_blocked_title">Blockierter Kontakt in dieser Gruppe</string>
-    <string name="thread_group_blocked_body">In Ihrer Sperrliste: %1$s.\n\nDiese Nachricht geht nur an die %2$d anderen Mitglieder, in einer Gruppenunterhaltung ohne die blockierten Kontakte, die sich nach dem Senden öffnet.</string>
+    <string name="thread_group_blocked_body">In Ihrer Sperrliste: %1$s.\n\nDiese Nachricht geht nur an die %2$d anderen Mitglieder und erscheint in einer Gruppenunterhaltung ohne die blockierten Kontakte.</string>
     <string name="compose_recipient_blocked">%1$s · blockiert</string>
     <string name="compose_recipient_added">Hinzugefügt: %1$s (insgesamt %2$d)</string>
     <string name="compose_recipient_added_blocked">Hinzugefügt: %1$s (insgesamt %2$d). Diese Nummer steht in Ihrer Sperrliste: Sie erhält Ihre Nachrichten nicht.</string>

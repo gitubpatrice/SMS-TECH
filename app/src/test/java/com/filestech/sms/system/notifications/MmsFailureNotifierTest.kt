@@ -262,20 +262,20 @@ class MmsFailureNotifierTest {
         assertThat(notification.actions).hasLength(1)
     }
 
-    /** Le tap transmet le bouton à la fenêtre, et seule cette lecture le laisse passer. */
+    /** Le tap transmet l'ÉTIQUETTE du message à la fenêtre, qui retrouve par elle le bouton que nous avons créé. */
     @Test
-    fun `le tap transmet le bouton du message a la fenetre`() {
+    fun `le tap transmet l'etiquette, et la fenetre retrouve le bouton du message`() {
         val d = demande()
         posteAvecRelance(d, nouvelEssaiPrevu = true)
         val tap = shadowOf(shadowOf(nm).allNotifications.single().contentIntent).savedIntent
 
-        val paquet = contexte.packageName
-        val relance = MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, tap, paquet)
+        assertThat(tap.getStringExtra(MmsFailureNotifier.EXTRA_RELANCE)).isEqualTo(d.etiquette)
+        val relance = MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, tap, contexte)
 
         assertThat(relance).isNotNull()
         assertThat(RelanceMms.Demande.depuis(shadowOf(relance).savedIntent)?.etiquette).isEqualTo(d.etiquette)
         // Contrôle négatif : pour un autre motif, rien.
-        assertThat(MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.TOO_LARGE, tap, paquet)).isNull()
+        assertThat(MmsFailureNotifier.relanceDepuisExtras(MmsFailureNotifier.Reason.TOO_LARGE, tap, contexte)).isNull()
     }
 
     /**
@@ -294,7 +294,7 @@ class MmsFailureNotifierTest {
             val relance = MmsFailureNotifier.relanceDepuisExtras(
                 reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
                 intent = tap,
-                paquet = contexte.packageName,
+                context = contexte,
             )
             RelanceMms.Demande.depuis(shadowOf(relance).savedIntent)?.etiquette
         }
@@ -324,28 +324,64 @@ class MmsFailureNotifierTest {
     }
 
     /**
-     * `MainActivity` est exportée : une autre application peut y glisser un `PendingIntent` à elle, qui s'exécuterait
-     * sous son identité au clic sur « Réessayer ». Seul celui que notre paquet a créé passe.
+     * Relecture Claude du 2026-11-14 : le correspondant passe au coffre APRÈS le premier échec. L'essai suivant, qui
+     * échoue aussi, ne peut plus le nommer — et la notification nominative déjà affichée ne doit pas rester.
      */
     @Test
-    fun `bouton forge par une autre application - refuse`() {
-        // Simulé : sous Robolectric, un `PendingIntent` créé par un contexte « étranger » garde le paquet de
-        // l'application de test comme créateur. Sur un téléphone, il viendrait d'un autre processus.
-        val etranger = mockk<android.app.PendingIntent> {
-            io.mockk.every { creatorPackage } returns "com.exemple.malveillant"
-        }
-        val cle = MmsFailureNotifier.EXTRA_RELANCE
-        val forge = Intent(MmsFailureNotifier.ACTION_EXPLAIN_MMS_FAILURE).putExtra(cle, etranger)
-        val notreBouton = RelanceMmsReceiver.intentionManuelle(contexte, demande())
-        val legitime = Intent(MmsFailureNotifier.ACTION_EXPLAIN_MMS_FAILURE).putExtra(cle, notreBouton)
-        val enChaine = Intent("x").putExtra(cle, "x")
-        val echec = MmsFailureNotifier.Reason.DOWNLOAD_FAILED
-        val paquet = contexte.packageName
+    fun `correspondant passe au coffre depuis - sa notification nominative part`() {
+        val d = demande()
+        posteAvecRelance(d, nouvelEssaiPrevu = true)
+        assertThat(shadowOf(nm).allNotifications).hasSize(1)
 
-        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, forge, paquet)).isNull()
-        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, Intent("x"), paquet)).isNull()
-        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, enChaine, paquet)).isNull()
-        // Témoin positif : le même chemin accepte notre propre bouton.
-        assertThat(MmsFailureNotifier.relanceDepuisExtras(echec, legitime, paquet)).isNotNull()
+        coEvery { visibilite.verdictPour(any(), any()) } returns CorrespondentVisibilityPolicy.Verdict.TAIRE
+        assertThat(posteAvecRelance(d, nouvelEssaiPrevu = true)).isFalse()
+
+        assertThat(shadowOf(nm).allNotifications).isEmpty()
+    }
+
+    /**
+     * Relecture Claude du 2026-11-14 : notifications de l'appli coupées, ou canal des échecs réduit au silence —
+     * `notify` ne lève rien, mais rien ne s'affiche. L'appelant ne doit pas croire la notification postée (il
+     * armerait un essai que sa porte abandonnerait aussitôt).
+     */
+    @Test
+    fun `notifications coupees ou canal muet - rien de poste, et l'appelant le sait`() {
+        // Témoin positif : canal créé, notifications permises — la notification est postée.
+        NotificationChannelInitializer(contexte).ensureDefaultChannels()
+        assertThat(posteAvecRelance(demande("A"), nouvelEssaiPrevu = true)).isTrue()
+
+        shadowOf(nm).setNotificationsEnabled(false)
+        assertThat(posteAvecRelance(demande("B"), nouvelEssaiPrevu = true)).isFalse()
+
+        shadowOf(nm).setNotificationsEnabled(true)
+        nm.deleteNotificationChannel(NotificationChannelInitializer.CHANNEL_FAILED)
+        val muet = android.app.NotificationChannel(
+            NotificationChannelInitializer.CHANNEL_FAILED,
+            "x",
+            NotificationManager.IMPORTANCE_NONE,
+        )
+        nm.createNotificationChannel(muet)
+        assertThat(posteAvecRelance(demande("C"), nouvelEssaiPrevu = true)).isFalse()
+    }
+
+    /**
+     * `MainActivity` est exportée : l'intent peut venir de n'importe qui. Il ne porte qu'une étiquette ; le bouton est
+     * celui que NOUS avons créé pour ce message, ou rien. Un `PendingIntent` glissé dans l'intent n'est plus lu.
+     */
+    @Test
+    fun `intent forge vers la fenetre - etiquette inventee, mal formee ou PendingIntent, rien`() {
+        val cle = MmsFailureNotifier.EXTRA_RELANCE
+        val echec = MmsFailureNotifier.Reason.DOWNLOAD_FAILED
+        val inventee = "a".repeat(64)
+        val notreBouton = RelanceMmsReceiver.intentionManuelle(contexte, demande())
+
+        fun lu(intent: Intent) = MmsFailureNotifier.relanceDepuisExtras(echec, intent, contexte)
+
+        assertThat(lu(Intent("x"))).isNull()
+        assertThat(lu(Intent("x").putExtra(cle, inventee))).isNull()
+        assertThat(lu(Intent("x").putExtra(cle, "../../etc"))).isNull()
+        assertThat(lu(Intent("x").putExtra(cle, notreBouton))).isNull()
+        // Témoin positif : la vraie étiquette d'un message dont le bouton existe.
+        assertThat(lu(Intent("x").putExtra(cle, demande().etiquette))).isNotNull()
     }
 }

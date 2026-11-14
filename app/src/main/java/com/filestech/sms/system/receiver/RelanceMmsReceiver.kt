@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.SystemClock
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.util.DernierEffacement
 import com.filestech.sms.data.mms.MmsDownloader
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.system.notifications.MmsFailureNotifier
@@ -110,6 +111,28 @@ class RelanceMmsReceiver : BroadcastReceiver() {
             intention(context, ACTION_MANUELLE, demande)
 
         /**
+         * 2026-11-14 (relecture Claude) — le bouton « Réessayer » DÉJÀ créé pour le message [etiquette], ou `null`.
+         *
+         * La fenêtre d'explication le reçoit ainsi, et non plus comme un `PendingIntent` transmis à `MainActivity` :
+         * celle-ci est exportée, et un `PendingIntent` glissé dans son intent, fût-il créé par notre paquet (une
+         * appli à qui l'on a donné l'accès aux notifications peut en lire), aurait déclenché une autre de nos
+         * actions sous le libellé « Réessayer ». Seule l'étiquette voyage ; le bouton est retrouvé par son identité
+         * (action, composant, URI) avec `FLAG_NO_CREATE`, extras d'origine compris. Aucun n'existe : `null`.
+         */
+        fun boutonExistant(context: Context, etiquette: String): PendingIntent? {
+            if (!RelanceMms.etiquetteValide(etiquette)) return null
+            val cible = Intent(ACTION_MANUELLE)
+                .setClass(context, RelanceMmsReceiver::class.java)
+                .setData(RelanceMms.identite(etiquette))
+            return PendingIntent.getBroadcast(
+                context,
+                0,
+                cible,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        /**
          * Arme l'essai automatique [demande] dans [delaiMs]. Une alarme par message : la reposer remplace la
          * précédente. Inexacte, permise en veille, sans permission (même choix que `SafetyCallAlarmScheduler`).
          */
@@ -144,19 +167,37 @@ class RelanceMmsReceiver : BroadcastReceiver() {
 /**
  * 2026-11-14 — la suite d'un nouvel essai, hors du receveur pour être vérifiable sans Hilt (`RelanceMmsSuiteTest`).
  *
- * L'ordre compte : la porte de l'essai automatique d'abord (notification retirée = on n'y touche plus), puis la
- * liste noire (l'expéditeur a pu être bloqué depuis l'échec ; même règle qu'à l'annonce, avant tout
- * téléchargement — `TraitementMmsRecu` l'applique de nouveau après), puis le téléchargement.
+ * L'ordre compte :
+ *  1. un effacement d'urgence survenu depuis l'échec : rien (`DernierEffacement`) ;
+ *  2. la notification de CE message doit être affichée — pour l'essai automatique comme pour le bouton, qu'on ne
+ *     touche que tant qu'elle est là (elle ne part plus au tap). Retirée : le message est arrivé, l'utilisateur l'a
+ *     balayée, ou l'effacement l'a annulée (relecture Claude du 2026-11-14 : le bouton d'une fenêtre restée ouverte
+ *     relançait un message déjà arrivé) ;
+ *  3. la liste noire : l'expéditeur a pu être bloqué depuis l'échec (même règle qu'à l'annonce, avant tout
+ *     téléchargement ; `TraitementMmsRecu` l'applique de nouveau après) ;
+ *  4. un seul essai à la fois par message ([RelanceMms.EnCours]).
  */
+@Suppress("LongParameterList")
 internal suspend fun relancerMms(
     demande: RelanceMms.Demande,
     automatique: Boolean,
     notifier: MmsFailureNotifier,
     estBloque: suspend (String) -> Boolean,
     telecharger: (RelanceMms.Demande) -> Outcome<Unit>,
+    effaceDepuis: (Long) -> Boolean = DernierEffacement::anterieur,
+    enCours: RelanceMms.EnCours = RelanceMms.EnCours,
 ) {
-    if (automatique && !notifier.relanceAffichee(demande.etiquette)) {
-        Timber.i("MMS: essai automatique %d abandonne, notification retiree", demande.tentative)
+    if (effaceDepuis(demande.lanceeA)) {
+        Timber.i("MMS: nouvel essai abandonne, effacement d'urgence depuis l'echec")
+        notifier.retirerRelance(demande.etiquette)
+        return
+    }
+    if (!notifier.relanceAffichee(demande.etiquette)) {
+        Timber.i(
+            "MMS: essai %s %d abandonne, notification retiree",
+            if (automatique) "auto" else "manuel",
+            demande.tentative,
+        )
         return
     }
     val expediteur = demande.expediteur?.stripMmsAddressSuffix()
@@ -165,6 +206,12 @@ internal suspend fun relancerMms(
         notifier.retirerRelance(demande.etiquette)
         return
     }
+    if (!enCours.prendre(demande.etiquette)) {
+        // L'autre essai rendra son résultat, et `MmsDownloadedReceiver` en tirera la suite.
+        Timber.i("MMS: un essai de ce message est deja en cours")
+        return
+    }
+    // Le bouton : la notification part tout de suite, c'est l'accusé du geste ; l'échec la reposera.
     if (!automatique) notifier.retirerRelance(demande.etiquette)
     val res = telecharger(demande)
     // Sans l'adresse : elle peut porter un jeton (audit SEC-06 de `MmsWapPushReceiver`).
@@ -175,7 +222,9 @@ internal suspend fun relancerMms(
         res,
     )
     if (res is Outcome.Failure) {
-        // Le téléchargement n'a pas même démarré : aucun résultat ne viendra. Le message reste au bouton.
+        // Le téléchargement n'a pas même démarré : aucun résultat ne viendra, l'essai est rendu ici. Le message reste
+        // au bouton.
+        enCours.rendre(demande.etiquette)
         notifier.notifyFailure(
             reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
             senderAddress = demande.expediteur,

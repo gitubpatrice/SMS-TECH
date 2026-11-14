@@ -83,18 +83,19 @@ fun ComposeScreen(
     val ajouteFmt = stringResource(R.string.compose_recipient_added)
     val ajouteBloqueFmt = stringResource(R.string.compose_recipient_added_blocked)
     val dejaFmt = stringResource(R.string.compose_recipient_already)
+    val bandeau = remember { BandeauCourant() }
     LaunchedEffect(Unit) {
         viewModel.events.collect { e ->
             when (e) {
                 is ComposeViewModel.Event.ConversationCreated -> onConversationCreated(e.id)
                 // 2026-11-14 (Patrice) — chaque ajout est confirmé. Le bandeau précédent est remplacé, pas empilé :
                 // on ajoute souvent plusieurs contacts d'affilée.
-                is ComposeViewModel.Event.DestinataireAjoute -> annoncer(
+                is ComposeViewModel.Event.DestinataireAjoute -> bandeau.annoncer(
                     snackbarHost,
                     (if (e.bloque) ajouteBloqueFmt else ajouteFmt).format(e.nom, e.total),
                     scope,
                 )
-                is ComposeViewModel.Event.DejaChoisi -> annoncer(snackbarHost, dejaFmt.format(e.nom), scope)
+                is ComposeViewModel.Event.DejaChoisi -> bandeau.annoncer(snackbarHost, dejaFmt.format(e.nom), scope)
             }
         }
     }
@@ -323,7 +324,15 @@ internal fun PucesDestinataires(
     bloques: Set<String> = emptySet(),
 ) {
     val defilement = rememberScrollState()
-    LaunchedEffect(destinataires.size) {
+    // Seulement quand la zone GRANDIT : une puce ajoutée, ou une marque « bloqué » qui allonge la dernière (elle
+    // arrive après l'ajout). Retirer une puce ne fait pas défiler : l'utilisateur garde sa place (relectures Claude
+    // et GPT du 2026-11-14).
+    val tailles = remember { intArrayOf(destinataires.size, bloques.size) }
+    LaunchedEffect(destinataires.size, bloques.size) {
+        val grandit = destinataires.size > tailles[0] || bloques.size > tailles[1]
+        tailles[0] = destinataires.size
+        tailles[1] = bloques.size
+        if (!grandit) return@LaunchedEffect
         // Une image d'attente : la hauteur à faire défiler n'est connue qu'après la mise en page de la puce ajoutée.
         withFrameNanos { }
         defilement.animateScrollTo(defilement.maxValue)
@@ -355,10 +364,16 @@ internal fun PucesDestinataires(
 private val HAUTEUR_MAX_PUCES = 152.dp
 
 /**
- * 2026-11-14 — un bandeau court, qui remplace celui encore affiché : `showSnackbar` met les messages en file, et dix
- * contacts ajoutés d'affilée défileraient l'un après l'autre longtemps après le dernier geste.
+ * 2026-11-14 — un bandeau court, qui REMPLACE le précédent : `showSnackbar` met les messages en file, et dix contacts
+ * ajoutés d'affilée défileraient l'un après l'autre longtemps après le dernier geste. `dismiss()` ne vidait que le
+ * bandeau affiché, pas la file (relectures GPT et Claude) : on annule la coroutine du précédent, affiché ou en
+ * attente, ce qui le retire.
  */
-private fun annoncer(hote: SnackbarHostState, texte: String, scope: kotlinx.coroutines.CoroutineScope) {
-    hote.currentSnackbarData?.dismiss()
-    scope.launch { hote.showSnackbar(texte, duration = androidx.compose.material3.SnackbarDuration.Short) }
+private class BandeauCourant {
+    private var job: kotlinx.coroutines.Job? = null
+
+    fun annoncer(hote: SnackbarHostState, texte: String, scope: kotlinx.coroutines.CoroutineScope) {
+        job?.cancel()
+        job = scope.launch { hote.showSnackbar(texte, duration = androidx.compose.material3.SnackbarDuration.Short) }
+    }
 }

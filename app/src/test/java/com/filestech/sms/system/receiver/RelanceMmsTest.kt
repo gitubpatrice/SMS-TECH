@@ -187,4 +187,50 @@ class RelanceMmsTest {
         resultat.putExtra(MmsDownloader.EXTRA_TENTATIVE, 1_000)
         assertThat(RelanceMms.tentativeDepuis(resultat)).isEqualTo(RelanceMms.ESSAIS_AUTOMATIQUES)
     }
+
+    /**
+     * Relecture GPT du 2026-11-14 : un identifiant trop long était retiré EN SILENCE, et la réponse au MMSC partait
+     * sans lui. La demande est désormais refusée ; à la borne, il est gardé entier.
+     */
+    @Test
+    fun `identifiant de transaction demesure - pas de demande, plutot qu'un identifiant perdu`() {
+        fun avec(octets: Int) = RelanceMms.Demande.creer(
+            adresse = "http://mmsc.example/a",
+            transactionId = "T",
+            expediteur = null,
+            subId = null,
+            transactionIdOctets = ByteArray(octets) { 7 },
+            tentative = 0,
+        )
+
+        assertThat(avec(RelanceMms.OCTETS_TRANSACTION_MAX + 1)).isNull()
+        val aLaBorne = avec(RelanceMms.OCTETS_TRANSACTION_MAX)?.transactionIdOctets
+        assertThat(aLaBorne).hasLength(RelanceMms.OCTETS_TRANSACTION_MAX)
+    }
+
+    /** L'heure du téléchargement d'origine suit la demande d'essai en essai : c'est elle que l'effacement compare. */
+    @Test
+    fun `l'heure de lancement fait l'aller-retour, et suit les essais suivants`() {
+        val origine = requireNotNull(
+            RelanceMms.Demande.creer("http://mmsc.example/a", "T", null, null, null, 0, lanceeA = 123_456L),
+        )
+        val relue = requireNotNull(RelanceMms.Demande.depuis(origine.dans(Intent("x"))))
+
+        assertThat(relue.lanceeA).isEqualTo(123_456L)
+        assertThat(relue.avecTentative(2).lanceeA).isEqualTo(123_456L)
+    }
+
+    /** L'étiquette qu'un intent porte vers `MainActivity`, exportée : seule la forme d'une vraie étiquette passe. */
+    @Test
+    fun `forme de l'etiquette - 64 hexadecimaux minuscules, rien d'autre`() {
+        val vraie = requireNotNull(demande()).etiquette
+
+        assertThat(RelanceMms.etiquetteValide(vraie)).isTrue()
+        assertThat(RelanceMms.etiquetteValide(null)).isFalse()
+        assertThat(RelanceMms.etiquetteValide("")).isFalse()
+        assertThat(RelanceMms.etiquetteValide(vraie.uppercase())).isFalse()
+        assertThat(RelanceMms.etiquetteValide(vraie.dropLast(1))).isFalse()
+        assertThat(RelanceMms.etiquetteValide(vraie + "0")).isFalse()
+        assertThat(RelanceMms.etiquetteValide("../" + vraie.drop(3))).isFalse()
+    }
 }

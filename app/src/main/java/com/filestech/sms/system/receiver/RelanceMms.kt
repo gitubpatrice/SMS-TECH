@@ -81,6 +81,17 @@ object RelanceMms {
         else -> false
     }
 
+    /** L'identité des `PendingIntent` d'un message, par son étiquette ([Demande.etiquette]). */
+    fun identite(etiquette: String): Uri = Uri.parse("smstech://mms-relance/$etiquette")
+
+    /**
+     * Une étiquette bien formée : 64 caractères hexadécimaux minuscules, la forme de [Demande.etiquette]. Celle qu'un
+     * intent porte vers `MainActivity`, exportée, se vérifie ici avant de servir.
+     */
+    fun etiquetteValide(valeur: String?): Boolean = valeur != null && FORME_ETIQUETTE.matches(valeur)
+
+    private val FORME_ETIQUETTE = Regex("[0-9a-f]{64}")
+
     /** La tentative portée par [intent], bornée : l'extra vient de nos propres `PendingIntent`, mais rien n'y oblige. */
     fun tentativeDepuis(intent: Intent): Int =
         intent.getIntExtra(MmsDownloader.EXTRA_TENTATIVE, 0).coerceIn(0, ESSAIS_AUTOMATIQUES)
@@ -90,6 +101,8 @@ object RelanceMms {
      *
      * @property adresse l'adresse à télécharger, déjà complétée (`MmsDownloader.adresseATelecharger`).
      * @property transactionIdOctets l'identifiant en octets, pour la réponse au MMSC après le retrait.
+     * @property lanceeA l'heure du téléchargement dont l'échec a produit cette demande : une demande antérieure au
+     *   dernier effacement d'urgence ne relance rien (`DernierEffacement`, cf. [relancerMms]).
      */
     class Demande private constructor(
         val adresse: String,
@@ -98,6 +111,7 @@ object RelanceMms {
         val subId: Int?,
         val transactionIdOctets: ByteArray?,
         val tentative: Int,
+        val lanceeA: Long,
     ) {
         /**
          * L'identité du message : elle nomme sa notification (étiquette) et ses `PendingIntent` (URI). Empreinte
@@ -106,10 +120,10 @@ object RelanceMms {
         val etiquette: String = empreinte(transactionId, adresse, subId)
 
         /** L'URI qui distingue les `PendingIntent` de ce message de ceux d'un autre (les extras n'y comptent pas). */
-        val identite: Uri get() = Uri.parse("smstech://mms-relance/$etiquette")
+        val identite: Uri get() = identite(etiquette)
 
         fun avecTentative(tentative: Int): Demande =
-            Demande(adresse, transactionId, expediteur, subId, transactionIdOctets, tentative)
+            Demande(adresse, transactionId, expediteur, subId, transactionIdOctets, tentative, lanceeA)
 
         /** Pose la demande dans [intent] : identité et extras. */
         fun dans(intent: Intent): Intent = intent.apply {
@@ -120,13 +134,19 @@ object RelanceMms {
             putExtra(EXTRA_SUB_ID, subId ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID)
             putExtra(EXTRA_TRANSACTION_ID_OCTETS, transactionIdOctets)
             putExtra(EXTRA_RANG, tentative)
+            putExtra(EXTRA_LANCEE_A, lanceeA)
         }
 
         companion object {
             /**
              * La demande, ou `null` si [adresse] n'est pas `http(s)` — la règle de [MmsDownloader.download], qui
              * refuserait de toute façon. Une SIM invalide devient `null`, comme dans `MmsDownloadedReceiver`.
+             *
+             * 2026-11-14 (relecture GPT) — un identifiant de transaction plus long que [OCTETS_TRANSACTION_MAX] REFUSE
+             * la demande : il était retiré en silence, et la réponse au MMSC partait sans lui. Rien de réel n'en
+             * approche (quelques dizaines d'octets) ; un message aussi anormal garde l'ancien sort, sans bouton.
              */
+            @Suppress("LongParameterList")
             fun creer(
                 adresse: String?,
                 transactionId: String?,
@@ -134,19 +154,22 @@ object RelanceMms {
                 subId: Int?,
                 transactionIdOctets: ByteArray?,
                 tentative: Int,
+                lanceeA: Long = System.currentTimeMillis(),
             ): Demande? {
                 if (adresse.isNullOrBlank() || !MmsDownloader.adresseHttp(adresse)) return null
+                if (transactionIdOctets != null && transactionIdOctets.size > OCTETS_TRANSACTION_MAX) return null
                 return Demande(
                     adresse = adresse,
                     transactionId = transactionId,
                     expediteur = expediteur,
                     subId = subId?.takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID },
-                    transactionIdOctets = transactionIdOctets?.takeIf { it.size <= OCTETS_TRANSACTION_MAX },
+                    transactionIdOctets = transactionIdOctets,
                     tentative = tentative.coerceIn(0, ESSAIS_AUTOMATIQUES),
+                    lanceeA = lanceeA,
                 )
             }
 
-            /** La demande posée par [dans], ou `null`. */
+            /** La demande posée par [dans], ou `null`. Sans heure de lancement : 0, que tout effacement précède. */
             fun depuis(intent: Intent): Demande? = creer(
                 adresse = intent.getStringExtra(EXTRA_ADRESSE),
                 transactionId = intent.getStringExtra(EXTRA_TRANSACTION_ID),
@@ -154,6 +177,7 @@ object RelanceMms {
                 subId = intent.getIntExtra(EXTRA_SUB_ID, SubscriptionManager.INVALID_SUBSCRIPTION_ID),
                 transactionIdOctets = intent.getByteArrayExtra(EXTRA_TRANSACTION_ID_OCTETS),
                 tentative = intent.getIntExtra(EXTRA_RANG, 0),
+                lanceeA = intent.getLongExtra(EXTRA_LANCEE_A, 0L),
             )
 
             /** Chaque champ précédé de sa longueur, comme `PdusEnAttente.cle` : aucun séparateur ne se confond. */
@@ -191,8 +215,8 @@ object RelanceMms {
     /** Délai dépassé, trop de requêtes : des refus qui invitent à revenir. */
     private val HTTP_PASSAGERS: Set<Int> = setOf(408, 429)
 
-    /** Un identifiant de transaction tient en quelques dizaines d'octets ; au-delà, on ne le garde pas. */
-    private const val OCTETS_TRANSACTION_MAX = 256
+    /** Un identifiant de transaction tient en quelques dizaines d'octets ; au-delà, la demande est refusée. */
+    internal const val OCTETS_TRANSACTION_MAX = 1024
 
     private const val MINUTE_MS: Long = 60_000L
 
@@ -202,4 +226,45 @@ object RelanceMms {
     private const val EXTRA_SUB_ID = "com.filestech.sms.extra.RELANCE_SUB_ID"
     private const val EXTRA_TRANSACTION_ID_OCTETS = "com.filestech.sms.extra.RELANCE_TRANSACTION_ID_OCTETS"
     private const val EXTRA_RANG = "com.filestech.sms.extra.RELANCE_RANG"
+    private const val EXTRA_LANCEE_A = "com.filestech.sms.extra.RELANCE_LANCEE_A"
+
+    /**
+     * 2026-11-14 (relectures Claude et GPT) — **un seul essai à la fois par message.** Sans lui, l'alarme et le bouton
+     * « Réessayer » (ou deux appuis rapides) lançaient deux téléchargements du même message : deux attentes réseau, et
+     * l'échec tardif de l'un reposait « non reçu » pour un message que l'autre venait d'écrire.
+     *
+     * Pris avant le téléchargement ([prendre]), rendu à l'arrivée de son résultat dans `MmsDownloadedReceiver`
+     * ([rendre]). En mémoire : un processus mort n'a plus de téléchargement à attendre. Un résultat qui ne viendrait
+     * jamais (service MMS tombé) ne bloque pas le message pour toujours : passé [DUREE_MAX_MS] — l'attente maximale du
+     * réseau MMS d'Android, plus une marge —, l'essai est tenu pour perdu.
+     */
+    object EnCours {
+        private val essais = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+        /** `true` si l'essai de [etiquette] est pris par l'appelant ; `false` si un autre court encore. */
+        fun prendre(etiquette: String, maintenant: Long = System.currentTimeMillis()): Boolean {
+            var pris = false
+            essais.compute(etiquette) { _, debut ->
+                if (debut != null && maintenant - debut < DUREE_MAX_MS) {
+                    debut
+                } else {
+                    pris = true
+                    maintenant
+                }
+            }
+            return pris
+        }
+
+        fun rendre(etiquette: String) {
+            essais.remove(etiquette)
+        }
+
+        /** Pour les tests seulement. */
+        fun oublierPourLesTests() {
+            essais.clear()
+        }
+
+        /** 30 min d'attente réseau au plus (AOSP `MmsNetworkManager`), plus 5 min de marge. */
+        internal const val DUREE_MAX_MS: Long = 35 * MINUTE_MS
+    }
 }

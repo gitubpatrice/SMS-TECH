@@ -11,14 +11,16 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
  * 2026-11-14 — la suite d'un nouvel essai de téléchargement MMS ([relancerMms]), dans l'ordre où elle compte.
  *
- * La porte de l'essai AUTOMATIQUE est la présence de la notification du message : l'effacement d'urgence les
- * annule toutes, et une alarme restée armée ne doit pas recréer un message dans une base qu'on vient de vider.
- * Un test qui ne vérifierait que le chemin heureux laisserait passer exactement ce défaut.
+ * Ses portes : un effacement d'urgence survenu depuis l'échec, la notification de CE message encore affichée (pour
+ * l'essai automatique comme pour le bouton), la liste noire, et un seul essai à la fois. Un test qui ne vérifierait
+ * que le chemin heureux laisserait passer exactement les défauts qu'elles ferment (relectures du 2026-11-14).
  */
 class RelanceMmsSuiteTest {
 
@@ -30,6 +32,7 @@ class RelanceMmsSuiteTest {
             subId = 1,
             transactionIdOctets = byteArrayOf(1, 2),
             tentative = 1,
+            lanceeA = 1_000L,
         ),
     )
 
@@ -37,6 +40,18 @@ class RelanceMmsSuiteTest {
     private val telechargees = mutableListOf<RelanceMms.Demande>()
     private var resultat: Outcome<Unit> = Outcome.Success(Unit)
     private val bloques = mutableListOf<String>()
+    private var effaceDepuis = false
+
+    @BeforeEach
+    fun notificationAffichee() {
+        RelanceMms.EnCours.oublierPourLesTests()
+        every { notifier.relanceAffichee(demande.etiquette) } returns true
+    }
+
+    @AfterEach
+    fun oublier() {
+        RelanceMms.EnCours.oublierPourLesTests()
+    }
 
     private suspend fun relancer(automatique: Boolean, bloque: Boolean = false) = relancerMms(
         demande = demande,
@@ -49,6 +64,10 @@ class RelanceMmsSuiteTest {
         telecharger = { d ->
             telechargees += d
             resultat
+        },
+        effaceDepuis = { lanceeA ->
+            assertThat(lanceeA).isEqualTo(1_000L)
+            effaceDepuis
         },
     )
 
@@ -63,10 +82,32 @@ class RelanceMmsSuiteTest {
         assertThat(bloques).isEmpty()
     }
 
+    /**
+     * Le bouton d'une fenêtre restée ouverte, alors que le message est arrivé entre-temps (sa notification est
+     * partie) : il ne le redemande plus (relecture Claude).
+     */
+    @Test
+    fun `bouton - notification retiree, rien n'est telecharge`() = runTest {
+        every { notifier.relanceAffichee(demande.etiquette) } returns false
+
+        relancer(automatique = false)
+
+        assertThat(telechargees).isEmpty()
+    }
+
+    /** Un effacement d'urgence depuis l'échec : ni téléchargement, ni notification qui resterait. */
+    @Test
+    fun `effacement d'urgence depuis l'echec - rien, et la notification part`() = runTest {
+        effaceDepuis = true
+
+        relancer(automatique = false)
+
+        assertThat(telechargees).isEmpty()
+        verify { notifier.retirerRelance(demande.etiquette) }
+    }
+
     @Test
     fun `essai automatique - notification affichee, le meme message est redemande et sa notification reste`() = runTest {
-        every { notifier.relanceAffichee(demande.etiquette) } returns true
-
         relancer(automatique = true)
 
         assertThat(telechargees).containsExactly(demande)
@@ -74,22 +115,41 @@ class RelanceMmsSuiteTest {
         verify(exactly = 0) { notifier.retirerRelance(any()) }
     }
 
-    /** Le bouton ne dépend pas de la notification : la fenêtre d'explication l'envoie aussi, une fois celle-ci partie. */
     @Test
     fun `bouton Reessayer - la notification part d'abord, puis le message est redemande`() = runTest {
-        every { notifier.relanceAffichee(any()) } returns false
-
         relancer(automatique = false)
 
         assertThat(telechargees).containsExactly(demande)
         verify { notifier.retirerRelance(demande.etiquette) }
     }
 
+    /** L'alarme et le bouton, ou deux appuis : un seul téléchargement tant que le premier n'a pas rendu son résultat. */
+    @Test
+    fun `un seul essai a la fois - le second attend le resultat du premier`() = runTest {
+        relancer(automatique = true)
+        relancer(automatique = false)
+
+        assertThat(telechargees).hasSize(1)
+
+        // Le résultat du premier arrive (MmsDownloadedReceiver rend l'essai) : un nouvel essai peut partir.
+        RelanceMms.EnCours.rendre(demande.etiquette)
+        relancer(automatique = false)
+
+        assertThat(telechargees).hasSize(2)
+    }
+
+    /** Un essai dont le résultat ne viendra jamais ne bloque pas le message pour toujours. */
+    @Test
+    fun `un essai perdu est tenu pour fini apres la duree maximale`() {
+        val t0 = 1_000_000L
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette, t0)).isTrue()
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette, t0 + 60_000L)).isFalse()
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette, t0 + RelanceMms.EnCours.DUREE_MAX_MS)).isTrue()
+    }
+
     /** L'expéditeur bloqué depuis l'échec : la liste noire est lue sur l'adresse SANS le suffixe de passerelle. */
     @Test
     fun `expediteur bloque depuis - rien n'est telecharge, la notification part`() = runTest {
-        every { notifier.relanceAffichee(any()) } returns true
-
         relancer(automatique = true, bloque = true)
 
         assertThat(bloques).containsExactly("+15551234567")
@@ -99,7 +159,7 @@ class RelanceMmsSuiteTest {
 
     /** Un téléchargement qui ne démarre pas ne rend aucun résultat : sans notification, le message serait perdu. */
     @Test
-    fun `telechargement qui ne demarre pas - le bouton revient`() = runTest {
+    fun `telechargement qui ne demarre pas - le bouton revient, et l'essai est rendu`() = runTest {
         resultat = Outcome.Failure(AppError.Validation("x"))
         coEvery {
             notifier.notifyFailure(any(), any(), any(), any(), any(), any(), any())
@@ -118,12 +178,14 @@ class RelanceMmsSuiteTest {
                 relance = demande,
             )
         }
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette)).isTrue()
     }
 
     @Test
     fun `telechargement lance - aucune notification d'echec ici, le resultat la decidera`() = runTest {
         relancer(automatique = false)
 
+        assertThat(telechargees).hasSize(1)
         coVerify(exactly = 0) { notifier.notifyFailure(any(), any(), any(), any(), any(), any(), any()) }
     }
 }

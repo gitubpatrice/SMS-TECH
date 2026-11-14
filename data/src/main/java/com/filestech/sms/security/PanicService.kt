@@ -66,6 +66,10 @@ class PanicService @Inject constructor(
      * qu'un ajout ultérieur contournerait encore.
      */
     suspend fun nukeEverything(): Residu = withContext(io + NonCancellable) {
+        // 2026-11-14 — AVANT toute destruction, et dans les deux sessions (une différence observable entre leurre et
+        // session réelle serait la fuite que I1 interdit) : un téléchargement MMS lancé avant cet instant ne
+        // ressuscitera rien après lui, cf. [com.filestech.sms.core.util.DernierEffacement].
+        com.filestech.sms.core.util.DernierEffacement.marquer()
         val residu = if (panicState.isPanicDecoyActive) {
             effacerCeQueLeLeurreMontre()
         } else {

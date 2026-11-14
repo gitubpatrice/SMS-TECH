@@ -5,10 +5,12 @@ import com.filestech.sms.domain.model.Message
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SendReport
 import com.filestech.sms.domain.usecase.EnvoyerMessageUseCase
+import com.filestech.sms.domain.usecase.ScheduleMessageUseCase
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -115,6 +117,75 @@ class ThreadEnvoiSansBloquesTest {
         assertThat(vm.state.value.envoiSansBloques).isNull()
         coVerify(exactly = 1) { envoyer.invoke(any(), "Bonjour", any(), any(), any()) }
         assertThat(evenements.filterIsInstance<ThreadViewModel.Event.OuvrirConversation>()).isEmpty()
+    }
+
+    /**
+     * Relecture Claude du 2026-11-14 : la vérification des membres bloqués SUSPEND avant que l'envoi ne pose
+     * `isSending` ; un second appui pendant ce temps partait aussi — deux MMS envoyés et facturés à tout le groupe.
+     */
+    @Test
+    fun `double appui pendant la verification - un seul envoi`() = runTest(dispatcher) {
+        val porte = CompletableDeferred<Unit>()
+        coEvery { envoyer.membresEcartesDuGroupe(any()) } coAnswers {
+            porte.await()
+            emptyList()
+        }
+        coEvery { envoyer.invoke(any(), any(), any(), any(), any()) } returns Outcome.Success(
+            SendReport(dispatched = listOf(42L), failed = emptyList(), blocked = emptyList(), servis = 3),
+        )
+        val vm = threadViewModelDeTest(dispatcher, envoyer, adresses = groupe)
+
+        vm.updateDraft("Bonjour")
+        vm.send()
+        vm.send()
+        porte.complete(Unit)
+
+        coVerify(exactly = 1) { envoyer.invoke(any(), "Bonjour", any(), any(), any()) }
+    }
+
+    /**
+     * Relecture Claude du 2026-11-14 : sans fenêtre acceptée, l'écran ne part pas ailleurs. En SMS par destinataire,
+     * le message rendu est celui d'un destinataire, rangé dans SA conversation : le suivre aurait été une erreur, et
+     * le bandeau d'envoi partiel se serait tu.
+     */
+    @Test
+    fun `sans avertissement - pas de navigation, le bandeau parle`() = runTest(dispatcher) {
+        coEvery { envoyer.membresEcartesDuGroupe(any()) } returns emptyList()
+        coEvery { envoyer.invoke(any(), any(), any(), any(), any()) } returns Outcome.Success(
+            SendReport(dispatched = listOf(42L), failed = emptyList(), blocked = listOf(bloque)),
+        )
+        val envoye = mockk<Message> { io.mockk.every { conversationId } returns 99L }
+        val vm = threadViewModelDeTest(dispatcher, envoyer, adresses = groupe) {
+            coEvery { findMessageById(42L) } returns envoye
+        }
+        val evenements = mutableListOf<ThreadViewModel.Event>()
+        backgroundScope.launch { vm.events.collect { evenements += it } }
+
+        vm.updateDraft("Bonjour")
+        vm.send()
+
+        assertThat(evenements.filterIsInstance<ThreadViewModel.Event.OuvrirConversation>()).isEmpty()
+        assertThat(evenements).contains(ThreadViewModel.Event.PartialSend(sent = 1, failed = 0, blocked = 1))
+    }
+
+    /** Relecture Claude du 2026-11-14 : un envoi PROGRAMMÉ vers ce groupe prévient aussi, à la programmation. */
+    @Test
+    fun `envoi programme - prevenu avant d'etre programme`() = runTest(dispatcher) {
+        coEvery { envoyer.membresEcartesDuGroupe(any()) } returns listOf(bloque)
+        val programmer = mockk<ScheduleMessageUseCase>()
+        coEvery { programmer.invoke(any(), any(), any(), any(), any(), any()) } returns Outcome.Success(1L)
+        val vm = threadViewModelDeTest(dispatcher, envoyer, adresses = groupe, scheduleMessage = programmer)
+        val echeance = System.currentTimeMillis() + 3_600_000L
+
+        vm.updateDraft("Bonjour")
+        vm.scheduleSend(echeance)
+
+        assertThat(vm.state.value.envoiSansBloques?.suite).isEqualTo(ThreadViewModel.SuiteEnvoi.PROGRAMMATION)
+        coVerify(exactly = 0) { programmer.invoke(any(), any(), any(), any(), any(), any()) }
+
+        vm.confirmerEnvoiSansBloques()
+
+        coVerify(exactly = 1) { programmer.invoke(any(), any(), "Bonjour", echeance, any(), any()) }
     }
 
     /**
