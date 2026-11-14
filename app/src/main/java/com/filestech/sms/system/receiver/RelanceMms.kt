@@ -154,7 +154,9 @@ object RelanceMms {
                 subId: Int?,
                 transactionIdOctets: ByteArray?,
                 tentative: Int,
-                lanceeA: Long = System.currentTimeMillis(),
+                // 0 par défaut, que tout effacement précède : un appelant qui l'oublierait ne passerait pas la garde
+                // d'effacement (relecture Claude). `SystemClock.elapsedRealtime()`, comme `MmsDownloader`.
+                lanceeA: Long = 0L,
             ): Demande? {
                 if (adresse.isNullOrBlank() || !MmsDownloader.adresseHttp(adresse)) return null
                 if (transactionIdOctets != null && transactionIdOctets.size > OCTETS_TRANSACTION_MAX) return null
@@ -241,8 +243,11 @@ object RelanceMms {
     object EnCours {
         private val essais = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-        /** `true` si l'essai de [etiquette] est pris par l'appelant ; `false` si un autre court encore. */
-        fun prendre(etiquette: String, maintenant: Long = System.currentTimeMillis()): Boolean {
+        /**
+         * `true` si l'essai de [etiquette] est pris par l'appelant ; `false` si un autre court encore. L'horloge est
+         * celle de l'heure de lancement des téléchargements (`SystemClock.elapsedRealtime()`), que [rendre] compare.
+         */
+        fun prendre(etiquette: String, maintenant: Long = android.os.SystemClock.elapsedRealtime()): Boolean {
             var pris = false
             essais.compute(etiquette) { _, debut ->
                 if (debut != null && maintenant - debut < DUREE_MAX_MS) {
@@ -255,8 +260,14 @@ object RelanceMms {
             return pris
         }
 
-        fun rendre(etiquette: String) {
-            essais.remove(etiquette)
+        /**
+         * Rend l'essai de [etiquette] — s'il est bien celui dont le résultat arrive : lancé à [lanceA], pas avant
+         * l'essai enregistré. Le résultat tardif d'un essai tenu pour perdu (au-delà de [DUREE_MAX_MS]) ne libère pas
+         * l'essai qui l'a remplacé (seconde relecture GPT du 2026-11-14). L'essai est pris AVANT le téléchargement :
+         * son propre résultat porte toujours une heure postérieure ou égale.
+         */
+        fun rendre(etiquette: String, lanceA: Long) {
+            essais.computeIfPresent(etiquette) { _, debut -> if (lanceA >= debut) null else debut }
         }
 
         /** Pour les tests seulement. */

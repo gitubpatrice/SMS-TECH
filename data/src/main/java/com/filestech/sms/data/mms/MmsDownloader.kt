@@ -97,8 +97,7 @@ class MmsDownloader @Inject constructor(
         // action, which it doesn't — Android 14+ silently drops these broadcasts. Without delivery,
         // the receiver never runs → the downloaded PDU file (raw audio + sender headers) stays
         // forever in `cache/mms_incoming/`, leaking plaintext on adb-pull / forensics.
-        val intent = Intent(ACTION_MMS_DOWNLOADED)
-            .setClassName(context, "com.filestech.sms.system.receiver.MmsDownloadedReceiver")
+        val intent = identiteDuResultat(context)
             .apply {
                 putExtra(EXTRA_PDU_FILE, pduFile.absolutePath)
                 putExtra(EXTRA_TRANSACTION_ID, transactionId)
@@ -114,14 +113,13 @@ class MmsDownloader @Inject constructor(
                 putExtra(EXTRA_TENTATIVE, tentative)
                 // 2026-11-14 — l'heure du lancement : un résultat arrivé après un effacement d'urgence, pour un
                 // téléchargement lancé avant lui, ne ressuscite rien (`DernierEffacement`).
-                putExtra(EXTRA_LANCE_A, System.currentTimeMillis())
+                putExtra(EXTRA_LANCE_A, android.os.SystemClock.elapsedRealtime())
             }
-        val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
         // 2026-11-06 — MUTABLE, sans quoi le statut HTTP d'un échec n'arrive jamais : cf.
         // [drapeauxDuResultatDeTelechargement].
         val pi = PendingIntent.getBroadcast(
             context,
-            reqCode,
+            codeDuResultat(pduFile),
             intent,
             drapeauxDuResultatDeTelechargement(Build.VERSION.SDK_INT),
         )
@@ -210,8 +208,54 @@ class MmsDownloader @Inject constructor(
         /** 2026-11-14 — le rang du téléchargement : 0 à l'annonce, puis celui du nouvel essai (`RelanceMms`). */
         const val EXTRA_TENTATIVE: String = "com.filestech.sms.extra.MMS_DOWNLOAD_ATTEMPT"
 
-        /** 2026-11-14 — l'heure (ms) à laquelle ce téléchargement a été lancé, cf. `DernierEffacement`. */
+        /**
+         * 2026-11-14 — l'instant du lancement de ce téléchargement, en `SystemClock.elapsedRealtime()` (horloge qui ne
+         * recule pas), cf. `DernierEffacement` et `RelanceMms.EnCours`.
+         */
         const val EXTRA_LANCE_A: String = "com.filestech.sms.extra.MMS_DOWNLOAD_STARTED_AT"
+
+        /**
+         * 2026-11-14 (seconde relecture GPT) — **annule le résultat de chaque téléchargement encore en cours**, appelé
+         * par l'effacement d'urgence avant qu'il ne vide le cache.
+         *
+         * Un téléchargement lancé avant l'effacement peut aboutir après lui (le service MMS attend parfois le réseau
+         * trente minutes) : son résultat écrivait le message dans la base vidée. La marque en mémoire
+         * (`DernierEffacement`) ne suffit pas quand le processus meurt entre-temps ; un `PendingIntent` annulé, lui,
+         * l'est dans le système : le service MMS ne peut plus le livrer, à aucun processus. Rien n'est écrit nulle
+         * part, l'effacement ne laisse donc pas de trace.
+         *
+         * Chaque téléchargement en cours a son PDU dans [MMS_IN_DIR], et son `PendingIntent` se retrouve par la même
+         * identité qu'à la création (action, receveur, code tiré du chemin) ; `FLAG_NO_CREATE` n'en crée aucun.
+         *
+         * @return le nombre de `PendingIntent` annulés.
+         */
+        fun annulerLesResultatsEnAttente(context: Context): Int {
+            val fichiers = File(context.cacheDir, MMS_IN_DIR).listFiles() ?: return 0
+            var annules = 0
+            for (fichier in fichiers) {
+                val pi = runCatching {
+                    PendingIntent.getBroadcast(
+                        context,
+                        codeDuResultat(fichier),
+                        identiteDuResultat(context),
+                        drapeauxDuResultatDeTelechargement(Build.VERSION.SDK_INT) or PendingIntent.FLAG_NO_CREATE,
+                    )
+                }.getOrNull() ?: continue
+                pi.cancel()
+                annules++
+            }
+            return annules
+        }
+
+        /**
+         * L'identité du résultat d'un téléchargement (action et receveur ; les extras n'en font pas partie). Audit
+         * P0-2 (v1.2.0) : explicite, sans quoi Android 14+ ne livrait rien au receveur sans filtre.
+         */
+        private fun identiteDuResultat(context: Context): Intent = Intent(ACTION_MMS_DOWNLOADED)
+            .setClassName(context, "com.filestech.sms.system.receiver.MmsDownloadedReceiver")
+
+        /** Le code de requête du résultat, tiré du chemin du PDU : un par téléchargement. */
+        private fun codeDuResultat(pdu: File): Int = pdu.absolutePath.hashCode() and 0x7FFFFFFF
 
         /**
          * v1.3.10 (SEC-05) — `http://` ou `https://`, rien d'autre. 2026-11-06 — sortie du corps de

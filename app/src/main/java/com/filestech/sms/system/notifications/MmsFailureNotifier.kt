@@ -154,27 +154,30 @@ class MmsFailureNotifier @Inject constructor(
     ): Boolean {
         // 2026-11-14 — seul un téléchargement manqué se redemande.
         val aRelancer = relance?.takeIf { reason == Reason.DOWNLOAD_FAILED }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.POST_NOTIFICATIONS,
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return false
-            }
+        // 2026-11-14 — le verdict de confidentialité D'ABORD : retirer une notification nominative déjà affichée ne
+        // dépend pas de pouvoir en poster une nouvelle (seconde relecture GPT : coupées entre-temps, elles la
+        // laissaient en place).
+        val verdict = visibilite.verdictPour(senderAddress)
+        if (verdict == CorrespondentVisibilityPolicy.Verdict.TAIRE) {
+            // 2026-11-14 (relecture Claude) — le correspondant est passé au coffre (ou une session leurre a commencé)
+            // depuis le premier échec : sa notification nominative ne reste pas affichée.
+            aRelancer?.let { retirerRelance(it.etiquette) }
+            return false
         }
-        // 2026-11-14 (relecture Claude) — notifications de l'appli coupées (avant Android 13 : pas de permission,
-        // un interrupteur), ou canal des échecs réduit au silence : `notify` ne lève rien, mais rien ne s'affiche.
-        // L'appelant aurait armé un essai que sa porte (la notification affichée) aurait aussitôt abandonné.
-        if (!notificationsVisibles()) return false
+        // 2026-11-14 (relecture Claude) — permission refusée, notifications de l'appli coupées (avant Android 13 : pas
+        // de permission, un interrupteur), canal des échecs absent ou réduit au silence : `notify` ne lève rien, mais
+        // rien ne s'affiche. L'appelant aurait armé un essai que sa porte (la notification affichée) aurait aussitôt
+        // abandonné.
+        val permise = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!permise || !notificationsVisibles()) return false
         val anonyme = context.getString(R.string.mms_failure_notification_body_unknown_sender)
-        val sender = when (visibilite.verdictPour(senderAddress)) {
-            CorrespondentVisibilityPolicy.Verdict.TAIRE -> {
-                // 2026-11-14 (relecture Claude) — le correspondant est passé au coffre (ou une session leurre a
-                // commencé) depuis le premier échec : sa notification nominative ne reste pas affichée.
-                aRelancer?.let { retirerRelance(it.etiquette) }
-                return false
-            }
-            CorrespondentVisibilityPolicy.Verdict.ANONYMISER -> anonyme
+        val sender = when (verdict) {
+            // TAIRE est sorti plus haut ; l'anonymat est le repli s'il revenait jusqu'ici.
+            CorrespondentVisibilityPolicy.Verdict.TAIRE,
+            CorrespondentVisibilityPolicy.Verdict.ANONYMISER,
+            -> anonyme
             // 2026-11-06 — l'adresse vient du PDU, donc de l'extérieur : sans le suffixe de passerelle
             // `/TYPE=PLMN`, qui s'affichait tel quel, ni caractère invisible (Bidi, RLO), comme
             // l'expéditeur d'un MMS reçu (audit SEC-08, `LecteurRetrieveConf.lire`).
@@ -273,12 +276,7 @@ class MmsFailureNotifier @Inject constructor(
      * affichée ? Condition de tout essai automatique, cf. [RelanceMms]. Une lecture impossible répond `false` :
      * le repli sûr est l'essai manqué, pas l'essai qu'on n'aurait plus voulu (après un effacement d'urgence).
      */
-    fun relanceAffichee(etiquette: String): Boolean = runCatching {
-        val tag = etiquetteDeNotification(etiquette)
-        context.getSystemService(NotificationManager::class.java)
-            ?.activeNotifications
-            ?.any { it.id == NOTIF_ID_RELANCE && it.tag == tag } == true
-    }.getOrDefault(false)
+    fun relanceAffichee(etiquette: String): Boolean = relanceAfficheeDans(context, etiquette)
 
     /** 2026-11-14 — retire la notification du message [etiquette] : arrivé, abandonné, ou relancé à la main. */
     fun retirerRelance(etiquette: String) {
@@ -288,13 +286,17 @@ class MmsFailureNotifier @Inject constructor(
     }
 
     /**
-     * 2026-11-14 — une notification d'échec postée s'affichera-t-elle ? Notifications de l'appli autorisées, et canal
-     * des échecs non réduit au silence. Une lecture impossible répond `true` : on poste comme avant.
+     * 2026-11-14 — une notification d'échec postée s'affichera-t-elle (la permission, elle, est vérifiée par
+     * l'appelant, là où lint la voit) ? Notifications de l'appli autorisées, et canal
+     * des échecs présent (Android 8 et plus n'affiche rien sur un canal inexistant — seconde relecture GPT) et non
+     * réduit au silence. Une lecture impossible répond `true` : on poste comme avant.
      */
     private fun notificationsVisibles(): Boolean = runCatching {
         val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return@runCatching false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@runCatching true
         val canal = nm.getNotificationChannelCompat(NotificationChannelInitializer.CHANNEL_FAILED)
-        nm.areNotificationsEnabled() && canal?.importance != NotificationManagerCompat.IMPORTANCE_NONE
+        canal != null && canal.importance != NotificationManagerCompat.IMPORTANCE_NONE
     }.getOrDefault(true)
 
     companion object {
@@ -327,8 +329,19 @@ class MmsFailureNotifier @Inject constructor(
         fun relanceDepuisExtras(reason: Reason, intent: Intent, context: Context): PendingIntent? {
             if (reason != Reason.DOWNLOAD_FAILED) return null
             val etiquette = runCatching { intent.getStringExtra(EXTRA_RELANCE) }.getOrNull() ?: return null
+            // 2026-11-14 (seconde relecture Claude) — pas de bouton si la notification du message est partie (arrivé,
+            // balayé) : l'essai lui-même le refuserait, et la fenêtre aurait annoncé un nouvel essai qui n'a pas lieu.
+            if (!RelanceMms.etiquetteValide(etiquette) || !relanceAfficheeDans(context, etiquette)) return null
             return RelanceMmsReceiver.boutonExistant(context, etiquette)
         }
+
+        /** La notification du message [etiquette] est-elle affichée ? Une lecture impossible répond `false`. */
+        private fun relanceAfficheeDans(context: Context, etiquette: String): Boolean = runCatching {
+            val tag = etiquetteDeNotification(etiquette)
+            context.getSystemService(NotificationManager::class.java)
+                ?.activeNotifications
+                ?.any { it.id == NOTIF_ID_RELANCE && it.tag == tag } == true
+        }.getOrDefault(false)
 
         /** 2026-11-06 — tap de la notification : `MainActivity` ouvre la fenêtre d'explication. */
         const val ACTION_EXPLAIN_MMS_FAILURE: String = "com.filestech.sms.action.EXPLAIN_MMS_FAILURE"

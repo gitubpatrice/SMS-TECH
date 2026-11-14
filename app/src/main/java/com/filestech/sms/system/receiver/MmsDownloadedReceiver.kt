@@ -178,8 +178,6 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                 nouvelEssaiPrevu = nouvelEssaiPrevu,
             )
             try {
-                // 2026-11-14 — le résultat de cet essai est là : un autre essai du même message peut partir.
-                relance?.let { RelanceMms.EnCours.rendre(it.etiquette) }
                 // 2026-11-14 (relectures Claude, GPT, audit de sécurité) — un téléchargement lancé AVANT un
                 // effacement d'urgence ne ressuscite rien après lui : ni message écrit dans la base vidée, ni
                 // notification nominative, ni essai réarmé. Le PDU, s'il est arrivé, part avec (finally).
@@ -435,6 +433,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
                         entry.mmsSender().repondreAuMmsc(notificationTransactionId, contentLocation, statut, subId)
                     }.onFailure { Timber.w(it, "m-notifyresp.ind: sender unavailable") }
                 }
+                // 2026-11-14 — le résultat de cet essai est TRAITÉ : un autre essai du même message peut partir. Rendu
+                // en fin de traitement, pas à l'arrivée (seconde relecture GPT) : un « Réessayer » pendant l'écriture
+                // relançait le message en cours d'écriture.
+                relance?.let { RelanceMms.EnCours.rendre(it.etiquette, lanceA) }
                 pending.finish()
             }
         }

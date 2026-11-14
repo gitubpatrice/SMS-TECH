@@ -100,7 +100,8 @@ class ComposeAjoutTest {
 
     /**
      * Relecture Claude du 2026-11-14 : chaque lecture de la liste de blocage suspend ; deux ajouts rapides pouvaient
-     * être annoncés dans le désordre, et tous deux « 2 au total ». Ici la lecture du second finit AVANT celle du premier.
+     * être annoncés dans le désordre, et tous deux « 2 au total ». Ici la réponse pour le second est prête AVANT celle
+     * du premier : la file des annonces le fait attendre (il ne lit qu'après), et chacune garde son total.
      */
     @Test
     fun `deux ajouts rapides - annonces dans l'ordre, chacune avec son total`() = runTest(dispatcher) {

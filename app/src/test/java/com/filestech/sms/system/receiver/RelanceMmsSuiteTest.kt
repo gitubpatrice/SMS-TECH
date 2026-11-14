@@ -131,11 +131,31 @@ class RelanceMmsSuiteTest {
 
         assertThat(telechargees).hasSize(1)
 
-        // Le résultat du premier arrive (MmsDownloadedReceiver rend l'essai) : un nouvel essai peut partir.
-        RelanceMms.EnCours.rendre(demande.etiquette)
+        // Le résultat du premier est traité (MmsDownloadedReceiver rend l'essai) : un nouvel essai peut partir.
+        RelanceMms.EnCours.rendre(demande.etiquette, lanceA = android.os.SystemClock.elapsedRealtime())
         relancer(automatique = false)
 
         assertThat(telechargees).hasSize(2)
+    }
+
+    /**
+     * Seconde relecture GPT du 2026-11-14 : le résultat TARDIF d'un essai tenu pour perdu ne libère pas l'essai qui l'a
+     * remplacé — sinon un troisième partirait pendant que le second court.
+     */
+    @Test
+    fun `le resultat tardif d'un ancien essai ne libere pas le suivant`() {
+        val t0 = 1_000_000L
+        val apresPerte = t0 + RelanceMms.EnCours.DUREE_MAX_MS
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette, t0)).isTrue()
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette, apresPerte)).isTrue()
+
+        // Le résultat du premier essai (lancé à t0) arrive enfin.
+        RelanceMms.EnCours.rendre(demande.etiquette, lanceA = t0)
+
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette, apresPerte + 1)).isFalse()
+        // Celui du second, lui, le libère.
+        RelanceMms.EnCours.rendre(demande.etiquette, lanceA = apresPerte)
+        assertThat(RelanceMms.EnCours.prendre(demande.etiquette, apresPerte + 2)).isTrue()
     }
 
     /** Un essai dont le résultat ne viendra jamais ne bloque pas le message pour toujours. */

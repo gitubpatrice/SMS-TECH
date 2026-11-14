@@ -188,6 +188,27 @@ class ThreadEnvoiSansBloquesTest {
         coVerify(exactly = 1) { programmer.invoke(any(), any(), "Bonjour", echeance, any(), any()) }
     }
 
+    /** Seconde relecture GPT du 2026-11-14 : un double appui sur « Programmer » programmait deux fois le même message. */
+    @Test
+    fun `double appui sur Programmer - une seule programmation`() = runTest(dispatcher) {
+        val porte = CompletableDeferred<Unit>()
+        coEvery { envoyer.membresEcartesDuGroupe(any()) } returns emptyList()
+        val programmer = mockk<ScheduleMessageUseCase>()
+        coEvery { programmer.invoke(any(), any(), any(), any(), any(), any()) } coAnswers {
+            porte.await()
+            Outcome.Success(1L)
+        }
+        val vm = threadViewModelDeTest(dispatcher, envoyer, adresses = groupe, scheduleMessage = programmer)
+        val echeance = System.currentTimeMillis() + 3_600_000L
+
+        vm.updateDraft("Bonjour")
+        vm.scheduleSend(echeance)
+        vm.scheduleSend(echeance)
+        porte.complete(Unit)
+
+        coVerify(exactly = 1) { programmer.invoke(any(), any(), any(), any(), any(), any()) }
+    }
+
     /**
      * Le message est resté ici (cas d'un groupe déjà réduit) : pas de navigation, et le bandeau compte les PERSONNES
      * servies — « Envoyé à 1 destinataire(s) » pour un MMS parti à 55 était le défaut vécu.

@@ -42,6 +42,19 @@ class MmsFailureNotifierTest {
         shadowOf(contexte as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         coEvery { visibilite.verdictPour(any(), any()) } returns CorrespondentVisibilityPolicy.Verdict.NOMMER
         coEvery { visibilite.ecranVerrouille() } returns CorrespondentVisibilityPolicy.EcranVerrouille.PRIVE
+        // Comme au démarrage de l'appli (`MainApplication`) : sans canal, Android 8+ n'affiche rien.
+        NotificationChannelInitializer(contexte).ensureDefaultChannels()
+    }
+
+    /** Seconde relecture GPT du 2026-11-14 : un canal absent n'affiche rien ; l'appelant ne doit pas croire le contraire. */
+    @Test
+    fun `canal des echecs absent - rien de poste, et l'appelant le sait`() {
+        nm.deleteNotificationChannel(NotificationChannelInitializer.CHANNEL_FAILED)
+
+        val notifier = MmsFailureNotifier(contexte, visibilite)
+        val postee = runBlocking { notifier.notifyFailure(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, "+15551234567") }
+
+        assertThat(postee).isFalse()
     }
 
     private fun poste(
@@ -334,6 +347,8 @@ class MmsFailureNotifierTest {
         assertThat(shadowOf(nm).allNotifications).hasSize(1)
 
         coEvery { visibilite.verdictPour(any(), any()) } returns CorrespondentVisibilityPolicy.Verdict.TAIRE
+        // Seconde relecture GPT : même si les notifications ont été coupées entre-temps.
+        shadowOf(nm).setNotificationsEnabled(false)
         assertThat(posteAvecRelance(d, nouvelEssaiPrevu = true)).isFalse()
 
         assertThat(shadowOf(nm).allNotifications).isEmpty()
@@ -381,7 +396,13 @@ class MmsFailureNotifierTest {
         assertThat(lu(Intent("x").putExtra(cle, inventee))).isNull()
         assertThat(lu(Intent("x").putExtra(cle, "../../etc"))).isNull()
         assertThat(lu(Intent("x").putExtra(cle, notreBouton))).isNull()
-        // Témoin positif : la vraie étiquette d'un message dont le bouton existe.
+        // Le bouton existe, mais sa notification n'est pas (ou plus) affichée : pas de bouton dans la fenêtre.
+        assertThat(lu(Intent("x").putExtra(cle, demande().etiquette))).isNull()
+        // Témoin positif : la vraie étiquette d'un message dont la notification, et donc le bouton, est là.
+        posteAvecRelance(demande(), nouvelEssaiPrevu = true)
         assertThat(lu(Intent("x").putExtra(cle, demande().etiquette))).isNotNull()
+        // Le message arrive (sa notification part) : la fenêtre n'offre plus de bouton.
+        MmsFailureNotifier(contexte, visibilite).retirerRelance(demande().etiquette)
+        assertThat(lu(Intent("x").putExtra(cle, demande().etiquette))).isNull()
     }
 }

@@ -9,17 +9,25 @@ package com.filestech.sms.core.util
  * réarmait des essais (relectures Claude, GPT et audit de sécurité du 2026-11-14).
  *
  * Pourquoi en mémoire seulement : une marque écrite sur le disque serait une trace qu'un effacement a eu lieu, ce que
- * le mode leurre doit taire. Le prix : si le processus meurt entre l'effacement et le résultat, la marque est perdue.
- * Les essais automatiques restent alors tenus par leur propre porte (la notification de leur message, que
- * l'effacement a annulée) ; seul un téléchargement déjà en vol peut encore aboutir — comme avant cette marque.
+ * le mode leurre doit taire. Le prix : si le processus meurt entre l'effacement et le résultat, la marque est perdue —
+ * c'est pourquoi l'effacement annule aussi, DANS LE SYSTÈME, le résultat des téléchargements en cours
+ * (`MmsDownloader.annulerLesResultatsEnAttente`). Cette marque est la seconde ligne.
+ *
+ * L'horloge est `SystemClock.elapsedRealtime()`, passée par l'appelant, des deux côtés (relecture Claude du
+ * 2026-11-14) : l'heure murale recule (NTP, réseau, réglage à la main), et un recul après un effacement faisait
+ * écarter des MMS reçus ensuite. L'horloge monotone ne recule pas ; elle repart à zéro au redémarrage, comme cette
+ * marque et tout ce qu'elle compare.
  */
 object DernierEffacement {
 
     @Volatile
     private var instant: Long = 0L
 
-    /** Posée par l'effacement, AVANT de détruire quoi que ce soit : un résultat qui arrive pendant compte aussi. */
-    fun marquer(maintenant: Long = System.currentTimeMillis()) {
+    /**
+     * Posée par l'effacement, AVANT de détruire quoi que ce soit : un résultat qui arrive pendant compte aussi.
+     * [maintenant] : `SystemClock.elapsedRealtime()`.
+     */
+    fun marquer(maintenant: Long) {
         instant = maxOf(instant, maintenant)
     }
 

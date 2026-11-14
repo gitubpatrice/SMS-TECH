@@ -224,7 +224,7 @@ internal suspend fun relancerMms(
     if (res is Outcome.Failure) {
         // Le téléchargement n'a pas même démarré : aucun résultat ne viendra, l'essai est rendu ici. Le message reste
         // au bouton.
-        enCours.rendre(demande.etiquette)
+        enCours.rendre(demande.etiquette, lanceA = android.os.SystemClock.elapsedRealtime())
         notifier.notifyFailure(
             reason = MmsFailureNotifier.Reason.DOWNLOAD_FAILED,
             senderAddress = demande.expediteur,

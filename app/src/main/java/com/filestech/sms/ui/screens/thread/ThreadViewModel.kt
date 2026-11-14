@@ -395,6 +395,9 @@ class ThreadViewModel @Inject constructor(
      */
     private var verificationAvantEnvoi = false
 
+    /** 2026-11-14 — une programmation est en cours, cf. [scheduleSend]. Fil principal seulement. */
+    private var programmationEnCours = false
+
     /**
      * v1.6.1 PERF-01 / v1.6.2 BUGFIX — snapshot chaud des AppSettings.
      *
@@ -853,16 +856,33 @@ class ThreadViewModel @Inject constructor(
             ))
             return
         }
+        // 2026-11-14 (seconde relecture GPT) — un double appui programmait deux fois le même message. Le verrou est
+        // posé ici, de façon synchrone, et tenu jusqu'à la fin de la programmation.
+        if (programmationEnCours) return
+        programmationEnCours = true
         viewModelScope.launch {
-            // 2026-11-14 (relecture Claude) — à l'heure dite, un MMS de groupe écartera les membres bloqués et partira
-            // dans une autre conversation, sans personne devant l'écran : on le dit maintenant.
-            if (demanderSiBloques(SuiteEnvoi.PROGRAMMATION, programmeA = epochMillis)) return@launch
-            programmer(epochMillis)
+            try {
+                // 2026-11-14 (relecture Claude) — à l'heure dite, un MMS de groupe écartera les membres bloqués et
+                // partira dans une autre conversation, sans personne devant l'écran : on le dit maintenant.
+                if (demanderSiBloques(SuiteEnvoi.PROGRAMMATION, programmeA = epochMillis)) return@launch
+                programmer(epochMillis)
+            } finally {
+                programmationEnCours = false
+            }
         }
     }
 
     /** La programmation elle-même, après les vérifications de [scheduleSend] (et, s'il y a lieu, l'avertissement). */
     private suspend fun programmer(epochMillis: Long) {
+        // 2026-11-14 (seconde relecture Claude) — l'échéance a pu passer pendant que l'avertissement restait ouvert :
+        // même refus qu'à la saisie, plutôt qu'un envoi immédiat que personne n'a confirmé comme tel.
+        if (epochMillis <= System.currentTimeMillis()) {
+            _events.tryEmit(Event.ShowSnackbar(
+                context.getString(com.filestech.sms.R.string.thread_schedule_invalid_past),
+                isError = true,
+            ))
+            return
+        }
         val body = _state.value.draft.trim()
         val conv = _state.value.conversation
         // Les destinataires sont ceux de la conversation courante (cohérent avec sendSms).

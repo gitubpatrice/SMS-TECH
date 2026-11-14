@@ -66,10 +66,20 @@ class PanicService @Inject constructor(
      * qu'un ajout ultérieur contournerait encore.
      */
     suspend fun nukeEverything(): Residu = withContext(io + NonCancellable) {
-        // 2026-11-14 — AVANT toute destruction, et dans les deux sessions (une différence observable entre leurre et
-        // session réelle serait la fuite que I1 interdit) : un téléchargement MMS lancé avant cet instant ne
-        // ressuscitera rien après lui, cf. [com.filestech.sms.core.util.DernierEffacement].
-        com.filestech.sms.core.util.DernierEffacement.marquer()
+        // 2026-11-14 — AVANT toute destruction : un téléchargement MMS lancé avant cet instant ne ressuscitera rien
+        // après lui (marque en mémoire, cf. [com.filestech.sms.core.util.DernierEffacement]) ; et, la marque mourant
+        // avec le processus, son résultat est annulé DANS LE SYSTÈME, avant que le cache qui permet de le retrouver
+        // ne soit vidé.
+        //
+        // Seulement pour l'effacement RÉEL (relecture Claude du 2026-11-14) : la session leurre ne vide que ce
+        // qu'elle montre et garde les vraies données ; écarter un MMS réel en route y serait une perte sans
+        // contrepartie. Ce que l'utilisateur voit de l'effacement — liste, notifications, dialogue — reste le même
+        // dans les deux sessions ; un MMS arrivé ensuite suit les règles de réception ordinaires, ici comme là.
+        if (!panicState.isPanicDecoyActive) {
+            com.filestech.sms.core.util.DernierEffacement.marquer(android.os.SystemClock.elapsedRealtime())
+            runCatching { com.filestech.sms.data.mms.MmsDownloader.annulerLesResultatsEnAttente(context) }
+                .onFailure { Timber.w(it, "wipe: resultats MMS en attente") }
+        }
         val residu = if (panicState.isPanicDecoyActive) {
             effacerCeQueLeLeurreMontre()
         } else {
