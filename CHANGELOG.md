@@ -39,6 +39,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   with a restart, like the notification. The explanation suggests turning Wi-Fi off for a moment.
 - **Each recipient added to a new group is confirmed** ("Added: name (N in total)"), a contact already in
   the list says so, and a number from the block list is announced and its chip marked "blocked".
+- **A thank-you note in About**, above "Created by", to everyone who reports a problem, tests a new version
+  or suggests an idea. It names no one: nobody agreed to appear in the app.
 
 ### Fixed
 

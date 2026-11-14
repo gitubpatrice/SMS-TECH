@@ -767,6 +767,9 @@
     <string name="about_permissions_title">Permissions we use</string>
     <string name="about_security_title">Security &amp; limits</string>
     <string name="about_security_body">SMS and MMS travel unencrypted across the carrier network — this is a protocol limitation, not a choice. SMS Tech only protects what is stored on your device. For end-to-end encrypted messaging, use Signal or Matrix.</string>
+    <!-- 2026-11-14 (Patrice) — remerciements aux contributeurs, sans nom : personne n'a consenti à figurer dans
+         l'application, et une liste nominative serait à tenir à jour (et incomplète) à chaque version. -->
+    <string name="about_thanks_body">Thank you to everyone who reports a problem, tests a new version or suggests an idea: SMS Tech gets better with your help.</string>
     <string name="about_credits_body">Created by %1$s. UI inspired by Material 3 motion principles. Built with Kotlin, Compose, Hilt, Room and SQLCipher.</string>
     <string name="about_legal_body">© %1$s %2$s. Released under the Apache License 2.0.</string>
     <string name="about_source_code">Source code</string>

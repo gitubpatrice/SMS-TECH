@@ -773,6 +773,7 @@
     <string name="about_permissions_title">Permisos que usamos</string>
     <string name="about_security_title">Seguridad y límites</string>
     <string name="about_security_body">Los SMS y los MMS viajan sin cifrar por la red del operador: es un límite del protocolo, no una elección. SMS Tech solo protege lo que está guardado en su dispositivo. Para mensajería cifrada de extremo a extremo, use Signal o Matrix.</string>
+    <string name="about_thanks_body">Gracias a todas las personas que informan de un problema, prueban una nueva versión o proponen una idea: con su ayuda, SMS Tech mejora.</string>
     <string name="about_credits_body">Creada por %1$s. Interfaz inspirada en los principios de movimiento de Material 3. Desarrollada con Kotlin, Compose, Hilt, Room y SQLCipher.</string>
     <string name="about_legal_body">© %1$s %2$s. Publicada bajo la licencia Apache 2.0.</string>
     <string name="about_source_code">Código fuente</string>

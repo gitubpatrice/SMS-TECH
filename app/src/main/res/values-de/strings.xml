@@ -770,6 +770,7 @@
     <string name="about_permissions_title">Berechtigungen, die wir verwenden</string>
     <string name="about_security_title">Sicherheit &amp; Grenzen</string>
     <string name="about_security_body">SMS und MMS laufen unverschlüsselt über das Netz des Anbieters — das ist eine Grenze des Protokolls, keine Entscheidung. SMS Tech schützt nur, was auf Ihrem Gerät gespeichert ist. Für Ende-zu-Ende-verschlüsselte Nachrichten verwenden Sie Signal oder Matrix.</string>
+    <string name="about_thanks_body">Danke an alle, die einen Fehler melden, eine neue Version testen oder eine Idee vorschlagen: Mit Ihrer Hilfe wird SMS Tech besser.</string>
     <string name="about_credits_body">Erstellt von %1$s. Oberfläche inspiriert von den Bewegungsprinzipien von Material 3. Gebaut mit Kotlin, Compose, Hilt, Room und SQLCipher.</string>
     <string name="about_legal_body">© %1$s %2$s. Veröffentlicht unter der Apache License 2.0.</string>
     <string name="about_source_code">Quellcode</string>
