@@ -554,7 +554,7 @@ class ConversationRepositoryImpl @Inject constructor(
     // état partiel non-récupérable. Retourne le count effectivement modifié.
     override suspend fun bulkMoveToVault(ids: List<Long>, inVault: Boolean): Int = withContext(io) {
         if (ids.isEmpty()) return@withContext 0
-        database.withTransaction {
+        val deplacees = database.withTransaction {
             var n = 0
             for (id in ids) {
                 conversationDao.setInVault(id, inVault)
@@ -562,6 +562,17 @@ class ConversationRepositoryImpl @Inject constructor(
             }
             n
         }
+        // 2026-11-15 (v1.30.1) — une conversation qui ENTRE au Coffre perd ses notifications affichées. La promesse
+        // du Coffre (« ni nom, ni aperçu, ni icône ») ne tenait que pour les messages à venir : la notification d'un
+        // message reçu juste avant le déplacement restait dans le volet, nom et aperçu compris (relecture GPT du
+        // 2026-11-15). Après la validation : une notification qui résiste ne remet pas le déplacement en cause.
+        if (inVault) {
+            for (id in ids) {
+                runCatching { notifier.cancelAllForConversation(id) }
+                    .onFailure { Timber.w(it, "Coffre : notifications de %d non retirees", id) }
+            }
+        }
+        deplacees
     }
     override suspend fun setDraft(id: Long, draft: String?) = withContext(io) { conversationDao.setDraft(id, draft) }
     override suspend fun setCustomName(id: Long, name: String?) = withContext(io) {

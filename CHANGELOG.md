@@ -55,7 +55,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   the notification does not already show, so it now goes through, on an unlocked phone: from the phone's
   lock screen, Android first asks for the phone's code (Android 12 and later; before, the action is
   refused there as it was). It never creates a conversation and never touches one in the vault. Reply and
-  Resend, which send a message, still need the app to be unlocked.
+  Resend, which send a message, still need the app to be unlocked: they are no longer offered while the app
+  lock is on, since a reply typed there was refused and lost without a word. Notifications already shown
+  follow when the lock (or "Reply from notification") is changed, and a refused action now says why in its
+  notification ("SMS Tech is locked: open it to reply", "Unlock your phone to mark as read").
+- **A conversation moved into the vault loses its notifications.** The vault promised no name and no preview
+  for messages to come, but the notification of a message received just before the move stayed on screen.
 - **A message that went out is no longer left "Not sent"** (reported by e-mail, a scheduled MMS on Wi-Fi).
   A message still waiting for Android's answer after 15 minutes is marked as failed, as it may never have
   left. On Wi-Fi, Android can hold an MMS for up to 30 minutes while it waits for the mobile network: its

@@ -15,6 +15,7 @@ import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.di.IoDispatcher
@@ -26,6 +27,9 @@ import com.filestech.sms.domain.settings.NotificationStyle
 import com.filestech.sms.domain.settings.PreviewMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -45,7 +49,22 @@ class IncomingMessageNotifier @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ConversationNotificationCanceller {
 
+    /** 2026-11-15 (v1.30.1) — sérialise la pose ([notifyIncoming]) et la reconstruction ([reposer]). */
+    private val verrouPose = Mutex()
+
+    /**
+     * 2026-11-15 (v1.30.1) — pose et reconstruction ([reposer]) passent l'une après l'autre (relecture Claude du
+     * 2026-11-15) : un message arrivé pendant qu'on refait les actions aurait été posé avec celles d'avant le
+     * changement de verrou, après que la reconstruction l'eut manqué.
+     */
     suspend fun notifyIncoming(
+        address: String,
+        body: String,
+        messageId: Long,
+        conversationId: Long,
+    ) = verrouPose.withLock { poser(address, body, messageId, conversationId) }
+
+    private suspend fun poser(
         address: String,
         body: String,
         messageId: Long,
@@ -289,63 +308,154 @@ class IncomingMessageNotifier @Inject constructor(
         reponseActivee: Boolean,
         verrouApp: Boolean,
     ) {
+        actionsVoulues(id, reponseActivee, verrouApp).forEach { b.addAction(it) }
+    }
+
+    private fun actionsVoulues(id: IdentiteNotif, reponseActivee: Boolean, verrouApp: Boolean) = buildList {
         if (reponseProposee(reponseActivee, verrouApp)) {
-            b.addAction(buildReplyAction(id.address, id.messageId, id.notificationId, id.conversationId))
+            add(buildReplyAction(id.address, id.messageId, id.notificationId, id.conversationId))
         }
-        b.addAction(buildMarkReadAction(id.address, id.messageId, id.notificationId, id.conversationId, verrouApp))
+        add(buildMarkReadAction(id.address, id.messageId, id.notificationId, id.conversationId, verrouApp))
     }
 
     /**
-     * 2026-11-15 (v1.30.1) — refait les actions des notifications de message AFFICHÉES, quand le verrou de l'app
-     * (ou le réglage « Répondre depuis la notification ») change.
-     *
-     * Les actions d'une notification sont figées à sa pose. Une notification posée verrou désactivé gardait
-     * donc « Répondre » — refusé ensuite sans un mot — et un « Marquer comme lu » qui, touché depuis l'écran de
-     * verrouillage, ne faisait pas demander le code du téléphone : le receveur le refusait, en silence.
-     * Appelé par `MainApplication` à chaque changement.
+     * Notification posée par une version antérieure (sans [IdentiteNotif]) : ses actions ne peuvent pas être
+     * reconstruites, mais elles peuvent être DURCIES. Sous verrou, les actions à saisie (« Répondre ») tombent et les
+     * autres exigent le déverrouillage du téléphone ; hors verrou, elles restent telles quelles.
      */
-    suspend fun reappliquerActions() = withContext(io) { reposer(motif = null) { true } }
+    private fun actionsAncienneVersion(
+        n: android.app.Notification,
+        verrouApp: Boolean,
+    ): List<NotificationCompat.Action> {
+        val actuelles = actionsDe(n)
+        if (!verrouApp) return actuelles
+        return actuelles
+            .filter { it.remoteInputs.isNullOrEmpty() }
+            .map { NotificationCompat.Action.Builder(it).setAuthenticationRequired(true).build() }
+    }
+
+    private fun actionsDe(n: android.app.Notification): List<NotificationCompat.Action> =
+        (0 until NotificationCompat.getActionCount(n)).mapNotNull { NotificationCompat.getAction(n, it) }
 
     /**
-     * 2026-11-15 (v1.30.1) — un geste vient d'être refusé sous verrou ([motif]) : la notification est reposée
-     * avec les actions du moment et une ligne qui dit pourquoi. Sans cela, une réponse refusée laissait
-     * l'indicateur d'envoi tourner sans fin et le texte disparaissait sans explication.
+     * 2026-11-15 (v1.30.1) — met les actions des notifications de message AFFICHÉES en accord avec le verrou de l'app
+     * et le réglage « Répondre depuis la notification ».
+     *
+     * Les actions d'une notification sont figées à sa pose. Une notification posée verrou désactivé gardait donc
+     * « Répondre » — refusé ensuite sans un mot — et un « Marquer comme lu » qui, touché depuis l'écran de
+     * verrouillage, ne faisait pas demander le code du téléphone : le receveur le refusait, en silence.
+     *
+     * Appelé par `MainApplication` à CHAQUE valeur lue sur le stockage, la première comprise (une notification
+     * d'avant un redémarrage, ou posée quand les réglages étaient illisibles, y est remise d'aplomb) ; les valeurs
+     * sont celles de l'émission, pas une relecture qui pourrait être en retard (relecture Claude du 2026-11-15).
+     * Ne repose que ce qui change : Android jette les mises à jour d'une application au-delà de quelques par
+     * seconde, sans le dire.
+     */
+    suspend fun reappliquerActions(verrouApp: Boolean, reponseActivee: Boolean) = withContext(io) {
+        reposer(verrouApp, reponseActivee, motif = null) { true }
+    }
+
+    /**
+     * 2026-11-15 (v1.30.1) — un geste vient d'être refusé sous verrou ([motif]) : la notification est reposée avec
+     * les actions du moment et une ligne qui dit pourquoi. Sans cela, une réponse refusée laissait l'indicateur
+     * d'envoi tourner sans fin, et le texte disparaissait sans explication.
      */
     suspend fun signalerRefus(conversationId: Long, notificationId: Int, motif: MotifRefus) = withContext(io) {
+        val reglages = settings.hydratedOrNull()
+        val reponseActivee = (reglages?.notifications ?: FALLBACK_NOTIFICATIONS).inlineReply
         val tag = conversationTag(conversationId)
-        reposer(motif) { it.tag == tag && it.id == notificationId }
+        reposer(verrouAppActif(reglages), reponseActivee, motif) { it.tag == tag && it.id == notificationId }
     }
 
     /**
-     * Repose, à l'identique hormis les actions (et une ligne de [motif]), chaque notification de message affichée
-     * que [cible] retient. La copie (`NotificationCompat.Builder(context, notification)`) garde canal, style,
-     * visibilité, version d'écran verrouillé et délai ; `setOnlyAlertOnce` évite un second son. Rien n'est reposé
-     * pour une conversation passée au Coffre depuis, ou illisible : elle ne doit pas réapparaître.
+     * Repose chaque notification de message affichée que [cible] retient, à l'identique hormis les actions et la
+     * ligne de [motif] (effacée quand il n'y en a pas : un « verrouillée » ne doit pas survivre au déverrouillage).
+     *
+     * - La copie (`NotificationCompat.Builder(context, notification)`) reprend canal, style, visibilité, version
+     *   d'écran verrouillé et délai ; `setOnlyAlertOnce` évite un second son. Une notification disparue entre-temps
+     *   (lue ailleurs, effacée) ne doit pas revenir : sa présence est revérifiée juste avant, sans suspension.
+     * - Conversation passée au Coffre : la notification est RETIRÉE (promesse du Coffre). En sourdine ou illisible :
+     *   on n'y touche pas.
+     * - Une pose par [INTERVALLE_REPOSE_MS] au plus, sous le même verrou que [notifyIncoming].
      */
-    private suspend fun reposer(motif: MotifRefus?, cible: (android.service.notification.StatusBarNotification) -> Boolean) {
+    private suspend fun reposer(
+        verrouApp: Boolean,
+        reponseActivee: Boolean,
+        motif: MotifRefus?,
+        cible: (android.service.notification.StatusBarNotification) -> Boolean,
+    ) = verrouPose.withLock {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            return
+            return@withLock
         }
-        val reglages = settings.hydratedOrNull()
-        val reponseActivee = (reglages?.notifications ?: FALLBACK_NOTIFICATIONS).inlineReply
-        val verrouApp = verrouAppActif(reglages)
-        val nm = context.getSystemService(NotificationManager::class.java) ?: return
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return@withLock
         val actives = runCatching { nm.activeNotifications.toList() }.getOrDefault(emptyList())
+        val voulu = Voulu(verrouApp, reponseActivee, motif?.let { context.getString(it.texte) })
+        var reposees = 0
         for (sbn in actives) {
-            val id = IdentiteNotif.depuis(sbn.notification.extras)
-            if (id == null || sbn.tag != conversationTag(id.conversationId) || !cible(sbn)) continue
-            val horsCoffre = runCatching { conversationDao.findById(id.conversationId)?.inVault == false }
-                .getOrDefault(false)
-            if (!horsCoffre) continue
-            val b = NotificationCompat.Builder(context, sbn.notification).clearActions().setOnlyAlertOnce(true)
-            ajouterActions(b, id, reponseActivee, verrouApp)
-            motif?.let { b.setSubText(context.getString(it.texte)) }
+            if (cible(sbn) && reposerUne(nm, sbn, voulu, attendre = reposees > 0)) reposees++
+        }
+    }
+
+    /** Ce que la reconstruction doit obtenir : l'état du verrou, le réglage de réponse, la ligne de refus. */
+    private data class Voulu(val verrouApp: Boolean, val reponseActivee: Boolean, val sousTexte: String?)
+
+    /** @return vrai si [sbn] a été reposée. Cf. [reposer]. */
+    private suspend fun reposerUne(
+        nm: NotificationManager,
+        sbn: android.service.notification.StatusBarNotification,
+        voulu: Voulu,
+        attendre: Boolean,
+    ): Boolean {
+        val conversation = conversationIdDuTag(sbn.tag)
+            ?.let { id -> runCatchingCancellable { conversationDao.findById(id) }.getOrNull() }
+            ?: return false
+        if (conversation.inVault) {
+            runCatching { nm.cancel(sbn.tag, sbn.id) }
+            return false
+        }
+        val id = IdentiteNotif.depuis(sbn.notification.extras)
+        val actions = if (id != null) {
+            actionsVoulues(id, voulu.reponseActivee, voulu.verrouApp)
+        } else {
+            actionsAncienneVersion(sbn.notification, voulu.verrouApp)
+        }
+        if (conversation.muted || rienAChanger(sbn.notification, actions, voulu.sousTexte)) return false
+        if (attendre) delay(INTERVALLE_REPOSE_MS)
+        val toujoursAffichee = runCatching { nm.activeNotifications.any { it.key == sbn.key } }.getOrDefault(false)
+        if (toujoursAffichee) {
+            // Pas de `setSilent` : NotificationCompat le réalise en rangeant la notification dans un GROUPE, ce que
+            // ces notifications évitent exprès (résumé fantôme sur One UI / MIUI, cf. la pose).
+            val b = NotificationCompat.Builder(context, sbn.notification)
+                .clearActions()
+                .setOnlyAlertOnce(true)
+                .setSubText(voulu.sousTexte)
+            actions.forEach { b.addAction(it) }
             runCatching { nm.notify(sbn.tag, sbn.id, b.build()) }
                 .onFailure { Timber.w(it, "Notification de message non reposee") }
         }
+        return toujoursAffichee
+    }
+
+    /** Mêmes actions (libellé, saisie, et déverrouillage exigé là où Android le porte) et même ligne : rien à faire. */
+    private fun rienAChanger(
+        n: android.app.Notification,
+        voulues: List<NotificationCompat.Action>,
+        sousTexte: String?,
+    ): Boolean {
+        return signature(actionsDe(n)) == signature(voulues) &&
+            NotificationCompat.getSubText(n)?.toString() == sousTexte
+    }
+
+    private fun signature(actions: List<NotificationCompat.Action>) = actions.map {
+        Triple(
+            it.title?.toString(),
+            !it.remoteInputs.isNullOrEmpty(),
+            // Avant Android 12, la notification postée ne garde pas ce drapeau : le comparer y ferait tout reposer.
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && it.isAuthenticationRequired,
+        )
     }
 
     /**
@@ -561,6 +671,12 @@ class IncomingMessageNotifier @Inject constructor(
          * (l'utilisateur voit déjà le message en temps réel dans la conv ouverte).
          */
         private const val ACTIVE_CONV_TIMEOUT_MS: Long = 1500L
+
+        /**
+         * 2026-11-15 (v1.30.1) — écart entre deux notifications reposées. Android limite les mises à jour d'une
+         * application à quelques par seconde (au-delà, il les jette sans rien dire) : 250 ms en laisse passer quatre.
+         */
+        internal const val INTERVALLE_REPOSE_MS: Long = 250L
     }
 }
 
@@ -597,7 +713,13 @@ internal const val NOTIFICATION_ID_FALLBACK = 0x10000
  * [notificationsToCancel] le construise à l'identique : deux écritures du même littéral auraient
  * pu diverger, et l'annulation ne toucherait alors plus rien, sans erreur.
  */
-internal fun conversationTagFor(conversationId: Long): String = "com.filestech.sms.conv.$conversationId"
+internal fun conversationTagFor(conversationId: Long): String = "$PREFIXE_TAG_CONVERSATION$conversationId"
+
+/** 2026-11-15 (v1.30.1) — l'inverse de [conversationTagFor] ; `null` pour toute autre étiquette (ou aucune). */
+internal fun conversationIdDuTag(tag: String?): Long? =
+    tag?.takeIf { it.startsWith(PREFIXE_TAG_CONVERSATION) }?.removePrefix(PREFIXE_TAG_CONVERSATION)?.toLongOrNull()
+
+private const val PREFIXE_TAG_CONVERSATION = "com.filestech.sms.conv."
 
 /**
  * 2026-11-15 (v1.30.1) — « Répondre » n'est proposé que réglage activé ET verrou de l'app désactivé : sous verrou,

@@ -18,6 +18,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -222,6 +223,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
     private suspend fun signalerLeRefus(intent: Intent, conversationId: Long?) {
         val idNotification = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
         if (idNotification == -1) return
+        // Borné : le receveur n'a que quelques secondes (`goAsync`), et ce signalement n'en vaut pas un dépassement.
+        withTimeoutOrNull(BUDGET_SIGNALEMENT_MS) { signalerLeRefusSansBorne(intent, conversationId, idNotification) }
+            ?: Timber.w("Refus sous verrou : signalement abandonne (budget depasse)")
+    }
+
+    private suspend fun signalerLeRefusSansBorne(intent: Intent, conversationId: Long?, idNotification: Int) {
         runCatchingCancellable {
             when (intent.action) {
                 ACTION_REPLY -> conversationId?.let {
@@ -312,6 +319,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
         }
 
         private const val ATTENTE_DEVERROUILLAGE_MS = 3_000L
+
+        /** 2026-11-15 — au plus ce temps pour reposer la notification d'un geste refusé (cf. [signalerLeRefus]). */
+        private const val BUDGET_SIGNALEMENT_MS = 4_000L
         private const val PAS_ATTENTE_DEVERROUILLAGE_MS = 100L
 
         const val ACTION_REPLY = "com.filestech.sms.action.NOTIF_REPLY"

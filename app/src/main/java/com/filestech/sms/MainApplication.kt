@@ -27,7 +27,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -306,16 +305,17 @@ class MainApplication : Application(), Configuration.Provider {
         // 2026-11-15 (v1.30.1) — les actions des notifications déjà AFFICHÉES suivent le verrou de l'app et le
         // réglage « Répondre depuis la notification ». Elles étaient figées à la pose : activer le verrou laissait
         // « Répondre » et « Renvoyer », refusés ensuite sans un mot, et un « Marquer comme lu » qui ne faisait pas
-        // demander le code du téléphone. La première valeur (au démarrage) n'est pas un changement.
+        // demander le code du téléphone. La PREMIÈRE valeur compte aussi : `flow` ne sert que des valeurs lues sur
+        // le stockage, et elle remet d'aplomb ce qui a été posé avant un redémarrage, ou quand les réglages étaient
+        // illisibles. Les valeurs émises sont passées telles quelles ; rien n'est reposé quand rien ne change.
         appScope.launch {
             settingsRepository.flow
                 .map { verrouAppActif(it) to it.notifications.inlineReply }
                 .distinctUntilChanged()
-                .drop(1)
-                .collect {
-                    runCatching { notificateurMessagesLazy.get().reappliquerActions() }
+                .collect { (verrouApp, reponseActivee) ->
+                    runCatching { notificateurMessagesLazy.get().reappliquerActions(verrouApp, reponseActivee) }
                         .onFailure { Timber.w(it, "Notifications de message : actions non refaites") }
-                    runCatching { notificateurEchecsLazy.get().reappliquerActions() }
+                    runCatching { notificateurEchecsLazy.get().reappliquerActions(verrouApp) }
                         .onFailure { Timber.w(it, "Notifications d'echec : actions non refaites") }
                 }
         }
