@@ -808,6 +808,10 @@
     <!-- Notification actions -->
     <string name="notif_reply_label">Reply</string>
     <string name="notif_mark_read_label">Mark as read</string>
+    <!-- 2026-11-15 (v1.30.1) — geste de notification refusé sous verrou : la notification le dit -->
+    <string name="notif_reply_refused_locked">SMS Tech is locked: open it to reply</string>
+    <string name="notif_mark_read_refused_locked">Unlock your phone to mark as read</string>
+    <string name="send_failure_refused_locked">SMS Tech is locked: open it to retry</string>
     <string name="notif_preview_hidden_content">New message</string>
 
     <!-- PDF export -->

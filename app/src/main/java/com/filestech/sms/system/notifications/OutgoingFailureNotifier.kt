@@ -1,6 +1,7 @@
 package com.filestech.sms.system.notifications
 
 import android.Manifest
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -11,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
+import com.filestech.sms.data.local.datastore.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -56,6 +58,8 @@ import javax.inject.Singleton
 class OutgoingFailureNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
     private val visibilite: CorrespondentVisibilityPolicy,
+    // 2026-11-15 (v1.30.1) — le verrou de l'app décide de l'action « Renvoyer », cf. [notifierEchec].
+    private val settings: SettingsRepository,
 ) {
 
     /**
@@ -93,17 +97,40 @@ class OutgoingFailureNotifier @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // v1.28.3 — `data` distinct par message, leçon de F19 : `PendingIntent.filterEquals`
-        // ignore les extras, donc deux actions « Renvoyer » de deux messages differents seraient
-        // le MEME `PendingIntent`, et `FLAG_UPDATE_CURRENT` réécrirait les extras du premier. On
-        // relancerait alors le mauvais message.
+        val notif = NotificationCompat.Builder(context, NotificationChannelInitializer.CHANNEL_FAILED)
+            .setSmallIcon(R.drawable.ic_notification_message)
+            .setContentTitle(context.getString(R.string.send_failure_notification_title))
+            .setContentText(corps)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(corps))
+            .setContentIntent(ouvrir)
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setVisibility(visibilite.ecranVerrouille().versNotificationCompat())
+            // 2026-11-15 (v1.30.1) — l'identifiant du message reste dans la notification, pour refaire
+            // l'action quand le verrou de l'app change (cf. [reappliquerActions]).
+            .addExtras(android.os.Bundle().apply { putLong(CLE_MESSAGE, messageId) })
+            .also { b ->
+                // Sous verrou, pas de « Renvoyer » : le receveur le refuserait (il envoie un message).
+                if (!verrouAppActif(settings.hydratedOrNull())) b.addAction(actionRenvoyer(messageId, idNotification))
+            }
+            .build()
+
+        runCatching { NotificationManagerCompat.from(context).notify(idNotification, notif) }
+            .onFailure { Timber.w(it, "Notification d'echec d'envoi non postee pour %d", messageId) }
+    }
+
+    // v1.28.3 — `data` distinct par message, leçon de F19 : `PendingIntent.filterEquals`
+    // ignore les extras, donc deux actions « Renvoyer » de deux messages differents seraient
+    // le MEME `PendingIntent`, et `FLAG_UPDATE_CURRENT` réécrirait les extras du premier. On
+    // relancerait alors le mauvais message.
+    private fun actionRenvoyer(messageId: Long, idNotification: Int): NotificationCompat.Action {
         val renvoyer = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_RETRY_SEND
             data = android.net.Uri.parse("smstech://notification/retry/$messageId")
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, idNotification)
         }
-        val actionRenvoyer = NotificationCompat.Action.Builder(
+        return NotificationCompat.Action.Builder(
             R.drawable.ic_notification_message,
             context.getString(R.string.action_retry),
             PendingIntent.getBroadcast(
@@ -113,21 +140,37 @@ class OutgoingFailureNotifier @Inject constructor(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             ),
         ).build()
+    }
 
-        val notif = NotificationCompat.Builder(context, NotificationChannelInitializer.CHANNEL_FAILED)
-            .setSmallIcon(R.drawable.ic_notification_message)
-            .setContentTitle(context.getString(R.string.send_failure_notification_title))
-            .setContentText(corps)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(corps))
-            .setContentIntent(ouvrir)
-            .addAction(actionRenvoyer)
-            .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_ERROR)
-            .setVisibility(visibilite.ecranVerrouille().versNotificationCompat())
-            .build()
+    /**
+     * 2026-11-15 (v1.30.1) — refait l'action « Renvoyer » des notifications d'échec AFFICHÉES quand le verrou
+     * de l'app change : posée verrou désactivé, elle restait proposée verrou activé, et le receveur la refusait
+     * sans un mot. Appelé par `MainApplication`, comme `IncomingMessageNotifier.reappliquerActions`.
+     */
+    suspend fun reappliquerActions() = reposer(motif = false) { true }
 
-        runCatching { NotificationManagerCompat.from(context).notify(idNotification, notif) }
-            .onFailure { Timber.w(it, "Notification d'echec d'envoi non postee pour %d", messageId) }
+    /** 2026-11-15 (v1.30.1) — « Renvoyer » vient d'être refusé sous verrou : la notification le dit. */
+    suspend fun signalerRefus(idNotification: Int) = reposer(motif = true) { it.id == idNotification }
+
+    private suspend fun reposer(motif: Boolean, cible: (android.service.notification.StatusBarNotification) -> Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val verrouApp = verrouAppActif(settings.hydratedOrNull())
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return
+        val actives = runCatching { nm.activeNotifications.toList() }.getOrDefault(emptyList())
+        for (sbn in actives) {
+            val extras = sbn.notification.extras
+            if (sbn.tag != null || extras?.containsKey(CLE_MESSAGE) != true || !cible(sbn)) continue
+            val b = NotificationCompat.Builder(context, sbn.notification).clearActions().setOnlyAlertOnce(true)
+            if (!verrouApp) b.addAction(actionRenvoyer(extras.getLong(CLE_MESSAGE), sbn.id))
+            if (motif) b.setSubText(context.getString(R.string.send_failure_refused_locked))
+            runCatching { nm.notify(sbn.id, b.build()) }
+                .onFailure { Timber.w(it, "Notification d'echec d'envoi non reposee") }
+        }
     }
 
     private companion object {
@@ -137,5 +180,8 @@ class OutgoingFailureNotifier @Inject constructor(
          * qu'une notification d'échec d'ENVOI ne remplace jamais celle d'un échec de RÉCEPTION.
          */
         const val NOTIF_ID_BASE = 90_000
+
+        /** 2026-11-15 — extra d'une notification d'échec d'envoi : l'id Room du message, pour refaire l'action. */
+        const val CLE_MESSAGE = "com.filestech.sms.notif.echec.message"
     }
 }

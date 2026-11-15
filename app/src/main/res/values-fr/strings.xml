@@ -800,6 +800,10 @@
 
     <string name="notif_reply_label">Répondre</string>
     <string name="notif_mark_read_label">Marquer comme lu</string>
+    <!-- 2026-11-15 (v1.30.1) — geste de notification refusé sous verrou : la notification le dit -->
+    <string name="notif_reply_refused_locked">SMS Tech est verrouillée : ouvrez-la pour répondre</string>
+    <string name="notif_mark_read_refused_locked">Déverrouillez le téléphone pour marquer comme lu</string>
+    <string name="send_failure_refused_locked">SMS Tech est verrouillée : ouvrez-la pour réessayer</string>
     <string name="notif_preview_hidden_content">Nouveau message</string>
 
     <string name="pdf_header_subtitle">Exporté le %1$s • %2$d participant(s)</string>

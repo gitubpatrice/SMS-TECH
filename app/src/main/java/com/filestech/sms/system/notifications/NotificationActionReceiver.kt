@@ -62,6 +62,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
      */
     @Inject lateinit var simPourConversationLazy: dagger.Lazy<SimPourConversationUseCase>
 
+    /**
+     * 2026-11-15 (v1.30.1) — pour dire, DANS la notification, pourquoi un geste vient d'être refusé sous verrou
+     * (cf. [signalerLeRefus]). `Lazy` : ils lisent des DAO (cf. ci-dessus).
+     */
+    @Inject lateinit var notificateurMessagesLazy: dagger.Lazy<IncomingMessageNotifier>
+
+    @Inject lateinit var notificateurEchecsLazy: dagger.Lazy<OutgoingFailureNotifier>
+
     @Inject lateinit var appLock: AppLockManager
 
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
@@ -92,6 +100,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val telephoneVerrouille = intent.action == ACTION_MARK_READ && telephoneEncoreVerrouille(context)
                     if (refuseeSousVerrou(intent.action, telephoneVerrouille)) {
                         Timber.i("NotificationActionReceiver: refused while app is locked")
+                        signalerLeRefus(intent, conversationIdOuNull)
                         return@launch
                     }
                 }
@@ -202,6 +211,31 @@ class NotificationActionReceiver : BroadcastReceiver() {
      * Une notification posée avant la v1.28.12 ne porte pas d'identifiant : l'action n'y fait plus rien,
      * la balayer reste possible.
      */
+    /**
+     * 2026-11-15 (v1.30.1) — **un refus sous verrou se dit.** Il était muet : une réponse tapée disparaissait
+     * (l'indicateur d'envoi tournait sans fin), « Marquer comme lu » ou « Renvoyer » ne faisaient rien. La
+     * notification est reposée avec les actions du moment — sous verrou, plus de « Répondre » ni de « Renvoyer »
+     * — et une ligne qui dit quoi faire. Depuis cette version, seules les notifications posées AVANT que le verrou
+     * soit activé y arrivent encore (les autres n'ont plus ces boutons) ; « Marquer comme lu » depuis l'écran de
+     * verrouillage, sur Android 11 et avant, aussi.
+     */
+    private suspend fun signalerLeRefus(intent: Intent, conversationId: Long?) {
+        val idNotification = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+        if (idNotification == -1) return
+        runCatchingCancellable {
+            when (intent.action) {
+                ACTION_REPLY -> conversationId?.let {
+                    notificateurMessagesLazy.get().signalerRefus(it, idNotification, MotifRefus.REPONSE)
+                }
+                ACTION_MARK_READ -> conversationId?.let {
+                    notificateurMessagesLazy.get().signalerRefus(it, idNotification, MotifRefus.LECTURE)
+                }
+                ACTION_RETRY_SEND -> notificateurEchecsLazy.get().signalerRefus(idNotification)
+                else -> Unit
+            }
+        }.onFailure { Timber.w(it, "Refus sous verrou non signale") }
+    }
+
     private suspend fun marquerLu(conversationId: Long?) {
         runCatchingCancellable {
             val depot = conversationRepoLazy.get()

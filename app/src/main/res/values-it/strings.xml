@@ -813,6 +813,10 @@
     <!-- Notification actions -->
     <string name="notif_reply_label">Rispondi</string>
     <string name="notif_mark_read_label">Segna come letto</string>
+    <!-- 2026-11-15 (v1.30.1) — geste de notification refusé sous verrou : la notification le dit -->
+    <string name="notif_reply_refused_locked">SMS Tech è bloccata: la apra per rispondere</string>
+    <string name="notif_mark_read_refused_locked">Sblocchi il telefono per segnare come letto</string>
+    <string name="send_failure_refused_locked">SMS Tech è bloccata: la apra per riprovare</string>
     <string name="notif_preview_hidden_content">Nuovo messaggio</string>
 
     <!-- PDF export -->
