@@ -41,9 +41,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   the list says so, and a number from the block list is announced and its chip marked "blocked".
 - **A thank-you note in About**, above "Created by", to everyone who reports a problem, tests a new version
   or suggests an idea. It names no one: nobody agreed to appear in the app.
+- **Open or share an exported PDF** (issue #76, GrapheneOS). The export went straight to the Share menu,
+  and a PDF reader usually offers to open a file, not to receive a share: GrapheneOS's PDF Viewer, a
+  system app, never appeared there, and the PDF had to be copied to be read. After the export, a dialog
+  now offers Open (the apps that read a PDF) or Share.
 
 ### Fixed
 
+- **"Mark as read" from a notification works while SMS Tech is locked** (reported by e-mail on 1.30.0).
+  With the app lock on, every notification action was refused, and silently: Mark as read did nothing, and
+  SMS Tech is usually locked when a notification comes in. Marking as read sends nothing and shows nothing
+  the notification does not already show, so it now goes through. Reply and Resend, which send a message,
+  still need the app to be unlocked.
+- **A message that went out is no longer left "Not sent"** (reported by e-mail, a scheduled MMS on Wi-Fi).
+  A message still waiting for Android's answer after 15 minutes is marked as failed, as it may never have
+  left. On Wi-Fi, Android can hold an MMS for up to 30 minutes while it waits for the mobile network: its
+  "sent" then came in too late and was ignored, and the message stayed "Not sent" under the recipient's
+  reply. The real result now replaces that guess, whether it says sent, delivered or failed.
+- **A new message in the conversation on screen clears its notification again** (issue #60, second
+  report). When a second screen of the same conversation opened over it (a link to that conversation, for
+  example) and the user went back, SMS Tech forgot the conversation was on screen, and a message arriving
+  there kept its notification. Measured on an emulator, before and after.
 - **Every recipient of a new group is visible.** Recipients were shown on a single line that never wrapped:
   from the 4th one, a recipient was added but invisible, so it could not be checked or removed. They now
   wrap onto new lines, the area scrolls past three lines, and the last one added is brought into view.
@@ -53,6 +71,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   and left the original group empty without a word. The warning names the blocked members; a message
   scheduled for such a group is warned about when it is scheduled.
 - **"Sent to 1 recipient(s)" for a group MMS sent to 55 people**: the banner counted the MMS, not people.
+- **The keyboard no longer hides half of the contact list** on the new message and new group screens: the
+  navigation bar's height was counted twice under the keyboard.
+- **The "Group MMS" setting says what recipients see**: with it on, they all see each other's numbers and
+  receive each other's replies; with it off, each person gets a separate SMS and replies only to the sender.
 
 - **A SIM no longer in the phone no longer makes sending fail.** The SIM asked for (setting, scheduled
   message, retry) is checked against the active SIMs; when it is gone, Android's SMS SIM is used.
