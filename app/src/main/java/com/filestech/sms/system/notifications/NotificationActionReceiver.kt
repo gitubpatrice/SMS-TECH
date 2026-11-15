@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.core.app.RemoteInput
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.core.result.runCatchingCancellable
@@ -15,6 +16,7 @@ import com.filestech.sms.domain.usecase.SimPourConversationUseCase
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -84,9 +86,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 // once per process and the main thread is freed entirely.
                 appLock.ensureResolved()
                 val appOuverte = appLock.isOpenForUi(appLock.state.value)
-                if (!appOuverte && refuseeSousVerrou(intent.action, appareilVerrouille(context))) {
-                    Timber.i("NotificationActionReceiver: refused while app is locked")
-                    return@launch
+                if (!appOuverte) {
+                    // L'état du téléphone ne compte que pour « Marquer comme lu » : les autres actions sont
+                    // refusées sous verrou dans tous les cas, sans attendre.
+                    val telephoneVerrouille = intent.action == ACTION_MARK_READ && telephoneEncoreVerrouille(context)
+                    if (refuseeSousVerrou(intent.action, telephoneVerrouille)) {
+                        Timber.i("NotificationActionReceiver: refused while app is locked")
+                        return@launch
+                    }
                 }
                 // v1.3.3 Z4 audit fix — la fermeture de la notif passe désormais
                 // exclusivement par `markRead` → `cancelAllForConversation` (tag-based).
@@ -239,10 +246,28 @@ class NotificationActionReceiver : BroadcastReceiver() {
         internal fun refuseeSousVerrou(action: String?, appareilVerrouille: Boolean): Boolean =
             action != ACTION_MARK_READ || appareilVerrouille
 
-        /** L'écran de verrouillage du TÉLÉPHONE est-il en place ? Illisible : on le tient pour verrouillé. */
-        private fun appareilVerrouille(context: Context): Boolean =
-            runCatching { context.getSystemService(KeyguardManager::class.java)?.isDeviceLocked }
-                .getOrNull() ?: true
+        /**
+         * Le TÉLÉPHONE est-il verrouillé ? Illisible : on le tient pour verrouillé.
+         *
+         * Android livre l'action d'une notification « authentification requise » au moment même où l'écran
+         * de verrouillage se retire, et `isDeviceLocked` peut encore dire vrai à cet instant : mesuré sur
+         * émulateur API 34, l'action, livrée juste après la saisie du code, était refusée. On laisse donc au
+         * téléphone [ATTENTE_DEVERROUILLAGE_MS] pour finir de se déverrouiller. Un toucher depuis l'écran de
+         * verrouillage sans code (Android 11 et avant, où rien ne demande le code) reste refusé à l'issue de
+         * l'attente. Le receveur dispose de dix secondes (`goAsync`).
+         */
+        private suspend fun telephoneEncoreVerrouille(context: Context): Boolean {
+            val gardien = context.getSystemService(KeyguardManager::class.java) ?: return true
+            val limite = SystemClock.elapsedRealtime() + ATTENTE_DEVERROUILLAGE_MS
+            while (true) {
+                val verrouille = runCatching { gardien.isDeviceLocked }.getOrDefault(true)
+                if (!verrouille || SystemClock.elapsedRealtime() >= limite) return verrouille
+                delay(PAS_ATTENTE_DEVERROUILLAGE_MS)
+            }
+        }
+
+        private const val ATTENTE_DEVERROUILLAGE_MS = 3_000L
+        private const val PAS_ATTENTE_DEVERROUILLAGE_MS = 100L
 
         const val ACTION_REPLY = "com.filestech.sms.action.NOTIF_REPLY"
         const val ACTION_MARK_READ = "com.filestech.sms.action.NOTIF_MARK_READ"
