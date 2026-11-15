@@ -24,6 +24,7 @@ import javax.inject.Inject
  * **Audit F7 mitigation**: actions are refused while the app lock is held — typing a reply from
  * a locked phone shouldn't ship an SMS in the user's name. The notification visibility settings
  * already restrict who can see the body, but the *write* path is the dangerous side.
+ * Since 1.30.1, "mark as read" is the exception: it sends nothing (cf. [refuseeSousVerrou]).
  *
  * **Audit F38 mitigation**: the notification id used by [NotificationManagerCompat.cancel] now
  * comes from a dedicated extra ([EXTRA_NOTIFICATION_ID]) populated by [IncomingMessageNotifier].
@@ -81,7 +82,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 // the resolution inside the receiver's own coroutine context — the cost is paid
                 // once per process and the main thread is freed entirely.
                 appLock.ensureResolved()
-                if (!appLock.isOpenForUi(appLock.state.value)) {
+                if (!appLock.isOpenForUi(appLock.state.value) && refuseeSousVerrou(intent.action)) {
                     Timber.i("NotificationActionReceiver: refused while app is locked")
                     return@launch
                 }
@@ -186,6 +187,22 @@ class NotificationActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        /**
+         * 2026-11-15 (v1.30.1, courriel d'Andrew) — **seules les actions qui ENVOIENT sont refusées sous
+         * verrou.**
+         *
+         * Le garde F7 visait la réponse : un téléphone tenu par un tiers, l'app verrouillée, ne doit pas
+         * envoyer un message au nom de son propriétaire. Il refusait pourtant TOUTES les actions, et
+         * sans rien dire : « Marquer comme lu » ne faisait rien dès que le verrou de l'app était actif,
+         * c'est-à-dire presque toujours quand une notification arrive (mesuré sur émulateur API 34 :
+         * notification restée, `refused while app is locked`). Marquer comme lu n'envoie rien et ne
+         * montre rien que la notification n'affiche déjà ; c'est le geste de la balayer, plus le
+         * compteur de non-lus. Il passe donc. Réponse et renvoi restent refusés : eux envoient.
+         *
+         * Une action inconnue est refusée : un ajout futur devra choisir sa place ici.
+         */
+        internal fun refuseeSousVerrou(action: String?): Boolean = action != ACTION_MARK_READ
+
         const val ACTION_REPLY = "com.filestech.sms.action.NOTIF_REPLY"
         const val ACTION_MARK_READ = "com.filestech.sms.action.NOTIF_MARK_READ"
 
