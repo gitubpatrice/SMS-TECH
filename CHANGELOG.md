@@ -39,8 +39,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   with a restart, like the notification. The explanation suggests turning Wi-Fi off for a moment.
 - **Each recipient added to a new group is confirmed** ("Added: name (N in total)"), a contact already in
   the list says so, and a number from the block list is announced and its chip marked "blocked".
-- **A thank-you note in About**, above "Created by", to everyone who reports a problem, tests a new version
-  or suggests an idea. It names no one: nobody agreed to appear in the app.
+- **A thank-you note in About**, framed and topped with folded hands, above "Created by", to everyone who
+  reports a problem, tests a new version or suggests an idea. It names no one: nobody agreed to appear in
+  the app.
 - **Open or share an exported PDF** (issue #76, GrapheneOS). The export went straight to the Share menu,
   and a PDF reader usually offers to open a file, not to receive a share: GrapheneOS's PDF Viewer, a
   system app, never appeared there, and the PDF had to be copied to be read. After the export, a dialog
