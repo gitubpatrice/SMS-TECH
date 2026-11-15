@@ -1,10 +1,10 @@
 package com.filestech.sms.system.notifications
 
+import com.filestech.sms.domain.model.Conversation
+import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.system.notifications.NotificationActionReceiver.Companion.ACTION_MARK_READ
 import com.filestech.sms.system.notifications.NotificationActionReceiver.Companion.ACTION_REPLY
 import com.filestech.sms.system.notifications.NotificationActionReceiver.Companion.ACTION_RETRY_SEND
-import com.filestech.sms.domain.model.Conversation
-import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.system.notifications.NotificationActionReceiver.Companion.conversationAMarquerLue
 import com.filestech.sms.system.notifications.NotificationActionReceiver.Companion.refuseeSousVerrou
 import com.google.common.truth.Truth.assertThat
