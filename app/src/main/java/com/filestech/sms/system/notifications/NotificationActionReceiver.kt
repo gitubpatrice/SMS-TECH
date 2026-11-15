@@ -136,7 +136,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         // dans markRead). Cohérent : répondre = avoir vu le message.
                         markReadAndCancelNotifs(adresse, conversationIdOuNull)
                     }
-                    ACTION_MARK_READ -> marquerLu(conversationIdOuNull, appOuverte)
+                    ACTION_MARK_READ -> marquerLu(conversationIdOuNull)
                     // v1.28.3 — « Renvoyer » depuis la notification d'echec d'envoi.
                     //
                     // Le geste est celui de la bulle rouge dans le fil, et il passe par le MEME
@@ -192,22 +192,25 @@ class NotificationActionReceiver : BroadcastReceiver() {
      * - **jamais de création** : seule la conversation que la notification désigne est marquée. Le repli
      *   par adresse (`findOrCreate`) créait une conversation vide quand celle de la notification avait été
      *   supprimée entre-temps — et, app verrouillée, cela devenait possible sans s'authentifier ;
-     * - **rien dans le Coffre tant que l'app est verrouillée** : une écriture dans une zone censée être
-     *   inaccessible, comme le refuse déjà `markAllIncomingAsRead` ;
+     * - **jamais dans le Coffre** (cf. [conversationAMarquerLue]) : une écriture dans une zone censée être
+     *   inaccessible, comme le refuse déjà `markAllIncomingAsRead`. Une conversation du Coffre ne reçoit pas
+     *   de notification ; il n'en reste qu'à une conversation déplacée au Coffre après la pose de la sienne.
+     *   La règle ne dépend PAS de l'état du verrou (relecture GPT du 2026-11-15) : lu en tête du receveur, il
+     *   pouvait avoir changé avant l'écriture, et une session leurre passe pour « app ouverte » ;
      * - **une base indisponible n'est pas un plantage** : l'exception est journalisée, la notification reste.
      *
      * Une notification posée avant la v1.28.12 ne porte pas d'identifiant : l'action n'y fait plus rien,
      * la balayer reste possible.
      */
-    private suspend fun marquerLu(conversationId: Long?, appOuverte: Boolean) {
+    private suspend fun marquerLu(conversationId: Long?) {
         runCatchingCancellable {
             val depot = conversationRepoLazy.get()
             val conversation = conversationId?.takeIf { it > 0L }?.let { depot.findById(it) }
-            when {
-                conversation == null -> Timber.i("Marquer comme lu : conversation introuvable, rien n'est fait")
-                conversation.inVault && !appOuverte ->
-                    Timber.i("Marquer comme lu : conversation du Coffre, app verrouillee, rien n'est fait")
-                else -> depot.markRead(conversation.id)
+            val id = conversationAMarquerLue(conversation)
+            if (id == null) {
+                Timber.i("Marquer comme lu : conversation introuvable ou au Coffre, rien n'est fait")
+            } else {
+                depot.markRead(id)
             }
         }.onFailure { Timber.w(it, "Marquer comme lu : echec") }
     }
@@ -245,6 +248,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
          */
         internal fun refuseeSousVerrou(action: String?, appareilVerrouille: Boolean): Boolean =
             action != ACTION_MARK_READ || appareilVerrouille
+
+        /**
+         * 2026-11-15 (v1.30.1) — la conversation que « Marquer comme lu » peut marquer : celle que la
+         * notification désigne, si elle existe et n'est PAS au Coffre. Aucune création, aucun repli par
+         * adresse. Cf. [marquerLu].
+         */
+        internal fun conversationAMarquerLue(conversation: com.filestech.sms.domain.model.Conversation?): Long? =
+            conversation?.takeUnless { it.inVault }?.id
 
         /**
          * Le TÉLÉPHONE est-il verrouillé ? Illisible : on le tient pour verrouillé.

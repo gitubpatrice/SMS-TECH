@@ -64,6 +64,12 @@ class RetrySendUseCase @Inject constructor(
      */
     private suspend fun rienARelancer(messageId: Long): Outcome<Unit> {
         val statut = mirror.outgoingStatus(messageId) ?: return Outcome.Failure(AppError.NotFound("message"))
+        // Relecture GPT du 2026-11-15 : de nouveau en échec à la relecture (une autre relance l'a rouvert puis
+        // a échoué entre les deux requêtes). Ce n'est pas un succès : la bulle reste rouge, on le dit.
+        if (statut == MessageStatus.FAILED) {
+            Timber.w("Retry of message %d raced with another attempt; it is failed again", messageId)
+            return Outcome.Failure(AppError.Cancelled("retry raced with another attempt"))
+        }
         Timber.i("Retry of message %d skipped: it is no longer failed (%s)", messageId, statut)
         return Outcome.Success(Unit)
     }

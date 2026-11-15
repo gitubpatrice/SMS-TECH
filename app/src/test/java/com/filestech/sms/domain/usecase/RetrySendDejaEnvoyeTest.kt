@@ -71,6 +71,20 @@ class RetrySendDejaEnvoyeTest {
         coVerify(exactly = 0) { sender.send(any(), any(), any(), any(), any(), any()) }
     }
 
+    /** Relecture GPT : de nouveau en échec à la relecture, ce n'est pas un succès. */
+    @Test
+    fun `une ligne redevenue en echec entre-temps n'est pas annoncee comme un succes`() = runTest {
+        coEvery { repo.findMessageForResend(42L) } returns ligneDuChienDeGarde
+        coEvery { blocked.isBlocked(any()) } returns false
+        coEvery { mirror.resetOutgoingForRetry(42L) } returns null
+        coEvery { mirror.outgoingStatus(42L) } returns MessageStatus.FAILED
+
+        val issue = useCase().invoke(42L)
+
+        assertThat(issue).isInstanceOf(Outcome.Failure::class.java)
+        coVerify(exactly = 0) { sender.send(any(), any(), any(), any(), any(), any()) }
+    }
+
     @Test
     fun `une ligne disparue reste une erreur`() = runTest {
         coEvery { repo.findMessageForResend(42L) } returns ligneDuChienDeGarde
