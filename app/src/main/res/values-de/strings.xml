@@ -177,6 +177,10 @@
     <string name="date_yesterday">Gestern</string>
     <string name="thread_confirm_delete_message">Diese Nachricht löschen? Das lässt sich nicht rückgängig machen.</string>
     <string name="thread_export_success">PDF gespeichert (%1$d Seiten)</string>
+    <!-- 2026-11-15 (issue #76) — après l'export : ouvrir le PDF ou le partager -->
+    <string name="pdf_ready_body">Öffnen Sie es zum Lesen oder teilen Sie es mit einer anderen App.</string>
+    <string name="pdf_action_open">Öffnen</string>
+    <string name="pdf_action_share">Teilen</string>
 
     <!-- Voice MMS composer -->
     <string name="voice_action_record">Sprachnachricht aufnehmen</string>

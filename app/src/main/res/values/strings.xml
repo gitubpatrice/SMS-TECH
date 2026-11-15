@@ -177,6 +177,10 @@
     <string name="date_yesterday">Yesterday</string>
     <string name="thread_confirm_delete_message">Delete this message? This cannot be undone.</string>
     <string name="thread_export_success">PDF saved (%1$d pages)</string>
+    <!-- 2026-11-15 (issue #76) — après l'export : ouvrir le PDF ou le partager -->
+    <string name="pdf_ready_body">Open it to read it, or share it with another app.</string>
+    <string name="pdf_action_open">Open</string>
+    <string name="pdf_action_share">Share</string>
 
     <!-- Voice MMS composer -->
     <string name="voice_action_record">Record voice message</string>

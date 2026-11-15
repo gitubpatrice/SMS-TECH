@@ -178,6 +178,10 @@
     <string name="date_yesterday">Ayer</string>
     <string name="thread_confirm_delete_message">¿Eliminar este mensaje? Esta acción no se puede deshacer.</string>
     <string name="thread_export_success">PDF guardado (%1$d páginas)</string>
+    <!-- 2026-11-15 (issue #76) — après l'export : ouvrir le PDF ou le partager -->
+    <string name="pdf_ready_body">Ábralo para leerlo, o compártalo con otra app.</string>
+    <string name="pdf_action_open">Abrir</string>
+    <string name="pdf_action_share">Compartir</string>
 
     <!-- Voice MMS composer -->
     <string name="voice_action_record">Grabar un mensaje de voz</string>

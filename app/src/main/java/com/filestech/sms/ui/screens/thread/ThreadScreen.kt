@@ -303,6 +303,8 @@ fun ThreadScreen(
     // broadcast de confirmation). On confirme via dialog avant retry. SYNCHRONOUS reste
     // un retry direct sans dialog (le radio a rejeté l'envoi, pas de risque doublon).
     var pendingRetryWatchdog by remember { mutableStateOf<Message?>(null) }
+    // 2026-11-15 (issue #76) — PDF exporté, en attente du choix « Ouvrir » ou « Partager ».
+    var pdfPret by remember { mutableStateOf<ThreadViewModel.Event.PdfReady?>(null) }
     // v1.15.1 — Flow Programmer un SMS : 2 étapes (DatePicker puis TimePicker).
     // `scheduleStep` null = aucun picker ouvert ; "date" = DatePicker actif ;
     // "time" = TimePicker actif (date déjà choisie, stockée dans scheduledEpochMidnight).
@@ -403,15 +405,8 @@ fun ThreadScreen(
                 is ThreadViewModel.Event.ShowSnackbar -> snackbarHost.showSnackbar(
                     SmsTechSnackbarVisuals(message = e.message, isError = e.isError),
                 )
-                is ThreadViewModel.Event.PdfReady -> {
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, e.uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    runCatching { context.startActivity(Intent.createChooser(shareIntent, "PDF")) }
-                    snackbarHost.showSnackbar(context.getString(R.string.thread_export_success, e.pages))
-                }
+                // 2026-11-15 (issue #76) — ouvrir OU partager, au choix : cf. [FenetrePdfPret].
+                is ThreadViewModel.Event.PdfReady -> pdfPret = e
                 // v1.3.7 — un échec d'envoi est par définition une erreur → rouge.
                 //
                 // v1.28.3 (F21) — le refus pour cause de blocage se dit à part. « Échec de
@@ -1212,6 +1207,7 @@ fun ThreadScreen(
     // fichier au moment du choix — mais il a emporté avec lui la confirmation d'ENVOI, sans que
     // personne le remarque, ce commentaire continuant d'affirmer le contraire. Le chemin média
     // est de nouveau couvert, par le dialogue ajouté plus bas.
+    pdfPret?.let { pdf -> FenetrePdfPret(uri = pdf.uri, pages = pdf.pages, onFermer = { pdfPret = null }) }
     state.pendingSend?.let { body ->
         // v1.2.3 audit U10: Send is the positive primary action — autofocus + Button (heavier
         // weight) instead of two ambiguous TextButtons. Material 3 confirm-flow guideline.

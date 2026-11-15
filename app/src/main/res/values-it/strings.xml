@@ -178,6 +178,10 @@
     <string name="date_yesterday">Ieri</string>
     <string name="thread_confirm_delete_message">Eliminare questo messaggio? L\'operazione è irreversibile.</string>
     <string name="thread_export_success">PDF salvato (%1$d pagine)</string>
+    <!-- 2026-11-15 (issue #76) — après l'export : ouvrir le PDF ou le partager -->
+    <string name="pdf_ready_body">Lo apra per leggerlo, oppure lo condivida con un\'altra app.</string>
+    <string name="pdf_action_open">Apri</string>
+    <string name="pdf_action_share">Condividi</string>
 
     <!-- Voice MMS composer -->
     <string name="voice_action_record">Registra un messaggio vocale</string>
