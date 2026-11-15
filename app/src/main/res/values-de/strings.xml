@@ -812,7 +812,7 @@
     <string name="notif_mark_read_label">Als gelesen markieren</string>
     <!-- 2026-11-15 (v1.30.1) — geste de notification refusé sous verrou : la notification le dit -->
     <string name="notif_reply_refused_locked">SMS Tech ist gesperrt: Öffnen Sie die App, um zu antworten</string>
-    <string name="notif_mark_read_refused_locked">Entsperren Sie das Telefon, um als gelesen zu markieren</string>
+    <string name="notif_mark_read_refused_locked">Entsperren Sie das Telefon, um die Nachricht als gelesen zu markieren</string>
     <string name="send_failure_refused_locked">SMS Tech ist gesperrt: Öffnen Sie die App, um es erneut zu versuchen</string>
     <string name="notif_preview_hidden_content">Neue Nachricht</string>
 
