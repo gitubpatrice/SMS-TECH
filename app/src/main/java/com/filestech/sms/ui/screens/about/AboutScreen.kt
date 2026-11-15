@@ -71,12 +71,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -225,14 +233,8 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
             // 2026-11-14 (Patrice) — un merci à celles et ceux qui signalent, testent et proposent, juste au-dessus
             // de « Créée par ». Sans nom (cf. le commentaire de `about_thanks_body`). Visible aussi en session leurre :
             // il ne dit rien de l'application.
-            Text(
-                text = stringResource(R.string.about_thanks_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.size(8.dp))
+            Remerciement()
+            Spacer(Modifier.size(12.dp))
             Text(
                 text = stringResource(R.string.about_credits_body, AUTHOR_NAME),
                 style = MaterialTheme.typography.bodySmall,
@@ -353,6 +355,83 @@ private fun PrivacyCard() {
         }
     }
 }
+
+/**
+ * 2026-11-15 (Patrice) — le remerciement, encadré d'une bordure gris clair pour le séparer de « Créée par » et des
+ * mentions qui suivent, et précédé de mains jointes.
+ *
+ * Les mains jointes sont l'émoji U+1F64F (Unicode 6.0, présent sur toutes les versions d'Android visées) : la
+ * bibliothèque d'icônes Material n'en a pas. Il est décoratif — un lecteur d'écran ne lit que le texte. La bordure
+ * suit le thème (`outlineVariant` : gris clair en clair, discret en sombre), comme les séparateurs de cet écran.
+ */
+@Composable
+private fun Remerciement() {
+    val forme = RoundedCornerShape(16.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(width = 1.dp, color = MaterialTheme.colorScheme.outlineVariant, shape = forme)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        // Un émoji garde ses couleurs quelle que soit la couleur du texte : on le dessine à travers un calque qui le
+        // ramène à une seule teinte (Patrice), en gardant ses ombres — cf. [teinteMonochrome].
+        val teinte = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(
+            text = MAINS_JOINTES,
+            fontSize = 20.sp,
+            modifier = Modifier
+                .clearAndSetSemantics {}
+                .drawWithCache {
+                    val calque = Paint().apply { colorFilter = ColorFilter.colorMatrix(teinteMonochrome(teinte)) }
+                    onDrawWithContent {
+                        drawIntoCanvas { canvas ->
+                            canvas.saveLayer(Rect(Offset.Zero, size), calque)
+                            drawContent()
+                            canvas.restore()
+                        }
+                    }
+                },
+        )
+        Spacer(Modifier.size(6.dp))
+        Text(
+            text = stringResource(R.string.about_thanks_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** Mains jointes, U+1F64F (source en UTF-8). */
+private const val MAINS_JOINTES = "🙏"
+
+/**
+ * Matrice qui ramène une image à UNE teinte en gardant son relief : chaque pixel prend sa luminance (poids de
+ * `ColorMatrix.setToSaturation(0)`), multipliée par la [teinte] ; l'alpha d'origine est gardé. Le clair devient la
+ * teinte, le sombre tend vers le noir.
+ */
+internal fun teinteMonochrome(teinte: Color): ColorMatrix {
+    val valeurs = FloatArray(COLONNES * LIGNES)
+    // Lignes R, G, B : la luminance de l'entrée, multipliée par la composante de la teinte.
+    for ((ligne, composante) in listOf(teinte.red, teinte.green, teinte.blue).withIndex()) {
+        valeurs[ligne * COLONNES] = LUM_R * composante
+        valeurs[ligne * COLONNES + 1] = LUM_G * composante
+        valeurs[ligne * COLONNES + 2] = LUM_B * composante
+    }
+    // Ligne A : l'alpha d'entrée, inchangé.
+    valeurs[LIGNE_ALPHA * COLONNES + LIGNE_ALPHA] = 1f
+    return ColorMatrix(valeurs)
+}
+
+// Poids de luminance d'Android (`ColorMatrix.setSaturation(0)`), et forme d'une matrice de couleur 4 × 5.
+private const val LUM_R = 0.213f
+private const val LUM_G = 0.715f
+private const val LUM_B = 0.072f
+private const val LIGNES = 4
+private const val COLONNES = 5
+private const val LIGNE_ALPHA = 3
 
 @Composable
 private fun BadgesFlow(badges: List<PrivacyBadge>) {
