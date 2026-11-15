@@ -1,6 +1,6 @@
 package com.filestech.sms.system.notifications
 
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,48 +14,54 @@ import javax.inject.Singleton
  * voit déjà le message en temps réel.
  *
  * **Pattern attendu** :
- *   - `ThreadScreen`, ON_START → `ThreadViewModel.onVisibilityChanged(true)` → `setActive(conversationId)`
- *   - ON_STOP, puis `ThreadViewModel.onCleared` en filet → `clearActive(conversationId)`. Jusqu'à la
+ *   - `ThreadScreen`, ON_START → `ThreadViewModel.onVisibilityChanged(true)` → `setActive(conversationId, vm)`
+ *   - ON_STOP, puis `ThreadViewModel.onCleared` en filet → `clearActive(vm)`. Jusqu'à la
  *     1.29.0, `init` et `onCleared` seuls : le ViewModel survivant à l'écran éteint, la conversation
  *     restait « active » sans être vue (issue #60).
  *   - `IncomingMessageNotifier.notifyIncoming` → check `isActive(conversationId)`
  *     pour décider du `setTimeoutAfter` court vs persistance par défaut.
  *
- * **Thread-safety** : `AtomicLong` garantit lecture/écriture atomiques entre le
+ * **2026-11-15 (v1.30.1, issue #60, second signalement) — l'état appartient à un ÉCRAN, plus à un
+ * identifiant.** Le `clearActive(conversationId)` d'avant ne s'effaçait « que si la valeur courante
+ * matche » : il protégeait une conversation d'une AUTRE, jamais deux écrans de la MÊME. Or une
+ * transition de navigation démarre l'écran entrant (ON_START) avant d'arrêter le sortant (ON_STOP) :
+ * deux `Thread(A)` qui se succèdent (un lien `sms:` vers la conversation déjà ouverte, le retour de
+ * l'un vers l'autre) faisaient effacer par le sortant l'état que l'entrant venait de poser. La
+ * conversation restait sous les yeux, mais ses notifications ne s'effaçaient plus. Le propriétaire
+ * ([setActive]'s `owner`, le ViewModel de l'écran) tranche : seul celui qui a posé l'état l'efface.
+ *
+ * **Thread-safety** : `AtomicReference` garantit lecture/écriture atomiques entre le
  * thread main (où le ViewModel set/clear) et les threads BroadcastReceiver +
  * coroutines IO (où le Notifier read). Aucun lock explicite nécessaire.
  *
  * **Robustesse** :
- *   - `setActive` écrit la valeur sans condition. Si un autre thread vient de
- *     poser une autre conv, on écrase — sémantique "dernière conv ouverte
- *     gagne", correcte car le ViewModel précédent vient nécessairement de
- *     subir un `onCleared` qui aurait clear de toute façon (sauf
- *     race configChange, où l'ordre est : new init avant old onCleared ;
- *     dans ce cas la nouvelle conv reste active, OK).
- *   - `clearActive` ne clear QUE si la valeur courante matche, pour éviter
- *     qu'un `onCleared` tardif d'une conv quittée n'efface l'état d'une conv
- *     fraîchement ouverte (race configChange ci-dessus).
+ *   - `setActive` écrit la valeur sans condition : « le dernier écran visible gagne ».
+ *   - `clearActive` n'efface QUE si l'état appartient encore à [owner] (comparaison d'IDENTITÉ,
+ *     `compareAndSet`) : un arrêt tardif — écran sortant d'une transition, `onCleared` après un
+ *     changement de configuration — ne peut plus effacer l'état d'un écran entré entre-temps, que ce
+ *     soit pour une autre conversation ou pour la même.
  */
 @Singleton
 class ActiveConversationTracker @Inject constructor() {
 
-    private val activeId: AtomicLong = AtomicLong(NONE)
+    /** L'écran visible et sa conversation ; `null` quand aucune conversation n'est à l'écran. */
+    private class Actif(val conversationId: Long, val owner: Any)
 
-    fun setActive(conversationId: Long) {
-        activeId.set(conversationId)
+    private val actif = AtomicReference<Actif?>(null)
+
+    fun setActive(conversationId: Long, owner: Any) {
+        actif.set(Actif(conversationId, owner))
     }
 
-    fun clearActive(conversationId: Long) {
-        // CAS guard : ne clear que si on est encore propriétaire de l'état, pour
-        // éviter qu'un onCleared tardif n'écrase une init survenue entre-temps
-        // (cas configChange où le nouveau ViewModel s'init AVANT que l'ancien
-        // n'appelle son onCleared).
-        activeId.compareAndSet(conversationId, NONE)
+    fun clearActive(owner: Any) {
+        // Boucle de `compareAndSet` sur l'objet LU : l'état n'est effacé que s'il n'a pas changé
+        // entre la lecture et l'écriture, et seulement s'il appartient à [owner].
+        while (true) {
+            val courant = actif.get() ?: return
+            if (courant.owner !== owner) return
+            if (actif.compareAndSet(courant, null)) return
+        }
     }
 
-    fun isActive(conversationId: Long): Boolean = activeId.get() == conversationId
-
-    private companion object {
-        const val NONE = -1L
-    }
+    fun isActive(conversationId: Long): Boolean = actif.get()?.conversationId == conversationId
 }

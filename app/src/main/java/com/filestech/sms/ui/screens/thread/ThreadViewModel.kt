@@ -2055,12 +2055,16 @@ class ThreadViewModel @Inject constructor(
      * Jusqu'à la 1.29.0, elle était déclarée active dans `init` et ne l'était plus qu'à `onCleared`.
      * Or le ViewModel survit à l'écran éteint et à une autre application au premier plan : la
      * notification d'un message que personne ne voyait disparaissait en 1,5 s.
+     *
+     * 2026-11-15 (v1.30.1, issue #60) — l'état est posé AU NOM de ce ViewModel : deux écrans de la
+     * même conversation se chevauchent pendant une transition, et l'arrêt du sortant effaçait l'état
+     * de l'entrant (cf. [ActiveConversationTracker]).
      */
     fun onVisibilityChanged(visible: Boolean) {
         if (visible) {
-            activeConversationTracker.setActive(conversationId)
+            activeConversationTracker.setActive(conversationId, owner = this)
         } else {
-            activeConversationTracker.clearActive(conversationId)
+            activeConversationTracker.clearActive(owner = this)
         }
     }
 
@@ -2175,10 +2179,9 @@ class ThreadViewModel @Inject constructor(
         super.onCleared()
         // v1.3.9 — libère le slot "conversation active" pour que les notifs futures
         // (l'app étant désormais en background ou sur une autre conv) repassent en
-        // persistance normale. Le `compareAndSet` interne au tracker garantit qu'un
-        // ViewModel d'une autre conv fraîchement init ne sera pas écrasé par ce clear
-        // (race configChange : new init avant old onCleared).
-        activeConversationTracker.clearActive(conversationId)
+        // persistance normale. Le tracker n'efface que l'état posé par CE ViewModel : celui
+        // d'un autre écran, de la même conversation ou d'une autre, n'est pas touché.
+        activeConversationTracker.clearActive(owner = this)
         recorderJob?.cancel()
         voiceRecorder.cancel()
         playbackController.stop()
