@@ -44,24 +44,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 - **Open or share an exported PDF** (issue #76, GrapheneOS). The export went straight to the Share menu,
   and a PDF reader usually offers to open a file, not to receive a share: GrapheneOS's PDF Viewer, a
   system app, never appeared there, and the PDF had to be copied to be read. After the export, a dialog
-  now offers Open (the apps that read a PDF) or Share.
+  now offers Open (the apps that read a PDF, with Android's "Always" choice) or Share. Its title says
+  "1 page", not "1 pages".
 
 ### Fixed
 
 - **"Mark as read" from a notification works while SMS Tech is locked** (reported by e-mail on 1.30.0).
   With the app lock on, every notification action was refused, and silently: Mark as read did nothing, and
   SMS Tech is usually locked when a notification comes in. Marking as read sends nothing and shows nothing
-  the notification does not already show, so it now goes through. Reply and Resend, which send a message,
-  still need the app to be unlocked.
+  the notification does not already show, so it now goes through, on an unlocked phone: from the phone's
+  lock screen, Android first asks for the phone's code (Android 12 and later; before, the action is
+  refused there as it was). It never creates a conversation and never touches one in the vault. Reply and
+  Resend, which send a message, still need the app to be unlocked.
 - **A message that went out is no longer left "Not sent"** (reported by e-mail, a scheduled MMS on Wi-Fi).
   A message still waiting for Android's answer after 15 minutes is marked as failed, as it may never have
   left. On Wi-Fi, Android can hold an MMS for up to 30 minutes while it waits for the mobile network: its
   "sent" then came in too late and was ignored, and the message stayed "Not sent" under the recipient's
-  reply. The real result now replaces that guess, whether it says sent, delivered or failed.
+  reply. The real result now replaces that guess, whether it says sent, delivered or failed. A retry
+  confirmed after the real "sent" came in does not send the message again, and Android's own copy of an
+  outgoing MMS is kept for an hour instead of 15 minutes, so it is still there when the result arrives.
 - **A new message in the conversation on screen clears its notification again** (issue #60, second
   report). When a second screen of the same conversation opened over it (a link to that conversation, for
   example) and the user went back, SMS Tech forgot the conversation was on screen, and a message arriving
-  there kept its notification. Measured on an emulator, before and after.
+  there kept its notification. Measured on an emulator, before and after. A cancelled back gesture could
+  do the same.
 - **Every recipient of a new group is visible.** Recipients were shown on a single line that never wrapped:
   from the 4th one, a recipient was added but invisible, so it could not be checked or removed. They now
   wrap onto new lines, the area scrolls past three lines, and the last one added is brought into view.
