@@ -31,6 +31,8 @@ class SendVoiceMmsUseCase @Inject constructor(
     private val sender: MmsDispatcher,
     private val settings: AppSettingsSource,
     private val attachmentStore: OutgoingAttachmentStore,
+    // 2026-11-10 (v1.30.1) — la SIM qui part, validée ; cf. [SimDEnvoi].
+    private val simDEnvoi: SimDEnvoi,
 ) {
     private val envoi = EnvoiParDestinataire(blockedRepo, mirror)
 
@@ -54,7 +56,8 @@ class SendVoiceMmsUseCase @Inject constructor(
         // d'envoi lisent désormais la même chose de la même façon.
         val s = settings.hydratedOrNull() ?: AppSettings()
         val deliveryReports = s.sending.deliveryReports
-        val effectiveSubId = subId ?: s.sending.defaultSubId
+        // 2026-11-10 (v1.30.1) — validée, comme dans [SendSmsUseCase].
+        val effectiveSubId = simDEnvoi.pourEnvoi(subId, s)
 
         // Promote the recorded clip out of `cacheDir/voice_mms/` (wiped on every lock cycle by
         // AutoLockObserver + pruned by VoiceRecorder.pruneOld) into durable storage BEFORE

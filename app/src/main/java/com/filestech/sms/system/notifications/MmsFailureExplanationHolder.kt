@@ -1,5 +1,6 @@
 package com.filestech.sms.system.notifications
 
+import android.app.PendingIntent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,12 +32,15 @@ class MmsFailureExplanationHolder @Inject constructor() {
      *   même après une rotation ou un retour par le verrou (relecture Claude et Gemini du 2026-11-06). Gardé
      *   ICI, dans la seule source, et non dans un `rememberSaveable` qui en ferait une seconde.
      * @property erreur 2026-11-06 — ce qu'Android a dit du téléchargement manqué, ou `null`.
+     * @property relance 2026-11-14 — le bouton « Réessayer » du message, déjà validé
+     *   ([MmsFailureNotifier.relanceDepuisExtras]), ou `null`.
      */
     data class Pending(
         val reason: MmsFailureNotifier.Reason,
         val postedAt: Long = System.currentTimeMillis(),
         val affichee: Boolean = false,
         val erreur: MmsFailureNotifier.ErreurAndroid? = null,
+        val relance: PendingIntent? = null,
     ) {
         fun isExpired(now: Long = System.currentTimeMillis()): Boolean = !affichee && now - postedAt > PENDING_TTL_MS
     }
@@ -45,15 +49,16 @@ class MmsFailureExplanationHolder @Inject constructor() {
     val pending: StateFlow<Pending?> = _pending.asStateFlow()
 
     /**
-     * Écrase la précédente : le dernier tap décide, erreur comprise — un tap sans code n'hérite pas de celui
-     * du tap d'avant. [nowMs] est injectable, comme chez les jumeaux.
+     * Écrase la précédente : le dernier tap décide, erreur et bouton compris — un tap sans code n'hérite pas de
+     * celui du tap d'avant, ni du bouton d'un autre message. [nowMs] est injectable, comme chez les jumeaux.
      */
     fun set(
         reason: MmsFailureNotifier.Reason,
         nowMs: Long = System.currentTimeMillis(),
         erreur: MmsFailureNotifier.ErreurAndroid? = null,
+        relance: PendingIntent? = null,
     ) {
-        _pending.value = Pending(reason, postedAt = nowMs, erreur = erreur)
+        _pending.value = Pending(reason, postedAt = nowMs, erreur = erreur, relance = relance)
     }
 
     /** La fenêtre a paru : elle ne périme plus. Sans effet sur un porteur vide ou déjà marqué. */

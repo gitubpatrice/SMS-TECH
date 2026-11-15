@@ -124,6 +124,11 @@ class HeadlessSmsSendService : Service() {
                         Timber.i("HeadlessSmsSendService: refused while app is locked")
                         return@withTimeout
                     }
+                    // 2026-11-10 (v1.30.1) — pas de SIM de conversation ici, exprès : le réglage « SIM d'envoi »,
+                    // puis Android. Un appel refusé avec un message ne passe pas par ce service sur AOSP :
+                    // Telecom envoie lui-même le SMS par la SIM de l'appel (`RespondViaSmsManager
+                    // .onIncomingCallRejected`, AOSP main lu le 2026-11-10). Aucune preuve de la SIM qu'un
+                    // composeur constructeur transmettrait en déléguant ici : on ne lit pas d'extra supposé.
                     envoyer.invoke(recipients = recipients, body = text)
                 }
             } catch (_: TimeoutCancellationException) {

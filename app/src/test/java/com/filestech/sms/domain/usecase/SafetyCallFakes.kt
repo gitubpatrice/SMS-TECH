@@ -340,6 +340,14 @@ internal fun useCase(
         mirror = mirror,
         blockedRepo = NeverBlocked(),
         settings = settings,
+        // 2026-11-10 (v1.30.1) — liste des SIM inconnue : la SIM demandée passe telle quelle.
+        simDEnvoi = SimDEnvoi(
+            object : com.filestech.sms.domain.sender.SimsActives {
+                override fun lister() = emptyList<com.filestech.sms.domain.model.SimActive>()
+                override fun simSmsDAndroid(): Int? = null
+            },
+            Dispatchers.Unconfined,
+        ),
     ),
     settings = settings,
     panicState = object : PanicStateProvider { override val isPanicDecoyActive = false },

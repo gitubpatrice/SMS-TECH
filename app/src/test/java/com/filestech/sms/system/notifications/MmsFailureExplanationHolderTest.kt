@@ -1,6 +1,8 @@
 package com.filestech.sms.system.notifications
 
+import android.app.PendingIntent
 import com.google.common.truth.Truth.assertThat
+import io.mockk.mockk
 import org.junit.jupiter.api.Test
 
 /**
@@ -155,6 +157,22 @@ class MmsFailureExplanationHolderTest {
         holder.set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, T0)
 
         assertThat(holder.consume(T0)?.erreur).isNull()
+    }
+
+    /**
+     * 2026-11-14 — le bouton « Réessayer » du message tapé, et de lui seul : un tap sans bouton n'hérite pas de
+     * celui d'un autre message, que « Réessayer » aurait alors redemandé à sa place.
+     */
+    @Test
+    fun `le bouton du message est garde, et un tap sans bouton n'herite pas du precedent`() {
+        val holder = MmsFailureExplanationHolder()
+        val bouton = mockk<PendingIntent>()
+
+        holder.set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, T0, relance = bouton)
+        assertThat(holder.pending.value?.relance).isSameInstanceAs(bouton)
+
+        holder.set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, T0)
+        assertThat(holder.consume(T0)?.relance).isNull()
     }
 
     @Test

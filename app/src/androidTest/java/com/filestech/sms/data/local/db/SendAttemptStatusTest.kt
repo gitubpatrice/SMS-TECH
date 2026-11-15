@@ -133,8 +133,11 @@ class SendAttemptStatusTest {
     fun uneEcritureSansTentativeSAppliqueQuelQueSoitLeCompteur(): Unit = runBlocking {
         val dao = db.messageDao()
         val id = seedOutgoing()
-        dao.openNextSendAttempt(id)
-        dao.openNextSendAttempt(id)
+        // Deux relances, chacune d'une ligne en échec : depuis la v1.30.1, seule une ligne en échec se rouvre.
+        repeat(2) {
+            dao.promoteStatusMonotonic(id, MessageStatus.FAILED, 3, errorCode = 2, attempt = null)
+            assertThat(dao.openNextSendAttempt(id)).isEqualTo(1)
+        }
         assertThat(dao.sendAttemptOf(id)).isEqualTo(2)
 
         dao.promoteStatusMonotonic(id, MessageStatus.FAILED, 3, SendErrorCode.WATCHDOG_TIMEOUT, null)
@@ -167,5 +170,131 @@ class SendAttemptStatusTest {
         dao.promoteStatusMonotonic(id, MessageStatus.SENT, 1, null, attempt = 7)
 
         assertThat(statusOf(id)).isEqualTo(MessageStatus.PENDING)
+    }
+
+    // ── 2026-11-15 (v1.30.1) — l'échec SUPPOSÉ du chien de garde cède au vrai accusé ──────────────
+    //
+    // Courriel d'une utilisatrice : MMS programmé à 6 h, en Wi-Fi, affiché « Non envoyé » sous la
+    // réponse de son destinataire. Android peut retenir un MMS jusqu'à trente minutes en attendant le
+    // réseau mobile ; le chien de garde le passe en échec au bout d'un quart d'heure, et le `SENT`
+    // arrivé ensuite ne pouvait plus rien écrire. Ces tests passent par la VRAIE requête du chien de
+    // garde, `timeoutStalePending`, et non par une imitation.
+
+    private suspend fun chienDeGarde(): Int = db.messageDao().timeoutStalePending(APRES_LE_MESSAGE)
+
+    @Test
+    fun unEnvoiTardifRemplaceLEchecDuChienDeGarde(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        assertThat(chienDeGarde()).isEqualTo(1)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.FAILED)
+        assertThat(dao.findById(id)?.errorCode).isEqualTo(SendErrorCode.WATCHDOG_TIMEOUT)
+
+        // Le résultat d'Android arrive enfin, sans tentative (c'est le cas du MMS).
+        val ecrites = dao.promoteStatusMonotonic(id, MessageStatus.SENT, 1, null, null)
+
+        assertThat(ecrites).isEqualTo(1)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.SENT)
+        assertThat(dao.findById(id)?.errorCode).isNull()
+    }
+
+    @Test
+    fun unAccuseDeRemiseTardifRemplaceLEchecDuChienDeGarde(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+
+        dao.promoteStatusMonotonic(id, MessageStatus.DELIVERED, 2, null, 0)
+
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.DELIVERED)
+    }
+
+    /** Un VRAI échec remplace aussi la supposition : il porte le code d'Android, qui dit pourquoi. */
+    @Test
+    fun unEchecReelTardifRemplaceLeCodeDuChienDeGarde(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+
+        val ecrites = dao.promoteStatusMonotonic(id, MessageStatus.FAILED, 3, errorCode = 3, attempt = 0)
+
+        assertThat(ecrites).isEqualTo(1)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.FAILED)
+        assertThat(dao.findById(id)?.errorCode).isEqualTo(3)
+    }
+
+    /** Le filtre de tentative tient : l'accusé d'une tentative périmée ne remplace pas la supposition. */
+    @Test
+    fun lAccuseDUneAutreTentativeNeRemplacePasLEchecDuChienDeGarde(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+
+        val ecrites = dao.promoteStatusMonotonic(id, MessageStatus.SENT, 1, null, attempt = 7)
+
+        assertThat(ecrites).isEqualTo(0)
+        assertThat(dao.findById(id)?.errorCode).isEqualTo(SendErrorCode.WATCHDOG_TIMEOUT)
+    }
+
+    /** Ni un second passage du chien de garde, ni un retour à « en attente » ne sont des accusés. */
+    @Test
+    fun niLeChienDeGardeNiUnRetourEnAttenteNeRemplacentSaSupposition(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+
+        assertThat(chienDeGarde()).isEqualTo(0)
+        assertThat(
+            dao.promoteStatusMonotonic(id, MessageStatus.FAILED, 3, SendErrorCode.WATCHDOG_TIMEOUT, null),
+        ).isEqualTo(0)
+        assertThat(dao.promoteStatusMonotonic(id, MessageStatus.PENDING, 0, null, null)).isEqualTo(0)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.FAILED)
+        assertThat(dao.findById(id)?.errorCode).isEqualTo(SendErrorCode.WATCHDOG_TIMEOUT)
+    }
+
+    /** Un échec RÉEL reste le sommet : un `SENT` tardif ne l'efface pas (M8, sans tentative). */
+    @Test
+    fun unEchecReelResteDefinitifMemeSansTentative(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        dao.promoteStatusMonotonic(id, MessageStatus.FAILED, 3, errorCode = 4, attempt = null)
+
+        val ecrites = dao.promoteStatusMonotonic(id, MessageStatus.SENT, 1, null, null)
+
+        assertThat(ecrites).isEqualTo(0)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.FAILED)
+    }
+
+    /**
+     * Relecture Claude du 2026-11-15 : le vrai `SENT` arrive pendant que l'avertissement de doublon est
+     * ouvert. Confirmer ne doit pas rouvrir — donc pas renvoyer — un message désormais envoyé.
+     */
+    @Test
+    fun uneRelanceNeRouvrePasUnMessageDevenuEnvoye(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+        dao.promoteStatusMonotonic(id, MessageStatus.SENT, 1, null, null)
+
+        assertThat(dao.openNextSendAttempt(id)).isEqualTo(0)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.SENT)
+        assertThat(dao.sendAttemptOf(id)).isEqualTo(0)
+    }
+
+    /** Contrôle positif du précédent : un échec, lui, se rouvre. */
+    @Test
+    fun uneRelanceRouvreUnMessageEnEchec(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+
+        assertThat(dao.openNextSendAttempt(id)).isEqualTo(1)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.PENDING)
+        assertThat(dao.sendAttemptOf(id)).isEqualTo(1)
+    }
+
+    private companion object {
+        /** Un instant postérieur à la date de [seedOutgoing] : le chien de garde la voit « ancienne ». */
+        const val APRES_LE_MESSAGE = 1_800_000_000_000L
     }
 }

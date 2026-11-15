@@ -14,7 +14,10 @@ import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.safetycall.SafetyCallNotice
 import com.filestech.sms.security.AppLockManager
 import com.filestech.sms.security.AutoLockObserver
+import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.notifications.NotificationChannelInitializer
+import com.filestech.sms.system.notifications.OutgoingFailureNotifier
+import com.filestech.sms.system.notifications.verrouAppActif
 import com.filestech.sms.system.scheduler.SafetyCallAlarmScheduler
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
@@ -84,6 +87,11 @@ class MainApplication : Application(), Configuration.Provider {
      * `MessageDao` / `AttachmentDao` / `ConversationMirror` vivent désormais dans [StartupMigrations].
      */
     @Inject lateinit var conversationDaoLazy: dagger.Lazy<ConversationDao>
+
+    /** 2026-11-15 (v1.30.1) — refont les actions des notifications affichées quand le verrou change. `Lazy` : DAO. */
+    @Inject lateinit var notificateurMessagesLazy: dagger.Lazy<IncomingMessageNotifier>
+
+    @Inject lateinit var notificateurEchecsLazy: dagger.Lazy<OutgoingFailureNotifier>
 
     /** v1.24.0 — migrations one-shot cold-start qui ouvrent la base, regroupées et gardées. */
     @Inject lateinit var startupMigrations: com.filestech.sms.system.startup.StartupMigrations
@@ -291,6 +299,24 @@ class MainApplication : Application(), Configuration.Provider {
                 .collect { notice ->
                     runCatching { safetyCallWarningNotifierLazy.get().reconcile(notice) }
                         .onFailure { Timber.w(it, "SafetyCall: reconciliation notification echouee") }
+                }
+        }
+
+        // 2026-11-15 (v1.30.1) — les actions des notifications déjà AFFICHÉES suivent le verrou de l'app et le
+        // réglage « Répondre depuis la notification ». Elles étaient figées à la pose : activer le verrou laissait
+        // « Répondre » et « Renvoyer », refusés ensuite sans un mot, et un « Marquer comme lu » qui ne faisait pas
+        // demander le code du téléphone. La PREMIÈRE valeur compte aussi : `flow` ne sert que des valeurs lues sur
+        // le stockage, et elle remet d'aplomb ce qui a été posé avant un redémarrage, ou quand les réglages étaient
+        // illisibles. Les valeurs émises sont passées telles quelles ; rien n'est reposé quand rien ne change.
+        appScope.launch {
+            settingsRepository.flow
+                .map { verrouAppActif(it) to it.notifications.inlineReply }
+                .distinctUntilChanged()
+                .collect { (verrouApp, reponseActivee) ->
+                    runCatching { notificateurMessagesLazy.get().reappliquerActions(verrouApp, reponseActivee) }
+                        .onFailure { Timber.w(it, "Notifications de message : actions non refaites") }
+                    runCatching { notificateurEchecsLazy.get().reappliquerActions(verrouApp) }
+                        .onFailure { Timber.w(it, "Notifications d'echec : actions non refaites") }
                 }
         }
 

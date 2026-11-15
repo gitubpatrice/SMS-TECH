@@ -34,6 +34,8 @@ class SendMediaMmsUseCase @Inject constructor(
     private val sender: MmsDispatcher,
     private val settings: AppSettingsSource,
     private val attachmentStore: OutgoingAttachmentStore,
+    // 2026-11-10 (v1.30.1) — la SIM qui part, validée ; cf. [SimDEnvoi].
+    private val simDEnvoi: SimDEnvoi,
 ) {
     private val envoi = EnvoiParDestinataire(blockedRepo, mirror)
 
@@ -66,7 +68,8 @@ class SendMediaMmsUseCase @Inject constructor(
         // un worker réveillé à froid. `defaultSubId` y valait alors `null` : le renvoi partait de
         // la SIM système au lieu de celle choisie. Même correctif que [SendSmsUseCase].
         val s = settings.hydratedOrNull() ?: AppSettings()
-        val effectiveSubId = subId ?: s.sending.defaultSubId
+        // 2026-11-10 (v1.30.1) — validée, comme dans [SendSmsUseCase].
+        val effectiveSubId = simDEnvoi.pourEnvoi(subId, s)
         val deliveryReports = s.sending.deliveryReports
         val now = System.currentTimeMillis()
 

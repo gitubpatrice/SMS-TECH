@@ -151,6 +151,9 @@ fun SettingsScreen(
     var reactionFormatPickerOpen by remember { mutableStateOf(false) }
     // v1.21.0 — picker indicatif pays par défaut (conversion E.164 à l'envoi).
     var defaultRegionPickerOpen by remember { mutableStateOf(false) }
+    // 2026-11-10 (v1.30.1) — SIM d'envoi par défaut, proposée à partir de deux SIM actives.
+    var defaultSimPickerOpen by remember { mutableStateOf(false) }
+    val sims = com.filestech.sms.ui.util.rememberSimsActives()
     // v1.8.0 — 3 nouveaux dialogs de confirmation pour les actions destructives :
     //  - resync depuis le téléphone (réimporte tout)
     //  - reset all settings (defaults)
@@ -448,6 +451,18 @@ fun SettingsScreen(
                         viewModel.update { it.copy(sending = it.sending.copy(userMsisdn = v?.takeIf { s -> s.isNotBlank() })) }
                     },
                 )
+                // 2026-11-10 (v1.30.1) — la SIM d'envoi par défaut. `defaultSubId` était lu par chaque voie
+                // d'envoi depuis longtemps, mais aucun écran ne l'écrivait. Une SIM retirée depuis est
+                // affichée « Comme Android », et c'est bien ce qui part (`SimDEnvoi`).
+                if (sims.size >= 2) {
+                    val simReglee = sims.firstOrNull { it.subId == state.sending.defaultSubId }
+                    NavigationRow(
+                        title = stringResource(R.string.settings_default_sim_title),
+                        description = simReglee?.let { com.filestech.sms.ui.util.libelleDeSim(it) }
+                            ?: stringResource(R.string.settings_default_sim_android),
+                        onClick = { defaultSimPickerOpen = true },
+                    )
+                }
                 // v1.21.0 — indicatif pays par défaut pour convertir les numéros nationaux
                 // au format international (E.164) avant l'envoi. "Auto" = pays de la SIM.
                 // Indispensable pour envoyer des numéros nationaux d'un pays depuis une SIM
@@ -1284,6 +1299,49 @@ fun SettingsScreen(
                 defaultRegionPickerOpen = false
             },
             onDismiss = { defaultRegionPickerOpen = false },
+        )
+    }
+
+    // 2026-11-10 (v1.30.1) — la SIM d'envoi par défaut : « Comme Android » (`null`, le comportement d'avant),
+    // puis chaque SIM active. L'aide, en tête et non sous « Comme Android », décrit le réglage et dit que le
+    // fil choisit lui-même. Un réglage pointant une SIM retirée ne coche rien : il vaut « Comme Android ».
+    // Écrit ici plutôt qu'en fonction : ce fichier est au plafond de fonctions de detekt.
+    if (defaultSimPickerOpen && sims.size >= 2) {
+        val reglee = state.sending.defaultSubId?.takeIf { id -> sims.any { it.subId == id } }
+        val choisir: (Int?) -> Unit = { subId ->
+            viewModel.update { it.copy(sending = it.sending.copy(defaultSubId = subId)) }
+            defaultSimPickerOpen = false
+        }
+        AlertDialog(
+            onDismissRequest = { defaultSimPickerOpen = false },
+            title = { Text(stringResource(R.string.settings_default_sim_title)) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        stringResource(R.string.settings_default_sim_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    PreviewModeOption(
+                        label = stringResource(R.string.settings_default_sim_android),
+                        hint = null,
+                        selected = reglee == null,
+                        onClick = { choisir(null) },
+                    )
+                    for (sim in sims) {
+                        PreviewModeOption(
+                            label = com.filestech.sms.ui.util.libelleDeSim(sim),
+                            hint = null,
+                            selected = reglee == sim.subId,
+                            onClick = { choisir(sim.subId) },
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { defaultSimPickerOpen = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
         )
     }
 

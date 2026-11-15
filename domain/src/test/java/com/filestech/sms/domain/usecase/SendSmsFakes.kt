@@ -5,13 +5,16 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.mms.MediaAttachmentSpec
 import com.filestech.sms.domain.model.BlockedNumber
 import com.filestech.sms.domain.model.MessageStatus
+import com.filestech.sms.domain.model.SimActive
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SentSmsRecorder
+import com.filestech.sms.domain.sender.SimsActives
 import com.filestech.sms.domain.sender.SmsSender
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import java.io.File
@@ -203,6 +206,7 @@ internal fun sendSmsUseCase(
     isDefaultSmsApp: Boolean = true,
     mirror: OutgoingMessageMirror = NoopMirror(),
     blocked: BlockedNumberRepository = NeverBlocked(),
+    sims: SimsActives = SimsInconnues,
 ) = SendSmsUseCase(
     defaultAppManager = object : DefaultSmsAppChecker {
         override fun isDefault() = isDefaultSmsApp
@@ -212,7 +216,26 @@ internal fun sendSmsUseCase(
     mirror = mirror,
     blockedRepo = blocked,
     settings = settings,
+    simDEnvoi = SimDEnvoi(sims, Dispatchers.Unconfined),
 )
+
+/**
+ * 2026-11-10 (v1.30.1) — liste des SIM inconnue (permission refusée) : [SimDEnvoi] laisse passer la SIM
+ * demandée telle quelle, c'est-à-dire le comportement d'avant la 1.30.1.
+ */
+internal object SimsInconnues : SimsActives {
+    override fun lister(): List<SimActive> = emptyList()
+    override fun simSmsDAndroid(): Int? = null
+}
+
+/** 2026-11-10 (v1.30.1) — des SIM connues, pour les tests qui exercent la validation. */
+internal class SimsConnues(private val sims: List<SimActive>, private val android: Int? = null) : SimsActives {
+    override fun lister(): List<SimActive> = sims
+    override fun simSmsDAndroid(): Int? = android
+}
+
+/** 2026-11-10 (v1.30.1) — le [SimDEnvoi] des tests qui ne portent pas sur la SIM. */
+internal fun simDEnvoiNeutre() = SimDEnvoi(SimsInconnues, Dispatchers.Unconfined)
 
 /** v1.28.3 (F21) — bloque les numeros dont la forme brute figure dans [numeros]. */
 internal class BlockedList(private val numeros: Set<String>) : BlockedNumberRepository {

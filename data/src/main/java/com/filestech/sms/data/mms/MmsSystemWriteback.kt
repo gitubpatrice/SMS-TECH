@@ -157,6 +157,12 @@ class MmsSystemWriteback @Inject constructor(
             Timber.w("MmsSystemWriteback: cannot parse mmsId from %s", mmsUri)
             return@withContext null
         }
+        // 2026-11-10 (issue #87) — un refus ne lève pas : il rend `…/0` (`ContentProvider.rejectInsert`).
+        // Le KDoc promettait `null` dans ce cas ; on rendait 0, et la suite écrivait sous `content://mms/0`.
+        if (mmsId <= 0L) {
+            Timber.w("MmsSystemWriteback: content://mms a refusé l'écriture (rôle SMS ?)")
+            return@withContext null
+        }
 
         // 2. Insert addresses — each insert in its own safe() so a single failure (e.g. FROM
         // rejected) does not silently skip the remaining TO rows. Without `addr` rows, the MMS

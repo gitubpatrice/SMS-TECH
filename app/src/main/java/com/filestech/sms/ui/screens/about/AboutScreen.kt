@@ -222,6 +222,17 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
             )
 
             Spacer(Modifier.size(24.dp))
+            // 2026-11-14 (Patrice) — un merci à celles et ceux qui signalent, testent et proposent, juste au-dessus
+            // de « Créée par ». Sans nom (cf. le commentaire de `about_thanks_body`). Visible aussi en session leurre :
+            // il ne dit rien de l'application.
+            Text(
+                text = stringResource(R.string.about_thanks_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.size(8.dp))
             Text(
                 text = stringResource(R.string.about_credits_body, AUTHOR_NAME),
                 style = MaterialTheme.typography.bodySmall,

@@ -35,6 +35,8 @@ class MmsDownloader @Inject constructor(
      * @param transactionIdOctets 2026-11-06 — le `transactionId` de la notification, en OCTETS : la
      *   réponse au MMSC ([MmsSender.repondreAuMmsc]) doit le rendre à l'identique, ce que la chaîne
      *   [transactionId] (décodée en UTF-8, et qui fait la clé du PDU) ne garantit pas.
+     * @param tentative 2026-11-14 — 0 pour le téléchargement annoncé par l'opérateur, puis le rang du nouvel essai
+     *   (`RelanceMms`) : rendu tel quel au receveur du résultat, qui décide de l'essai suivant.
      */
     fun download(
         contentLocation: String,
@@ -42,18 +44,25 @@ class MmsDownloader @Inject constructor(
         senderAddress: String?,
         subId: Int? = null,
         transactionIdOctets: ByteArray? = null,
+        tentative: Int = 0,
     ): Outcome<Unit> {
-        if (contentLocation.isBlank()) return Outcome.Failure(AppError.Validation("empty contentLocation"))
         // v1.3.10 (SEC-05) — defense in depth: reject any contentLocation whose scheme is
         // not `http(s)://`. The WAP push receiver is OS-protected (BROADCAST_WAP_PUSH), and
         // every production AOSP telephony stack rejects non-HTTP schemes downstream, but
         // some legacy OEM stacks were observed honouring `file://` / `content://` URIs —
         // we'd rather fail the download loudly than let `SmsManager` chase an arbitrary URI.
-        if (!adresseHttp(contentLocation)) {
-            val scheme = contentLocation.substringBefore("://", missingDelimiterValue = "").lowercase()
-            Timber.w("Rejected MMS contentLocation with non-HTTP scheme: %s", scheme)
-            return Outcome.Failure(AppError.Validation("contentLocation scheme not allowed: $scheme"))
+        // 2026-11-14 — les deux refus en un seul `return` (règle ReturnCount, le paramètre `tentative` ayant
+        // changé la signature) : mêmes refus, mêmes messages.
+        val refus = when {
+            contentLocation.isBlank() -> AppError.Validation("empty contentLocation")
+            !adresseHttp(contentLocation) -> {
+                val scheme = contentLocation.substringBefore("://", missingDelimiterValue = "").lowercase()
+                Timber.w("Rejected MMS contentLocation with non-HTTP scheme: %s", scheme)
+                AppError.Validation("contentLocation scheme not allowed: $scheme")
+            }
+            else -> null
         }
+        if (refus != null) return Outcome.Failure(refus)
 
         val dir = File(context.cacheDir, MMS_IN_DIR).apply { mkdirs() }
         // v1.28.9 (F17) — le nom porte la clé de transaction et la SIM : si le traitement échoue et que le
@@ -88,8 +97,7 @@ class MmsDownloader @Inject constructor(
         // action, which it doesn't — Android 14+ silently drops these broadcasts. Without delivery,
         // the receiver never runs → the downloaded PDU file (raw audio + sender headers) stays
         // forever in `cache/mms_incoming/`, leaking plaintext on adb-pull / forensics.
-        val intent = Intent(ACTION_MMS_DOWNLOADED)
-            .setClassName(context, "com.filestech.sms.system.receiver.MmsDownloadedReceiver")
+        val intent = identiteDuResultat(context)
             .apply {
                 putExtra(EXTRA_PDU_FILE, pduFile.absolutePath)
                 putExtra(EXTRA_TRANSACTION_ID, transactionId)
@@ -102,13 +110,16 @@ class MmsDownloader @Inject constructor(
                 // L'intent est explicite, vers un receveur non exporté ; l'adresse ne va pas au journal.
                 putExtra(EXTRA_CONTENT_LOCATION, contentLocation)
                 putExtra(EXTRA_NOTIFICATION_TRANSACTION_ID, transactionIdOctets)
+                putExtra(EXTRA_TENTATIVE, tentative)
+                // 2026-11-14 — l'heure du lancement : un résultat arrivé après un effacement d'urgence, pour un
+                // téléchargement lancé avant lui, ne ressuscite rien (`DernierEffacement`).
+                putExtra(EXTRA_LANCE_A, android.os.SystemClock.elapsedRealtime())
             }
-        val reqCode = (pduFile.absolutePath.hashCode() and 0x7FFFFFFF)
         // 2026-11-06 — MUTABLE, sans quoi le statut HTTP d'un échec n'arrive jamais : cf.
         // [drapeauxDuResultatDeTelechargement].
         val pi = PendingIntent.getBroadcast(
             context,
-            reqCode,
+            codeDuResultat(pduFile),
             intent,
             drapeauxDuResultatDeTelechargement(Build.VERSION.SDK_INT),
         )
@@ -193,6 +204,58 @@ class MmsDownloader @Inject constructor(
 
         /** 2026-11-06 — le `transactionId` de la notification, en octets, pour la réponse au MMSC. */
         const val EXTRA_NOTIFICATION_TRANSACTION_ID: String = "com.filestech.sms.extra.NOTIFICATION_TRANSACTION_ID"
+
+        /** 2026-11-14 — le rang du téléchargement : 0 à l'annonce, puis celui du nouvel essai (`RelanceMms`). */
+        const val EXTRA_TENTATIVE: String = "com.filestech.sms.extra.MMS_DOWNLOAD_ATTEMPT"
+
+        /**
+         * 2026-11-14 — l'instant du lancement de ce téléchargement, en `SystemClock.elapsedRealtime()` (horloge qui ne
+         * recule pas), cf. `DernierEffacement` et `RelanceMms.EnCours`.
+         */
+        const val EXTRA_LANCE_A: String = "com.filestech.sms.extra.MMS_DOWNLOAD_STARTED_AT"
+
+        /**
+         * 2026-11-14 (seconde relecture GPT) — **annule le résultat de chaque téléchargement encore en cours**, appelé
+         * par l'effacement d'urgence avant qu'il ne vide le cache.
+         *
+         * Un téléchargement lancé avant l'effacement peut aboutir après lui (le service MMS attend parfois le réseau
+         * trente minutes) : son résultat écrivait le message dans la base vidée. La marque en mémoire
+         * (`DernierEffacement`) ne suffit pas quand le processus meurt entre-temps ; un `PendingIntent` annulé, lui,
+         * l'est dans le système : le service MMS ne peut plus le livrer, à aucun processus. Rien n'est écrit nulle
+         * part, l'effacement ne laisse donc pas de trace.
+         *
+         * Chaque téléchargement en cours a son PDU dans [MMS_IN_DIR], et son `PendingIntent` se retrouve par la même
+         * identité qu'à la création (action, receveur, code tiré du chemin) ; `FLAG_NO_CREATE` n'en crée aucun.
+         *
+         * @return le nombre de `PendingIntent` annulés.
+         */
+        fun annulerLesResultatsEnAttente(context: Context): Int {
+            val fichiers = File(context.cacheDir, MMS_IN_DIR).listFiles() ?: return 0
+            var annules = 0
+            for (fichier in fichiers) {
+                val pi = runCatching {
+                    PendingIntent.getBroadcast(
+                        context,
+                        codeDuResultat(fichier),
+                        identiteDuResultat(context),
+                        drapeauxDuResultatDeTelechargement(Build.VERSION.SDK_INT) or PendingIntent.FLAG_NO_CREATE,
+                    )
+                }.getOrNull() ?: continue
+                pi.cancel()
+                annules++
+            }
+            return annules
+        }
+
+        /**
+         * L'identité du résultat d'un téléchargement (action et receveur ; les extras n'en font pas partie). Audit
+         * P0-2 (v1.2.0) : explicite, sans quoi Android 14+ ne livrait rien au receveur sans filtre.
+         */
+        private fun identiteDuResultat(context: Context): Intent = Intent(ACTION_MMS_DOWNLOADED)
+            .setClassName(context, "com.filestech.sms.system.receiver.MmsDownloadedReceiver")
+
+        /** Le code de requête du résultat, tiré du chemin du PDU : un par téléchargement. */
+        private fun codeDuResultat(pdu: File): Int = pdu.absolutePath.hashCode() and 0x7FFFFFFF
 
         /**
          * v1.3.10 (SEC-05) — `http://` ou `https://`, rien d'autre. 2026-11-06 — sortie du corps de

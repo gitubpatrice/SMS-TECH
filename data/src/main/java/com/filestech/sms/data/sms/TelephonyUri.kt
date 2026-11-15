@@ -56,3 +56,27 @@ internal fun canonicalTelephonyUri(raw: String): String {
         raw
     }
 }
+
+/**
+ * 2026-11-10 (issue #87) — l'URI de la ligne que `ContentResolver.insert` vient de CRÉER, sous sa
+ * forme canonique, ou `null` quand le fournisseur n'a rien créé.
+ *
+ * Un fournisseur qui refuse une écriture ne lève pas : `ContentProvider.rejectInsert` rend l'URI
+ * demandé suivi de `/0` (`content://sms/sent/0` ; AOSP `ContentProvider.java`, lu le 2026-11-10 :
+ * « the base URI with a '0' tagged on to it »), et 0 n'est l'identifiant d'aucune ligne (SQLite
+ * numérote à partir de 1). C'est ce que rend `content://sms` à une application qui n'est pas
+ * l'application SMS par défaut (vu sans rôle sur émulateur, PR #80). Enregistrée telle quelle, cette
+ * fausse adresse :
+ *  - faisait croire qu'une copie existait chez Android ;
+ *  - entrait en conflit, à l'écriture refusée suivante, avec l'index `UNIQUE(telephony_uri)` : le
+ *    message suivant n'était plus écrit, alors que l'aperçu de la conversation l'annonçait.
+ *
+ * Un dernier segment non numérique traverse, comme dans [canonicalTelephonyUri] : on ne déforme pas
+ * ce qu'on ne sait pas interpréter.
+ */
+internal fun uriDeLigneCreee(brut: String?): String? {
+    if (brut.isNullOrBlank()) return null
+    val canonique = canonicalTelephonyUri(brut)
+    val id = canonique.substringAfterLast('/').toLongOrNull()
+    return if (id != null && id <= 0L) null else canonique
+}

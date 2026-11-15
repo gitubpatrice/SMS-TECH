@@ -13,6 +13,7 @@ import com.filestech.sms.data.repository.QuickReplyRepositoryImpl
 import com.filestech.sms.data.repository.ScheduledMessageRepositoryImpl
 import com.filestech.sms.data.sender.SenderNameProviderImpl
 import com.filestech.sms.data.sms.DefaultSmsAppManager
+import com.filestech.sms.data.sms.SimsActivesAndroid
 import com.filestech.sms.data.sms.SmsSenderImpl
 import com.filestech.sms.data.sms.SystemCopyEraser
 import com.filestech.sms.data.sms.TelephonyReader
@@ -38,6 +39,7 @@ import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.sender.DefaultSmsAppChecker
 import com.filestech.sms.domain.sender.SenderNameProvider
 import com.filestech.sms.domain.sender.SentSmsRecorder
+import com.filestech.sms.domain.sender.SimsActives
 import com.filestech.sms.domain.sender.SmsSender
 import com.filestech.sms.domain.settings.AppSettingsSource
 import com.filestech.sms.domain.vault.VaultMover
@@ -84,6 +86,11 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindSmsSender(impl: SmsSenderImpl): SmsSender
+
+    // 2026-11-10 (v1.30.1) — la liste des SIM du choix de SIM, de la validation a l'envoi et des
+    // etiquettes des bulles.
+    @Binds @Singleton
+    abstract fun bindSimsActives(impl: SimsActivesAndroid): SimsActives
 
     @Binds @Singleton
     abstract fun bindDefaultSmsAppChecker(impl: DefaultSmsAppManager): DefaultSmsAppChecker

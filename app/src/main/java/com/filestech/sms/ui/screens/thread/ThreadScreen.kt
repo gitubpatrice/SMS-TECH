@@ -303,6 +303,11 @@ fun ThreadScreen(
     // broadcast de confirmation). On confirme via dialog avant retry. SYNCHRONOUS reste
     // un retry direct sans dialog (le radio a rejeté l'envoi, pas de risque doublon).
     var pendingRetryWatchdog by remember { mutableStateOf<Message?>(null) }
+    // 2026-11-15 (issue #76) — PDF exporté, en attente du choix « Ouvrir » ou « Partager ». `remember`
+    // suffit à la rotation : `MainActivity` déclare `configChanges` (orientation, taille…), l'activité n'est
+    // pas recréée. Après la mort du processus, la fenêtre ne revient pas, comme la visionneuse de photos :
+    // l'export d'une conversation du Coffre ne doit pas se rouvrir tout seul.
+    var pdfPret by remember { mutableStateOf<ThreadViewModel.Event.PdfReady?>(null) }
     // v1.15.1 — Flow Programmer un SMS : 2 étapes (DatePicker puis TimePicker).
     // `scheduleStep` null = aucun picker ouvert ; "date" = DatePicker actif ;
     // "time" = TimePicker actif (date déjà choisie, stockée dans scheduledEpochMidnight).
@@ -403,15 +408,8 @@ fun ThreadScreen(
                 is ThreadViewModel.Event.ShowSnackbar -> snackbarHost.showSnackbar(
                     SmsTechSnackbarVisuals(message = e.message, isError = e.isError),
                 )
-                is ThreadViewModel.Event.PdfReady -> {
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, e.uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    runCatching { context.startActivity(Intent.createChooser(shareIntent, "PDF")) }
-                    snackbarHost.showSnackbar(context.getString(R.string.thread_export_success, e.pages))
-                }
+                // 2026-11-15 (issue #76) — ouvrir OU partager, au choix : cf. [FenetrePdfPret].
+                is ThreadViewModel.Event.PdfReady -> pdfPret = e
                 // v1.3.7 — un échec d'envoi est par définition une erreur → rouge.
                 //
                 // v1.28.3 (F21) — le refus pour cause de blocage se dit à part. « Échec de
@@ -440,6 +438,9 @@ fun ThreadScreen(
                         partialFmt.format(e.sent, e.failed + e.blocked)
                     },
                 )
+                // 2026-11-14 — le message est parti dans la conversation des membres non bloqués : même geste que
+                // le transfert vers une conversation existante, ce fil est remplacé par celle-là.
+                is ThreadViewModel.Event.OuvrirConversation -> onForwardToConversation(e.conversationId)
                 is ThreadViewModel.Event.OpenAddContact -> {
                     val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {
                         type = ContactsContract.Contacts.CONTENT_ITEM_TYPE
@@ -658,6 +659,10 @@ fun ThreadScreen(
                         onRemove = { id -> viewModel.removePendingAttachment(id) },
                     )
                 }
+                // 2026-11-10 (v1.30.1) — la SIM d'envoi, juste au-dessus du composeur : le texte, les pièces
+                // jointes et le vocal partent tous par elle. Rien du tout avec une seule SIM. Placée ici, comme
+                // la bande des pièces jointes, elle monte avec le clavier (`imePadding` du composeur).
+                ChoixDeSimComposeur(sims = state.sims, simEnvoi = state.simEnvoi, onChoisir = viewModel::choisirSim)
                 ComposerBar(
                     voice = state.voice,
                     playback = playbackState,
@@ -733,6 +738,8 @@ fun ThreadScreen(
         // uniquement si viewModel change (singleton scope ViewModel — donc 1 fois par
         // composition de ThreadScreen). Référence stable → Compose peut skipper la
         // recomposition des items dont le `msg` n'a pas changé.
+        // 2026-11-12 (issue #87) — les messages dont l'heure et l'état ont été demandés, cf. [HeuresRevelees].
+        val heuresRevelees = remember(conversationId) { HeuresRevelees() }
         val itemActions = remember(viewModel) {
             ThreadMessageItemActions(
                 onTogglePlayback = { audio -> viewModel.togglePlayback(audio.localUri, audio.toPlaybackUri()) },
@@ -835,6 +842,7 @@ fun ThreadScreen(
                     // serait du bruit non sollicité.
                     simLabel = if (msg.isIncoming) simLabeler(msg.subId) else null,
                     montrerEnvoiGroupe = state.conversation?.isGroup == false,
+                    heuresRevelees = heuresRevelees,
                     actions = itemActions,
                 )
             }
@@ -1202,6 +1210,7 @@ fun ThreadScreen(
     // fichier au moment du choix — mais il a emporté avec lui la confirmation d'ENVOI, sans que
     // personne le remarque, ce commentaire continuant d'affirmer le contraire. Le chemin média
     // est de nouveau couvert, par le dialogue ajouté plus bas.
+    pdfPret?.let { pdf -> FenetrePdfPret(uri = pdf.uri, pages = pdf.pages, onFermer = { pdfPret = null }) }
     state.pendingSend?.let { body ->
         // v1.2.3 audit U10: Send is the positive primary action — autofocus + Button (heavier
         // weight) instead of two ambiguous TextButtons. Material 3 confirm-flow guideline.
@@ -1223,6 +1232,35 @@ fun ThreadScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelPendingSend() }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    // 2026-11-14 (groupe de 56 sur le S24 de Patrice) — un MMS de groupe écarterait des membres bloqués, et partirait
+    // dans une autre conversation : on le dit AVANT. Accepter envoie (sans seconde confirmation) ; annuler ne touche à
+    // rien. Cf. [ThreadViewModel.EnvoiSansBloques].
+    state.envoiSansBloques?.let { attente ->
+        AlertDialog(
+            onDismissRequest = { viewModel.annulerEnvoiSansBloques() },
+            title = { Text(stringResource(R.string.thread_group_blocked_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.thread_group_blocked_body,
+                        attente.bloques.joinToString(", "),
+                        attente.servis,
+                    ),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(onClick = { viewModel.confirmerEnvoiSansBloques() }) {
+                    Text(stringResource(R.string.action_send))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.annulerEnvoiSansBloques() }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },
@@ -2069,14 +2107,6 @@ private const val WAVE_BARS: Int = 28
 /** Max gap (ms) between two messages of the same sender to count as one burst. */
 private const val BURST_GAP_MS: Long = 60_000L
 
-/** True when [a] and [b] fall on the same calendar day. */
-private fun sameDay(a: Long, b: Long): Boolean {
-    val ca = java.util.Calendar.getInstance().apply { timeInMillis = a }
-    val cb = java.util.Calendar.getInstance().apply { timeInMillis = b }
-    return ca.get(java.util.Calendar.YEAR) == cb.get(java.util.Calendar.YEAR) &&
-        ca.get(java.util.Calendar.DAY_OF_YEAR) == cb.get(java.util.Calendar.DAY_OF_YEAR)
-}
-
 /**
  * Decides where a message sits inside its burst (a run of consecutive messages from the same
  * sender, within [BURST_GAP_MS] of one another, not crossing a calendar day).
@@ -2233,6 +2263,8 @@ private fun ThreadMessageItem(
      * ligne qui ouvre ses destinataires. Dans un groupe, la conversation les montre déjà.
      */
     montrerEnvoiGroupe: Boolean = false,
+    /** 2026-11-12 (issue #87) — l'heure et l'état demandés, tenus au niveau de l'écran, cf. [HeuresRevelees]. */
+    heuresRevelees: HeuresRevelees,
     actions: ThreadMessageItemActions,
 ) {
     // Taille du texte des messages : tout l'élément (séparateur, bulle, citation, horodatage).
@@ -2242,7 +2274,15 @@ private fun ThreadMessageItem(
             DateSeparator(label = label)
         }
 
-        val showTimestamp = prev?.date?.let { msg.date - it > 5 * 60_000L } ?: true
+        // 2026-11-12 (issue #87) — la ligne « heure • état » : d'office en tête de rafale, sous le dernier message
+        // envoyé d'une série et sur un échec ; sinon à la demande (toucher, menu ⋮), cf. [ligneHeureDOffice]. L'action
+        // n'est recréée que si ce qu'elle dit change (relecture GPT) : sinon les bulles ne pourraient jamais être sautées.
+        val heureRevelee = heuresRevelees.estRevelee(msg.id)
+        val heureDOffice = ligneHeureDOffice(msg, prev, next)
+        val showTimestamp = heureDOffice || heureRevelee
+        val actionHeure = remember(msg.id, heureDOffice, heureRevelee, heuresRevelees) {
+            actionHeure(heureDOffice, heureRevelee) { heuresRevelees.basculer(msg.id) }
+        }
         val burstPosition = computeBurstPosition(prev, msg, next)
         val audio = msg.audioAttachment
         // v1.3.3 bug #2 — pour les pièces jointes NON-audio (image/video/file), on délègue à
@@ -2292,6 +2332,7 @@ private fun ThreadMessageItem(
                     repliedToPreview = repliedToPreview,
                     showTimestamp = showTimestamp,
                     senderLabel = senderLabel,
+                    actionHeure = actionHeure,
                 )
             }
             mediaAttachment != null -> {
@@ -2314,6 +2355,7 @@ private fun ThreadMessageItem(
                     onRemoveReaction = { actions.onRemoveReaction(msg) },
                     repliedToPreview = repliedToPreview,
                     senderLabel = senderLabel,
+                    actionHeure = actionHeure,
                 )
             }
             else -> {
@@ -2321,7 +2363,8 @@ private fun ThreadMessageItem(
                     message = msg,
                     showTimestamp = showTimestamp,
                     burstPosition = burstPosition,
-                    onTap = { if (msg.status == Message.Status.FAILED) actions.onTapFailed(msg) },
+                    // 2026-11-12 (issue #87) — un échec garde la relance ; sinon le toucher bascule l'heure.
+                    onTap = { surToucherBulle(msg, actionHeure) { actions.onTapFailed(msg) } },
                     onDelete = { actions.onDelete(msg) },
                     onReply = { actions.onReply(msg) },
                     // v1.7.1 — Translate via ACTION_PROCESS_TEXT system intent. Only wired when
@@ -2339,6 +2382,7 @@ private fun ThreadMessageItem(
                     senderLabel = senderLabel,
                     customBubbleColorArgb = bubbleColorArgb,
                     smishingReasons = smishingReasons,
+                    actionHeure = actionHeure,
                 )
             }
         }

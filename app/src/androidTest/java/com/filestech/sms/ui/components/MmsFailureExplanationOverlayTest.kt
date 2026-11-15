@@ -1,7 +1,14 @@
 package com.filestech.sms.ui.components
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.ContextCompat
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -167,6 +174,75 @@ class MmsFailureExplanationOverlayTest {
 
         compose.onNodeWithText(texteTropVolumineux).assertDoesNotExist()
         assertThat(holder.pending.value).isNull()
+    }
+
+    // ── 2026-11-14 — le bouton « Réessayer » (courriel : MMS perdus en Wi-Fi, code 3) ────────────────────────
+
+    private val texteEchecAvecBouton: String
+        get() = context.getString(R.string.mms_failure_dialog_body_download_failed_retry)
+    private val boutonReessayer: String get() = context.getString(R.string.action_retry)
+
+    /**
+     * Un `PendingIntent` de test vers une diffusion que le test écoute : le vrai bouton déclencherait un
+     * téléchargement MMS.
+     */
+    private fun boutonDeTest(action: String): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        0,
+        Intent(action).setPackage(context.packageName),
+        PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    @Test
+    fun echecAvecBoutonLaFenetreMeneAReessayerEtLEnvoie() {
+        val action = "com.filestech.sms.test.RELANCE_${System.nanoTime()}"
+        val recu = CountDownLatch(1)
+        val ecoute = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) = recu.countDown()
+        }
+        ContextCompat.registerReceiver(context, ecoute, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
+        try {
+            val holder = MmsFailureExplanationHolder().apply {
+                set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED, relance = boutonDeTest(action))
+            }
+            compose.setContent { MmsFailureExplanationOverlay(holder, showLock = false, isPanicDecoy = false) }
+
+            compose.onNodeWithText(texteEchecAvecBouton).assertIsDisplayed()
+            compose.onNodeWithText(texteEchec).assertDoesNotExist()
+            compose.onNodeWithText(boutonReseau).assertIsDisplayed()
+            compose.onNodeWithText(boutonFermer).assertIsDisplayed()
+
+            compose.onNodeWithText(boutonReessayer).performClick()
+            compose.waitForIdle()
+
+            assertThat(recu.await(5, TimeUnit.SECONDS)).isTrue()
+            assertThat(holder.pending.value).isNull()
+            compose.onNodeWithText(texteEchecAvecBouton).assertDoesNotExist()
+        } finally {
+            context.unregisterReceiver(ecoute)
+        }
+    }
+
+    /** Contrôle négatif : sans bouton transmis, l'ancien texte (qui reste vrai) et aucun « Réessayer ». */
+    @Test
+    fun echecSansBoutonNiTexteNiBoutonReessayer() {
+        val holder = MmsFailureExplanationHolder().apply { set(MmsFailureNotifier.Reason.DOWNLOAD_FAILED) }
+        compose.setContent { MmsFailureExplanationOverlay(holder, showLock = false, isPanicDecoy = false) }
+
+        compose.onNodeWithText(texteEchec).assertIsDisplayed()
+        compose.onNodeWithText(boutonReessayer).assertDoesNotExist()
+    }
+
+    /** Contrôle négatif : un bouton porté par un autre motif ne s'affiche pas. */
+    @Test
+    fun autreMotifAvecBoutonPasDeReessayer() {
+        val holder = MmsFailureExplanationHolder().apply {
+            set(MmsFailureNotifier.Reason.CARRIER_ERROR, relance = boutonDeTest("com.filestech.sms.test.JAMAIS"))
+        }
+        compose.setContent { MmsFailureExplanationOverlay(holder, showLock = false, isPanicDecoy = false) }
+
+        compose.onNodeWithText(texteOperateur).assertIsDisplayed()
+        compose.onNodeWithText(boutonReessayer).assertDoesNotExist()
     }
 
     @Test

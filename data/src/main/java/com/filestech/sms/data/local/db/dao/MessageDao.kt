@@ -108,6 +108,14 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE telephony_uri = :uri LIMIT 1")
     suspend fun findByTelephonyUri(uri: String): MessageEntity?
 
+    /**
+     * 2026-11-10 (issue #87) — retire à une ligne son lien vers la base SMS d'Android, quand ce lien désigne
+     * une ligne système qui n'existe plus (cf. `ConversationMirror.insererApresEcritureSysteme`). Le message
+     * reste ; seule disparaît une adresse qui, sinon, ferait effacer chez Android le message d'un autre.
+     */
+    @Query("UPDATE messages SET telephony_uri = NULL WHERE id = :id")
+    suspend fun detacherDuSysteme(id: Long): Int
+
     /** One-shot suspend snapshot used by deletion paths that need each row's telephony URI. */
     @Query("SELECT * FROM messages WHERE conversation_id = :conversationId")
     suspend fun findByConversation(conversationId: Long): List<MessageEntity>
@@ -260,13 +268,35 @@ interface MessageDao {
      * [attempt] identifie la tentative dont provient l'accusé. `NULL` signifie « quelle que soit
      * la tentative en cours » et reste le bon choix pour ce qui n'est pas un accusé : l'échec
      * synchrone écrit juste après la remise, la sentinelle du chien de garde, le suivi MMS.
+     *
+     * # 2026-11-15 (v1.30.1) — l'échec du CHIEN DE GARDE n'est pas un sommet
+     *
+     * [timeoutStalePending] passe en `FAILED` (code [com.filestech.sms.domain.model.SendErrorCode
+     * .WATCHDOG_TIMEOUT]) tout envoi resté `PENDING` un quart d'heure. Ce n'est pas un accusé, c'est
+     * une SUPPOSITION : sa propre documentation dit que le message a peut-être atteint son
+     * destinataire. Or ce `FAILED` occupait le sommet de l'échelle, et le vrai accusé arrivé ensuite —
+     * `SENT` d'Android, accusé de remise — ne pouvait plus jamais l'écrire. Un MMS envoyé en Wi-Fi,
+     * qu'Android peut retenir jusqu'à trente minutes en attendant le réseau mobile, restait ainsi
+     * « Non envoyé » sous la réponse de son destinataire (courriel d'une utilisatrice, 2026-11-15,
+     * message programmé de 6 h).
+     *
+     * Un accusé, quel qu'il soit, remplace donc la supposition : `status = 3` avec ce code-là est
+     * traité comme le bas de l'échelle — sauf pour un retour à `PENDING`, qui n'est pas un accusé
+     * (la relance passe par [openNextSendAttempt]). Un second passage du chien de garde (même code)
+     * n'écrit rien.
+     * Le filtre de tentative s'applique toujours : l'accusé d'une tentative périmée ne remplace pas
+     * plus la supposition qu'il ne remplaçait l'attente.
      */
     @Query(
         """
         UPDATE messages
            SET status = :status, error_code = :errorCode
          WHERE id = :id
-           AND status < :statusRaw
+           AND (
+                 status < :statusRaw
+              OR (status = 3 AND error_code = -2 AND :statusRaw > 0
+                  AND (:errorCode IS NULL OR :errorCode != -2))
+           )
            AND (:attempt IS NULL OR send_attempt = :attempt)
         """,
     )
@@ -286,11 +316,19 @@ interface MessageDao {
      * l'incrément était séparé de la rétrogradation, il existerait un instant où la ligne est
      * `PENDING` sous l'ancien numéro de tentative — exactement la fenêtre dans laquelle un
      * accusé tardif s'appliquerait à tort.
+     *
+     * 2026-11-15 (v1.30.1) — **seulement sur une ligne encore en ÉCHEC** (`status = 3`), dans la même
+     * requête. Depuis qu'un vrai accusé remplace l'échec supposé du chien de garde (cf.
+     * [promoteStatusMonotonic]), la ligne peut passer `SENT` pendant que l'avertissement de doublon est
+     * ouvert : confirmer renvoyait alors un message confirmé envoyé (relecture Claude du 2026-11-15).
+     *
+     * @return le nombre de lignes rouvertes : 0 si la ligne n'existe plus ou n'est plus en échec.
      */
     @Query(
-        "UPDATE messages SET status = 0, error_code = NULL, send_attempt = send_attempt + 1 WHERE id = :id",
+        "UPDATE messages SET status = 0, error_code = NULL, send_attempt = send_attempt + 1 " +
+            "WHERE id = :id AND status = 3",
     )
-    suspend fun openNextSendAttempt(id: Long)
+    suspend fun openNextSendAttempt(id: Long): Int
 
     /** v1.28.3 (F23) — numéro de la tentative en cours, ou `null` si la ligne n'existe plus. */
     @Query("SELECT send_attempt FROM messages WHERE id = :id")
@@ -476,6 +514,11 @@ interface MessageDao {
      *
      * Direction filter: only `OUTGOING` rows (direction=1) — incoming RECEIVED-status
      * messages never sit in PENDING.
+     *
+     * 2026-11-15 (v1.30.1) — this is a guess, not an acknowledgment: when the real result comes in
+     * later (an MMS on Wi-Fi can wait up to 30 min for the mobile network), [promoteStatusMonotonic]
+     * lets it replace the `-2` row. Before, `FAILED` was the top of the ladder and the late `SENT`
+     * was dropped, leaving "Not sent" under the recipient's reply.
      */
     @Query(
         """

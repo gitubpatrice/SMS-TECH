@@ -28,6 +28,8 @@ class RetrySendUseCase @Inject constructor(
     private val mirror: OutgoingMessageMirror,
     // v1.27.2 (audit de cohérence 2026-08-04) — cf. la garde de liste noire ci-dessous.
     private val blockedRepo: BlockedNumberRepository,
+    // 2026-11-10 (v1.30.1) — la SIM du message, si elle est encore active ; cf. [SimDEnvoi.valider].
+    private val simDEnvoi: SimDEnvoi,
 ) {
     suspend operator fun invoke(messageId: Long): Outcome<Unit> {
         val msg = conversationRepo.findMessageForResend(messageId)
@@ -50,8 +52,26 @@ class RetrySendUseCase @Inject constructor(
         // rétrogradation ouvre donc désormais une TENTATIVE numérotée, et c'est ce numéro que
         // l'on transmet à la pile téléphonie pour que ses accusés soient reconnaissables.
         val attempt = mirror.resetOutgoingForRetry(messageId)
-            ?: return Outcome.Failure(AppError.NotFound("message"))
+            ?: return rienARelancer(messageId)
         return dispatcher(msg, messageId, attempt)
+    }
+
+    /**
+     * 2026-11-15 (v1.30.1) — la ligne n'a pas été rouverte. Soit elle n'existe plus ; soit elle n'est plus
+     * en échec : le vrai accusé d'un envoi que le chien de garde avait supposé perdu est arrivé pendant que
+     * l'avertissement de doublon était ouvert. Le message est parti, il ne faut pas le renvoyer, et ce
+     * n'est pas une erreur à afficher : la bulle dit déjà « envoyé ».
+     */
+    private suspend fun rienARelancer(messageId: Long): Outcome<Unit> {
+        val statut = mirror.outgoingStatus(messageId) ?: return Outcome.Failure(AppError.NotFound("message"))
+        // Relecture GPT du 2026-11-15 : de nouveau en échec à la relecture (une autre relance l'a rouvert puis
+        // a échoué entre les deux requêtes). Ce n'est pas un succès : la bulle reste rouge, on le dit.
+        if (statut == MessageStatus.FAILED) {
+            Timber.w("Retry of message %d raced with another attempt; it is failed again", messageId)
+            return Outcome.Failure(AppError.Cancelled("retry raced with another attempt"))
+        }
+        Timber.i("Retry of message %d skipped: it is no longer failed (%s)", messageId, statut)
+        return Outcome.Success(Unit)
     }
 
     /**
@@ -93,7 +113,10 @@ class RetrySendUseCase @Inject constructor(
     }
 
     private suspend fun dispatcher(msg: Message, messageId: Long, attempt: Int): Outcome<Unit> {
-        return when (val r = sender.send(messageId, msg.address, msg.body, msg.subId, attempt = attempt)) {
+        // 2026-11-10 (v1.30.1) — la SIM du premier essai, tant qu'elle est là ; sinon celle d'Android, plutôt
+        // qu'un renvoi voué à l'échec sur une carte retirée.
+        val subId = simDEnvoi.valider(msg.subId)
+        return when (val r = sender.send(messageId, msg.address, msg.body, subId, attempt = attempt)) {
             is Outcome.Success -> Outcome.Success(Unit)
             is Outcome.Failure -> {
                 // `attempt` explicite : cet échec-ci est bien celui de la tentative qu'on vient

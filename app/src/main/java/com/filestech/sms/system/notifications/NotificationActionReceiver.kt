@@ -1,18 +1,24 @@
 package com.filestech.sms.system.notifications
 
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.core.app.RemoteInput
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.usecase.SendSmsUseCase
+import com.filestech.sms.domain.usecase.SimPourConversationUseCase
 import com.filestech.sms.security.AppLockManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -22,6 +28,7 @@ import javax.inject.Inject
  * **Audit F7 mitigation**: actions are refused while the app lock is held — typing a reply from
  * a locked phone shouldn't ship an SMS in the user's name. The notification visibility settings
  * already restrict who can see the body, but the *write* path is the dangerous side.
+ * Since 1.30.1, "mark as read" is the exception: it sends nothing (cf. [refuseeSousVerrou]).
  *
  * **Audit F38 mitigation**: the notification id used by [NotificationManagerCompat.cancel] now
  * comes from a dedicated extra ([EXTRA_NOTIFICATION_ID]) populated by [IncomingMessageNotifier].
@@ -50,6 +57,20 @@ class NotificationActionReceiver : BroadcastReceiver() {
     /** v1.28.3 — action « Renvoyer » de la notification d'echec d'envoi. `Lazy` : cf. ci-dessus. */
     @Inject lateinit var retrySendLazy: dagger.Lazy<com.filestech.sms.domain.usecase.RetrySendUseCase>
 
+    /**
+     * 2026-11-10 (v1.30.1) — la SIM de la conversation, pour que la reponse rapide parte par la SIM qui a
+     * recu, comme depuis le fil. `Lazy` : elle lit les messages, donc atteint un DAO (cf. ci-dessus).
+     */
+    @Inject lateinit var simPourConversationLazy: dagger.Lazy<SimPourConversationUseCase>
+
+    /**
+     * 2026-11-15 (v1.30.1) — pour dire, DANS la notification, pourquoi un geste vient d'être refusé sous verrou
+     * (cf. [signalerLeRefus]). `Lazy` : ils lisent des DAO (cf. ci-dessus).
+     */
+    @Inject lateinit var notificateurMessagesLazy: dagger.Lazy<IncomingMessageNotifier>
+
+    @Inject lateinit var notificateurEchecsLazy: dagger.Lazy<OutgoingFailureNotifier>
+
     @Inject lateinit var appLock: AppLockManager
 
     @Inject @ApplicationScope lateinit var scope: CoroutineScope
@@ -73,9 +94,16 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 // the resolution inside the receiver's own coroutine context — the cost is paid
                 // once per process and the main thread is freed entirely.
                 appLock.ensureResolved()
-                if (!appLock.isOpenForUi(appLock.state.value)) {
-                    Timber.i("NotificationActionReceiver: refused while app is locked")
-                    return@launch
+                val appOuverte = appLock.isOpenForUi(appLock.state.value)
+                if (!appOuverte) {
+                    // L'état du téléphone ne compte que pour « Marquer comme lu » : les autres actions sont
+                    // refusées sous verrou dans tous les cas, sans attendre.
+                    val telephoneVerrouille = intent.action == ACTION_MARK_READ && telephoneEncoreVerrouille(context)
+                    if (refuseeSousVerrou(intent.action, telephoneVerrouille)) {
+                        Timber.i("NotificationActionReceiver: refused while app is locked")
+                        signalerLeRefus(intent, conversationIdOuNull)
+                        return@launch
+                    }
                 }
                 // v1.3.3 Z4 audit fix — la fermeture de la notif passe désormais
                 // exclusivement par `markRead` → `cancelAllForConversation` (tag-based).
@@ -108,14 +136,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
                             ?.let { conversationRepoLazy.get().findById(it)?.addresses }
                             ?.takeIf { it.isNotEmpty() }
                             ?: listOf(PhoneAddress.of(adresse))
-                        envoyerLazy.get().invoke(recipients = destinataires, body = text)
+                        // 2026-11-10 (v1.30.1) — par la SIM de la conversation (celle du dernier message,
+                        // donc d'ordinaire celle qui vient de recevoir), comme le composeur du fil.
+                        val subId = runCatchingCancellable {
+                            simPourConversationLazy.get().pourConversation(conversationIdOuNull)
+                        }.getOrNull()
+                        envoyerLazy.get().invoke(recipients = destinataires, body = text, subId = subId)
                         // Marquer comme lu (et donc clear notifs via le notifier câblé
                         // dans markRead). Cohérent : répondre = avoir vu le message.
                         markReadAndCancelNotifs(adresse, conversationIdOuNull)
                     }
-                    ACTION_MARK_READ -> {
-                        markReadAndCancelNotifs(address ?: return@launch, conversationIdOuNull)
-                    }
+                    ACTION_MARK_READ -> marquerLu(conversationIdOuNull)
                     // v1.28.3 — « Renvoyer » depuis la notification d'echec d'envoi.
                     //
                     // Le geste est celui de la bulle rouge dans le fil, et il passe par le MEME
@@ -164,6 +195,67 @@ class NotificationActionReceiver : BroadcastReceiver() {
      * L'adresse reste le repli pour les notifications posees avant cette version, dont le
      * `PendingIntent` ne porte pas encore l'identifiant.
      */
+    /**
+     * 2026-11-15 (v1.30.1) — « Marquer comme lu », qui peut désormais tourner app verrouillée (cf.
+     * [refuseeSousVerrou]). D'où trois règles que le chemin commun [markReadAndCancelNotifs] n'avait pas :
+     *
+     * - **jamais de création** : seule la conversation que la notification désigne est marquée. Le repli
+     *   par adresse (`findOrCreate`) créait une conversation vide quand celle de la notification avait été
+     *   supprimée entre-temps — et, app verrouillée, cela devenait possible sans s'authentifier ;
+     * - **jamais dans le Coffre** (cf. [conversationAMarquerLue]) : une écriture dans une zone censée être
+     *   inaccessible, comme le refuse déjà `markAllIncomingAsRead`. Une conversation du Coffre ne reçoit pas
+     *   de notification ; il n'en reste qu'à une conversation déplacée au Coffre après la pose de la sienne.
+     *   La règle ne dépend PAS de l'état du verrou (relecture GPT du 2026-11-15) : lu en tête du receveur, il
+     *   pouvait avoir changé avant l'écriture, et une session leurre passe pour « app ouverte » ;
+     * - **une base indisponible n'est pas un plantage** : l'exception est journalisée, la notification reste.
+     *
+     * Une notification posée avant la v1.28.12 ne porte pas d'identifiant : l'action n'y fait plus rien,
+     * la balayer reste possible.
+     */
+    /**
+     * 2026-11-15 (v1.30.1) — **un refus sous verrou se dit.** Il était muet : une réponse tapée disparaissait
+     * (l'indicateur d'envoi tournait sans fin), « Marquer comme lu » ou « Renvoyer » ne faisaient rien. La
+     * notification est reposée avec les actions du moment — sous verrou, plus de « Répondre » ni de « Renvoyer »
+     * — et une ligne qui dit quoi faire. Depuis cette version, seules les notifications posées AVANT que le verrou
+     * soit activé y arrivent encore (les autres n'ont plus ces boutons) ; « Marquer comme lu » depuis l'écran de
+     * verrouillage, sur Android 11 et avant, aussi.
+     */
+    private suspend fun signalerLeRefus(intent: Intent, conversationId: Long?) {
+        val idNotification = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+        if (idNotification == -1) return
+        // Borné : le receveur n'a que quelques secondes (`goAsync`), et ce signalement n'en vaut pas un dépassement.
+        withTimeoutOrNull(BUDGET_SIGNALEMENT_MS) { signalerLeRefusSansBorne(intent, conversationId, idNotification) }
+            ?: Timber.w("Refus sous verrou : signalement abandonne (budget depasse)")
+    }
+
+    private suspend fun signalerLeRefusSansBorne(intent: Intent, conversationId: Long?, idNotification: Int) {
+        runCatchingCancellable {
+            when (intent.action) {
+                ACTION_REPLY -> conversationId?.let {
+                    notificateurMessagesLazy.get().signalerRefus(it, idNotification, MotifRefus.REPONSE)
+                }
+                ACTION_MARK_READ -> conversationId?.let {
+                    notificateurMessagesLazy.get().signalerRefus(it, idNotification, MotifRefus.LECTURE)
+                }
+                ACTION_RETRY_SEND -> notificateurEchecsLazy.get().signalerRefus(idNotification)
+                else -> Unit
+            }
+        }.onFailure { Timber.w(it, "Refus sous verrou non signale") }
+    }
+
+    private suspend fun marquerLu(conversationId: Long?) {
+        runCatchingCancellable {
+            val depot = conversationRepoLazy.get()
+            val conversation = conversationId?.takeIf { it > 0L }?.let { depot.findById(it) }
+            val id = conversationAMarquerLue(conversation)
+            if (id == null) {
+                Timber.i("Marquer comme lu : conversation introuvable ou au Coffre, rien n'est fait")
+            } else {
+                depot.markRead(id)
+            }
+        }.onFailure { Timber.w(it, "Marquer comme lu : echec") }
+    }
+
     private suspend fun markReadAndCancelNotifs(address: String, conversationId: Long?) {
         val depot = conversationRepoLazy.get()
         val id = conversationId?.takeIf { it > 0L && depot.findById(it) != null }
@@ -173,6 +265,65 @@ class NotificationActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        /**
+         * 2026-11-15 (v1.30.1, courriel d'Andrew) — **seules les actions qui ENVOIENT sont refusées sous
+         * verrou.**
+         *
+         * Le garde F7 visait la réponse : un téléphone tenu par un tiers, l'app verrouillée, ne doit pas
+         * envoyer un message au nom de son propriétaire. Il refusait pourtant TOUTES les actions, et
+         * sans rien dire : « Marquer comme lu » ne faisait rien dès que le verrou de l'app était actif,
+         * c'est-à-dire presque toujours quand une notification arrive (mesuré sur émulateur API 34 :
+         * notification restée, `refused while app is locked`). Marquer comme lu n'envoie rien et ne
+         * montre rien que la notification n'affiche déjà ; c'est le geste de la balayer, plus le
+         * compteur de non-lus. Il passe donc. Réponse et renvoi restent refusés : eux envoient.
+         *
+         * Une action inconnue est refusée : un ajout futur devra choisir sa place ici.
+         *
+         * **Seulement sur un téléphone DÉVERROUILLÉ** (relecture Claude du 2026-11-15). Une action de
+         * notification se touche aussi depuis l'écran de verrouillage du TÉLÉPHONE : sans cette condition,
+         * quiconque le tient verrouillé aurait pu marquer lu une conversation, effaçant le compteur de
+         * non-lus qui signalait à son propriétaire l'arrivée d'un message — ce que le verrou de l'app
+         * empêchait jusqu'ici. Sur Android 12 et plus, l'action demande alors de déverrouiller d'abord
+         * (`setAuthenticationRequired`, posé par `IncomingMessageNotifier` quand le verrou de l'app est
+         * actif) ; avant, ou si l'état est illisible, elle est refusée comme avant.
+         */
+        internal fun refuseeSousVerrou(action: String?, appareilVerrouille: Boolean): Boolean =
+            action != ACTION_MARK_READ || appareilVerrouille
+
+        /**
+         * 2026-11-15 (v1.30.1) — la conversation que « Marquer comme lu » peut marquer : celle que la
+         * notification désigne, si elle existe et n'est PAS au Coffre. Aucune création, aucun repli par
+         * adresse. Cf. [marquerLu].
+         */
+        internal fun conversationAMarquerLue(conversation: com.filestech.sms.domain.model.Conversation?): Long? =
+            conversation?.takeUnless { it.inVault }?.id
+
+        /**
+         * Le TÉLÉPHONE est-il verrouillé ? Illisible : on le tient pour verrouillé.
+         *
+         * Android livre l'action d'une notification « authentification requise » au moment même où l'écran
+         * de verrouillage se retire, et `isDeviceLocked` peut encore dire vrai à cet instant : mesuré sur
+         * émulateur API 34, l'action, livrée juste après la saisie du code, était refusée. On laisse donc au
+         * téléphone [ATTENTE_DEVERROUILLAGE_MS] pour finir de se déverrouiller. Un toucher depuis l'écran de
+         * verrouillage sans code (Android 11 et avant, où rien ne demande le code) reste refusé à l'issue de
+         * l'attente. Le receveur dispose de dix secondes (`goAsync`).
+         */
+        private suspend fun telephoneEncoreVerrouille(context: Context): Boolean {
+            val gardien = context.getSystemService(KeyguardManager::class.java) ?: return true
+            val limite = SystemClock.elapsedRealtime() + ATTENTE_DEVERROUILLAGE_MS
+            while (true) {
+                val verrouille = runCatching { gardien.isDeviceLocked }.getOrDefault(true)
+                if (!verrouille || SystemClock.elapsedRealtime() >= limite) return verrouille
+                delay(PAS_ATTENTE_DEVERROUILLAGE_MS)
+            }
+        }
+
+        private const val ATTENTE_DEVERROUILLAGE_MS = 3_000L
+
+        /** 2026-11-15 — au plus ce temps pour reposer la notification d'un geste refusé (cf. [signalerLeRefus]). */
+        private const val BUDGET_SIGNALEMENT_MS = 4_000L
+        private const val PAS_ATTENTE_DEVERROUILLAGE_MS = 100L
+
         const val ACTION_REPLY = "com.filestech.sms.action.NOTIF_REPLY"
         const val ACTION_MARK_READ = "com.filestech.sms.action.NOTIF_MARK_READ"
 

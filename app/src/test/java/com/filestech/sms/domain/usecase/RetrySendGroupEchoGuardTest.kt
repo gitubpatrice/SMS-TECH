@@ -47,7 +47,8 @@ class RetrySendGroupEchoGuardTest {
         )
         coEvery { blocked.isBlocked(any()) } returns false
 
-        val issue = RetrySendUseCase(repo, sender, mirror, blocked).invoke(7L)
+        val sims = SimDEnvoi(mockk(relaxed = true), kotlinx.coroutines.Dispatchers.Unconfined)
+        val issue = RetrySendUseCase(repo, sender, mirror, blocked, sims).invoke(7L)
 
         assertThat(issue).isEqualTo(Outcome.Failure(AppError.GroupEchoRetryUnsupported))
         coVerify(exactly = 0) { mirror.resetOutgoingForRetry(any()) }

@@ -35,6 +35,7 @@ class SendMediaMmsGroupTest {
             sender = dispatcher,
             settings = DefaultSettingsSource(),
             attachmentStore = PassthroughAttachmentStore(),
+            simDEnvoi = simDEnvoiNeutre(),
         )
 
     private fun photo(dir: File) = listOf(SendMediaMmsUseCase.AttachmentPayload(fichier(dir), "image/jpeg"))

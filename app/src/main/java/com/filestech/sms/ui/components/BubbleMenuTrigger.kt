@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -76,6 +77,8 @@ fun BubbleMenuTrigger(
      */
     starred: Boolean = false,
     onToggleStar: (() -> Unit)? = null,
+    /** 2026-11-12 (issue #87) — afficher ou masquer l'heure et l'état ; `null` quand ils s'affichent d'office. */
+    actionHeure: ActionHeure? = null,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -194,6 +197,23 @@ fun BubbleMenuTrigger(
                     onClick = {
                         expanded = false
                         onReact()
+                    },
+                )
+            }
+            // 2026-11-12 (issue #87) — l'heure et l'état d'un message que la ligne ne montre pas d'office. Seul
+            // chemin pour une photo ou un message vocal, dont le toucher ouvre la visionneuse ou lance la lecture.
+            if (actionHeure != null) {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(stringResource(actionHeure.libelle)) },
+                    onClick = {
+                        expanded = false
+                        actionHeure.basculer()
                     },
                 )
             }
