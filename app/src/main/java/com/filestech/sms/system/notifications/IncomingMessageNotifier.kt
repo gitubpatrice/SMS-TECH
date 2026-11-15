@@ -20,6 +20,7 @@ import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.notification.ConversationNotificationCanceller
 import com.filestech.sms.domain.repository.ContactRepository
+import com.filestech.sms.domain.settings.LockMode
 import com.filestech.sms.domain.settings.NotificationSettings
 import com.filestech.sms.domain.settings.NotificationStyle
 import com.filestech.sms.domain.settings.PreviewMode
@@ -116,7 +117,12 @@ class IncomingMessageNotifier @Inject constructor(
         // [hydratedOrNull] garde le chemin chaud à coût nul et ne paie la lecture qu'une fois
         // par démarrage à froid. Même famille de défaut que celui corrigé dans
         // [com.filestech.sms.system.scheduler.SafetyCallWorker].
-        val notifSettings = settings.hydratedOrNull()?.notifications ?: FALLBACK_NOTIFICATIONS
+        val reglages = settings.hydratedOrNull()
+        val notifSettings = reglages?.notifications ?: FALLBACK_NOTIFICATIONS
+        // 2026-11-15 (v1.30.1) — avec le verrou de l'app, « Marquer comme lu » n'agit que sur un téléphone
+        // déverrouillé (cf. `NotificationActionReceiver.refuseeSousVerrou`) : Android fait déverrouiller
+        // d'abord quand on le touche depuis l'écran de verrouillage. Réglages illisibles : on l'exige.
+        val verrouApp = reglages?.security?.lockMode?.let { it != LockMode.OFF } ?: true
         if (!notifSettings.enabled) return@withContext
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -224,7 +230,7 @@ class IncomingMessageNotifier @Inject constructor(
                 if (notifSettings.inlineReply) {
                     b.addAction(buildReplyAction(address, messageId, notificationId, conversationId))
                 }
-                b.addAction(buildMarkReadAction(address, messageId, notificationId, conversationId))
+                b.addAction(buildMarkReadAction(address, messageId, notificationId, conversationId, verrouApp))
                 if (isActiveConversation) {
                     b.setTimeoutAfter(ACTIVE_CONV_TIMEOUT_MS)
                 }
@@ -333,6 +339,7 @@ class IncomingMessageNotifier @Inject constructor(
         messageId: Long,
         notificationId: Int,
         conversationId: Long,
+        authentificationRequise: Boolean,
     ): NotificationCompat.Action {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             component = ComponentName(context, NotificationActionReceiver::class.java)
@@ -362,7 +369,10 @@ class IncomingMessageNotifier @Inject constructor(
             R.drawable.ic_notification_check,
             context.getString(R.string.notif_mark_read_label),
             pi,
-        ).build()
+        )
+            // API 31+ ; ignoré avant, où le receveur refuse seul quand le téléphone est verrouillé.
+            .setAuthenticationRequired(authentificationRequise)
+            .build()
     }
 
     /**

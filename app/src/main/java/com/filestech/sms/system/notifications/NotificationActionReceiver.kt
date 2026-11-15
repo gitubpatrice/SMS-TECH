@@ -1,5 +1,6 @@
 package com.filestech.sms.system.notifications
 
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -82,7 +83,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 // the resolution inside the receiver's own coroutine context — the cost is paid
                 // once per process and the main thread is freed entirely.
                 appLock.ensureResolved()
-                if (!appLock.isOpenForUi(appLock.state.value) && refuseeSousVerrou(intent.action)) {
+                val appOuverte = appLock.isOpenForUi(appLock.state.value)
+                if (!appOuverte && refuseeSousVerrou(intent.action, appareilVerrouille(context))) {
                     Timber.i("NotificationActionReceiver: refused while app is locked")
                     return@launch
                 }
@@ -127,9 +129,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         // dans markRead). Cohérent : répondre = avoir vu le message.
                         markReadAndCancelNotifs(adresse, conversationIdOuNull)
                     }
-                    ACTION_MARK_READ -> {
-                        markReadAndCancelNotifs(address ?: return@launch, conversationIdOuNull)
-                    }
+                    ACTION_MARK_READ -> marquerLu(conversationIdOuNull, appOuverte)
                     // v1.28.3 — « Renvoyer » depuis la notification d'echec d'envoi.
                     //
                     // Le geste est celui de la bulle rouge dans le fil, et il passe par le MEME
@@ -178,6 +178,33 @@ class NotificationActionReceiver : BroadcastReceiver() {
      * L'adresse reste le repli pour les notifications posees avant cette version, dont le
      * `PendingIntent` ne porte pas encore l'identifiant.
      */
+    /**
+     * 2026-11-15 (v1.30.1) — « Marquer comme lu », qui peut désormais tourner app verrouillée (cf.
+     * [refuseeSousVerrou]). D'où trois règles que le chemin commun [markReadAndCancelNotifs] n'avait pas :
+     *
+     * - **jamais de création** : seule la conversation que la notification désigne est marquée. Le repli
+     *   par adresse (`findOrCreate`) créait une conversation vide quand celle de la notification avait été
+     *   supprimée entre-temps — et, app verrouillée, cela devenait possible sans s'authentifier ;
+     * - **rien dans le Coffre tant que l'app est verrouillée** : une écriture dans une zone censée être
+     *   inaccessible, comme le refuse déjà `markAllIncomingAsRead` ;
+     * - **une base indisponible n'est pas un plantage** : l'exception est journalisée, la notification reste.
+     *
+     * Une notification posée avant la v1.28.12 ne porte pas d'identifiant : l'action n'y fait plus rien,
+     * la balayer reste possible.
+     */
+    private suspend fun marquerLu(conversationId: Long?, appOuverte: Boolean) {
+        runCatchingCancellable {
+            val depot = conversationRepoLazy.get()
+            val conversation = conversationId?.takeIf { it > 0L }?.let { depot.findById(it) }
+            when {
+                conversation == null -> Timber.i("Marquer comme lu : conversation introuvable, rien n'est fait")
+                conversation.inVault && !appOuverte ->
+                    Timber.i("Marquer comme lu : conversation du Coffre, app verrouillee, rien n'est fait")
+                else -> depot.markRead(conversation.id)
+            }
+        }.onFailure { Timber.w(it, "Marquer comme lu : echec") }
+    }
+
     private suspend fun markReadAndCancelNotifs(address: String, conversationId: Long?) {
         val depot = conversationRepoLazy.get()
         val id = conversationId?.takeIf { it > 0L && depot.findById(it) != null }
@@ -200,8 +227,22 @@ class NotificationActionReceiver : BroadcastReceiver() {
          * compteur de non-lus. Il passe donc. Réponse et renvoi restent refusés : eux envoient.
          *
          * Une action inconnue est refusée : un ajout futur devra choisir sa place ici.
+         *
+         * **Seulement sur un téléphone DÉVERROUILLÉ** (relecture Claude du 2026-11-15). Une action de
+         * notification se touche aussi depuis l'écran de verrouillage du TÉLÉPHONE : sans cette condition,
+         * quiconque le tient verrouillé aurait pu marquer lu une conversation, effaçant le compteur de
+         * non-lus qui signalait à son propriétaire l'arrivée d'un message — ce que le verrou de l'app
+         * empêchait jusqu'ici. Sur Android 12 et plus, l'action demande alors de déverrouiller d'abord
+         * (`setAuthenticationRequired`, posé par `IncomingMessageNotifier` quand le verrou de l'app est
+         * actif) ; avant, ou si l'état est illisible, elle est refusée comme avant.
          */
-        internal fun refuseeSousVerrou(action: String?): Boolean = action != ACTION_MARK_READ
+        internal fun refuseeSousVerrou(action: String?, appareilVerrouille: Boolean): Boolean =
+            action != ACTION_MARK_READ || appareilVerrouille
+
+        /** L'écran de verrouillage du TÉLÉPHONE est-il en place ? Illisible : on le tient pour verrouillé. */
+        private fun appareilVerrouille(context: Context): Boolean =
+            runCatching { context.getSystemService(KeyguardManager::class.java)?.isDeviceLocked }
+                .getOrNull() ?: true
 
         const val ACTION_REPLY = "com.filestech.sms.action.NOTIF_REPLY"
         const val ACTION_MARK_READ = "com.filestech.sms.action.NOTIF_MARK_READ"

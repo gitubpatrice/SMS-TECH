@@ -316,11 +316,19 @@ interface MessageDao {
      * l'incrément était séparé de la rétrogradation, il existerait un instant où la ligne est
      * `PENDING` sous l'ancien numéro de tentative — exactement la fenêtre dans laquelle un
      * accusé tardif s'appliquerait à tort.
+     *
+     * 2026-11-15 (v1.30.1) — **seulement sur une ligne encore en ÉCHEC** (`status = 3`), dans la même
+     * requête. Depuis qu'un vrai accusé remplace l'échec supposé du chien de garde (cf.
+     * [promoteStatusMonotonic]), la ligne peut passer `SENT` pendant que l'avertissement de doublon est
+     * ouvert : confirmer renvoyait alors un message confirmé envoyé (relecture Claude du 2026-11-15).
+     *
+     * @return le nombre de lignes rouvertes : 0 si la ligne n'existe plus ou n'est plus en échec.
      */
     @Query(
-        "UPDATE messages SET status = 0, error_code = NULL, send_attempt = send_attempt + 1 WHERE id = :id",
+        "UPDATE messages SET status = 0, error_code = NULL, send_attempt = send_attempt + 1 " +
+            "WHERE id = :id AND status = 3",
     )
-    suspend fun openNextSendAttempt(id: Long)
+    suspend fun openNextSendAttempt(id: Long): Int
 
     /** v1.28.3 (F23) — numéro de la tentative en cours, ou `null` si la ligne n'existe plus. */
     @Query("SELECT send_attempt FROM messages WHERE id = :id")

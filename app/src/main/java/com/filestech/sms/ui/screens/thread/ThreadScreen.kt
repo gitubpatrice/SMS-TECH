@@ -303,7 +303,10 @@ fun ThreadScreen(
     // broadcast de confirmation). On confirme via dialog avant retry. SYNCHRONOUS reste
     // un retry direct sans dialog (le radio a rejeté l'envoi, pas de risque doublon).
     var pendingRetryWatchdog by remember { mutableStateOf<Message?>(null) }
-    // 2026-11-15 (issue #76) — PDF exporté, en attente du choix « Ouvrir » ou « Partager ».
+    // 2026-11-15 (issue #76) — PDF exporté, en attente du choix « Ouvrir » ou « Partager ». `remember`
+    // suffit à la rotation : `MainActivity` déclare `configChanges` (orientation, taille…), l'activité n'est
+    // pas recréée. Après la mort du processus, la fenêtre ne revient pas, comme la visionneuse de photos :
+    // l'export d'une conversation du Coffre ne doit pas se rouvrir tout seul.
     var pdfPret by remember { mutableStateOf<ThreadViewModel.Event.PdfReady?>(null) }
     // v1.15.1 — Flow Programmer un SMS : 2 étapes (DatePicker puis TimePicker).
     // `scheduleStep` null = aucun picker ouvert ; "date" = DatePicker actif ;

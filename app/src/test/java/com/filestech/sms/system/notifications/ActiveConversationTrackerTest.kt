@@ -66,8 +66,42 @@ class ActiveConversationTrackerTest {
         assertThat(tracker.isActive(CONVERSATION_B)).isFalse()
     }
 
+    /**
+     * Relecture Claude du 2026-11-15 : un retour pendant la transition arrête l'écran ENTRANT, et le
+     * sortant, resté démarré, ne reçoit aucun nouvel ON_START. Une seule valeur, même attribuée à son
+     * propriétaire, laissait alors la conversation à l'écran sans état.
+     */
+    @Test
+    fun `un retour pendant la transition laisse l'ecran du dessous actif`() {
+        tracker.setActive(CONVERSATION_A, ecranSortant)
+        tracker.setActive(CONVERSATION_A, ecranEntrant)
+        tracker.clearActive(ecranEntrant)
+
+        assertThat(tracker.isActive(CONVERSATION_A)).isTrue()
+    }
+
+    /** Retour prédictif annulé : l'écran du dessous démarre puis s'arrête, celui du dessus reste visible. */
+    @Test
+    fun `un retour predictif annule laisse l'ecran visible actif`() {
+        tracker.setActive(CONVERSATION_A, ecranEntrant)
+        tracker.setActive(CONVERSATION_B, ecranSortant)
+        tracker.clearActive(ecranSortant)
+
+        assertThat(tracker.isActive(CONVERSATION_A)).isTrue()
+        assertThat(tracker.isActive(CONVERSATION_B)).isFalse()
+    }
+
+    /** Un identifiant hors du cache des `Long` en boîte (-128..127) : la comparaison doit être une égalité. */
+    @Test
+    fun `un grand identifiant de conversation est reconnu`() {
+        tracker.setActive(GRAND_IDENTIFIANT, ecranEntrant)
+
+        assertThat(tracker.isActive(GRAND_IDENTIFIANT)).isTrue()
+    }
+
     private companion object {
         const val CONVERSATION_A = 7L
         const val CONVERSATION_B = 8L
+        const val GRAND_IDENTIFIANT = 100_000L
     }
 }

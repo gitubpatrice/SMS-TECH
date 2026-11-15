@@ -176,7 +176,10 @@
     <string name="date_today">Heute</string>
     <string name="date_yesterday">Gestern</string>
     <string name="thread_confirm_delete_message">Diese Nachricht löschen? Das lässt sich nicht rückgängig machen.</string>
-    <string name="thread_export_success">PDF gespeichert (%1$d Seiten)</string>
+    <plurals name="pdf_export_title">
+        <item quantity="one">PDF gespeichert (%1$d Seite)</item>
+        <item quantity="other">PDF gespeichert (%1$d Seiten)</item>
+    </plurals>
     <!-- 2026-11-15 (issue #76) — après l'export : ouvrir le PDF ou le partager -->
     <string name="pdf_ready_body">Öffnen Sie es zum Lesen oder teilen Sie es mit einer anderen App.</string>
     <string name="pdf_action_open">Öffnen</string>

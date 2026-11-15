@@ -114,14 +114,14 @@ class TelephonySyncWorker @AssistedInject constructor(
             // MmsSystemWriteback whose MmsSentReceiver never fired (process killed, force-stop,
             // Doze + reboot) would remain `msg_box = 4` in `content://mms` forever — polluting
             // the conversation in other SMS apps AND coming back as a phantom MMS at the next
-            // reimport. Same 15 min threshold for symmetry.
+            // reimport. 2026-11-15 — one hour, not 15 min: cf. [OUTBOX_PURGE_AGE_MS].
             runCatching {
                 // v1.28.3 (F18) — la purge ne porte plus que sur les lignes DONT NOUS AVONS LA
                 // PREUVE qu'elles sont les notres. Sans cette liste, le selecteur ne connaissait
                 // que l'etat et l'age, et detruisait aussi les MMS en echec d'autres
                 // applications SMS installees sur l'appareil.
                 val owned = messageDao.ownedMmsSystemIds()
-                val deleted = mmsSystemWriteback.purgeStaleOutbox(PENDING_TIMEOUT_MS, owned)
+                val deleted = mmsSystemWriteback.purgeStaleOutbox(OUTBOX_PURGE_AGE_MS, owned)
                 if (deleted > 0) Timber.i("Watchdog: %d stale system OUTBOX rows purged", deleted)
             }.onFailure { Timber.w(it, "OUTBOX system watchdog failed") }
             // v1.3.0 — auto-nettoyage de l'historique, cadence mensuelle. Le worker
@@ -288,6 +288,22 @@ class TelephonySyncWorker @AssistedInject constructor(
         // duplication silencieuse).
         private val STALE_CACHE_AGE_MS = MS_PER_DAY
         private const val PENDING_TIMEOUT_MS = 15L * 60L * 1_000L
+
+        /**
+         * 2026-11-15 (v1.30.1, relecture Claude) — la copie système d'un MMS sortant n'est purgée qu'au bout
+         * d'une HEURE, et non plus d'un quart d'heure comme l'attente du message.
+         *
+         * En Wi-Fi, le service MMS d'Android peut retenir un MMS jusqu'à trente minutes en attendant le
+         * réseau mobile. Le chien de garde Room le passe en échec au bout de quinze, et un vrai `SENT`
+         * arrivé ensuite le rétablit désormais ; mais la purge, au même seuil, avait déjà détruit sa copie
+         * dans `content://mms` : « envoyé » dans SMS Tech, absent pour les autres applications et les
+         * sauvegardes du système. La purge vise les lignes dont l'accusé n'arrivera JAMAIS (processus
+         * tué, redémarrage) : attendre plus longtemps ne coûte qu'une ligne orpheline gardée un peu plus.
+         */
+        internal const val OUTBOX_PURGE_AGE_MS = 60L * 60L * 1_000L
+
+        /** L'attente la plus longue du service MMS d'Android avant de rendre son verdict (lue dans AOSP). */
+        internal const val ATTENTE_MAX_SERVICE_MMS_MS = 30L * 60L * 1_000L
         // v1.6.1 (audit QUAL-01) — MS_PER_DAY et SAFETY_NET_DAYS centralisés dans
         // [com.filestech.sms.domain.purge.PurgePolicy]. Importés en tête de fichier.
         /**

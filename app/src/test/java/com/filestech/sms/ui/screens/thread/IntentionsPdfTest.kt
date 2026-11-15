@@ -22,12 +22,11 @@ class IntentionsPdfTest {
     @Suppress("DEPRECATION")
     private fun cible(selecteur: Intent): Intent = checkNotNull(selecteur.getParcelableExtra(Intent.EXTRA_INTENT))
 
+    /** Sans sélecteur imposé : le choix ordinaire d'Android, qui offre « Toujours ». */
     @Test
     fun `ouvrir propose les lecteurs de PDF, avec le droit de lire le fichier`() {
-        val selecteur = intentionOuvrirPdf(uri)
+        val ouvrir = intentionOuvrirPdf(uri)
 
-        assertThat(selecteur.action).isEqualTo(Intent.ACTION_CHOOSER)
-        val ouvrir = cible(selecteur)
         assertThat(ouvrir.action).isEqualTo(Intent.ACTION_VIEW)
         assertThat(ouvrir.data).isEqualTo(uri)
         assertThat(ouvrir.type).isEqualTo("application/pdf")

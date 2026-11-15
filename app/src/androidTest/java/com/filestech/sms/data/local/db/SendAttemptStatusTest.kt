@@ -133,8 +133,11 @@ class SendAttemptStatusTest {
     fun uneEcritureSansTentativeSAppliqueQuelQueSoitLeCompteur(): Unit = runBlocking {
         val dao = db.messageDao()
         val id = seedOutgoing()
-        dao.openNextSendAttempt(id)
-        dao.openNextSendAttempt(id)
+        // Deux relances, chacune d'une ligne en échec : depuis la v1.30.1, seule une ligne en échec se rouvre.
+        repeat(2) {
+            dao.promoteStatusMonotonic(id, MessageStatus.FAILED, 3, errorCode = 2, attempt = null)
+            assertThat(dao.openNextSendAttempt(id)).isEqualTo(1)
+        }
         assertThat(dao.sendAttemptOf(id)).isEqualTo(2)
 
         dao.promoteStatusMonotonic(id, MessageStatus.FAILED, 3, SendErrorCode.WATCHDOG_TIMEOUT, null)
@@ -260,6 +263,34 @@ class SendAttemptStatusTest {
 
         assertThat(ecrites).isEqualTo(0)
         assertThat(statusOf(id)).isEqualTo(MessageStatus.FAILED)
+    }
+
+    /**
+     * Relecture Claude du 2026-11-15 : le vrai `SENT` arrive pendant que l'avertissement de doublon est
+     * ouvert. Confirmer ne doit pas rouvrir — donc pas renvoyer — un message désormais envoyé.
+     */
+    @Test
+    fun uneRelanceNeRouvrePasUnMessageDevenuEnvoye(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+        dao.promoteStatusMonotonic(id, MessageStatus.SENT, 1, null, null)
+
+        assertThat(dao.openNextSendAttempt(id)).isEqualTo(0)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.SENT)
+        assertThat(dao.sendAttemptOf(id)).isEqualTo(0)
+    }
+
+    /** Contrôle positif du précédent : un échec, lui, se rouvre. */
+    @Test
+    fun uneRelanceRouvreUnMessageEnEchec(): Unit = runBlocking {
+        val dao = db.messageDao()
+        val id = seedOutgoing()
+        chienDeGarde()
+
+        assertThat(dao.openNextSendAttempt(id)).isEqualTo(1)
+        assertThat(statusOf(id)).isEqualTo(MessageStatus.PENDING)
+        assertThat(dao.sendAttemptOf(id)).isEqualTo(1)
     }
 
     private companion object {

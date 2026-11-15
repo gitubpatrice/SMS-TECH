@@ -505,7 +505,8 @@ class ConversationMirror @Inject constructor(
 
     /** v1.26.1 (audit M8), v1.28.3 (F23) — voir [OutgoingMessageMirror.resetOutgoingForRetry]. */
     override suspend fun resetOutgoingForRetry(localId: Long): Int? = withContext(io) {
-        messageDao.openNextSendAttempt(localId)
+        // 2026-11-15 (v1.30.1) — rien n'est rouvert sur une ligne qui n'est plus en échec.
+        if (messageDao.openNextSendAttempt(localId) == 0) return@withContext null
         messageDao.sendAttemptOf(localId)
     }
 

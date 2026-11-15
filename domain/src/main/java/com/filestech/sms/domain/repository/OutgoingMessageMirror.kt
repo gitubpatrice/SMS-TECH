@@ -82,7 +82,11 @@ interface OutgoingMessageMirror {
      * de la précédente. Rétrograder sans compter, c'était rouvrir la porte que la monotonie
      * venait de fermer.
      *
-     * @return le numéro de la tentative qui commence, ou `null` si la ligne n'existe plus.
+     * 2026-11-15 (v1.30.1) — seulement si la ligne est encore en ÉCHEC : un vrai accusé arrivé entre-temps
+     * (qui remplace l'échec supposé du chien de garde) l'a peut-être passée `SENT`.
+     *
+     * @return le numéro de la tentative qui commence, ou `null` si la ligne n'existe plus ou n'est plus
+     *   en échec — [outgoingStatus] dit lequel.
      */
     suspend fun resetOutgoingForRetry(localId: Long): Int?
 

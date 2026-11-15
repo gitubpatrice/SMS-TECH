@@ -52,8 +52,20 @@ class RetrySendUseCase @Inject constructor(
         // rétrogradation ouvre donc désormais une TENTATIVE numérotée, et c'est ce numéro que
         // l'on transmet à la pile téléphonie pour que ses accusés soient reconnaissables.
         val attempt = mirror.resetOutgoingForRetry(messageId)
-            ?: return Outcome.Failure(AppError.NotFound("message"))
+            ?: return rienARelancer(messageId)
         return dispatcher(msg, messageId, attempt)
+    }
+
+    /**
+     * 2026-11-15 (v1.30.1) — la ligne n'a pas été rouverte. Soit elle n'existe plus ; soit elle n'est plus
+     * en échec : le vrai accusé d'un envoi que le chien de garde avait supposé perdu est arrivé pendant que
+     * l'avertissement de doublon était ouvert. Le message est parti, il ne faut pas le renvoyer, et ce
+     * n'est pas une erreur à afficher : la bulle dit déjà « envoyé ».
+     */
+    private suspend fun rienARelancer(messageId: Long): Outcome<Unit> {
+        val statut = mirror.outgoingStatus(messageId) ?: return Outcome.Failure(AppError.NotFound("message"))
+        Timber.i("Retry of message %d skipped: it is no longer failed (%s)", messageId, statut)
+        return Outcome.Success(Unit)
     }
 
     /**

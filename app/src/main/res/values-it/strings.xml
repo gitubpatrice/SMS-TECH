@@ -177,7 +177,11 @@
     <string name="date_today">Oggi</string>
     <string name="date_yesterday">Ieri</string>
     <string name="thread_confirm_delete_message">Eliminare questo messaggio? L\'operazione è irreversibile.</string>
-    <string name="thread_export_success">PDF salvato (%1$d pagine)</string>
+    <plurals name="pdf_export_title">
+        <item quantity="one">PDF salvato (%1$d pagina)</item>
+        <item quantity="other">PDF salvato (%1$d pagine)</item>
+        <item quantity="many">PDF salvato (%1$d pagine)</item>
+    </plurals>
     <!-- 2026-11-15 (issue #76) — après l'export : ouvrir le PDF ou le partager -->
     <string name="pdf_ready_body">Lo apra per leggerlo, oppure lo condivida con un\'altra app.</string>
     <string name="pdf_action_open">Apri</string>
