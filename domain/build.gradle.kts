@@ -50,4 +50,7 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.junit.jupiter.params)
     testImplementation(libs.truth)
+    // 2026-11-16 (v1.31.0) — temps virtuel des coroutines : `EnvoiDAlerteTest` mesure une radio qui ne répond
+    // jamais, dont l'attente durerait sinon quarante-cinq secondes réelles. Tests seulement, rien dans l'APK.
+    testImplementation(libs.kotlinx.coroutines.test)
 }

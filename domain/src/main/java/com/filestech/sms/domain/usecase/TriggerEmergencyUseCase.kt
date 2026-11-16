@@ -1,7 +1,6 @@
 package com.filestech.sms.domain.usecase
 
 import android.os.SystemClock
-import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.location.LocationProvider
 import com.filestech.sms.domain.location.lienCarte
@@ -47,7 +46,8 @@ import javax.inject.Inject
  * identifiés par index ou par hash courte.
  */
 class TriggerEmergencyUseCase @Inject constructor(
-    private val sendSms: SendSmsUseCase,
+    // 2026-11-16 (v1.31.0) — l'envoi passe par [EnvoiDAlerte] : verdict de la radio, puis l'autre SIM si besoin.
+    private val envoi: EnvoiDAlerte,
     private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
     private val location: LocationProvider,
@@ -100,34 +100,21 @@ class TriggerEmergencyUseCase @Inject constructor(
             contacts.size, emergency.template.name, hadLocation,
         )
 
-        var sent = 0
-        var failed = 0
-        contacts.forEachIndexed { index, contact ->
-            if (!contact.isValid()) {
-                Timber.w("TriggerEmergencyUseCase: skipping invalid contact #%d", index)
-                failed++
-                return@forEachIndexed
-            }
-            val target = PhoneAddress.of(contact.phoneNumber)
-            if (target.normalized.isEmpty()) {
-                Timber.w("TriggerEmergencyUseCase: skipping unresolvable contact #%d", index)
-                failed++
-                return@forEachIndexed
-            }
-            val outcome = sendSms(
-                recipients = listOf(target),
-                body = body,
-                appendSignature = false,
-            )
-            when (outcome) {
-                is Outcome.Success -> sent++
-                is Outcome.Failure -> {
-                    Timber.w("TriggerEmergencyUseCase: send failed for contact #%d", index)
-                    failed++
-                }
+        var invalides = 0
+        val cibles = contacts.mapIndexedNotNull { index, contact ->
+            val target = contact.takeIf { it.isValid() }?.let { PhoneAddress.of(it.phoneNumber) }
+            if (target == null || target.normalized.isEmpty()) {
+                Timber.w("TriggerEmergencyUseCase: skipping unusable contact #%d", index)
+                invalides++
+                null
+            } else {
+                target
             }
         }
-
+        // 2026-11-16 (v1.31.0, relecture Claude) — le délai est posé AVANT l'envoi. L'envoi attend désormais le verdict
+        // de la radio, puis renvoie par l'autre SIM : jusqu'à une minute et demie. Posé après, il laissait tout ce temps
+        // un écran rouvert se dire « prêt », et un second appui envoyait l'alerte deux fois ; « Je vais bien » ne
+        // trouvait rien à annuler. C'est un marqueur de déclenchement, pas de réussite.
         // Pose le timestamp anti-spam UI (60s). N'auto-disable PAS la feature
         // (urgence répétable, contrairement au Safety call qui est unique).
         // v1.10.0 audit S2 — couple wall+mono pour bloquer un bypass via
@@ -145,6 +132,19 @@ class TriggerEmergencyUseCase @Inject constructor(
             )
         }
 
+        // 2026-11-16 (v1.31.0) — par la SIM du réglage, puis par l'autre SIM pour qui la radio a refusé l'envoi
+        // (cf. [EnvoiDAlerte]). Un message remis à la radio et encore sans verdict à l'échéance compte comme envoyé,
+        // comme avant la 1.31.0, où l'acceptation par `SmsManager` suffisait.
+        // Un « Je vais bien » dit pendant l'attente remet le marqueur à zéro : plus aucun renvoi ne part ensuite,
+        // sans quoi l'alerte, repartie par l'autre SIM, arriverait APRÈS le message rassurant. Une session leurre
+        // ouverte pendant l'attente, elle, ne l'arrête PAS (revue de sécurité du 2026-11-16) : l'alerte a été
+        // déclenchée légitimement avant, et c'est sous la contrainte qu'elle doit le plus aboutir.
+        val bilan = envoi.envoyer(cibles, body, avantChaqueEnvoi = {
+            settings.flow.first().security.emergency.lastTriggeredAt == triggeredAtWall
+        })
+        val sent = bilan.parties + bilan.sansVerdict
+        val failed = invalides + bilan.echouees
+
         Timber.i(
             "TriggerEmergencyUseCase: TRIGGER done — sent=%d failed=%d hadLocation=%s",
             sent, failed, hadLocation,
@@ -153,6 +153,7 @@ class TriggerEmergencyUseCase @Inject constructor(
             sent = sent,
             failed = failed,
             hadLocation = hadLocation,
+            parAutreSim = bilan.parAutreSim,
         )
     }
 
@@ -182,6 +183,8 @@ class TriggerEmergencyUseCase @Inject constructor(
             val sent: Int,
             val failed: Int,
             val hadLocation: Boolean,
+            /** 2026-11-16 (v1.31.0) — contacts servis par l'autre SIM, la SIM choisie ayant échoué. */
+            val parAutreSim: Int = 0,
         ) : Result
     }
 }

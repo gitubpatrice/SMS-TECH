@@ -608,6 +608,12 @@
     <string name="emergency_status_disabled">Emergency mode is disabled. Turn it on in settings.</string>
     <string name="emergency_status_no_contacts">No emergency contacts configured. Add some in Safety call settings.</string>
     <string name="emergency_status_cooldown">Just sent. Available again in a minute.</string>
+    <!-- 2026-11-16 (v1.31.0) - alert sent again through the other SIM. -->
+    <string name="emergency_status_sending">Sending the alert…</string>
+    <plurals name="emergency_triggered_other_sim">
+        <item quantity="one">For %d of them, it went through the other SIM: the chosen SIM could not send it.</item>
+        <item quantity="other">For %d of them, it went through the other SIM: the chosen SIM could not send it.</item>
+    </plurals>
     <string name="emergency_status_ready">Hold the button 3 seconds to alert your contacts.</string>
     <string name="emergency_triggered_ok">Emergency sent to %1$d contact(s).</string>
     <string name="emergency_triggered_no_location">Emergency sent to %1$d contact(s) — location unavailable.</string>
@@ -1156,5 +1162,5 @@
     <string name="thread_sim_selected">Selected</string>
     <string name="settings_default_sim_title">SIM for sending</string>
     <string name="settings_default_sim_android">Same as Android</string>
-    <string name="settings_default_sim_hint">Used for automatic messages (emergency mode, Safety call) and for conversations that have not used a SIM yet. In a conversation, the SIM shown above the text field is the one used: by default, the SIM of its last message. Tap it to change it. An emergency alert goes only through the SIM chosen here: if it has no network, the other one is not tried.</string>
+    <string name="settings_default_sim_hint">Used for automatic messages (emergency mode, Safety call) and for conversations that have not used a SIM yet. In a conversation, the SIM shown above the text field is the one used: by default, the SIM of its last message. Tap it to change it. Automatic messages first go through the SIM chosen here; if the network reports that one could not be sent, it is sent again through the other SIM.</string>
 </resources>

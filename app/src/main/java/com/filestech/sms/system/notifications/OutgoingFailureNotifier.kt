@@ -62,7 +62,16 @@ class OutgoingFailureNotifier @Inject constructor(
     private val visibilite: CorrespondentVisibilityPolicy,
     // 2026-11-15 (v1.30.1) — le verrou de l'app décide de l'action « Renvoyer », cf. [notifierEchec].
     private val settings: SettingsRepository,
-) {
+) : com.filestech.sms.domain.notification.NotificationDEchecDEnvoi {
+
+    /**
+     * 2026-11-16 (v1.31.0) — retire la notification d'échec de [messageId] : une alerte repartie par l'autre SIM a
+     * prévenu ce proche, et la notification aurait dit le contraire, avec un bouton Renvoyer.
+     */
+    override fun retirer(messageId: Long) {
+        val idNotification = NOTIF_ID_BASE + notificationIdFor(messageId) % PLAGE_IDS
+        runCatching { NotificationManagerCompat.from(context).cancel(idNotification) }
+    }
 
     /**
      * @param messageId id Room du message en échec — porté par l'action « Renvoyer ».

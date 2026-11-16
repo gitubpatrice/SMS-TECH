@@ -332,29 +332,41 @@ internal fun useCase(
     sender: SmsSender,
     mirror: NoopMirror = NoopMirror(),
     io: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Unconfined,
-) = TriggerSafetyCallUseCase(
-    sendSms = SendSmsUseCase(
+): TriggerSafetyCallUseCase {
+    // 2026-11-10 (v1.30.1) — liste des SIM inconnue : la SIM demandée passe telle quelle. 2026-11-16 (v1.31.0) —
+    // et aucune bascule sur une autre SIM : ces tests portent sur le créneau et le verdict de la radio, comme avant.
+    val sims = object : com.filestech.sms.domain.sender.SimsActives {
+        override fun lister() = emptyList<com.filestech.sms.domain.model.SimActive>()
+        override fun simSmsDAndroid(): Int? = null
+    }
+    val simDEnvoi = SimDEnvoi(sims, Dispatchers.Unconfined)
+    val sendSms = SendSmsUseCase(
         defaultAppManager = object : DefaultSmsAppChecker { override fun isDefault() = true },
         sentSmsRecorder = NoopRecorder(),
         sender = sender,
         mirror = mirror,
         blockedRepo = NeverBlocked(),
         settings = settings,
-        // 2026-11-10 (v1.30.1) — liste des SIM inconnue : la SIM demandée passe telle quelle.
-        simDEnvoi = SimDEnvoi(
-            object : com.filestech.sms.domain.sender.SimsActives {
-                override fun lister() = emptyList<com.filestech.sms.domain.model.SimActive>()
-                override fun simSmsDAndroid(): Int? = null
+        simDEnvoi = simDEnvoi,
+    )
+    return TriggerSafetyCallUseCase(
+        envoi = EnvoiDAlerte(
+            sendSms = sendSms,
+            mirror = mirror,
+            simDEnvoi = simDEnvoi,
+            sims = sims,
+            settings = settings,
+            notificationsDEchec = object : com.filestech.sms.domain.notification.NotificationDEchecDEnvoi {
+                override fun retirer(messageId: Long) = Unit
             },
-            Dispatchers.Unconfined,
+            io = Dispatchers.Unconfined,
         ),
-    ),
-    settings = settings,
-    panicState = object : PanicStateProvider { override val isPanicDecoyActive = false },
-    mirror = mirror,
-    textes = FakeSafetyMessageTexts(),
-    io = io,
-)
+        settings = settings,
+        panicState = object : PanicStateProvider { override val isPanicDecoyActive = false },
+        textes = FakeSafetyMessageTexts(),
+        io = io,
+    )
+}
 
 /**
  * v1.28.12 — un double pour les textes, parce qu'ils viennent désormais des RESSOURCES.

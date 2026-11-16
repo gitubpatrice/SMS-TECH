@@ -146,6 +146,12 @@ abstract class RepositoryModule {
         impl: IncomingMessageNotifier,
     ): ConversationNotificationCanceller
 
+    // 2026-11-16 (v1.31.0) — une alerte repartie par l'autre SIM retire la notification d'échec du premier envoi.
+    @Binds @Singleton
+    abstract fun bindNotificationDEchecDEnvoi(
+        impl: com.filestech.sms.system.notifications.OutgoingFailureNotifier,
+    ): com.filestech.sms.domain.notification.NotificationDEchecDEnvoi
+
     @Binds @Singleton
     abstract fun bindAllNotificationsCanceller(
         impl: AllNotificationsCancellerImpl,
