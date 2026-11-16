@@ -115,7 +115,9 @@ class AlerteUrgenceAutreSimTest {
     fun `le delai anti-repetition est deja pose pendant l'attente du verdict`() = runTest {
         val reglages = reglagesUrgence()
         val pendantLEnvoi = mutableListOf<Long>()
-        val radio = Radio(pendantLAttente = { pendantLEnvoi += reglages.flow.first().security.emergency.lastTriggeredAt })
+        val radio = Radio(
+            pendantLAttente = { pendantLEnvoi += reglages.flow.first().security.emergency.lastTriggeredAt },
+        )
 
         urgence(radio, Expediteur(), reglages)()
 

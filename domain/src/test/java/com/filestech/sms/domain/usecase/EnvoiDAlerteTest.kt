@@ -73,6 +73,8 @@ class EnvoiDAlerteTest {
         private val echec: Set<Int?> = emptySet(),
         private val muette: Set<Int?> = emptySet(),
         private val base: NoopMirror = NoopMirror(),
+        /** Ce qui se passe pendant l'attente du verdict, donc entre deux passages. */
+        private val pendantLAttente: () -> Unit = {},
     ) : OutgoingMessageMirror by base {
         private val simDeLaLigne = mutableMapOf<Long, Int?>()
 
@@ -97,6 +99,7 @@ class EnvoiDAlerteTest {
         ).also { simDeLaLigne[it] = subId }
 
         override suspend fun outgoingStatus(localId: Long): MessageStatus {
+            pendantLAttente()
             val sim = simDeLaLigne[localId]
             return when (sim) {
                 in muette -> MessageStatus.PENDING
@@ -276,19 +279,24 @@ class EnvoiDAlerteTest {
     /** Relectures GPT, Gemini et Claude du 2026-11-16 : il sortait du bilan. */
     @Test
     fun `un contact bloque pendant le renvoi compte parmi les echecs`() = runTest {
-        val bloqueAuSecondEnvoi = object : BlockedNumberRepository by BlockedList(emptySet()) {
-            private var appels = 0
-            override suspend fun isBlocked(rawNumber: String): Boolean = ++appels > 1
+        // Bloqué pendant l'attente du verdict du premier passage, donc avant le renvoi.
+        var bloque = false
+        val bloqueApresLePremierPassage = object : BlockedNumberRepository by BlockedList(emptySet()) {
+            override suspend fun isBlocked(rawNumber: String): Boolean = bloque
+            override suspend fun blockedRawSnapshot(): List<String> = if (bloque) listOf(alice.raw) else emptyList()
         }
+        val expediteur = Expediteur()
         val bilan = envoi(
             reglage = 11,
             sims = SimsConnues(listOf(sim1, sim2)),
-            expediteur = Expediteur(),
-            radio = Radio(echec = setOf(11)),
-            bloques = bloqueAuSecondEnvoi,
+            expediteur = expediteur,
+            radio = Radio(echec = setOf(11), pendantLAttente = { bloque = true }),
+            bloques = bloqueApresLePremierPassage,
         )
             .envoyer(listOf(alice), "ALERTE")
 
+        // Parti une fois par la 11 (en échec), refusé au renvoi : un échec, et aucun second envoi.
+        assertThat(expediteur.sims).containsExactly(11)
         assertThat(bilan.echouees).isEqualTo(1)
         assertThat(bilan.parties + bilan.sansVerdict).isEqualTo(0)
     }
