@@ -16,7 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   twice on a quick second tap, and the delete never goes beyond what its dialog counted. The vault move existed,
   as an unlabelled padlock at the top that the user who asked for it had not found. Nothing in a decoy session.
 - **An emergency alert that fails on the chosen SIM goes out through the other one.** With two SIMs, the
-  emergency alert, the Safety Call and "I am OK" first go through "SIM for sending"; SMS Tech waits for the
+  emergency alert, the Safety call and "I am OK" first go through "SIM for sending"; SMS Tech waits for the
   radio's verdict and sends again, through each other active SIM, to the contacts whose message certainly
   failed. Not resent: a message still without a verdict after 45 s, a contact the user blocked, anything when
   fewer than two SIMs are known. The emergency result says how many contacts the other SIM reached, the screen
@@ -33,7 +33,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 - **A conversation moved to the vault during its own delete is kept in the vault** when its system copy could
   not be removed; its local row went, and the next sync brought it back outside the vault, in clear. The panic
   wipe and the total purge keep erasing vault conversations whatever happens.
-- **Safety Call**: a check whose lease was taken over after a long stall no longer releases or concludes the
+- **Safety call**: a check whose lease was taken over after a long stall no longer releases or concludes the
   sequence in the window before the new owner reserves it.
 - **The vault move of a selection** acted on the raw selection, including conversations the search hid.
 
