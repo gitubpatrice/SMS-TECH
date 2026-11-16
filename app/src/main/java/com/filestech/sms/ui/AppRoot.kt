@@ -244,7 +244,8 @@ fun AppRoot() {
         //
         // v1.23.2 — NE PAS remplacer ce check par `launchSingleTop = true`, malgré
         // la ressemblance avec les sites Conversations/Vault. Vérifié dans le bytecode
-        // de navigation-runtime 2.9.8 (`NavControllerImpl.launchSingleTopInternal`) :
+        // de navigation-runtime 2.9.8, puis de nouveau en 2.10.2 le 2026-11-16
+        // (`NavControllerImpl.launchSingleTopInternal`, `if_acmpne` sur la destination) :
         // la recherche est un `indexOfLast { it.destination === node }` sur TOUT le
         // backQueue, avec comparaison d'IDENTITÉ sur la `NavDestination` — les
         // ARGUMENTS sont ignorés. Or avec les routes type-safe, `Thread(A)` et
