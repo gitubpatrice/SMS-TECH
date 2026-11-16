@@ -3,6 +3,45 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [1.31.0] — 2026-11-23
+
+### Added
+
+- **Actions on a selection of conversations** (requested by e-mail on 2026-11-11). In selection mode, a bar at
+  the bottom of the list offers Archive (Unarchive in the archive), Move to vault and Delete, each with an icon
+  and its name, one button each for TalkBack; the new message button steps aside. Archiving is one transaction.
+  Deleting asks for a confirmation with the number of conversations, then erases each one as a single delete
+  would, with its own rules for keeping it; the result says how many were deleted, or in red how many were kept.
+  A bulk action takes the visible selection in one atomic step: never a conversation hidden by the search, never
+  twice on a quick second tap, and the delete never goes beyond what its dialog counted. The vault move existed,
+  as an unlabelled padlock at the top that the user who asked for it had not found. Nothing in a decoy session.
+- **An emergency alert that fails on the chosen SIM goes out through the other one.** With two SIMs, the
+  emergency alert, the Safety call and "I am OK" first go through "SIM for sending"; SMS Tech waits for the
+  radio's verdict and sends again, through each other active SIM, to the contacts whose message certainly
+  failed. Not resent: a message still without a verdict after 45 s, a contact the user blocked, anything when
+  fewer than two SIMs are known. The emergency result says how many contacts the other SIM reached, the screen
+  shows "Sending the alert..." meanwhile, and the "failed" notification of a contact reached that way is
+  removed. The setting's help says the new rule.
+
+### Fixed
+
+- **A multipart SMS is marked sent only at its last part's report**; a failure on any part is still written.
+  The first part's success marked the whole message sent before a later part could fail.
+- **The emergency cooldown is set before sending**: while the alert waited for the radio, a reopened screen
+  said "ready" and a second hold sent it twice. "I am OK" said meanwhile stops the alert's resends, and its own
+  send is no longer cut off when the list closes.
+- **A conversation moved to the vault during its own delete is kept in the vault** when its system copy could
+  not be removed; its local row went, and the next sync brought it back outside the vault, in clear. The panic
+  wipe and the total purge keep erasing vault conversations whatever happens.
+- **Safety call**: a check whose lease was taken over after a long stall no longer releases or concludes the
+  sequence in the window before the new owner reserves it.
+- **The vault move of a selection** acted on the raw selection, including conversations the search hid.
+
+### Changed
+
+- Build: Gradle 9.9.1 instead of 9.7.1 (six GitHub security advisories, three fixed only in 9.9.1; they concern
+  the build machine, not the app), AGP 9.5.1, KSP 2.3.13, navigation-compose 2.10.2, uiautomator 2.4.1.
+
 ## [1.30.1] — 2026-11-16
 
 ### Added

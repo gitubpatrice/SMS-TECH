@@ -112,7 +112,10 @@ class SuppressionConversationCoffreTest {
     @Test
     fun uneConversationMiseAuCoffrePendantSaSuppressionEstConservee(): Unit = runBlocking {
         conversation(ALICE, inVault = false)
-        message(ALICE)
+        // Audit pré-release du 2026-11-16 : gardée seulement à la transaction finale, elle perdait ses pièces jointes,
+        // effacées entre-temps. Elle est désormais gardée avant que ses dépendants ne soient touchés.
+        val photo = File(dossier, "souvenir.jpg").apply { writeBytes(ByteArray(16)) }
+        citer(message(ALICE), photo)
         val entreAuCoffrePendantLeBalayage = object : SystemCopyEraser {
             override fun erase(message: MessageEntity): Boolean {
                 runBlocking { db.conversationDao().setInVault(ALICE, true) }
@@ -125,6 +128,7 @@ class SuppressionConversationCoffreTest {
         assertThat(resultat).isEqualTo(ConversationDeleteResult.KEPT_SYSTEM_COPY)
         assertThat(db.conversationDao().idsInVault()).containsExactly(ALICE)
         assertThat(db.messageDao().findByConversation(ALICE)).hasSize(1)
+        assertThat(photo.exists()).isTrue()
     }
 
     @Test

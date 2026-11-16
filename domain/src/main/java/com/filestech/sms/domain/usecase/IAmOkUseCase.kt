@@ -106,7 +106,15 @@ class IAmOkUseCase @Inject constructor(
         // `NonCancellable` (relecture Claude du 2026-11-16) : lancé depuis la liste, l'envoi attend désormais le
         // verdict de la radio puis renvoie par l'autre SIM. Fermer l'écran pendant ce temps annulait le renvoi, alors
         // que le marqueur de l'alerte, déjà remis à zéro, ne permettait plus de redire « Je vais bien ».
-        val bilan = withContext(NonCancellable) { envoi.envoyer(cibles, body) }
+        // Audit pré-release du 2026-11-16 : un effacement de panique pendant l'attente du verdict arrête tout. Il
+        // remet les réglages à zéro, contacts compris ; sans ce témoin, le renvoi par l'autre SIM réécrivait, APRÈS
+        // l'effacement, une ligne et une copie système portant le numéro du proche. L'alerte et le Safety Call
+        // s'arrêtent déjà sur leurs propres marqueurs, remis à zéro par le même effacement.
+        val bilan = withContext(NonCancellable) {
+            envoi.envoyer(cibles, body, avantChaqueEnvoi = {
+                settings.flow.first().security.safetyCall.contacts.isNotEmpty()
+            })
+        }
         val sent = bilan.parties + bilan.sansVerdict
         val failed = invalides + bilan.echouees
 
