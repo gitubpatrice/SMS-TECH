@@ -73,10 +73,13 @@ class EnvoiDAlerteTest {
         private val echec: Set<Int?> = emptySet(),
         private val muette: Set<Int?> = emptySet(),
         private val base: NoopMirror = NoopMirror(),
+        /** SIM dont le message se lit d'abord « parti », puis « en échec » (accusés de parties dans le désordre). */
+        private val echecTardif: Set<Int?> = emptySet(),
         /** Ce qui se passe pendant l'attente du verdict, donc entre deux passages. */
         private val pendantLAttente: () -> Unit = {},
     ) : OutgoingMessageMirror by base {
         private val simDeLaLigne = mutableMapOf<Long, Int?>()
+        private val lectures = mutableMapOf<Long, Int>()
 
         /** Les lignes écrites : un envoi refusé à un destinataire bloqué en laisse une, sans rien envoyer. */
         val lignes get() = base.lignes
@@ -104,6 +107,8 @@ class EnvoiDAlerteTest {
         override suspend fun outgoingStatus(localId: Long): MessageStatus {
             pendantLAttente()
             val sim = simDeLaLigne[localId]
+            val lecture = lectures.merge(localId, 1, Int::plus)!!
+            if (sim in echecTardif) return if (lecture == 1) MessageStatus.SENT else MessageStatus.FAILED
             return when (sim) {
                 in muette -> MessageStatus.PENDING
                 in echec -> MessageStatus.FAILED
@@ -317,5 +322,32 @@ class EnvoiDAlerteTest {
         assertThat(bilan.parties).isEqualTo(1)
         assertThat(bilan.parAutreSim).isEqualTo(0)
         assertThat(expediteur.sims).containsExactly(null, 11).inOrder()
+    }
+
+    /**
+     * Revue de sécurité du 2026-11-16 : l'accusé de la dernière partie d'un SMS long peut précéder celui d'une partie en
+     * échec. Le « parti » lu d'abord est relu : l'échec arrivé entre-temps fait repartir le contact par l'autre SIM.
+     */
+    @Test
+    fun `un parti d'un message long qui passe en echec a la relecture repart par l'autre SIM`() = runTest {
+        val expediteur = Expediteur()
+        val long = "ALERTE ".repeat(20)
+        val bilan = envoi(11, SimsConnues(listOf(sim1, sim2)), expediteur, Radio(echecTardif = setOf(11)))
+            .envoyer(listOf(alice), long)
+
+        assertThat(bilan.parAutreSim).isEqualTo(1)
+        assertThat(expediteur.sims).containsExactly(11, 22).inOrder()
+    }
+
+    @Test
+    fun `une interruption au premier passage garde ce qui est deja parti`() = runTest {
+        val expediteur = Expediteur()
+        var autorises = 1
+        val bilan = envoi(11, SimsConnues(listOf(sim1, sim2)), expediteur, Radio())
+            .envoyer(listOf(alice, bob), "ALERTE", avantChaqueEnvoi = { autorises-- > 0 })
+
+        assertThat(bilan.interrompu).isTrue()
+        assertThat(bilan.sansVerdict).isEqualTo(1)
+        assertThat(expediteur.sims).containsExactly(11)
     }
 }

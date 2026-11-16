@@ -74,7 +74,15 @@ class EnvoiDAlerte @Inject constructor(
     ): Bilan {
         val premiere = simDEnvoi.pourEnvoi(null, settings.hydratedOrNull() ?: AppSettings())
         val premier = passage(cibles.map { Essai(it) }, corps, subId = premiere, avantChaqueEnvoi)
-        if (premier.interrompu) return Bilan.INTERROMPU
+        if (premier.interrompu) {
+            return Bilan(
+                parties = 0,
+                echouees = premier.echecs.size + premier.bloquees,
+                sansVerdict = premier.sansVerdict,
+                parAutreSim = 0,
+                interrompu = true,
+            )
+        }
         var echecs = premier.echecs
         var parties = premier.parties.size
         var bloquees = premier.bloquees
@@ -88,7 +96,13 @@ class EnvoiDAlerte @Inject constructor(
                 val renvoi = passage(echecs, corps, subId = autre, avantChaqueEnvoi)
                 // Interrompu pendant un renvoi : ce qui est déjà parti reste compté (le mode urgence le dit).
                 if (renvoi.interrompu) {
-                    return Bilan(parties, echecs.size + bloquees, sansVerdict, parAutreSim, interrompu = true)
+                    return Bilan(
+                        parties = parties,
+                        echouees = echecs.size - renvoi.sansVerdict + bloquees,
+                        sansVerdict = sansVerdict + renvoi.sansVerdict,
+                        parAutreSim = parAutreSim,
+                        interrompu = true,
+                    )
                 }
                 for (servi in renvoi.parties) servi.idsEnEchec.forEach(notificationsDEchec::retirer)
                 parties += renvoi.parties.size
@@ -133,7 +147,16 @@ class EnvoiDAlerte @Inject constructor(
         val echecs = mutableListOf<Essai>()
         var bloquees = 0
         for (essai in essais) {
-            if (!avantChaqueEnvoi()) return Passage.INTERROMPU
+            // Interrompu : ce qui est déjà remis à la radio part peut-être, sans verdict attendu.
+            if (!avantChaqueEnvoi()) {
+                return Passage(
+                    parties = emptyList(),
+                    echecs = echecs,
+                    sansVerdict = remis.size,
+                    bloquees = bloquees,
+                    interrompu = true,
+                )
+            }
             val issue = sendSms(
                 recipients = listOf(essai.cible),
                 body = corps,
@@ -149,7 +172,7 @@ class EnvoiDAlerte @Inject constructor(
                 else -> echecs += essai
             }
         }
-        val verdicts = verdicts(remis.flatMap { it.second })
+        val verdicts = verdicts(remis.flatMap { it.second }, plusieursParties = corps.length > UNE_PARTIE_AU_PLUS)
         val parties = mutableListOf<Essai>()
         var sansVerdict = 0
         for ((essai, ids) in remis) {
@@ -169,7 +192,7 @@ class EnvoiDAlerte @Inject constructor(
      * disparue (purge, suppression) est tranchée sans verdict. `withTimeoutOrNull` et non le temps mural : la borne
      * suit l'horloge des coroutines, un test du « radio muet » ne dure pas quarante-cinq secondes réelles.
      */
-    private suspend fun verdicts(ids: List<Long>): Map<Long, MessageStatus?> {
+    private suspend fun verdicts(ids: List<Long>, plusieursParties: Boolean): Map<Long, MessageStatus?> {
         val tranches = mutableMapOf<Long, MessageStatus?>()
         if (ids.isEmpty()) return tranches
         val enAttente = ids.toMutableSet()
@@ -192,6 +215,15 @@ class EnvoiDAlerte @Inject constructor(
         if (enAttente.isNotEmpty()) {
             Timber.w("EnvoiDAlerte: %d message(s) sans verdict apres %d ms", enAttente.size, ATTENTE_VERDICT_MS)
         }
+        // Revue de sécurité du 2026-11-16 : d'un SMS en plusieurs parties, l'accusé de la DERNIÈRE marque le message
+        // parti (`SmsSentReceiver`), mais celui d'une partie précédente en échec peut arriver après lui. Un « parti »
+        // est donc relu une fois, [RELECTURE_PARTI_MS] plus tard : un échec arrivé entre-temps l'emporte, et le
+        // contact repart par l'autre SIM. Seulement quand le corps peut dépasser une partie.
+        val partis = tranches.filterValues { it == MessageStatus.SENT }.keys
+        if (plusieursParties && partis.isNotEmpty()) {
+            delay(RELECTURE_PARTI_MS)
+            for (id in partis) if (mirror.outgoingStatus(id) == MessageStatus.FAILED) tranches[id] = MessageStatus.FAILED
+        }
         return tranches
     }
 
@@ -206,12 +238,7 @@ class EnvoiDAlerte @Inject constructor(
         val sansVerdict: Int,
         val parAutreSim: Int,
         val interrompu: Boolean,
-    ) {
-        companion object {
-            /** Tout s'est arrêté sur la demande de l'appelant : rien n'est à compter. */
-            val INTERROMPU = Bilan(parties = 0, echouees = 0, sansVerdict = 0, parAutreSim = 0, interrompu = true)
-        }
-    }
+    )
 
     /** Un contact à prévenir, et les identifiants de ses envois déjà en échec (leur notification est à retirer). */
     private data class Essai(val cible: PhoneAddress, val idsEnEchec: List<Long> = emptyList())
@@ -222,17 +249,7 @@ class EnvoiDAlerte @Inject constructor(
         val sansVerdict: Int,
         val bloquees: Int,
         val interrompu: Boolean = false,
-    ) {
-        companion object {
-            val INTERROMPU = Passage(
-                parties = emptyList(),
-                echecs = emptyList(),
-                sansVerdict = 0,
-                bloquees = 0,
-                interrompu = true,
-            )
-        }
-    }
+    )
 
     companion object {
         /**
@@ -250,5 +267,14 @@ class EnvoiDAlerte @Inject constructor(
 
         /** Intervalle de sondage du statut. Une lecture par seconde sur au plus quelques lignes. */
         const val INTERVALLE_VERDICT_MS = 1_000L
+
+        /** Le délai de la relecture d'un « parti » de plusieurs parties. */
+        const val RELECTURE_PARTI_MS = 2_000L
+
+        /**
+         * Au plus ce nombre de caractères, un SMS tient en UNE partie quel que soit son encodage (70 en UCS-2,
+         * 160 en GSM 7 bits) : pas de relecture.
+         */
+        const val UNE_PARTIE_AU_PLUS = 70
     }
 }

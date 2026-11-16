@@ -136,7 +136,9 @@ class TriggerEmergencyUseCase @Inject constructor(
         // (cf. [EnvoiDAlerte]). Un message remis à la radio et encore sans verdict à l'échéance compte comme envoyé,
         // comme avant la 1.31.0, où l'acceptation par `SmsManager` suffisait.
         // Un « Je vais bien » dit pendant l'attente remet le marqueur à zéro : plus aucun renvoi ne part ensuite,
-        // sans quoi l'alerte, repartie par l'autre SIM, arriverait APRÈS le message rassurant.
+        // sans quoi l'alerte, repartie par l'autre SIM, arriverait APRÈS le message rassurant. Une session leurre
+        // ouverte pendant l'attente, elle, ne l'arrête PAS (revue de sécurité du 2026-11-16) : l'alerte a été
+        // déclenchée légitimement avant, et c'est sous la contrainte qu'elle doit le plus aboutir.
         val bilan = envoi.envoyer(cibles, body, avantChaqueEnvoi = {
             settings.flow.first().security.emergency.lastTriggeredAt == triggeredAtWall
         })
