@@ -196,8 +196,9 @@ interface ConversationDao {
     @Query("UPDATE conversations SET pinned = :pinned WHERE id = :id")
     suspend fun setPinned(id: Long, pinned: Boolean)
 
+    /** 2026-11-16 (v1.31.0) — rend le nombre de lignes modifiées : 0 si la conversation n'existe plus. */
     @Query("UPDATE conversations SET archived = :archived WHERE id = :id")
-    suspend fun setArchived(id: Long, archived: Boolean)
+    suspend fun setArchived(id: Long, archived: Boolean): Int
 
     @Query("UPDATE conversations SET muted = :muted WHERE id = :id")
     suspend fun setMuted(id: Long, muted: Boolean)

@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.filestech.sms.core.ext.foldForSearch
 import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.DefaultSmsAppManager
@@ -27,6 +28,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +47,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -555,7 +558,9 @@ class ConversationsViewModel @Inject constructor(
      * outcome rare en pratique mais traité défensivement.
      */
     fun bulkMoveSelectedToVault() = viewModelScope.launch {
-        val ids = selectedIds.value.toList()
+        // 2026-11-16 (v1.31.0) — la sélection VISIBLE, plus la brute : celle-ci gardait les conversations que la
+        // recherche avait masquées depuis, et le Coffre les recevait sans que l'écran les montre cochées.
+        val ids = selectionVisible()
         if (ids.isEmpty()) return@launch
         // v1.14.8 R8 — Wrap atomique Room transaction. Avant : boucle itérative N appels →
         // process-kill au milieu = état partiel non-récupérable. Maintenant : succès complet
@@ -573,6 +578,54 @@ class ConversationsViewModel @Inject constructor(
                 }
                 is Outcome.Failure -> Event.MoveToVaultFailed(count = ids.size)
             }
+        )
+    }
+
+    /**
+     * 2026-11-16 (v1.31.0) — les conversations cochées QUE L'ÉCRAN MONTRE : [UiState.selectedIds] est la sélection
+     * brute restreinte à la liste affichée, recherche comprise, et vide en session leurre. Une action groupée n'agit
+     * que sur ce que l'utilisateur voit coché et compté dans le titre.
+     */
+    private fun selectionVisible(): List<Long> = state.value.selectedIds.toList()
+
+    /**
+     * 2026-11-16 (v1.31.0, courriel du 2026-11-11) — archive la sélection depuis la liste, ou la désarchive depuis
+     * les Archives. Une transaction : toutes ou aucune.
+     */
+    fun bulkArchiveSelected() = viewModelScope.launch {
+        val ids = selectionVisible()
+        if (ids.isEmpty() || appLock.state.value is AppLockManager.LockState.PanicDecoy) return@launch
+        val archiver = vue != VueConversations.ARCHIVES
+        clearSelection()
+        val modifiees = runCatchingCancellable { toggle.setArchivedAll(ids, archived = archiver) }
+            .onFailure { Timber.w(it, "archivage groupe en echec") }
+            .getOrNull()
+        _events.trySend(
+            if (modifiees == null || modifiees == 0) {
+                Event.Groupe.ArchivageEchoue
+            } else {
+                Event.Groupe.Archivees(nombre = modifiees, archivees = archiver)
+            },
+        )
+    }
+
+    /**
+     * 2026-11-16 (v1.31.0, courriel du 2026-11-11) — supprime la sélection, après la confirmation de l'écran. Chaque
+     * conversation garde ses règles de conservation ([ToggleConversationStateUseCase.deleteAll]) ; le bilan dit
+     * combien sont restées. `NonCancellable` : une suppression commencée va au bout même si l'écran se ferme entre
+     * deux conversations, au lieu de s'arrêter au milieu de la sélection sans rien en dire.
+     */
+    fun bulkDeleteSelected() = viewModelScope.launch {
+        val ids = selectionVisible()
+        if (ids.isEmpty() || appLock.state.value is AppLockManager.LockState.PanicDecoy) return@launch
+        clearSelection()
+        val bilan = withContext(NonCancellable) { toggle.deleteAll(ids) }
+        _events.trySend(
+            if (bilan.conservees > 0) {
+                Event.Groupe.SuppressionsConservees(nombre = bilan.conservees)
+            } else {
+                Event.Groupe.Supprimees(nombre = bilan.supprimees)
+            },
         )
     }
 
@@ -627,6 +680,20 @@ class ConversationsViewModel @Inject constructor(
          * élément local n'a pas pu être supprimé ou l'état de la conversation n'a pas pu être lu.
          */
         data class DeleteKept(val copieSysteme: Boolean) : Erreur
+
+        /**
+         * 2026-11-16 (v1.31.0) — le bilan d'une action groupée. Une seule branche dans l'écran, au seuil de
+         * complexité de detekt : le texte est choisi par [texteDuBilan].
+         */
+        sealed interface Groupe : Event {
+            data class Archivees(val nombre: Int, val archivees: Boolean) : Groupe
+            data object ArchivageEchoue : Groupe
+            data class Supprimees(val nombre: Int) : Groupe
+
+            /** Au moins une conversation de la sélection est restée, cf. [Event.DeleteKept]. */
+            data class SuppressionsConservees(val nombre: Int) : Groupe
+        }
+
         /** v1.14.0 — Reset cooldown + SMS "Je vais bien" envoyé. */
         data class IAmOkDoneWithSms(val sent: Int, val failed: Int) : Event
         /** v1.14.0 — Reset cooldown effectué, pas de SMS (opt-in OFF). */

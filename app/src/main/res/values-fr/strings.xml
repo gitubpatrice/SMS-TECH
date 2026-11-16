@@ -1036,6 +1036,34 @@
         <item quantity="other">%d conversations sorties du coffre</item>
         <item quantity="many">%d conversations sorties du coffre</item>
     </plurals>
+    <!-- 2026-11-16 (v1.31.0) - actions sur une sélection de conversations (courriel du 2026-11-11). -->
+    <plurals name="conversations_bulk_delete_title">
+        <item quantity="one">Supprimer %d conversation ?</item>
+        <item quantity="many">Supprimer %d conversations ?</item>
+        <item quantity="other">Supprimer %d conversations ?</item>
+    </plurals>
+    <string name="conversations_bulk_delete_body">Tous les messages des conversations sélectionnées seront définitivement supprimés de cet appareil. Les autres conversations ne sont pas affectées.</string>
+    <plurals name="conversations_bulk_deleted">
+        <item quantity="one">%d conversation supprimée</item>
+        <item quantity="many">%d conversations supprimées</item>
+        <item quantity="other">%d conversations supprimées</item>
+    </plurals>
+    <plurals name="conversations_bulk_delete_kept">
+        <item quantity="one">%d conversation n’a pas été supprimée : une partie n’a pas pu être retirée de ce téléphone. Réessayez.</item>
+        <item quantity="many">%d conversations n’ont pas été supprimées : une partie n’a pas pu être retirée de ce téléphone. Réessayez.</item>
+        <item quantity="other">%d conversations n’ont pas été supprimées : une partie n’a pas pu être retirée de ce téléphone. Réessayez.</item>
+    </plurals>
+    <plurals name="conversations_bulk_archived">
+        <item quantity="one">%d conversation archivée</item>
+        <item quantity="many">%d conversations archivées</item>
+        <item quantity="other">%d conversations archivées</item>
+    </plurals>
+    <plurals name="conversations_bulk_unarchived">
+        <item quantity="one">%d conversation sortie des archives</item>
+        <item quantity="many">%d conversations sorties des archives</item>
+        <item quantity="other">%d conversations sorties des archives</item>
+    </plurals>
+    <string name="conversations_bulk_archive_failed">Les conversations sélectionnées n’ont pas pu être déplacées. Réessayez.</string>
     <!-- v1.24.0 fenêtre glissante : contrôle en tête de fil pour élargir la fenêtre -->
     <string name="thread_load_older">Charger les messages plus anciens</string>
     <string name="thread_load_older_remaining">Charger les messages plus anciens (%1$d)</string>

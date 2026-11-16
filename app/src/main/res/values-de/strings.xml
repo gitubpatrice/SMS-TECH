@@ -1044,6 +1044,29 @@
         <item quantity="one">%d Unterhaltung aus dem Tresor verschoben</item>
         <item quantity="other">%d Unterhaltungen aus dem Tresor verschoben</item>
     </plurals>
+    <!-- 2026-11-16 (v1.31.0) - Aktionen für eine Auswahl von Unterhaltungen (E-Mail vom 2026-11-11). -->
+    <plurals name="conversations_bulk_delete_title">
+        <item quantity="one">%d Unterhaltung löschen?</item>
+        <item quantity="other">%d Unterhaltungen löschen?</item>
+    </plurals>
+    <string name="conversations_bulk_delete_body">Alle Nachrichten der ausgewählten Unterhaltungen werden endgültig von diesem Gerät entfernt. Andere Unterhaltungen sind nicht betroffen.</string>
+    <plurals name="conversations_bulk_deleted">
+        <item quantity="one">%d Unterhaltung gelöscht</item>
+        <item quantity="other">%d Unterhaltungen gelöscht</item>
+    </plurals>
+    <plurals name="conversations_bulk_delete_kept">
+        <item quantity="one">%d Unterhaltung wurde nicht gelöscht: ein Teil davon ließ sich nicht von diesem Telefon entfernen. Versuchen Sie es erneut.</item>
+        <item quantity="other">%d Unterhaltungen wurden nicht gelöscht: ein Teil davon ließ sich nicht von diesem Telefon entfernen. Versuchen Sie es erneut.</item>
+    </plurals>
+    <plurals name="conversations_bulk_archived">
+        <item quantity="one">%d Unterhaltung archiviert</item>
+        <item quantity="other">%d Unterhaltungen archiviert</item>
+    </plurals>
+    <plurals name="conversations_bulk_unarchived">
+        <item quantity="one">%d Unterhaltung aus dem Archiv geholt</item>
+        <item quantity="other">%d Unterhaltungen aus dem Archiv geholt</item>
+    </plurals>
+    <string name="conversations_bulk_archive_failed">Die ausgewählten Unterhaltungen konnten nicht verschoben werden. Versuchen Sie es erneut.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Ältere Nachrichten laden</string>
     <string name="thread_load_older_remaining">Ältere Nachrichten laden (%1$d)</string>

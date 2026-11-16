@@ -2,6 +2,8 @@ package com.filestech.sms.domain.usecase
 
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
+import com.filestech.sms.core.result.runCatchingCancellable
+import com.filestech.sms.domain.repository.ConversationDeleteResult
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.filestech.sms.domain.vault.VaultMover
 import javax.inject.Inject
@@ -69,4 +71,32 @@ class ToggleConversationStateUseCase @Inject constructor(
         vault.requestBulkMoveToVault(ids, intoVault)
 
     suspend fun delete(id: Long) = repo.delete(id)
+
+    /**
+     * 2026-11-16 (v1.31.0, courriel du 2026-11-11) — archive ou désarchive une sélection, en une transaction.
+     * Rend le nombre de conversations réellement modifiées.
+     */
+    suspend fun setArchivedAll(ids: List<Long>, archived: Boolean): Int = repo.bulkSetArchived(ids, archived)
+
+    /**
+     * 2026-11-16 (v1.31.0, courriel du 2026-11-11) — supprime une sélection, une conversation après l'autre.
+     *
+     * Chacune passe par [delete], c'est-à-dire par le même effacement que la suppression d'une seule (copie du
+     * téléphone, pièces jointes, PDU, notifications), avec ses propres règles de conservation : un lot n'en
+     * contourne aucune. Pas de transaction d'ensemble, volontairement — l'effacement de la copie système n'est pas
+     * transactionnel, et une conversation conservée ne doit pas en retenir une autre. Une exception sur l'une compte
+     * comme une conversation conservée et n'arrête pas les suivantes.
+     */
+    suspend fun deleteAll(ids: List<Long>): BilanSuppression {
+        var supprimees = 0
+        var conservees = 0
+        for (id in ids) {
+            val resultat = runCatchingCancellable { repo.delete(id) }.getOrNull()
+            if (resultat == ConversationDeleteResult.DELETED) supprimees++ else conservees++
+        }
+        return BilanSuppression(supprimees = supprimees, conservees = conservees)
+    }
+
+    /** Ce qu'il est advenu d'une sélection supprimée : [conservees] = toujours là, quelle qu'en soit la raison. */
+    data class BilanSuppression(val supprimees: Int, val conservees: Int)
 }

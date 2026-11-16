@@ -73,6 +73,13 @@ interface ConversationRepository {
      * Retourne le nombre de rows effectivement mises à jour.
      */
     suspend fun bulkMoveToVault(ids: List<Long>, inVault: Boolean): Int
+
+    /**
+     * 2026-11-16 (v1.31.0) — archive ou désarchive N conversations dans UNE transaction, comme
+     * [bulkMoveToVault] : tout passe ou rien. Rend le nombre de conversations réellement modifiées
+     * (une conversation supprimée entre-temps ne compte pas).
+     */
+    suspend fun bulkSetArchived(ids: List<Long>, archived: Boolean): Int
     suspend fun setDraft(id: Long, draft: String?)
     /**
      * v1.11.0 — apparence personnalisée par conversation (Sujet 5). `null` sur

@@ -468,10 +468,6 @@ class ConversationRepositoryImpl @Inject constructor(
         Outcome.Success(requireNotNull(conversationDao.findById(id)?.toDomain()))
     }
 
-    /** Canonical CSV: addresses sorted by normalized value so reordering does not duplicate threads. */
-    private fun canonicalCsv(addresses: List<PhoneAddress>): String =
-        addresses.sortedBy { it.normalized }.toCsv()
-
     companion object {
         /**
          * Rapprochement d'une conversation 1-to-1 par la clé numérique canonique [blockKey]
@@ -542,7 +538,9 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun setPinned(id: Long, pinned: Boolean) = withContext(io) { conversationDao.setPinned(id, pinned) }
-    override suspend fun setArchived(id: Long, archived: Boolean) = withContext(io) { conversationDao.setArchived(id, archived) }
+    override suspend fun setArchived(id: Long, archived: Boolean) {
+        withContext(io) { conversationDao.setArchived(id, archived) }
+    }
     override suspend fun setMuted(id: Long, muted: Boolean) = withContext(io) { conversationDao.setMuted(id, muted) }
 
     override suspend fun findById(id: Long): Conversation? = withContext(io) {
@@ -573,6 +571,16 @@ class ConversationRepositoryImpl @Inject constructor(
             }
         }
         deplacees
+    }
+
+    // 2026-11-16 (v1.31.0) — archivage d'une sélection : une seule transaction, comme le Coffre ci-dessus.
+    override suspend fun bulkSetArchived(ids: List<Long>, archived: Boolean): Int = withContext(io) {
+        if (ids.isEmpty()) return@withContext 0
+        database.withTransaction {
+            var modifiees = 0
+            for (id in ids) modifiees += conversationDao.setArchived(id, archived)
+            modifiees
+        }
     }
     override suspend fun setDraft(id: Long, draft: String?) = withContext(io) { conversationDao.setDraft(id, draft) }
     override suspend fun setCustomName(id: Long, name: String?) = withContext(io) {
@@ -777,3 +785,12 @@ class ConversationRepositoryImpl @Inject constructor(
     // v1.6.1 (audit QUAL-01) — SAFETY_NET_DAYS centralisé dans
     // [com.filestech.sms.domain.purge.PurgePolicy]. Plus de companion local nécessaire.
 }
+
+/**
+ * Canonical CSV: addresses sorted by normalized value so reordering does not duplicate threads.
+ *
+ * 2026-11-16 (v1.31.0) — sortie de la classe, qu'elle n'utilise pas : le dépôt atteignait le plafond de fonctions de
+ * detekt avec l'archivage groupé.
+ */
+private fun canonicalCsv(addresses: List<PhoneAddress>): String =
+    addresses.sortedBy { it.normalized }.toCsv()
