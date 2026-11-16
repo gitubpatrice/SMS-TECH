@@ -1047,6 +1047,30 @@
         <item quantity="one">%d conversation moved out of the vault</item>
         <item quantity="other">%d conversations moved out of the vault</item>
     </plurals>
+    <!-- 2026-11-16 (v1.31.0) - actions on a selection of conversations (e-mail of 2026-11-11). -->
+    <plurals name="conversations_bulk_delete_title">
+        <item quantity="one">Delete %d conversation?</item>
+        <item quantity="other">Delete %d conversations?</item>
+    </plurals>
+    <string name="conversations_bulk_delete_body">All messages in the selected conversations will be permanently removed from this device. Other conversations are not affected.</string>
+    <plurals name="conversations_bulk_deleted">
+        <item quantity="one">%d conversation deleted</item>
+        <item quantity="other">%d conversations deleted</item>
+    </plurals>
+    <plurals name="conversations_bulk_delete_kept">
+        <item quantity="one">%d conversation was not deleted: part of it could not be removed from this phone. Try again.</item>
+        <item quantity="other">%d conversations were not deleted: part of them could not be removed from this phone. Try again.</item>
+    </plurals>
+    <plurals name="conversations_bulk_archived">
+        <item quantity="one">%d conversation archived</item>
+        <item quantity="other">%d conversations archived</item>
+    </plurals>
+    <plurals name="conversations_bulk_unarchived">
+        <item quantity="one">%d conversation moved out of the archive</item>
+        <item quantity="other">%d conversations moved out of the archive</item>
+    </plurals>
+    <string name="conversations_bulk_archive_failed">The selected conversations could not be archived. Try again.</string>
+    <string name="conversations_bulk_unarchive_failed">The selected conversations could not be moved out of the archive. Try again.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Load older messages</string>
     <string name="thread_load_older_remaining">Load older messages (%1$d)</string>

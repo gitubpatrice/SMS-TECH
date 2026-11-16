@@ -1058,6 +1058,35 @@
         <item quantity="many">%d conversaciones sacadas de la caja fuerte</item>
         <item quantity="other">%d conversaciones sacadas de la caja fuerte</item>
     </plurals>
+    <!-- 2026-11-16 (v1.31.0) - acciones sobre una selección de conversaciones (correo del 2026-11-11). -->
+    <plurals name="conversations_bulk_delete_title">
+        <item quantity="one">¿Eliminar %d conversación?</item>
+        <item quantity="many">¿Eliminar %d conversaciones?</item>
+        <item quantity="other">¿Eliminar %d conversaciones?</item>
+    </plurals>
+    <string name="conversations_bulk_delete_body">Todos los mensajes de las conversaciones seleccionadas se borrarán definitivamente de este dispositivo. Las demás conversaciones no se ven afectadas.</string>
+    <plurals name="conversations_bulk_deleted">
+        <item quantity="one">%d conversación eliminada</item>
+        <item quantity="many">%d conversaciones eliminadas</item>
+        <item quantity="other">%d conversaciones eliminadas</item>
+    </plurals>
+    <plurals name="conversations_bulk_delete_kept">
+        <item quantity="one">%d conversación no se ha eliminado: una parte no ha podido quitarse de este teléfono. Vuelva a intentarlo.</item>
+        <item quantity="many">%d conversaciones no se han eliminado: una parte no ha podido quitarse de este teléfono. Vuelva a intentarlo.</item>
+        <item quantity="other">%d conversaciones no se han eliminado: una parte no ha podido quitarse de este teléfono. Vuelva a intentarlo.</item>
+    </plurals>
+    <plurals name="conversations_bulk_archived">
+        <item quantity="one">%d conversación archivada</item>
+        <item quantity="many">%d conversaciones archivadas</item>
+        <item quantity="other">%d conversaciones archivadas</item>
+    </plurals>
+    <plurals name="conversations_bulk_unarchived">
+        <item quantity="one">%d conversación sacada del archivo</item>
+        <item quantity="many">%d conversaciones sacadas del archivo</item>
+        <item quantity="other">%d conversaciones sacadas del archivo</item>
+    </plurals>
+    <string name="conversations_bulk_archive_failed">Las conversaciones seleccionadas no se han podido archivar. Vuelva a intentarlo.</string>
+    <string name="conversations_bulk_unarchive_failed">Las conversaciones seleccionadas no se han podido sacar del archivo. Vuelva a intentarlo.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Cargar los mensajes más antiguos</string>
     <string name="thread_load_older_remaining">Cargar los mensajes más antiguos (%1$d)</string>

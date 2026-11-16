@@ -1058,6 +1058,35 @@
         <item quantity="many">%d conversazioni tolte dalla cassaforte</item>
         <item quantity="other">%d conversazioni tolte dalla cassaforte</item>
     </plurals>
+    <!-- 2026-11-16 (v1.31.0) - azioni su una selezione di conversazioni (e-mail del 2026-11-11). -->
+    <plurals name="conversations_bulk_delete_title">
+        <item quantity="one">Eliminare %d conversazione?</item>
+        <item quantity="many">Eliminare %d conversazioni?</item>
+        <item quantity="other">Eliminare %d conversazioni?</item>
+    </plurals>
+    <string name="conversations_bulk_delete_body">Tutti i messaggi delle conversazioni selezionate saranno rimossi definitivamente da questo dispositivo. Le altre conversazioni non sono toccate.</string>
+    <plurals name="conversations_bulk_deleted">
+        <item quantity="one">%d conversazione eliminata</item>
+        <item quantity="many">%d conversazioni eliminate</item>
+        <item quantity="other">%d conversazioni eliminate</item>
+    </plurals>
+    <plurals name="conversations_bulk_delete_kept">
+        <item quantity="one">%d conversazione non è stata eliminata: una parte non è stata rimossa da questo telefono. Riprovi.</item>
+        <item quantity="many">%d conversazioni non sono state eliminate: una parte non è stata rimossa da questo telefono. Riprovi.</item>
+        <item quantity="other">%d conversazioni non sono state eliminate: una parte non è stata rimossa da questo telefono. Riprovi.</item>
+    </plurals>
+    <plurals name="conversations_bulk_archived">
+        <item quantity="one">%d conversazione archiviata</item>
+        <item quantity="many">%d conversazioni archiviate</item>
+        <item quantity="other">%d conversazioni archiviate</item>
+    </plurals>
+    <plurals name="conversations_bulk_unarchived">
+        <item quantity="one">%d conversazione tolta dall\'archivio</item>
+        <item quantity="many">%d conversazioni tolte dall\'archivio</item>
+        <item quantity="other">%d conversazioni tolte dall\'archivio</item>
+    </plurals>
+    <string name="conversations_bulk_archive_failed">Le conversazioni selezionate non sono state archiviate. Riprovi.</string>
+    <string name="conversations_bulk_unarchive_failed">Le conversazioni selezionate non sono state tolte dall\'archivio. Riprovi.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Carica i messaggi più vecchi</string>
     <string name="thread_load_older_remaining">Carica i messaggi più vecchi (%1$d)</string>

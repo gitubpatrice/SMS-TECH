@@ -103,6 +103,30 @@ class SuppressionConversationCoffreTest {
         assertThat(db.conversationDao().findById(ALICE)).isNull()
     }
 
+    /**
+     * 2026-11-16 (v1.31.0, relecture Claude) — une conversation mise au coffre PENDANT sa suppression ordinaire.
+     * Une suppression groupée est longue, et la barre de la sélection offre « Déplacer dans le coffre » à côté. La
+     * copie système résiste : supprimer la ligne la laissait seule, et la synchronisation suivante ramenait la
+     * conversation hors du coffre, en clair. Elle doit rester, au coffre.
+     */
+    @Test
+    fun uneConversationMiseAuCoffrePendantSaSuppressionEstConservee(): Unit = runBlocking {
+        conversation(ALICE, inVault = false)
+        message(ALICE)
+        val entreAuCoffrePendantLeBalayage = object : SystemCopyEraser {
+            override fun erase(message: MessageEntity): Boolean {
+                runBlocking { db.conversationDao().setInVault(ALICE, true) }
+                return false
+            }
+        }
+
+        val resultat = eraserAvec(entreAuCoffrePendantLeBalayage).supprimer(ALICE)
+
+        assertThat(resultat).isEqualTo(ConversationDeleteResult.KEPT_SYSTEM_COPY)
+        assertThat(db.conversationDao().idsInVault()).containsExactly(ALICE)
+        assertThat(db.messageDao().findByConversation(ALICE)).hasSize(1)
+    }
+
     @Test
     fun unFichierQuiResisteGardeLaConversationDuCoffre(): Unit = runBlocking {
         conversation(COFFRE, inVault = true)

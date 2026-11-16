@@ -234,6 +234,8 @@ fun ConversationsScreen(
                 }
                 is ConversationsViewModel.Event.IAmOkDoneNoSms ->
                     snackbarHost.showSnackbar(ctx.getString(R.string.emergency_i_am_ok_reset_only))
+                // 2026-11-16 (v1.31.0) — bilan d'une action groupée ; le texte est choisi par [texteDuBilan].
+                is ConversationsViewModel.Event.Groupe -> snackbarHost.afficherBilan(ctx.resources, event)
             }
         }
     }
@@ -248,10 +250,11 @@ fun ConversationsScreen(
         snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
         topBar = topBar@{
             if (state.selectionMode && !isPanicDecoy) {
-                // v1.13.0 — TopAppBar contextuelle en mode sélection : count + action
-                // "Déplacer N vers le coffre" + croix annule. Masquée en PanicDecoy
-                // (re-entry via le `combine` purge la sélection ; on dé-render aussi
-                // côté UI pour ne pas laisser un état zombie pendant la transition).
+                // v1.13.0 — TopAppBar contextuelle en mode sélection : count + croix annule.
+                // Masquée en PanicDecoy (re-entry via le `combine` purge la sélection ; on
+                // dé-render aussi côté UI pour ne pas laisser un état zombie pendant la transition).
+                // 2026-11-16 (v1.31.0) — les actions sont en bas, avec leur libellé
+                // ([BarreActionsSelection]) : le cadenas seul, ici, n'était pas trouvé.
                 TopAppBar(
                     title = {
                         Text(
@@ -267,14 +270,6 @@ fun ConversationsScreen(
                             Icon(
                                 Icons.Outlined.Close,
                                 contentDescription = stringResource(R.string.action_cancel),
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { viewModel.bulkMoveSelectedToVault() }) {
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = stringResource(R.string.bulk_vault_move_in),
                             )
                         }
                     },
@@ -397,23 +392,20 @@ fun ConversationsScreen(
                 },
             )
         },
+        bottomBar = {
+            // 2026-11-16 (v1.31.0) — les actions d'une sélection, avec leur libellé ; rien hors sélection ni en
+            // session leurre (les conditions sont dans [BasDeSelection], cet écran est au seuil de detekt).
+            BasDeSelection(
+                selectionnees = state.selectedIds,
+                leurre = isPanicDecoy,
+                archives = archived,
+                onArchiver = viewModel::bulkArchiveSelected,
+                onCoffre = viewModel::bulkMoveSelectedToVault,
+                onSupprimer = viewModel::bulkDeleteSelected,
+            )
+        },
         floatingActionButton = {
-            // v1.2.3 audit U6: use the theme's primary (which auto-adapts to Dark Tech /
-            // Material You / Light) rather than a hardcoded blue that desaturated wrong on
-            // the deep-slate Dark Tech palette.
-            // 2026-11-06 — pas dans le dossier des bloquées : on n'y écrit pas.
-            if (!blocked) {
-                FloatingActionButton(
-                    onClick = onCompose,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ) {
-                    Icon(
-                        Icons.Outlined.Edit,
-                        contentDescription = stringResource(R.string.action_new_message),
-                    )
-                }
-            }
+            BoutonNouveauMessage(dossierBloquees = blocked, selection = state.selectionMode, onClick = onCompose)
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -616,6 +608,30 @@ fun ConversationsScreen(
                     onClick = { showMarkAllReadConfirm = false },
                 ) { Text(stringResource(R.string.action_cancel)) }
             },
+        )
+    }
+}
+
+/**
+ * Le bouton « nouveau message ». 2026-11-16 (v1.31.0) — sorti de [ConversationsScreen], au seuil de complexité de
+ * detekt, quand il a dû s'effacer aussi pendant une sélection.
+ */
+@Composable
+private fun BoutonNouveauMessage(dossierBloquees: Boolean, selection: Boolean, onClick: () -> Unit) {
+    // v1.2.3 audit U6: use the theme's primary (which auto-adapts to Dark Tech /
+    // Material You / Light) rather than a hardcoded blue that desaturated wrong on
+    // the deep-slate Dark Tech palette.
+    // 2026-11-06 — pas dans le dossier des bloquées : on n'y écrit pas.
+    // 2026-11-16 (v1.31.0) — ni pendant une sélection : la barre de ses actions occupe le bas.
+    if (dossierBloquees || selection) return
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Icon(
+            Icons.Outlined.Edit,
+            contentDescription = stringResource(R.string.action_new_message),
         )
     }
 }
