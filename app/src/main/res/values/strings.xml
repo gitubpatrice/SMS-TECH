@@ -1063,7 +1063,8 @@
         <item quantity="one">%d conversation moved out of the archive</item>
         <item quantity="other">%d conversations moved out of the archive</item>
     </plurals>
-    <string name="conversations_bulk_archive_failed">The selected conversations could not be moved. Try again.</string>
+    <string name="conversations_bulk_archive_failed">The selected conversations could not be archived. Try again.</string>
+    <string name="conversations_bulk_unarchive_failed">The selected conversations could not be moved out of the archive. Try again.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Load older messages</string>
     <string name="thread_load_older_remaining">Load older messages (%1$d)</string>

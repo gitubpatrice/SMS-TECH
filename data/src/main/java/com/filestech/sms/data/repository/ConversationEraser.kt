@@ -192,6 +192,10 @@ class ConversationEraser @Inject constructor(
                 .filterNot { it in pdus.cles }
                 .let { cles -> cles.isNotEmpty() && fichiers.pdusGardesPresents(cles) }
             val tardif = mode != Mode.ORDINAIRE && messageDao.findByConversation(id).any { it.id !in connus }
+            // 2026-11-16 (v1.31.0) — relue sous le verrou d'écriture : un déplacement au coffre ne peut plus se
+            // glisser entre cette lecture et la suppression.
+            val entreeAuCoffre = mode == Mode.ORDINAIRE && !systemCopyGone &&
+                conversationDao.findById(id)?.inVault == true
             val programmesRestants = scheduledDao.findForConversation(id)
             cheminsTardifs = (
                 attachmentDao.findForConversation(id).map { it.localUri } +
@@ -200,6 +204,7 @@ class ConversationEraser @Inject constructor(
                     }
                 ).filterNot { it in possedes.chemins }
             when {
+                entreeAuCoffre -> Conservation.ENTREE_AU_COFFRE
                 tardif && mode == Mode.COFFRE -> Conservation.MESSAGE_TARDIF
                 // Sous `force` aussi : une pièce tardive est un dépendant pas encore traité, et
                 // `force` ne lève que la condition « copie système ». Partie avec le parent, son
@@ -219,7 +224,8 @@ class ConversationEraser @Inject constructor(
             Timber.w("delete: %s during sweep of conversation %d, parent kept", cause, id)
             // Un message tardif n'a jamais été présenté au fournisseur ; une pièce ou un PDU tardif est un
             // dépendant pas encore traité. Un seul retour : `erase` est à la limite de detekt.
-            return if (cause == Conservation.MESSAGE_TARDIF) {
+            // Entrée au coffre : comme un message tardif, c'est la copie système qui retient le parent.
+            return if (cause == Conservation.MESSAGE_TARDIF || cause == Conservation.ENTREE_AU_COFFRE) {
                 Issue(systemCopyGone = false, localeComplete = true, conservee = true)
             } else {
                 Issue(systemCopyGone, localeComplete = false, conservee = true)
@@ -286,9 +292,11 @@ class ConversationEraser @Inject constructor(
      * purge du leurre continuent d'appeler [erase] directement.
      *
      * Un état illisible n'est pas « hors coffre » : on ne supprime pas ce qu'on ne sait pas protéger.
-     * Limite assumée : le mode est choisi à la lecture. Une conversation déplacée au coffre PENDANT
-     * sa propre suppression suivrait le mode lu ; l'interface ne permet pas ce geste, et la barrière
-     * de purge ne peut pas servir ici — elle refuse deux balayages simultanés.
+     * Le mode est choisi à la lecture. 2026-11-16 (v1.31.0) — une conversation déplacée au coffre
+     * PENDANT sa propre suppression n'est plus perdue pour autant : l'interface le permet désormais (une
+     * suppression groupée est longue, et la barre de la sélection offre « Déplacer dans le coffre » à côté),
+     * et [erase] relit l'appartenance au coffre dans sa transaction finale (cf. [Conservation.ENTREE_AU_COFFRE]).
+     * La barrière de purge ne pouvait pas servir ici — elle refuse deux balayages simultanés.
      */
     suspend fun supprimer(id: Long): ConversationDeleteResult {
         val conversation = runCatchingCancellable { conversationDao.findById(id) }.getOrElse {
@@ -391,7 +399,13 @@ class ConversationEraser @Inject constructor(
      * du 2026-09-14, C1) vaut dans tous les modes : un PDU gardé encore là ressusciterait le message effacé avec la
      * conversation.
      */
-    private enum class Conservation { MESSAGE_TARDIF, PIECE_TARDIVE, PDU_TARDIF }
+    /**
+     * Pourquoi la transaction finale a gardé le parent. [ENTREE_AU_COFFRE] (2026-11-16, v1.31.0, relecture Claude) :
+     * la conversation est entrée au coffre pendant une suppression ORDINAIRE dont la copie système a résisté.
+     * Supprimer la ligne laissait la copie du téléphone, et la synchronisation suivante ramenait la conversation
+     * HORS du coffre, en clair — le défaut que [Mode.COFFRE] existe pour empêcher. Gardée, elle reste au coffre.
+     */
+    private enum class Conservation { MESSAGE_TARDIF, PIECE_TARDIVE, PDU_TARDIF, ENTREE_AU_COFFRE }
 
     /**
      * v1.28.3 (F04) — efface les FICHIERS des pièces jointes, que la cascade Room laissait

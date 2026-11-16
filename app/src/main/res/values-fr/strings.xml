@@ -1063,7 +1063,8 @@
         <item quantity="many">%d conversations sorties des archives</item>
         <item quantity="other">%d conversations sorties des archives</item>
     </plurals>
-    <string name="conversations_bulk_archive_failed">Les conversations sélectionnées n’ont pas pu être déplacées. Réessayez.</string>
+    <string name="conversations_bulk_archive_failed">Les conversations sélectionnées n’ont pas pu être archivées. Réessayez.</string>
+    <string name="conversations_bulk_unarchive_failed">Les conversations sélectionnées n’ont pas pu être sorties des archives. Réessayez.</string>
     <!-- v1.24.0 fenêtre glissante : contrôle en tête de fil pour élargir la fenêtre -->
     <string name="thread_load_older">Charger les messages plus anciens</string>
     <string name="thread_load_older_remaining">Charger les messages plus anciens (%1$d)</string>

@@ -44,33 +44,36 @@ import com.filestech.sms.ui.theme.BrandDanger
  * suppression, qui appelle [onSupprimer] seulement une fois confirmée. Rien hors sélection, rien en session leurre.
  * Les conditions vivent ici et non dans [ConversationsScreen], au seuil de complexité de detekt. La confirmation
  * repart fermée à chaque nouvelle sélection : son état quitte la composition avec la barre.
+ *
+ * La fenêtre FIGE les conversations à son ouverture et les passe telles quelles à [onSupprimer] : le nombre lu
+ * dans son titre est celui qui sera supprimé, même si une conversation cochée puis masquée par la recherche
+ * revient dans la liste pendant qu'elle est ouverte (relecture Claude du 2026-11-16).
  */
 @Composable
 internal fun BasDeSelection(
-    selection: Boolean,
+    selectionnees: Set<Long>,
     leurre: Boolean,
     archives: Boolean,
-    nombre: Int,
     onArchiver: () -> Unit,
     onCoffre: () -> Unit,
-    onSupprimer: () -> Unit,
+    onSupprimer: (List<Long>) -> Unit,
 ) {
-    if (!selection || leurre) return
-    var confirmer by remember { mutableStateOf(false) }
+    if (selectionnees.isEmpty() || leurre) return
+    var aConfirmer by remember { mutableStateOf<List<Long>?>(null) }
     BarreActionsSelection(
         archives = archives,
         onArchiver = onArchiver,
         onCoffre = onCoffre,
-        onSupprimer = { confirmer = true },
+        onSupprimer = { aConfirmer = selectionnees.toList() },
     )
-    if (confirmer) {
+    aConfirmer?.let { figees ->
         ConfirmationSuppressionGroupee(
-            nombre = nombre,
+            nombre = figees.size,
             onConfirmer = {
-                confirmer = false
-                onSupprimer()
+                aConfirmer = null
+                onSupprimer(figees)
             },
-            onAnnuler = { confirmer = false },
+            onAnnuler = { aConfirmer = null },
         )
     }
 }
@@ -190,8 +193,9 @@ internal fun texteDuBilan(res: Resources, bilan: ConversationsViewModel.Event.Gr
             bilan.nombre,
             bilan.nombre,
         ) to false
-        ConversationsViewModel.Event.Groupe.ArchivageEchoue ->
-            res.getString(R.string.conversations_bulk_archive_failed) to true
+        is ConversationsViewModel.Event.Groupe.ArchivageEchoue -> res.getString(
+            if (bilan.archivees) R.string.conversations_bulk_archive_failed else R.string.conversations_bulk_unarchive_failed,
+        ) to true
         is ConversationsViewModel.Event.Groupe.Supprimees ->
             res.getQuantityString(R.plurals.conversations_bulk_deleted, bilan.nombre, bilan.nombre) to false
         is ConversationsViewModel.Event.Groupe.SuppressionsConservees ->

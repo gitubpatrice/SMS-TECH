@@ -1078,7 +1078,8 @@
         <item quantity="many">%d conversazioni tolte dall\'archivio</item>
         <item quantity="other">%d conversazioni tolte dall\'archivio</item>
     </plurals>
-    <string name="conversations_bulk_archive_failed">Le conversazioni selezionate non sono state spostate. Riprovi.</string>
+    <string name="conversations_bulk_archive_failed">Le conversazioni selezionate non sono state archiviate. Riprovi.</string>
+    <string name="conversations_bulk_unarchive_failed">Le conversazioni selezionate non sono state tolte dall\'archivio. Riprovi.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Carica i messaggi più vecchi</string>
     <string name="thread_load_older_remaining">Carica i messaggi più vecchi (%1$d)</string>

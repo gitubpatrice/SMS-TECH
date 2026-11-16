@@ -37,8 +37,11 @@ class TexteDuBilanTest {
         assertThat(rouge).isTrue()
         assertThat(texteDuBilan(res, Groupe.SuppressionsConservees(nombre = 4)).first)
             .startsWith("4 conversations were not deleted")
-        assertThat(texteDuBilan(res, Groupe.ArchivageEchoue))
-            .isEqualTo("The selected conversations could not be moved. Try again." to true)
+        // L'échec dit le geste tenté (relecture GPT du 2026-11-16) : « déplacées » se confondait avec le Coffre.
+        assertThat(texteDuBilan(res, Groupe.ArchivageEchoue(archivees = true)))
+            .isEqualTo("The selected conversations could not be archived. Try again." to true)
+        assertThat(texteDuBilan(res, Groupe.ArchivageEchoue(archivees = false)))
+            .isEqualTo("The selected conversations could not be moved out of the archive. Try again." to true)
     }
 
     @Test

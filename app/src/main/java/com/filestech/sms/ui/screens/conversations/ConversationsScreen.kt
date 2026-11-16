@@ -396,10 +396,9 @@ fun ConversationsScreen(
             // 2026-11-16 (v1.31.0) — les actions d'une sélection, avec leur libellé ; rien hors sélection ni en
             // session leurre (les conditions sont dans [BasDeSelection], cet écran est au seuil de detekt).
             BasDeSelection(
-                selection = state.selectionMode,
+                selectionnees = state.selectedIds,
                 leurre = isPanicDecoy,
                 archives = archived,
-                nombre = state.selectedIds.size,
                 onArchiver = viewModel::bulkArchiveSelected,
                 onCoffre = viewModel::bulkMoveSelectedToVault,
                 onSupprimer = viewModel::bulkDeleteSelected,

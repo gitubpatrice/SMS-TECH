@@ -1078,7 +1078,8 @@
         <item quantity="many">%d conversaciones sacadas del archivo</item>
         <item quantity="other">%d conversaciones sacadas del archivo</item>
     </plurals>
-    <string name="conversations_bulk_archive_failed">Las conversaciones seleccionadas no se han podido mover. Vuelva a intentarlo.</string>
+    <string name="conversations_bulk_archive_failed">Las conversaciones seleccionadas no se han podido archivar. Vuelva a intentarlo.</string>
+    <string name="conversations_bulk_unarchive_failed">Las conversaciones seleccionadas no se han podido sacar del archivo. Vuelva a intentarlo.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Cargar los mensajes más antiguos</string>
     <string name="thread_load_older_remaining">Cargar los mensajes más antiguos (%1$d)</string>

@@ -94,10 +94,9 @@ class BarreActionsSelectionTest {
         var leurre by mutableStateOf(false)
         compose.setContent {
             BasDeSelection(
-                selection = selection,
+                selectionnees = if (selection) setOf(1L, 2L) else emptySet(),
                 leurre = leurre,
                 archives = false,
-                nombre = 2,
                 onArchiver = {},
                 onCoffre = {},
                 onSupprimer = {},
@@ -114,18 +113,22 @@ class BarreActionsSelectionTest {
         assertThat(compose.onAllNodesWithTextCount(supprimer)).isEqualTo(0)
     }
 
+    /**
+     * La suppression attend la confirmation, et reçoit les conversations FIGÉES à l'ouverture de la fenêtre, même si
+     * la sélection grandit pendant qu'elle est ouverte (relecture Claude du 2026-11-16).
+     */
     @Test
-    fun supprimerDemandeConfirmationAvantDAgir() {
-        var supprimee = 0
+    fun supprimerDemandeConfirmationEtNePrendQueCeQuElleACompte() {
+        val supprimees = mutableListOf<List<Long>>()
+        var selection by mutableStateOf(setOf(1L, 2L))
         compose.setContent {
             BasDeSelection(
-                selection = true,
+                selectionnees = selection,
                 leurre = false,
                 archives = false,
-                nombre = 2,
                 onArchiver = {},
                 onCoffre = {},
-                onSupprimer = { supprimee++ },
+                onSupprimer = { supprimees += it },
             )
         }
         val titre = InstrumentationRegistry.getInstrumentation().targetContext.resources
@@ -133,13 +136,16 @@ class BarreActionsSelectionTest {
 
         compose.onNodeWithText(texte(R.string.action_delete)).performClick()
         compose.onNodeWithText(titre).assertIsDisplayed()
-        assertThat(supprimee).isEqualTo(0)
+        assertThat(supprimees).isEmpty()
+        selection = setOf(1L, 2L, 3L) // une conversation cochée revient dans la liste, fenêtre ouverte
+        compose.waitForIdle()
+        compose.onNodeWithText(titre).assertIsDisplayed()
         // Le bouton de la fenêtre porte le même mot que celui de la barre : on vise celui de la fenêtre.
         compose.onNode(
             androidx.compose.ui.test.hasText(texte(R.string.action_delete)) and
                 androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.isDialog()),
         ).performClick()
-        assertThat(supprimee).isEqualTo(1)
+        assertThat(supprimees).containsExactly(listOf(1L, 2L))
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onAllNodesWithTextCount(texte: String): Int =

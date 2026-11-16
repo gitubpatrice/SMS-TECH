@@ -95,7 +95,7 @@ class ActionsGroupeesTest {
 
         vm.toggleSelection(1)
         vm.toggleSelection(99) // cochée, puis sortie de la liste
-        vm.bulkDeleteSelected()
+        vm.bulkDeleteSelected(confirmees = listOf(1L, 99L))
 
         coVerify(exactly = 1) { toggle.deleteAll(listOf(1L)) }
         assertThat(evenements).containsExactly(Event.Groupe.Supprimees(nombre = 1))
@@ -153,7 +153,7 @@ class ActionsGroupeesTest {
         vm.toggleSelection(1)
         vm.bulkArchiveSelected()
 
-        assertThat(evenements).containsExactly(Event.Groupe.ArchivageEchoue)
+        assertThat(evenements).containsExactly(Event.Groupe.ArchivageEchoue(archivees = true))
     }
 
     @Test
@@ -163,7 +163,7 @@ class ActionsGroupeesTest {
         val evenements = observer(vm)
 
         listOf(1L, 2L, 3L).forEach(vm::toggleSelection)
-        vm.bulkDeleteSelected()
+        vm.bulkDeleteSelected(confirmees = listOf(1L, 2L, 3L))
 
         assertThat(evenements).containsExactly(Event.Groupe.SuppressionsConservees(nombre = 1))
     }
@@ -177,11 +177,63 @@ class ActionsGroupeesTest {
 
         vm.toggleSelection(1)
         verrou.value = AppLockManager.LockState.PanicDecoy
-        vm.bulkDeleteSelected()
+        vm.bulkDeleteSelected(confirmees = listOf(1L))
         vm.bulkArchiveSelected()
 
         coVerify(exactly = 0) { toggle.deleteAll(any()) }
         coVerify(exactly = 0) { toggle.setArchivedAll(any(), any()) }
+        assertThat(evenements).isEmpty()
+    }
+
+    /**
+     * Relectures GPT, Gemini et Claude du 2026-11-16 : l'état se recalcule de façon asynchrone, et un second appui
+     * rapide relisait la même sélection. Le Coffre ne la vidait même qu'APRÈS sa transaction.
+     */
+    @Test
+    fun `un second appui ne relance pas l'action sur la meme selection`() = runTest(dispatcher) {
+        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 1, conservees = 0)
+        coEvery { toggle.requestBulkMoveToVault(any(), any()) } returns Outcome.Success(1)
+        val vm = liste(listOf(conv(1), conv(2)))
+        observer(vm)
+
+        vm.toggleSelection(1)
+        vm.bulkDeleteSelected(confirmees = listOf(1L))
+        vm.bulkDeleteSelected(confirmees = listOf(1L))
+        vm.toggleSelection(2)
+        vm.bulkMoveSelectedToVault()
+        vm.bulkMoveSelectedToVault()
+
+        coVerify(exactly = 1) { toggle.deleteAll(any()) }
+        coVerify(exactly = 1) { toggle.requestBulkMoveToVault(any(), any()) }
+    }
+
+    /** Relecture Claude du 2026-11-16 : la fenêtre annonçait 2, la suppression en prenait 3. */
+    @Test
+    fun `la suppression ne depasse jamais ce que la confirmation a compte`() = runTest(dispatcher) {
+        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 2, conservees = 0)
+        val vm = liste(listOf(conv(1), conv(2), conv(3)))
+        observer(vm)
+
+        listOf(1L, 2L, 3L).forEach(vm::toggleSelection)
+        vm.bulkDeleteSelected(confirmees = listOf(1L, 2L))
+
+        coVerify(exactly = 1) { toggle.deleteAll(match { it.toSet() == setOf(1L, 2L) }) }
+    }
+
+    /** Relecture Claude du 2026-11-16 : une session leurre ouverte pendant l'opération n'en voit pas le bilan. */
+    @Test
+    fun `aucun bilan si une session leurre commence pendant l'operation`() = runTest(dispatcher) {
+        coEvery { toggle.deleteAll(any()) } coAnswers {
+            verrou.value = AppLockManager.LockState.PanicDecoy
+            BilanSuppression(supprimees = 1, conservees = 0)
+        }
+        val vm = liste(listOf(conv(1)))
+        val evenements = observer(vm)
+
+        vm.toggleSelection(1)
+        vm.bulkDeleteSelected(confirmees = listOf(1L))
+
+        coVerify(exactly = 1) { toggle.deleteAll(listOf(1L)) }
         assertThat(evenements).isEmpty()
     }
 }

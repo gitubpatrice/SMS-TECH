@@ -1066,7 +1066,8 @@
         <item quantity="one">%d Unterhaltung aus dem Archiv geholt</item>
         <item quantity="other">%d Unterhaltungen aus dem Archiv geholt</item>
     </plurals>
-    <string name="conversations_bulk_archive_failed">Die ausgewählten Unterhaltungen konnten nicht verschoben werden. Versuchen Sie es erneut.</string>
+    <string name="conversations_bulk_archive_failed">Die ausgewählten Unterhaltungen konnten nicht archiviert werden. Versuchen Sie es erneut.</string>
+    <string name="conversations_bulk_unarchive_failed">Die ausgewählten Unterhaltungen konnten nicht aus dem Archiv geholt werden. Versuchen Sie es erneut.</string>
     <!-- v1.24.0 sliding window: head-of-thread control to widen the loaded window -->
     <string name="thread_load_older">Ältere Nachrichten laden</string>
     <string name="thread_load_older_remaining">Ältere Nachrichten laden (%1$d)</string>
