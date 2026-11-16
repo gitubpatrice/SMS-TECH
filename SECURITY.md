@@ -2,7 +2,7 @@
 
 English · 🇫🇷 [Version française](SECURITY.fr.md)
 
-Current release : **v1.30.1** (2026-11-16)
+Current release : **v1.31.0** (2026-11-23)
 
 This document describes the threat model SMS Tech protects against, the cryptographic
 primitives it uses, the architectural choices that make those primitives meaningful, and the
