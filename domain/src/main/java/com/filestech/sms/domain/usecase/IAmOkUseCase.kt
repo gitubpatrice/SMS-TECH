@@ -1,6 +1,5 @@
 package com.filestech.sms.domain.usecase
 
-import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.emergency.IAmOkMessageProvider
 import com.filestech.sms.domain.model.PhoneAddress
@@ -39,7 +38,8 @@ import javax.inject.Inject
  * ce cas.
  */
 class IAmOkUseCase @Inject constructor(
-    private val sendSms: SendSmsUseCase,
+    // 2026-11-16 (v1.31.0) — l'envoi passe par [EnvoiDAlerte], comme l'alerte qu'il dément.
+    private val envoi: EnvoiDAlerte,
     private val settings: AppSettingsSource,
     private val panicState: PanicStateProvider,
     private val iAmOkMessage: IAmOkMessageProvider,
@@ -89,31 +89,22 @@ class IAmOkUseCase @Inject constructor(
         }
 
         Timber.i("IAmOkUseCase: sending I-am-ok SMS to %d contact(s)", contacts.size)
-        var sent = 0
-        var failed = 0
-        contacts.forEachIndexed { index, contact ->
-            if (!contact.isValid()) {
-                failed++
-                return@forEachIndexed
-            }
-            val target = PhoneAddress.of(contact.phoneNumber)
-            if (target.normalized.isEmpty()) {
-                failed++
-                return@forEachIndexed
-            }
-            val outcome = sendSms(
-                recipients = listOf(target),
-                body = body,
-                appendSignature = false,
-            )
-            when (outcome) {
-                is Outcome.Success -> sent++
-                is Outcome.Failure -> {
-                    Timber.w("IAmOkUseCase: send failed for contact #%d", index)
-                    failed++
-                }
+        var invalides = 0
+        val cibles = contacts.mapNotNull { contact ->
+            val target = contact.takeIf { it.isValid() }?.let { PhoneAddress.of(it.phoneNumber) }
+            if (target == null || target.normalized.isEmpty()) {
+                invalides++
+                null
+            } else {
+                target
             }
         }
+        // 2026-11-16 (v1.31.0) — même chemin que l'alerte ([EnvoiDAlerte]) : si l'alerte est partie par l'autre SIM
+        // faute de réseau sur la première, le message rassurant échouerait sur celle-ci, et les proches resteraient
+        // sur l'alerte. Sans verdict à l'échéance, il compte comme envoyé, comme avant.
+        val bilan = envoi.envoyer(cibles, body)
+        val sent = bilan.parties + bilan.sansVerdict
+        val failed = invalides + bilan.echouees
 
         Timber.i("IAmOkUseCase: I-am-ok done — sent=%d failed=%d", sent, failed)
         return@withContext Result.ResetAndSmsSent(sent = sent, failed = failed)

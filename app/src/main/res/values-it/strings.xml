@@ -614,6 +614,13 @@
     <string name="emergency_status_disabled">La modalità emergenza è disattivata. La attivi nelle impostazioni.</string>
     <string name="emergency_status_no_contacts">Nessun contatto di emergenza configurato. Ne aggiunga nelle impostazioni di Safety call.</string>
     <string name="emergency_status_cooldown">Appena inviato. Di nuovo disponibile tra un minuto.</string>
+    <!-- 2026-11-16 (v1.31.0) - alert sent again through the other SIM. -->
+    <string name="emergency_status_sending">Invio dell’avviso…</string>
+    <plurals name="emergency_triggered_other_sim">
+        <item quantity="one">Per %d di loro è partita dall’altra SIM: la SIM scelta non ha potuto inviarla.</item>
+        <item quantity="many">Per %d di loro è partita dall’altra SIM: la SIM scelta non ha potuto inviarla.</item>
+        <item quantity="other">Per %d di loro è partita dall’altra SIM: la SIM scelta non ha potuto inviarla.</item>
+    </plurals>
     <string name="emergency_status_ready">Tenga premuto il pulsante 3 secondi per avvisare i suoi contatti.</string>
     <string name="emergency_triggered_ok">Emergenza inviata a %1$d contatto/i.</string>
     <string name="emergency_triggered_no_location">Emergenza inviata a %1$d contatto/i — posizione non disponibile.</string>
@@ -1144,5 +1151,5 @@
     <string name="thread_sim_selected">Selezionata</string>
     <string name="settings_default_sim_title">SIM per l\'invio</string>
     <string name="settings_default_sim_android">Come Android</string>
-    <string name="settings_default_sim_hint">Usata per i messaggi automatici (modalità emergenza, Safety call) e per le conversazioni che non hanno ancora usato una SIM. In una conversazione si usa la SIM mostrata sopra il campo di testo: per impostazione predefinita, quella dell\'ultimo messaggio. La tocchi per cambiarla. Un avviso di emergenza parte solo dalla SIM scelta qui: se non ha rete, l\'altra non viene provata.</string>
+    <string name="settings_default_sim_hint">Usata per i messaggi automatici (modalità emergenza, Safety call) e per le conversazioni che non hanno ancora usato una SIM. In una conversazione si usa la SIM mostrata sopra il campo di testo: per impostazione predefinita, quella dell\'ultimo messaggio. La tocchi per cambiarla. Un avviso di emergenza parte prima dalla SIM scelta qui; se questa non riesce a inviarlo (per esempio senza rete), viene inviato di nuovo dall\'altra.</string>
 </resources>

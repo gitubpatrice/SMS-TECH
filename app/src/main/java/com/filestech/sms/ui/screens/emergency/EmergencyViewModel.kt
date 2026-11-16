@@ -133,6 +133,15 @@ class EmergencyViewModel @Inject constructor(
      */
     private val _isTriggerInFlight = AtomicBoolean(false)
 
+    /**
+     * 2026-11-16 (v1.31.0) — l'alerte est en cours d'envoi : l'écran le dit sous le bouton. L'envoi attend désormais
+     * le verdict de la radio, et renvoie par l'autre SIM ce que la première a échoué ([com.filestech.sms.domain
+     * .usecase.EnvoiDAlerte]) : quelques secondes de plus, qui s'ajoutent à la recherche de la position (jusqu'à
+     * 8 s), pendant lesquelles rien ne disait que l'alerte partait.
+     */
+    private val _envoiEnCours = MutableStateFlow(false)
+    val envoiEnCours: StateFlow<Boolean> = _envoiEnCours.asStateFlow()
+
     init {
         viewModelScope.launch {
             val initial = settings.flow.first().security.emergency
@@ -272,6 +281,7 @@ class EmergencyViewModel @Inject constructor(
      */
     fun trigger() {
         if (!_isTriggerInFlight.compareAndSet(false, true)) return
+        _envoiEnCours.value = true
         // v1.26.1 (audit H10) — `appScope` et non `viewModelScope`.
         //
         // `TriggerEmergencyUseCase` résout la position AVANT la boucle d'envoi, ce qui peut
@@ -285,6 +295,7 @@ class EmergencyViewModel @Inject constructor(
                 val result = triggerEmergency()
                 _events.trySend(Event.Triggered(result))
             } finally {
+                _envoiEnCours.value = false
                 _isTriggerInFlight.set(false)
             }
         }
