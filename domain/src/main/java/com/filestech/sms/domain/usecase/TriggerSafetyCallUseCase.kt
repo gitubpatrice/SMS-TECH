@@ -276,7 +276,8 @@ class TriggerSafetyCallUseCase @Inject constructor(
                 // Restitution conditionnee a la PROPRIETE, pas au seul compteur : sans
                 // `claimId`, un worker revenu tardivement restituait la reservation d un autre,
                 // ramenant le compteur en arriere pendant un envoi reel.
-                if (cfg.claimId != myClaimId || cfg.generation != myGeneration) {
+                // 2026-11-16 (v1.31.0) — bail levé par une reprise = créneau perdu, comme à la conclusion.
+                if (cfg.claimId != myClaimId || cfg.generation != myGeneration || cfg.claimedAt == 0L) {
                     s
                 } else {
                     s.copy(
@@ -304,7 +305,11 @@ class TriggerSafetyCallUseCase @Inject constructor(
         var concluded = false
         settings.update { s ->
             val cfg = s.security.safetyCall
-            if (cfg.claimId != myClaimId || cfg.generation != myGeneration) {
+            // 2026-11-16 (v1.31.0, relecture GPT) — et le bail n'a pas été levé par une reprise : la reprise
+            // efface `claimedAt` sans toucher à `claimId`, et entre elle et la réservation du repreneur, un worker
+            // revenu tardivement concluait encore — jusqu'à désarmer la protection sur un état qui n'était plus le
+            // sien. Même règle que [renewClaim].
+            if (cfg.claimId != myClaimId || cfg.generation != myGeneration || cfg.claimedAt == 0L) {
                 s
             } else {
                 concluded = true

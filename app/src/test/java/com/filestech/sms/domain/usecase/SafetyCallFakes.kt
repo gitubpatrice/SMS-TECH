@@ -356,6 +356,9 @@ internal fun useCase(
             simDEnvoi = simDEnvoi,
             sims = sims,
             settings = settings,
+            notificationsDEchec = object : com.filestech.sms.domain.notification.NotificationDEchecDEnvoi {
+                override fun retirer(messageId: Long) = Unit
+            },
             io = Dispatchers.Unconfined,
         ),
         settings = settings,

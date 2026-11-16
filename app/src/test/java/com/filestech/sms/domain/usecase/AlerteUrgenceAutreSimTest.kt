@@ -14,6 +14,7 @@ import com.filestech.sms.domain.sender.SmsSender
 import com.filestech.sms.domain.settings.AppSettings
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 
@@ -51,6 +52,8 @@ class AlerteUrgenceAutreSimTest {
         private val echec: Set<Int?> = emptySet(),
         private val muette: Set<Int?> = emptySet(),
         private val base: NoopMirror = NoopMirror(),
+        /** Ce qui se passe pendant que l'alerte attend le verdict (un « Je vais bien », par exemple). */
+        private val pendantLAttente: suspend () -> Unit = {},
     ) : OutgoingMessageMirror by base {
         private val simDeLaLigne = mutableMapOf<Long, Int?>()
 
@@ -74,31 +77,84 @@ class AlerteUrgenceAutreSimTest {
             localMirrorBody,
         ).also { simDeLaLigne[it] = subId }
 
-        override suspend fun outgoingStatus(localId: Long): MessageStatus = when (simDeLaLigne[localId]) {
-            in muette -> MessageStatus.PENDING
-            in echec -> MessageStatus.FAILED
-            else -> MessageStatus.SENT
+        override suspend fun outgoingStatus(localId: Long): MessageStatus {
+            pendantLAttente()
+            return when (simDeLaLigne[localId]) {
+                in muette -> MessageStatus.PENDING
+                in echec -> MessageStatus.FAILED
+                else -> MessageStatus.SENT
+            }
         }
     }
 
-    private fun urgence(radio: Radio, expediteur: Expediteur): TriggerEmergencyUseCase {
-        val reglages = FakeSettings(
-            AppSettings().let { base ->
-                base.copy(
-                    sending = base.sending.copy(defaultSubId = 11),
-                    security = base.security.copy(
-                        emergency = EmergencyConfig(enabled = true, includeLocation = false),
-                        safetyCall = base.security.safetyCall.copy(
-                            contacts = listOf(
-                                SafetyCallContact(phoneNumber = CONTACT),
-                                SafetyCallContact(phoneNumber = "+33622222222"),
-                            ),
+    /**
+     * Relecture Claude du 2026-11-16 : un « Je vais bien » dit pendant que l'alerte attend son verdict arrête les
+     * renvois ; sans cela, l'alerte repartie par l'autre SIM arrivait APRÈS le message rassurant.
+     */
+    @Test
+    fun `un « Je vais bien » pendant l'attente arrete les renvois de l'alerte`() = runTest {
+        val expediteur = Expediteur()
+        val reglages = reglagesUrgence()
+        val jeVaisBien: suspend () -> Unit = {
+            reglages.update { s ->
+                s.copy(security = s.security.copy(emergency = s.security.emergency.copy(lastTriggeredAt = 0L)))
+            }
+        }
+
+        val resultat = urgence(Radio(echec = setOf(11), pendantLAttente = jeVaisBien), expediteur, reglages)()
+
+        assertThat(expediteur.sims).containsExactly(11, 11)
+        assertThat((resultat as TriggerEmergencyUseCase.Result.Triggered).parAutreSim).isEqualTo(0)
+    }
+
+    /**
+     * Relecture Claude du 2026-11-16 : le délai anti-répétition est posé AVANT l'envoi. Posé après, pendant toute
+     * l'attente du verdict, un écran rouvert se disait « prêt » et un second appui envoyait l'alerte deux fois.
+     */
+    @Test
+    fun `le delai anti-repetition est deja pose pendant l'attente du verdict`() = runTest {
+        val reglages = reglagesUrgence()
+        val pendantLEnvoi = mutableListOf<Long>()
+        val radio = Radio(pendantLAttente = { pendantLEnvoi += reglages.flow.first().security.emergency.lastTriggeredAt })
+
+        urgence(radio, Expediteur(), reglages)()
+
+        assertThat(pendantLEnvoi).isNotEmpty()
+        assertThat(pendantLEnvoi.all { it > 0L }).isTrue()
+    }
+
+    private fun urgence(
+        radio: Radio,
+        expediteur: Expediteur,
+        reglages: FakeSettings = reglagesUrgence(),
+    ): TriggerEmergencyUseCase {
+        val simDEnvoi = SimDEnvoi(deuxSims, Dispatchers.Unconfined)
+        return construire(radio, expediteur, reglages, simDEnvoi)
+    }
+
+    private fun reglagesUrgence(): FakeSettings = FakeSettings(
+        AppSettings().let { base ->
+            base.copy(
+                sending = base.sending.copy(defaultSubId = 11),
+                security = base.security.copy(
+                    emergency = EmergencyConfig(enabled = true, includeLocation = false),
+                    safetyCall = base.security.safetyCall.copy(
+                        contacts = listOf(
+                            SafetyCallContact(phoneNumber = CONTACT),
+                            SafetyCallContact(phoneNumber = "+33622222222"),
                         ),
                     ),
-                )
-            },
-        )
-        val simDEnvoi = SimDEnvoi(deuxSims, Dispatchers.Unconfined)
+                ),
+            )
+        },
+    )
+
+    private fun construire(
+        radio: Radio,
+        expediteur: Expediteur,
+        reglages: FakeSettings,
+        simDEnvoi: SimDEnvoi,
+    ): TriggerEmergencyUseCase {
         val sendSms = SendSmsUseCase(
             defaultAppManager = object : com.filestech.sms.domain.sender.DefaultSmsAppChecker {
                 override fun isDefault() = true
@@ -111,7 +167,17 @@ class AlerteUrgenceAutreSimTest {
             simDEnvoi = simDEnvoi,
         )
         return TriggerEmergencyUseCase(
-            envoi = EnvoiDAlerte(sendSms, radio, simDEnvoi, deuxSims, reglages, Dispatchers.Unconfined),
+            envoi = EnvoiDAlerte(
+                sendSms = sendSms,
+                mirror = radio,
+                simDEnvoi = simDEnvoi,
+                sims = deuxSims,
+                settings = reglages,
+                notificationsDEchec = object : com.filestech.sms.domain.notification.NotificationDEchecDEnvoi {
+                    override fun retirer(messageId: Long) = Unit
+                },
+                io = Dispatchers.Unconfined,
+            ),
             settings = reglages,
             panicState = object : PanicStateProvider { override val isPanicDecoyActive = false },
             location = object : LocationProvider {

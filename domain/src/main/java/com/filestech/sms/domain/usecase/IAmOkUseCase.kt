@@ -6,6 +6,7 @@ import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.security.PanicStateProvider
 import com.filestech.sms.domain.settings.AppSettingsSource
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -102,7 +103,10 @@ class IAmOkUseCase @Inject constructor(
         // 2026-11-16 (v1.31.0) — même chemin que l'alerte ([EnvoiDAlerte]) : si l'alerte est partie par l'autre SIM
         // faute de réseau sur la première, le message rassurant échouerait sur celle-ci, et les proches resteraient
         // sur l'alerte. Sans verdict à l'échéance, il compte comme envoyé, comme avant.
-        val bilan = envoi.envoyer(cibles, body)
+        // `NonCancellable` (relecture Claude du 2026-11-16) : lancé depuis la liste, l'envoi attend désormais le
+        // verdict de la radio puis renvoie par l'autre SIM. Fermer l'écran pendant ce temps annulait le renvoi, alors
+        // que le marqueur de l'alerte, déjà remis à zéro, ne permettait plus de redire « Je vais bien ».
+        val bilan = withContext(NonCancellable) { envoi.envoyer(cibles, body) }
         val sent = bilan.parties + bilan.sansVerdict
         val failed = invalides + bilan.echouees
 

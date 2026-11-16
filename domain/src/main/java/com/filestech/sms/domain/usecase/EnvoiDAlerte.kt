@@ -4,6 +4,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
+import com.filestech.sms.domain.notification.NotificationDEchecDEnvoi
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.SimsActives
 import com.filestech.sms.domain.settings.AppSettings
@@ -45,6 +46,8 @@ class EnvoiDAlerte @Inject constructor(
     private val simDEnvoi: SimDEnvoi,
     private val sims: SimsActives,
     private val settings: AppSettingsSource,
+    // 2026-11-16 (v1.31.0, relecture Claude) — la notification d'échec d'un proche servi par l'autre SIM.
+    private val notificationsDEchec: NotificationDEchecDEnvoi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -53,31 +56,50 @@ class EnvoiDAlerte @Inject constructor(
      * échoué. [avantChaqueEnvoi] est appelé avant CHAQUE envoi, renvoi compris ; s'il rend `false`, tout s'arrête
      * sur-le-champ et le bilan est marqué [Bilan.interrompu] (le Safety Call y vérifie qu'il détient toujours son
      * créneau).
+     *
+     * Relecture GPT, Gemini et Claude du 2026-11-16 :
+     *  - la SIM du premier passage est fixée UNE fois, ici : relue au moment de choisir l'autre, un réglage changé
+     *    entre-temps faisait réessayer la SIM qui venait d'échouer ;
+     *  - un contact servi par l'autre SIM perd la notification d'échec de ses envois précédents, qui disait le
+     *    contraire avec un bouton Renvoyer ;
+     *  - un contact bloqué pendant un renvoi compte parmi les échecs (il sortait du bilan) ;
+     *  - [Bilan.parAutreSim] ne compte que si la première SIM est connue : sinon le renvoi a pu repartir par elle,
+     *    et l'écran aurait dit à tort « par l'autre SIM ».
      */
     suspend fun envoyer(
         cibles: List<PhoneAddress>,
         corps: String,
         avantChaqueEnvoi: suspend () -> Boolean = { true },
     ): Bilan {
-        val premier = passage(cibles, corps, subId = null, avantChaqueEnvoi)
+        val premiere = simDEnvoi.pourEnvoi(null, settings.hydratedOrNull() ?: AppSettings())
+        val premier = passage(cibles.map { Essai(it) }, corps, subId = premiere, avantChaqueEnvoi)
         if (premier.interrompu) return Bilan.INTERROMPU
         var echecs = premier.echecs
-        var parAutreSim = 0
+        var parties = premier.parties.size
+        var bloquees = premier.bloquees
         var sansVerdict = premier.sansVerdict
+        var parAutreSim = 0
         if (echecs.isNotEmpty()) {
-            for (autre in autresSims()) {
+            val premiereConnue = premiere ?: withContext(io) { sims.simSmsDAndroid() }
+            for (autre in autresSims(exclue = premiereConnue)) {
                 if (echecs.isEmpty()) break
                 Timber.i("EnvoiDAlerte: %d contact(s) en echec, nouvel essai par une autre SIM", echecs.size)
                 val renvoi = passage(echecs, corps, subId = autre, avantChaqueEnvoi)
-                if (renvoi.interrompu) return Bilan.INTERROMPU
-                parAutreSim += renvoi.parties
+                // Interrompu pendant un renvoi : ce qui est déjà parti reste compté (le mode urgence le dit).
+                if (renvoi.interrompu) {
+                    return Bilan(parties, echecs.size + bloquees, sansVerdict, parAutreSim, interrompu = true)
+                }
+                for (servi in renvoi.parties) servi.idsEnEchec.forEach(notificationsDEchec::retirer)
+                parties += renvoi.parties.size
+                if (premiereConnue != null) parAutreSim += renvoi.parties.size
+                bloquees += renvoi.bloquees
                 sansVerdict += renvoi.sansVerdict
                 echecs = renvoi.echecs
             }
         }
         return Bilan(
-            parties = premier.parties + parAutreSim,
-            echouees = echecs.size + premier.bloquees,
+            parties = parties,
+            echouees = echecs.size + bloquees,
             sansVerdict = sansVerdict,
             parAutreSim = parAutreSim,
             interrompu = false,
@@ -85,54 +107,55 @@ class EnvoiDAlerte @Inject constructor(
     }
 
     /**
-     * Les SIM à essayer après celle du premier passage, par emplacement. Celle-ci est la SIM du réglage, validée
-     * comme le fait [SendSmsUseCase], sinon la SIM SMS d'Android. Quand ni l'une ni l'autre n'est connue (Android
-     * « demande à chaque fois »), on ne l'exclut pas : au pire, une SIM est réessayée une fois de trop.
+     * Les SIM actives à essayer après celle du premier passage ([exclue]), par emplacement. Rien quand moins de deux
+     * SIM sont connues. [exclue] inconnue (Android « demande à chaque fois ») : rien n'est exclu, et au pire une SIM
+     * est réessayée une fois de trop.
      */
-    private suspend fun autresSims(): List<Int> {
+    private suspend fun autresSims(exclue: Int?): List<Int> {
         val actives = withContext(io) { sims.lister() }
         if (actives.size < 2) return emptyList()
-        val reglages = settings.hydratedOrNull() ?: AppSettings()
-        val premiere = simDEnvoi.pourEnvoi(null, reglages) ?: withContext(io) { sims.simSmsDAndroid() }
-        return actives.map { it.subId }.filter { it != premiere }
+        return actives.map { it.subId }.filter { it != exclue }
     }
 
-    /** Un envoi par contact sur [subId] (`null` = la SIM du réglage), puis le verdict de la radio. */
+    /**
+     * Un envoi par contact sur [subId] (`null` = la SIM SMS d'Android), puis le verdict de la radio. Chaque contact
+     * garde les identifiants de ses envois en échec d'un passage à l'autre ([Essai.idsEnEchec]).
+     */
     private suspend fun passage(
-        cibles: List<PhoneAddress>,
+        essais: List<Essai>,
         corps: String,
         subId: Int?,
         avantChaqueEnvoi: suspend () -> Boolean,
     ): Passage {
         // Une liste et non une table : deux contacts au même numéro restent deux personnes à prévenir.
-        val remis = mutableListOf<Pair<PhoneAddress, List<Long>>>()
-        val echecs = mutableListOf<PhoneAddress>()
+        val remis = mutableListOf<Pair<Essai, List<Long>>>()
+        val echecs = mutableListOf<Essai>()
         var bloquees = 0
-        for (cible in cibles) {
+        for (essai in essais) {
             if (!avantChaqueEnvoi()) return Passage.INTERROMPU
             val issue = sendSms(
-                recipients = listOf(cible),
+                recipients = listOf(essai.cible),
                 body = corps,
                 subId = subId,
                 appendSignature = false,
             )
             when (issue) {
                 is Outcome.Success -> when {
-                    issue.value.dispatched.isNotEmpty() -> remis += cible to issue.value.dispatched
+                    issue.value.dispatched.isNotEmpty() -> remis += essai to issue.value.dispatched
                     issue.value.blocked.isNotEmpty() -> bloquees++
-                    else -> echecs += cible
+                    else -> echecs += essai
                 }
-                is Outcome.Failure -> echecs += cible
+                is Outcome.Failure -> echecs += essai
             }
         }
         val verdicts = verdicts(remis.flatMap { it.second })
-        var parties = 0
+        val parties = mutableListOf<Essai>()
         var sansVerdict = 0
-        for ((cible, ids) in remis) {
+        for ((essai, ids) in remis) {
             val etats = ids.map { verdicts[it] }
             when {
-                etats.any { it == MessageStatus.FAILED } -> echecs += cible
-                etats.all { it == MessageStatus.SENT || it == MessageStatus.DELIVERED } -> parties++
+                etats.any { it == MessageStatus.FAILED } -> echecs += essai.copy(idsEnEchec = essai.idsEnEchec + ids)
+                etats.all { it == MessageStatus.SENT || it == MessageStatus.DELIVERED } -> parties += essai
                 else -> sansVerdict++
             }
         }
@@ -189,16 +212,19 @@ class EnvoiDAlerte @Inject constructor(
         }
     }
 
+    /** Un contact à prévenir, et les identifiants de ses envois déjà en échec (leur notification est à retirer). */
+    private data class Essai(val cible: PhoneAddress, val idsEnEchec: List<Long> = emptyList())
+
     private data class Passage(
-        val parties: Int,
-        val echecs: List<PhoneAddress>,
+        val parties: List<Essai>,
+        val echecs: List<Essai>,
         val sansVerdict: Int,
         val bloquees: Int,
         val interrompu: Boolean = false,
     ) {
         companion object {
             val INTERROMPU = Passage(
-                parties = 0,
+                parties = emptyList(),
                 echecs = emptyList(),
                 sansVerdict = 0,
                 bloquees = 0,

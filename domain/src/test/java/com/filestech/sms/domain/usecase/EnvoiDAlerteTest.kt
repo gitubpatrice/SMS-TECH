@@ -4,6 +4,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.model.SimActive
+import com.filestech.sms.domain.notification.NotificationDEchecDEnvoi
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.OutgoingMessageMirror
 import com.filestech.sms.domain.sender.SimsActives
@@ -34,6 +35,14 @@ class EnvoiDAlerteTest {
     private val sim2 = SimActive(subId = 22, emplacement = 1, nom = "Free")
     private val alice = PhoneAddress.of("+33611111111")
     private val bob = PhoneAddress.of("+33622222222")
+
+    /** Les notifications d'échec retirées, par identifiant de message. */
+    private val retirees = mutableListOf<Long>()
+    private val notifications = object : NotificationDEchecDEnvoi {
+        override fun retirer(messageId: Long) {
+            retirees += messageId
+        }
+    }
 
     private class Reglages(defaultSubId: Int?) : AppSettingsSource {
         private val valeur = AppSettings(sending = SendingSettings(defaultSubId = defaultSubId))
@@ -111,6 +120,7 @@ class EnvoiDAlerteTest {
             simDEnvoi = SimDEnvoi(sims, Dispatchers.Unconfined),
             sims = sims,
             settings = reglages,
+            notificationsDEchec = notifications,
             io = Dispatchers.Unconfined,
         )
     }
@@ -238,7 +248,60 @@ class EnvoiDAlerteTest {
             .envoyer(listOf(alice, bob), "ALERTE", avantChaqueEnvoi = { autorises-- > 0 })
 
         assertThat(bilan.interrompu).isTrue()
+        // Interrompu pendant le renvoi : les deux échecs du premier passage restent comptés.
+        assertThat(bilan.echouees).isEqualTo(2)
         // Les deux premiers envois, puis l'arrêt avant le premier renvoi.
         assertThat(expediteur.sims).containsExactly(11, 11)
+    }
+
+    /** Relecture Claude du 2026-11-16 : la notification « échec » restait, avec son bouton Renvoyer. */
+    @Test
+    fun `la notification d'echec du premier envoi est retiree quand l'autre SIM a servi`() = runTest {
+        val bilan = envoi(11, SimsConnues(listOf(sim1, sim2)), Expediteur(), Radio(echec = setOf(11)))
+            .envoyer(listOf(alice), "ALERTE")
+
+        assertThat(bilan.parAutreSim).isEqualTo(1)
+        // La ligne 1 est l'envoi en échec par la SIM 11 ; la 2, le renvoi parti par la 22.
+        assertThat(retirees).containsExactly(1L)
+    }
+
+    @Test
+    fun `aucune notification retiree quand l'autre SIM echoue aussi`() = runTest {
+        envoi(11, SimsConnues(listOf(sim1, sim2)), Expediteur(), Radio(echec = setOf(11, 22)))
+            .envoyer(listOf(alice), "ALERTE")
+
+        assertThat(retirees).isEmpty()
+    }
+
+    /** Relectures GPT, Gemini et Claude du 2026-11-16 : il sortait du bilan. */
+    @Test
+    fun `un contact bloque pendant le renvoi compte parmi les echecs`() = runTest {
+        val bloqueAuSecondEnvoi = object : BlockedNumberRepository by BlockedList(emptySet()) {
+            private var appels = 0
+            override suspend fun isBlocked(rawNumber: String): Boolean = ++appels > 1
+        }
+        val bilan = envoi(
+            reglage = 11,
+            sims = SimsConnues(listOf(sim1, sim2)),
+            expediteur = Expediteur(),
+            radio = Radio(echec = setOf(11)),
+            bloques = bloqueAuSecondEnvoi,
+        )
+            .envoyer(listOf(alice), "ALERTE")
+
+        assertThat(bilan.echouees).isEqualTo(1)
+        assertThat(bilan.parties + bilan.sansVerdict).isEqualTo(0)
+    }
+
+    /** Relecture Claude du 2026-11-16 : sans première SIM connue, le renvoi a pu repartir par elle. */
+    @Test
+    fun `Android qui demande a chaque fois, le renvoi n'est pas annonce comme passe par l'autre SIM`() = runTest {
+        val expediteur = Expediteur()
+        val bilan = envoi(null, SimsConnues(listOf(sim1, sim2), android = null), expediteur, Radio(echec = setOf(null)))
+            .envoyer(listOf(alice), "ALERTE")
+
+        assertThat(bilan.parties).isEqualTo(1)
+        assertThat(bilan.parAutreSim).isEqualTo(0)
+        assertThat(expediteur.sims).containsExactly(null, 11).inOrder()
     }
 }

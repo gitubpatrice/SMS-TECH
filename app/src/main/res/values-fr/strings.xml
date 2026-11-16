@@ -1126,5 +1126,5 @@
     <string name="thread_sim_selected">Sélectionnée</string>
     <string name="settings_default_sim_title">SIM d\'envoi</string>
     <string name="settings_default_sim_android">Comme Android</string>
-    <string name="settings_default_sim_hint">Utilisée pour les messages automatiques (mode urgence, Safety call) et pour les conversations qui n\'ont encore utilisé aucune SIM. Dans une conversation, c\'est la SIM affichée au-dessus du champ de saisie qui part : par défaut, celle du dernier message. Touchez-la pour en changer. Une alerte d\'urgence part d\'abord par la SIM choisie ici ; si celle-ci ne peut pas l\'envoyer (pas de réseau, par exemple), l\'alerte repart par l\'autre.</string>
+    <string name="settings_default_sim_hint">Utilisée pour les messages automatiques (mode urgence, Safety call) et pour les conversations qui n\'ont encore utilisé aucune SIM. Dans une conversation, c\'est la SIM affichée au-dessus du champ de saisie qui part : par défaut, celle du dernier message. Touchez-la pour en changer. Les messages automatiques partent d\'abord par la SIM choisie ici ; si le réseau signale qu\'un message n\'a pas pu partir, il est renvoyé par l\'autre SIM.</string>
 </resources>

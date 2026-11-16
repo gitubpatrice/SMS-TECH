@@ -49,6 +49,18 @@ class SmsSentReceiver : BroadcastReceiver() {
         // le numero que porte toute ligne existante apres la migration 10 -> 11.
         val attempt = intent.getIntExtra(SmsSenderImpl.EXTRA_ATTEMPT, 0)
         val rc = resultCode
+        // 2026-11-16 (v1.31.0) — un SMS en plusieurs parties n'est « envoyé » qu'à l'accusé de sa DERNIÈRE partie.
+        // Le premier accusé positif marquait le message entier comme parti, avant que la suite ait pu échouer :
+        // l'alerte qui attend ce verdict pour basculer sur l'autre SIM le prenait pour acquis, et le proche recevait
+        // un message tronqué (relectures Gemini et Claude du 2026-11-16). Un échec, sur n'importe quelle partie,
+        // s'écrit toujours. Les intentions d'avant ces extras valent « une seule partie ».
+        if (rc == Activity.RESULT_OK && !accuseFinal(
+                intent.getIntExtra(SmsSenderImpl.EXTRA_PART_INDEX, 0),
+                intent.getIntExtra(SmsSenderImpl.EXTRA_PART_COUNT, 1),
+            )
+        ) {
+            return
+        }
         val pending = goAsync()
         scope.launch {
             try {
@@ -84,3 +96,9 @@ class SmsSentReceiver : BroadcastReceiver() {
         }
     }
 }
+
+/**
+ * 2026-11-16 (v1.31.0) — l'accusé positif de [partie] (de 0 à [parties] - 1) est-il celui de la dernière partie ? Seul
+ * celui-là marque le message envoyé. Une valeur incohérente (nombre de parties nul ou négatif) vaut « dernière ».
+ */
+internal fun accuseFinal(partie: Int, parties: Int): Boolean = parties <= 1 || partie >= parties - 1

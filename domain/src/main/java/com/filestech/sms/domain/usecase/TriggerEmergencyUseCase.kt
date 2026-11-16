@@ -111,13 +111,10 @@ class TriggerEmergencyUseCase @Inject constructor(
                 target
             }
         }
-        // 2026-11-16 (v1.31.0) — par la SIM du réglage, puis par l'autre SIM pour qui la radio a refusé l'envoi
-        // (cf. [EnvoiDAlerte]). Un message remis à la radio et encore sans verdict à l'échéance compte comme envoyé,
-        // comme avant la 1.31.0, où l'acceptation par `SmsManager` suffisait.
-        val bilan = envoi.envoyer(cibles, body)
-        val sent = bilan.parties + bilan.sansVerdict
-        val failed = invalides + bilan.echouees
-
+        // 2026-11-16 (v1.31.0, relecture Claude) — le délai est posé AVANT l'envoi. L'envoi attend désormais le verdict
+        // de la radio, puis renvoie par l'autre SIM : jusqu'à une minute et demie. Posé après, il laissait tout ce temps
+        // un écran rouvert se dire « prêt », et un second appui envoyait l'alerte deux fois ; « Je vais bien » ne
+        // trouvait rien à annuler. C'est un marqueur de déclenchement, pas de réussite.
         // Pose le timestamp anti-spam UI (60s). N'auto-disable PAS la feature
         // (urgence répétable, contrairement au Safety call qui est unique).
         // v1.10.0 audit S2 — couple wall+mono pour bloquer un bypass via
@@ -134,6 +131,17 @@ class TriggerEmergencyUseCase @Inject constructor(
                 ),
             )
         }
+
+        // 2026-11-16 (v1.31.0) — par la SIM du réglage, puis par l'autre SIM pour qui la radio a refusé l'envoi
+        // (cf. [EnvoiDAlerte]). Un message remis à la radio et encore sans verdict à l'échéance compte comme envoyé,
+        // comme avant la 1.31.0, où l'acceptation par `SmsManager` suffisait.
+        // Un « Je vais bien » dit pendant l'attente remet le marqueur à zéro : plus aucun renvoi ne part ensuite,
+        // sans quoi l'alerte, repartie par l'autre SIM, arriverait APRÈS le message rassurant.
+        val bilan = envoi.envoyer(cibles, body, avantChaqueEnvoi = {
+            settings.flow.first().security.emergency.lastTriggeredAt == triggeredAtWall
+        })
+        val sent = bilan.parties + bilan.sansVerdict
+        val failed = invalides + bilan.echouees
 
         Timber.i(
             "TriggerEmergencyUseCase: TRIGGER done — sent=%d failed=%d hadLocation=%s",
