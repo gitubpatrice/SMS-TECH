@@ -87,6 +87,8 @@ fun EmergencyScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val contactsCount by viewModel.safetyCallContactsCount.collectAsStateWithLifecycle()
+    // 2026-11-16 (v1.31.0) — l'alerte part : la ligne d'état sous le bouton le dit.
+    val envoiEnCours by viewModel.envoiEnCours.collectAsStateWithLifecycle()
     // v1.14.1 — liste complète SafetyCall pour le bouton "Appeler un proche".
     // Audit SEC-1 fix : hoist au top-level pour respecter règle hooks Compose.
     val safetyContacts by viewModel.safetyCallContacts.collectAsStateWithLifecycle()
@@ -413,6 +415,7 @@ fun EmergencyScreen(
             Spacer(Modifier.height(12.dp))
             // Statut explicatif sous le bouton.
             val statusRes = when {
+                envoiEnCours -> R.string.emergency_status_sending
                 !state.enabled -> R.string.emergency_status_disabled
                 contactsCount == 0 -> R.string.emergency_status_no_contacts
                 cooldownActive -> R.string.emergency_status_cooldown
@@ -687,6 +690,15 @@ private suspend fun handleTriggerResult(
     val ctx = ctxGetter()
     when (result) {
         is TriggerEmergencyUseCase.Result.Triggered -> {
+            // 2026-11-16 (v1.31.0) — des contacts ont été servis par l'autre SIM : la SIM choisie a échoué, et
+            // l'utilisateur doit le savoir (sa SIM d'urgence est peut-être sans réseau). Une phrase de plus.
+            val autreSim = if (result.parAutreSim > 0) {
+                " " + ctx.resources.getQuantityString(
+                    R.plurals.emergency_triggered_other_sim, result.parAutreSim, result.parAutreSim,
+                )
+            } else {
+                ""
+            }
             if (result.sent == 0 && result.failed > 0) {
                 snackbarHost.showError(
                     ctx.getString(R.string.emergency_triggered_all_failed, result.failed),
@@ -694,11 +706,11 @@ private suspend fun handleTriggerResult(
             } else if (!result.hadLocation) {
                 // Succès partiel — SMS partis mais sans géoloc.
                 snackbarHost.showError(
-                    ctx.getString(R.string.emergency_triggered_no_location, result.sent),
+                    ctx.getString(R.string.emergency_triggered_no_location, result.sent) + autreSim,
                 )
             } else {
                 snackbarHost.showSnackbar(
-                    ctx.getString(R.string.emergency_triggered_ok, result.sent),
+                    ctx.getString(R.string.emergency_triggered_ok, result.sent) + autreSim,
                 )
             }
         }
