@@ -78,6 +78,9 @@ class EnvoiDAlerteTest {
     ) : OutgoingMessageMirror by base {
         private val simDeLaLigne = mutableMapOf<Long, Int?>()
 
+        /** Les lignes écrites : un envoi refusé à un destinataire bloqué en laisse une, sans rien envoyer. */
+        val lignes get() = base.lignes
+
         override suspend fun upsertOutgoingSms(
             address: String,
             body: String,
@@ -230,17 +233,20 @@ class EnvoiDAlerteTest {
     @Test
     fun `un contact bloque par l'utilisateur ne repart pas par l'autre SIM`() = runTest {
         val expediteur = Expediteur()
+        val radio = Radio()
         val bilan = envoi(
             11,
             SimsConnues(listOf(sim1, sim2)),
             expediteur,
-            Radio(),
+            radio,
             bloques = BlockedList(setOf(alice.raw)),
         ).envoyer(listOf(alice), "ALERTE")
 
         assertThat(bilan.echouees).isEqualTo(1)
         assertThat(bilan.parAutreSim).isEqualTo(0)
         assertThat(expediteur.sims).isEmpty()
+        // Une seule tentative, refusée : pas de second essai par l'autre SIM (il laisserait une seconde trace).
+        assertThat(radio.lignes).hasSize(1)
     }
 
     @Test

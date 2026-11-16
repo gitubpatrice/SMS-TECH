@@ -1,5 +1,6 @@
 package com.filestech.sms.domain.usecase
 
+import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.MessageStatus
@@ -139,13 +140,13 @@ class EnvoiDAlerte @Inject constructor(
                 subId = subId,
                 appendSignature = false,
             )
-            when (issue) {
-                is Outcome.Success -> when {
-                    issue.value.dispatched.isNotEmpty() -> remis += essai to issue.value.dispatched
-                    issue.value.blocked.isNotEmpty() -> bloquees++
-                    else -> echecs += essai
-                }
-                is Outcome.Failure -> echecs += essai
+            when {
+                issue is Outcome.Success && issue.value.dispatched.isNotEmpty() ->
+                    remis += essai to issue.value.dispatched
+                // Un destinataire que l'utilisateur a bloqué : `SendSmsUseCase` rend un échec `RecipientBlocked`
+                // (rien n'est parti). Ce n'est pas une panne de la SIM, il ne repart pas par l'autre.
+                issue is Outcome.Failure && issue.error is AppError.RecipientBlocked -> bloquees++
+                else -> echecs += essai
             }
         }
         val verdicts = verdicts(remis.flatMap { it.second })
