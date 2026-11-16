@@ -120,7 +120,7 @@ class ConversationEraser @Inject constructor(
      * « copie système », effaçait le journal de reprise et se disait localement complète. Ma note
      * du 10 septembre affirmait le contraire du code. Trois contrats, trois noms : [Mode].
      */
-    suspend fun erase(id: Long, mode: Mode = Mode.ORDINAIRE): Issue {
+    suspend fun erase(id: Long, mode: Mode = Mode.ORDINAIRE, horsCoffreAuDepart: Boolean = false): Issue {
         var systemCopyGone = true
         var connus: Set<Long> = emptySet()
         // v1.28.9 — une annulation de coroutine n'est pas une copie système qui résiste : elle remonte
@@ -193,8 +193,11 @@ class ConversationEraser @Inject constructor(
                 .let { cles -> cles.isNotEmpty() && fichiers.pdusGardesPresents(cles) }
             val tardif = mode != Mode.ORDINAIRE && messageDao.findByConversation(id).any { it.id !in connus }
             // 2026-11-16 (v1.31.0) — relue sous le verrou d'écriture : un déplacement au coffre ne peut plus se
-            // glisser entre cette lecture et la suppression.
-            val entreeAuCoffre = mode == Mode.ORDINAIRE && !systemCopyGone &&
+            // glisser entre cette lecture et la suppression. SEULEMENT pour une conversation hors coffre au départ
+            // ([horsCoffreAuDepart], posé par [supprimer]) : la purge totale et l'effacement de panique passent ici
+            // en mode ORDINAIRE sur des conversations DU coffre, et leur ligne locale doit partir quoi qu'il arrive
+            // (VaultPurgeRetryTest ; une première version de cette garde les conservait, vu en CI).
+            val entreeAuCoffre = horsCoffreAuDepart && !systemCopyGone &&
                 conversationDao.findById(id)?.inVault == true
             val programmesRestants = scheduledDao.findForConversation(id)
             cheminsTardifs = (
@@ -305,7 +308,9 @@ class ConversationEraser @Inject constructor(
         } ?: return ConversationDeleteResult.DELETED
         val mode = if (conversation.inVault) Mode.COFFRE else Mode.ORDINAIRE
         // Une exception ici vient de la transaction finale : annulée, la conversation est restée.
-        val issue = runCatchingCancellable { erase(id, mode) }.getOrElse {
+        val issue = runCatchingCancellable {
+            erase(id, mode, horsCoffreAuDepart = mode == Mode.ORDINAIRE)
+        }.getOrElse {
             Timber.w(it, "delete: conversation %d non supprimee", id)
             return ConversationDeleteResult.KEPT_LOCAL_FAILURE
         }
