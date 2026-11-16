@@ -151,6 +151,62 @@ class AlerteUrgenceAutreSimTest {
         },
     )
 
+    /**
+     * Audit pré-release du 2026-11-16 : un effacement de panique pendant l'attente du verdict arrête les renvois de
+     * « Je vais bien » ; sans cela, le renvoi par l'autre SIM réécrivait, après l'effacement, le numéro du proche.
+     */
+    @Test
+    fun `un effacement de panique pendant l'attente arrete les renvois de « Je vais bien »`() = runTest {
+        val expediteur = Expediteur()
+        val reglages = reglagesUrgence()
+        reglages.update { s ->
+            s.copy(security = s.security.copy(emergency = s.security.emergency.copy(lastTriggeredAt = 1L)))
+        }
+        val effacement: suspend () -> Unit = { reglages.update { AppSettings() } }
+        val radio = Radio(echec = setOf(11), pendantLAttente = effacement)
+        val jeVaisBien = IAmOkUseCase(
+            envoi = envoiDAlerte(radio, expediteur, reglages, SimDEnvoi(deuxSims, Dispatchers.Unconfined)),
+            settings = reglages,
+            panicState = object : PanicStateProvider { override val isPanicDecoyActive = false },
+            iAmOkMessage = object : com.filestech.sms.domain.emergency.IAmOkMessageProvider {
+                override fun body() = "Je vais bien"
+            },
+            io = Dispatchers.Unconfined,
+        )
+
+        jeVaisBien()
+
+        // Les deux contacts une fois par la SIM 11, en échec ; aucun renvoi par la 22 après l'effacement.
+        assertThat(expediteur.sims).containsExactly(11, 11)
+    }
+
+    private fun envoiDAlerte(
+        radio: Radio,
+        expediteur: Expediteur,
+        reglages: FakeSettings,
+        simDEnvoi: SimDEnvoi,
+    ): EnvoiDAlerte = EnvoiDAlerte(
+        sendSms = SendSmsUseCase(
+            defaultAppManager = object : com.filestech.sms.domain.sender.DefaultSmsAppChecker {
+                override fun isDefault() = true
+            },
+            sentSmsRecorder = NoopRecorder(),
+            sender = expediteur,
+            mirror = radio,
+            blockedRepo = NeverBlocked(),
+            settings = reglages,
+            simDEnvoi = simDEnvoi,
+        ),
+        mirror = radio,
+        simDEnvoi = simDEnvoi,
+        sims = deuxSims,
+        settings = reglages,
+        notificationsDEchec = object : com.filestech.sms.domain.notification.NotificationDEchecDEnvoi {
+            override fun retirer(messageId: Long) = Unit
+        },
+        io = Dispatchers.Unconfined,
+    )
+
     private fun construire(
         radio: Radio,
         expediteur: Expediteur,

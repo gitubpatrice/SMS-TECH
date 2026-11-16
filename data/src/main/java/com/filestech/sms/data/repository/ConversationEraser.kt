@@ -134,7 +134,10 @@ class ConversationEraser @Inject constructor(
             Timber.w(it, "delete: system-provider sweep failed for conversation %d", id)
         }
         // Seule condition que la sortie assumée lève : la copie système qui résiste.
-        if (!systemCopyGone && mode == Mode.COFFRE) {
+        // 2026-11-16 (v1.31.0, audit pré-release) — une conversation entrée au coffre pendant ce balayage est gardée
+        // ICI, avant que ses fichiers, ses PDU et ses envois programmés ne soient effacés : gardée seulement à la
+        // transaction finale, elle restait au coffre sans ses pièces jointes. La transaction finale relit encore.
+        if (!systemCopyGone && (mode == Mode.COFFRE || estEntreeAuCoffre(id, horsCoffreAuDepart))) {
             Timber.w("delete: conversation %d kept locally, its system copy survives", id)
             return Issue(systemCopyGone = false, localeComplete = true, conservee = true)
         }
@@ -197,8 +200,7 @@ class ConversationEraser @Inject constructor(
             // ([horsCoffreAuDepart], posé par [supprimer]) : la purge totale et l'effacement de panique passent ici
             // en mode ORDINAIRE sur des conversations DU coffre, et leur ligne locale doit partir quoi qu'il arrive
             // (VaultPurgeRetryTest ; une première version de cette garde les conservait, vu en CI).
-            val entreeAuCoffre = horsCoffreAuDepart && !systemCopyGone &&
-                conversationDao.findById(id)?.inVault == true
+            val entreeAuCoffre = !systemCopyGone && estEntreeAuCoffre(id, horsCoffreAuDepart)
             val programmesRestants = scheduledDao.findForConversation(id)
             cheminsTardifs = (
                 attachmentDao.findForConversation(id).map { it.localUri } +
@@ -404,6 +406,14 @@ class ConversationEraser @Inject constructor(
      * du 2026-09-14, C1) vaut dans tous les modes : un PDU gardé encore là ressusciterait le message effacé avec la
      * conversation.
      */
+    /**
+     * 2026-11-16 (v1.31.0) — la conversation, hors coffre au départ de [supprimer], y est-elle entrée depuis ? Faux
+     * pour la purge totale et l'effacement de panique (`horsCoffreAuDepart` absent) : leur ligne part quoi qu'il
+     * arrive.
+     */
+    private suspend fun estEntreeAuCoffre(id: Long, horsCoffreAuDepart: Boolean): Boolean =
+        horsCoffreAuDepart && conversationDao.findById(id)?.inVault == true
+
     /**
      * Pourquoi la transaction finale a gardé le parent. [ENTREE_AU_COFFRE] (2026-11-16, v1.31.0, relecture Claude) :
      * la conversation est entrée au coffre pendant une suppression ORDINAIRE dont la copie système a résisté.
