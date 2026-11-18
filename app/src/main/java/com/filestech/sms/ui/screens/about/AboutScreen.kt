@@ -74,11 +74,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -92,6 +94,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.filestech.sms.BuildConfig
 import com.filestech.sms.R
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * v1.2.6: re-skinned to mirror the PDF Tech About screen design — centered icon header with a
@@ -374,20 +379,47 @@ private fun Remerciement() {
             .border(width = 1.dp, color = MaterialTheme.colorScheme.outlineVariant, shape = forme)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        // Un émoji garde ses couleurs quelle que soit la couleur du texte : on le dessine à travers un calque qui le
-        // ramène à une seule teinte (Patrice), en gardant ses ombres — cf. [teinteMonochrome].
-        val teinte = MaterialTheme.colorScheme.onSurfaceVariant
+        // Un émoji garde ses couleurs quelle que soit la couleur du texte. 2026-11-18 (Patrice), comme dans Notes
+        // Tech : des mains BLANCHES au contour gris — la teinte unique gris foncé d'avant faisait lourd —, et un trait
+        // entre les deux mains. Trois calques :
+        // - la silhouette en gris, dessinée tout autour d'elle-même : le contour ;
+        // - l'émoji ramené près du blanc, ses traits intérieurs gardés pâles (cf. [versLeBlanc]) ;
+        // - la jointure des mains, effacée avec les autres traits : un trait gris au milieu, limité à la forme de
+        //   l'émoji (`DstIn`). Toutes les polices dessinent 🙏 symétrique, les mains jointes au centre.
+        // Gris moyen dans les deux thèmes : `outline` est ici le gris clair du cadre, trop pâle pour un contour, et le
+        // gris du texte secondaire à pleine force est le gris foncé qui faisait lourd.
+        val contour = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = OPACITE_DU_CONTOUR)
         Text(
             text = MAINS_JOINTES,
-            fontSize = 20.sp,
+            fontSize = 22.sp,
             modifier = Modifier
                 .clearAndSetSemantics {}
                 .drawWithCache {
-                    val calque = Paint().apply { colorFilter = ColorFilter.colorMatrix(teinteMonochrome(teinte)) }
+                    val epaisseur = EPAISSEUR_DU_CONTOUR.toPx()
+                    val zone = Rect(-epaisseur, -epaisseur, size.width + epaisseur, size.height + epaisseur)
+                    val pinceauDuContour = Paint().apply { colorFilter = ColorFilter.tint(contour, BlendMode.SrcIn) }
+                    val pinceauDuFond = Paint().apply { colorFilter = ColorFilter.colorMatrix(versLeBlanc(PLANCHER)) }
+                    val pinceauDuMasque = Paint().apply { blendMode = BlendMode.DstIn }
+                    val milieu = size.width / 2
+                    val decalages = (0 until DIRECTIONS).map { i ->
+                        val angle = 2 * PI * i / DIRECTIONS
+                        Offset((cos(angle) * epaisseur).toFloat(), (sin(angle) * epaisseur).toFloat())
+                    }
                     onDrawWithContent {
                         drawIntoCanvas { canvas ->
-                            canvas.saveLayer(Rect(Offset.Zero, size), calque)
+                            decalages.forEach { decalage ->
+                                canvas.saveLayer(zone, pinceauDuContour)
+                                translate(decalage.x, decalage.y) { this@onDrawWithContent.drawContent() }
+                                canvas.restore()
+                            }
+                            canvas.saveLayer(zone, pinceauDuFond)
                             drawContent()
+                            canvas.restore()
+                            canvas.saveLayer(zone, Paint())
+                            drawLine(contour, Offset(milieu, 0f), Offset(milieu, size.height), SEPARATION.toPx())
+                            canvas.saveLayer(zone, pinceauDuMasque)
+                            drawContent()
+                            canvas.restore()
                             canvas.restore()
                         }
                     }
@@ -407,18 +439,33 @@ private fun Remerciement() {
 /** Mains jointes, U+1F64F (source en UTF-8). */
 private const val MAINS_JOINTES = "🙏"
 
+/** Le contour gris : épaisseur, force, et directions dans lesquelles il est dessiné autour de l'émoji. */
+private val EPAISSEUR_DU_CONTOUR = 1.5.dp
+private const val OPACITE_DU_CONTOUR = 0.6f
+private const val DIRECTIONS = 12
+
+/** La largeur du trait entre les deux mains, du gris du contour. */
+private val SEPARATION = 1.dp
+
+/** Le gris le plus foncé que garde le fond — ses traits intérieurs, pâles : 0 garderait le noir, 1 un blanc uni. */
+private const val PLANCHER = 0.72f
+
 /**
- * Matrice qui ramène une image à UNE teinte en gardant son relief : chaque pixel prend sa luminance (poids de
- * `ColorMatrix.setToSaturation(0)`), multipliée par la [teinte] ; l'alpha d'origine est gardé. Le clair devient la
- * teinte, le sombre tend vers le noir.
+ * Matrice qui ramène une image près du BLANC en gardant son relief, pâle : chaque pixel prend sa luminance (poids de
+ * `ColorMatrix.setToSaturation(0)`), resserrée dans [[plancher], 1] — le clair devient blanc, les traits sombres un
+ * gris clair. L'alpha est gardé : la forme reste celle de l'émoji.
+ *
+ * ⚠️ La colonne de décalage est en unités 0-255, comme la lit la `ColorMatrix` d'Android (Compose transmet les valeurs
+ * telles quelles).
  */
-internal fun teinteMonochrome(teinte: Color): ColorMatrix {
+internal fun versLeBlanc(plancher: Float): ColorMatrix {
+    val etendue = 1f - plancher
     val valeurs = FloatArray(COLONNES * LIGNES)
-    // Lignes R, G, B : la luminance de l'entrée, multipliée par la composante de la teinte.
-    for ((ligne, composante) in listOf(teinte.red, teinte.green, teinte.blue).withIndex()) {
-        valeurs[ligne * COLONNES] = LUM_R * composante
-        valeurs[ligne * COLONNES + 1] = LUM_G * composante
-        valeurs[ligne * COLONNES + 2] = LUM_B * composante
+    for (ligne in 0 until LIGNE_ALPHA) {
+        valeurs[ligne * COLONNES] = LUM_R * etendue
+        valeurs[ligne * COLONNES + 1] = LUM_G * etendue
+        valeurs[ligne * COLONNES + 2] = LUM_B * etendue
+        valeurs[ligne * COLONNES + COLONNE_DECALAGE] = plancher * MAX_8_BITS
     }
     // Ligne A : l'alpha d'entrée, inchangé.
     valeurs[LIGNE_ALPHA * COLONNES + LIGNE_ALPHA] = 1f
@@ -432,6 +479,8 @@ private const val LUM_B = 0.072f
 private const val LIGNES = 4
 private const val COLONNES = 5
 private const val LIGNE_ALPHA = 3
+private const val COLONNE_DECALAGE = 4
+private const val MAX_8_BITS = 255f
 
 @Composable
 private fun BadgesFlow(badges: List<PrivacyBadge>) {
