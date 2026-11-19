@@ -818,6 +818,69 @@ interface MessageDao {
     )
     suspend fun findTransactionKeysOlderThan(olderThan: Long): List<String>
 
+    /**
+     * 2026-11-19 (issue #98) — parmi [ids] (des `_id` de `content://mms`), ceux qu'un MMS ENVOYÉ d'ici porte en
+     * `mms_system_id`. L'import les écarte : un MMS sortant n'a jamais de `telephony_uri` (cf.
+     * `SystemCopyEraser.lienSysteme`), l'index unique ne pouvait donc pas le reconnaître, et « Resynchroniser »
+     * en faisait un second exemplaire.
+     */
+    @Query("SELECT mms_system_id FROM messages WHERE mms_system_id IN (:ids)")
+    suspend fun mmsSystemIdsParmi(ids: List<Long>): List<Long>
+
+    /**
+     * 2026-11-19 (issue #98) — les MMS REÇUS ici qui n'ont pas encore de copie dans `content://mms`, les plus récents
+     * d'abord (un message qui ne se copie pas — pièce perdue — ne bloque pas les suivants) : écrits par le receveur
+     * (clé de transaction), sans lien système, hors Coffre, arrivés depuis [depuis]. Cf.
+     * [com.filestech.sms.data.sync.CopieMmsRecus].
+     *
+     * `type = 1` = MMS, `direction = 0` = reçu (`MessageEnumConverters`).
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+         WHERE type = 1 AND direction = 0
+           AND telephony_uri IS NULL AND mms_transaction_key IS NOT NULL
+           AND date >= :depuis
+           AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 0)
+         ORDER BY date DESC, id DESC
+         LIMIT :limite
+        """,
+    )
+    suspend fun mmsRecusSansCopieSysteme(depuis: Long, limite: Int): List<MessageEntity>
+
+    /**
+     * 2026-11-19 (issue #98) — relie un message à sa copie système, s'il existe encore et n'en a pas déjà une. `0` :
+     * le message a été supprimé entre-temps (ou relié par un autre passage) — l'appelant efface alors la copie
+     * qu'il vient d'écrire, qui ressusciterait sinon un message supprimé.
+     */
+    @Query("UPDATE messages SET telephony_uri = :uri WHERE id = :id AND telephony_uri IS NULL")
+    suspend fun lierCopieSysteme(id: Long, uri: String): Int
+
+    /** 2026-11-19 (issue #98) — parmi [uris], celles qu'un message d'ici porte déjà en `telephony_uri`. */
+    @Query("SELECT telephony_uri FROM messages WHERE telephony_uri IN (:uris)")
+    suspend fun telephonyUrisParmi(uris: List<String>): List<String>
+
+    /**
+     * 2026-11-19 (issue #98) — les MMS REÇUS ici (clé de transaction) dont la conversation est au Coffre et qui ont
+     * encore une copie dans `content://mms` : recopiés avant que leur conversation n'y entre. Leur copie doit partir
+     * du stockage partagé (relectures Claude, GPT et Gemini). Cf. [com.filestech.sms.data.sync.CopieMmsRecus].
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+         WHERE type = 1 AND direction = 0
+           AND mms_transaction_key IS NOT NULL AND telephony_uri LIKE 'content://mms/%'
+           AND conversation_id IN (SELECT id FROM conversations WHERE in_vault = 1)
+         ORDER BY date DESC, id DESC
+         LIMIT :limite
+        """,
+    )
+    suspend fun mmsRecusCopiesAuCoffre(limite: Int): List<MessageEntity>
+
+    /** 2026-11-19 (issue #98) — retire à un message le lien vers sa copie système, s'il porte toujours [uri]. */
+    @Query("UPDATE messages SET telephony_uri = NULL WHERE id = :id AND telephony_uri = :uri")
+    suspend fun delierCopieSysteme(id: Long, uri: String): Int
+
     /** v1.28.9 (F17) — le nombre de pièces d'un message, réécrit quand la reprise complète un MMS reçu. */
     @Query("UPDATE messages SET attachments_count = :nombre WHERE id = :id")
     suspend fun setAttachmentsCount(id: Long, nombre: Int)

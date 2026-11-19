@@ -420,6 +420,85 @@ class TelephonyReader @Inject constructor(
     // Date encoding caveat: `content://mms.date` is in **SECONDS** (not ms like SMS), per AOSP.
     // We multiply by 1000 for consistency with the rest of the pipeline.
 
+    /**
+     * 2026-11-19 (issue #98) — des MMS dans une boîte TERMINÉE (reçu, envoyé), par tranche d'identifiants
+     * `]apres, jusqua]` ou par liste. Ni brouillon, ni boîte d'envoi : un MMS en cours d'envoi par un autre profil serait
+     * importé « en attente » et le chien de garde des envois d'ici le passerait en échec ; une copie de MMS reçu en
+     * cours d'écriture serait importée incomplète. Cf. [com.filestech.sms.data.sync.CurseurMms].
+     */
+    class TrancheMms private constructor(val selection: String, val arguments: Array<String>) {
+        companion object {
+            // Réception et envoi abouti seulement : un échec peut être renvoyé sous le même identifiant (CurseurMms).
+            private const val BOITES = "msg_box IN (?, ?)"
+            private val ARGUMENTS_BOITES = arrayOf(
+                MMS_MSG_BOX_INBOX.toString(),
+                MMS_MSG_BOX_SENT.toString(),
+            )
+
+            fun entre(apres: Long, jusqua: Long): TrancheMms {
+                val bornes = arrayOf(apres.toString(), jusqua.toString())
+                return TrancheMms("_id > ? AND _id <= ? AND $BOITES", bornes + ARGUMENTS_BOITES)
+            }
+
+            /** [ids] non vide, et sous la limite de paramètres de SQLite (l'appelant découpe). */
+            fun parmi(ids: Collection<Long>): TrancheMms {
+                require(ids.isNotEmpty()) { "une liste vide ne designe rien" }
+                val marques = ids.joinToString(",") { "?" }
+                val valeurs = ids.map { it.toString() }.toTypedArray()
+                return TrancheMms("_id IN ($marques) AND $BOITES", valeurs + ARGUMENTS_BOITES)
+            }
+        }
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — l'état actuel des lignes [ids] de `content://mms` ; une ligne supprimée n'y figure pas.
+     * `null` = lecture impossible.
+     */
+    fun lireEtatsMms(ids: Collection<Long>): List<EtatMms>? {
+        if (ids.isEmpty()) return emptyList()
+        val out = ArrayList<EtatMms>(ids.size)
+        for (lot in ids.chunked(LOT_IDS)) {
+            resolver.query(
+                Uri.parse("content://mms"),
+                arrayOf("_id", "msg_box", "date"),
+                "_id IN (${lot.joinToString(",") { "?" }})",
+                lot.map { it.toString() }.toTypedArray(),
+                null,
+            )?.use { c ->
+                while (c.moveToNext()) out += EtatMms(id = c.getLong(0), boite = c.getInt(1), dateSec = c.getLong(2))
+            } ?: return null
+        }
+        return out
+    }
+
+    /** 2026-11-19 (issue #98) — l'identifiant, la boîte et la date (secondes) d'une ligne de `content://mms`. */
+    data class EtatMms(val id: Long, val boite: Int, val dateSec: Long)
+
+    /**
+     * 2026-11-19 (issue #98) — les lignes de `content://mms` d'identifiant supérieur à [apres], dans l'ordre des
+     * identifiants : trois colonnes, aucune adresse, aucune pièce. `null` = lecture impossible.
+     */
+    fun lireEtatsMmsApres(apres: Long): List<EtatMms>? = resolver.query(
+        Uri.parse("content://mms"),
+        arrayOf("_id", "msg_box", "date"),
+        "_id > ?",
+        arrayOf(apres.toString()),
+        "_id ASC",
+    )?.use { c ->
+        val out = ArrayList<EtatMms>(c.count)
+        while (c.moveToNext()) out += EtatMms(id = c.getLong(0), boite = c.getInt(1), dateSec = c.getLong(2))
+        out
+    }
+
+    /** 2026-11-19 (issue #98) — le plus grand `_id` de `content://mms` (0 s'il est vide), ou `null` si illisible. */
+    fun plusGrandIdMms(): Long? = resolver.query(
+        Uri.parse("content://mms"),
+        arrayOf("_id"),
+        null,
+        null,
+        "_id DESC",
+    )?.use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+
     /** One MMS row, ready to be mirrored into Room. */
     // v1.16.0 — Type sécurisé (était Int). Le mapper [readPendingMms] convertit
     // depuis les codes AOSP via `MessageDirection.fromRaw` / `MessageStatus.fromRaw`.
@@ -526,6 +605,12 @@ class TelephonyReader @Inject constructor(
         pageSize: Int,
         // 2026-11-06 (issue #76) — clé d'identité des numéros, pour les destinataires d'un envoi groupé.
         cle: (String) -> String = { it },
+        // 2026-11-19 (issue #98) — une tranche d'identifiants, pour l'import des NOUVEAUX MMS ; `null` = tout.
+        tranche: TrancheMms? = null,
+        // 2026-11-19 (issue #98, relecture Claude, 2e vague) — reçoit l'identifiant d'une ligne LUE mais écartée (sans
+        // adresse, ou sans texte ni pièce) : une ligne qu'une autre application est peut-être encore en train
+        // d'écrire, que l'import des nouveaux MMS relira une fois.
+        surIgnoree: ((Long) -> Unit)? = null,
         onPage: suspend (List<MmsImportRow>) -> Unit,
     ): Boolean {
         if (pageSize <= 0) return false
@@ -538,8 +623,8 @@ class TelephonyReader @Inject constructor(
         val mainCursor = resolver.query(
             Uri.parse("content://mms"),
             arrayOf("_id", "thread_id", "date", "read", "msg_box", "sub_id"),
-            null,
-            null,
+            tranche?.selection,
+            tranche?.arguments,
             "date DESC",
         ) ?: return false
         mainCursor.use { c ->
@@ -583,6 +668,7 @@ class TelephonyReader @Inject constructor(
                         "TelephonyReader: MMS %d skipped (empty address after FROM=137/151/129 fallback, direction=%d, threadId=%d)",
                         mmsId, direction, threadId,
                     )
+                    surIgnoree?.invoke(mmsId)
                     continue
                 }
                 val address = resolvedAddress
@@ -599,13 +685,13 @@ class TelephonyReader @Inject constructor(
                     recipients = adresses.destinataires,
                 )
                 if (pending.size >= pageSize) {
-                    if (!flushPending(pending, onPage)) complete = false
+                    if (!flushPending(pending, onPage, surIgnoree)) complete = false
                     pending.clear()
                 }
             }
         }
         if (pending.isNotEmpty()) {
-            if (!flushPending(pending, onPage)) complete = false
+            if (!flushPending(pending, onPage, surIgnoree)) complete = false
         }
         return complete
     }
@@ -622,21 +708,26 @@ class TelephonyReader @Inject constructor(
     private suspend fun flushPending(
         pending: List<PendingMms>,
         onPage: suspend (List<MmsImportRow>) -> Unit,
+        surIgnoree: ((Long) -> Unit)?,
     ): Boolean {
         val partsByMid = readMmsPartsBatched(pending.map { it.telephonyId })
-        onPage(flushPendingWithBatchedParts(pending, partsByMid ?: emptyMap()))
+        onPage(flushPendingWithBatchedParts(pending, partsByMid ?: emptyMap(), surIgnoree))
         return partsByMid != null
     }
 
     private fun flushPendingWithBatchedParts(
         pending: List<PendingMms>,
         partsByMid: Map<Long, Pair<String, List<MmsPartImport>>>,
+        surIgnoree: ((Long) -> Unit)?,
     ): List<MmsImportRow> {
         if (pending.isEmpty()) return emptyList()
         val out = ArrayList<MmsImportRow>(pending.size)
         for (p in pending) {
             val (textBody, attachments) = partsByMid[p.telephonyId] ?: ("" to emptyList())
-            if (textBody.isBlank() && attachments.isEmpty()) continue
+            if (textBody.isBlank() && attachments.isEmpty()) {
+                surIgnoree?.invoke(p.telephonyId)
+                continue
+            }
             out += MmsImportRow(
                 telephonyId = p.telephonyId,
                 threadId = p.threadId,
@@ -761,6 +852,9 @@ class TelephonyReader @Inject constructor(
     companion object {
         /** 2026-11-06 — fils par requête de [lireMessagesDesFils], sous la limite de 999 paramètres de SQLite. */
         private const val LOT_DE_FILS = 500
+
+        /** 2026-11-19 (issue #98) — identifiants par requête ([lireEtatsMms], et l'appelant de [TrancheMms.parmi]). */
+        const val LOT_IDS = 500
 
         /**
          * v1.28.9 (audit de cohérence du 2026-09-14, C2) — la partie est-elle du texte que le fournisseur

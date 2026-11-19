@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.data.blocking.BlockedNumberSystem
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.local.db.AppDatabase
@@ -15,6 +16,7 @@ import com.filestech.sms.data.repository.ConversationMirror
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.di.IoDispatcher
+import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -90,6 +92,9 @@ class TelephonySyncManager @Inject constructor(
     private val rattrapageDestinataires: RattrapageDestinatairesMms,
     // 2026-11-06 — fils de groupe du fournisseur : import en groupe, et réparation des imports d'avant.
     private val filsDeGroupe: FilsDeGroupe,
+    // 2026-11-19 (issue #98) — la copie système des MMS reçus, sous le verrou de la synchronisation.
+    private val copieMmsRecus: CopieMmsRecus,
+    private val journalCopies: JournalCopiesMms,
     @ApplicationScope private val appScope: CoroutineScope,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
@@ -165,6 +170,54 @@ class TelephonySyncManager @Inject constructor(
         appScope.launch { runSync(reason = reason) }
     }
 
+    /**
+     * 2026-11-19 (issue #98) — recopie dans `content://mms` les MMS reçus qui n'y sont pas encore, cf.
+     * [CopieMmsRecus]. Appelé par le traitement d'un MMS reçu, juste après son écriture chez nous : les autres
+     * profils le voient sans attendre la passe suivante. Sous le même verrou que l'import, qui ne peut donc pas lire
+     * une copie avant qu'elle soit reliée à son message.
+     */
+    fun copierMmsRecus() {
+        if (!hasReadSmsPermission()) return
+        appScope.launch(io) { syncMutex.withLock { copierMmsRecusSousVerrou() } }
+    }
+
+    /**
+     * À appeler sous [syncMutex]. Un échec n'arrête rien : le passage suivant reprend.
+     *
+     * 2026-11-19 (relecture Claude, 2e vague) — un passage qui a écrit des copies en programme un second, juste après
+     * le délai de vérification du journal : une copie dont le message a été supprimé pendant qu'on la reliait est
+     * effacée en une minute et demie, et non au prochain passage venu (jusqu'à douze heures), pendant lesquelles les
+     * autres profils pouvaient l'importer.
+     */
+    private suspend fun copierMmsRecusSousVerrou() {
+        runCatching { copieMmsRecus.copier(depuis = debutDeLaCopieDesMmsRecus()) }
+            .onSuccess { relies ->
+                if (relies > 0) {
+                    appScope.launch(io) {
+                        kotlinx.coroutines.delay(CopieMmsRecus.DELAI_VERIFICATION_MS + MARGE_VERIFICATION_MS)
+                        copierMmsRecus()
+                    }
+                }
+            }
+            .onFailure {
+                if (it is kotlinx.coroutines.CancellationException) throw it
+                Timber.w(it, "Copie systeme des MMS recus en echec")
+            }
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — le début de la copie système des MMS reçus, posé au premier passage de cette version :
+     * les MMS reçus avant ne sont pas recopiés (cf. [CopieMmsRecus]). Une marge couvre un MMS arrivé pendant le
+     * démarrage, avant ce premier passage.
+     */
+    private suspend fun debutDeLaCopieDesMmsRecus(): Long {
+        val pose = settings.flow.first().advanced.copieMmsRecusDepuis
+        if (pose > 0L) return pose
+        val debut = System.currentTimeMillis() - MARGE_DEBUT_COPIE_MS
+        settings.update { s -> s.copy(advanced = s.advanced.copy(copieMmsRecusDepuis = debut)) }
+        return debut
+    }
+
     private suspend fun runSync(reason: String) = withContext(io) {
         if (syncMutex.isLocked) {
             // A sync is already in-flight; the new call will await its turn. We log here so the
@@ -219,6 +272,9 @@ class TelephonySyncManager @Inject constructor(
             // la DERNIÈRE page. Tant qu'il manque, on rejoue — l'insertion est idempotente.
             val hasAnyMms = runCatching { messageDao.hasAnyMms() }.getOrDefault(false)
             val needsMmsImport = !advanced.mmsImportCompleted || isFirstRun || !hasAnyMms
+            // 2026-11-19 (issue #98) — AVANT tout import : une copie interrompue avant son lien est retrouvée et reliée
+            // ici, au lieu d'être importée comme un second exemplaire.
+            copierMmsRecusSousVerrou()
             // 2026-11-06 — les fils de groupe du fournisseur, lus une fois par passe quand un import complet ou la
             // réparation en a besoin. Une synchronisation ordinaire ne les lit que si elle a des SMS à importer (plus
             // bas). `null` = illisible : l'import range alors comme avant, et la réparation attend le passage suivant.
@@ -237,9 +293,20 @@ class TelephonySyncManager @Inject constructor(
                     // 5-10 s. The chunk size is 200, balancing transaction lock duration
                     // against per-page overhead.
                     var imported = 0
+                    // 2026-11-19 (issue #98) — le curseur des NOUVEAUX MMS, pris AVANT la lecture : une ligne écrite
+                    // pendant l'import sera relue par la passe suivante (sans doublon : index unique).
+                    val plusGrandAvant = telephonyReader.plusGrandIdMms()
+                    // 2026-11-19 (issue #98) — ni une ligne non terminée (brouillon, envoi en cours, copie en écriture :
+                    // elle entre en liste d'attente, cf. [CurseurMms]), ni une copie de chez nous pas encore vérifiée.
+                    val nonTerminees = ArrayList<Long>()
+                    // Journal illisible : pas d'import cette passe (il n'est pas déclaré complet, il sera rejoué).
+                    val exclues = copiesNonVerifiees() ?: return@runCatching
                     // 2026-11-06 (issue #76) — la clé d'identité rapproche les destinataires d'un envoi groupé.
                     val identite = phoneIdentity.snapshot()
-                    val complete = telephonyReader.readMmsBatched(pageSize = 200, cle = identite::key) { page ->
+                    val complete = telephonyReader.readMmsBatched(pageSize = 200, cle = identite::key) { lue ->
+                        val (enCours, terminees) = lue.partition { it.status == MessageStatus.PENDING }
+                        nonTerminees += enCours.map { it.telephonyId }
+                        val page = terminees.filterNot { it.telephonyId in exclues }
                         // v1.8.0 (post-audit fix badges fresh install S24) — au 1er
                         // sync (Room vide), tous les messages historiques sont
                         // considérés comme déjà vus. Sans ça, l'user voit des
@@ -267,9 +334,24 @@ class TelephonySyncManager @Inject constructor(
                     //
                     // `readMmsBatched` rend desormais un drapeau explicite : curseur principal,
                     // adresses et parts doivent TOUS avoir ete lus pour qu'il vaille `true`.
-                    if (complete) {
+                    // 2026-11-19 (issue #98) — sans le plus grand identifiant, le curseur des nouveaux MMS ne pourrait
+                    // être posé qu'au maximum de la passe suivante, et tout ce qui est écrit entre-temps serait sauté
+                    // (relecture Claude) : l'import n'est pas déclaré complet, il sera rejoué.
+                    if (complete && plusGrandAvant != null) {
+                        val maintenant = System.currentTimeMillis()
                         settings.update { s ->
-                            s.copy(advanced = s.advanced.copy(mmsImportCompleted = true))
+                            s.copy(
+                                advanced = s.advanced.copy(
+                                    mmsImportCompleted = true,
+                                    lastSyncedMmsId = maxOf(s.advanced.lastSyncedMmsId, plusGrandAvant),
+                                    // Dédoublonnée et bornée, comme l'attente de l'import des nouveaux MMS (GPT, 2e vague).
+                                    mmsNonTermines = CurseurMms.ajouter(
+                                        s.advanced.mmsNonTermines.mapNotNull(IdDate::decoder),
+                                        nonTerminees,
+                                        maintenant,
+                                    ).mapTo(HashSet()) { it.encoder() },
+                                ),
+                            )
                         }
                     } else {
                         Timber.w(
@@ -327,18 +409,8 @@ class TelephonySyncManager @Inject constructor(
             // region-aware. Les cles de neuf chiffres confondaient `+33612345678` et
             // `+15612345678` ; la ligne du tiers etait filtree ET son identifiant franchissait
             // quand meme le curseur, donc le message etait perdu pour de bon.
-            val roomBlocked = runCatching { blockedRepo.blockedRawSnapshot() }.getOrDefault(emptyList())
-            val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
-            } else emptyList()
-            val isBlockedAddress = phoneIdentity.snapshot()
-                .blockedMatcher(roomBlocked + systemBlocked)
-            Timber.i(
-                "runSync(%s) blocked sources: room=%d system=%d",
-                reason,
-                roomBlocked.size,
-                systemBlocked.size,
-            )
+            // 2026-11-19 (issue #98) — extrait dans [filtreListeNoire], que l'import des MMS du worker partage.
+            val isBlockedAddress = filtreListeNoire(reason)
 
             var imported = 0
             var skipped = 0
@@ -384,9 +456,177 @@ class TelephonySyncManager @Inject constructor(
             } else {
                 Timber.i("runSync(%s) done; no new rows (skipped(blocked)=%d)", reason, skipped)
             }
+            // 2026-11-19 (issue #98) — APRÈS les SMS : la même liste noire, et les fils de groupe déjà lus.
+            if (!needsMmsImport) {
+                importerNouveauxMms(reason, isBlockedAddress) {
+                    filsPourLesSms ?: filsDeGroupe.lire().orEmpty().also { filsPourLesSms = it }
+                }
+            }
             reconcileDeletions()
             _state.value = State.Idle
         }
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — **la part MMS de la synchronisation, pour le worker de 12 h** : copie des MMS reçus et
+     * import des nouveaux MMS, sous le même verrou et par les mêmes fonctions que [runSync]. Le worker n'importait
+     * que les SMS : un profil où l'application ne s'ouvre pas ne recevait jamais ses MMS en arrière-plan, et une copie
+     * dont le lancement avait été tué attendait la prochaine ouverture (relectures des trois modèles).
+     */
+    suspend fun synchroniserMms(reason: String) = withContext(io) {
+        if (!hasReadSmsPermission()) return@withContext
+        syncMutex.withLock {
+            copierMmsRecusSousVerrou()
+            // L'import complet reste l'affaire de [runSync], qui le rejouera ; ici, seulement les nouveaux. La
+            // condition ne dépend que de l'import complet des MMS — pas du curseur des SMS, qui peut rester à zéro
+            // sur un téléphone sans SMS (relecture GPT, 2e vague).
+            if (settings.flow.first().advanced.mmsImportCompleted) {
+                importerNouveauxMms(reason, filtreListeNoire(reason)) { filsDeGroupe.lire().orEmpty() }
+            }
+        }
+    }
+
+    /**
+     * La liste noire du système et de l'application, en une fonction (v1.26.1 H4, v1.27.2 C-08 : formes BRUTES et
+     * comparaison region-aware). 2026-11-19 — extraite de [runSync] pour [synchroniserMms].
+     */
+    private suspend fun filtreListeNoire(reason: String): (String) -> Boolean {
+        // Union the Room mirror with a fresh read of the system blocklist. The Room snapshot
+        // covers app-initiated blocks; the live system read covers entries the user already
+        // had in Téléphone / Samsung Messages before the importer had a chance to mirror them.
+        // v1.26.1 (audit H4) — `blockKey()` des DEUX côtés, plus `phoneSuffix8()`. Jumeau
+        // exact de [TelephonySyncWorker] : voir là-bas le détail des deux effets (perte
+        // silencieuse et définitive de messages d'un numéro NON bloqué qui partage ses
+        // 8 derniers chiffres avec un numéro bloqué ; et blocage inopérant sur les
+        // expéditeurs alphanumériques, dont la clé se réduisait à la chaîne vide).
+        // v1.27.2 (audit Codex du 2026-08-05, C-08) — formes BRUTES et comparaison
+        // region-aware. Les cles de neuf chiffres confondaient `+33612345678` et
+        // `+15612345678` ; la ligne du tiers etait filtree ET son identifiant franchissait
+        // quand meme le curseur, donc le message etait perdu pour de bon.
+        val roomBlocked = runCatching { blockedRepo.blockedRawSnapshot() }.getOrDefault(emptyList())
+        val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
+        } else emptyList()
+        Timber.i(
+            "runSync(%s) blocked sources: room=%d system=%d",
+            reason,
+            roomBlocked.size,
+            systemBlocked.size,
+        )
+        return phoneIdentity.snapshot().blockedMatcher(roomBlocked + systemBlocked)
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — les copies de MMS reçus pas encore vérifiées : aucun import de ce profil ne les prend.
+     * `null` si le journal ne se lit pas : l'import attend alors la passe suivante, plutôt que de les laisser passer
+     * (contrôle de cohérence). Une annulation remonte.
+     */
+    private suspend fun copiesNonVerifiees(): Set<Long>? =
+        runCatchingCancellable { journalCopies.lire().mapTo(HashSet()) { it.id } }
+            .onFailure { Timber.w(it, "Journal des copies MMS illisible : import reporte") }
+            .getOrNull()
+
+    /**
+     * 2026-11-19 (issue #98, plusieurs profils) — **importe les MMS apparus dans `content://mms` depuis la passe
+     * précédente**, comme `readSmsSince` le fait pour les SMS.
+     *
+     * L'import des MMS ne tournait qu'une fois (`mmsImportCompleted`) : un MMS écrit ensuite par un autre profil du
+     * téléphone — envoyé depuis ce profil, ou reçu par le profil principal ([CopieMmsRecus]) — n'arrivait jamais
+     * ici. Les nôtres sont relus aussi, et écartés par [ConversationMirror.bulkImportMmsFromTelephony] : un envoi
+     * par son `mms_system_id`, une réception par son lien ; une copie pas encore vérifiée l'est ici.
+     *
+     * Le curseur ne saute rien : une ligne non terminée entre en liste d'attente et s'importe une fois terminée
+     * ([CurseurMms]). Une installation qui avait déjà fait son import complet pose le curseur en relisant les
+     * [RELECTURE_A_LA_MISE_A_JOUR_MS] derniers jours seulement : de quoi prendre les copies qu'un autre profil a
+     * écrites avant que celui-ci ne s'ouvre sur la nouvelle version, sans relire tout l'historique — relire ferait
+     * revenir les MMS supprimés ici dont la copie système a résisté. Curseur et attente n'avancent qu'après une
+     * lecture complète.
+     */
+    private suspend fun importerNouveauxMms(
+        reason: String,
+        estBloquee: (String) -> Boolean,
+        fils: suspend () -> Map<Long, List<String>>,
+    ) {
+        runCatching {
+            val advanced = settings.flow.first().advanced
+            val maintenant = System.currentTimeMillis()
+            val curseur = if (advanced.lastSyncedMmsId >= 0L) {
+                advanced.lastSyncedMmsId
+            } else {
+                curseurDeDepart(maintenant) ?: return@runCatching
+            }
+            val attente = advanced.mmsNonTermines.mapNotNull(IdDate::decoder)
+            val nouveaux = telephonyReader.lireEtatsMmsApres(curseur) ?: return@runCatching
+            val etatsDeLAttente = telephonyReader.lireEtatsMms(attente.map { it.id }) ?: return@runCatching
+            val avance = CurseurMms.avancer(curseur, nouveaux, attente, etatsDeLAttente, maintenant)
+            val exclues = copiesNonVerifiees() ?: return@runCatching
+            var importes = 0
+            val identite = phoneIdentity.snapshot()
+            val importer: suspend (List<TelephonyReader.MmsImportRow>) -> Unit = { page ->
+                val gardes = page.filterNot { it.telephonyId in exclues || estBloquee(it.address) }
+                if (gardes.isNotEmpty()) {
+                    mirror.bulkImportMmsFromTelephony(gardes, fils())
+                    importes += gardes.size
+                }
+            }
+            // Une ligne terminée mais illisible (sans adresse, ou vide) est peut-être encore en cours d'écriture par
+            // une autre application — AOSP écrit la ligne avant ses adresses : elle repasse UNE fois par l'attente
+            // (relecture Claude, 2e vague). Relue par son identifiant et toujours illisible, elle n'y revient pas.
+            val illisibles = ArrayList<Long>()
+            val lire: suspend (TelephonyReader.TrancheMms, ((Long) -> Unit)?) -> Boolean = { tranche, surIgnoree ->
+                telephonyReader.readMmsBatched(
+                    pageSize = 200,
+                    cle = identite::key,
+                    tranche = tranche,
+                    surIgnoree = surIgnoree,
+                    onPage = importer,
+                )
+            }
+            var complete = avance.jusqua <= curseur ||
+                lire(TelephonyReader.TrancheMms.entre(curseur, avance.jusqua)) { illisibles += it }
+            for (lot in avance.aImporter.chunked(TelephonyReader.LOT_IDS)) {
+                if (!lire(TelephonyReader.TrancheMms.parmi(lot), null)) complete = false
+            }
+            if (complete) {
+                val attente = CurseurMms.ajouter(avance.attente, illisibles, maintenant)
+                settings.update { s ->
+                    s.copy(
+                        advanced = s.advanced.copy(
+                            lastSyncedMmsId = maxOf(s.advanced.lastSyncedMmsId, avance.jusqua),
+                            mmsNonTermines = attente.mapTo(HashSet()) { it.encoder() },
+                        ),
+                    )
+                }
+            }
+            Timber.i(
+                "runSync(%s) nouveaux MMS : %d importe(s), curseur %d -> %d, %d en attente%s",
+                reason,
+                importes,
+                curseur,
+                avance.jusqua,
+                avance.attente.size,
+                if (complete) "" else " (lecture incomplete, rien d'avance)",
+            )
+        }.onFailure {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            Timber.w(it, "runSync(%s) import des nouveaux MMS en echec", reason)
+        }
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — le curseur d'une installation qui avait déjà fait son import complet : juste avant la
+     * PLUS PETITE ligne datée des [RELECTURE_A_LA_MISE_A_JOUR_MS] derniers jours ; sans ligne récente, au bout du
+     * fournisseur. `null` = lecture impossible ; la passe suivante réessaie.
+     *
+     * Pas « la plus grande ligne plus ancienne » (relecture Claude, 2e vague) : les identifiants ne suivent pas les
+     * dates — une application de sauvegarde qui restaure de vieux MMS leur donne de grands identifiants, et le curseur
+     * aurait sauté par-dessus les lignes récentes qu'on voulait justement relire.
+     */
+    private fun curseurDeDepart(maintenant: Long): Long? {
+        val toutes = telephonyReader.lireEtatsMmsApres(0L) ?: return null
+        val limiteSec = (maintenant - RELECTURE_A_LA_MISE_A_JOUR_MS) / 1000L
+        val premiereRecente = toutes.filter { it.dateSec >= limiteSec }.minOfOrNull { it.id }
+        return if (premiereRecente != null) premiereRecente - 1 else toutes.maxOfOrNull { it.id } ?: 0L
     }
 
     /**
@@ -585,5 +825,14 @@ class TelephonySyncManager @Inject constructor(
     private companion object {
         /** v1.26.1 (audit F6) — seules les lignes SMS sont réconciliables, cf. [reconcileDeletions]. */
         const val SMS_URI_PREFIX = "content://sms/"
+
+        /** 2026-11-19 (issue #98) — cf. [debutDeLaCopieDesMmsRecus]. */
+        const val MARGE_DEBUT_COPIE_MS = 10L * 60L * 1_000L
+
+        /** 2026-11-19 (issue #98) — cf. [copierMmsRecusSousVerrou]. */
+        const val MARGE_VERIFICATION_MS = 30L * 1_000L
+
+        /** 2026-11-19 (issue #98) — cf. [curseurDeDepart] ; la même fenêtre que la copie (`CopieMmsRecus.FENETRE_MS`). */
+        const val RELECTURE_A_LA_MISE_A_JOUR_MS = CopieMmsRecus.FENETRE_MS
     }
 }

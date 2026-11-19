@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.data.local.db.AppDatabase
+import com.filestech.sms.data.local.db.SQLITE_HOST_PARAM_LIMIT
 import com.filestech.sms.data.local.db.dao.AttachmentDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
 import com.filestech.sms.data.local.db.dao.MessageDao
@@ -972,12 +973,20 @@ class ConversationMirror @Inject constructor(
         filsDeGroupe: Map<Long, List<String>> = emptyMap(),
     ) = withContext(io) {
         if (rows.isEmpty()) return@withContext
-        // v1.2.4 audit P2: group by AOSP `thread_id` so each conversation gets exactly one
-        // `findById + update` (= one `touchConversation`) per chunk instead of one per row.
-        // For 500 MMS across 20 threads that's 20 SQLCipher updates instead of 500. Mirrors
-        // the per-thread aggregation already used by `bulkImportFromTelephony` (SMS path).
-        val byThread = rows.groupBy { it.threadId }
         database.withTransaction {
+            // 2026-11-19 (issue #98) — 🔴 NOS PROPRES ENVOIS ÉTAIENT RÉIMPORTÉS. Un MMS envoyé d'ici est relié à sa
+            // copie système par `mms_system_id` seul, son `telephony_uri` restant vide (cf.
+            // `SystemCopyEraser.lienSysteme`) : l'index unique ci-dessous ne pouvait pas le reconnaître, et chaque
+            // « Resynchroniser » en faisait un second exemplaire. Lus dans la transaction, comme l'insertion.
+            val nosEnvois = rows.map { it.telephonyId }.chunked(SQLITE_HOST_PARAM_LIMIT)
+                .flatMap { messageDao.mmsSystemIdsParmi(it) }
+                .toHashSet()
+            val aImporter = if (nosEnvois.isEmpty()) rows else rows.filterNot { it.telephonyId in nosEnvois }
+            // v1.2.4 audit P2: group by AOSP `thread_id` so each conversation gets exactly one
+            // `findById + update` (= one `touchConversation`) per chunk instead of one per row.
+            // For 500 MMS across 20 threads that's 20 SQLCipher updates instead of 500. Mirrors
+            // the per-thread aggregation already used by `bulkImportFromTelephony` (SMS path).
+            val byThread = aImporter.groupBy { it.threadId }
             // v1.2.7 audit P4 — buffer les AttachmentEntity de tout le group, puis 1 seul
             // `insertAll` à la fin pour économiser N-1 IPC SQLCipher. Sur un import 500 MMS
             // × ~1.5 attachments moyens, gain mesuré 400-600 ms cumulés. Le buffer est

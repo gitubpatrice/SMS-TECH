@@ -62,6 +62,9 @@ class TelephonySyncWorker @AssistedInject constructor(
     private val pdusEnAttente: com.filestech.sms.data.mms.PdusEnAttente,
     // 2026-11-06 — jumeau de `TelephonySyncManager` : un import COMPLET range un fil de groupe dans son groupe.
     private val filsDeGroupe: com.filestech.sms.data.sync.FilsDeGroupe,
+    // 2026-11-19 (issue #98) — la part MMS (copie des MMS reçus, import des nouveaux), par le gestionnaire : un seul
+    // chemin, sous un seul verrou.
+    private val synchro: com.filestech.sms.data.sync.TelephonySyncManager,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -86,6 +89,14 @@ class TelephonySyncWorker @AssistedInject constructor(
             // toutes les 12 h.
             val snapshot = settings.flow.first()
             runImport(snapshot)
+            // 2026-11-19 (issue #98, relectures des trois modèles) — ce worker n'importait que les SMS : un profil où
+            // l'application ne s'ouvre pas ne recevait jamais en arrière-plan les MMS qu'un autre profil écrit, et la
+            // copie d'un MMS reçu dont le lancement avait été tué attendait la prochaine ouverture. Un échec n'arrête
+            // pas le reste du travail ; une annulation, si.
+            runCatching { synchro.synchroniserMms("TelephonySyncWorker") }.onFailure {
+                if (it is kotlinx.coroutines.CancellationException) throw it
+                Timber.w(it, "Sync: part MMS en echec")
+            }
             // Audit M-6: opportunistic housekeeping. Outbound MMS / voice caches accumulate when
             // the `SmsSentReceiver` never fires (process force-killed, OS skips the broadcast);
             // we prune anything older than 24 h here. Inbound caches are intentionally **not**

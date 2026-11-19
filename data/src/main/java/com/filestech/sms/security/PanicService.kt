@@ -48,6 +48,8 @@ class PanicService @Inject constructor(
     private val notifications: AllNotificationsCanceller,
     private val pressePapiers: ClipboardCleaner,
     @IoDispatcher private val io: CoroutineDispatcher,
+    // 2026-11-19 (issue #98) — les copies de MMS reçus encore au journal, effacées avant la remise à zéro des réglages.
+    private val copiesMms: dagger.Lazy<com.filestech.sms.data.sync.CopieMmsRecus>,
 ) {
     /**
      * v1.28.6 (audit 3 axes pré-release) — **non annulable de bout en bout**, et non plus sur son
@@ -248,11 +250,26 @@ class PanicService @Inject constructor(
             echecs++
             Timber.w(it, "wipe: magasin securise")
         }
+        // 2026-11-19 (issue #98, contrôle de cohérence) — AVANT la remise à zéro des réglages, qui emporte le journal des
+        // copies de MMS reçus : une copie orpheline de la dernière minute (message supprimé pendant sa copie) ne serait
+        // plus jamais retrouvée, et resterait lisible dans le stockage partagé. Les copies reliées sont déjà parties par
+        // l'effaceur. Ce qui résiste compte comme une copie système restante, comme pour les conversations.
+        var copiesMmsRestantes = 0
+        runCatching { copiesMms.get().effacerLeJournal() }
+            .onSuccess { copiesMmsRestantes = it }
+            .onFailure {
+                echecs++
+                Timber.w(it, "wipe: copies MMS du journal")
+            }
         runCatching { settings.update { AppSettings() } }.onFailure {
             echecs++
             Timber.w(it, "wipe: settings")
         }
-        return Residu(balayage.copiesSystemeRestantes, listeIllisible = toutes == null, echecsLocaux = echecs)
+        return Residu(
+            balayage.copiesSystemeRestantes + copiesMmsRestantes,
+            listeIllisible = toutes == null,
+            echecsLocaux = echecs,
+        )
     }
 
     /**
@@ -348,11 +365,23 @@ class PanicService @Inject constructor(
             echecs++
             Timber.w(it, "decoy wipe: files")
         }
+        // 2026-11-19 (issue #98) — jumeau de [purgeTotale] : le journal des copies de MMS reçus part avec les réglages.
+        var copiesMmsRestantes = 0
+        runCatching { copiesMms.get().effacerLeJournal() }
+            .onSuccess { copiesMmsRestantes = it }
+            .onFailure {
+                echecs++
+                Timber.w(it, "decoy wipe: copies MMS du journal")
+            }
         runCatching { settings.update { AppSettings(security = it.security) } }.onFailure {
             echecs++
             Timber.w(it, "decoy wipe: settings")
         }
-        balayage.copy(listeIllisible = ids == null, echecsLocaux = echecs)
+        balayage.copy(
+            copiesSystemeRestantes = balayage.copiesSystemeRestantes + copiesMmsRestantes,
+            listeIllisible = ids == null,
+            echecsLocaux = echecs,
+        )
     }
 
     /**

@@ -9,6 +9,7 @@ import com.filestech.sms.domain.vault.VaultMover
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,6 +67,8 @@ class VaultManager @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
     // v1.28.4 (F13) — on n'entre pas au coffre pendant qu'on le vide. Voir [VaultPurgeBarrier].
     private val barriere: VaultPurgeBarrier,
+    // 2026-11-19 (issue #98) — `Lazy` : le graphe de cette classe doit rester léger (cf. SEC-CRIT v1.24.0).
+    private val synchro: dagger.Lazy<com.filestech.sms.data.sync.TelephonySyncManager>,
 ) : VaultMover {
 
     // v1.11.0 audit SEC-V2 — AtomicBoolean au lieu de `@Volatile Boolean`.
@@ -147,8 +150,17 @@ class VaultManager @Inject constructor(
      * que l'utilisateur y aurait mise indépendamment. Le déplacement reste atomique
      * ([ConversationRepository.bulkMoveToVault]).
      */
-    private suspend fun deplacerAvecLesMembres(ids: List<Long>, intoVault: Boolean): Int =
-        conversationRepo.bulkMoveToVault(avecLesMembres(ids), intoVault)
+    private suspend fun deplacerAvecLesMembres(ids: List<Long>, intoVault: Boolean): Int {
+        val deplacees = conversationRepo.bulkMoveToVault(avecLesMembres(ids), intoVault)
+        // 2026-11-19 (issue #98) — les MMS reçus de ces conversations ont pu être recopiés dans le stockage partagé
+        // d'Android avant leur entrée au coffre : la copie les en retire tout de suite, sans attendre la prochaine
+        // synchronisation (`CopieMmsRecus.balayerLeCoffre`). Rien d'attendu ici : elle passe sous son propre verrou.
+        if (intoVault && deplacees > 0) {
+            runCatching { synchro.get().copierMmsRecus() }
+                .onFailure { Timber.w(it, "Coffre : retrait des copies MMS non demande") }
+        }
+        return deplacees
+    }
 
     private suspend fun avecLesMembres(ids: List<Long>): List<Long> {
         val tous = LinkedHashSet(ids)
