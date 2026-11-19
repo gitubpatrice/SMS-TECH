@@ -14,7 +14,8 @@ import javax.inject.Singleton
  *
  * # Pourquoi une clé, et pourquoi dans le nom
  *
- * Aucun MMS entrant n'est écrit dans `content://mms` : le PDU téléchargé est la SEULE copie du message.
+ * Un MMS entrant n'est écrit dans `content://mms` qu'une fois complet chez nous (`CopieMmsRecus`, 2026-11-19) :
+ * jusque-là, le PDU téléchargé est la SEULE copie du message.
  * Quand son traitement échoue, `MmsDownloadedReceiver` le garde ; une reprise doit alors savoir si le
  * message a déjà été écrit — sinon elle le dupliquerait, ou, s'il a été supprimé entre-temps, le
  * ressusciterait. La clé est calculée par [MmsDownloader] AVANT le téléchargement, à partir de ce que

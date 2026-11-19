@@ -50,7 +50,9 @@ class VaultGuardsTest {
     ): Pair<VaultManager, VaultSessionState> {
         // Le porteur de session est le VRAI : c'est lui l'objet du test.
         val session = VaultSessionState().apply { if (sessionUnlocked) markUnlocked() }
-        return VaultManager(repo, lockManager(state), session, io, VaultPurgeBarrier()) to session
+        return VaultManager(repo, lockManager(state), session, io, VaultPurgeBarrier()) {
+            mockk<com.filestech.sms.data.sync.TelephonySyncManager>(relaxed = true)
+        } to session
     }
 
     // ──────────── Entrer dans le coffre n'ouvre pas la session ────────────

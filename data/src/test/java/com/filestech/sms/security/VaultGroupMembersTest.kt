@@ -5,11 +5,13 @@ import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ConversationRepository
 import com.google.common.truth.Truth.assertThat
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -27,6 +29,25 @@ class VaultGroupMembersTest {
 
     private val io = UnconfinedTestDispatcher()
     private val repo = mockk<ConversationRepository>(relaxed = true)
+    private val synchro = mockk<com.filestech.sms.data.sync.TelephonySyncManager>(relaxed = true)
+
+    /**
+     * 2026-11-19 (issue #98) — entrer au coffre retire tout de suite du stockage partagé d'Android les copies des MMS
+     * reçus de ces conversations ; en sortir ne demande rien. Contrôle négatif : retirer l'appel fait tomber le
+     * premier cas.
+     */
+    @Test
+    fun `entrer au coffre demande le retrait des copies MMS, en sortir non`() = runTest {
+        coEvery { repo.findById(7L) } returns conversation(7L, "0617332729")
+        coEvery { repo.bulkMoveToVault(any(), any()) } returns 1
+
+        vault().moveToVault(7L)
+        verify(exactly = 1) { synchro.copierMmsRecus() }
+
+        clearMocks(synchro)
+        vault().moveOutOfVault(7L)
+        verify(exactly = 0) { synchro.copierMmsRecus() }
+    }
 
     private fun conversation(id: Long, vararg adresses: String) = Conversation(
         id = id,
@@ -49,7 +70,7 @@ class VaultGroupMembersTest {
             every { m.isOpenForUi(any()) } answers { callOriginal() }
         }
         val session = VaultSessionState().apply { markUnlocked() }
-        return VaultManager(repo, lock, session, io, VaultPurgeBarrier())
+        return VaultManager(repo, lock, session, io, VaultPurgeBarrier()) { synchro }
     }
 
     @Test

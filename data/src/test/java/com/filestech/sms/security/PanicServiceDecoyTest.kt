@@ -72,6 +72,9 @@ class PanicServiceDecoyTest {
     private val barriere = VaultPurgeBarrier()
     private val notifications = mockk<AllNotificationsCanceller>(relaxed = true)
     private val pressePapiers = mockk<ClipboardCleaner>(relaxed = true)
+    private val copiesMms = mockk<com.filestech.sms.data.sync.CopieMmsRecus> {
+        coEvery { effacerLeJournal() } returns 0
+    }
     private val settings = FakeSettings(reglagesModifies)
 
     private fun fichier(chemin: String): File = File(dossier, chemin).apply {
@@ -101,6 +104,7 @@ class PanicServiceDecoyTest {
             notifications = notifications,
             pressePapiers = pressePapiers,
             io = UnconfinedTestDispatcher(),
+            copiesMms = { copiesMms },
         )
     }
 
@@ -214,7 +218,27 @@ class PanicServiceDecoyTest {
         coVerify(exactly = 1) { securityStore.clearAll() }
         verify(exactly = 1) { notifications.cancelAll() }
         verify(exactly = 1) { pressePapiers.clear() }
+        // 2026-11-19 (issue #98) — les copies de MMS reçus du journal, avant que les réglages ne l'emportent.
+        coVerify(exactly = 1) { copiesMms.effacerLeJournal() }
         assertThat(settings.state.value).isEqualTo(AppSettings())
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — une copie de MMS reçu que le fournisseur n'a pas pu effacer compte comme copie système
+     * restante : la purge ne se dit pas complète. Contrôle négatif : sans l'appel, ou sans le compte, ce cas tombe.
+     */
+    @Test
+    fun `une copie MMS du journal qui resiste est comptee, en leurre comme hors leurre`() = runTest {
+        coEvery { conversationDao.idsToutes() } returns emptyList()
+        coEvery { conversationDao.idsHorsCoffre() } returns emptyList()
+        coEvery { copiesMms.effacerLeJournal() } returns 1
+
+        val totale = service(decoy = false).nukeEverything()
+        val leurre = service(decoy = true).nukeEverything()
+
+        assertThat(totale.copiesSystemeRestantes).isEqualTo(1)
+        assertThat(totale.complet).isFalse()
+        assertThat(leurre.copiesSystemeRestantes).isEqualTo(1)
     }
 
     /**
