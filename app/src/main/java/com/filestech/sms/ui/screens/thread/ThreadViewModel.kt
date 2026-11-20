@@ -2079,22 +2079,22 @@ class ThreadViewModel @Inject constructor(
 
     /**
      * v1.4.0 (F5 forward feature) — stages the given [message] into [com.filestech.sms.system.share
-     * .IncomingShareHolder] so the next [ThreadViewModel] that hydrates (i.e. the
-     * destination thread the user picks in [com.filestech.sms.ui.components
-     * .ForwardMessageSheet]) pulls it through [consumeIncomingShareIfAny] and pre-fills
-     * its draft / staged attachment.
+     * .IncomingShareHolder] for the conversation the user picked in [com.filestech.sms.ui.components
+     * .ForwardMessageSheet], which pulls it through [consumeIncomingShareIfAny] and pre-fills its draft / staged
+     * attachment.
      *
-     * The payload mirrors what the share-target flow produces for [android.content
-     * .Intent.ACTION_SEND]:
+     * The payload mirrors what the share-target flow produces for [android.content.Intent.ACTION_SEND]:
      *   - `text` = the message body (trimmed, `null` if blank);
-     *   - `uris` = the first attachment's URI if any (image / file / audio / video). The
-     *     URI is built from the stored `localUri` — either a `content://` (system MMS
-     *     parts) used as-is, or a `file://` for our own cache (intra-process consume,
-     *     no FileUriExposedException because no [Intent] crosses).
-     *   - `mimeType` = the attachment's MIME (drives the `AttachmentKind` selection in
-     *     [onAttachmentPicked]).
+     *   - `uris` = the first attachment's URI if any (image / file / audio / video). The URI is built from the stored
+     *     `localUri` — either a `content://` (system MMS parts) used as-is, or a `file://` for our own cache
+     *     (intra-process consume, no FileUriExposedException because no [Intent] crosses);
+     *   - `mimeType` = the attachment's MIME (drives the `AttachmentKind` selection in [onAttachmentPicked]).
+     *
+     * 2026-11-20 — [destination] is the conversation picked in the sheet, `null` for a new contact (the payload then
+     * waits for the conversation "New message" creates, cf. `IncomingShareHolder.cibler`). The forward used to be
+     * posted as a plain share, which AppRoot's SEC-03 guard cleared at once: the text never arrived.
      */
-    fun stageForward(message: com.filestech.sms.domain.model.Message) {
+    fun stageForward(message: com.filestech.sms.domain.model.Message, destination: Long?) {
         val text = message.body.trim().takeIf { it.isNotBlank() }
         val attachment = message.attachments.firstOrNull()
         val uris = buildList {
@@ -2127,6 +2127,9 @@ class ThreadViewModel @Inject constructor(
             uris = uris,
             mimeType = attachment?.mimeType,
             text = text,
+            cible = destination
+                ?.let { com.filestech.sms.system.share.IncomingShareHolder.Cible.Conversation(it) }
+                ?: com.filestech.sms.system.share.IncomingShareHolder.Cible.EnAttente,
         )
         if (!pending.isEmpty) {
             incomingShare.set(pending)
@@ -2143,6 +2146,11 @@ class ThreadViewModel @Inject constructor(
      * Z3 audit fix : on suspend jusqu'à hydration de `state.conversation`. Sans ça
      * la course `onConversationOpened` ⇆ flow Room peut faire échouer silencieusement
      * `onAttachmentPicked` qui guarde `if (_state.value.conversation == null) return`.
+     *
+     * 2026-11-20 — seul un dépôt destiné à CETTE conversation est repris (`IncomingShareHolder.consumePour`) : un
+     * transfert, un partage dont « Nouveau message » a choisi la conversation, le texte d'un lien `sms:`. Toujours à
+     * l'ouverture, et à elle seule : un écran plus ancien de la même conversation, resté dans la pile, ne le prend pas
+     * au nouveau (relectures Claude et GPT d'une première version qui écoutait le relais en continu).
      */
     private fun consumeIncomingShareIfAny() {
         viewModelScope.launch {
@@ -2155,24 +2163,28 @@ class ThreadViewModel @Inject constructor(
                 timber.log.Timber.w("consumeIncomingShareIfAny: conversation never hydrated, share ignored")
                 return@launch
             }
-            val pending = incomingShare.consume() ?: return@launch
-            // 1) Texte → draft si encore vide.
-            if (!pending.text.isNullOrBlank() && _state.value.draft.isBlank()) {
-                updateDraft(pending.text)
-            }
-            // 2) Premier URI → attachement via le pipeline standard.
-            val firstUri = pending.uris.firstOrNull() ?: return@launch
-            val kind = when {
-                pending.mimeType?.startsWith("image/") == true ->
-                    com.filestech.sms.ui.components.AttachmentKind.PHOTO
-                pending.mimeType?.startsWith("video/") == true ->
-                    com.filestech.sms.ui.components.AttachmentKind.VIDEO
-                pending.mimeType == "text/x-vcard" || pending.mimeType == "text/vcard" ->
-                    com.filestech.sms.ui.components.AttachmentKind.CONTACT
-                else -> com.filestech.sms.ui.components.AttachmentKind.FILE
-            }
-            onAttachmentPicked(firstUri, kind)
+            incomingShare.consumePour(conversationId)?.let { appliquerDepot(it) }
         }
+    }
+
+    /** 2026-11-20 — un dépôt repris : son texte dans la saisie, sa première pièce par le chemin ordinaire. */
+    private fun appliquerDepot(pending: com.filestech.sms.system.share.IncomingShareHolder.Pending) {
+        // 1) Texte → saisie : seul si elle est vide, à la suite sinon (il était perdu en silence).
+        if (!pending.text.isNullOrBlank()) {
+            updateDraft(com.filestech.sms.system.share.IncomingShareHolder.saisieAvec(_state.value.draft, pending.text))
+        }
+        // 2) Premier URI → attachement via le pipeline standard.
+        val firstUri = pending.uris.firstOrNull() ?: return
+        val kind = when {
+            pending.mimeType?.startsWith("image/") == true ->
+                com.filestech.sms.ui.components.AttachmentKind.PHOTO
+            pending.mimeType?.startsWith("video/") == true ->
+                com.filestech.sms.ui.components.AttachmentKind.VIDEO
+            pending.mimeType == "text/x-vcard" || pending.mimeType == "text/vcard" ->
+                com.filestech.sms.ui.components.AttachmentKind.CONTACT
+            else -> com.filestech.sms.ui.components.AttachmentKind.FILE
+        }
+        onAttachmentPicked(firstUri, kind)
     }
 
     override fun onCleared() {

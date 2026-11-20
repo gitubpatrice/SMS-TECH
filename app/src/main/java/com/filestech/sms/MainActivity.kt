@@ -880,17 +880,11 @@ class MainActivity : FragmentActivity() {
                         ?: intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
                     incomingShare.clear()
                     if (!firstRecipient.isNullOrBlank()) {
-                        if (body != null) {
-                            incomingShare.set(
-                                IncomingShareHolder.Pending(
-                                    uris = emptyList(),
-                                    mimeType = null,
-                                    text = body,
-                                ),
-                            )
-                        }
+                        // 2026-11-20 — le texte voyage AVEC la navigation : AppRoot le dépose, ciblé, en ouvrant la
+                        // conversation résolue (cf. `PendingNavHolder.Pending.smsBody`). Posé ici comme un partage, il
+                        // était effacé si un fil était ouvert, ou rouvrait « Nouveau message » depuis la liste.
                         pendingNav.set(
-                            PendingNavHolder.Pending(sendToAddress = firstRecipient),
+                            PendingNavHolder.Pending(sendToAddress = firstRecipient, smsBody = body),
                         )
                     }
                 } else {

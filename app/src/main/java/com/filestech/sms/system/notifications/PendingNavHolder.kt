@@ -69,6 +69,14 @@ class PendingNavHolder @Inject constructor() {
          */
         val sendToAddress: String? = null,
         /**
+         * 2026-11-20 — le texte du lien `sms:` (`sms_body` ou `EXTRA_TEXT`), qui voyage AVEC sa navigation. Il était
+         * posé à part dans [com.filestech.sms.system.share.IncomingShareHolder], où la garde SEC-03 d'AppRoot
+         * l'effaçait si un fil était ouvert, et où la résolution asynchrone de l'adresse pouvait recibler un dépôt
+         * plus récent (relecture GPT). AppRoot ne le dépose qu'en ouvrant la conversation résolue, déjà ciblé.
+         * Contenu du message : ne jamais journaliser l'instance entière.
+         */
+        val smsBody: String? = null,
+        /**
          * v1.26.1 (audit H2) — secret porte par l'intent d'ouverture de conversation.
          * Verifie par `AppRoot` AVANT de naviguer, cf. [NotificationIntentToken] : la lecture
          * du secret est suspendue, donc elle ne peut pas avoir lieu dans `MainActivity`.

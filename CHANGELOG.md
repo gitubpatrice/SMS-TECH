@@ -32,6 +32,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   the copy, or by an interrupted copy, is erased at the next pass; moving the conversation to the vault erases
   its copies. Not copied: the vault, and MMS received before the update.
 - **"Resync from phone" no longer duplicates the MMS sent from the app.** The import did not recognise them.
+- **"Forward" puts the message in the chosen conversation again** (reported by e-mail, also on 1.30.1). A privacy
+  guard meant for shares from other apps (SEC-03, v1.4.1) also cleared forwards, which start from a conversation:
+  the chosen conversation opened with an empty message box. Every deposit in the share relay now has a target, and
+  only that conversation takes it; a share or forward abandoned in "New message" goes nowhere. The text of an `sms:`
+  link had the same fault. A forwarded text is added after a message already started instead of being dropped.
 - **New MMS written by another profile are imported at each sync**, the 12-hour background sync included. The
   MMS import ran only once. A draft or a send still in progress is imported once finished.
 - **A multipart SMS is marked sent only at its last part's report**; a failure on any part is still written.

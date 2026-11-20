@@ -83,6 +83,23 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.31.0 — A share or a forward goes only to its own conversation
+
+**Affected versions: 1.4.1 to 1.30.1.** Reported by e-mail: "Forward" opened the chosen conversation with an empty
+message box. The forwarded message travels through the same in-memory relay as a share from another app
+(`IncomingShareHolder`). The SEC-03 guard (v1.4.1) clears a share that arrives while a conversation is open, so that
+it cannot land in a conversation the user did not pick; a forward starts from a conversation, so the guard cleared it.
+The text of an `sms:` link arriving while a conversation was open was cleared the same way.
+
+**What changes.** Every deposit has a target: a share from another app is "to choose" (only it goes through SEC-03,
+which opens "New message"); a forward to a conversation targets that conversation; a forward to a new contact waits
+for the conversation "New message" creates. Only the targeted conversation takes a deposit, when it opens. This
+extends what SEC-03 only guaranteed on arrival: a share or forward abandoned in "New message" is erased when that
+screen closes, an expired one is never revived, a forward does not survive the lock screen, and nothing survives
+entering the decoy session. The text of an `sms:` link now travels with its navigation and is deposited, already
+targeted, when its conversation opens. Two external reviews (Claude, GPT) found five weaknesses in a first version;
+all are fixed and each guard has a test that fails without it.
+
 ### v1.31.0 — A received MMS now has a copy in Android's message store (issue #98)
 
 **Affected versions: all up to 1.30.1.** Reported by a GrapheneOS user running SMS Tech in several user

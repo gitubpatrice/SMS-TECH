@@ -49,6 +49,7 @@ class ComposeAjoutTest {
             conversationRepo = mockk(relaxed = true),
             io = dispatcher,
             blockedRepo = liste,
+            incomingShare = com.filestech.sms.system.share.IncomingShareHolder(),
         )
     }
 
@@ -118,6 +119,7 @@ class ComposeAjoutTest {
             conversationRepo = mockk(relaxed = true),
             io = dispatcher,
             blockedRepo = liste,
+            incomingShare = com.filestech.sms.system.share.IncomingShareHolder(),
         )
         val annonces = mutableListOf<ComposeViewModel.Event>()
         backgroundScope.launch { vm.events.collect { annonces += it } }

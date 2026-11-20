@@ -999,13 +999,15 @@ fun ThreadScreen(
         com.filestech.sms.ui.components.ForwardMessageSheet(
             currentConversationId = conversationId,
             onDismiss = { forwardingMessage = null },
+            // 2026-11-20 — le dépôt porte sa destination : la conversation choisie, ou celle que « Nouveau message »
+            // va créer. Sans elle, AppRoot le prenait pour un partage externe et l'effaçait (garde SEC-03).
             onPickConversation = { destId ->
-                viewModel.stageForward(msg)
+                viewModel.stageForward(msg, destination = destId)
                 forwardingMessage = null
                 onForwardToConversation(destId)
             },
             onPickNewContact = {
-                viewModel.stageForward(msg)
+                viewModel.stageForward(msg, destination = null)
                 forwardingMessage = null
                 onForwardToNewContact()
             },
