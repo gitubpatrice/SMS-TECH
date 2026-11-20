@@ -48,6 +48,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 
 ### Changed
 
+- **The folded hands of the thanks in About are white, with a grey outline and a line down the middle**, as in
+  Notes Tech; drawn in a single dark grey, they looked heavy.
 - Build: Gradle 9.9.1 instead of 9.7.1 (six GitHub security advisories, three fixed only in 9.9.1; they concern
   the build machine, not the app), AGP 9.5.1, KSP 2.3.13, navigation-compose 2.10.2, uiautomator 2.4.1.
 
