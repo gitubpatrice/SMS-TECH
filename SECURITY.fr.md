@@ -89,6 +89,79 @@ v1.2.0 est livrée avec la classe BIOMETRIC_WEAK pour l'empreinte digitale **OU*
 
 ## Historique des audits
 
+### v1.31.0 — Un MMS reçu a désormais sa copie dans le stockage de messages d'Android (issue #98)
+
+**Versions affectées : toutes jusqu'à la 1.30.1.** Signalé par un utilisateur de GrapheneOS qui utilise SMS Tech
+dans plusieurs profils. Android garde un seul stockage de messages pour tous les profils, mais ne remet les
+messages entrants qu'à l'application du profil principal : les autres profils ne voient que ce que celle-ci y
+écrit. SMS Tech y écrivait chaque SMS reçu, jamais un MMS reçu : il ne vivait que dans la base chiffrée, et les
+autres profils ne le voyaient jamais (ni les autres applications SMS, ni une réinstallation, contrairement à ce
+que disait déjà `PRIVACY.md`).
+
+**Ce qui change.** Un MMS reçu, une fois complet dans la base, est recopié dans `content://mms` et relié à cette
+copie. Trois relectures externes (Claude, GPT, Gemini) ont trouvé cinq façons dont la première version pouvait
+laisser fuir ou faire revenir un message. Les cinq sont fermées et testées contre le vrai fournisseur :
+- **Visible avant d'être complète.** Un autre profil ne partage pas le verrou de synchronisation de celui-ci. La
+  copie est désormais écrite dans la boîte d'envoi, qu'aucun import ne prend, et ne passe en réception qu'une fois
+  ses adresses et toutes ses parties écrites. Un refus du fournisseur (`…/0`) compte comme un échec et efface la
+  copie.
+- **Supprimée pendant sa copie.** Une suppression qui avait lu le message juste avant le lien laissait la copie
+  derrière elle, et l'import la faisait revenir. Chaque copie est désormais notée dans un journal dès que sa
+  ligne existe. Le passage suivant, au moins une minute plus tard, efface toute copie à laquelle plus aucun
+  message d'ici n'est relié. D'ici là, l'import de ce profil l'ignore. Ce seul contrôle couvre tous les chemins de
+  suppression (message, conversation, rétention, panique) sans toucher à l'effaceur. Supprimer un message relié
+  efface sa copie par l'effaceur, dont la vérification d'identité (date à la seconde, boîte, expéditeur) est
+  satisfaite par la copie ; un test instrumenté le prouve.
+- **Mise au coffre après la copie.** Les copies de ses MMS reçus sont effacées du stockage partagé dès que la
+  conversation entre au coffre, et de nouveau à chaque passage. Les profils qui les avaient déjà importées les
+  gardent : les MMS ne sont pas réconciliés d'un profil à l'autre.
+- **Copie interrompue.** Elle est effacée par le journal et réécrite, jamais en double.
+- **Chemin jumeau.** Le worker de 12 h fait aussi la copie et l'import des nouveaux MMS, par la même fonction et
+  sous le même verrou.
+
+Une seconde vague de relecture (Claude, GPT ; Gemini n'a rien trouvé) a resserré cinq points, chacun avec un test
+qui échoue sans lui :
+- Le journal est daté au moment où la copie est écrite, et non au début du passage. Un passage qui a écrit des
+  copies en programme un autre 90 s plus tard : une copie orpheline est effacée en une minute et demie, et non à la
+  prochaine synchronisation.
+- Une copie dont la note au journal n'a pas pu être écrite est effacée sur-le-champ. Une copie restée plus d'une
+  heure dans la boîte d'envoi est balayée ; le balayage ne vise que les copies reçues (`m-retrieve-conf`), jamais
+  un envoi.
+- Le coffre est revérifié juste après le lien.
+- La liste d'attente : un MMS en échec n'est plus terminé (une autre application peut le renvoyer sous le même
+  identifiant). La liste est dédoublonnée et bornée à 1 000, les brouillons les plus anciens partant d'abord. Une
+  ligne terminée lue sans son adresse ou son contenu (une autre application est encore en train de l'écrire) est
+  relue une fois.
+- Le curseur de départ d'une installation existante est posé avant la première ligne des sept derniers jours, et
+  non après la dernière plus ancienne : les identifiants ne suivent plus les dates dès qu'une application de
+  sauvegarde restaure de vieux messages.
+
+**Limites connues.**
+- Une copie en cours d'écriture est visible quelques millisecondes, comme un message sortant, par les autres
+  applications SMS qui lisent la boîte d'envoi. Aucun import de SMS Tech ne la prend.
+- Supprimer un message ici ne le supprime pas des profils qui l'ont déjà importé. Les MMS, comme les SMS, ne sont
+  pas réconciliés d'un profil à l'autre.
+- Un MMS envoyé d'ici et supprimé dans les millisecondes de sa propre écriture, avant d'être relié, peut revenir
+  une fois parti. Le fermer obligerait à modifier le chemin d'envoi.
+- Si la copie système résiste à l'effaceur (rôle SMS perdu, par exemple), elle reste, comme pour les SMS.
+
+**Ce qui n'est volontairement pas recopié.**
+- **Le coffre.** Ses photos apparaîtraient en clair dans les autres profils. Les SMS du coffre ont bien une copie
+  système (limite N2, assumée) ; on ne l'étend pas aux MMS.
+- **L'historique.** Seuls les MMS reçus après la mise à jour, sur sept jours. Recopier d'un coup des centaines de
+  MMS privés dans le stockage partagé n'est pas un effet de bord acceptable d'une mise à jour.
+
+**Deux défauts corrigés sur le même chemin.**
+- **« Resynchroniser depuis le téléphone » dédoublait chaque MMS envoyé par l'application.** Un MMS sortant est
+  relié à sa copie système par `mms_system_id` seul, et l'import ne dédoublonnait que sur `telephony_uri`. Mesuré
+  sur le vrai fournisseur : deux messages au lieu d'un sans le correctif.
+- **L'import des MMS ne tournait qu'une fois.** Un MMS écrit ensuite par un autre profil n'arrivait jamais. Les
+  nouveaux MMS sont désormais importés à chaque synchronisation, avec un curseur qui ne saute rien : un brouillon,
+  un envoi en cours ou une copie en écriture entre en liste d'attente et s'importe une fois terminé, même sous le
+  même identifiant. Sur une installation existante, le curseur part de sept jours en arrière, pour prendre les
+  copies qu'un autre profil a écrites avant que celui-ci ne s'ouvre. Il ne relit pas tout l'historique, ce qui
+  ferait revenir des MMS dont la copie système a résisté à une suppression.
+
 ### v1.28.13 — Ce qu'a révélé le refus de chaque permission, une par une
 
 **Versions affectées : voir chaque point.** Signalé sur la demande de fusion F-Droid

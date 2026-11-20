@@ -35,7 +35,9 @@ class VaultPurgeBarrierTest {
             every { m.isOpenForUi(any()) } answers { callOriginal() }
         }
         val session = VaultSessionState().apply { markUnlocked() }
-        return VaultManager(repo, lock, session, io, barriere)
+        return VaultManager(repo, lock, session, io, barriere) {
+            mockk<com.filestech.sms.data.sync.TelephonySyncManager>(relaxed = true)
+        }
     }
 
     @Test

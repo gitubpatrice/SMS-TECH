@@ -7,6 +7,7 @@ import com.filestech.sms.data.mms.IntegrationMmsRecu
 import com.filestech.sms.data.mms.IntegrationMmsRecu.Resultat
 import com.filestech.sms.data.mms.LecteurRetrieveConf
 import com.filestech.sms.data.sms.PhoneIdentity
+import com.filestech.sms.data.sync.TelephonySyncManager
 import com.filestech.sms.domain.mms.DestinatairesMms
 import com.filestech.sms.domain.mms.GroupMmsMembers
 import com.filestech.sms.domain.model.PhoneAddress
@@ -44,6 +45,8 @@ class TraitementMmsRecu @Inject constructor(
     private val messageDao: MessageDao,
     private val notifier: IncomingMessageNotifier,
     private val failureNotifier: MmsFailureNotifier,
+    // 2026-11-19 (issue #98) — `Lazy` : le receveur construit ce traitement au démarrage à froid.
+    private val synchro: dagger.Lazy<TelephonySyncManager>,
 ) {
 
     /**
@@ -96,6 +99,12 @@ class TraitementMmsRecu @Inject constructor(
             destinataires = destinatairesDuMessage(contenu),
             pduPresent = pduPresent,
         )
+        // 2026-11-19 (issue #98) — un message COMPLET part aussi dans le stockage d'Android, pour les autres profils du
+        // téléphone. Un message incomplet attend sa complétion : la reprise rappellera ce traitement.
+        when (resultat) {
+            is Resultat.Ecrit, is Resultat.DejaComplet, is Resultat.Complete -> demanderCopieSysteme()
+            is Resultat.EcritIncomplet, is Resultat.ToujoursIncomplet, Resultat.Disparu -> Unit
+        }
         return when (resultat) {
             is Resultat.Ecrit -> {
                 notifierArrivee(contenu, resultat.messageId)
@@ -159,6 +168,16 @@ class TraitementMmsRecu @Inject constructor(
             expediteur = contenu.expediteur,
             cle = identite?.let { it::key } ?: { it },
         )
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — la copie se fait APRÈS, sous le verrou de la synchronisation
+     * (`TelephonySyncManager.copierMmsRecus`) : rien ici n'attend, et un échec ne change pas le sort du PDU — le
+     * message est en base, la passe suivante recopiera.
+     */
+    private fun demanderCopieSysteme() {
+        runCatching { synchro.get().copierMmsRecus() }
+            .onFailure { Timber.w(it, "MMS: copie systeme non demandee") }
     }
 
     /**

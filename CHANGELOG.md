@@ -25,6 +25,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 
 ### Fixed
 
+- **A received MMS now reaches the other user profiles of the phone** (issue #98, GrapheneOS). Android keeps one
+  message store for all profiles but delivers incoming messages only to the primary profile; SMS Tech wrote
+  received SMS there, never received MMS. A complete received MMS is now copied there, visible only once
+  complete, and linked to its copy, which deleting the message erases. A copy left behind by a delete during
+  the copy, or by an interrupted copy, is erased at the next pass; moving the conversation to the vault erases
+  its copies. Not copied: the vault, and MMS received before the update.
+- **"Resync from phone" no longer duplicates the MMS sent from the app.** The import did not recognise them.
+- **New MMS written by another profile are imported at each sync**, the 12-hour background sync included. The
+  MMS import ran only once. A draft or a send still in progress is imported once finished.
 - **A multipart SMS is marked sent only at its last part's report**; a failure on any part is still written.
   The first part's success marked the whole message sent before a later part could fail.
 - **The emergency cooldown is set before sending**: while the alert waited for the radio, a reopened screen

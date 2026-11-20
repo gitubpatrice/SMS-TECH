@@ -24,7 +24,8 @@ import javax.inject.Singleton
  * # Ce qui manquait
  *
  * Le receveur gardait le PDU quand une pièce jointe n'avait pas pu être écrite, ou quand le traitement
- * échouait — c'est la seule copie du message, aucun MMS entrant n'étant écrit dans `content://mms` —, mais
+ * échouait — c'est la seule copie du message : un MMS entrant n'est écrit dans `content://mms` qu'une fois complet
+ * chez nous (`CopieMmsRecus`, 2026-11-19) —, mais
  * personne ne le rouvrait : il partait au bout de 24 h. Rejouer demande de savoir si le message a déjà été
  * écrit, sinon on le duplique ; d'où la clé de transaction ([PdusEnAttente]) cherchée dans la transaction
  * d'écriture ([ConversationMirror.inscrireMmsRecu]).

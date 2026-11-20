@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.domain.model.ReactionFormat
@@ -408,6 +409,10 @@ class SettingsRepository(
                 identityDedupRepairedV1272 = p[K.identityDedupRepairedV1272] ?: false,
                 emptyConversationsPurgedV1272 = p[K.emptyConversationsPurgedV1272] ?: false,
                 groupThreadsRegroupedV1300 = p[K.groupThreadsRegroupedV1300] ?: false,
+                lastSyncedMmsId = p[K.lastSyncedMmsId] ?: -1L,
+                copieMmsRecusDepuis = p[K.copieMmsRecusDepuis] ?: 0L,
+                mmsNonTermines = p[K.mmsNonTermines] ?: emptySet(),
+                copiesMmsAVerifier = p[K.copiesMmsAVerifier] ?: emptySet(),
             ),
         )
     }
@@ -533,6 +538,10 @@ class SettingsRepository(
         this[K.identityDedupRepairedV1272] = s.advanced.identityDedupRepairedV1272
         this[K.emptyConversationsPurgedV1272] = s.advanced.emptyConversationsPurgedV1272
         this[K.groupThreadsRegroupedV1300] = s.advanced.groupThreadsRegroupedV1300
+        this[K.lastSyncedMmsId] = s.advanced.lastSyncedMmsId
+        this[K.copieMmsRecusDepuis] = s.advanced.copieMmsRecusDepuis
+        this[K.mmsNonTermines] = s.advanced.mmsNonTermines
+        this[K.copiesMmsAVerifier] = s.advanced.copiesMmsAVerifier
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -716,5 +725,17 @@ class SettingsRepository(
         /** 2026-11-06 (v1.30.0) — fils de groupe rangés dans leur conversation, cf. `FilsDeGroupe`. */
         val groupThreadsRegroupedV1300 =
             booleanPreferencesKey("advanced.groupThreadsRegroupedV1300")
+
+        /** 2026-11-19 (issue #98) — curseur de l'import des nouveaux MMS, cf. `AdvancedSettings.lastSyncedMmsId`. */
+        val lastSyncedMmsId = longPreferencesKey("advanced.lastSyncedMmsId")
+
+        /** 2026-11-19 (issue #98) — début de la copie système des MMS reçus, cf. `CopieMmsRecus`. */
+        val copieMmsRecusDepuis = longPreferencesKey("advanced.copieMmsRecusDepuis")
+
+        /** 2026-11-19 (issue #98) — lignes MMS passées non terminées, cf. `CurseurMms`. */
+        val mmsNonTermines = stringSetPreferencesKey("advanced.mmsNonTermines")
+
+        /** 2026-11-19 (issue #98) — copies de MMS reçus à vérifier, cf. `CopieMmsRecus`. */
+        val copiesMmsAVerifier = stringSetPreferencesKey("advanced.copiesMmsAVerifier")
     }
 }

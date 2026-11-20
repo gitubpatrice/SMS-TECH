@@ -5,6 +5,7 @@ import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.data.mms.IntegrationMmsRecu
 import com.filestech.sms.data.mms.IntegrationMmsRecu.Resultat
 import com.filestech.sms.data.sms.PhoneIdentity
+import com.filestech.sms.data.sync.TelephonySyncManager
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.settings.AppSettings
 import com.filestech.sms.domain.settings.AppSettingsSource
@@ -42,7 +43,10 @@ class TraitementMmsRecuTest {
     private val notifier = mockk<IncomingMessageNotifier>(relaxed = true)
     private val echecs = mockk<MmsFailureNotifier>(relaxed = true)
 
-    private val traitement = TraitementMmsRecu(blocage, reglages, identite, integration, messages, notifier, echecs)
+    private val synchro = mockk<TelephonySyncManager>(relaxed = true)
+
+    private val traitement =
+        TraitementMmsRecu(blocage, reglages, identite, integration, messages, notifier, echecs) { synchro }
 
     private fun conf() = RetrieveConf().apply {
         setFrom(EncodedStringValue("$ALICE/TYPE=PLMN"))
@@ -137,6 +141,35 @@ class TraitementMmsRecuTest {
         }
         coVerify(exactly = 0) { notifier.notifyIncoming(any(), any(), any(), any()) }
         coVerify(exactly = 0) { echecs.notifyFailure(any(), any(), any(), any(), any()) }
+    }
+
+    /**
+     * 2026-11-19 (issue #98) — un MMS reçu COMPLET est recopié dans le stockage d'Android, pour les autres profils du
+     * téléphone ; un message incomplet ne l'est pas encore (sa copie serait reliée, donc jamais refaite), ni un
+     * message disparu. Contrôle négatif : retirer l'appel fait tomber la première moitié, l'appeler pour toute issue
+     * la seconde.
+     */
+    @Test
+    fun `seul un message complet demande sa copie dans le stockage d'Android`() = runTest {
+        for (resultat in listOf(Resultat.Ecrit(ID), Resultat.DejaComplet(ID), Resultat.Complete(ID))) {
+            io.mockk.clearMocks(synchro)
+            traiter(resultat)
+            io.mockk.verify(exactly = 1) { synchro.copierMmsRecus() }
+        }
+        for (resultat in listOf(Resultat.EcritIncomplet(ID), Resultat.ToujoursIncomplet(ID), Resultat.Disparu)) {
+            io.mockk.clearMocks(synchro)
+            traiter(resultat)
+            io.mockk.verify(exactly = 0) { synchro.copierMmsRecus() }
+        }
+    }
+
+    @Test
+    fun `une demande de copie qui leve ne change pas le sort du PDU`() = runTest {
+        io.mockk.every { synchro.copierMmsRecus() } throws IllegalStateException("verrou")
+
+        val issue = traiter(Resultat.Ecrit(ID))
+
+        assertThat(issue).isEqualTo(TraitementMmsRecu.Issue(garderLePdu = false, consigner = true))
     }
 
     @Test

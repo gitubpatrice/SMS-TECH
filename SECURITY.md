@@ -83,6 +83,71 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.31.0 — A received MMS now has a copy in Android's message store (issue #98)
+
+**Affected versions: all up to 1.30.1.** Reported by a GrapheneOS user running SMS Tech in several user
+profiles. Android keeps one message store for all profiles but delivers incoming messages only to the primary
+profile's app, so the other profiles see only what that app writes there. SMS Tech wrote every received SMS
+there, but never a received MMS: it lived only in the encrypted database, and the other profiles never saw it
+(nor did other SMS apps, nor a reinstall, unlike what `PRIVACY.md` already said).
+
+**What changes.** A received MMS, once complete in the database, is copied to `content://mms` and linked to that
+copy. Three external reviews (Claude, GPT, Gemini) found five ways the first version could leak or bring back a
+message. All five are closed and tested against the real provider:
+- **Visible before complete.** Another profile does not share this profile's sync lock. The copy is now written
+  in the outbox box, which no import takes, and moved to the inbox only once its addresses and parts are all
+  written. A provider refusal (`…/0`) counts as a failure and erases the copy.
+- **Deleted during its copy.** A deletion that read the message just before the link left the copy behind, and
+  the import brought it back. Every copy is now recorded in a journal as soon as its row exists. The next pass,
+  at least a minute later, erases any copy no local message is linked to. Until then, this profile's import
+  ignores it. This one check covers every deletion path (message, conversation, retention, panic) without touching
+  the eraser. Deleting a linked message erases its copy through the eraser, whose identity check (date to the
+  second, box, sender) the copy satisfies; an instrumented test proves it.
+- **Moved to the vault after the copy.** The copies of its received MMS are erased from the shared store as soon
+  as the conversation enters the vault, and again at every pass. Profiles that had already imported them keep
+  them: MMS are not reconciled from one profile to another.
+- **Interrupted copy.** It is erased through the journal and written again, never twice.
+- **Twin path.** The 12-hour worker now also runs the copy and the import of new MMS, through the same function
+  and under the same lock.
+
+A second review round (Claude, GPT; Gemini found nothing) tightened five points, each with a test that fails
+without it:
+- The journal is stamped when the copy is written, not when the pass started. A pass that wrote copies schedules
+  another one 90 s later, so an orphaned copy is erased within a minute and a half rather than at the next sync.
+- A copy whose journal entry could not be written is erased on the spot. A copy left in the outbox box for more than
+  an hour is swept; the sweep only matches received copies (`m-retrieve-conf`), never a send.
+- The vault is checked again right after the link.
+- The waiting list: a failed MMS is no longer final (another app may resend it under the same id). The list is
+  deduplicated and capped at 1,000, the oldest drafts going first. A finished row read without its address or
+  content (another app still writing it) is read again once.
+- The starting cursor of an existing install is set before the earliest row of the last seven days, not after the
+  latest older one: ids do not follow dates once a backup app restores old messages.
+
+**Known limits.**
+- A copy being written is visible for a few milliseconds, as an outgoing message, to other SMS apps that read the
+  outbox box. No SMS Tech import takes it.
+- Deleting a message here does not delete it from profiles that already imported it. MMS, like SMS, are not
+  reconciled across profiles.
+- An MMS sent from here and deleted within the milliseconds of its own write, before it is linked, can come back
+  once sent. Closing this would mean changing the send path.
+- If the system copy resists the eraser (SMS role lost, for example), it stays, as it does for SMS.
+
+**What is deliberately not copied.**
+- **The vault.** Its photos would appear in clear in the other profiles. Vault SMS do have a system copy
+  (limit N2, accepted); it is not extended to MMS.
+- **History.** Only MMS received after the update, within seven days. Copying hundreds of private MMS into the
+  shared store at once is not an acceptable side effect of an update.
+
+**Two defects fixed on the same path.**
+- **"Resync from phone" duplicated every MMS sent from the app.** An outgoing MMS is linked to its system copy
+  by `mms_system_id` only, and the import deduplicated on `telephony_uri` only. Measured on the real provider:
+  two messages instead of one without the fix.
+- **The MMS import ran once.** An MMS written later by another profile never arrived. New MMS are now imported
+  at each sync, with a cursor that skips nothing: a draft, a send in progress or a copy being written enters a
+  waiting list and is imported once finished, even under the same id. On an existing install the cursor starts
+  seven days back, to pick up copies another profile wrote before this one opened. It does not re-read all
+  history, which would bring back MMS whose system copy resisted a deletion.
+
 ### v1.28.13 — What refusing each permission, one at a time, revealed
 
 **Affected versions: see each item.** Reported on the F-Droid merge request (fdroid/fdroiddata!38458)

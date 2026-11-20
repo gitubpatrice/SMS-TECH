@@ -535,6 +535,36 @@ data class AdvancedSettings(
      */
     val groupThreadsRegroupedV1300: Boolean = false,
     /**
+     * 2026-11-19 (issue #98, plusieurs profils) — le plus grand `_id` de `content://mms` déjà regardé par
+     * l'import des NOUVEAUX MMS ([com.filestech.sms.data.sync.TelephonySyncManager]). `-1` : jamais posé.
+     *
+     * L'import des MMS du fournisseur ne tournait qu'une fois (`mmsImportCompleted`) : un MMS écrit ensuite par
+     * un autre profil du téléphone (ou une autre application) n'arrivait jamais ici. Une installation qui a déjà
+     * fait son import complet pose ce curseur juste avant les lignes des sept derniers jours
+     * (`TelephonySyncManager.curseurDeDepart`), sans relire tout l'historique : le relire ferait revenir les MMS dont
+     * la copie système a résisté à une suppression. Un import complet — premier lancement, « Resynchroniser » — le
+     * pose au plus grand identifiant lu avant lui, sans jamais le faire reculer.
+     */
+    val lastSyncedMmsId: Long = -1L,
+    /**
+     * 2026-11-19 (issue #98) — date (ms) à partir de laquelle les MMS REÇUS sont recopiés dans `content://mms`
+     * ([com.filestech.sms.data.sync.CopieMmsRecus]). `0` : pas encore posée ; la première synchronisation de
+     * cette version la pose à « maintenant », pour ne pas recopier tout l'historique d'un coup.
+     */
+    val copieMmsRecusDepuis: Long = 0L,
+    /**
+     * 2026-11-19 (issue #98) — les lignes de `content://mms` que le curseur des nouveaux MMS a passées alors qu'elles
+     * n'étaient pas terminées (brouillon, envoi en cours, copie en cours d'écriture) : relues à chaque passe, importées
+     * une fois terminées. Forme `"<_id>:<vue la première fois, ms>"`, cf. [com.filestech.sms.data.sync.CurseurMms].
+     */
+    val mmsNonTermines: Set<String> = emptySet(),
+    /**
+     * 2026-11-19 (issue #98) — les copies de MMS reçus écrites dans `content://mms` et pas encore vérifiées : au passage
+     * suivant, une copie dont le message n'existe plus ici est effacée (suppression pendant la copie, arrêt brutal).
+     * Forme `"<_id>:<écrite, ms>"`, cf. [com.filestech.sms.data.sync.CopieMmsRecus].
+     */
+    val copiesMmsAVerifier: Set<String> = emptySet(),
+    /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante
      * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour
