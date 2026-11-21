@@ -294,7 +294,6 @@ class MmsFailureNotifier @Inject constructor(
     private fun notificationsVisibles(): Boolean = runCatching {
         val nm = NotificationManagerCompat.from(context)
         if (!nm.areNotificationsEnabled()) return@runCatching false
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@runCatching true
         val canal = nm.getNotificationChannelCompat(NotificationChannelInitializer.CHANNEL_FAILED)
         canal != null && canal.importance != NotificationManagerCompat.IMPORTANCE_NONE
     }.getOrDefault(true)

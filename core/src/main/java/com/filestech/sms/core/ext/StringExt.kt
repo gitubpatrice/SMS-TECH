@@ -266,23 +266,23 @@ fun String.deterministicHue(): Int {
  *   - `͏`       — COMBINING GRAPHEME JOINER
  *   - `؜`       — ARABIC LETTER MARK (bidi)
  *   - `᠎`       — MONGOLIAN VOWEL SEPARATOR (formerly whitespace, now zero-width)
- *   - `​`       — ZERO WIDTH SPACE
- *   - `‎`, `‏` — LRM / RLM (bidi)
- *   - `‪-‮` — bidi explicit formatting (LRE/RLE/PDF/LRO/RLO)
- *   - `⁠-⁤` — word joiner + invisible operators
- *   - `⁦-⁩` — bidi isolates (LRI/RLI/FSI/PDI)
- *   - `﻿`       — ZWNBSP / BOM
+ *   - `\u200B`       — ZERO WIDTH SPACE
+ *   - `\u200E`, `\u200F` — LRM / RLM (bidi)
+ *   - `\u202A-\u202E` — bidi explicit formatting (LRE/RLE/PDF/LRO/RLO)
+ *   - `\u2060-\u2064` — word joiner + invisible operators
+ *   - `\u2066-\u2069` — bidi isolates (LRI/RLI/FSI/PDI)
+ *   - `\uFEFF`       — ZWNBSP / BOM
  *   - `￼-�` — object replacement + replacement character
  *
  * # v1.28.3 (F28) — ZWJ et ZWNJ ne sont PLUS retirés
  *
- * La plage d'origine s'écrivait `​-‏`, qui englobe **U+200C ZERO WIDTH NON-JOINER**
+ * La plage d'origine s'écrivait `\u200B-\u200F`, qui englobe **U+200C ZERO WIDTH NON-JOINER**
  * et **U+200D ZERO WIDTH JOINER**. Ce ne sont pas des invisibles trompeurs : ce sont les
  * liants qui CONSTRUISENT le texte. Les retirer avant stockage altérait irréversiblement des
  * messages parfaitement légitimes, à chaque réception :
  *
- *  - `👨‍👩‍👧` (deux ZWJ) était stocké comme trois emoji séparés, `🏳️‍🌈` comme `🏳️🌈` ;
- *  - en persan, `می‌روم` devenait `میروم` ; même effet en hindi et dans plusieurs écritures
+ *  - `👨\u200D👩\u200D👧` (deux ZWJ) était stocké comme trois emoji séparés, `🏳️\u200D🌈` comme `🏳️🌈` ;
+ *  - en persan, `می\u200Cروم` devenait `میروم` ; même effet en hindi et dans plusieurs écritures
  *    indiennes, où le ZWNJ change le mot et non son style.
  *
  * Irréversible parce que le corps nettoyé était écrit AUX DEUX endroits — `content://sms` et
@@ -303,8 +303,8 @@ fun String.stripInvisibleChars(): String =
 /**
  * Compiled once at class-load — never re-allocated per call.
  *
- * ⚠️ `​‎‏` énumérés un par un, et NON `​-‏` : la plage engloberait
- * ZWNJ (`‌`) et ZWJ (`‍`), qui doivent être conservés. Cf. le KDoc ci-dessus — c'est
+ * ⚠️ `\u200B\u200E\u200F` énumérés un par un, et NON `\u200B-\u200F` : la plage engloberait
+ * ZWNJ (`\u200C`) et ZWJ (`\u200D`), qui doivent être conservés. Cf. le KDoc ci-dessus — c'est
  * une plage qui a coûté tous les emoji composés reçus depuis la v1.4.1.
  */
 private val INVISIBLE_CHARS_REGEX = Regex(

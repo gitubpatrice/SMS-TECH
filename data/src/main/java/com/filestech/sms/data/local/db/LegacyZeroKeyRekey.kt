@@ -2,6 +2,7 @@ package com.filestech.sms.data.local.db
 
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.core.content.edit
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SQLiteNotADatabaseException
 import timber.log.Timber
@@ -170,7 +171,7 @@ object LegacyZeroKeyRekey {
             // Nothing to repair: fresh install, or a truncated stub Room will recreate anyway.
             recoverInterruptedSwap(dbFile)
             if (!dbFile.exists() || dbFile.length() < MIN_SQLITE_SIZE) {
-                prefs.edit().putBoolean(doneKey(dbFile), true).commit()
+                prefs.edit(commit = true) { putBoolean(doneKey(dbFile), true) }
                 return Result.FRESH_INSTALL
             }
         }
@@ -200,7 +201,7 @@ object LegacyZeroKeyRekey {
         // 493 ms -> 2 ms). Sonder d'abord la passphrase ferait payer 256 000 iterations pour
         // s'entendre repondre non, sur le chemin meme que ce correctif repare.
         if (canOpen(dbFile, rawKeySpecBytes(passphrase)) || canOpen(dbFile, passphrase)) {
-            prefs.edit().putBoolean(doneKey(dbFile), true).commit()
+            prefs.edit(commit = true) { putBoolean(doneKey(dbFile), true) }
             discardOld(dbFile)
             return Result.ALREADY_CORRECT
         }
@@ -255,7 +256,7 @@ object LegacyZeroKeyRekey {
                 SIDECAR_SUFFIXES.forEach { File(dbFile.absolutePath + it).delete() }
                 discardTemp(dbFile)
                 discardOld(dbFile)
-                prefs.edit().putBoolean(doneKey(dbFile), true).commit()
+                prefs.edit(commit = true) { putBoolean(doneKey(dbFile), true) }
                 return Result.ORPHANED_DISCARDED
             }
             // Doctrine (audit F18): a silent wipe is silent data loss. Surface, never delete.
@@ -279,7 +280,7 @@ object LegacyZeroKeyRekey {
         // Single exit for every failure path: the outcome is memoized in `failed`, so a later
         // request cannot re-run the rebuild — possibly from the main thread.
         failures[dbFile.absolutePath]?.let { throw it }
-        prefs.edit().putBoolean(doneKey(dbFile), true).commit()
+        prefs.edit(commit = true) { putBoolean(doneKey(dbFile), true) }
         Timber.i("LegacyZeroKeyRekey: database re-encrypted with the Keystore passphrase")
         return Result.REKEYED
     }
@@ -325,12 +326,12 @@ object LegacyZeroKeyRekey {
         // Fresh install: no file yet. Room will create it directly raw-keyed (the app opens with
         // the raw spec), so there is nothing to convert — just record completion.
         if (!dbFile.exists() || dbFile.length() < MIN_SQLITE_SIZE) {
-            prefs.edit().putBoolean(rawDoneKey(dbFile), true).commit()
+            prefs.edit(commit = true) { putBoolean(rawDoneKey(dbFile), true) }
             return Result.FRESH_INSTALL
         }
 
         if (canOpen(dbFile, rawKey)) {
-            prefs.edit().putBoolean(rawDoneKey(dbFile), true).commit()
+            prefs.edit(commit = true) { putBoolean(rawDoneKey(dbFile), true) }
             return Result.ALREADY_CORRECT
         }
 
@@ -353,7 +354,7 @@ object LegacyZeroKeyRekey {
         }
         // Single exit for every failure path (memoized, so a retry cannot re-run the conversion).
         failures[dbFile.absolutePath]?.let { throw it }
-        prefs.edit().putBoolean(rawDoneKey(dbFile), true).commit()
+        prefs.edit(commit = true) { putBoolean(rawDoneKey(dbFile), true) }
         Timber.i("LegacyZeroKeyRekey: ${dbFile.name} now raw-keyed — open is now near-instant")
         return Result.REKEYED
     }
@@ -376,6 +377,9 @@ object LegacyZeroKeyRekey {
      *  - passphrase → raw-key speed-up: `sourceKey = passphrase`, `applyNewKey = PRAGMA rekey x'…'`,
      *    `validationKey = the ASCII of x'…'`.
      */
+    // `usableSpace` et non `getAllocatableBytes` : la reparation refuse AVANT d'ecrire, sur l'espace libre reel ;
+    // vider le cache d'autres applis pour faire de la place ne la regarde pas.
+    @SuppressLint("UsableSpace")
     private fun exportToNewKey(
         dbFile: File,
         sourceKey: ByteArray,

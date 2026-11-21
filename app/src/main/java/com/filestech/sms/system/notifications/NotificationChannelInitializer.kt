@@ -3,7 +3,6 @@ package com.filestech.sms.system.notifications
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import androidx.core.content.getSystemService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -15,7 +14,6 @@ class NotificationChannelInitializer @Inject constructor(
 ) {
 
     fun ensureDefaultChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService<NotificationManager>() ?: return
         val incoming = NotificationChannel(
             CHANNEL_INCOMING,

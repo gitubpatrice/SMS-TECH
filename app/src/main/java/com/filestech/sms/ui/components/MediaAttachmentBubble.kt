@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.filestech.sms.R
@@ -312,7 +313,7 @@ private fun ImagePreview(
  * échoue en silence à l'affichage.
  */
 internal fun Attachment.modeleImage(): Any =
-    if (localUri.startsWith("content://")) Uri.parse(localUri) else File(localUri)
+    if (localUri.startsWith("content://")) localUri.toUri() else File(localUri)
 
 /**
  * Ouvre une pièce jointe dans l'application du système associée à son type.
@@ -353,7 +354,7 @@ private fun com.filestech.sms.domain.model.Attachment.toShareableUri(
 ): Uri? {
     if (localUri.isBlank()) return null
     if (localUri.startsWith("content://")) {
-        return Uri.parse(localUri)
+        return localUri.toUri()
     }
     // v1.6.1 (audit SEC-09) — canonicalFile + whitelist filesDir/cacheDir defense-in-depth.
     // FileProvider.getUriForFile() throw IllegalArgumentException si le path est hors des

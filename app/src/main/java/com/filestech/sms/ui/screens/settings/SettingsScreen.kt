@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -182,6 +183,7 @@ fun SettingsScreen(
 
     val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val resources = LocalResources.current
     // v1.26.0 — libelles du code panique resolus dans la composition, pas via
     // `Context.getString` depuis le collecteur d'evenements : lint le refuse a juste titre
     // (LocalContextGetResourceValueCall), un changement de langue ne serait pas repercute.
@@ -220,17 +222,19 @@ fun SettingsScreen(
                     snackbarHost.showError(lockDowngradeUnverifiableMsg)
                 is SettingsViewModel.Event.BlockedPurged -> {
                     val msg = if (e.count > 0) {
-                        ctx.getString(R.string.settings_purge_blocked_result, e.count)
-                    } else ctx.getString(R.string.settings_purge_blocked_none)
+                        resources.getQuantityString(R.plurals.settings_purge_blocked_result, e.count, e.count)
+                    } else {
+                        resources.getString(R.string.settings_purge_blocked_none)
+                    }
                     snackbarHost.showSnackbar(msg)
                 }
                 is SettingsViewModel.Event.HistoryPurged -> {
                     snackbarHost.showSnackbar(
-                        ctx.getString(R.string.settings_auto_delete_purge_done, e.count),
+                        resources.getQuantityString(R.plurals.settings_auto_delete_purge_done, e.count, e.count),
                     )
                 }
                 SettingsViewModel.Event.ResyncRequested -> {
-                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_resync_started))
+                    snackbarHost.showSnackbar(resources.getString(R.string.settings_resync_started))
                 }
                 SettingsViewModel.Event.PanicCodeSet -> {
                     snackbarHost.showSnackbar(panicSavedMsg)
@@ -261,7 +265,7 @@ fun SettingsScreen(
                 // caractere destructif de l'operation constatable, pas seulement annonce.
                 is SettingsViewModel.Event.VaultPurged -> {
                     snackbarHost.showSnackbar(
-                        ctx.getString(R.string.settings_vault_pin_forgot_done, e.count),
+                        resources.getQuantityString(R.plurals.settings_vault_pin_forgot_done, e.count, e.count),
                     )
                 }
                 // v1.27.11 (revue externe GitLab !38458, constat 2) — la purge a échoué, le PIN
@@ -270,7 +274,7 @@ fun SettingsScreen(
                 // devant un dialogue de PIN qu'il n'attendait plus.
                 is SettingsViewModel.Event.VaultPurgeIncomplete -> {
                     snackbarHost.showError(
-                        ctx.getString(
+                        resources.getString(
                             R.string.settings_vault_pin_forgot_incomplete,
                             e.deleted,
                             e.left,
@@ -298,7 +302,7 @@ fun SettingsScreen(
                 // la contrepartie acceptee, et elle se dit — `showError` pour qu'elle se voie.
                 is SettingsViewModel.Event.VaultPurgedWithResidue -> {
                     snackbarHost.showError(
-                        ctx.getString(
+                        resources.getString(
                             R.string.settings_vault_pin_forgot_residue,
                             e.deleted,
                             e.left,
@@ -324,7 +328,7 @@ fun SettingsScreen(
                 ))
             }
             rootScope.launch {
-                snackbarHost.showError(ctx.getString(R.string.settings_emergency_include_location_denied))
+                snackbarHost.showError(resources.getString(R.string.settings_emergency_include_location_denied))
             }
         }
     }
@@ -1359,7 +1363,7 @@ fun SettingsScreen(
             onSaved = {
                 vaultPinSetupOpen = false
                 rootScope.launch {
-                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_saved))
+                    snackbarHost.showSnackbar(resources.getString(R.string.settings_vault_pin_saved))
                 }
             },
             onDismiss = { vaultPinSetupOpen = false },
@@ -1414,7 +1418,7 @@ fun SettingsScreen(
             onVerified = {
                 vaultPinDisableOpen = false
                 rootScope.launch {
-                    snackbarHost.showSnackbar(ctx.getString(R.string.settings_vault_pin_cleared))
+                    snackbarHost.showSnackbar(resources.getString(R.string.settings_vault_pin_cleared))
                 }
             },
             onCancel = { vaultPinDisableOpen = false },
@@ -1471,7 +1475,7 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_vault_pin_force_title)) },
             text = {
                 Text(
-                    stringResource(R.string.settings_vault_pin_force_body, resteAuTelephone),
+                    pluralStringResource(R.plurals.settings_vault_pin_force_body, resteAuTelephone, resteAuTelephone),
                 )
             },
             confirmButton = {
@@ -2334,7 +2338,8 @@ private fun detectMsisdn(context: android.content.Context): MsisdnDetection {
         runCatching {
             val tm = context.getSystemService(android.telephony.TelephonyManager::class.java)
                 ?.createForSubscriptionId(defaultId)
-            @Suppress("DEPRECATION")
+            // HardwareIds : voulu, le numero de la SIM preremplit « Mon numero » a la demande de l'utilisateur.
+            @Suppress("DEPRECATION", "HardwareIds")
             tm?.line1Number
         }
             .getOrNull()
@@ -2932,8 +2937,9 @@ private fun SafetyCallArmedRecap(
                 R.string.settings_safety_call_armed_contacts_one,
                 labels.joinToString(", "),
             )
-            else -> stringResource(
-                R.string.settings_safety_call_armed_contacts_many,
+            else -> pluralStringResource(
+                R.plurals.settings_safety_call_armed_contacts_many,
+                labels.size - 2,
                 labels.take(2).joinToString(", "),
                 labels.size - 2,
             )
@@ -3150,8 +3156,9 @@ private fun EmergencyArmedRecap(
                 R.string.settings_emergency_armed_contacts_one,
                 labels.joinToString(", "),
             )
-            else -> stringResource(
-                R.string.settings_emergency_armed_contacts_many,
+            else -> pluralStringResource(
+                R.plurals.settings_emergency_armed_contacts_many,
+                labels.size - 2,
                 labels.take(2).joinToString(", "),
                 labels.size - 2,
             )

@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -110,7 +111,7 @@ fun SafetyCallSetupScreen(
     val snackbarHost = remember { SnackbarHostState() }
     var addContactDialogOpen by remember { mutableStateOf(false) }
     var customDurationDialogOpen by remember { mutableStateOf(false) }
-    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val resources = LocalResources.current
 
     // v1.28.12 — le retour du sélecteur système ne porte rien d'utile : c'est le `ON_RESUME`
     // de [BanniereRoleSmsManquant] qui relit l'état du rôle et fait disparaître la bannière.
@@ -184,7 +185,7 @@ fun SafetyCallSetupScreen(
                             R.string.safety_call_setup_shared_with_emergency
                     }
                     // v1.9.0 — validation = erreur rouge, pas confirmation bleue.
-                    snackbarHost.showError(ctx.getString(msgRes))
+                    snackbarHost.showError(resources.getString(msgRes))
                 }
             }
         }

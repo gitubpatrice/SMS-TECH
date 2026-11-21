@@ -105,12 +105,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -210,6 +212,7 @@ fun ThreadScreen(
     }
     val snackbarHost = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val listState = rememberLazyListState()
     val formatters = rememberChatFormatters()
     val haptic = LocalHapticFeedback.current
@@ -229,7 +232,7 @@ fun ThreadScreen(
         if (body.isNotEmpty()) {
             context.copyToClipboardSensitive(label = "message", text = body)
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            val label = context.getString(R.string.toast_copied)
+            val label = resources.getString(R.string.toast_copied)
             scope.launch { snackbarHost.showSnackbar(label) }
         }
     }
@@ -416,7 +419,7 @@ fun ThreadScreen(
                 // l'envoi » laisserait croire à une panne passagère, alors que rien ne repartira
                 // tant que l'utilisateur n'aura pas débloqué le numéro qu'il a lui-même bloqué.
                 is ThreadViewModel.Event.SendError -> snackbarHost.showError(
-                    context.getString(
+                    resources.getString(
                         when (e.error) {
                             is AppError.RecipientBlocked -> R.string.error_send_recipient_blocked
                             // v1.28.3 (audit global B-1) — la bulle rouge d'un MMS ne se relance
@@ -454,7 +457,7 @@ fun ThreadScreen(
                     ContactIntents.createContact(context, e.rawNumber)
                 }
                 is ThreadViewModel.Event.OpenDialer -> {
-                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(e.rawNumber)}"))
+                    val intent = Intent(Intent.ACTION_DIAL, "tel:${Uri.encode(e.rawNumber)}".toUri())
                     runCatching { context.startActivity(intent) }
                 }
                 is ThreadViewModel.Event.RequestReactionConfirm -> {
@@ -697,7 +700,7 @@ fun ThreadScreen(
                         // v1.3.7 — refus de permission = erreur utilisateur visible → rouge.
                         scope.launch {
                             snackbarHost.showError(
-                                context.getString(R.string.voice_permission_denied),
+                                resources.getString(R.string.voice_permission_denied),
                             )
                         }
                     },
@@ -1249,8 +1252,9 @@ fun ThreadScreen(
             title = { Text(stringResource(R.string.thread_group_blocked_title)) },
             text = {
                 Text(
-                    stringResource(
-                        R.string.thread_group_blocked_body,
+                    pluralStringResource(
+                        R.plurals.thread_group_blocked_body,
+                        attente.servis,
                         attente.bloques.joinToString(", "),
                         attente.servis,
                     ),
@@ -1525,7 +1529,7 @@ internal fun ConversationDetailsDialog(
                     )
                 }
                 Text(
-                    stringResource(R.string.thread_details_messages, messages),
+                    pluralStringResource(R.plurals.thread_details_messages, messages, messages),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (firstAt != null) {

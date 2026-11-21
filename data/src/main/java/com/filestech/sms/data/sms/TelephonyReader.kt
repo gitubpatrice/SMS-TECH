@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.provider.Telephony
+import androidx.core.net.toUri
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.domain.model.MessageStatus
@@ -330,7 +331,7 @@ class TelephonyReader @Inject constructor(
         }
         val mmsUpdated = runCatching {
             resolver.update(
-                Uri.parse("content://mms"),
+                "content://mms".toUri(),
                 cvMms,
                 "thread_id = ? AND read = 0 AND msg_box = $MMS_MSG_BOX_INBOX",
                 arrayOf(systemThreadId.toString()),
@@ -360,7 +361,7 @@ class TelephonyReader @Inject constructor(
         }
         val mmsUpdated = runCatching {
             resolver.update(
-                Uri.parse("content://mms"),
+                "content://mms".toUri(),
                 cvMms,
                 "read = 0 AND msg_box = $MMS_MSG_BOX_INBOX",
                 null,
@@ -459,7 +460,7 @@ class TelephonyReader @Inject constructor(
         val out = ArrayList<EtatMms>(ids.size)
         for (lot in ids.chunked(LOT_IDS)) {
             resolver.query(
-                Uri.parse("content://mms"),
+                "content://mms".toUri(),
                 arrayOf("_id", "msg_box", "date"),
                 "_id IN (${lot.joinToString(",") { "?" }})",
                 lot.map { it.toString() }.toTypedArray(),
@@ -479,7 +480,7 @@ class TelephonyReader @Inject constructor(
      * identifiants : trois colonnes, aucune adresse, aucune pièce. `null` = lecture impossible.
      */
     fun lireEtatsMmsApres(apres: Long): List<EtatMms>? = resolver.query(
-        Uri.parse("content://mms"),
+        "content://mms".toUri(),
         arrayOf("_id", "msg_box", "date"),
         "_id > ?",
         arrayOf(apres.toString()),
@@ -492,7 +493,7 @@ class TelephonyReader @Inject constructor(
 
     /** 2026-11-19 (issue #98) — le plus grand `_id` de `content://mms` (0 s'il est vide), ou `null` si illisible. */
     fun plusGrandIdMms(): Long? = resolver.query(
-        Uri.parse("content://mms"),
+        "content://mms".toUri(),
         arrayOf("_id"),
         null,
         null,
@@ -531,14 +532,14 @@ class TelephonyReader @Inject constructor(
      */
     fun lireFilsDuFournisseur(): Map<Long, List<String>>? {
         val adresses = resolver.query(
-            Uri.parse("content://mms-sms/canonical-addresses"),
+            "content://mms-sms/canonical-addresses".toUri(),
             arrayOf("_id", "address"),
             null,
             null,
             null,
         )?.use(FilsDuFournisseur::adresses) ?: return null
         return resolver.query(
-            Uri.parse("content://mms-sms/conversations?simple=true"),
+            "content://mms-sms/conversations?simple=true".toUri(),
             arrayOf("_id", "recipient_ids"),
             null,
             null,
@@ -557,7 +558,7 @@ class TelephonyReader @Inject constructor(
             val arguments = lot.map(Long::toString).toTypedArray()
             for (table in listOf("sms", "mms")) {
                 val curseur = resolver.query(
-                    Uri.parse("content://$table"),
+                    "content://$table".toUri(),
                     arrayOf("_id", "thread_id"),
                     selection,
                     arguments,
@@ -621,7 +622,7 @@ class TelephonyReader @Inject constructor(
         // → 3 queries par chunk de 200 MMS (~5 s économisées sur premier import 500 MMS S9).
         val pending = ArrayList<PendingMms>(pageSize)
         val mainCursor = resolver.query(
-            Uri.parse("content://mms"),
+            "content://mms".toUri(),
             arrayOf("_id", "thread_id", "date", "read", "msg_box", "sub_id"),
             tranche?.selection,
             tranche?.arguments,
@@ -761,7 +762,7 @@ class TelephonyReader @Inject constructor(
             val placeholders = chunk.joinToString(",") { "?" }
             val args = Array(chunk.size) { chunk[it].toString() }
             resolver.query(
-                Uri.parse("content://mms/part"),
+                "content://mms/part".toUri(),
                 arrayOf("_id", "mid", "ct", "name", "text"),
                 "mid IN ($placeholders)",
                 args,
@@ -820,7 +821,7 @@ class TelephonyReader @Inject constructor(
         val text = StringBuilder()
         val atts = ArrayList<MmsPartImport>(4)
         resolver.query(
-            Uri.parse("content://mms/part"),
+            "content://mms/part".toUri(),
             arrayOf("_id", "ct", "name", "text"),
             "mid = ?",
             arrayOf(mmsId.toString()),

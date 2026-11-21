@@ -19,6 +19,7 @@ package com.filestech.sms.pdu;
 
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
+import java.util.Locale;
 
 /**
  * IANA MIB-enum mapping for the character sets used in MMS PDU headers. Numbers come from the
@@ -100,7 +101,7 @@ public class CharacterSets {
     /** Inverse of [getMimeName]. */
     public static int getMibEnumValue(String mimeName) throws UnsupportedEncodingException {
         if (mimeName == null) throw new UnsupportedEncodingException();
-        Integer mibEnum = NAME_TO_MIBENUM_MAP.get(mimeName.toLowerCase());
+        Integer mibEnum = NAME_TO_MIBENUM_MAP.get(mimeName.toLowerCase(Locale.ROOT));
         if (mibEnum == null) throw new UnsupportedEncodingException();
         return mibEnum;
     }

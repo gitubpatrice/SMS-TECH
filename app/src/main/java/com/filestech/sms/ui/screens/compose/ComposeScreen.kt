@@ -49,6 +49,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -79,6 +80,7 @@ fun ComposeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val filtered by viewModel.filtered.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val snackbarHost = remember { SnackbarHostState() }
     // 2026-11-14 — gabarits lus dans la composition (sensibles à la configuration), mis en forme à l'annonce,
@@ -193,7 +195,7 @@ fun ComposeScreen(
                                 if (!ContactIntents.createContact(context)) {
                                     scope.launch {
                                         snackbarHost.showError(
-                                            context.getString(R.string.phone_action_no_contacts),
+                                            resources.getString(R.string.phone_action_no_contacts),
                                         )
                                     }
                                 }

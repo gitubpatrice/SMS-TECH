@@ -1,6 +1,5 @@
 package com.filestech.sms.data.blocking
 
-import android.os.Build
 import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.data.local.db.dao.BlockedNumberDao
 import com.filestech.sms.data.local.db.dao.ConversationDao
@@ -78,7 +77,6 @@ class BlockedNumbersImporter @Inject constructor(
         // l'ancienne clé ne bloque plus rien, donc plus tôt elle est convertie, mieux c'est.
         runCatching { rekeyLegacyEntries() }
             .onFailure { Timber.w(it, "rekeyLegacyEntries failed") }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return@withContext
         val systemNumbers = runCatching { system.listSystemBlocked() }.getOrDefault(emptyList())
         if (systemNumbers.isNotEmpty()) {
             var imported = 0

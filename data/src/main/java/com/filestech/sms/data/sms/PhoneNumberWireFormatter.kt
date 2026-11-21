@@ -1,7 +1,6 @@
 package com.filestech.sms.data.sms
 
 import android.content.Context
-import android.os.Build
 import android.telephony.PhoneNumberUtils
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
@@ -102,8 +101,7 @@ class PhoneNumberWireFormatter @Inject constructor(
         val base = context.getSystemService(TelephonyManager::class.java) ?: return null
         val tm = if (
             subId != null &&
-            subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+            subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID
         ) {
             runCatching { base.createForSubscriptionId(subId) }.getOrNull() ?: base
         } else {
