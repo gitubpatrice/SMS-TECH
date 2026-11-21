@@ -93,6 +93,7 @@ class ContactsRefusesTest {
             conversationRepo = mockk(relaxed = true),
             io = dispatcher,
             blockedRepo = mockk(relaxed = true),
+            incomingShare = com.filestech.sms.system.share.IncomingShareHolder(),
         )
 
         assertThat(vm.state.value.contactsRefused).isTrue()
@@ -120,6 +121,7 @@ class ContactsRefusesTest {
             conversationRepo = mockk(relaxed = true),
             io = dispatcher,
             blockedRepo = mockk(relaxed = true),
+            incomingShare = com.filestech.sms.system.share.IncomingShareHolder(),
         )
 
         assertThat(vm.state.value.contactsRefused).isFalse()

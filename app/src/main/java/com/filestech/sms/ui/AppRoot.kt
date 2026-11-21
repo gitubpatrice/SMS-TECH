@@ -144,27 +144,26 @@ fun AppRoot() {
     //   - skip if we're already on Compose / Thread (the user is mid-flow),
     //   - skip in panic-decoy state (sharing into the decoy session is forbidden
     //     by design — the user's real conversations are not available there).
+    //
+    // v1.4.1 (SEC-03) — privacy fix : when a share arrives while the user is already inside a Thread (or in
+    // Compose), the Pending is cleared, so it cannot land in a conversation the user did not pick.
+    //
+    // 2026-11-20 — ONLY a share from another app (`Cible.AChoisir`) is routed here. SEC-03 also cleared forwards,
+    // which start from a Thread by definition: the forwarded text never reached the chosen conversation (reported
+    // by e-mail, "same problem on 1.30.1"). The decision lives in [AiguillagePartage], tested on its own.
     val pendingShare by incomingShare.pending.collectAsStateWithLifecycle()
     LaunchedEffect(pendingShare, showLock, isPanicDecoy) {
-        val current = pendingShare ?: return@LaunchedEffect
-        if (showLock || isPanicDecoy) return@LaunchedEffect
-        if (current.isExpired()) return@LaunchedEffect
-        val route = nav.currentDestination?.route
-        val alreadyInFlow = route?.contains("Compose") == true ||
-            route?.contains("Thread") == true
-        if (alreadyInFlow) {
-            // v1.4.1 (SEC-03) — privacy fix : when a share arrives while the user is
-            // already inside a Thread (or in Compose), the Pending used to linger up to
-            // its 60 s TTL. If the user then navigated to ANOTHER thread within that
-            // window, `ThreadViewModel.consumeIncomingShareIfAny` would silently stage
-            // the shared attachment into that wrong conversation's composer — risking
-            // an accidental send to the wrong recipient. Clearing the Pending here is
-            // a small UX cost (the user has to share again) for a real privacy guard.
-            incomingShare.clear()
-            return@LaunchedEffect
-        }
-        nav.navigate(Compose())
+        com.filestech.sms.system.share.AiguillagePartage.appliquer(
+            relais = incomingShare,
+            route = nav.currentDestination?.route,
+            verrouille = showLock,
+            leurre = isPanicDecoy,
+        ) { nav.navigate(Compose()) }
     }
+    // 2026-11-20 (relecture GPT) — un transfert en route vers une conversation ne survit pas au verrouillage, et rien
+    // du relais ne survit à l'entrée en session leurre. Un partage venu d'une autre application attend le
+    // déverrouillage, comme avant.
+    LaunchedEffect(showLock, isPanicDecoy) { incomingShare.surVerrouOuLeurre(showLock, isPanicDecoy) }
 
     // v1.8.0 (bug 4 fix) — auto-navigate to Thread on notification tap.
     //
@@ -222,10 +221,16 @@ fun AppRoot() {
             // re-déclencherait le même pending pendant la coroutine.
             val consumed = pendingNav.consume() ?: return@LaunchedEffect
             rootViewModel.resolveSendToAddress(consumed.sendToAddress.orEmpty()) { resolvedId ->
+                // 2026-11-20 — le texte du lien est déposé ICI, au moment d'ouvrir sa conversation : ciblé sur elle, ou
+                // en attente de celle que « Nouveau message » va créer. Cf. `PendingNavHolder.Pending.smsBody`.
                 if (resolvedId == null || resolvedId <= 0L) {
                     // Fallback : on bascule sur ComposeScreen avec l'adresse pré-remplie.
                     // L'user peut alors valider manuellement (ou ajouter d'autres
                     // destinataires pour un groupe MMS).
+                    incomingShare.deposerTexte(
+                        consumed.smsBody,
+                        com.filestech.sms.system.share.IncomingShareHolder.Cible.EnAttente,
+                    )
                     nav.navigate(Compose(initialAddress = consumed.sendToAddress))
                 } else {
                     // Pas de `launchSingleTop` ici non plus : un deep-link `sms:` peut
@@ -233,6 +238,10 @@ fun AppRoot() {
                     // bas sur la comparaison par identité de destination). Ce callback
                     // est single-fire de toute façon — `pendingNav.consume()` a vidé
                     // l'état avant l'appel async, donc aucun double-push possible.
+                    incomingShare.deposerTexte(
+                        consumed.smsBody,
+                        com.filestech.sms.system.share.IncomingShareHolder.Cible.Conversation(resolvedId),
+                    )
                     nav.navigate(Thread(conversationId = resolvedId))
                 }
             }
@@ -460,6 +469,9 @@ fun AppRoot() {
                 groupe = args.groupe,
                 onBack = { nav.popBackStack() },
                 onConversationCreated = { id ->
+                    // 2026-11-20 — un partage ou un transfert attendait cette conversation : il lui revient,
+                    // et à elle seule (`IncomingShareHolder.consumePour`).
+                    incomingShare.cibler(id)
                     nav.popBackStack()
                     nav.navigate(Thread(id))
                 },

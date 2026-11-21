@@ -46,7 +46,23 @@ class ComposeViewModel @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
     /** 2026-11-14 — pour marquer « bloqué » la puce d'un destinataire de la liste de blocage. */
     private val blockedRepo: BlockedNumberRepository,
+    /** 2026-11-20 — le relais de partage, cf. [onCleared]. */
+    private val incomingShare: com.filestech.sms.system.share.IncomingShareHolder,
 ) : ViewModel() {
+
+    /** 2026-11-20 — l'ouverture de cet écran : ce qu'il abandonne en se fermant doit lui être antérieur. */
+    private val ouvertA: Long = System.currentTimeMillis()
+
+    /**
+     * 2026-11-20 — « Nouveau message » se ferme pour de bon (retour, ou conversation ouverte) : un partage ou un
+     * transfert qui l'attendait sans avoir été reciblé est effacé, sans quoi le prochain « Nouveau message » le
+     * recevrait pour un autre destinataire (relectures Claude et GPT). `onCleared`, et non la sortie de composition :
+     * une rotation ne doit pas l'effacer. Une conversation créée l'a déjà reciblé (`AppRoot`, `onConversationCreated`).
+     */
+    override fun onCleared() {
+        super.onCleared()
+        incomingShare.abandonnerNonCible(ouvertA)
+    }
 
     // v1.6.1 (audit QUAL-17) — @Stable pour Compose recomposition skipping.
     @androidx.compose.runtime.Stable

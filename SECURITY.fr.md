@@ -89,6 +89,25 @@ v1.2.0 est livrée avec la classe BIOMETRIC_WEAK pour l'empreinte digitale **OU*
 
 ## Historique des audits
 
+### v1.31.0 — Un partage ou un transfert ne va qu'à sa propre conversation
+
+**Versions affectées : de la 1.4.1 à la 1.30.1.** Signalé par courriel : « Transférer » ouvrait la conversation
+choisie avec un champ de saisie vide. Le message transféré passe par le même relais en mémoire qu'un partage venu
+d'une autre application (`IncomingShareHolder`). La garde SEC-03 (v1.4.1) efface un partage arrivé pendant qu'une
+conversation est ouverte, pour qu'il ne tombe pas dans une conversation que l'utilisateur n'a pas choisie ; un
+transfert part d'une conversation, la garde l'effaçait donc. Le texte d'un lien `sms:` arrivé pendant qu'une
+conversation était ouverte était effacé de la même façon.
+
+**Ce qui change.** Chaque dépôt a une cible : un partage venu d'une autre application est « à choisir » (lui seul
+passe par SEC-03, qui ouvre « Nouveau message ») ; un transfert vers une conversation vise cette conversation ; un
+transfert vers un nouveau contact attend la conversation que « Nouveau message » crée. Seule la conversation visée
+reprend un dépôt, à son ouverture. Cela étend ce que SEC-03 ne garantissait qu'à l'arrivée : un partage ou un
+transfert abandonné dans « Nouveau message » est effacé à la fermeture de cet écran, un dépôt expiré n'est jamais
+ranimé, un transfert ne survit pas au verrouillage, et rien ne survit à l'entrée en session leurre. Le texte d'un
+lien `sms:` voyage désormais avec sa navigation et n'est déposé, déjà ciblé, qu'à l'ouverture de sa conversation.
+Deux relectures externes (Claude, GPT) ont trouvé cinq faiblesses à une première version ; toutes sont corrigées, et
+chaque garde a un test qui échoue sans elle.
+
 ### v1.31.0 — Un MMS reçu a désormais sa copie dans le stockage de messages d'Android (issue #98)
 
 **Versions affectées : toutes jusqu'à la 1.30.1.** Signalé par un utilisateur de GrapheneOS qui utilise SMS Tech
