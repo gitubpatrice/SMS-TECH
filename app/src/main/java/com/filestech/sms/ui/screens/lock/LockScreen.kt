@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -153,6 +154,7 @@ fun LockScreen(
     var pin by remember { mutableStateOf("") }
     var fallbackToPin by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val resources = LocalResources.current
 
     // Un écran de verrou ne doit JAMAIS être « dépassé » par le bouton Retour : sans ce handler,
     // Retour déléguait au NavHost, qui dépilait l'écran Lock et révélait la liste verrouillée
@@ -281,9 +283,9 @@ fun LockScreen(
             },
         )
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(context.getString(R.string.lock_biometric_title))
-            .setSubtitle(context.getString(R.string.lock_biometric_subtitle))
-            .setNegativeButtonText(context.getString(R.string.lock_use_pin))
+            .setTitle(resources.getString(R.string.lock_biometric_title))
+            .setSubtitle(resources.getString(R.string.lock_biometric_subtitle))
+            .setNegativeButtonText(resources.getString(R.string.lock_use_pin))
             .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
             .setConfirmationRequired(false)
             .build()

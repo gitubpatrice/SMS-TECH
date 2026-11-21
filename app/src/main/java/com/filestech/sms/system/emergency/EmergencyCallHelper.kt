@@ -4,8 +4,8 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import timber.log.Timber
 
 /**
@@ -88,7 +88,7 @@ object EmergencyCallHelper {
     /** `ACTION_DIAL` commun à [openDialer] et [openTrustedContactDialer], une fois le numéro validé. */
     private fun dial(context: Context, number: String): CallOutcome {
         val intent = Intent(Intent.ACTION_DIAL).apply {
-            data = Uri.parse("tel:$number")
+            data = "tel:$number".toUri()
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         return runCatching { context.startActivity(intent) }
@@ -151,7 +151,7 @@ object EmergencyCallHelper {
             return CallOutcome.PERMISSION_DENIED
         }
         val intent = Intent(Intent.ACTION_CALL).apply {
-            data = Uri.parse("tel:$number")
+            data = "tel:$number".toUri()
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         return try {

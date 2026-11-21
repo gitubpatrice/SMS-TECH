@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.filestech.sms.R
 import com.filestech.sms.ui.theme.BrandBlue
@@ -132,7 +133,7 @@ fun AppearanceDialog(
                 if (oldStr != newUriStr) {
                     runCatching {
                         ctx.contentResolver.releasePersistableUriPermission(
-                            Uri.parse(oldStr),
+                            oldStr.toUri(),
                             Intent.FLAG_GRANT_READ_URI_PERMISSION,
                         )
                     }
@@ -207,7 +208,7 @@ fun AppearanceDialog(
                                     pickedAvatarUri?.let { uriStr ->
                                         runCatching {
                                             ctx.contentResolver.releasePersistableUriPermission(
-                                                Uri.parse(uriStr),
+                                                uriStr.toUri(),
                                                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
                                             )
                                         }

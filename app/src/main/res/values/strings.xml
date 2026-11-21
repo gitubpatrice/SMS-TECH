@@ -89,7 +89,10 @@
     <string name="conversation_blocked_label">Blocked</string>
     <string name="settings_purge_blocked">Purge blocked conversations</string>
     <string name="settings_purge_blocked_desc">Permanently delete every conversation whose participants are all on the system blocklist.</string>
-    <string name="settings_purge_blocked_result">Purged %1$d conversation(s)</string>
+    <plurals name="settings_purge_blocked_result">
+        <item quantity="one">Purged %1$d conversation</item>
+        <item quantity="other">Purged %1$d conversations</item>
+    </plurals>
     <string name="settings_purge_blocked_none">No blocked conversation to purge</string>
     <string name="lock_mode_biometric">Biometric + PIN fallback</string>
     <string name="lock_biometric_title">Unlock SMS Tech</string>
@@ -126,7 +129,10 @@
     <string name="action_create_contact">Create contact</string>
     <string name="action_details">Conversation details</string>
 
-    <string name="thread_details_messages">%1$d messages</string>
+    <plurals name="thread_details_messages">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
     <string name="thread_details_first">First message: %1$s</string>
     <string name="thread_details_last">Last message: %1$s</string>
     <string name="thread_details_participants">Participants: %1$d</string>
@@ -155,7 +161,10 @@
     <string name="conversations_importing_title">Importing your messages</string>
     <string name="conversations_importing_body">Reading your existing SMS — this happens only once.</string>
     <string name="conversations_loading">Loading conversations…</string>
-    <string name="conversations_importing_count">%1$d messages imported…</string>
+    <plurals name="conversations_importing_count">
+        <item quantity="one">%1$d message imported…</item>
+        <item quantity="other">%1$d messages imported…</item>
+    </plurals>
     <string name="conversations_delete_confirm_title">Delete this conversation?</string>
     <string name="conversations_delete_confirm_body">All messages in this conversation will be permanently removed from this device. Other conversations are not affected.</string>
     <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
@@ -166,7 +175,8 @@
 
     <!-- Thread -->
     <string name="thread_compose_placeholder">Type a message…</string>
-    <string name="thread_segments_indicator">%1$d / %2$d • %3$d seg.</string>
+    <!-- PluralsCandidate : abreviation (« seg. »), pas un mot qui s'accorde. -->
+    <string name="thread_segments_indicator" tools:ignore="PluralsCandidate">%1$d / %2$d • %3$d seg.</string>
     <string name="thread_status_pending">Sending…</string>
     <string name="thread_status_sent">Sent</string>
     <string name="thread_status_delivered">Delivered</string>
@@ -221,7 +231,7 @@
     <!-- v1.13.0 — multi-selection bulk move to/from vault -->
     <string name="bulk_vault_move_in">Move to vault</string>
     <string name="bulk_vault_move_out">Move out of vault</string>
-    <string name="selected">Selected</string>
+    <string name="conversation_selected">Selected</string>
     <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
     <string name="bulk_select_multiple">Select multiple</string>
     <!-- v1.14.0 — emergency call behavior + outcomes -->
@@ -295,13 +305,22 @@
     <string name="settings_vault_pin_forgot_confirm_title">Empty the vault and remove its PIN?</string>
     <string name="settings_vault_pin_forgot_confirm_body">Every conversation in the vault is deleted, messages included, on this phone and from the system SMS store. Nothing is recovered — this is the price of getting back in without the PIN. Conversations outside the vault are untouched. This cannot be undone.</string>
     <string name="settings_vault_pin_forgot_confirm_action">Empty and remove</string>
-    <string name="settings_vault_pin_forgot_done">Vault emptied: %1$d conversation(s) deleted. Its PIN is removed.</string>
-    <string name="settings_vault_pin_forgot_incomplete">Purge incomplete: %1$d conversation(s) deleted, %2$d left. The vault PIN was NOT removed. Make SMS Tech your default SMS app, then try again.</string>
+    <plurals name="settings_vault_pin_forgot_done">
+        <item quantity="one">Vault emptied: %1$d conversation deleted. Its PIN is removed.</item>
+        <item quantity="other">Vault emptied: %1$d conversations deleted. Its PIN is removed.</item>
+    </plurals>
+    <!-- PluralsCandidate : deux nombres dans la phrase : un pluriel Android ne choisit que sur un seul, « (s) » voulu. -->
+    <string name="settings_vault_pin_forgot_incomplete" tools:ignore="PluralsCandidate">Purge incomplete: %1$d conversation(s) deleted, %2$d left. The vault PIN was NOT removed. Make SMS Tech your default SMS app, then try again.</string>
     <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
-    <string name="settings_vault_pin_forgot_local_failure">%1$d conversation(s) deleted, but %2$d could not be removed from this phone. The PIN stays in place: removing it would open a vault that is still full. Free up some storage and try again.</string>
-    <string name="settings_vault_pin_forgot_residue">Vault emptied and PIN removed. But %2$d conversation(s) left their copy in the phone’s SMS store: they stay readable by another messaging app. %1$d conversation(s) were deleted in full.</string>
+    <!-- PluralsCandidate : deux nombres dans la phrase : un pluriel Android ne choisit que sur un seul, « (s) » voulu. -->
+    <string name="settings_vault_pin_forgot_local_failure" tools:ignore="PluralsCandidate">%1$d conversation(s) deleted, but %2$d could not be removed from this phone. The PIN stays in place: removing it would open a vault that is still full. Free up some storage and try again.</string>
+    <!-- PluralsCandidate : deux nombres dans la phrase : un pluriel Android ne choisit que sur un seul, « (s) » voulu. -->
+    <string name="settings_vault_pin_forgot_residue" tools:ignore="PluralsCandidate">Vault emptied and PIN removed. But %2$d conversation(s) left their copy in the phone’s SMS store: they stay readable by another messaging app. %1$d conversation(s) were deleted in full.</string>
     <string name="settings_vault_pin_force_title">Empty it anyway?</string>
-    <string name="settings_vault_pin_force_body">The copy of %1$d conversation(s) could not be removed from the phone’s SMS store, and trying again will give the same result. SMS Tech can empty the vault and remove the PIN regardless: you get access back, but those copies stay on the phone and remain readable by another messaging app. This cannot be undone.</string>
+    <plurals name="settings_vault_pin_force_body">
+        <item quantity="one">The copy of %1$d conversation could not be removed from the phone’s SMS store, and trying again will give the same result. SMS Tech can empty the vault and remove the PIN regardless: you get access back, but those copies stay on the phone and remain readable by another messaging app. This cannot be undone.</item>
+        <item quantity="other">The copies of %1$d conversations could not be removed from the phone’s SMS store, and trying again will give the same result. SMS Tech can empty the vault and remove the PIN regardless: you get access back, but those copies stay on the phone and remain readable by another messaging app. This cannot be undone.</item>
+    </plurals>
     <string name="settings_vault_pin_force_action">Empty and remove the PIN</string>
     <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
     <string name="settings_lock_clear_confirm_title">Turn off app lock?</string>
@@ -460,13 +479,18 @@
     <string name="settings_auto_delete_status_30">Deletes messages older than 30 days</string>
     <string name="settings_auto_delete_status_60">Deletes messages older than 60 days</string>
     <string name="settings_auto_delete_status_180">Deletes messages older than 180 days</string>
-    <string name="settings_auto_delete_status_n_days">Deletes messages older than %1$d days</string>
+    <!-- PluralsCandidate : toujours au pluriel : seuls 30, 60 et 180 jours sont proposes. -->
+    <string name="settings_auto_delete_status_n_days" tools:ignore="PluralsCandidate">Deletes messages older than %1$d days</string>
     <string name="settings_auto_delete_purge_now">Clean up now</string>
     <string name="settings_auto_delete_purge_now_disabled">Pick a duration to enable</string>
     <string name="settings_auto_delete_purge_confirm_title">Confirm cleanup</string>
     <string name="settings_auto_delete_purge_confirm_zero">No messages to delete for this duration.</string>
-    <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) older than %2$d days will be deleted from the phone, not just from SMS Tech. Starred messages are kept. This cannot be undone.</string>
-    <string name="settings_auto_delete_purge_done">%1$d message(s) deleted.</string>
+    <!-- PluralsCandidate : deux nombres dans la phrase : un pluriel Android ne choisit que sur un seul, « (s) » voulu. -->
+    <string name="settings_auto_delete_purge_confirm_body" tools:ignore="PluralsCandidate">%1$d message(s) older than %2$d days will be deleted from the phone, not just from SMS Tech. Starred messages are kept. This cannot be undone.</string>
+    <plurals name="settings_auto_delete_purge_done">
+        <item quantity="one">%1$d message deleted.</item>
+        <item quantity="other">%1$d messages deleted.</item>
+    </plurals>
     <string name="action_delete_now">Delete</string>
     <string name="settings_resync_title">Resync from phone</string>
     <string name="settings_resync_desc">Re-imports all SMS from the Android system. Useful when messages present on the phone are missing from the app. It does not bring back what you deleted: deleting also removes the phone\'s copy. No duplicates.</string>
@@ -513,7 +537,10 @@
     <string name="settings_safety_call_armed_remaining">Remaining: %1$s before trigger</string>
     <string name="settings_safety_call_armed_remaining_imminent">Less than 2 h before trigger</string>
     <string name="settings_safety_call_armed_contacts_one">Contact: %1$s</string>
-    <string name="settings_safety_call_armed_contacts_many">Contacts: %1$s (+%2$d others)</string>
+    <plurals name="settings_safety_call_armed_contacts_many">
+        <item quantity="one">Contacts: %1$s (+%2$d other)</item>
+        <item quantity="other">Contacts: %1$s (+%2$d others)</item>
+    </plurals>
     <string name="settings_safety_call_armed_template">Template: %1$s</string>
     <string name="settings_safety_call_armed_modify">Modify</string>
     <string name="settings_safety_call_armed_actions_hint">“I\'m OK” resets the timer: the countdown restarts from the full duration, and no message is sent. “Modify” opens the settings (duration, contacts, message).</string>
@@ -549,7 +576,8 @@
     <string name="safety_call_setup_shared_with_emergency">These contacts are also used by Emergency mode, which is still armed. Emptying the list would leave it with no one to alert. Turn Emergency mode off first, or keep at least one contact.</string>
     <string name="safety_call_setup_save_validation_custom_empty">Custom message cannot be empty.</string>
     <string name="safety_call_warning_title">SMS Tech — confirm you\'re OK</string>
-    <string name="safety_call_warning_body_hours">Safety call will trigger in about %1$d hours. Tap to reset the timer.</string>
+    <!-- PluralsCandidate : toujours au pluriel : affiche a partir de 2 heures (SafetyCallWarningNotifier). -->
+    <string name="safety_call_warning_body_hours" tools:ignore="PluralsCandidate">Safety call will trigger in about %1$d hours. Tap to reset the timer.</string>
     <string name="safety_call_warning_body_imminent">Safety call will trigger in less than 2 hours. Tap to reset now.</string>
     <string name="safety_call_cannot_send_title">Safety call cannot send</string>
     <string name="safety_call_cannot_send_body">SMS Tech is not your default SMS app, so the alert would not be sent. Your contacts will not be warned. Tap to fix it.</string>
@@ -596,7 +624,10 @@
     <string name="settings_emergency_armed_location_approximate">Approximate location included (about 2 km)</string>
     <string name="settings_emergency_armed_location_denied">Location NOT sent: location permission not granted</string>
     <string name="settings_emergency_armed_contacts_one">Contacts: %1$s</string>
-    <string name="settings_emergency_armed_contacts_many">Contacts: %1$s +%2$d more</string>
+    <plurals name="settings_emergency_armed_contacts_many">
+        <item quantity="one">Contacts: %1$s +%2$d more</item>
+        <item quantity="other">Contacts: %1$s +%2$d more</item>
+    </plurals>
     <string name="settings_emergency_armed_no_contacts">No contacts configured</string>
     <string name="settings_emergency_armed_modify">Edit</string>
     <string name="settings_emergency_armed_open">Open</string>
@@ -615,8 +646,14 @@
         <item quantity="other">For %d of them, it went through the other SIM: the chosen SIM could not send it.</item>
     </plurals>
     <string name="emergency_status_ready">Hold the button 3 seconds to alert your contacts.</string>
-    <string name="emergency_triggered_ok">Emergency sent to %1$d contact(s).</string>
-    <string name="emergency_triggered_no_location">Emergency sent to %1$d contact(s) — location unavailable.</string>
+    <plurals name="emergency_triggered_ok">
+        <item quantity="one">Emergency sent to %1$d contact.</item>
+        <item quantity="other">Emergency sent to %1$d contacts.</item>
+    </plurals>
+    <plurals name="emergency_triggered_no_location">
+        <item quantity="one">Emergency sent to %1$d contact — location unavailable.</item>
+        <item quantity="other">Emergency sent to %1$d contacts — location unavailable.</item>
+    </plurals>
     <string name="emergency_triggered_all_failed">Emergency send failed (%1$d). Check your default SMS app.</string>
     <string name="emergency_setup_enable_title">Enable emergency mode</string>
     <string name="emergency_setup_enable_desc">When on, an emergency button appears in the dedicated screen. Hold 3s to send an SMS to your emergency contacts, with your location if enabled and available.</string>
@@ -629,7 +666,10 @@
     <string name="emergency_setup_location_permission_warning">Location permission not granted. The emergency SMS will be sent without coordinates. Grant the permission in Android settings to fix this.</string>
     <string name="emergency_setup_contacts_title">Emergency contacts</string>
     <string name="emergency_setup_contacts_empty">No contacts configured.</string>
-    <string name="emergency_setup_contacts_count">%1$d contact(s) configured.</string>
+    <plurals name="emergency_setup_contacts_count">
+        <item quantity="one">%1$d contact configured.</item>
+        <item quantity="other">%1$d contacts configured.</item>
+    </plurals>
     <string name="emergency_setup_contacts_cta">Manage contacts</string>
     <string name="action_edit">Edit</string>
     <string name="snack_generic_error">Something went wrong.</string>
@@ -821,7 +861,10 @@
     <string name="notif_preview_hidden_content">New message</string>
 
     <!-- PDF export -->
-    <string name="pdf_header_subtitle">Exported %1$s • %2$d participant(s)</string>
+    <plurals name="pdf_header_subtitle">
+        <item quantity="one">Exported %1$s • %2$d participant</item>
+        <item quantity="other">Exported %1$s • %2$d participants</item>
+    </plurals>
     <string name="pdf_footer">Page %1$d — SMS Tech</string>
 
     <!-- Errors -->
@@ -843,10 +886,15 @@
     <string name="error_retry_group_echo">This is the copy kept in the group. Resend from each member\'s conversation.</string>
     <string name="error_retry_mms_unsupported">This MMS can\'t be resent from here. Send it again from the composer.</string>
     <!-- v1.28.3 (F21) — envoi partiel : quelque chose est parti, mais pas tout. -->
-    <string name="send_partial">Sent to %1$d recipient(s); %2$d could not be reached.</string>
-    <string name="send_partial_blocked">Sent to %1$d recipient(s); %2$d skipped because you blocked them.</string>
+    <!-- PluralsCandidate : deux nombres dans la phrase : un pluriel Android ne choisit que sur un seul, « (s) » voulu. -->
+    <string name="send_partial" tools:ignore="PluralsCandidate">Sent to %1$d recipient(s); %2$d could not be reached.</string>
+    <!-- PluralsCandidate : deux nombres dans la phrase : un pluriel Android ne choisit que sur un seul, « (s) » voulu. -->
+    <string name="send_partial_blocked" tools:ignore="PluralsCandidate">Sent to %1$d recipient(s); %2$d skipped because you blocked them.</string>
     <string name="thread_group_blocked_title">Blocked contact in this group</string>
-    <string name="thread_group_blocked_body">In your block list: %1$s.\n\nThis message will only go to the %2$d other members, and it will appear in a group conversation without the blocked contacts.</string>
+    <plurals name="thread_group_blocked_body">
+        <item quantity="one">In your block list: %1$s.\n\nThis message will only go to the %2$d other member, and it will appear in a group conversation without the blocked contacts.</item>
+        <item quantity="other">In your block list: %1$s.\n\nThis message will only go to the %2$d other members, and it will appear in a group conversation without the blocked contacts.</item>
+    </plurals>
     <string name="compose_recipient_blocked">%1$s · blocked</string>
     <string name="compose_recipient_added">Added: %1$s (%2$d in total)</string>
     <string name="compose_recipient_added_blocked">Added: %1$s (%2$d in total). This number is in your block list: it will not receive your messages.</string>
@@ -866,12 +914,14 @@
     <string name="snack_block_failed">Blocking failed — the number was not blocked. The conversation was kept.</string>
     <!-- v1.25.3 (audit SEC3) — a partial block used to be reported as a full success, and the
          conversation was deleted even though one participant could still reach the user. -->
-    <string name="snack_block_partial">Only %1$d of %2$d numbers could be blocked. The conversation was kept so you do not lose it.</string>
+    <!-- PluralsCandidate : toujours au pluriel : un blocage partiel suppose au moins deux numeros. -->
+    <string name="snack_block_partial" tools:ignore="PluralsCandidate">Only %1$d of %2$d numbers could be blocked. The conversation was kept so you do not lose it.</string>
 
     <!-- v1.15.2 — Common a11y + UX strings for passphrase fields. -->
     <string name="action_show_password">Show passphrase</string>
     <string name="action_hide_password">Hide passphrase</string>
-    <string name="backup_passphrase_min_length">Minimum %1$d characters</string>
+    <!-- PluralsCandidate : toujours au pluriel : minimum fixe (MIN_PASSPHRASE_LEN). -->
+    <string name="backup_passphrase_min_length" tools:ignore="PluralsCandidate">Minimum %1$d characters</string>
 
     <!-- v1.15.2 — Backup restore (encrypted .smsbk). -->
     <string name="backup_restore_explainer">Pick a .smsbk file then enter its passphrase. Conversations with the same recipients are merged with your current ones; existing messages are kept (no duplicates).</string>
@@ -880,7 +930,8 @@
     <string name="backup_restore_passphrase_field">Passphrase</string>
     <string name="backup_restore_action">Restore</string>
     <string name="backup_restore_in_progress">Restoring…</string>
-    <string name="backup_restore_success">%1$d conversations (%2$d new), %3$d messages imported (%4$d already present)</string>
+    <!-- PluralsCandidate : quatre nombres dans la phrase : un pluriel ne choisit que sur un seul. -->
+    <string name="backup_restore_success" tools:ignore="PluralsCandidate">%1$d conversations (%2$d new), %3$d messages imported (%4$d already present)</string>
     <string name="backup_restore_failed_wrong_pass">Wrong passphrase or corrupted file</string>
     <string name="backup_restore_failed_format">Not a valid SMS Tech backup file</string>
     <string name="backup_restore_failed_storage">Could not read the file</string>
@@ -1143,9 +1194,12 @@
          plurals: the value is the follow-up interval times the index, so 15, 30 or 45 — never 1.
          Making them plurals would ask every translator to write a singular form that can never
          appear on screen. -->
-    <string name="safety_sms_relance_first">SMS Tech automatic alert: still no activity on my phone, %1$d minutes later. Please try to reach me.</string>
-    <string name="safety_sms_relance_middle">SMS Tech automatic alert: %1$d minutes with no activity from me. If you cannot reach me, please tell someone close to me.</string>
-    <string name="safety_sms_relance_last">Last SMS Tech automatic alert: %1$d minutes with no activity. No further message will follow. Please check that I am all right.</string>
+    <!-- PluralsCandidate : toujours au pluriel, cf. le commentaire ci-dessus. -->
+    <string name="safety_sms_relance_first" tools:ignore="PluralsCandidate">SMS Tech automatic alert: still no activity on my phone, %1$d minutes later. Please try to reach me.</string>
+    <!-- PluralsCandidate : toujours au pluriel, cf. le commentaire ci-dessus. -->
+    <string name="safety_sms_relance_middle" tools:ignore="PluralsCandidate">SMS Tech automatic alert: %1$d minutes with no activity from me. If you cannot reach me, please tell someone close to me.</string>
+    <!-- PluralsCandidate : toujours au pluriel, cf. le commentaire ci-dessus. -->
+    <string name="safety_sms_relance_last" tools:ignore="PluralsCandidate">Last SMS Tech automatic alert: %1$d minutes with no activity. No further message will follow. Please check that I am all right.</string>
 
     <string name="safety_duration_less_than_hour">less than an hour</string>
     <plurals name="safety_duration_hours">

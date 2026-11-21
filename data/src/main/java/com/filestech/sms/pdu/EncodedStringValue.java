@@ -17,18 +17,17 @@
 
 package com.filestech.sms.pdu;
 
-import android.util.Log;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import timber.log.Timber;
 
 /**
  * Wireless-encoded text (data + IANA MIB-enum charset). Used by MMS PDU headers that carry
  * non-ASCII text. Mirrors AOSP EncodedStringValue.
  */
 public class EncodedStringValue implements Cloneable {
-    private static final String TAG = "EncodedStringValue";
 
     /** IANA MIB-enum identifying the character set of [mData]. */
     private int mCharacterSet;
@@ -52,7 +51,7 @@ public class EncodedStringValue implements Cloneable {
             mData = data.getBytes(CharacterSets.MIMENAME_ISO_8859_1);
             mCharacterSet = CharacterSets.DEFAULT_CHARSET_MIB_ENUM;
         } catch (UnsupportedEncodingException e) {
-            Log.e(TAG, "default charset missing", e);
+            Timber.e(e, "default charset missing");
         }
     }
 

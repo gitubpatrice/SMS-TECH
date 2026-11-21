@@ -1,5 +1,6 @@
 package com.filestech.sms.security
 
+import androidx.core.content.edit
 import com.filestech.sms.core.crypto.KeystoreManager
 import com.filestech.sms.data.local.datastore.SecurityStore
 import com.filestech.sms.data.local.db.AppDatabase
@@ -217,7 +218,7 @@ class PanicService @Inject constructor(
         // effacer » doit être total.
         runCatching {
             context.getSharedPreferences("db_repair", android.content.Context.MODE_PRIVATE)
-                .edit().clear().commit()
+                .edit(commit = true) { clear() }
         }.onFailure { Timber.w(it, "clear db_repair prefs") }
         runCatching {
             if (!File(context.filesDir, "mms_attachments").deleteRecursively()) echecs++

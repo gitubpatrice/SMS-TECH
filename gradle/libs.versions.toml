@@ -79,6 +79,7 @@ benchmark = "1.5.0"
 profileinstaller = "1.4.1"
 uiautomator = "2.4.1"
 ktlint-gradle = "14.2.0"
+desugar-jdk-libs = "2.1.2"
 
 [libraries]
 # AndroidX core
@@ -185,6 +186,7 @@ detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", 
 androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "profileinstaller" }
 androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "benchmark" }
 androidx-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "uiautomator" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar-jdk-libs" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

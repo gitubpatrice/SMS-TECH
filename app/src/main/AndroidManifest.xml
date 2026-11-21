@@ -6,8 +6,9 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
+    <!-- WRITE_SMS existe bien (masquee du SDK public) : lint la croit mal orthographiee. -->
     <uses-permission android:name="android.permission.WRITE_SMS"
-        tools:ignore="ProtectedPermissions" />
+        tools:ignore="ProtectedPermissions,SystemPermissionTypo" />
     <uses-permission android:name="android.permission.RECEIVE_MMS" />
     <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
 

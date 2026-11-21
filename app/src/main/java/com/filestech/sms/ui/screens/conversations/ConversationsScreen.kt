@@ -62,6 +62,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -181,6 +183,7 @@ fun ConversationsScreen(
     // SmsTechSnackbarHost (bleu marque succès / rouge erreur).
     val snackbarHost = remember { androidx.compose.material3.SnackbarHostState() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
 
     // v1.25.3 (audit H16) — résolue ici plutôt que via `ctx.getString` dans le collecteur :
@@ -202,14 +205,15 @@ fun ConversationsScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is ConversationsViewModel.Event.MovedToVault -> {
-                    val msg = if (event.count <= 1) ctx.getString(R.string.vault_move_in_done)
-                    else ctx.resources.getQuantityString(
-                        R.plurals.vault_bulk_move_in_done, event.count, event.count,
-                    )
+                    val msg = if (event.count <= 1) {
+                        resources.getString(R.string.vault_move_in_done)
+                    } else {
+                        resources.getQuantityString(R.plurals.vault_bulk_move_in_done, event.count, event.count)
+                    }
                     snackbarHost.showSnackbar(msg)
                 }
                 is ConversationsViewModel.Event.MoveToVaultFailed ->
-                    snackbarHost.showError(ctx.getString(R.string.vault_move_in_failed))
+                    snackbarHost.showError(resources.getString(R.string.vault_move_in_failed))
                 is ConversationsViewModel.Event.Erreur ->
                     snackbarHost.showError(messagesDErreur.pour(event))
                 is ConversationsViewModel.Event.BlockPartial ->
@@ -227,15 +231,15 @@ fun ConversationsScreen(
                     // lieu mais aucun contact n'a reçu le SMS → l'user doit
                     // savoir pour relancer manuellement.
                     if (event.sent > 0) {
-                        snackbarHost.showSnackbar(ctx.getString(R.string.emergency_i_am_ok_done))
+                        snackbarHost.showSnackbar(resources.getString(R.string.emergency_i_am_ok_done))
                     } else {
-                        snackbarHost.showError(ctx.getString(R.string.emergency_i_am_ok_send_failed))
+                        snackbarHost.showError(resources.getString(R.string.emergency_i_am_ok_send_failed))
                     }
                 }
                 is ConversationsViewModel.Event.IAmOkDoneNoSms ->
-                    snackbarHost.showSnackbar(ctx.getString(R.string.emergency_i_am_ok_reset_only))
+                    snackbarHost.showSnackbar(resources.getString(R.string.emergency_i_am_ok_reset_only))
                 // 2026-11-16 (v1.31.0) — bilan d'une action groupée ; le texte est choisi par [texteDuBilan].
-                is ConversationsViewModel.Event.Groupe -> snackbarHost.afficherBilan(ctx.resources, event)
+                is ConversationsViewModel.Event.Groupe -> snackbarHost.afficherBilan(resources, event)
             }
         }
     }
@@ -332,7 +336,7 @@ fun ConversationsScreen(
                                 overflowOpen = false
                                 if (!ContactIntents.createContact(ctx)) {
                                     scope.launch {
-                                        snackbarHost.showError(ctx.getString(R.string.phone_action_no_contacts))
+                                        snackbarHost.showError(resources.getString(R.string.phone_action_no_contacts))
                                     }
                                 }
                             },
@@ -968,7 +972,7 @@ private fun SwipeableConversationRow(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Check,
-                        contentDescription = stringResource(R.string.selected),
+                        contentDescription = stringResource(R.string.conversation_selected),
                         tint = cs.onPrimary,
                         modifier = Modifier.size(18.dp),
                     )
@@ -1314,7 +1318,7 @@ private fun ImportingPlaceholder(count: Int) {
         )
         Text(
             text = if (count > 0) {
-                stringResource(R.string.conversations_importing_count, count)
+                pluralStringResource(R.plurals.conversations_importing_count, count, count)
             } else {
                 stringResource(R.string.conversations_importing_body)
             },

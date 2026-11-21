@@ -1,6 +1,6 @@
 package com.filestech.sms.data.repository
 
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.room.withTransaction
 import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.ext.stripInvisibleChars
@@ -596,7 +596,7 @@ class ConversationRepositoryImpl @Inject constructor(
             // chargerait sinon depuis fichier local ou réseau → fuite ou
             // path traversal). null reste valide (= reset).
             val safeAvatarUri = avatarUri?.takeIf { uri ->
-                val scheme = android.net.Uri.parse(uri).scheme?.lowercase()
+                val scheme = uri.toUri().scheme?.lowercase()
                 scheme == "content"
             }
             conversationDao.setAppearance(id, bubbleColorArgb, safeAvatarUri)

@@ -1,7 +1,6 @@
 package com.filestech.sms.ui.screens.about
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,7 +64,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -108,7 +107,7 @@ import kotlin.math.sin
 @Composable
 fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
     val context = LocalContext.current
-    var tapCount by remember { mutableStateOf(0) }
+    var tapCount by remember { mutableIntStateOf(0) }
 
     Scaffold(
         topBar = {
@@ -136,7 +135,7 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
                 onCheckUpdate = {
                     safeStartActivity(
                         context,
-                        Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL)),
+                        Intent(Intent.ACTION_VIEW, RELEASES_URL.toUri()),
                     )
                 },
                 onVersionTap = { tapCount++ },
@@ -182,13 +181,13 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
                 icon = Icons.Outlined.Code,
                 label = stringResource(R.string.about_source_code),
                 trailing = Icons.Outlined.Public,
-                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(REPO_URL))) },
+                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, REPO_URL.toUri())) },
             )
             LinkItem(
                 icon = Icons.Outlined.BugReport,
                 label = stringResource(R.string.about_report_issue),
                 onClick = {
-                    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:contact@files-tech.com")).apply {
+                    val intent = Intent(Intent.ACTION_SENDTO, "mailto:contact@files-tech.com".toUri()).apply {
                         putExtra(Intent.EXTRA_SUBJECT, "SMS Tech ${BuildConfig.VERSION_NAME}")
                     }
                     safeStartActivity(context, intent)
@@ -198,13 +197,13 @@ fun AboutScreen(onBack: () -> Unit, isPanicDecoy: Boolean) {
                 icon = Icons.Outlined.Language,
                 label = stringResource(R.string.about_website),
                 supporting = WEBSITE_URL,
-                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(WEBSITE_URL))) },
+                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, WEBSITE_URL.toUri())) },
             )
             LinkItem(
                 icon = Icons.Outlined.Gavel,
                 label = stringResource(R.string.about_license),
                 supporting = "Apache License 2.0",
-                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(LICENSE_URL))) },
+                onClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, LICENSE_URL.toUri())) },
             )
             // v1.28.13 — la politique et les conditions existent dans les cinq langues de
             // l'application : le lien ouvre celle de la langue AFFICHÉE, l'anglais à défaut.
@@ -759,7 +758,7 @@ private const val PAGE_DE_DONS_EN = "https://www.files-tech.com/en/soutenir.php"
 internal fun urlPageDeDons(langue: String): String = LANGUES_DE_LA_PAGE_DE_DONS[langue] ?: PAGE_DE_DONS_EN
 
 private fun ouvrirTexteJuridique(context: android.content.Context, document: String, langue: String) {
-    safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(urlTexteJuridique(document, langue))))
+    safeStartActivity(context, Intent(Intent.ACTION_VIEW, urlTexteJuridique(document, langue).toUri()))
 }
 
 private data class PrivacyBadge(val icon: ImageVector, val label: String, val color: Color)

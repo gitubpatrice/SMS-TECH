@@ -3,6 +3,7 @@ package com.filestech.sms.data.sms
 import android.content.Context
 import android.net.Uri
 import android.provider.Telephony
+import androidx.core.net.toUri
 import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.data.local.db.entity.MessageEntity
 import com.filestech.sms.domain.model.MessageDirection
@@ -118,7 +119,7 @@ class TelephonySystemCopyEraser @Inject constructor(
      * en base mais qu'un profil non migre porterait encore.
      */
     private fun canonicalUri(raw: String): Uri? =
-        runCatching { Uri.parse(canonicalTelephonyUri(raw)) }.getOrNull()
+        runCatching { canonicalTelephonyUri(raw).toUri() }.getOrNull()
 
     /**
      * v1.27.11 (revue externe GitLab !38458, constat 3) — la ligne systeme designee par [uri]

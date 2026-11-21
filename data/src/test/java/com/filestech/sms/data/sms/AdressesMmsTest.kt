@@ -2,10 +2,15 @@ package com.filestech.sms.data.sms
 
 import android.content.ContentResolver
 import android.database.Cursor
+import android.net.Uri
 import com.filestech.sms.domain.model.MessageDirection
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
@@ -27,6 +32,21 @@ class AdressesMmsTest {
         const val TO = 151
         const val CC = 130
         const val GENERIQUE = 129
+    }
+
+    /**
+     * 2026-11-21 — le `android.jar` des tests JVM rend `null` pour `Uri.parse` ; un vrai téléphone, jamais. Depuis
+     * `toUri()` (type non nul), ce `null` ne passe plus : on donne au code l'`Uri` qu'il aurait sur l'appareil.
+     */
+    @BeforeEach
+    fun uriDeTest() {
+        mockkStatic(Uri::class)
+        every { Uri.parse(any()) } returns mockk(relaxed = true)
+    }
+
+    @AfterEach
+    fun finUri() {
+        unmockkStatic(Uri::class)
     }
 
     /** Un fournisseur dont la table `addr` contient [lignes] (adresse, type). */

@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -370,6 +371,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         }
     }
     val ctx = LocalContext.current
+    val resources = LocalResources.current
 
     // v1.13.0 — si le PIN/pass distinct coffre est ON, on attend la validation
     // du PinEntryDialog avant d'enchaîner sur le flow biométrique. Le PinDialog
@@ -471,9 +473,9 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                             },
                         )
                         val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                            .setTitle(ctx.getString(R.string.vault_biometric_title))
-                            .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))
-                            .setNegativeButtonText(ctx.getString(R.string.action_cancel))
+                            .setTitle(resources.getString(R.string.vault_biometric_title))
+                            .setSubtitle(resources.getString(R.string.vault_biometric_subtitle))
+                            .setNegativeButtonText(resources.getString(R.string.action_cancel))
                             .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
                             .setConfirmationRequired(false)
                             .build()
@@ -580,14 +582,15 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         viewModel.events.collect { event ->
             when (event) {
                 is VaultViewModel.Event.MovedOut -> {
-                    val msg = if (event.count <= 1) ctx.getString(R.string.vault_move_out_done)
-                    else ctx.resources.getQuantityString(
-                        R.plurals.vault_bulk_move_out_done, event.count, event.count,
-                    )
+                    val msg = if (event.count <= 1) {
+                        resources.getString(R.string.vault_move_out_done)
+                    } else {
+                        resources.getQuantityString(R.plurals.vault_bulk_move_out_done, event.count, event.count)
+                    }
                     snackbarHost.showSnackbar(msg)
                 }
                 is VaultViewModel.Event.MoveOutFailed ->
-                    snackbarHost.showError(ctx.getString(R.string.vault_move_out_failed))
+                    snackbarHost.showError(resources.getString(R.string.vault_move_out_failed))
             }
         }
     }
@@ -710,7 +713,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Check,
-                                                contentDescription = stringResource(R.string.selected),
+                                                contentDescription = stringResource(R.string.conversation_selected),
                                                 tint = cs.onPrimary,
                                                 modifier = Modifier.size(18.dp),
                                             )
