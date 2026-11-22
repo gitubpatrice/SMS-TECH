@@ -3,7 +3,7 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
-## [1.31.0] — 2026-11-23
+## [1.31.0] — 2026-11-22
 
 ### Added
 
@@ -37,6 +37,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   the chosen conversation opened with an empty message box. Every deposit in the share relay now has a target, and
   only that conversation takes it; a share or forward abandoned in "New message" goes nowhere. The text of an `sms:`
   link had the same fault. A forwarded text is added after a message already started instead of being dropped.
+- **An attached photo is no longer sent rotated** (reported by the same user). A photo larger than its share of the
+  MMS limit, which is almost every camera photo, is reduced and re-encoded as JPEG; the decoder ignored the EXIF
+  orientation and the new JPEG no longer carries it, so a photo taken upright went out lying on its side, rotated a
+  quarter-turn anticlockwise, since v1.2.1. The photo is now turned (or mirrored) as its EXIF orientation says
+  before it is re-encoded; if that fails, it is sent as before rather than not at all.
 - **New MMS written by another profile are imported at each sync**, the 12-hour background sync included. The
   MMS import ran only once. A draft or a send still in progress is imported once finished.
 - **A multipart SMS is marked sent only at its last part's report**; a failure on any part is still written.
