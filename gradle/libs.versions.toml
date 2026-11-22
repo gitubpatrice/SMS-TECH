@@ -34,6 +34,9 @@ hilt-navigation-compose = "1.4.0"
 
 # Coil
 coil = "2.7.0"
+# 2026-11-22 — deja dans l'APK par Coil (meme version, resolue en 1.3.7) ; declaree parce qu'OrientationExif
+# s'en sert directement (lint deconseille android.media.ExifInterface).
+exifinterface = "1.3.7"
 
 # Accompanist
 accompanist = "0.37.3"
@@ -136,6 +139,7 @@ hilt-android-testing = { module = "com.google.dagger:hilt-android-testing", vers
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 # 2026-11-06 (issue #76) — GIF animés dans la visionneuse de photos ; même version que coil-compose.
 coil-gif = { module = "io.coil-kt:coil-gif", version.ref = "coil" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 
 # Accompanist
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanist" }

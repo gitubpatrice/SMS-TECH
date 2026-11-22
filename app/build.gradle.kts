@@ -281,6 +281,7 @@ dependencies {
     implementation(libs.coil.compose)
     // 2026-11-06 (issue #76) — GIF animés dans la visionneuse (`VisionneuseImage`) ; les vignettes restent fixes.
     implementation(libs.coil.gif)
+    implementation(libs.androidx.exifinterface)
 
     // Accompanist
     implementation(libs.accompanist.permissions)
