@@ -10,7 +10,7 @@ ksp = "2.3.13"
 java = "17"
 
 # AndroidX / Compose
-compose-bom = "2026.09.00"
+compose-bom = "2026.11.01"
 core-ktx = "1.19.1"
 activity-compose = "1.13.0"
 lifecycle = "2.11.0"
@@ -45,7 +45,7 @@ accompanist = "0.37.3"
 coroutines = "1.11.0"
 
 # Serialization
-kotlinx-serialization = "1.12.0"
+kotlinx-serialization = "1.13.0"
 
 # SQLCipher
 sqlcipher = "4.19.0"
