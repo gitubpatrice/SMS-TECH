@@ -48,7 +48,7 @@ coroutines = "1.11.0"
 kotlinx-serialization = "1.12.0"
 
 # SQLCipher
-sqlcipher = "4.19.0"
+sqlcipher = "4.20.0"
 
 # Logging
 timber = "5.0.1"
