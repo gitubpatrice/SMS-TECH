@@ -113,5 +113,63 @@ class BasDeSelectionDuCoffreTest {
         assertThat(compose.compter(supprimer)).isEqualTo(0)
     }
 
+    /** L'appui long d'une conversation du Coffre : « Supprimer » y est, et ne supprime qu'une fois confirmé. */
+    @Test
+    fun lAppuiLongProposeSupprimerConfirme() {
+        val gestes = mutableListOf<String>()
+        var cible by mutableStateOf<Long?>(7L)
+        compose.setContent {
+            ActionsDUneConversationDuCoffre(
+                cible = cible,
+                onFermer = { cible = null },
+                onSortir = { gestes += "sortir $it" },
+                onSelectionner = { gestes += "selection $it" },
+                onSupprimer = { gestes += "supprimer $it" },
+            )
+        }
+        val titre = texte(R.string.conversations_delete_confirm_title)
+
+        compose.onNodeWithText(texte(R.string.vault_move_out)).assertIsDisplayed()
+        compose.onNodeWithText(texte(R.string.bulk_select_multiple)).assertIsDisplayed()
+        compose.onNodeWithText(texte(R.string.action_delete)).assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        // La feuille se ferme, la confirmation s'ouvre : rien n'est supprimé avant elle.
+        compose.onNodeWithText(titre).assertIsDisplayed()
+        assertThat(cible).isNull()
+        assertThat(gestes).isEmpty()
+        compose.onNode(hasText(texte(R.string.action_delete)) and hasAnyAncestor(isDialog())).performClick()
+        compose.waitForIdle()
+
+        assertThat(gestes).containsExactly("supprimer 7")
+        assertThat(compose.compter(titre)).isEqualTo(0)
+    }
+
+    @Test
+    fun lAppuiLongAnnulerNeSupprimeRienSortirAgit() {
+        val gestes = mutableListOf<String>()
+        var cible by mutableStateOf<Long?>(7L)
+        compose.setContent {
+            ActionsDUneConversationDuCoffre(
+                cible = cible,
+                onFermer = { cible = null },
+                onSortir = { gestes += "sortir $it" },
+                onSelectionner = { gestes += "selection $it" },
+                onSupprimer = { gestes += "supprimer $it" },
+            )
+        }
+
+        compose.onNodeWithText(texte(R.string.action_delete)).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText(texte(R.string.action_cancel)).performClick()
+        compose.waitForIdle()
+        cible = 8L
+        compose.waitForIdle()
+        compose.onNodeWithText(texte(R.string.vault_move_out)).performClick()
+        compose.waitForIdle()
+
+        assertThat(gestes).containsExactly("sortir 8")
+        assertThat(cible).isNull()
+    }
+
     private fun ComposeContentTestRule.compter(texte: String): Int = onAllNodes(hasText(texte)).fetchSemanticsNodes().size
 }

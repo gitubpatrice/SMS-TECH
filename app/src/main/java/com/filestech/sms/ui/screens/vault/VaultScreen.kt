@@ -1,12 +1,9 @@
 package com.filestech.sms.ui.screens.vault
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -286,19 +282,33 @@ class VaultViewModel @Inject constructor(
      * `NonCancellable` : commencée, elle va au bout même si l'écran se ferme entre deux conversations.
      */
     fun bulkDeleteSelected(confirmees: Collection<Long>) = viewModelScope.launch {
-        val ids = prendreSelection(limiteA = confirmees)
-        if (ids.isEmpty() || !vault.isVaultUnlockedInSession) return@launch
+        supprimer(prendreSelection(limiteA = confirmees), annoncerSucces = true)
+    }
+
+    /**
+     * 2026-11-27 (issue #108) — supprime UNE conversation du Coffre, depuis son appui long, après confirmation : la
+     * liste le permet depuis le sien, le Coffre ne proposait que d'en sortir. Même chemin et mêmes gardes que
+     * [bulkDeleteSelected]. Comme dans la liste, une suppression réussie ne se dit pas (la ligne disparaît) ; une
+     * conversation conservée le dit, avec sa cause.
+     */
+    fun deleteOne(conversationId: Long) = viewModelScope.launch {
+        supprimer(listOf(conversationId), annoncerSucces = false)
+    }
+
+    /** Le chemin commun des deux suppressions ci-dessus. */
+    private suspend fun supprimer(ids: List<Long>, annoncerSucces: Boolean) {
+        if (ids.isEmpty() || !vault.isVaultUnlockedInSession) return
         val bilan = withContext(NonCancellable) { toggle.deleteAll(ids) }
-        if (!vault.isVaultUnlockedInSession) return@launch
-        _events.trySend(
-            when {
-                bilan.conservees == 0 -> Event.Suppression.Supprimees(nombre = bilan.supprimees)
-                else -> Event.Suppression.Conservees(
-                    nombre = bilan.conservees,
-                    copieSysteme = bilan.parCopieSysteme == bilan.conservees,
-                )
-            },
-        )
+        if (!vault.isVaultUnlockedInSession) return
+        val evenement = when {
+            bilan.conservees > 0 -> Event.Suppression.Conservees(
+                nombre = bilan.conservees,
+                copieSysteme = bilan.parCopieSysteme == bilan.conservees,
+            )
+            annoncerSucces -> Event.Suppression.Supprimees(nombre = bilan.supprimees)
+            else -> null
+        }
+        evenement?.let { _events.trySend(it) }
     }
 
     /**
@@ -857,46 +867,15 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // ce sheet avec (a) action rapide "Sortir du coffre" pour la conv ciblée,
     // (b) entrée en mode sélection multiple si l'user veut batch. Restaure le
     // pattern v1.12 attendu (appui long = action rapide) sans perdre le multi.
-    val pendingSheet = vaultSheetTarget
-    if (pendingSheet != null) {
-        val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
-            skipPartiallyExpanded = true,
-        )
-        androidx.compose.material3.ModalBottomSheet(
-            onDismissRequest = { vaultSheetTarget = null },
-            sheetState = sheetState,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.vault_actions_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                )
-                androidx.compose.material3.ListItem(
-                    leadingContent = { Icon(Icons.Outlined.LockOpen, contentDescription = null) },
-                    headlineContent = { Text(stringResource(R.string.vault_move_out)) },
-                    modifier = Modifier.clickable {
-                        viewModel.moveOutOfVault(pendingSheet)
-                        vaultSheetTarget = null
-                    },
-                )
-                androidx.compose.material3.ListItem(
-                    leadingContent = { Icon(Icons.Outlined.Check, contentDescription = null) },
-                    headlineContent = { Text(stringResource(R.string.bulk_select_multiple)) },
-                    modifier = Modifier.clickable {
-                        viewModel.toggleSelection(pendingSheet)
-                        vaultSheetTarget = null
-                    },
-                )
-            }
-        }
-    }
+    // 2026-11-27 (issue #108) — (c) « Supprimer », confirmé, comme le menu de la liste ; la feuille vit désormais
+    // dans [ActionsDUneConversationDuCoffre], avec sa confirmation.
+    ActionsDUneConversationDuCoffre(
+        cible = vaultSheetTarget,
+        onFermer = { vaultSheetTarget = null },
+        onSortir = viewModel::moveOutOfVault,
+        onSelectionner = viewModel::toggleSelection,
+        onSupprimer = viewModel::deleteOne,
+    )
 }
 
 /**

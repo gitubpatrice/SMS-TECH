@@ -15,6 +15,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   comes back outside the vault. The result is said, and when the phone's copy kept them, the message says to make
   SMS Tech the default SMS app. Nothing happens once the vault session is closed. Moving out now takes the
   selection in one step: a quick second tap no longer moves the same conversations again and shows a red failure.
+  A long press on a vault conversation also offers Delete, in red and confirmed, like the main list's menu; it
+  only offered to move it out.
 
 ## [1.31.0] — 2026-11-22
 

@@ -183,6 +183,41 @@ class CoffreActionsGroupeesTest {
         assertThat(evenements).isEmpty()
     }
 
+    /** L'appui long : une seule conversation, même chemin ; réussie, elle ne se dit pas, comme dans la liste. */
+    @Test
+    fun `supprimer une conversation depuis l'appui long`() = runTest(dispatcher) {
+        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 1, conservees = 0)
+        val vm = ecran()
+        val evenements = observer(vm)
+
+        vm.deleteOne(2L)
+
+        coVerify(exactly = 1) { toggle.deleteAll(listOf(2L)) }
+        assertThat(evenements).isEmpty()
+    }
+
+    @Test
+    fun `une conversation retenue par la copie du telephone le dit`() = runTest(dispatcher) {
+        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 0, conservees = 1, parCopieSysteme = 1)
+        val vm = ecran()
+        val evenements = observer(vm)
+
+        vm.deleteOne(2L)
+
+        assertThat(evenements).containsExactly(Event.Suppression.Conservees(nombre = 1, copieSysteme = true))
+    }
+
+    @Test
+    fun `appui long, session fermee - rien n'est supprime`() = runTest(dispatcher) {
+        val vm = ecran()
+        observer(vm)
+        sessionOuverte = false
+
+        vm.deleteOne(2L)
+
+        coVerify(exactly = 0) { toggle.deleteAll(any()) }
+    }
+
     /**
      * La sélection est prise AVANT l'appel : un second appui pendant le déplacement ne sort pas les mêmes
      * conversations une seconde fois — ce second déplacement, qui n'en trouvait plus aucune au Coffre, s'affichait

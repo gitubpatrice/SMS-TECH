@@ -164,10 +164,29 @@ internal fun ConfirmationSuppressionGroupee(
     onConfirmer: () -> Unit,
     onAnnuler: () -> Unit,
 ) {
+    ConfirmationSuppression(
+        titre = pluralStringResource(R.plurals.conversations_bulk_delete_title, nombre, nombre),
+        corps = stringResource(R.string.conversations_bulk_delete_body),
+        onConfirmer = onConfirmer,
+        onAnnuler = onAnnuler,
+    )
+}
+
+/**
+ * La fenêtre d'une suppression : [titre] et [corps], « Supprimer » en rouge plein, texte blanc, et « Annuler ».
+ * 2026-11-27 — partagée avec le Coffre, qui l'emploie aussi pour une seule conversation.
+ */
+@Composable
+internal fun ConfirmationSuppression(
+    titre: String,
+    corps: String,
+    onConfirmer: () -> Unit,
+    onAnnuler: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onAnnuler,
-        title = { Text(pluralStringResource(R.plurals.conversations_bulk_delete_title, nombre, nombre)) },
-        text = { Text(stringResource(R.string.conversations_bulk_delete_body)) },
+        title = { Text(titre) },
+        text = { Text(corps) },
         confirmButton = {
             FilledTonalButton(
                 onClick = onConfirmer,
