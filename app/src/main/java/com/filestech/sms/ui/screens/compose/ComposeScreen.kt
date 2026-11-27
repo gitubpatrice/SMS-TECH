@@ -289,7 +289,8 @@ fun ComposeScreen(
                 // 2026-11-27 (issue #109) — une ligne par NUMÉRO : un contact à plusieurs numéros en a plusieurs,
                 // chacune avec son nom, et le type du numéro devant lui quand le carnet le donne. Le numéro est isolé
                 // de gauche à droite : à côté d'un libellé en arabe ou en hébreu, ses groupes de chiffres
-                // s'inverseraient.
+                // s'inverseraient. Le type aussi est isolé, dans son propre sens : un libellé saisi dans le carnet
+                // peut porter n'importe quel texte (audit du 2026-11-27).
                 items(filtered, key = { it.cle }) { ligne ->
                     val contact = ligne.contact
                     val number = ligne.numero.address.raw
@@ -297,8 +298,9 @@ fun ComposeScreen(
                     ListItem(
                         headlineContent = { Text(contact.displayName ?: number) },
                         supportingContent = {
-                            val isole = BidiFormatter.getInstance().unicodeWrap(number, LTR)
-                            Text(if (type == null) number else "$type · $isole")
+                            val bidi = BidiFormatter.getInstance()
+                            val avecType = type?.let { "${bidi.unicodeWrap(it)} · ${bidi.unicodeWrap(number, LTR)}" }
+                            Text(avecType ?: number)
                         },
                         leadingContent = { Avatar(label = contact.displayName ?: number) },
                         // X-05 — meme bouton que sur la saisie libre : une puce, pas de navigation.
