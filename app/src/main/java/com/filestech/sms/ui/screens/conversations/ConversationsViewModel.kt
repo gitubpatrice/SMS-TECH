@@ -595,7 +595,11 @@ class ConversationsViewModel @Inject constructor(
         val prises = selectedIds.getAndUpdate { emptySet() }
         if (appLock.state.value is AppLockManager.LockState.PanicDecoy) return emptyList()
         val affichees = state.value.conversations.mapTo(HashSet()) { it.id }
-        return prises.filter { it in affichees && (limiteA == null || it in limiteA) }
+        // 2026-11-27 — ni une conversation en cours de suppression groupée (cf. [bulkDeleteSelected]) : une seconde
+        // action, quelle qu'elle soit, ne la reprend pas.
+        return prises.filter {
+            it in affichees && it !in enCoursDeSuppression && (limiteA == null || it in limiteA)
+        }
     }
 
     /**
@@ -637,9 +641,9 @@ class ConversationsViewModel @Inject constructor(
      */
     fun bulkDeleteSelected(confirmees: Collection<Long>) = viewModelScope.launch {
         // 2026-11-27 (relecture Claude, jumeau du Coffre) — une conversation déjà en cours de suppression n'est pas
-        // reprise : ses lignes restent affichées jusqu'à leur effacement, et les resélectionner relançait leur
-        // suppression, avec deux bilans au compte gonflé.
-        val ids = prendreSelectionVisible(limiteA = confirmees).filterNot { it in enCoursDeSuppression }
+        // reprise (filtrée par [prendreSelectionVisible]) : ses lignes restent affichées jusqu'à leur effacement, et
+        // les resélectionner relançait leur suppression, avec deux bilans au compte gonflé.
+        val ids = prendreSelectionVisible(limiteA = confirmees)
         if (ids.isEmpty()) return@launch
         enCoursDeSuppression += ids
         val bilan = try {

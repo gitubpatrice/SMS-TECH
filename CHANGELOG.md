@@ -19,11 +19,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   only offered to move it out.
 - **A bulk delete still running is not started again** (list and vault). Its conversations stay on screen until
   each one is erased; selecting and deleting them again started a second deletion and showed two results with an
-  inflated count.
+  inflated count. No other bulk action (archive, move to or out of the vault) takes them meanwhile.
 - **The message for a vault conversation that was not deleted no longer tells a user whose default SMS app is
-  already SMS Tech to make it so**: the phone's copy can also resist for another reason. It now says "if SMS Tech is
-  not your default SMS app". The German text no longer reads "your copy", and the Spanish one no longer says
-  "before the vault".
+  already SMS Tech to make it so** (in the conversation and in the vault): the phone's copy can also resist for
+  another reason. It now says "if SMS Tech is not your default SMS app". The German text no longer reads "your
+  copy", and the Spanish one no longer says "before the vault".
 
 ## [1.31.0] — 2026-11-22
 

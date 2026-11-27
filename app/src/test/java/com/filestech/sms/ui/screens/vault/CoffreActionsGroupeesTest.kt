@@ -236,6 +236,24 @@ class CoffreActionsGroupeesTest {
         coVerify(exactly = 2) { toggle.deleteAll(any()) }
     }
 
+    /** Audit pré-release : « Sortir du coffre » l'aurait annoncée sortie pendant que sa suppression l'effaçait. */
+    @Test
+    fun `sortir du coffre ne prend pas une conversation en cours de suppression`() = runTest(dispatcher) {
+        val fin = CompletableDeferred<BilanSuppression>()
+        coEvery { toggle.deleteAll(any()) } coAnswers { fin.await() }
+        coEvery { toggle.requestBulkMoveToVault(any(), intoVault = false) } returns Outcome.Success(1)
+        val vm = ecran()
+        observer(vm)
+        vm.toggleSelection(1L)
+        vm.bulkDeleteSelected(listOf(1L))
+        listOf(1L, 2L).forEach(vm::toggleSelection)
+
+        vm.bulkMoveSelectedOut()
+        fin.complete(BilanSuppression(supprimees = 1, conservees = 0))
+
+        coVerify(exactly = 1) { toggle.requestBulkMoveToVault(listOf(2L), intoVault = false) }
+    }
+
     /** Deux appuis sur « Supprimer » dans la même image : une seule suppression. */
     @Test
     fun `deux confirmations de l'appui long ne suppriment qu'une fois`() = runTest(dispatcher) {

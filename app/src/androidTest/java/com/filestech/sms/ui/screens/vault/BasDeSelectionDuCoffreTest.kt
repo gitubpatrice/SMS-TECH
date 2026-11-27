@@ -130,6 +130,7 @@ class BasDeSelectionDuCoffreTest {
         var cible by mutableStateOf<Long?>(7L)
         compose.setContent {
             ActionsDUneConversationDuCoffre(
+                visible = true,
                 cible = cible,
                 onFermer = { cible = null },
                 onSortir = { gestes += "sortir $it" },
@@ -160,6 +161,7 @@ class BasDeSelectionDuCoffreTest {
         var cible by mutableStateOf<Long?>(7L)
         compose.setContent {
             ActionsDUneConversationDuCoffre(
+                visible = true,
                 cible = cible,
                 onFermer = { cible = null },
                 onSortir = { gestes += "sortir $it" },
@@ -179,6 +181,43 @@ class BasDeSelectionDuCoffreTest {
 
         assertThat(gestes).containsExactly("sortir 8")
         assertThat(cible).isNull()
+    }
+
+    /**
+     * Audit pré-release du 2026-11-27 : la confirmation restait affichée par-dessus un Coffre verrouillé. Hors
+     * dévoilement, ni feuille ni confirmation ; et la confirmation ne revient pas avec lui.
+     */
+    @Test
+    fun lAppuiLongRienAvantDevoilementEtLaConfirmationNeRevientPas() {
+        var visible by mutableStateOf(false)
+        var cible by mutableStateOf<Long?>(7L)
+        val supprimees = mutableListOf<Long>()
+        compose.setContent {
+            ActionsDUneConversationDuCoffre(
+                visible = visible,
+                cible = cible,
+                onFermer = { cible = null },
+                onSortir = {},
+                onSelectionner = {},
+                onSupprimer = { supprimees += it },
+            )
+        }
+        val titre = texte(R.string.conversations_delete_confirm_title)
+
+        assertThat(compose.compter(texte(R.string.vault_move_out))).isEqualTo(0)
+        visible = true
+        compose.waitForIdle()
+        compose.onNodeWithText(texte(R.string.action_delete)).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText(titre).assertIsDisplayed()
+        visible = false
+        compose.waitForIdle()
+        assertThat(compose.compter(titre)).isEqualTo(0)
+        visible = true
+        compose.waitForIdle()
+
+        assertThat(compose.compter(titre)).isEqualTo(0)
+        assertThat(supprimees).isEmpty()
     }
 
     private fun ComposeContentTestRule.compter(texte: String): Int =

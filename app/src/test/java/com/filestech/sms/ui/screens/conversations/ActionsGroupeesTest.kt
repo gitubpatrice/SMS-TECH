@@ -228,6 +228,28 @@ class ActionsGroupeesTest {
         assertThat(evenements).containsExactly(Event.Groupe.Supprimees(nombre = 2))
     }
 
+    /** 2026-11-27 (audit pré-release) — ni archivée ni mise au Coffre pendant sa suppression. */
+    @Test
+    fun `une conversation en cours de suppression n'est reprise par aucune autre action`() = runTest(dispatcher) {
+        val fin = kotlinx.coroutines.CompletableDeferred<BilanSuppression>()
+        coEvery { toggle.deleteAll(any()) } coAnswers { fin.await() }
+        coEvery { toggle.setArchivedAll(any(), any()) } returns 1
+        coEvery { toggle.requestBulkMoveToVault(any(), any()) } returns Outcome.Success(1)
+        val vm = liste(listOf(conv(1), conv(2), conv(3)))
+        observer(vm)
+        vm.toggleSelection(1)
+        vm.bulkDeleteSelected(confirmees = listOf(1L))
+
+        listOf(1L, 2L).forEach(vm::toggleSelection)
+        vm.bulkArchiveSelected()
+        listOf(1L, 3L).forEach(vm::toggleSelection)
+        vm.bulkMoveSelectedToVault()
+        fin.complete(BilanSuppression(supprimees = 1, conservees = 0))
+
+        coVerify(exactly = 1) { toggle.setArchivedAll(listOf(2L), archived = true) }
+        coVerify(exactly = 1) { toggle.requestBulkMoveToVault(listOf(3L), intoVault = true) }
+    }
+
     /** Relecture Claude du 2026-11-16 : la fenêtre annonçait 2, la suppression en prenait 3. */
     @Test
     fun `la suppression ne depasse jamais ce que la confirmation a compte`() = runTest(dispatcher) {

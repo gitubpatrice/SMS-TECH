@@ -335,7 +335,11 @@ class VaultViewModel @Inject constructor(
     private fun prendreSelection(limiteA: Collection<Long>? = null): List<Long> {
         val prises = _selectedIds.getAndUpdate { emptySet() }
         val affichees = state.value.mapTo(HashSet()) { it.id }
-        return prises.filter { it in affichees && (limiteA == null || it in limiteA) }
+        // 2026-11-27 (audit pré-release) — ni une conversation en cours de suppression : « Sortir du coffre » l'aurait
+        // annoncée sortie pendant que sa suppression l'effaçait.
+        return prises.filter {
+            it in affichees && it !in enCoursDeSuppression && (limiteA == null || it in limiteA)
+        }
     }
 }
 
@@ -887,6 +891,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
     // 2026-11-27 (issue #108) — (c) « Supprimer », confirmé, comme le menu de la liste ; la feuille vit désormais
     // dans [ActionsDUneConversationDuCoffre], avec sa confirmation.
     ActionsDUneConversationDuCoffre(
+        visible = revealContent,
         cible = vaultSheetTarget,
         onFermer = { vaultSheetTarget = null },
         onSortir = viewModel::moveOutOfVault,

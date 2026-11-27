@@ -90,17 +90,21 @@ internal fun BasDeSelectionDuCoffre(
  * proposait que d'en sortir : supprimer une conversation demandait de l'ouvrir.
  *
  * [cible] : la conversation de la feuille, `null` feuille fermée. La confirmation survit à la fermeture de la
- * feuille (son état vit ici, pas dans la feuille) et reçoit la conversation figée à l'appui.
+ * feuille (son état vit ici, pas dans la feuille) et reçoit la conversation figée à l'appui. [visible] : le contenu
+ * du Coffre est dévoilé ; sinon ni feuille ni confirmation, et une confirmation ouverte repart fermée (audit
+ * pré-release : elle restait affichée par-dessus un Coffre verrouillé).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ActionsDUneConversationDuCoffre(
+    visible: Boolean,
     cible: Long?,
     onFermer: () -> Unit,
     onSortir: (Long) -> Unit,
     onSelectionner: (Long) -> Unit,
     onSupprimer: (Long) -> Unit,
 ) {
+    if (!visible) return
     var aSupprimer by remember { mutableStateOf<Long?>(null) }
     if (cible != null) {
         ModalBottomSheet(
