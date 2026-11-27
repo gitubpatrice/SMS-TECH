@@ -15,6 +15,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   spellings, appears once, and a search finds it under either spelling. A search by digits shows only the matching
   number. An entry with fewer than two digits ("N/A", "see e-mail"), which opened a conversation where every send
   failed, is no longer offered. Since v1.2.0.
+- **A selection in the vault can be deleted** (issue #108). In the vault, a selection only offered an unlabelled
+  padlock at the top (move out of the vault) and no way to delete: the gap 1.31.0 closed in the main list, not in
+  its twin. A bar at the bottom now offers Move out of vault and Delete, each with its name, one button each for
+  TalkBack. Delete asks for a confirmation with the number of conversations, then deletes each one as deleting a
+  single vault conversation does: one whose copy in the phone's message store resists is kept, so that it never
+  comes back outside the vault. The result is said, and when the phone's copy kept them, the message says to make
+  SMS Tech the default SMS app. Nothing happens once the vault session is closed. Moving out now takes the
+  selection in one step: a quick second tap no longer moves the same conversations again and shows a red failure.
+  A long press on a vault conversation also offers Delete, in red and confirmed, like the main list's menu; it
+  only offered to move it out.
+- **A bulk delete still running is not started again** (list and vault). Its conversations stay on screen until
+  each one is erased; selecting and deleting them again started a second deletion and showed two results with an
+  inflated count. No other bulk action (archive, move to or out of the vault) takes them meanwhile.
+- **The message for a vault conversation that was not deleted no longer tells a user whose default SMS app is
+  already SMS Tech to make it so** (in the conversation and in the vault): the phone's copy can also resist for
+  another reason. It now says "if SMS Tech is not your default SMS app". The German text no longer reads "your
+  copy", and the Spanish one no longer says "before the vault".
 
 ## [1.31.0] — 2026-11-22
 

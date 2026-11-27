@@ -159,7 +159,7 @@
     <string name="conversations_delete_confirm_title">Diese Unterhaltung löschen?</string>
     <string name="conversations_delete_confirm_body">Alle Nachrichten dieser Unterhaltung werden endgültig von diesem Gerät entfernt. Andere Unterhaltungen sind nicht betroffen.</string>
     <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
-    <string name="conversations_delete_vault_kept_system">Diese Unterhaltung im Tresor wurde nicht gelöscht: Ihre Kopie im Nachrichtenspeicher des Telefons ließ sich nicht entfernen, und sie wäre bei der nächsten Synchronisierung außerhalb des Tresors wieder aufgetaucht. Machen Sie SMS Tech zu Ihrer Standard-SMS-App und versuchen Sie es erneut. Wenn es weiterhin fehlschlägt, verschieben Sie die Unterhaltung zuerst aus dem Tresor: sie kann dann in der Hauptliste wieder erscheinen.</string>
+    <string name="conversations_delete_vault_kept_system">Diese Unterhaltung im Tresor wurde nicht gelöscht: Die Kopie im Nachrichtenspeicher des Telefons ließ sich nicht entfernen, und die Unterhaltung wäre bei der nächsten Synchronisierung außerhalb des Tresors wieder aufgetaucht. Wenn SMS Tech nicht Ihre Standard-SMS-App ist, machen Sie sie dazu und versuchen Sie es dann erneut. Wenn es weiterhin fehlschlägt, verschieben Sie die Unterhaltung zuerst aus dem Tresor; dann kann sie in der Hauptliste wieder erscheinen.</string>
     <string name="conversations_delete_kept_local">Die Unterhaltung wurde nicht gelöscht: ein Teil davon ließ sich nicht von diesem Telefon entfernen. Versuchen Sie es erneut.</string>
     <string name="conversations_draft_prefix">Entwurf: %1$s</string>
     <string name="conversations_preview_attachment">Anhang</string>
@@ -1063,6 +1063,10 @@
     <plurals name="conversations_bulk_delete_kept">
         <item quantity="one">%d Unterhaltung wurde nicht gelöscht: ein Teil davon ließ sich nicht von diesem Telefon entfernen. Versuchen Sie es erneut.</item>
         <item quantity="other">%d Unterhaltungen wurden nicht gelöscht: ein Teil davon ließ sich nicht von diesem Telefon entfernen. Versuchen Sie es erneut.</item>
+    </plurals>
+    <plurals name="vault_bulk_delete_kept_system">
+        <item quantity="one">%d Unterhaltung im Tresor wurde nicht gelöscht: Die Kopie im Nachrichtenspeicher des Telefons ließ sich nicht entfernen, und die Unterhaltung wäre bei der nächsten Synchronisierung außerhalb des Tresors wieder aufgetaucht. Wenn SMS Tech nicht Ihre Standard-SMS-App ist, machen Sie sie dazu und versuchen Sie es dann erneut. Wenn es weiterhin fehlschlägt, verschieben Sie die Unterhaltung zuerst aus dem Tresor; dann kann sie in der Hauptliste wieder erscheinen.</item>
+        <item quantity="other">%d Unterhaltungen im Tresor wurden nicht gelöscht: Die Kopien im Nachrichtenspeicher des Telefons ließen sich nicht entfernen, und die Unterhaltungen wären bei der nächsten Synchronisierung außerhalb des Tresors wieder aufgetaucht. Wenn SMS Tech nicht Ihre Standard-SMS-App ist, machen Sie sie dazu und versuchen Sie es dann erneut. Wenn es weiterhin fehlschlägt, verschieben Sie die Unterhaltungen zuerst aus dem Tresor; dann können sie in der Hauptliste wieder erscheinen.</item>
     </plurals>
     <plurals name="conversations_bulk_archived">
         <item quantity="one">%d Unterhaltung archiviert</item>
