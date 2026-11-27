@@ -210,6 +210,59 @@ class CoffreActionsGroupeesTest {
         assertThat(evenements).containsExactly(Event.Suppression.Conservees(nombre = 1, copieSysteme = true))
     }
 
+    /**
+     * Relecture Claude du 2026-11-27 : une suppression groupée est longue, ses lignes restent affichées, et les
+     * resélectionner relançait leur suppression (deux bilans, compte gonflé). Une fois finie, elles redeviennent
+     * libres.
+     */
+    @Test
+    fun `une seconde suppression pendant la premiere ne reprend pas ses conversations`() = runTest(dispatcher) {
+        val fin = CompletableDeferred<BilanSuppression>()
+        coEvery { toggle.deleteAll(any()) } coAnswers { fin.await() }
+        val vm = ecran()
+        val evenements = observer(vm)
+        listOf(1L, 2L).forEach(vm::toggleSelection)
+        vm.bulkDeleteSelected(listOf(1L, 2L))
+        listOf(1L, 2L).forEach(vm::toggleSelection)
+
+        vm.bulkDeleteSelected(listOf(1L, 2L))
+        vm.deleteOne(1L)
+        fin.complete(BilanSuppression(supprimees = 2, conservees = 0))
+
+        coVerify(exactly = 1) { toggle.deleteAll(any()) }
+        assertThat(evenements).containsExactly(Event.Suppression.Supprimees(nombre = 2))
+        // Le registre s'est vidé : une nouvelle demande repart.
+        vm.deleteOne(1L)
+        coVerify(exactly = 2) { toggle.deleteAll(any()) }
+    }
+
+    /** Deux appuis sur « Supprimer » dans la même image : une seule suppression. */
+    @Test
+    fun `deux confirmations de l'appui long ne suppriment qu'une fois`() = runTest(dispatcher) {
+        val fin = CompletableDeferred<BilanSuppression>()
+        coEvery { toggle.deleteAll(any()) } coAnswers { fin.await() }
+        val vm = ecran()
+        observer(vm)
+
+        vm.deleteOne(2L)
+        vm.deleteOne(2L)
+        fin.complete(BilanSuppression(supprimees = 1, conservees = 0))
+
+        coVerify(exactly = 1) { toggle.deleteAll(listOf(2L)) }
+    }
+
+    /** Relectures GPT et Claude du 2026-11-27 : la confirmation restée ouverte vise une conversation partie. */
+    @Test
+    fun `l'appui long ne supprime pas une conversation que le coffre ne montre plus`() = runTest(dispatcher) {
+        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 1, conservees = 0)
+        val vm = ecran(ids = listOf(1L))
+        observer(vm)
+
+        vm.deleteOne(9L)
+
+        coVerify(exactly = 0) { toggle.deleteAll(any()) }
+    }
+
     @Test
     fun `appui long, session fermee - rien n'est supprime`() = runTest(dispatcher) {
         val vm = ecran()

@@ -64,10 +64,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -287,18 +287,34 @@ class VaultViewModel @Inject constructor(
 
     /**
      * 2026-11-27 (issue #108) — supprime UNE conversation du Coffre, depuis son appui long, après confirmation : la
-     * liste le permet depuis le sien, le Coffre ne proposait que d'en sortir. Même chemin et mêmes gardes que
-     * [bulkDeleteSelected]. Comme dans la liste, une suppression réussie ne se dit pas (la ligne disparaît) ; une
-     * conversation conservée le dit, avec sa cause.
+     * liste le permet depuis le sien, le Coffre ne proposait que d'en sortir. Mêmes gardes que [bulkDeleteSelected] :
+     * la conversation doit être encore affichée par le Coffre, la session ouverte, et une conversation déjà en cours
+     * de suppression n'est pas reprise (deux appuis dans la même image sur « Supprimer »). Comme dans la liste, une
+     * suppression réussie ne se dit pas (la ligne disparaît) ; une conversation conservée le dit, avec sa cause.
      */
     fun deleteOne(conversationId: Long) = viewModelScope.launch {
+        if (state.value.none { it.id == conversationId }) return@launch
         supprimer(listOf(conversationId), annoncerSucces = false)
     }
 
+    /**
+     * 2026-11-27 (relecture Claude) — les conversations en cours de suppression. Une suppression groupée est longue
+     * (chaque conversation balaie sa copie système) et ses lignes restent affichées jusqu'à leur effacement : sans ce
+     * registre, les resélectionner relançait leur suppression, et deux bilans au compte gonflé s'affichaient. Lu et
+     * écrit sur le thread principal seulement (`viewModelScope`).
+     */
+    private val enCoursDeSuppression = HashSet<Long>()
+
     /** Le chemin commun des deux suppressions ci-dessus. */
     private suspend fun supprimer(ids: List<Long>, annoncerSucces: Boolean) {
-        if (ids.isEmpty() || !vault.isVaultUnlockedInSession) return
-        val bilan = withContext(NonCancellable) { toggle.deleteAll(ids) }
+        val miennes = ids.filterNot { it in enCoursDeSuppression }
+        if (miennes.isEmpty() || !vault.isVaultUnlockedInSession) return
+        enCoursDeSuppression += miennes
+        val bilan = try {
+            withContext(NonCancellable) { toggle.deleteAll(miennes) }
+        } finally {
+            enCoursDeSuppression -= miennes.toSet()
+        }
         if (!vault.isVaultUnlockedInSession) return
         val evenement = when {
             bilan.conservees > 0 -> Event.Suppression.Conservees(

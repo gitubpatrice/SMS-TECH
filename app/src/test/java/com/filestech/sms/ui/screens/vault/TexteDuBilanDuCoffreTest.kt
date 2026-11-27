@@ -33,7 +33,8 @@ class TexteDuBilanDuCoffreTest {
     fun retenuesParLaCopieDuTelephone_laCauseEtQuoiFaire() {
         val (une, rouge) = texteDuBilanDuCoffre(res, Suppression.Conservees(nombre = 1, copieSysteme = true))
         assertThat(une).startsWith("1 vault conversation was not deleted: its copy in the phone’s message store")
-        assertThat(une).contains("Make SMS Tech your default SMS app")
+        // Au conditionnel (relecture Claude) : la copie peut aussi résister alors que SMS Tech est déjà par défaut.
+        assertThat(une).contains("If SMS Tech is not your default SMS app, make it so, then try again.")
         assertThat(rouge).isTrue()
         assertThat(texteDuBilanDuCoffre(res, Suppression.Conservees(nombre = 2, copieSysteme = true)).first)
             .startsWith("2 vault conversations were not deleted: their copy")

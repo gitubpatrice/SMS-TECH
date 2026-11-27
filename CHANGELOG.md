@@ -17,6 +17,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   selection in one step: a quick second tap no longer moves the same conversations again and shows a red failure.
   A long press on a vault conversation also offers Delete, in red and confirmed, like the main list's menu; it
   only offered to move it out.
+- **A bulk delete still running is not started again** (list and vault). Its conversations stay on screen until
+  each one is erased; selecting and deleting them again started a second deletion and showed two results with an
+  inflated count.
+- **The message for a vault conversation that was not deleted no longer tells a user whose default SMS app is
+  already SMS Tech to make it so**: the phone's copy can also resist for another reason. It now says "if SMS Tech is
+  not your default SMS app". The German text no longer reads "your copy", and the Spanish one no longer says
+  "before the vault".
 
 ## [1.31.0] — 2026-11-22
 

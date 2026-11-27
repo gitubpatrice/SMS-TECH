@@ -207,6 +207,27 @@ class ActionsGroupeesTest {
         coVerify(exactly = 1) { toggle.requestBulkMoveToVault(any(), any()) }
     }
 
+    /**
+     * 2026-11-27 (relecture Claude du Coffre, jumeau) — une suppression groupée est longue, ses lignes restent
+     * affichées : les resélectionner pendant qu'elle tourne ne relance pas leur suppression.
+     */
+    @Test
+    fun `une seconde suppression pendant la premiere ne reprend pas ses conversations`() = runTest(dispatcher) {
+        val fin = kotlinx.coroutines.CompletableDeferred<BilanSuppression>()
+        coEvery { toggle.deleteAll(any()) } coAnswers { fin.await() }
+        val vm = liste(listOf(conv(1), conv(2)))
+        val evenements = observer(vm)
+        listOf(1L, 2L).forEach(vm::toggleSelection)
+        vm.bulkDeleteSelected(confirmees = listOf(1L, 2L))
+        listOf(1L, 2L).forEach(vm::toggleSelection)
+
+        vm.bulkDeleteSelected(confirmees = listOf(1L, 2L))
+        fin.complete(BilanSuppression(supprimees = 2, conservees = 0))
+
+        coVerify(exactly = 1) { toggle.deleteAll(any()) }
+        assertThat(evenements).containsExactly(Event.Groupe.Supprimees(nombre = 2))
+    }
+
     /** Relecture Claude du 2026-11-16 : la fenêtre annonçait 2, la suppression en prenait 3. */
     @Test
     fun `la suppression ne depasse jamais ce que la confirmation a compte`() = runTest(dispatcher) {

@@ -636,9 +636,17 @@ class ConversationsViewModel @Inject constructor(
      * ferme entre deux conversations, au lieu de s'arrêter au milieu de la sélection sans rien en dire.
      */
     fun bulkDeleteSelected(confirmees: Collection<Long>) = viewModelScope.launch {
-        val ids = prendreSelectionVisible(limiteA = confirmees)
+        // 2026-11-27 (relecture Claude, jumeau du Coffre) — une conversation déjà en cours de suppression n'est pas
+        // reprise : ses lignes restent affichées jusqu'à leur effacement, et les resélectionner relançait leur
+        // suppression, avec deux bilans au compte gonflé.
+        val ids = prendreSelectionVisible(limiteA = confirmees).filterNot { it in enCoursDeSuppression }
         if (ids.isEmpty()) return@launch
-        val bilan = withContext(NonCancellable) { toggle.deleteAll(ids) }
+        enCoursDeSuppression += ids
+        val bilan = try {
+            withContext(NonCancellable) { toggle.deleteAll(ids) }
+        } finally {
+            enCoursDeSuppression -= ids.toSet()
+        }
         emettreBilan(
             if (bilan.conservees > 0) {
                 Event.Groupe.SuppressionsConservees(nombre = bilan.conservees)
@@ -647,6 +655,9 @@ class ConversationsViewModel @Inject constructor(
             },
         )
     }
+
+    /** 2026-11-27 — les conversations en cours de suppression groupée, cf. [bulkDeleteSelected] ; thread principal. */
+    private val enCoursDeSuppression = HashSet<Long>()
 
     private val _events = Channel<Event>(Channel.BUFFERED)
     val events: Flow<Event> = _events.receiveAsFlow()

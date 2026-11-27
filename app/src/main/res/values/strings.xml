@@ -159,7 +159,7 @@
     <string name="conversations_delete_confirm_title">Delete this conversation?</string>
     <string name="conversations_delete_confirm_body">All messages in this conversation will be permanently removed from this device. Other conversations are not affected.</string>
     <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
-    <string name="conversations_delete_vault_kept_system">This vault conversation was not deleted: its copy in the phone’s message store could not be removed, and it would have come back outside the vault at the next sync. Make SMS Tech your default SMS app, then try again. If it keeps failing, move the conversation out of the vault first: it may then come back in the main list.</string>
+    <string name="conversations_delete_vault_kept_system">This vault conversation was not deleted: its copy in the phone’s message store could not be removed, and it would have come back outside the vault at the next sync. If SMS Tech is not your default SMS app, make it so, then try again. If it keeps failing, move the conversation out of the vault first: it may then come back in the main list.</string>
     <string name="conversations_delete_kept_local">The conversation was not deleted: part of it could not be removed from this phone. Try again.</string>
     <string name="conversations_draft_prefix">Draft: %1$s</string>
     <string name="conversations_preview_attachment">Attachment</string>
@@ -1062,8 +1062,8 @@
         <item quantity="other">%d conversations were not deleted: part of them could not be removed from this phone. Try again.</item>
     </plurals>
     <plurals name="vault_bulk_delete_kept_system">
-        <item quantity="one">%d vault conversation was not deleted: its copy in the phone’s message store could not be removed, and it would have come back outside the vault at the next sync. Make SMS Tech your default SMS app, then try again. If it keeps failing, move it out of the vault first: it may then come back in the main list.</item>
-        <item quantity="other">%d vault conversations were not deleted: their copy in the phone’s message store could not be removed, and they would have come back outside the vault at the next sync. Make SMS Tech your default SMS app, then try again. If it keeps failing, move them out of the vault first: they may then come back in the main list.</item>
+        <item quantity="one">%d vault conversation was not deleted: its copy in the phone’s message store could not be removed, and it would have come back outside the vault at the next sync. If SMS Tech is not your default SMS app, make it so, then try again. If it keeps failing, move it out of the vault first: it may then come back in the main list.</item>
+        <item quantity="other">%d vault conversations were not deleted: their copy in the phone’s message store could not be removed, and they would have come back outside the vault at the next sync. If SMS Tech is not your default SMS app, make it so, then try again. If it keeps failing, move them out of the vault first: they may then come back in the main list.</item>
     </plurals>
     <plurals name="conversations_bulk_archived">
         <item quantity="one">%d conversation archived</item>
