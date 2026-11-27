@@ -4,9 +4,11 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.ContactsContract
+import android.provider.ContactsContract.CommonDataKinds.Phone
 import android.util.LruCache
 import com.filestech.sms.core.ext.normalizePhone
 import com.filestech.sms.domain.model.Contact
+import com.filestech.sms.domain.model.ContactPhone
 import com.filestech.sms.domain.model.PhoneAddress
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -55,7 +57,7 @@ class ContactsReader @Inject constructor(
                 contact = Contact(
                     id = c.getLong(0),
                     displayName = c.getString(1),
-                    phones = listOf(PhoneAddress.of(rawPhone)),
+                    phones = listOf(ContactPhone(PhoneAddress.of(rawPhone))),
                     photoUri = c.getString(2),
                 )
             }
@@ -67,36 +69,40 @@ class ContactsReader @Inject constructor(
         return resolved
     }
 
-    /** Read all visible contacts that have at least one phone number. Used by the new-message picker. */
+    /**
+     * Read all visible contacts that have at least one phone number. Used by the new-message picker.
+     *
+     * 2026-11-27 (issue #109) — chaque numéro, avec son type, le numéro par défaut en tête et sans doublon : cf.
+     * [regrouperParContact], où vit la règle (testable sans fournisseur).
+     */
     fun listAll(): List<Contact> {
         val proj = arrayOf(
-            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
-            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-            ContactsContract.CommonDataKinds.Phone.NUMBER,
-            ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI,
+            Phone.CONTACT_ID,
+            Phone.DISPLAY_NAME,
+            Phone.NUMBER,
+            Phone.PHOTO_THUMBNAIL_URI,
+            Phone.NORMALIZED_NUMBER,
+            Phone.TYPE,
+            Phone.LABEL,
+            Phone.IS_SUPER_PRIMARY,
         )
-        val rows = mutableMapOf<Long, Contact>()
-        resolver.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            proj,
-            null,
-            null,
-            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC",
-        )?.use { c ->
+        val lignes = ArrayList<LigneDeNumero>()
+        resolver.query(Phone.CONTENT_URI, proj, null, null, Phone.DISPLAY_NAME + " ASC")?.use { c ->
             while (c.moveToNext()) {
-                val id = c.getLong(0)
-                val name = c.getString(1)
-                val number = c.getString(2) ?: continue
-                val photo = c.getString(3)
-                val existing = rows[id]
-                if (existing == null) {
-                    rows[id] = Contact(id, name, listOf(PhoneAddress.of(number)), photo)
-                } else {
-                    rows[id] = existing.copy(phones = existing.phones + PhoneAddress.of(number))
-                }
+                val numero = c.getString(2) ?: continue
+                lignes += LigneDeNumero(
+                    contactId = c.getLong(0),
+                    nom = c.getString(1),
+                    numero = numero,
+                    photo = c.getString(3),
+                    e164 = c.getString(4),
+                    type = if (c.isNull(5)) ContactPhone.TYPE_LIBRE else c.getInt(5),
+                    libelle = c.getString(6),
+                    parDefaut = !c.isNull(7) && c.getInt(7) != 0,
+                )
             }
         }
-        return rows.values.toList()
+        return regrouperParContact(lignes)
     }
 
     fun invalidate() {
