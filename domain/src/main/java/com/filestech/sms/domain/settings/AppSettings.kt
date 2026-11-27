@@ -565,6 +565,14 @@ data class AdvancedSettings(
      */
     val copiesMmsAVerifier: Set<String> = emptySet(),
     /**
+     * 2026-11-27 (issue #98, profil secondaire) — le plus grand identifiant de message (Room) déjà regardé pour une
+     * notification d'arrivée DANS UN PROFIL SECONDAIRE (`ArriveesDuProfilPrincipal`). `-1` : jamais posé.
+     *
+     * Persistant, et non relevé au début de chaque passe : un SMS démarre le processus, dont la synchronisation de
+     * démarrage peut importer le message AVANT la passe qui doit le notifier.
+     */
+    val arriveesNotifieesJusqua: Long = -1L,
+    /**
      * v1.3.10 — **opt-in** : démarre [com.filestech.sms.system.service.KeepAliveService]
      * qui maintient le processus SMS Tech vivant via une notification persistante
      * discrète (canal `IMPORTANCE_MIN`, ne fait ni son ni vibration). Indispensable pour

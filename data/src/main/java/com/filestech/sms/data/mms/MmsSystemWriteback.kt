@@ -301,6 +301,7 @@ class MmsSystemWriteback @Inject constructor(
             put(Telephony.Mms.DATE, System.currentTimeMillis() / 1000L)
             put(Telephony.Mms.DATE_SENT, dateSec)
             put(Telephony.Mms.MESSAGE_BOX, Telephony.Mms.MESSAGE_BOX_OUTBOX)
+            // Remplacés par « lu » hors de la réception : c'est [versLaReception] qui les pose pour de bon.
             put(Telephony.Mms.READ, if (lu) 1 else 0)
             put(Telephony.Mms.SEEN, if (lu) 1 else 0)
             put(Telephony.Mms.MESSAGE_TYPE, MSG_TYPE_RETRIEVE_CONF)
@@ -323,7 +324,7 @@ class MmsSystemWriteback @Inject constructor(
         }
         val complete = ecrireAdresses(mmsId, expediteur, destinataires) &&
             ecrireParties(mmsId, textBody, pieces) &&
-            versLaReception(mmsId, dateSec)
+            versLaReception(mmsId, dateSec, lu)
         if (!complete) {
             Timber.w("MmsSystemWriteback: copie du MMS reçu incomplète, effacée (id=%d)", mmsId)
             effacerCopieRecue(mmsId)
@@ -354,11 +355,17 @@ class MmsSystemWriteback @Inject constructor(
     /**
      * La copie complète passe de la boîte d'envoi à la réception, à l'heure du message (à la seconde, ce que
      * `SystemCopyEraser.matchesSystemRow` vérifie) : c'est là seulement que l'import la prend.
+     *
+     * 2026-11-27 (issue #98) — **et avec l'état lu du message.** Le fournisseur marque lue toute ligne insérée hors
+     * de la réception (`MmsProvider.insert`) : la copie, née dans la boîte d'envoi, arrivait LUE dans les autres
+     * profils — sans pastille, et rien à y notifier. Mesuré sur émulateurs Android 14 et 16 à deux utilisateurs.
      */
-    private fun versLaReception(mmsId: Long, dateSec: Long): Boolean {
+    private fun versLaReception(mmsId: Long, dateSec: Long, lu: Boolean): Boolean {
         val valeurs = ContentValues().apply {
             put(Telephony.Mms.MESSAGE_BOX, Telephony.Mms.MESSAGE_BOX_INBOX)
             put(Telephony.Mms.DATE, dateSec)
+            put(Telephony.Mms.READ, if (lu) 1 else 0)
+            put(Telephony.Mms.SEEN, if (lu) 1 else 0)
         }
         return safe("inbox.toInbox") {
             resolver.update(ContentUris.withAppendedId(Telephony.Mms.CONTENT_URI, mmsId), valeurs, null, null)

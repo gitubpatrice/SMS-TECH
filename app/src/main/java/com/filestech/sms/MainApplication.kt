@@ -18,6 +18,7 @@ import com.filestech.sms.system.notifications.IncomingMessageNotifier
 import com.filestech.sms.system.notifications.NotificationChannelInitializer
 import com.filestech.sms.system.notifications.OutgoingFailureNotifier
 import com.filestech.sms.system.notifications.verrouAppActif
+import com.filestech.sms.system.scheduler.ArriveesDuProfilPrincipalWorker
 import com.filestech.sms.system.scheduler.SafetyCallAlarmScheduler
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
@@ -172,6 +173,9 @@ class MainApplication : Application(), Configuration.Provider {
                 .onFailure { Timber.w(it, "TelephonySyncManager.start failed") }
         }
         TelephonySyncWorker.schedulePeriodic(this)
+        // 2026-11-27 (issue #98) — dans un profil secondaire, l'observation du stockage partagé qui notifie les MMS
+        // reçus par le profil principal. Hors du fil principal : elle demande au système l'application SMS par défaut.
+        appScope.launch(ioDispatcher) { ArriveesDuProfilPrincipalWorker.assurerLObservation(this@MainApplication) }
         // v1.9.0 — schedule du SafetyCall worker (idempotent KEEP policy).
         // Même si la config deadman est désactivée, le worker tourne en no-op
         // (1 lecture DataStore par heure, négligeable batterie). Avantage : un

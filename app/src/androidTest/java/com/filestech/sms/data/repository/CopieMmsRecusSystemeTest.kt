@@ -153,6 +153,28 @@ class CopieMmsRecusSystemeTest {
     }
 
     /**
+     * 2026-11-27 (issue #98) — la copie garde l'état lu du message. Le fournisseur marque lue toute ligne insérée hors
+     * de la réception, et la copie naît dans la boîte d'envoi : un MMS pas encore lu arrivait LU dans les autres
+     * profils, sans pastille ni rien à y notifier (mesuré sur émulateurs à deux utilisateurs). Le message déjà lu
+     * vérifie qu'on ne force pas l'inverse.
+     */
+    @Test
+    fun laCopieGardeLEtatLuDuMessage() = runBlocking {
+        val nonLu = mmsRecu(ALICE, "Pas encore lu", enCoffre = false)
+        val dejaLu = mmsRecu(BOB, "Deja lu", enCoffre = false, lu = true)
+
+        assertThat(copie.copier(depuis = 0L)).isEqualTo(2)
+
+        val copieNonLue = idSystemeDe(nonLu)
+        val copieLue = idSystemeDe(dejaLu)
+        assertThat(luEtVu(copieNonLue)).isEqualTo(0 to 0)
+        assertThat(luEtVu(copieLue)).isEqualTo(1 to 1)
+        // Ce qu'un autre profil importe.
+        assertThat(lire(copieNonLue).single().read).isFalse()
+        assertThat(lire(copieLue).single().read).isTrue()
+    }
+
+    /**
      * Supprimer le message ici efface sa copie : l'effaceur vérifie l'identité de la ligne (date à la seconde, boîte,
      * expéditeur) avant d'y toucher, et la copie doit donc la satisfaire. Effacement de panique compris : il passe
      * par le même effaceur.
@@ -325,11 +347,11 @@ class CopieMmsRecusSystemeTest {
 
     // ───────────────────────────── outils ─────────────────────────────
 
-    private suspend fun mmsRecu(expediteur: String, texte: String, enCoffre: Boolean): Long {
+    private suspend fun mmsRecu(expediteur: String, texte: String, enCoffre: Boolean, lu: Boolean = false): Long {
         val conversation = db.conversationDao().insert(conversation(expediteur, enCoffre))
         val messageId = db.messageDao().insert(
             message(conversation, expediteur, texte, MessageDirection.INCOMING)
-                .copy(mmsTransactionKey = "cle-test-${System.nanoTime()}", attachmentsCount = 1),
+                .copy(mmsTransactionKey = "cle-test-${System.nanoTime()}", attachmentsCount = 1, read = lu),
         )
         val fichier = File(context.filesDir, "mms_attachments/test-98-${System.nanoTime()}.png")
         fichier.parentFile?.mkdirs()
@@ -416,6 +438,15 @@ class CopieMmsRecusSystemeTest {
         null,
         null,
     )?.use { it.count > 0 } ?: false
+
+    /** Les colonnes `read` et `seen` de la ligne système [idSysteme]. */
+    private fun luEtVu(idSysteme: Long): Pair<Int, Int>? = context.contentResolver.query(
+        ContentUris.withAppendedId(Telephony.Mms.CONTENT_URI, idSysteme),
+        arrayOf(Telephony.Mms.READ, Telephony.Mms.SEEN),
+        null,
+        null,
+        null,
+    )?.use { c -> if (c.moveToFirst()) c.getInt(0) to c.getInt(1) else null }
 
     private fun nombreDeMessages(base: AppDatabase): Int =
         base.openHelper.readableDatabase.query("SELECT COUNT(*) FROM messages").use { c ->

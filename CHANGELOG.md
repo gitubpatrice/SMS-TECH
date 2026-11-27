@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 
 ## [Unreleased]
 
+### Added
+
+- **Notifications in a secondary profile** (issue #98, GrapheneOS). Android hands incoming messages only to the
+  primary profile, and the other profiles showed them at their next sync, without a notification. Where SMS Tech is
+  the default SMS app of a secondary profile, it now imports and notifies a message as soon as the primary profile
+  has received it: an SMS within seconds (Android tells every running profile), an MMS once the primary profile
+  has copied it to the shared message store (the store tells every profile; in deep sleep, at the next wake-up).
+  A message received while the profile was stopped is notified when it starts; what the app has shown is not
+  notified later. Same rules as in the primary profile: vault, muted conversations, hidden previews, app lock,
+  notification settings, and this profile's own blocked numbers and unknown-number setting. Nothing changes in the
+  primary profile.
+
 ### Fixed
 
 - **"New message" offers every number of a contact** (issue #109). A contact with several phone numbers had one
@@ -32,6 +44,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   already SMS Tech to make it so** (in the conversation and in the vault): the phone's copy can also resist for
   another reason. It now says "if SMS Tech is not your default SMS app". The German text no longer reads "your
   copy", and the Spanish one no longer says "before the vault".
+- **A received MMS reached the other profiles already marked as read** (issue #98). Android marks as read any row
+  written outside the inbox, and the copy stays in the outbox until it is complete; it now gets the message's read
+  state when it moves to the inbox. Measured on Android 14 and 16 emulators with two users.
+- **A profile without any SMS re-imported all its MMS at every sync, marked as read.** The first-sync rule only
+  looked at the SMS cursor, which stays at zero there; it now also looks at the completed MMS import.
 
 ## [1.31.0] — 2026-11-22
 

@@ -83,6 +83,47 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.32.0 — Notifications in a secondary profile (issue #98)
+
+**What changes.** In a secondary user profile where SMS Tech is the default SMS app, a message received by the
+primary profile is now imported and notified. Two signals start a pass, both measured on Android 14 and 16
+emulators with two users:
+- **SMS**: `SMS_RECEIVED`, which Android sends to every running user once the primary profile's `SMS_DELIVER` is
+  done. A new manifest receiver, exported but restricted to senders holding `BROADCAST_SMS`, schedules one pass per
+  SMS (expedited from Android 12) and a re-read 30 s later. It reads nothing from the intent (only the shared store
+  counts) and does nothing in the primary profile.
+- **MMS**: no broadcast reaches a manifest receiver (`MMS_DOWNLOADED` is not exempt from the implicit-broadcast
+  limits). A WorkManager task triggered by changes to `content://mms-sms/`, which the provider notifies to every
+  user, runs a pass when the primary profile writes its copy. Such a task serves once; two names take turns, and
+  every pass checks, at its start and at its end, that one of them still waits for a change. The first version only
+  re-armed at the start, with `KEEP`: two passes that overlapped each found the other one running, and the
+  observation stopped for good (found by the external reviews).
+- **User start**: a message received while the secondary user was stopped reached no signal. A pass runs when the
+  user starts (`BootReceiver`).
+
+A pass syncs, then notifies the received unread messages it brought, through the primary profile's notifier
+(vault, muted conversations, hidden previews, app lock, notification settings) and blocking policy, applied with
+this profile's own blocklist and settings: Android does not let a secondary user read the system blocklist. A
+message the primary profile drops is never written to the shared store. A persistent mark, the highest message id
+already looked at, keeps a message from being notified twice, and still catches one that the process's own startup
+sync imported just before the pass. Bringing the app to the foreground moves the mark too: what the list shows is
+not notified later.
+
+**Guards.** Nothing in the primary profile, which notifies by itself (an instrumented test, run in both users, fails
+without the guard). Nothing in a profile (work, clone, private space) nor on a device whose system user is headless,
+where the primary profile is another user that no public API names: read from the API levels, not measurable on an
+emulator. Each of the following has a test that fails without it. The first pass after the update looks back ten
+minutes only. Afterwards, a message older than a day is not notified, and a pass posts at most the twenty most recent
+(a restore by a backup app, a user stopped for long). A mark above the highest id (database recreated) counts as
+unset, and an empty database does not set it. The observation re-arming rule, two passes overlapping included.
+
+**Known limits.**
+- In deep sleep, an MMS is notified at the next wake-up or maintenance window: JobScheduler defers the task, and no
+  Doze-exempt signal reaches a secondary profile for an MMS. SMS are notified within seconds, deep sleep included.
+- A notification that Android refuses to post is not retried, as in the primary profile.
+- A message imported by the 12-hour sync, because every signal missed it, is notified at the next pass if it is
+  still unread and less than a day old.
+
 ### v1.31.0 — A share or a forward goes only to its own conversation
 
 **Affected versions: 1.4.1 to 1.30.1.** Reported by e-mail: "Forward" opened the chosen conversation with an empty

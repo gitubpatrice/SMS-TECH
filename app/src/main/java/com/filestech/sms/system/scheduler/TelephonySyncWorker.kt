@@ -97,6 +97,9 @@ class TelephonySyncWorker @AssistedInject constructor(
                 if (it is kotlinx.coroutines.CancellationException) throw it
                 Timber.w(it, "Sync: part MMS en echec")
             }
+            // 2026-11-27 (issue #98) — profil secondaire : l'observation du stockage qui notifie les MMS reçus par le
+            // profil principal se rallume ici au plus tard, si elle s'était éteinte. Sans effet ailleurs.
+            ArriveesDuProfilPrincipalWorker.assurerLObservation(applicationContext)
             // Audit M-6: opportunistic housekeeping. Outbound MMS / voice caches accumulate when
             // the `SmsSentReceiver` never fires (process force-killed, OS skips the broadcast);
             // we prune anything older than 24 h here. Inbound caches are intentionally **not**
