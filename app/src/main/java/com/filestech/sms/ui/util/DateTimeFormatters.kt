@@ -23,6 +23,7 @@ class ChatFormatters(val locale: Locale) {
     val dayLabel: SimpleDateFormat = SimpleDateFormat("EEE", locale)
     val weekdayFull: SimpleDateFormat = SimpleDateFormat("EEEE", locale)
     val dateMedium: SimpleDateFormat = SimpleDateFormat("d MMM", locale)
+    val dateMediumWithYear: SimpleDateFormat = SimpleDateFormat("d MMM yyyy", locale)
     val fullDay: SimpleDateFormat = SimpleDateFormat("EEEE d MMMM yyyy", locale)
 }
 
@@ -35,9 +36,15 @@ fun rememberChatFormatters(): ChatFormatters {
 
 /**
  * Returns a label suitable for the conversation row:
- *  - same day  → HH:mm
- *  - same week → short day name
- *  - else      → day + month
+ *  - same day     → HH:mm
+ *  - same week    → short day name
+ *  - same year    → day + month
+ *  - earlier year → day + month + year
+ *
+ * 2026-11-27 (suggestion d'un utilisateur, par courriel) — l'année manquait aux dates d'une année antérieure : une
+ * conversation de mars 2024 affichait « 27 mars », comme une de mars dernier. Le séparateur de jours d'une
+ * conversation, [daySeparatorLabel], la donnait déjà ; la ligne de la liste la donne maintenant aussi, et
+ * seulement hors de l'année en cours.
  */
 fun ChatFormatters.relativeRowLabel(
     timestampMillis: Long,
@@ -51,13 +58,15 @@ fun ChatFormatters.relativeRowLabel(
     now: Calendar = Calendar.getInstance(locale),
 ): String {
     val then = Calendar.getInstance(locale).apply { timeInMillis = timestampMillis }
+    val sameYear = now.get(Calendar.YEAR) == then.get(Calendar.YEAR)
     return when {
-        now.get(Calendar.DATE) == then.get(Calendar.DATE) &&
+        sameYear &&
             now.get(Calendar.MONTH) == then.get(Calendar.MONTH) &&
-            now.get(Calendar.YEAR) == then.get(Calendar.YEAR) -> time.format(Date(timestampMillis))
-        now.get(Calendar.WEEK_OF_YEAR) == then.get(Calendar.WEEK_OF_YEAR) &&
-            now.get(Calendar.YEAR) == then.get(Calendar.YEAR) -> dayLabel.format(Date(timestampMillis))
-        else -> dateMedium.format(Date(timestampMillis))
+            now.get(Calendar.DATE) == then.get(Calendar.DATE) -> time.format(Date(timestampMillis))
+        sameYear &&
+            now.get(Calendar.WEEK_OF_YEAR) == then.get(Calendar.WEEK_OF_YEAR) -> dayLabel.format(Date(timestampMillis))
+        sameYear -> dateMedium.format(Date(timestampMillis))
+        else -> dateMediumWithYear.format(Date(timestampMillis))
     }
 }
 
