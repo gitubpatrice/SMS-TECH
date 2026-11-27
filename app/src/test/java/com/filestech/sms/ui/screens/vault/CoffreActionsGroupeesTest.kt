@@ -129,7 +129,8 @@ class CoffreActionsGroupeesTest {
 
     @Test
     fun `retenues par la copie du telephone - le bilan en donne la cause`() = runTest(dispatcher) {
-        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 1, conservees = 2, parCopieSysteme = 2)
+        coEvery { toggle.deleteAll(any()) } returns
+            BilanSuppression(supprimees = 1, conservees = 2, parCopieSysteme = 2)
         val vm = ecran()
         val evenements = observer(vm)
         listOf(1L, 2L, 3L).forEach(vm::toggleSelection)
@@ -142,7 +143,8 @@ class CoffreActionsGroupeesTest {
     /** Causes mêlées : le texte général, pas une cause qui ne vaut que pour une partie. */
     @Test
     fun `causes melees - le bilan ne pretend pas a une seule cause`() = runTest(dispatcher) {
-        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 0, conservees = 2, parCopieSysteme = 1)
+        coEvery { toggle.deleteAll(any()) } returns
+            BilanSuppression(supprimees = 0, conservees = 2, parCopieSysteme = 1)
         val vm = ecran()
         val evenements = observer(vm)
         listOf(1L, 2L).forEach(vm::toggleSelection)
@@ -198,7 +200,8 @@ class CoffreActionsGroupeesTest {
 
     @Test
     fun `une conversation retenue par la copie du telephone le dit`() = runTest(dispatcher) {
-        coEvery { toggle.deleteAll(any()) } returns BilanSuppression(supprimees = 0, conservees = 1, parCopieSysteme = 1)
+        coEvery { toggle.deleteAll(any()) } returns
+            BilanSuppression(supprimees = 0, conservees = 1, parCopieSysteme = 1)
         val vm = ecran()
         val evenements = observer(vm)
 

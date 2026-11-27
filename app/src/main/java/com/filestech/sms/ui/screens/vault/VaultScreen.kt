@@ -696,8 +696,9 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                             )
                         }
                     },
-                    // 2026-11-27 (issue #108) — les actions sont en bas, avec leur libellé ([BasDeSelectionDuCoffre]),
-                    // comme dans la liste : le cadenas seul, ici, ne se comprenait pas et ne permettait pas de supprimer.
+                    // 2026-11-27 (issue #108) — les actions sont en bas, avec leur libellé
+                    // ([BasDeSelectionDuCoffre]), comme dans la liste : le cadenas seul, ici, ne se comprenait pas et
+                    // ne permettait pas de supprimer.
                 )
                 return@topBar
             }

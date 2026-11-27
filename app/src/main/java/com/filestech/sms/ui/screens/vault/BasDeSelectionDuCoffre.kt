@@ -45,7 +45,8 @@ import com.filestech.sms.ui.screens.conversations.ConfirmationSuppressionGroupee
  * l'écran, et aucun moyen de supprimer une sélection. Mêmes boutons ([ActionDeSelection]) et même confirmation
  * ([ConfirmationSuppressionGroupee]) que la liste : la fenêtre FIGE les conversations à son ouverture et ce sont
  * elles que reçoit [onSupprimer]. Rien hors sélection, ni tant que le contenu du Coffre n'est pas dévoilé
- * ([visible]). La confirmation repart fermée à chaque nouvelle sélection : son état quitte la composition avec la barre.
+ * ([visible]). La confirmation repart fermée à chaque nouvelle sélection : son état quitte la composition avec la
+ * barre.
  */
 @Composable
 internal fun BasDeSelectionDuCoffre(
@@ -102,7 +103,10 @@ internal fun ActionsDUneConversationDuCoffre(
 ) {
     var aSupprimer by remember { mutableStateOf<Long?>(null) }
     if (cible != null) {
-        ModalBottomSheet(onDismissRequest = onFermer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        ModalBottomSheet(
+            onDismissRequest = onFermer,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
             Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
                 Text(
                     text = stringResource(R.string.vault_actions_title),
@@ -118,7 +122,11 @@ internal fun ActionsDUneConversationDuCoffre(
                     onFermer()
                     onSelectionner(cible)
                 }
-                LigneDAction(Icons.Outlined.Delete, stringResource(R.string.action_delete), MaterialTheme.colorScheme.error) {
+                LigneDAction(
+                    icone = Icons.Outlined.Delete,
+                    libelle = stringResource(R.string.action_delete),
+                    teinte = MaterialTheme.colorScheme.error,
+                ) {
                     onFermer()
                     aSupprimer = cible
                 }
@@ -168,7 +176,11 @@ internal fun texteDuBilanDuCoffre(res: Resources, bilan: VaultViewModel.Event.Su
         is VaultViewModel.Event.Suppression.Supprimees ->
             res.getQuantityString(R.plurals.conversations_bulk_deleted, bilan.nombre, bilan.nombre) to false
         is VaultViewModel.Event.Suppression.Conservees -> res.getQuantityString(
-            if (bilan.copieSysteme) R.plurals.vault_bulk_delete_kept_system else R.plurals.conversations_bulk_delete_kept,
+            if (bilan.copieSysteme) {
+                R.plurals.vault_bulk_delete_kept_system
+            } else {
+                R.plurals.conversations_bulk_delete_kept
+            },
             bilan.nombre,
             bilan.nombre,
         ) to true

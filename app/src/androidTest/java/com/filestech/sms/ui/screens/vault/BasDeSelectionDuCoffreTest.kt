@@ -66,7 +66,12 @@ class BasDeSelectionDuCoffreTest {
     fun annulerNeSupprimeRien() {
         val supprimees = mutableListOf<List<Long>>()
         compose.setContent {
-            BasDeSelectionDuCoffre(selectionnees = setOf(4L), visible = true, onSortir = {}, onSupprimer = { supprimees += it })
+            BasDeSelectionDuCoffre(
+                selectionnees = setOf(4L),
+                visible = true,
+                onSortir = {},
+                onSupprimer = { supprimees += it },
+            )
         }
 
         compose.onNodeWithText(texte(R.string.action_delete)).performClick()
@@ -82,7 +87,12 @@ class BasDeSelectionDuCoffreTest {
         val supprimees = mutableListOf<List<Long>>()
         var selection by mutableStateOf(setOf(4L, 5L))
         compose.setContent {
-            BasDeSelectionDuCoffre(selectionnees = selection, visible = true, onSortir = {}, onSupprimer = { supprimees += it })
+            BasDeSelectionDuCoffre(
+                selectionnees = selection,
+                visible = true,
+                onSortir = {},
+                onSupprimer = { supprimees += it },
+            )
         }
 
         compose.onNodeWithText(texte(R.string.action_delete)).performClick()
@@ -171,5 +181,6 @@ class BasDeSelectionDuCoffreTest {
         assertThat(cible).isNull()
     }
 
-    private fun ComposeContentTestRule.compter(texte: String): Int = onAllNodes(hasText(texte)).fetchSemanticsNodes().size
+    private fun ComposeContentTestRule.compter(texte: String): Int =
+        onAllNodes(hasText(texte)).fetchSemanticsNodes().size
 }
