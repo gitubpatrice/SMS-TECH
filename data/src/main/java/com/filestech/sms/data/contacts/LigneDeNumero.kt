@@ -43,7 +43,9 @@ internal data class LigneDeNumero(
 internal fun regrouperParContact(lignes: List<LigneDeNumero>): List<Contact> {
     val parContact = LinkedHashMap<Long, MutableList<LigneDeNumero>>()
     for (ligne in lignes) {
-        if (ligne.numero.count(Char::isDigit) >= CHIFFRES_MIN) parContact.getOrPut(ligne.contactId) { ArrayList() } += ligne
+        if (ligne.numero.count(Char::isDigit) >= CHIFFRES_MIN) {
+            parContact.getOrPut(ligne.contactId) { ArrayList() } += ligne
+        }
     }
     return parContact.map { (id, siennes) ->
         val premiere = siennes.first()

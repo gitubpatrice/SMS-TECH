@@ -286,9 +286,10 @@ fun ComposeScreen(
                         )
                     }
                 }
-                // 2026-11-27 (issue #109) — une ligne par NUMÉRO : un contact à plusieurs numéros en a plusieurs, chacune
-                // avec son nom, et le type du numéro devant lui quand le carnet le donne. Le numéro est isolé de
-                // gauche à droite : à côté d'un libellé en arabe ou en hébreu, ses groupes de chiffres s'inverseraient.
+                // 2026-11-27 (issue #109) — une ligne par NUMÉRO : un contact à plusieurs numéros en a plusieurs,
+                // chacune avec son nom, et le type du numéro devant lui quand le carnet le donne. Le numéro est isolé
+                // de gauche à droite : à côté d'un libellé en arabe ou en hébreu, ses groupes de chiffres
+                // s'inverseraient.
                 items(filtered, key = { it.cle }) { ligne ->
                     val contact = ligne.contact
                     val number = ligne.numero.address.raw
@@ -296,7 +297,8 @@ fun ComposeScreen(
                     ListItem(
                         headlineContent = { Text(contact.displayName ?: number) },
                         supportingContent = {
-                            Text(if (type == null) number else "$type · ${BidiFormatter.getInstance().unicodeWrap(number, LTR)}")
+                            val isole = BidiFormatter.getInstance().unicodeWrap(number, LTR)
+                            Text(if (type == null) number else "$type · $isole")
                         },
                         leadingContent = { Avatar(label = contact.displayName ?: number) },
                         // X-05 — meme bouton que sur la saisie libre : une puce, pas de navigation.

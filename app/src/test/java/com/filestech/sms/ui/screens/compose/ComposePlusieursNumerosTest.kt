@@ -45,7 +45,11 @@ class ComposePlusieursNumerosTest {
             ContactPhone(PhoneAddress.of("+44 7700 900123"), label = "Londres"),
         ),
     )
-    private val bruno = Contact(id = 2L, displayName = "Bruno", phones = listOf(ContactPhone(PhoneAddress.of("0633333333"))))
+    private val bruno = Contact(
+        id = 2L,
+        displayName = "Bruno",
+        phones = listOf(ContactPhone(PhoneAddress.of("0633333333"))),
+    )
 
     /** Les adresses de chaque conversation créée, dans l'ordre. */
     private val creees = mutableListOf<List<String>>()
@@ -145,7 +149,10 @@ class ComposePlusieursNumerosTest {
         val repete = Contact(
             id = 4L,
             displayName = "Denis",
-            phones = listOf(ContactPhone(PhoneAddress.of("0655555555")), ContactPhone(PhoneAddress.of("06 55 55 55 55"))),
+            phones = listOf(
+                ContactPhone(PhoneAddress.of("0655555555")),
+                ContactPhone(PhoneAddress.of("06 55 55 55 55")),
+            ),
         )
         val lignes = lignesPour(composeur(contacts = listOf(repete)), "")
 
