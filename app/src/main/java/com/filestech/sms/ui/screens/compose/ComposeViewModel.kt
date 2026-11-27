@@ -61,7 +61,6 @@ class ComposeViewModel @Inject constructor(
      * une rotation ne doit pas l'effacer. Une conversation créée l'a déjà reciblé (`AppRoot`, `onConversationCreated`).
      */
     override fun onCleared() {
-        super.onCleared()
         incomingShare.abandonnerNonCible(ouvertA)
     }
 

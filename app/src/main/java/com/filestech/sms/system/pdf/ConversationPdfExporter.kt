@@ -10,6 +10,7 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.core.content.FileProvider
+import androidx.core.graphics.toColorInt
 import com.filestech.sms.R
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
@@ -107,9 +108,18 @@ class ConversationPdfExporter @Inject constructor(
         val timestampPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.GRAY; textSize = 8.5f
         }
-        val outgoingBg = Paint().apply { color = Color.parseColor("#2460AB"); isAntiAlias = true }
-        val incomingBg = Paint().apply { color = Color.parseColor("#EAEAEA"); isAntiAlias = true; style = Paint.Style.FILL }
-        val incomingStroke = Paint().apply { color = Color.parseColor("#CFCFCF"); isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 0.75f }
+        val outgoingBg = Paint().apply { color = "#2460AB".toColorInt(); isAntiAlias = true }
+        val incomingBg = Paint().apply {
+            color = "#EAEAEA".toColorInt()
+            isAntiAlias = true
+            style = Paint.Style.FILL
+        }
+        val incomingStroke = Paint().apply {
+            color = "#CFCFCF".toColorInt()
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeWidth = 0.75f
+        }
 
         val dateFormatter = SimpleDateFormat("EEEE d MMMM yyyy", Locale.getDefault())
         val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -353,8 +363,9 @@ class ConversationPdfExporter @Inject constructor(
     ): Float {
         val title = conversation.customName ?: conversation.displayName ?: conversation.addresses.toCsv()
         canvas.drawText(title, margin.toFloat(), margin + 18f, titlePaint)
-        val sub = context.getString(
-            R.string.pdf_header_subtitle,
+        val sub = context.resources.getQuantityString(
+            R.plurals.pdf_header_subtitle,
+            conversation.addresses.size,
             // v1.28.12 — `Locale.US`, comme l'horodatage du NOM DE FICHIER 288 lignes plus
             // haut. Les deux écrivent un `yyyy-MM-dd` technique ; l'un suivait la locale et
             // l'autre non, dans le même fichier. `SimpleDateFormat` rend les chiffres dans
@@ -367,7 +378,7 @@ class ConversationPdfExporter @Inject constructor(
             conversation.addresses.size,
         )
         canvas.drawText(sub, margin.toFloat(), margin + 36f, subtitlePaint)
-        val rule = Paint().apply { color = Color.parseColor("#DDDDDD"); strokeWidth = 0.5f }
+        val rule = Paint().apply { color = "#DDDDDD".toColorInt(); strokeWidth = 0.5f }
         canvas.drawRect(Rect(margin, margin + 46, PAGE_WIDTH - margin, margin + 47), rule)
         return (margin + 60).toFloat()
     }

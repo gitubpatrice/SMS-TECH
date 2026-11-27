@@ -558,9 +558,9 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                             },
                         )
                         val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                            .setTitle(ctx.getString(R.string.vault_biometric_title))
-                            .setSubtitle(ctx.getString(R.string.vault_biometric_subtitle))
-                            .setNegativeButtonText(ctx.getString(R.string.action_cancel))
+                            .setTitle(resources.getString(R.string.vault_biometric_title))
+                            .setSubtitle(resources.getString(R.string.vault_biometric_subtitle))
+                            .setNegativeButtonText(resources.getString(R.string.action_cancel))
                             .setAllowedAuthenticators(StrongBiometrics.AUTHENTICATORS)
                             .setConfirmationRequired(false)
                             .build()
@@ -667,14 +667,15 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         viewModel.events.collect { event ->
             when (event) {
                 is VaultViewModel.Event.MovedOut -> {
-                    val msg = if (event.count <= 1) ctx.getString(R.string.vault_move_out_done)
-                    else ctx.resources.getQuantityString(
-                        R.plurals.vault_bulk_move_out_done, event.count, event.count,
-                    )
+                    val msg = if (event.count <= 1) {
+                        resources.getString(R.string.vault_move_out_done)
+                    } else {
+                        resources.getQuantityString(R.plurals.vault_bulk_move_out_done, event.count, event.count)
+                    }
                     snackbarHost.showSnackbar(msg)
                 }
                 is VaultViewModel.Event.MoveOutFailed ->
-                    snackbarHost.showError(ctx.getString(R.string.vault_move_out_failed))
+                    snackbarHost.showError(resources.getString(R.string.vault_move_out_failed))
                 // 2026-11-27 (issue #108) — bilan d'une suppression groupée ; le texte est choisi hors de l'écran.
                 is VaultViewModel.Event.Suppression -> snackbarHost.afficherBilanDuCoffre(resources, event)
             }
@@ -806,7 +807,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Check,
-                                                contentDescription = stringResource(R.string.selected),
+                                                contentDescription = stringResource(R.string.conversation_selected),
                                                 tint = cs.onPrimary,
                                                 modifier = Modifier.size(18.dp),
                                             )

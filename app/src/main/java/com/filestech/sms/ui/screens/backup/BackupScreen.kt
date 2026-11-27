@@ -40,7 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -229,7 +229,7 @@ class BackupViewModel @Inject constructor(
 @Composable
 fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel()) {
     val snackbarHost = remember { SnackbarHostState() }
-    val context = LocalContext.current
+    val resources = LocalResources.current
 
     var pendingUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var askingPassphrase by remember { mutableStateOf(false) }
@@ -273,10 +273,10 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
         viewModel.events.collect { ev ->
             when (ev) {
                 is BackupViewModel.Event.ExportDone -> snackbarHost.showSnackbar(
-                    context.getString(R.string.backup_export_success),
+                    resources.getString(R.string.backup_export_success),
                 )
                 BackupViewModel.Event.ExportFailed -> snackbarHost.showError(
-                    context.getString(R.string.backup_export_failed),
+                    resources.getString(R.string.backup_export_failed),
                 )
                 // v1.27.2 (audit externe 2026-08-04 #4) — le coffre n'est pas vide et sa
                 // session est verrouillée : inviter à l'ouvrir plutôt qu'un échec opaque.
@@ -290,7 +290,7 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 is BackupViewModel.Event.RestoreDone -> snackbarHost.showSnackbar(
                     buildString {
                         append(
-                            context.getString(
+                            resources.getString(
                                 R.string.backup_restore_success,
                                 ev.result.totalConversationsInBackup,
                                 ev.result.conversationsCreated,
@@ -312,11 +312,11 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
                 is BackupViewModel.Event.RestoreFailed -> {
                     val msg = when (ev.kind) {
                         BackupViewModel.RestoreFailureKind.WRONG_PASSPHRASE_OR_CORRUPTED ->
-                            context.getString(R.string.backup_restore_failed_wrong_pass)
+                            resources.getString(R.string.backup_restore_failed_wrong_pass)
                         BackupViewModel.RestoreFailureKind.INVALID_FORMAT ->
-                            context.getString(R.string.backup_restore_failed_format)
+                            resources.getString(R.string.backup_restore_failed_format)
                         BackupViewModel.RestoreFailureKind.STORAGE ->
-                            context.getString(R.string.backup_restore_failed_storage)
+                            resources.getString(R.string.backup_restore_failed_storage)
                     }
                     snackbarHost.showError(msg)
                 }

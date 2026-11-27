@@ -6,6 +6,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.provider.Telephony
+import androidx.core.net.toUri
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.mms.MmsAttachment
@@ -59,7 +60,7 @@ class MmsSystemWriteback @Inject constructor(
         raw.asSequence()
             // v1.2.7 audit S2 : strip d'abord les chars bidi/zero-width (RLO, LRE, BOM…)
             // pour ne pas hit un thread_id distinct côté Samsung canonical_addresses pour le
-            // même destinataire visuel — sinon un caller fournissant `"+33‮6 12…"` peut
+            // même destinataire visuel — sinon un caller fournissant `"+33\u202E6 12…"` peut
             // créer une conversation fantôme.
             .map { it.stripInvisibleChars() }
             .map { it.replace(Regex("[\\s\\-()]"), "") }
@@ -168,7 +169,7 @@ class MmsSystemWriteback @Inject constructor(
         // 2. Insert addresses — each insert in its own safe() so a single failure (e.g. FROM
         // rejected) does not silently skip the remaining TO rows. Without `addr` rows, the MMS
         // shows up in other SMS apps without any recipient label.
-        val addrUri = Uri.parse("content://mms/$mmsId/addr")
+        val addrUri = "content://mms/$mmsId/addr".toUri()
         safe("addr.from") {
             resolver.insert(
                 addrUri,
@@ -214,7 +215,7 @@ class MmsSystemWriteback @Inject constructor(
      */
     private fun ecrireParties(mmsId: Long, textBody: String?, pieces: List<Piece>): Boolean {
         var toutEcrit = true
-        val partsUri = Uri.parse("content://mms/$mmsId/part")
+        val partsUri = "content://mms/$mmsId/part".toUri()
         if (!textBody.isNullOrBlank()) {
             val texte = ContentValues().apply {
                 put("mid", mmsId)
@@ -340,7 +341,7 @@ class MmsSystemWriteback @Inject constructor(
     }
 
     private fun ecrireAdresses(mmsId: Long, expediteur: String, destinataires: List<String>): Boolean {
-        val addrUri = Uri.parse("content://mms/$mmsId/addr")
+        val addrUri = "content://mms/$mmsId/addr".toUri()
         val adresses = listOf(expediteur to ADDR_TYPE_FROM) + destinataires.map { it to ADDR_TYPE_TO }
         return adresses.all { (adresse, type) ->
             val valeurs = ContentValues().apply {
@@ -454,7 +455,7 @@ class MmsSystemWriteback @Inject constructor(
      */
     suspend fun finalizeFromAddress(mmsSystemId: Long, msisdn: String?): Boolean = withContext(io) {
         if (mmsSystemId <= 0L || msisdn.isNullOrBlank()) return@withContext false
-        val addrUri = Uri.parse("content://mms/$mmsSystemId/addr")
+        val addrUri = "content://mms/$mmsSystemId/addr".toUri()
         val values = ContentValues().apply { put("address", msisdn) }
         // v1.2.7 audit S1+Q14 : defense-in-depth.
         //  - `AND mid=?` : double sécurité au cas où l'URI scoping serveur-side serait laxiste

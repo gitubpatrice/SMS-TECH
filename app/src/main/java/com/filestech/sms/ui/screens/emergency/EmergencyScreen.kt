@@ -706,11 +706,11 @@ private suspend fun handleTriggerResult(
             } else if (!result.hadLocation) {
                 // Succès partiel — SMS partis mais sans géoloc.
                 snackbarHost.showError(
-                    ctx.getString(R.string.emergency_triggered_no_location, result.sent) + autreSim,
+                    ctx.resources.getQuantityString(R.plurals.emergency_triggered_no_location, result.sent, result.sent) + autreSim,
                 )
             } else {
                 snackbarHost.showSnackbar(
-                    ctx.getString(R.string.emergency_triggered_ok, result.sent) + autreSim,
+                    ctx.resources.getQuantityString(R.plurals.emergency_triggered_ok, result.sent, result.sent) + autreSim,
                 )
             }
         }

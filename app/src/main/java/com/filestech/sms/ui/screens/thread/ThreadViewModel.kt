@@ -1,6 +1,8 @@
 package com.filestech.sms.ui.screens.thread
 
 import android.net.Uri
+import androidx.core.graphics.scale
+import androidx.core.net.toUri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -1545,11 +1547,10 @@ class ThreadViewModel @Inject constructor(
         if (bitmap.width <= maxDim && bitmap.height <= maxDim) return bitmap
         val ratio = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height)
         return runCatching {
-            android.graphics.Bitmap.createScaledBitmap(
-                bitmap,
+            bitmap.scale(
                 (bitmap.width * ratio).toInt(),
                 (bitmap.height * ratio).toInt(),
-                true,
+                filter = true,
             )
         }.getOrElse {
             bitmap.recycle()
@@ -1951,7 +1952,7 @@ class ThreadViewModel @Inject constructor(
         _state.update { it.copy(isExporting = true) }
         viewModelScope.launch {
             when (val r = exportPdf.invoke(conversationId)) {
-                is Outcome.Success -> _events.tryEmit(Event.PdfReady(Uri.parse(r.value.shareUri), r.value.pages))
+                is Outcome.Success -> _events.tryEmit(Event.PdfReady(r.value.shareUri.toUri(), r.value.pages))
                 // v1.6.1 (audit QUAL-07) — string localisée (avant : "PDF export failed"
                 // affiché en anglais même sur device FR — regression i18n).
                 is Outcome.Failure -> _events.tryEmit(
@@ -2113,7 +2114,7 @@ class ThreadViewModel @Inject constructor(
                 // and we standardise on FileProvider throughout the app already (cf.
                 // [MediaAttachmentBubble.toShareableUri]).
                 val uri = if (attachment.localUri.startsWith("content://")) {
-                    android.net.Uri.parse(attachment.localUri)
+                    attachment.localUri.toUri()
                 } else {
                     val file = java.io.File(attachment.localUri)
                     if (file.exists()) {
@@ -2194,7 +2195,6 @@ class ThreadViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        super.onCleared()
         // v1.3.9 — libère le slot "conversation active" pour que les notifs futures
         // (l'app étant désormais en background ou sur une autre conv) repassent en
         // persistance normale. Le tracker n'efface que l'état posé par CE ViewModel : celui

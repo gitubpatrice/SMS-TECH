@@ -200,11 +200,7 @@ class KeepAliveService : Service() {
         fun start(context: Context) {
             try {
                 val intent = Intent(context, KeepAliveService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startForegroundService(intent)
             } catch (t: Throwable) {
                 Timber.w(
                     t,

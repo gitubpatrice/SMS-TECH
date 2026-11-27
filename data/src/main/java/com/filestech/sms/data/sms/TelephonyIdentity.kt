@@ -1,8 +1,8 @@
 package com.filestech.sms.data.sms
 
 import android.content.ContentResolver
-import android.net.Uri
 import android.provider.Telephony
+import androidx.core.net.toUri
 import com.filestech.sms.core.ext.stripInvisibleChars
 import com.filestech.sms.core.ext.stripMmsAddressSuffix
 import com.filestech.sms.domain.mms.DestinatairesMms
@@ -108,7 +108,7 @@ internal fun readMmsAddresses(
     val tos = ArrayList<String>(2)
     val ccs = ArrayList<String>(0)
     val cursor = resolver.query(
-        Uri.parse("content://mms/$mmsId/addr"),
+        "content://mms/$mmsId/addr".toUri(),
         arrayOf("address", "type"),
         null,
         null,

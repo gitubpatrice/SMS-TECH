@@ -87,7 +87,11 @@
     <string name="conversation_blocked_label">Bloquée</string>
     <string name="settings_purge_blocked">Purger les conversations bloquées</string>
     <string name="settings_purge_blocked_desc">Supprime définitivement toutes les conversations dont les participants sont sur la liste de blocage système.</string>
-    <string name="settings_purge_blocked_result">%1$d conversation(s) supprimée(s)</string>
+    <plurals name="settings_purge_blocked_result">
+        <item quantity="one">%1$d conversation supprimée</item>
+        <item quantity="other">%1$d conversations supprimées</item>
+        <item quantity="many">%1$d conversations supprimées</item>
+    </plurals>
     <string name="settings_purge_blocked_none">Aucune conversation bloquée à purger</string>
     <string name="lock_mode_biometric">Biométrie + PIN de secours</string>
     <string name="lock_biometric_title">Déverrouiller SMS Tech</string>
@@ -124,7 +128,11 @@
     <string name="action_create_contact">Créer un contact</string>
     <string name="action_details">Détails de la conversation</string>
 
-    <string name="thread_details_messages">%1$d messages</string>
+    <plurals name="thread_details_messages">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+        <item quantity="many">%1$d messages</item>
+    </plurals>
     <string name="thread_details_first">Premier message : %1$s</string>
     <string name="thread_details_last">Dernier message : %1$s</string>
     <string name="thread_details_participants">Participants : %1$d</string>
@@ -151,7 +159,11 @@
     <string name="conversations_importing_title">Importation de vos messages</string>
     <string name="conversations_importing_body">Lecture de vos SMS existants — opération unique.</string>
     <string name="conversations_loading">Chargement des conversations…</string>
-    <string name="conversations_importing_count">%1$d messages importés…</string>
+    <plurals name="conversations_importing_count">
+        <item quantity="one">%1$d message importé…</item>
+        <item quantity="other">%1$d messages importés…</item>
+        <item quantity="many">%1$d messages importés…</item>
+    </plurals>
     <string name="conversations_delete_confirm_title">Supprimer cette conversation ?</string>
     <string name="conversations_delete_confirm_body">Tous les messages de cette conversation seront définitivement supprimés de cet appareil. Les autres conversations ne sont pas affectées.</string>
     <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
@@ -214,7 +226,7 @@
     <!-- v1.13.0 — sélection multiple bulk move to/from vault -->
     <string name="bulk_vault_move_in">Déplacer dans le coffre</string>
     <string name="bulk_vault_move_out">Sortir du coffre</string>
-    <string name="selected">Sélectionnée</string>
+    <string name="conversation_selected">Sélectionnée</string>
     <!-- v1.13.1 — entrée mode sélection multiple depuis l'ActionsSheet long-press -->
     <string name="bulk_select_multiple">Sélectionner plusieurs</string>
     <!-- v1.14.0 — comportement boutons d'appel d'urgence + outcomes -->
@@ -288,13 +300,21 @@
     <string name="settings_vault_pin_forgot_confirm_title">Vider le coffre et retirer son PIN ?</string>
     <string name="settings_vault_pin_forgot_confirm_body">Toutes les conversations du coffre sont supprimées, messages compris, sur ce téléphone et dans le stockage SMS du système. Rien n\'est récupéré : c\'est le prix d\'un retour sans le PIN. Les conversations hors du coffre ne sont pas touchées. Action irréversible.</string>
     <string name="settings_vault_pin_forgot_confirm_action">Vider et retirer</string>
-    <string name="settings_vault_pin_forgot_done">Coffre vidé : %1$d conversation(s) supprimée(s). Son PIN est retiré.</string>
+    <plurals name="settings_vault_pin_forgot_done">
+        <item quantity="one">Coffre vidé : %1$d conversation supprimée. Son PIN est retiré.</item>
+        <item quantity="other">Coffre vidé : %1$d conversations supprimées. Son PIN est retiré.</item>
+        <item quantity="many">Coffre vidé : %1$d conversations supprimées. Son PIN est retiré.</item>
+    </plurals>
     <string name="settings_vault_pin_forgot_incomplete">Purge incomplète : %1$d conversation(s) supprimée(s), %2$d restante(s). Le PIN du coffre n\'a PAS été retiré. Définissez SMS Tech comme application SMS par défaut, puis réessayez.</string>
     <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
     <string name="settings_vault_pin_forgot_local_failure">%1$d conversation(s) supprimée(s), mais %2$d n\'ont pas pu être retirées de ce téléphone. Le PIN reste en place : le retirer ouvrirait un coffre encore plein. Libérez de l\'espace et réessayez.</string>
     <string name="settings_vault_pin_forgot_residue">Coffre vidé et PIN retiré. Mais %2$d conversation(s) ont laissé leur copie dans le stockage SMS du téléphone : elles restent lisibles par une autre application de messagerie. %1$d conversation(s) ont été entièrement supprimées.</string>
     <string name="settings_vault_pin_force_title">Vider quand même ?</string>
-    <string name="settings_vault_pin_force_body">La copie de %1$d conversation(s) n\'a pas pu être retirée du stockage SMS du téléphone, et un nouvel essai donnera le même résultat. SMS Tech peut vider le coffre et retirer le PIN malgré tout : vous retrouvez l\'accès, mais ces copies restent sur le téléphone et resteront lisibles par une autre application de messagerie. Action irréversible.</string>
+    <plurals name="settings_vault_pin_force_body">
+        <item quantity="one">La copie de %1$d conversation n\'a pas pu être retirée du stockage SMS du téléphone, et un nouvel essai donnera le même résultat. SMS Tech peut vider le coffre et retirer le PIN malgré tout : vous retrouvez l\'accès, mais ces copies restent sur le téléphone et resteront lisibles par une autre application de messagerie. Action irréversible.</item>
+        <item quantity="other">Les copies de %1$d conversations n\'ont pas pu être retirées du stockage SMS du téléphone, et un nouvel essai donnera le même résultat. SMS Tech peut vider le coffre et retirer le PIN malgré tout : vous retrouvez l\'accès, mais ces copies restent sur le téléphone et resteront lisibles par une autre application de messagerie. Action irréversible.</item>
+        <item quantity="many">Les copies de %1$d conversations n\'ont pas pu être retirées du stockage SMS du téléphone, et un nouvel essai donnera le même résultat. SMS Tech peut vider le coffre et retirer le PIN malgré tout : vous retrouvez l\'accès, mais ces copies restent sur le téléphone et resteront lisibles par une autre application de messagerie. Action irréversible.</item>
+    </plurals>
     <string name="settings_vault_pin_force_action">Vider et retirer le PIN</string>
     <!-- v1.25.3 (audit M23) — désactiver le verrou se faisait sur un simple tap. -->
     <string name="settings_lock_clear_confirm_title">Désactiver le verrouillage ?</string>
@@ -457,7 +477,11 @@
     <string name="settings_auto_delete_purge_confirm_title">Confirmer le nettoyage</string>
     <string name="settings_auto_delete_purge_confirm_zero">Aucun message à effacer pour cette durée.</string>
     <string name="settings_auto_delete_purge_confirm_body">%1$d message(s) plus vieux que %2$d jours vont être effacés du téléphone, pas seulement de SMS Tech. Les favoris sont conservés. Cette action est irréversible.</string>
-    <string name="settings_auto_delete_purge_done">%1$d message(s) effacé(s).</string>
+    <plurals name="settings_auto_delete_purge_done">
+        <item quantity="one">%1$d message effacé.</item>
+        <item quantity="other">%1$d messages effacés.</item>
+        <item quantity="many">%1$d messages effacés.</item>
+    </plurals>
     <string name="action_delete_now">Effacer</string>
     <string name="settings_resync_title">Resynchroniser depuis le téléphone</string>
     <string name="settings_resync_desc">Réimporte tous les SMS depuis le système Android. Utile si des messages présents sur le téléphone manquent dans l\'app. Ne récupère pas ce que vous avez effacé : la suppression retire aussi la copie du téléphone. Sans doublons.</string>
@@ -504,7 +528,11 @@
     <string name="settings_safety_call_armed_remaining">Restant : %1$s avant déclenchement</string>
     <string name="settings_safety_call_armed_remaining_imminent">Moins de 2 h avant déclenchement</string>
     <string name="settings_safety_call_armed_contacts_one">Contact : %1$s</string>
-    <string name="settings_safety_call_armed_contacts_many">Contacts : %1$s (+%2$d autres)</string>
+    <plurals name="settings_safety_call_armed_contacts_many">
+        <item quantity="one">Contacts : %1$s (+%2$d autre)</item>
+        <item quantity="other">Contacts : %1$s (+%2$d autres)</item>
+        <item quantity="many">Contacts : %1$s (+%2$d autres)</item>
+    </plurals>
     <string name="settings_safety_call_armed_template">Modèle : %1$s</string>
     <string name="settings_safety_call_armed_modify">Modifier</string>
     <!-- v1.27.2 — le bouton « Je vais bien » ne disait pas ce qu'il fait : la remise à zéro
@@ -592,7 +620,11 @@
     <string name="settings_emergency_armed_location_approximate">Position approximative incluse (environ 2 km)</string>
     <string name="settings_emergency_armed_location_denied">Position NON envoyée : la localisation n\'est pas autorisée</string>
     <string name="settings_emergency_armed_contacts_one">Contacts : %1$s</string>
-    <string name="settings_emergency_armed_contacts_many">Contacts : %1$s +%2$d autres</string>
+    <plurals name="settings_emergency_armed_contacts_many">
+        <item quantity="one">Contacts : %1$s +%2$d autre</item>
+        <item quantity="other">Contacts : %1$s +%2$d autres</item>
+        <item quantity="many">Contacts : %1$s +%2$d autres</item>
+    </plurals>
     <string name="settings_emergency_armed_no_contacts">Aucun contact configuré</string>
     <string name="settings_emergency_armed_modify">Modifier</string>
     <string name="settings_emergency_armed_open">Ouvrir</string>
@@ -612,8 +644,16 @@
         <item quantity="other">Pour %d d’entre eux, elle est passée par l’autre SIM : la SIM choisie n’a pas pu l’envoyer.</item>
     </plurals>
     <string name="emergency_status_ready">Maintenez le bouton 3 secondes pour alerter vos contacts.</string>
-    <string name="emergency_triggered_ok">Urgence envoyée à %1$d contact(s).</string>
-    <string name="emergency_triggered_no_location">Urgence envoyée à %1$d contact(s) — position indisponible.</string>
+    <plurals name="emergency_triggered_ok">
+        <item quantity="one">Urgence envoyée à %1$d contact.</item>
+        <item quantity="other">Urgence envoyée à %1$d contacts.</item>
+        <item quantity="many">Urgence envoyée à %1$d contacts.</item>
+    </plurals>
+    <plurals name="emergency_triggered_no_location">
+        <item quantity="one">Urgence envoyée à %1$d contact — position indisponible.</item>
+        <item quantity="other">Urgence envoyée à %1$d contacts — position indisponible.</item>
+        <item quantity="many">Urgence envoyée à %1$d contacts — position indisponible.</item>
+    </plurals>
     <string name="emergency_triggered_all_failed">Échec de l\'envoi (%1$d). Vérifiez votre app SMS par défaut.</string>
     <string name="emergency_setup_enable_title">Activer le mode urgence</string>
     <string name="emergency_setup_enable_desc">Quand activé, un bouton URGENCE apparaît dans l\'écran dédié. Maintenez 3 secondes pour envoyer un SMS à vos contacts d\'urgence, avec votre position si elle est activée et disponible.</string>
@@ -626,7 +666,11 @@
     <string name="emergency_setup_location_permission_warning">Permission Localisation non accordée. Le SMS d\'urgence sera envoyé sans coordonnées. Accordez la permission dans les réglages Android pour corriger.</string>
     <string name="emergency_setup_contacts_title">Contacts d\'urgence</string>
     <string name="emergency_setup_contacts_empty">Aucun contact configuré.</string>
-    <string name="emergency_setup_contacts_count">%1$d contact(s) configuré(s).</string>
+    <plurals name="emergency_setup_contacts_count">
+        <item quantity="one">%1$d contact configuré.</item>
+        <item quantity="other">%1$d contacts configurés.</item>
+        <item quantity="many">%1$d contacts configurés.</item>
+    </plurals>
     <string name="emergency_setup_contacts_cta">Gérer les contacts</string>
     <string name="action_edit">Modifier</string>
     <string name="snack_generic_error">Une erreur s\'est produite.</string>
@@ -813,7 +857,11 @@
     <string name="send_failure_refused_locked">SMS Tech est verrouillée : ouvrez-la pour réessayer</string>
     <string name="notif_preview_hidden_content">Nouveau message</string>
 
-    <string name="pdf_header_subtitle">Exporté le %1$s • %2$d participant(s)</string>
+    <plurals name="pdf_header_subtitle">
+        <item quantity="one">Exporté le %1$s • %2$d participant</item>
+        <item quantity="other">Exporté le %1$s • %2$d participants</item>
+        <item quantity="many">Exporté le %1$s • %2$d participants</item>
+    </plurals>
     <string name="pdf_footer">Page %1$d — SMS Tech</string>
 
     <string name="error_not_default_app">SMS Tech n\'est pas encore l\'application SMS par défaut.</string>
@@ -837,7 +885,11 @@
     <string name="send_partial">Envoyé à %1$d destinataire(s) ; %2$d n\'ont pas pu être joints.</string>
     <string name="send_partial_blocked">Envoyé à %1$d destinataire(s) ; %2$d écarté(s) car vous les avez bloqués.</string>
     <string name="thread_group_blocked_title">Contact bloqué dans ce groupe</string>
-    <string name="thread_group_blocked_body">Dans votre liste de blocage : %1$s.\n\nCe message partira seulement aux %2$d autres membres, et il apparaîtra dans une conversation de groupe sans les contacts bloqués.</string>
+    <plurals name="thread_group_blocked_body">
+        <item quantity="one">Dans votre liste de blocage : %1$s.\n\nCe message partira seulement à %2$d autre membre, et il apparaîtra dans une conversation de groupe sans les contacts bloqués.</item>
+        <item quantity="other">Dans votre liste de blocage : %1$s.\n\nCe message partira seulement aux %2$d autres membres, et il apparaîtra dans une conversation de groupe sans les contacts bloqués.</item>
+        <item quantity="many">Dans votre liste de blocage : %1$s.\n\nCe message partira seulement aux %2$d autres membres, et il apparaîtra dans une conversation de groupe sans les contacts bloqués.</item>
+    </plurals>
     <string name="compose_recipient_blocked">%1$s · bloqué</string>
     <string name="compose_recipient_added">Ajouté : %1$s (%2$d au total)</string>
     <string name="compose_recipient_added_blocked">Ajouté : %1$s (%2$d au total). Ce numéro est dans votre liste de blocage : il ne recevra pas vos messages.</string>

@@ -2,9 +2,7 @@ package com.filestech.sms.data.blocking
 
 import android.content.ContentValues
 import android.content.Context
-import android.os.Build
 import android.provider.BlockedNumberContract
-import androidx.annotation.RequiresApi
 import com.filestech.sms.core.ext.normalizePhone
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -29,7 +27,6 @@ class BlockedNumberSystem @Inject constructor(
     // est-il bloqué ? », disponible mais jamais consultée, est exactement la façon dont
     // l'affichage et le filtre ont divergé en v1.25.3.
 
-    @RequiresApi(Build.VERSION_CODES.N)
     fun block(rawNumber: String): String? {
         val cv = ContentValues().apply {
             put(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER, rawNumber)
@@ -43,7 +40,6 @@ class BlockedNumberSystem @Inject constructor(
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
     fun unblock(rawNumber: String): Boolean {
         return try {
             BlockedNumberContract.unblock(context, rawNumber) > 0
@@ -63,7 +59,6 @@ class BlockedNumberSystem @Inject constructor(
      * cases the contract throws `SecurityException`; we swallow it and return an empty list so
      * the caller can degrade gracefully (nothing to import yet).
      */
-    @RequiresApi(Build.VERSION_CODES.N)
     fun listSystemBlocked(): List<String> {
         val out = ArrayList<String>()
         runCatching {

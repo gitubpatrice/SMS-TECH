@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.filestech.sms.R
 import com.filestech.sms.data.voice.VoicePlaybackController
 import com.filestech.sms.domain.model.Attachment
@@ -342,7 +343,7 @@ fun AudioMessageBubble(
 fun Attachment.toPlaybackUri(): Uri {
     val raw = localUri
     return if (raw.startsWith("content://") || raw.startsWith("file://")) {
-        Uri.parse(raw)
+        raw.toUri()
     } else {
         Uri.fromFile(java.io.File(raw))
     }

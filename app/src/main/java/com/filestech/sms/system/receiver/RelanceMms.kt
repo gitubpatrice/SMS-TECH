@@ -3,6 +3,7 @@ package com.filestech.sms.system.receiver
 import android.content.Intent
 import android.net.Uri
 import android.telephony.SubscriptionManager
+import androidx.core.net.toUri
 import com.filestech.sms.data.mms.MmsDownloader
 import java.security.MessageDigest
 
@@ -82,7 +83,7 @@ object RelanceMms {
     }
 
     /** L'identité des `PendingIntent` d'un message, par son étiquette ([Demande.etiquette]). */
-    fun identite(etiquette: String): Uri = Uri.parse("smstech://mms-relance/$etiquette")
+    fun identite(etiquette: String): Uri = "smstech://mms-relance/$etiquette".toUri()
 
     /**
      * Une étiquette bien formée : 64 caractères hexadécimaux minuscules, la forme de [Demande.etiquette]. Celle qu'un

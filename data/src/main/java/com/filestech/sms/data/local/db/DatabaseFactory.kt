@@ -1,5 +1,6 @@
 package com.filestech.sms.data.local.db
 
+import android.annotation.SuppressLint
 import android.content.Context
 import androidx.room.Room
 import com.filestech.sms.data.BuildConfig
@@ -40,6 +41,7 @@ class DatabaseFactory @Inject constructor(
         repairState.markSettled()
     }
 
+    @SuppressLint("LogNotTimber") // `android.util.Log` voulu : cf. le commentaire du garde ci-dessous.
     private fun buildInternal(context: Context): AppDatabase {
         // v1.24.0 SEC-CRIT regression guard. Provisioning the database also runs the one-shot
         // repair, which is seconds of work on the launch that rebuilds a legacy zero-key file.

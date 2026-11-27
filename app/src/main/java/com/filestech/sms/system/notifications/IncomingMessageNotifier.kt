@@ -13,6 +13,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
 import com.filestech.sms.core.result.runCatchingCancellable
@@ -475,7 +476,7 @@ class IncomingMessageNotifier @Inject constructor(
      * `intent-filter` au manifeste) : ce `data` ne change que l'identité, jamais le routage.
      */
     private fun identiteAction(action: String, messageId: Long): android.net.Uri =
-        android.net.Uri.parse("smstech://notification/$action/$messageId")
+        "smstech://notification/$action/$messageId".toUri()
 
     private fun buildReplyAction(
         address: String,

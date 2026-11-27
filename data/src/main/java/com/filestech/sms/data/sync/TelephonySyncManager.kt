@@ -3,7 +3,6 @@ package com.filestech.sms.data.sync
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
 import com.filestech.sms.core.result.runCatchingCancellable
@@ -526,9 +525,7 @@ class TelephonySyncManager @Inject constructor(
         // `+15612345678` ; la ligne du tiers etait filtree ET son identifiant franchissait
         // quand meme le curseur, donc le message etait perdu pour de bon.
         val roomBlocked = runCatching { blockedRepo.blockedRawSnapshot() }.getOrDefault(emptyList())
-        val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
-        } else emptyList()
+        val systemBlocked = runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
         Timber.i(
             "runSync(%s) blocked sources: room=%d system=%d",
             reason,

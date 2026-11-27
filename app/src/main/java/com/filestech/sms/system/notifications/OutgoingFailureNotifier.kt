@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.filestech.sms.MainActivity
 import com.filestech.sms.R
 import com.filestech.sms.core.result.runCatchingCancellable
@@ -143,7 +144,7 @@ class OutgoingFailureNotifier @Inject constructor(
     private fun actionRenvoyer(messageId: Long, idNotification: Int): NotificationCompat.Action {
         val renvoyer = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_RETRY_SEND
-            data = android.net.Uri.parse("smstech://notification/retry/$messageId")
+            data = "smstech://notification/retry/$messageId".toUri()
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, idNotification)
         }

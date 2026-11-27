@@ -256,10 +256,10 @@ private const val PREVIEW_HARD_MAX = 50
  *     pourraient splitter la trame SMS ou injecter un préfixe trompeur.
  *   - **Line/Paragraph separators** (` `, ` `) : sauts de ligne Unicode
  *     que `\\s+` ne capturait pas seul.
- *   - **Bidi controls** (`‎`/`‏`, `‪-‮`, `⁦-⁩`) : un
- *     `‮` RLO injecté inverse visuellement le rendu — `Reacted ❤️ to «‮Hello»`
+ *   - **Bidi controls** (`\u200E`/`\u200F`, `\u202A-\u202E`, `\u2066-\u2069`) : un
+ *     `\u202E` RLO injecté inverse visuellement le rendu — `Reacted ❤️ to «\u202EHello»`
  *     s'affiche `«olleH»` côté correspondant, défaisant le parsing iMessage.
- *   - **BOM** (`﻿`) : zero-width invisible.
+ *   - **BOM** (`\uFEFF`) : zero-width invisible.
  */
 private val FORBIDDEN_BODY_CHARS = Regex(
     "[\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]"

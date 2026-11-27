@@ -1,7 +1,9 @@
 package com.filestech.sms.data.backup
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.room.withTransaction
 import com.filestech.sms.core.crypto.AeadCipher
 import com.filestech.sms.core.crypto.PasswordKdf
@@ -64,7 +66,7 @@ class BackupService @Inject constructor(
 ) : BackupRestorer {
 
     override suspend fun restore(uriString: String, password: CharArray): Outcome<RestoreResult> =
-        readSmsbk(Uri.parse(uriString), password)
+        readSmsbk(uriString.toUri(), password)
 
     /**
      * v1.27.13 — `true` quand [writeSmsbk] refusera parce que le coffre n'est pas vide et que sa
@@ -313,6 +315,7 @@ class BackupService @Inject constructor(
      * besoin de plus, et un `.smsbk` n'a aucune raison de transporter un identifiant d'appareil
      * en clair. Rien n'en sort de l'appareil — SMS Tech ne parle a aucun serveur.
      */
+    @SuppressLint("HardwareIds") // voulu : seule son empreinte est gardee, cf. ci-dessus.
     private fun currentDeviceId(): String? = runCatching {
         val raw = android.provider.Settings.Secure.getString(
             context.contentResolver,

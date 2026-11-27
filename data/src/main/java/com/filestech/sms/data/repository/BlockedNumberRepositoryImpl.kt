@@ -1,6 +1,5 @@
 package com.filestech.sms.data.repository
 
-import android.os.Build
 import com.filestech.sms.core.ext.blockKey
 import com.filestech.sms.core.result.AppError
 import com.filestech.sms.core.result.Outcome
@@ -87,7 +86,7 @@ class BlockedNumberRepositoryImpl @Inject constructor(
         if (normalized.isEmpty()) {
             return@withContext Outcome.Failure(AppError.Validation("identite indeterminable"))
         }
-        val systemUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) system.block(rawNumber) else null
+        val systemUri = system.block(rawNumber)
         dao.upsert(
             BlockedNumberEntity(
                 normalizedNumber = normalized,
@@ -101,7 +100,7 @@ class BlockedNumberRepositoryImpl @Inject constructor(
     }
 
     override suspend fun unblock(rawNumber: String): Outcome<Unit> = withContext(io) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) system.unblock(rawNumber)
+        system.unblock(rawNumber)
         // 🔴 v1.27.2 (audit Codex du 2026-08-05, LP-01) — LE JUMEAU DE `isBlocked`, QUE J AVAIS
         // OUBLIE.
         //

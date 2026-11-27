@@ -90,7 +90,11 @@
     <string name="conversation_blocked_label">Bloqueada</string>
     <string name="settings_purge_blocked">Eliminar las conversaciones bloqueadas</string>
     <string name="settings_purge_blocked_desc">Elimina definitivamente toda conversación cuyos participantes estén todos en la lista de bloqueados del sistema.</string>
-    <string name="settings_purge_blocked_result">%1$d conversación(es) eliminadas</string>
+    <plurals name="settings_purge_blocked_result">
+        <item quantity="one">%1$d conversación eliminada</item>
+        <item quantity="other">%1$d conversaciones eliminadas</item>
+        <item quantity="many">%1$d conversaciones eliminadas</item>
+    </plurals>
     <string name="settings_purge_blocked_none">No hay ninguna conversación bloqueada que eliminar</string>
     <string name="lock_mode_biometric">Biometría + PIN de reserva</string>
     <string name="lock_biometric_title">Desbloquear SMS Tech</string>
@@ -127,7 +131,11 @@
     <string name="action_create_contact">Crear contacto</string>
     <string name="action_details">Detalles de la conversación</string>
 
-    <string name="thread_details_messages">%1$d mensajes</string>
+    <plurals name="thread_details_messages">
+        <item quantity="one">%1$d mensaje</item>
+        <item quantity="other">%1$d mensajes</item>
+        <item quantity="many">%1$d mensajes</item>
+    </plurals>
     <string name="thread_details_first">Primer mensaje: %1$s</string>
     <string name="thread_details_last">Último mensaje: %1$s</string>
     <string name="thread_details_participants">Participantes: %1$d</string>
@@ -156,7 +164,11 @@
     <string name="conversations_importing_title">Importando sus mensajes</string>
     <string name="conversations_importing_body">Leyendo los SMS que ya tiene: esto ocurre una sola vez.</string>
     <string name="conversations_loading">Cargando conversaciones…</string>
-    <string name="conversations_importing_count">%1$d mensajes importados…</string>
+    <plurals name="conversations_importing_count">
+        <item quantity="one">%1$d mensaje importado…</item>
+        <item quantity="other">%1$d mensajes importados…</item>
+        <item quantity="many">%1$d mensajes importados…</item>
+    </plurals>
     <string name="conversations_delete_confirm_title">¿Eliminar esta conversación?</string>
     <string name="conversations_delete_confirm_body">Todos los mensajes de esta conversación se borrarán definitivamente de este dispositivo. Las demás conversaciones no se ven afectadas.</string>
     <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
@@ -223,7 +235,7 @@
     <!-- v1.13.0 — multi-selection bulk move to/from vault -->
     <string name="bulk_vault_move_in">Mover a la caja fuerte</string>
     <string name="bulk_vault_move_out">Sacar de la caja fuerte</string>
-    <string name="selected">Seleccionada</string>
+    <string name="conversation_selected">Seleccionada</string>
     <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
     <string name="bulk_select_multiple">Selección múltiple</string>
     <!-- v1.14.0 — emergency call behavior + outcomes -->
@@ -297,13 +309,21 @@
     <string name="settings_vault_pin_forgot_confirm_title">¿Vaciar la caja fuerte y eliminar su PIN?</string>
     <string name="settings_vault_pin_forgot_confirm_body">Se elimina toda conversación de la caja fuerte, mensajes incluidos, de este teléfono y del almacén de mensajes del sistema. No se recupera nada: es el precio de volver a entrar sin el PIN. Las conversaciones que están fuera de la caja fuerte no se tocan. Esta acción no se puede deshacer.</string>
     <string name="settings_vault_pin_forgot_confirm_action">Vaciar y eliminar</string>
-    <string name="settings_vault_pin_forgot_done">Caja fuerte vaciada: %1$d conversación(es) eliminadas. Su PIN se ha eliminado.</string>
+    <plurals name="settings_vault_pin_forgot_done">
+        <item quantity="one">Caja fuerte vaciada: %1$d conversación eliminada. Su PIN se ha eliminado.</item>
+        <item quantity="other">Caja fuerte vaciada: %1$d conversaciones eliminadas. Su PIN se ha eliminado.</item>
+        <item quantity="many">Caja fuerte vaciada: %1$d conversaciones eliminadas. Su PIN se ha eliminado.</item>
+    </plurals>
     <string name="settings_vault_pin_forgot_incomplete">Limpieza incompleta: %1$d conversación(es) eliminadas, quedan %2$d. El PIN de la caja fuerte NO se ha eliminado. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo.</string>
     <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
     <string name="settings_vault_pin_forgot_local_failure">%1$d conversación(es) eliminadas, pero %2$d no han podido quitarse de este teléfono. El PIN se mantiene: eliminarlo abriría una caja fuerte que sigue llena. Libere espacio y vuelva a intentarlo.</string>
     <string name="settings_vault_pin_forgot_residue">Caja fuerte vaciada y PIN eliminado. Pero %2$d conversación(es) han dejado su copia en el almacén de mensajes del teléfono: siguen siendo legibles para otra app de mensajería. %1$d conversación(es) se han eliminado por completo.</string>
     <string name="settings_vault_pin_force_title">¿Vaciarla de todos modos?</string>
-    <string name="settings_vault_pin_force_body">La copia de %1$d conversación(es) no ha podido quitarse del almacén de mensajes del teléfono, y volver a intentarlo dará el mismo resultado. SMS Tech puede vaciar la caja fuerte y eliminar el PIN igualmente: recupera el acceso, pero esas copias se quedan en el teléfono y siguen siendo legibles para otra app de mensajería. Esta acción no se puede deshacer.</string>
+    <plurals name="settings_vault_pin_force_body">
+        <item quantity="one">La copia de %1$d conversación no ha podido quitarse del almacén de mensajes del teléfono, y volver a intentarlo dará el mismo resultado. SMS Tech puede vaciar la caja fuerte y eliminar el PIN igualmente: recupera el acceso, pero esas copias se quedan en el teléfono y siguen siendo legibles para otra app de mensajería. Esta acción no se puede deshacer.</item>
+        <item quantity="other">Las copias de %1$d conversaciones no han podido quitarse del almacén de mensajes del teléfono, y volver a intentarlo dará el mismo resultado. SMS Tech puede vaciar la caja fuerte y eliminar el PIN igualmente: recupera el acceso, pero esas copias se quedan en el teléfono y siguen siendo legibles para otra app de mensajería. Esta acción no se puede deshacer.</item>
+        <item quantity="many">Las copias de %1$d conversaciones no han podido quitarse del almacén de mensajes del teléfono, y volver a intentarlo dará el mismo resultado. SMS Tech puede vaciar la caja fuerte y eliminar el PIN igualmente: recupera el acceso, pero esas copias se quedan en el teléfono y siguen siendo legibles para otra app de mensajería. Esta acción no se puede deshacer.</item>
+    </plurals>
     <string name="settings_vault_pin_force_action">Vaciar y eliminar el PIN</string>
     <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
     <string name="settings_lock_clear_confirm_title">¿Desactivar el bloqueo de la app?</string>
@@ -468,7 +488,11 @@
     <string name="settings_auto_delete_purge_confirm_title">Confirme la limpieza</string>
     <string name="settings_auto_delete_purge_confirm_zero">No hay mensajes que eliminar para esta duración.</string>
     <string name="settings_auto_delete_purge_confirm_body">%1$d mensaje(s) de más de %2$d días se eliminarán del teléfono, no solo de SMS Tech. Los mensajes destacados se conservan. Esta acción no se puede deshacer.</string>
-    <string name="settings_auto_delete_purge_done">%1$d mensaje(s) eliminados.</string>
+    <plurals name="settings_auto_delete_purge_done">
+        <item quantity="one">%1$d mensaje eliminado.</item>
+        <item quantity="other">%1$d mensajes eliminados.</item>
+        <item quantity="many">%1$d mensajes eliminados.</item>
+    </plurals>
     <string name="action_delete_now">Eliminar</string>
     <string name="settings_resync_title">Volver a sincronizar desde el teléfono</string>
     <string name="settings_resync_desc">Vuelve a importar todos los SMS del sistema Android. Útil cuando faltan en la app mensajes que sí están en el teléfono. No devuelve lo que usted eliminó: eliminar quita también la copia del teléfono. Sin duplicados.</string>
@@ -516,7 +540,11 @@
     <string name="settings_safety_call_armed_remaining">Queda: %1$s antes de dispararse</string>
     <string name="settings_safety_call_armed_remaining_imminent">Menos de 2 h antes de dispararse</string>
     <string name="settings_safety_call_armed_contacts_one">Contacto: %1$s</string>
-    <string name="settings_safety_call_armed_contacts_many">Contactos: %1$s (+%2$d más)</string>
+    <plurals name="settings_safety_call_armed_contacts_many">
+        <item quantity="one">Contactos: %1$s (+%2$d más)</item>
+        <item quantity="other">Contactos: %1$s (+%2$d más)</item>
+        <item quantity="many">Contactos: %1$s (+%2$d más)</item>
+    </plurals>
     <string name="settings_safety_call_armed_template">Plantilla: %1$s</string>
     <string name="settings_safety_call_armed_modify">Modificar</string>
     <string name="settings_safety_call_armed_actions_hint">«Estoy bien» reinicia el temporizador: la cuenta atrás vuelve a empezar desde la duración completa y no se envía ningún mensaje. «Modificar» abre los ajustes (duración, contactos, mensaje).</string>
@@ -602,7 +630,11 @@
     <string name="settings_emergency_armed_location_approximate">Ubicación aproximada incluida (unos 2 km)</string>
     <string name="settings_emergency_armed_location_denied">Ubicación NO enviada: permiso de ubicación no concedido</string>
     <string name="settings_emergency_armed_contacts_one">Contactos: %1$s</string>
-    <string name="settings_emergency_armed_contacts_many">Contactos: %1$s +%2$d más</string>
+    <plurals name="settings_emergency_armed_contacts_many">
+        <item quantity="one">Contactos: %1$s +%2$d más</item>
+        <item quantity="other">Contactos: %1$s +%2$d más</item>
+        <item quantity="many">Contactos: %1$s +%2$d más</item>
+    </plurals>
     <string name="settings_emergency_armed_no_contacts">No hay contactos configurados</string>
     <string name="settings_emergency_armed_modify">Editar</string>
     <string name="settings_emergency_armed_open">Abrir</string>
@@ -622,8 +654,16 @@
         <item quantity="other">Para %d de ellos salió por la otra SIM: la SIM elegida no pudo enviarla.</item>
     </plurals>
     <string name="emergency_status_ready">Mantenga pulsado el botón 3 segundos para avisar a sus contactos.</string>
-    <string name="emergency_triggered_ok">Emergencia enviada a %1$d contacto(s).</string>
-    <string name="emergency_triggered_no_location">Emergencia enviada a %1$d contacto(s) — ubicación no disponible.</string>
+    <plurals name="emergency_triggered_ok">
+        <item quantity="one">Emergencia enviada a %1$d contacto.</item>
+        <item quantity="other">Emergencia enviada a %1$d contactos.</item>
+        <item quantity="many">Emergencia enviada a %1$d contactos.</item>
+    </plurals>
+    <plurals name="emergency_triggered_no_location">
+        <item quantity="one">Emergencia enviada a %1$d contacto — ubicación no disponible.</item>
+        <item quantity="other">Emergencia enviada a %1$d contactos — ubicación no disponible.</item>
+        <item quantity="many">Emergencia enviada a %1$d contactos — ubicación no disponible.</item>
+    </plurals>
     <string name="emergency_triggered_all_failed">El envío de la emergencia ha fallado (%1$d). Compruebe cuál es su app de SMS predeterminada.</string>
     <string name="emergency_setup_enable_title">Activar el modo emergencia</string>
     <string name="emergency_setup_enable_desc">Cuando está activo, aparece un botón de emergencia en la pantalla dedicada. Manténgalo pulsado 3 s para enviar un SMS a sus contactos de emergencia, con su ubicación si está activada y disponible.</string>
@@ -636,7 +676,11 @@
     <string name="emergency_setup_location_permission_warning">Permiso de ubicación no concedido. El SMS de emergencia se enviará sin coordenadas. Concédalo en los ajustes de Android para resolverlo.</string>
     <string name="emergency_setup_contacts_title">Contactos de emergencia</string>
     <string name="emergency_setup_contacts_empty">No hay contactos configurados.</string>
-    <string name="emergency_setup_contacts_count">%1$d contacto(s) configurados.</string>
+    <plurals name="emergency_setup_contacts_count">
+        <item quantity="one">%1$d contacto configurado.</item>
+        <item quantity="other">%1$d contactos configurados.</item>
+        <item quantity="many">%1$d contactos configurados.</item>
+    </plurals>
     <string name="emergency_setup_contacts_cta">Gestionar los contactos</string>
     <string name="action_edit">Editar</string>
     <string name="snack_generic_error">Algo ha ido mal.</string>
@@ -827,7 +871,11 @@
     <string name="notif_preview_hidden_content">Mensaje nuevo</string>
 
     <!-- PDF export -->
-    <string name="pdf_header_subtitle">Exportado el %1$s • %2$d participante(s)</string>
+    <plurals name="pdf_header_subtitle">
+        <item quantity="one">Exportado el %1$s • %2$d participante</item>
+        <item quantity="other">Exportado el %1$s • %2$d participantes</item>
+        <item quantity="many">Exportado el %1$s • %2$d participantes</item>
+    </plurals>
     <string name="pdf_footer">Página %1$d — SMS Tech</string>
 
     <!-- Errors -->
@@ -852,7 +900,11 @@
     <string name="send_partial">Enviado a %1$d destinatario(s); no se ha podido alcanzar a %2$d.</string>
     <string name="send_partial_blocked">Enviado a %1$d destinatario(s); %2$d omitidos porque usted los ha bloqueado.</string>
     <string name="thread_group_blocked_title">Contacto bloqueado en este grupo</string>
-    <string name="thread_group_blocked_body">En su lista de bloqueo: %1$s.\n\nEste mensaje solo se enviará a los otros %2$d miembros y aparecerá en una conversación de grupo sin los contactos bloqueados.</string>
+    <plurals name="thread_group_blocked_body">
+        <item quantity="one">En su lista de bloqueo: %1$s.\n\nEste mensaje solo se enviará a %2$d miembro más y aparecerá en una conversación de grupo sin los contactos bloqueados.</item>
+        <item quantity="other">En su lista de bloqueo: %1$s.\n\nEste mensaje solo se enviará a los otros %2$d miembros y aparecerá en una conversación de grupo sin los contactos bloqueados.</item>
+        <item quantity="many">En su lista de bloqueo: %1$s.\n\nEste mensaje solo se enviará a los otros %2$d miembros y aparecerá en una conversación de grupo sin los contactos bloqueados.</item>
+    </plurals>
     <string name="compose_recipient_blocked">%1$s · bloqueado</string>
     <string name="compose_recipient_added">Añadido: %1$s (%2$d en total)</string>
     <string name="compose_recipient_added_blocked">Añadido: %1$s (%2$d en total). Este número está en su lista de bloqueo: no recibirá sus mensajes.</string>

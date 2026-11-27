@@ -42,6 +42,7 @@ fun MessageTextWithLinks(
     text: String,
     style: TextStyle,
     color: Color,
+    modifier: Modifier = Modifier,
     /**
      * v1.3.11 (F4) — invoked when the user taps a phone number detected inside [text].
      * Default no-op so existing call sites keep working until they opt in. Wrapped in
@@ -49,7 +50,6 @@ fun MessageTextWithLinks(
      * recompositions without invalidating the (potentially expensive) regex pass.
      */
     onPhoneClick: (String) -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     // v1.3.11 (F4) — keep the closure inside the AnnotatedString stable so the regex
     // pass below only re-runs when [text] changes, while the actual phone callback the

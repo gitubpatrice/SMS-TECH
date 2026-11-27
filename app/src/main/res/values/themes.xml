@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
     <!-- Base app theme (Compose uses MaterialTheme; this is only for the splash window) -->
     <style name="Theme.SmsTech" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/md_theme_light_background</item>
@@ -20,6 +20,6 @@
         <item name="windowSplashScreenBackground">@color/md_theme_light_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_transparent</item>
         <item name="postSplashScreenTheme">@style/Theme.SmsTech</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

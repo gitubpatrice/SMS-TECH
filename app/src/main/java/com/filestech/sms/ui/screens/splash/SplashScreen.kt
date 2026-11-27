@@ -1,5 +1,6 @@
 package com.filestech.sms.ui.screens.splash
 
+import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
@@ -184,6 +185,10 @@ fun SplashScreen(
 
     val interaction = remember { MutableInteractionSource() }
     val configuration = LocalConfiguration.current
+
+    // `screenWidthDp` voulu : connu des la premiere image (la taille de la fenetre ne l'est qu'apres la mise
+    // en page, le logo sauterait) et a jour, MainActivity gerant elle-meme les changements de taille.
+    @SuppressLint("ConfigurationScreenWidthHeight")
     val logoSizeDp = (configuration.screenWidthDp * LOGO_SIZE_RATIO)
         .coerceIn(LOGO_MIN_DP, LOGO_MAX_DP).dp
 

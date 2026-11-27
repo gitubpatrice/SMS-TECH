@@ -49,6 +49,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   state when it moves to the inbox. Measured on Android 14 and 16 emulators with two users.
 - **A profile without any SMS re-imported all its MMS at every sync, marked as read.** The first-sync rule only
   looked at the SMS cursor, which stays at zero there; it now also looks at the completed MMS import.
+- **Counts read correctly when there is only one.** "1 messages" in a conversation's details, "1 messages
+  imported…", "the 1 other members" before a group message that leaves out a blocked contact, "+1 others" under
+  the armed contacts, and the "(s)" forms of the vault, automatic deletion, emergency alert and PDF header
+  messages are now real singular and plural forms, in the five languages. A sentence with two numbers keeps "(s)":
+  Android picks the form on one number only.
+- **TalkBack reads the "selected" state in its own words again.** The label of a ticked conversation had the same
+  name as a private Compose text and replaced it in the whole app: in French, Italian and Spanish, every selected
+  element was read in the feminine ("Sélectionnée" instead of "Sélectionné").
+- **Turkish:** an MMS character-set name containing an "I" is recognised again. Lower-casing followed the phone's
+  language, which in Turkish turns "I" into a dotless "ı".
+- **Three MMS-building messages are no longer written to the system log in the published version**, one of them with
+  the address of an attachment. They go through Timber, like the rest of the app, which writes nothing in release.
+
+### Changed
+
+- Lint cleanup: the baseline goes from 280 entries to 12 (launcher-icon artwork and the target SDK, both choices);
+  the only warnings left are the "newer version available" notices, kept visible on purpose. Texts read when an
+  event happens use `LocalResources`; version checks for Android older than 8 are gone; invisible characters written
+  as-is in comments are now `\uXXXX`. No behaviour change beyond the fixes above.
 
 ## [1.31.0] — 2026-11-22
 

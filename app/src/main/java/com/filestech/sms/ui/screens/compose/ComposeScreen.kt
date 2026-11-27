@@ -200,7 +200,7 @@ fun ComposeScreen(
                                 if (!ContactIntents.createContact(context)) {
                                     scope.launch {
                                         snackbarHost.showError(
-                                            context.getString(R.string.phone_action_no_contacts),
+                                            resources.getString(R.string.phone_action_no_contacts),
                                         )
                                     }
                                 }

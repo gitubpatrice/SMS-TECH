@@ -190,6 +190,11 @@ android {
         // resurgissent ici). La couverture projet est préservée : `check`/`build` lance la lint
         // de tous les modules.
         checkDependencies = false
+        // 2026-11-21 — nettoyage : la baseline ne garde que des CHOIX, relus un à un — les icônes du lanceur (des
+        // dessins ; leurs PNG servent aussi à F-Droid, d'où `mipmap-anydpi-v26`) et la version d'Android visée
+        // (décision de Patrice). Les avis « version plus récente disponible » n'y sont volontairement pas : ils
+        // restent visibles, une montée de dépendance se décide à part (reproductibilité F-Droid). Ne pas la
+        // régénérer pour faire taire un nouvel avertissement : le corriger, ou le déclarer voulu là où il est.
         baseline = file("lint-baseline.xml")
     }
 
@@ -303,7 +308,7 @@ dependencies {
     implementation(libs.timber)
 
     // Desugaring (java.time on minSdk 26 already, but desugar still useful for stable libs)
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     // Unit tests
     testImplementation(libs.junit.jupiter.api)

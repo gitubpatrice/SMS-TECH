@@ -1,7 +1,6 @@
 package com.filestech.sms.system.scheduler
 
 import android.content.Context
-import android.os.Build
 import androidx.hilt.work.HiltWorker
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -237,9 +236,7 @@ class TelephonySyncWorker @AssistedInject constructor(
         // et le curseur avancait quand meme sur la ligne rejetee — perte definitive.
         val roomBlocked = runCatching { blockedRepo.blockedRawSnapshot() }
             .getOrDefault(emptyList())
-        val systemBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
-        } else emptyList()
+        val systemBlocked = runCatching { blockedSystem.listSystemBlocked() }.getOrDefault(emptyList())
         // v1.27.2 (audit Codex final, F-01) — instantane pris APRES hydratation, une seule fois.
         val isBlockedAddress = phoneIdentity.snapshot()
             .blockedMatcher(roomBlocked + systemBlocked)

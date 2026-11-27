@@ -88,7 +88,10 @@
     <string name="conversation_blocked_label">Blockiert</string>
     <string name="settings_purge_blocked">Blockierte Unterhaltungen bereinigen</string>
     <string name="settings_purge_blocked_desc">Löscht endgültig jede Unterhaltung, deren Teilnehmer alle auf der System-Blockliste stehen.</string>
-    <string name="settings_purge_blocked_result">%1$d Unterhaltung(en) bereinigt</string>
+    <plurals name="settings_purge_blocked_result">
+        <item quantity="one">%1$d Unterhaltung bereinigt</item>
+        <item quantity="other">%1$d Unterhaltungen bereinigt</item>
+    </plurals>
     <string name="settings_purge_blocked_none">Keine blockierte Unterhaltung zu bereinigen</string>
     <string name="lock_mode_biometric">Biometrie + PIN als Rückfallebene</string>
     <string name="lock_biometric_title">SMS Tech entsperren</string>
@@ -126,7 +129,10 @@
     <string name="action_details">Details der Unterhaltung</string>
 
 
-    <string name="thread_details_messages">%1$d Nachrichten</string>
+    <plurals name="thread_details_messages">
+        <item quantity="one">%1$d Nachricht</item>
+        <item quantity="other">%1$d Nachrichten</item>
+    </plurals>
     <string name="thread_details_first">Erste Nachricht: %1$s</string>
     <string name="thread_details_last">Letzte Nachricht: %1$s</string>
     <string name="thread_details_participants">Teilnehmer: %1$d</string>
@@ -155,7 +161,10 @@
     <string name="conversations_importing_title">Ihre Nachrichten werden importiert</string>
     <string name="conversations_importing_body">Ihre vorhandenen SMS werden gelesen — das geschieht nur einmal.</string>
     <string name="conversations_loading">Unterhaltungen werden geladen…</string>
-    <string name="conversations_importing_count">%1$d Nachrichten importiert…</string>
+    <plurals name="conversations_importing_count">
+        <item quantity="one">%1$d Nachricht importiert…</item>
+        <item quantity="other">%1$d Nachrichten importiert…</item>
+    </plurals>
     <string name="conversations_delete_confirm_title">Diese Unterhaltung löschen?</string>
     <string name="conversations_delete_confirm_body">Alle Nachrichten dieser Unterhaltung werden endgültig von diesem Gerät entfernt. Andere Unterhaltungen sind nicht betroffen.</string>
     <!-- v1.28.9 — une conversation du coffre n'est plus supprimee si sa copie systeme resiste : elle reviendrait hors du coffre. -->
@@ -221,7 +230,7 @@
     <!-- v1.13.0 — multi-selection bulk move to/from vault -->
     <string name="bulk_vault_move_in">In den Tresor verschieben</string>
     <string name="bulk_vault_move_out">Aus dem Tresor verschieben</string>
-    <string name="selected">Ausgewählt</string>
+    <string name="conversation_selected">Ausgewählt</string>
     <!-- v1.13.1 — entry from long-press ActionsSheet into multi-selection mode -->
     <string name="bulk_select_multiple">Mehrere auswählen</string>
     <!-- v1.14.0 — emergency call behavior + outcomes -->
@@ -295,13 +304,19 @@
     <string name="settings_vault_pin_forgot_confirm_title">Tresor leeren und seine PIN entfernen?</string>
     <string name="settings_vault_pin_forgot_confirm_body">Jede Unterhaltung im Tresor wird gelöscht, Nachrichten eingeschlossen, auf diesem Telefon und aus dem SMS-Speicher des Systems. Nichts wird wiederhergestellt — das ist der Preis dafür, ohne die PIN wieder hineinzukommen. Unterhaltungen außerhalb des Tresors bleiben unberührt. Das lässt sich nicht rückgängig machen.</string>
     <string name="settings_vault_pin_forgot_confirm_action">Leeren und entfernen</string>
-    <string name="settings_vault_pin_forgot_done">Tresor geleert: %1$d Unterhaltung(en) gelöscht. Seine PIN ist entfernt.</string>
+    <plurals name="settings_vault_pin_forgot_done">
+        <item quantity="one">Tresor geleert: %1$d Unterhaltung gelöscht. Seine PIN ist entfernt.</item>
+        <item quantity="other">Tresor geleert: %1$d Unterhaltungen gelöscht. Seine PIN ist entfernt.</item>
+    </plurals>
     <string name="settings_vault_pin_forgot_incomplete">Bereinigung unvollständig: %1$d Unterhaltung(en) gelöscht, %2$d verblieben. Die Tresor-PIN wurde NICHT entfernt. Machen Sie SMS Tech zu Ihrer Standard-SMS-App und versuchen Sie es erneut.</string>
     <!-- v1.28.3 — echec LOCAL : pas de sortie forcee, et la raison est dite. -->
     <string name="settings_vault_pin_forgot_local_failure">%1$d Unterhaltung(en) gelöscht, aber %2$d ließen sich nicht von diesem Telefon entfernen. Die PIN bleibt bestehen: sie zu entfernen würde einen Tresor öffnen, der noch voll ist. Geben Sie Speicherplatz frei und versuchen Sie es erneut.</string>
     <string name="settings_vault_pin_forgot_residue">Tresor geleert und PIN entfernt. Bei %2$d Unterhaltung(en) blieb jedoch die Kopie im SMS-Speicher des Telefons: sie bleiben für eine andere Messaging-App lesbar. %1$d Unterhaltung(en) wurden vollständig gelöscht.</string>
     <string name="settings_vault_pin_force_title">Trotzdem leeren?</string>
-    <string name="settings_vault_pin_force_body">Die Kopie von %1$d Unterhaltung(en) ließ sich nicht aus dem SMS-Speicher des Telefons entfernen, und ein weiterer Versuch führt zum selben Ergebnis. SMS Tech kann den Tresor trotzdem leeren und die PIN entfernen: Sie erhalten wieder Zugriff, aber diese Kopien bleiben auf dem Telefon und bleiben für eine andere Messaging-App lesbar. Das lässt sich nicht rückgängig machen.</string>
+    <plurals name="settings_vault_pin_force_body">
+        <item quantity="one">Die Kopie von %1$d Unterhaltung ließ sich nicht aus dem SMS-Speicher des Telefons entfernen, und ein weiterer Versuch führt zum selben Ergebnis. SMS Tech kann den Tresor trotzdem leeren und die PIN entfernen: Sie erhalten wieder Zugriff, aber diese Kopien bleiben auf dem Telefon und bleiben für eine andere Messaging-App lesbar. Das lässt sich nicht rückgängig machen.</item>
+        <item quantity="other">Die Kopien von %1$d Unterhaltungen ließen sich nicht aus dem SMS-Speicher des Telefons entfernen, und ein weiterer Versuch führt zum selben Ergebnis. SMS Tech kann den Tresor trotzdem leeren und die PIN entfernen: Sie erhalten wieder Zugriff, aber diese Kopien bleiben auf dem Telefon und bleiben für eine andere Messaging-App lesbar. Das lässt sich nicht rückgängig machen.</item>
+    </plurals>
     <string name="settings_vault_pin_force_action">Leeren und PIN entfernen</string>
     <!-- v1.25.3 (audit M23) — turning the app lock off used to happen on a single tap. -->
     <string name="settings_lock_clear_confirm_title">App-Sperre ausschalten?</string>
@@ -467,7 +482,10 @@
     <string name="settings_auto_delete_purge_confirm_title">Bereinigung bestätigen</string>
     <string name="settings_auto_delete_purge_confirm_zero">Für diesen Zeitraum gibt es keine Nachrichten zu löschen.</string>
     <string name="settings_auto_delete_purge_confirm_body">%1$d Nachricht(en), die älter als %2$d Tage sind, werden vom Telefon gelöscht, nicht nur aus SMS Tech. Markierte Nachrichten bleiben erhalten. Das lässt sich nicht rückgängig machen.</string>
-    <string name="settings_auto_delete_purge_done">%1$d Nachricht(en) gelöscht.</string>
+    <plurals name="settings_auto_delete_purge_done">
+        <item quantity="one">%1$d Nachricht gelöscht.</item>
+        <item quantity="other">%1$d Nachrichten gelöscht.</item>
+    </plurals>
     <string name="action_delete_now">Löschen</string>
     <string name="settings_resync_title">Vom Telefon neu einlesen</string>
     <string name="settings_resync_desc">Importiert alle SMS erneut aus dem Android-System. Nützlich, wenn Nachrichten auf dem Telefon vorhanden sind, in der App aber fehlen. Gelöschtes kommt dadurch nicht zurück: Löschen entfernt auch die Kopie des Telefons. Keine Duplikate.</string>
@@ -515,7 +533,10 @@
     <string name="settings_safety_call_armed_remaining">Verbleibend: %1$s bis zur Auslösung</string>
     <string name="settings_safety_call_armed_remaining_imminent">Weniger als 2 Std. bis zur Auslösung</string>
     <string name="settings_safety_call_armed_contacts_one">Kontakt: %1$s</string>
-    <string name="settings_safety_call_armed_contacts_many">Kontakte: %1$s (+%2$d weitere)</string>
+    <plurals name="settings_safety_call_armed_contacts_many">
+        <item quantity="one">Kontakte: %1$s (+%2$d weiterer)</item>
+        <item quantity="other">Kontakte: %1$s (+%2$d weitere)</item>
+    </plurals>
     <string name="settings_safety_call_armed_template">Vorlage: %1$s</string>
     <string name="settings_safety_call_armed_modify">Ändern</string>
     <string name="settings_safety_call_armed_actions_hint">„Mir geht es gut“ setzt den Zeitgeber zurück: die Frist beginnt wieder von vorn, und es wird keine Nachricht gesendet. „Ändern“ öffnet die Einstellungen (Dauer, Kontakte, Nachricht).</string>
@@ -598,7 +619,10 @@
     <string name="settings_emergency_armed_location_approximate">Ungefährer Standort enthalten (etwa 2 km)</string>
     <string name="settings_emergency_armed_location_denied">Standort wird NICHT gesendet: Standortberechtigung nicht erteilt</string>
     <string name="settings_emergency_armed_contacts_one">Kontakte: %1$s</string>
-    <string name="settings_emergency_armed_contacts_many">Kontakte: %1$s +%2$d weitere</string>
+    <plurals name="settings_emergency_armed_contacts_many">
+        <item quantity="one">Kontakte: %1$s +%2$d weiterer</item>
+        <item quantity="other">Kontakte: %1$s +%2$d weitere</item>
+    </plurals>
     <string name="settings_emergency_armed_no_contacts">Keine Kontakte eingerichtet</string>
     <string name="settings_emergency_armed_modify">Ändern</string>
     <string name="settings_emergency_armed_open">Öffnen</string>
@@ -617,8 +641,14 @@
         <item quantity="other">Bei %d davon ging sie über die andere SIM: Die gewählte SIM konnte sie nicht senden.</item>
     </plurals>
     <string name="emergency_status_ready">Halten Sie die Schaltfläche 3 Sekunden, um Ihre Kontakte zu alarmieren.</string>
-    <string name="emergency_triggered_ok">Notfall-SMS an %1$d Kontakt(e) gesendet.</string>
-    <string name="emergency_triggered_no_location">Notfall-SMS an %1$d Kontakt(e) gesendet — Standort nicht verfügbar.</string>
+    <plurals name="emergency_triggered_ok">
+        <item quantity="one">Notfall-SMS an %1$d Kontakt gesendet.</item>
+        <item quantity="other">Notfall-SMS an %1$d Kontakte gesendet.</item>
+    </plurals>
+    <plurals name="emergency_triggered_no_location">
+        <item quantity="one">Notfall-SMS an %1$d Kontakt gesendet — Standort nicht verfügbar.</item>
+        <item quantity="other">Notfall-SMS an %1$d Kontakte gesendet — Standort nicht verfügbar.</item>
+    </plurals>
     <string name="emergency_triggered_all_failed">Senden der Notfall-SMS fehlgeschlagen (%1$d). Prüfen Sie Ihre Standard-SMS-App.</string>
     <string name="emergency_setup_enable_title">Notfallmodus aktivieren</string>
     <string name="emergency_setup_enable_desc">Wenn aktiviert, erscheint eine Notfall-Schaltfläche auf dem dafür vorgesehenen Bildschirm. 3 s halten, um eine SMS an Ihre Notfallkontakte zu senden – mit Ihrem Standort, sofern aktiviert und verfügbar.</string>
@@ -631,7 +661,10 @@
     <string name="emergency_setup_location_permission_warning">Standortberechtigung nicht erteilt. Die Notfall-SMS wird ohne Koordinaten gesendet. Erteilen Sie die Berechtigung in den Android-Einstellungen, um das zu ändern.</string>
     <string name="emergency_setup_contacts_title">Notfallkontakte</string>
     <string name="emergency_setup_contacts_empty">Keine Kontakte eingerichtet.</string>
-    <string name="emergency_setup_contacts_count">%1$d Kontakt(e) eingerichtet.</string>
+    <plurals name="emergency_setup_contacts_count">
+        <item quantity="one">%1$d Kontakt eingerichtet.</item>
+        <item quantity="other">%1$d Kontakte eingerichtet.</item>
+    </plurals>
     <string name="emergency_setup_contacts_cta">Kontakte verwalten</string>
     <string name="action_edit">Bearbeiten</string>
     <string name="snack_generic_error">Etwas ist schiefgelaufen.</string>
@@ -823,7 +856,10 @@
     <string name="notif_preview_hidden_content">Neue Nachricht</string>
 
     <!-- PDF export -->
-    <string name="pdf_header_subtitle">Exportiert %1$s • %2$d Teilnehmer</string>
+    <plurals name="pdf_header_subtitle">
+        <item quantity="one">Exportiert %1$s • %2$d Teilnehmer</item>
+        <item quantity="other">Exportiert %1$s • %2$d Teilnehmer</item>
+    </plurals>
     <string name="pdf_footer">Seite %1$d — SMS Tech</string>
 
     <!-- Errors -->
@@ -848,7 +884,10 @@
     <string name="send_partial">An %1$d Empfänger gesendet; %2$d konnten nicht erreicht werden.</string>
     <string name="send_partial_blocked">An %1$d Empfänger gesendet; %2$d übersprungen, weil Sie sie blockiert haben.</string>
     <string name="thread_group_blocked_title">Blockierter Kontakt in dieser Gruppe</string>
-    <string name="thread_group_blocked_body">In Ihrer Sperrliste: %1$s.\n\nDiese Nachricht geht nur an die %2$d anderen Mitglieder und erscheint in einer Gruppenunterhaltung ohne die blockierten Kontakte.</string>
+    <plurals name="thread_group_blocked_body">
+        <item quantity="one">In Ihrer Sperrliste: %1$s.\n\nDiese Nachricht geht nur an %2$d anderes Mitglied und erscheint in einer Gruppenunterhaltung ohne die blockierten Kontakte.</item>
+        <item quantity="other">In Ihrer Sperrliste: %1$s.\n\nDiese Nachricht geht nur an die %2$d anderen Mitglieder und erscheint in einer Gruppenunterhaltung ohne die blockierten Kontakte.</item>
+    </plurals>
     <string name="compose_recipient_blocked">%1$s · blockiert</string>
     <string name="compose_recipient_added">Hinzugefügt: %1$s (insgesamt %2$d)</string>
     <string name="compose_recipient_added_blocked">Hinzugefügt: %1$s (insgesamt %2$d). Diese Nummer steht in Ihrer Sperrliste: Sie erhält Ihre Nachrichten nicht.</string>

@@ -20,11 +20,11 @@ package com.filestech.sms.pdu;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.net.Uri;
-import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.HashMap;
+import timber.log.Timber;
 
 /**
  * Serialises a [GenericPdu] (typically a [SendReq] or [NotifyRespInd]) into the binary OMA-MMS
@@ -35,7 +35,6 @@ import java.util.HashMap;
  * MmsBuilderFormatTest checks against bytes produced by AOSP's own composer (issue #53).
  */
 public class PduComposer {
-    private static final String TAG = "PduComposer";
 
     /* ─── Encoding constants ───────────────────────────────────────────────── */
     static final int START_VALUE_LENGTH      = 0x1F;
@@ -300,7 +299,7 @@ public class PduComposer {
             appendRecipientsAndRest(date);
             return PDU_COMPOSE_SUCCESS;
         } catch (Exception e) {
-            Log.w(TAG, "makeSendReqPdu failed", e);
+            Timber.w(e, "makeSendReqPdu failed");
             return PDU_COMPOSE_CONTENT_ERROR;
         }
     }
@@ -502,7 +501,7 @@ public class PduComposer {
                 return out.toByteArray();
             }
         } catch (Exception e) {
-            Log.w(TAG, "readBytes failed for " + uri, e);
+            Timber.w(e, "readBytes failed for %s", uri);
             return null;
         }
     }

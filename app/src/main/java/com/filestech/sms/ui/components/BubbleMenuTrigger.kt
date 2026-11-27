@@ -53,6 +53,7 @@ import com.filestech.sms.ui.theme.starColor
 @Composable
 fun BubbleMenuTrigger(
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
     onReply: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
     onReact: (() -> Unit)? = null,
@@ -79,7 +80,6 @@ fun BubbleMenuTrigger(
     onToggleStar: (() -> Unit)? = null,
     /** 2026-11-12 (issue #87) — afficher ou masquer l'heure et l'état ; `null` quand ils s'affichent d'office. */
     actionHeure: ActionHeure? = null,
-    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box(modifier = modifier) {

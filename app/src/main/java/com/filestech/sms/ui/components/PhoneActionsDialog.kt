@@ -1,7 +1,6 @@
 package com.filestech.sms.ui.components
 
 import android.content.Intent
-import android.net.Uri
 import android.provider.ContactsContract
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,8 +21,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.filestech.sms.R
 import com.filestech.sms.ui.security.copyToClipboardSensitive
 import kotlinx.coroutines.launch
@@ -57,6 +58,7 @@ fun PhoneActionsDialog(
     onSnack: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -76,13 +78,13 @@ fun PhoneActionsDialog(
                         runCatching {
                             context.startActivity(
                                 Intent(Intent.ACTION_DIAL).apply {
-                                    data = Uri.parse("tel:$number")
+                                    data = "tel:$number".toUri()
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 },
                             )
                         }.onFailure {
                             Timber.w(it, "ACTION_DIAL failed for %s", number)
-                            scope.launch { onSnack(context.getString(R.string.phone_action_no_dialer)) }
+                            scope.launch { onSnack(resources.getString(R.string.phone_action_no_dialer)) }
                         }
                         onDismiss()
                     },
@@ -94,7 +96,7 @@ fun PhoneActionsDialog(
                         // v1.27.0 (N4) — un numéro de correspondant est une métadonnée sensible :
                         // même traitement que le corps d'un message, pas de vignette d'aperçu.
                         context.copyToClipboardSensitive(label = "phone", text = number)
-                        scope.launch { onSnack(context.getString(R.string.toast_copied)) }
+                        scope.launch { onSnack(resources.getString(R.string.toast_copied)) }
                         onDismiss()
                     },
                 )
@@ -112,7 +114,7 @@ fun PhoneActionsDialog(
                             )
                         }.onFailure {
                             Timber.w(it, "Contacts Insert intent failed for %s", number)
-                            scope.launch { onSnack(context.getString(R.string.phone_action_no_contacts)) }
+                            scope.launch { onSnack(resources.getString(R.string.phone_action_no_contacts)) }
                         }
                         onDismiss()
                     },
