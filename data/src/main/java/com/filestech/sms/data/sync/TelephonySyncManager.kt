@@ -171,6 +171,19 @@ class TelephonySyncManager @Inject constructor(
     }
 
     /**
+     * 2026-11-27 (issue #98, profil secondaire) — la synchronisation de [requestSync], mais ATTENDUE : l'appelant lit
+     * ce qu'elle a importé dès son retour (`ArriveesDuProfilPrincipal`, qui notifie les arrivées d'un profil
+     * secondaire).
+     */
+    suspend fun synchroniserMaintenant(reason: String) {
+        if (!hasReadSmsPermission()) {
+            Timber.i("synchroniserMaintenant(%s) skipped — no READ_SMS", reason)
+            return
+        }
+        runSync(reason = reason)
+    }
+
+    /**
      * 2026-11-19 (issue #98) — recopie dans `content://mms` les MMS reçus qui n'y sont pas encore, cf.
      * [CopieMmsRecus]. Appelé par le traitement d'un MMS reçu, juste après son écriture chez nous : les autres
      * profils le voient sans attendre la passe suivante. Sous le même verrou que l'import, qui ne peut donc pas lire
@@ -250,6 +263,9 @@ class TelephonySyncManager @Inject constructor(
             val advanced = settings.flow.first().advanced
             val current = advanced.lastSyncedSmsId
             val isFirstRun = current == 0L
+            // 2026-11-27 (issue #98) — la première passe des MMS, distincte de celle des SMS
+            // ([estUnePremierePasseMms]).
+            val premierePasseMms = estUnePremierePasseMms(current, advanced.mmsImportCompleted)
             _state.value = State.Running(isFirstRun = isFirstRun, importedSoFar = 0)
             Timber.i("runSync(%s) starting; cursor=%d firstRun=%b", reason, current, isFirstRun)
 
@@ -271,7 +287,9 @@ class TelephonySyncManager @Inject constructor(
             // Le marqueur ci-dessous est la seule preuve de complétion, et il n'est posé qu'après
             // la DERNIÈRE page. Tant qu'il manque, on rejoue — l'insertion est idempotente.
             val hasAnyMms = runCatching { messageDao.hasAnyMms() }.getOrDefault(false)
-            val needsMmsImport = !advanced.mmsImportCompleted || isFirstRun || !hasAnyMms
+            // 2026-11-27 (issue #98) — plus `isFirstRun` : depuis le marqueur, il ne valait plus que dans un profil
+            // sans aucun SMS (curseur des SMS toujours à zéro), où il refaisait l'import complet à chaque passe.
+            val needsMmsImport = !advanced.mmsImportCompleted || !hasAnyMms
             // 2026-11-19 (issue #98) — AVANT tout import : une copie interrompue avant son lien est retrouvée et reliée
             // ici, au lieu d'être importée comme un second exemplaire.
             copierMmsRecusSousVerrou()
@@ -316,7 +334,7 @@ class TelephonySyncManager @Inject constructor(
                         // sur Google Messages / Samsung Messages.
                         // Les vrais nouveaux MMS arrivent ensuite via
                         // `MmsDownloadedReceiver` avec `read=false` → badge normal.
-                        val pageForImport = if (isFirstRun) {
+                        val pageForImport = if (premierePasseMms) {
                             page.map { it.copy(read = true) }
                         } else page
                         mirror.bulkImportMmsFromTelephony(pageForImport, fils)
@@ -836,3 +854,18 @@ class TelephonySyncManager @Inject constructor(
         const val RELECTURE_A_LA_MISE_A_JOUR_MS = CopieMmsRecus.FENETRE_MS
     }
 }
+
+/**
+ * 2026-11-27 (issue #98) — **la première passe des MMS** d'une installation, ou celle qui suit « Resynchroniser » (qui
+ * remet les deux marqueurs à zéro) : les MMS de l'historique y sont importés marqués lus.
+ *
+ * Le curseur des SMS seul ne suffisait pas : dans un profil sans AUCUN SMS, il reste à zéro, et CHAQUE passe était
+ * une première — chaque MMS reçu, recopié par le profil principal, arrivait marqué lu : ni pastille, ni rien à
+ * notifier. Mesuré sur un émulateur à deux utilisateurs dont le second n'avait aucun SMS. L'import complet des MMS,
+ * une fois fait, prouve qu'une passe a déjà eu lieu.
+ *
+ * Pour les SMS, la règle reste le seul curseur : si leur premier import échoue après celui des MMS, la passe
+ * suivante doit encore marquer lu leur historique.
+ */
+internal fun estUnePremierePasseMms(curseurSms: Long, importMmsComplet: Boolean): Boolean =
+    curseurSms == 0L && !importMmsComplet

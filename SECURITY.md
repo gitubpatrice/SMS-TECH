@@ -83,6 +83,34 @@ the BIOMETRIC_WEAK class for fingerprint **OR** face).
 
 ## Audit history
 
+### v1.32.0 — Notifications in a secondary profile (issue #98)
+
+**What changes.** In a secondary user profile where SMS Tech is the default SMS app, a message received by the
+primary profile is now imported and notified. Two signals start a pass, both measured on Android 14 and 16
+emulators with two users:
+- **SMS**: `SMS_RECEIVED`, which Android sends to every running user once the primary profile's `SMS_DELIVER` is
+  done. A new manifest receiver, exported but restricted to senders holding `BROADCAST_SMS`, schedules a pass. It
+  reads nothing from the intent (only the shared store counts) and does nothing in the primary profile.
+- **MMS**: no broadcast reaches a manifest receiver (`MMS_DOWNLOADED` is not exempt from the implicit-broadcast
+  limits). A WorkManager task triggered by changes to `content://mms-sms/`, which the provider notifies to every
+  user, runs a pass when the primary profile writes its copy.
+
+A pass syncs, then notifies the received unread messages it brought, through the primary profile's notifier
+(vault, muted conversations, hidden previews, app lock, notification settings) and blocking policy (blocklist,
+unknown numbers). A persistent mark, the highest message id already looked at, keeps a message from being notified
+twice, and still catches one that the process's own startup sync imported just before the pass.
+
+**Guards, each with a test that fails without it.** Nothing in the primary profile, which notifies by itself (an
+instrumented test, run in both users). The first pass after the update looks back ten minutes only. Afterwards, a
+message older than a day is not notified, and a pass posts at most twenty notifications (a restore by a backup app).
+A mark above the highest id (database recreated) counts as unset.
+
+**Known limits.**
+- In deep sleep, an MMS is notified at the next wake-up or maintenance window: JobScheduler defers the task, and no
+  Doze-exempt signal reaches a secondary profile for an MMS. SMS are notified within seconds, deep sleep included.
+- Not in a work profile: Android does not copy MMS to it and may hand it SMS directly.
+- A message imported by another sync (opening the app) is notified at the next pass if it is still unread.
+
 ### v1.31.0 — A share or a forward goes only to its own conversation
 
 **Affected versions: 1.4.1 to 1.30.1.** Reported by e-mail: "Forward" opened the chosen conversation with an empty

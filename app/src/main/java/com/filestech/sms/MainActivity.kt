@@ -31,6 +31,7 @@ import com.filestech.sms.system.notifications.PendingNavHolder
 import com.filestech.sms.system.notifications.SafetyCallAckHolder
 import com.filestech.sms.system.notifications.SafetyCallIntentToken
 import com.filestech.sms.system.notifications.SafetyCallWarningNotifier
+import com.filestech.sms.system.scheduler.ArriveesDuProfilPrincipalWorker
 import com.filestech.sms.system.share.IncomingShareHolder
 import com.filestech.sms.ui.AppRoot
 import com.filestech.sms.ui.security.keepSelectedTextInApp
@@ -385,6 +386,11 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch(ioDispatcher) {
             runCatching { telephonySyncManagerLazy.get().requestSync(reason = "MainActivity.onResume") }
                 .onFailure { Timber.w(it, "onResume sync trigger failed") }
+            // 2026-11-27 (issue #98) — profil secondaire : SMS Tech a pu y devenir l'application SMS par défaut
+            // depuis le démarrage du processus. Sans effet ailleurs, et rien de nouveau si l'observation est déjà
+            // armée (KEEP).
+            runCatching { ArriveesDuProfilPrincipalWorker.observerLeStockage(this@MainActivity) }
+                .onFailure { Timber.w(it, "Observation du stockage partage non armee") }
         }
         // Belt-and-braces : double-track via WorkManager au cas où le manager
         // serait dans un état inattendu (started flag bloqué, mutex deadlock).
