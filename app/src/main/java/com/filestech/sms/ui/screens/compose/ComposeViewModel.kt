@@ -14,6 +14,7 @@ import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.di.IoDispatcher
 import com.filestech.sms.domain.model.Contact
+import com.filestech.sms.domain.model.ContactPhone
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ContactRepository
@@ -247,15 +248,30 @@ class ComposeViewModel @Inject constructor(
     }
 
     /**
-     * Contact « pré-indexé » pour la recherche : le nom est **replié une seule fois**
-     * (casse + accents retirés via [foldForSearch]) et les numéros normalisés une seule
+     * 2026-11-27 (issue #109) — **une ligne de la liste : UN numéro d'un contact.** Un contact à trois numéros en
+     * donne trois, et chacune se choisit seule. La liste montrait une ligne par contact, avec son premier numéro :
+     * les autres ne pouvaient pas être choisis.
+     */
+    @androidx.compose.runtime.Immutable
+    data class LigneContact(val contact: Contact, val numero: ContactPhone) {
+        /**
+         * La clé de la liste paresseuse, qui plante sur une clé en double. Un numéro n'est repris qu'une fois par
+         * contact (`regrouperParContact`), et [filtered] écarte de toute façon une ligne déjà vue, quelle que soit la
+         * source. Sans identifiant de contact, le même repli qu'avant (`hashCode`).
+         */
+        val cle: String get() = "${contact.id ?: contact.hashCode()}:${numero.address.normalized}"
+    }
+
+    /**
+     * Ligne « pré-indexée » pour la recherche : le nom est **replié une seule fois**
+     * (casse + accents retirés via [foldForSearch]) et les écritures du numéro lues une seule
      * fois, au moment où la liste de contacts change — et non à chaque frappe. Le filtrage
      * par requête ne fait alors que des `contains` sur ces chaînes déjà calculées.
      */
-    private data class IndexedContact(
-        val contact: Contact,
+    private data class LigneIndexee(
+        val ligne: LigneContact,
         val foldedName: String,
-        val phoneDigits: List<String>,
+        val chiffres: Set<String>,
     )
 
     /**
@@ -264,31 +280,31 @@ class ComposeViewModel @Inject constructor(
      * de la liste source ([distinctUntilChanged]), et le filtrage qu'au changement de
      * requête. Recherche insensible à la **casse ET aux accents** (« maite » trouve
      * « Maïté »), et par numéro si l'utilisateur tape des chiffres.
+     *
+     * 2026-11-27 (issue #109) — un nom trouvé donne tous les numéros du contact ; des chiffres ne donnent que le
+     * numéro qui les contient, sous l'une quelconque de ses écritures ([ContactPhone.ecritures]). Avant, taper le
+     * second numéro d'un contact affichait sa ligne avec le PREMIER, et la toucher écrivait à celui-là.
      */
-    val filtered: StateFlow<List<Contact>> = combine(
+    val filtered: StateFlow<List<LigneContact>> = combine(
         // `snapshotFlow` fait le pont état Compose → Flow : le champ lit [searchInput] dans la frame
         // courante, le filtrage se déclenche derrière, sur IO, sans jamais réécrire le champ.
         snapshotFlow { searchInput.trim() }.distinctUntilChanged(),
         _state.map { it.results }.distinctUntilChanged().map { list ->
-            list.map { c ->
-                IndexedContact(
-                    contact = c,
-                    foldedName = c.displayName?.foldForSearch().orEmpty(),
-                    phoneDigits = c.phones.map { it.normalized },
-                )
-            }
+            list.flatMap { c ->
+                val nom = c.displayName?.foldForSearch().orEmpty()
+                c.phones.map { p -> LigneIndexee(LigneContact(c, p), nom, p.ecritures) }
+            }.distinctBy { it.ligne.cle }
         },
     ) { q, indexed ->
-        if (q.isEmpty()) return@combine indexed.map { it.contact }
+        if (q.isEmpty()) return@combine indexed.map { it.ligne }
         val needle = q.foldForSearch()
         // v1.2.10 : `normalizePhone()` d'un texte pur (ex. "Patrice") rend "" et
         // `contains("")` matcherait TOUT → on ne tente le match numéro que si la requête
         // contient réellement des chiffres (`n.isNotBlank()`).
         val n = q.normalizePhone()
         indexed.mapNotNull { idx ->
-            val match = idx.foldedName.contains(needle) ||
-                (n.isNotBlank() && idx.phoneDigits.any { it.contains(n) })
-            if (match) idx.contact else null
+            val match = idx.foldedName.contains(needle) || (n.isNotBlank() && idx.chiffres.any { it.contains(n) })
+            if (match) idx.ligne else null
         }
     }
         // Le repli NFD (`foldForSearch`) de tous les contacts au chargement de la liste ne doit

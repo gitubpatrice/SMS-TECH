@@ -5,8 +5,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 
 ## [Unreleased]
 
+### Added
+
+- **Notifications in a secondary profile** (issue #98, GrapheneOS). Android hands incoming messages only to the
+  primary profile, and the other profiles showed them at their next sync, without a notification. Where SMS Tech is
+  the default SMS app of a secondary profile, it now imports and notifies a message as soon as the primary profile
+  has received it: an SMS within seconds (Android tells every running profile), an MMS once the primary profile
+  has copied it to the shared message store (the store tells every profile; in deep sleep, at the next wake-up).
+  A message received while the profile was stopped is notified when it starts; what the app has shown is not
+  notified later. Same rules as in the primary profile: vault, muted conversations, hidden previews, app lock,
+  notification settings, and this profile's own blocked numbers and unknown-number setting. Nothing changes in the
+  primary profile.
+
 ### Fixed
 
+- **"New message" offers every number of a contact** (issue #109). A contact with several phone numbers had one
+  line, with only one of its numbers: the others could not be chosen, and searching for one of them showed the
+  line with another number, which then received the message. Each number now has its own line, with the
+  contact's name and, when the address book gives it, the number's type (Mobile, Work, or the user's own label),
+  the default number first. A number stored twice for the same contact, by two linked accounts or in two
+  spellings, appears once, and a search finds it under either spelling. A search by digits shows only the matching
+  number. An entry with fewer than two digits ("N/A", "see e-mail"), which opened a conversation where every send
+  failed, is no longer offered. Since v1.2.0.
+- **A selection in the vault can be deleted** (issue #108). In the vault, a selection only offered an unlabelled
+  padlock at the top (move out of the vault) and no way to delete: the gap 1.31.0 closed in the main list, not in
+  its twin. A bar at the bottom now offers Move out of vault and Delete, each with its name, one button each for
+  TalkBack. Delete asks for a confirmation with the number of conversations, then deletes each one as deleting a
+  single vault conversation does: one whose copy in the phone's message store resists is kept, so that it never
+  comes back outside the vault. The result is said, and when the phone's copy kept them, the message says to make
+  SMS Tech the default SMS app. Nothing happens once the vault session is closed. Moving out now takes the
+  selection in one step: a quick second tap no longer moves the same conversations again and shows a red failure.
+  A long press on a vault conversation also offers Delete, in red and confirmed, like the main list's menu; it
+  only offered to move it out.
+- **A bulk delete still running is not started again** (list and vault). Its conversations stay on screen until
+  each one is erased; selecting and deleting them again started a second deletion and showed two results with an
+  inflated count. No other bulk action (archive, move to or out of the vault) takes them meanwhile.
+- **The message for a vault conversation that was not deleted no longer tells a user whose default SMS app is
+  already SMS Tech to make it so** (in the conversation and in the vault): the phone's copy can also resist for
+  another reason. It now says "if SMS Tech is not your default SMS app". The German text no longer reads "your
+  copy", and the Spanish one no longer says "before the vault".
+- **A received MMS reached the other profiles already marked as read** (issue #98). Android marks as read any row
+  written outside the inbox, and the copy stays in the outbox until it is complete; it now gets the message's read
+  state when it moves to the inbox. Measured on Android 14 and 16 emulators with two users.
+- **A profile without any SMS re-imported all its MMS at every sync, marked as read.** The first-sync rule only
+  looked at the SMS cursor, which stays at zero there; it now also looks at the completed MMS import.
 - **Counts read correctly when there is only one.** "1 messages" in a conversation's details, "1 messages
   imported…", "the 1 other members" before a group message that leaves out a blocked contact, "+1 others" under
   the armed contacts, and the "(s)" forms of the vault, automatic deletion, emergency alert and PDF header
@@ -27,7 +69,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   event happens use `LocalResources`; version checks for Android older than 8 are gone; invisible characters written
   as-is in comments are now `\uXXXX`. No behaviour change beyond the fixes above.
 
-## [1.31.0] — 2026-11-23
+## [1.31.0] — 2026-11-22
 
 ### Added
 
@@ -61,6 +103,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   the chosen conversation opened with an empty message box. Every deposit in the share relay now has a target, and
   only that conversation takes it; a share or forward abandoned in "New message" goes nowhere. The text of an `sms:`
   link had the same fault. A forwarded text is added after a message already started instead of being dropped.
+- **An attached photo is no longer sent rotated** (reported by the same user). A photo larger than its share of the
+  MMS limit, which is almost every camera photo, is reduced and re-encoded as JPEG; the decoder ignored the EXIF
+  orientation and the new JPEG no longer carries it, so a photo taken upright went out lying on its side, rotated a
+  quarter-turn anticlockwise, since v1.2.1. The photo is now turned (or mirrored) as its EXIF orientation says
+  before it is re-encoded; if that fails, it is sent as before rather than not at all.
 - **New MMS written by another profile are imported at each sync**, the 12-hour background sync included. The
   MMS import ran only once. A draft or a send still in progress is imported once finished.
 - **A multipart SMS is marked sent only at its last part's report**; a failure on any part is still written.

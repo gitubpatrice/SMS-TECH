@@ -3,6 +3,7 @@ package com.filestech.sms.system.receiver
 import com.filestech.sms.core.result.Outcome
 import com.filestech.sms.domain.model.BlockedNumber
 import com.filestech.sms.domain.model.Contact
+import com.filestech.sms.domain.model.ContactPhone
 import com.filestech.sms.domain.repository.BlockedNumberRepository
 import com.filestech.sms.domain.repository.ContactRepository
 import com.filestech.sms.domain.settings.AppSettings
@@ -63,7 +64,7 @@ class IncomingBlockPolicyTest {
                 Contact(
                     id = 1L,
                     displayName = "Alice",
-                    phones = listOf(com.filestech.sms.domain.model.PhoneAddress.of(rawPhone)),
+                    phones = listOf(ContactPhone(com.filestech.sms.domain.model.PhoneAddress.of(rawPhone))),
                 )
             } else {
                 null

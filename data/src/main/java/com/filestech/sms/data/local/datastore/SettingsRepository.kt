@@ -413,6 +413,7 @@ class SettingsRepository(
                 copieMmsRecusDepuis = p[K.copieMmsRecusDepuis] ?: 0L,
                 mmsNonTermines = p[K.mmsNonTermines] ?: emptySet(),
                 copiesMmsAVerifier = p[K.copiesMmsAVerifier] ?: emptySet(),
+                arriveesNotifieesJusqua = p[K.arriveesNotifieesJusqua] ?: -1L,
             ),
         )
     }
@@ -542,6 +543,7 @@ class SettingsRepository(
         this[K.copieMmsRecusDepuis] = s.advanced.copieMmsRecusDepuis
         this[K.mmsNonTermines] = s.advanced.mmsNonTermines
         this[K.copiesMmsAVerifier] = s.advanced.copiesMmsAVerifier
+        this[K.arriveesNotifieesJusqua] = s.advanced.arriveesNotifieesJusqua
     }
 
     private inline fun <reified E : Enum<E>> enumOr(p: Preferences, key: Preferences.Key<String>, def: E, valueOf: (String) -> E): E =
@@ -737,5 +739,8 @@ class SettingsRepository(
 
         /** 2026-11-19 (issue #98) — copies de MMS reçus à vérifier, cf. `CopieMmsRecus`. */
         val copiesMmsAVerifier = stringSetPreferencesKey("advanced.copiesMmsAVerifier")
+
+        /** 2026-11-27 (issue #98) — repère des notifications d'un profil secondaire (`ArriveesDuProfilPrincipal`). */
+        val arriveesNotifieesJusqua = longPreferencesKey("advanced.arriveesNotifieesJusqua")
     }
 }

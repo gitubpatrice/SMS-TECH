@@ -856,6 +856,25 @@ interface MessageDao {
     @Query("UPDATE messages SET telephony_uri = :uri WHERE id = :id AND telephony_uri IS NULL")
     suspend fun lierCopieSysteme(id: Long, uri: String): Int
 
+    /** 2026-11-27 (issue #98) — le plus grand identifiant de message, `0` sans message. */
+    @Query("SELECT COALESCE(MAX(id), 0) FROM messages")
+    suspend fun plusGrandId(): Long
+
+    /**
+     * 2026-11-27 (issue #98, profil secondaire) — les messages REÇUS NON LUS d'identifiant dans `]apres, jusqua]`,
+     * datés depuis [depuis], les [limite] plus récents : ce qu'un import vient d'apporter et qui appelle une
+     * notification. `direction = 0` = reçu (`MessageEnumConverters`).
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+         WHERE id > :apres AND id <= :jusqua AND direction = 0 AND read = 0 AND date >= :depuis
+         ORDER BY id DESC
+         LIMIT :limite
+        """,
+    )
+    suspend fun recusNonLusEntre(apres: Long, jusqua: Long, depuis: Long, limite: Int): List<MessageEntity>
+
     /** 2026-11-19 (issue #98) — parmi [uris], celles qu'un message d'ici porte déjà en `telephony_uri`. */
     @Query("SELECT telephony_uri FROM messages WHERE telephony_uri IN (:uris)")
     suspend fun telephonyUrisParmi(uris: List<String>): List<String>

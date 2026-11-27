@@ -28,6 +28,7 @@ import com.filestech.sms.domain.usecase.RetrySendUseCase
 import com.filestech.sms.domain.usecase.SendMediaMmsUseCase
 import com.filestech.sms.domain.usecase.SendReactionUseCase
 import com.filestech.sms.domain.usecase.SendVoiceMmsUseCase
+import com.filestech.sms.system.media.OrientationExif
 import com.filestech.sms.system.notifications.ActiveConversationTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -1485,12 +1486,17 @@ class ThreadViewModel @Inject constructor(
      * v1.28.3 (audit global, X-03) — le budget est un PARAMÈTRE : la part de cette image dans le
      * plafond du message, et non plus le plafond entier. Les deux paliers de réduction
      * supplémentaires existent pour les petites parts — trois photos se partagent 280 Ko.
+     *
+     * 2026-11-22 (courriel de Caroline) — l'image est REDRESSÉE selon son étiquette EXIF avant d'être réencodée :
+     * le JPEG produit ne la porte plus, une photo prise en portrait partait couchée. Cf. [OrientationExif].
      */
     private suspend fun compressImage(src: java.io.File, budget: Long): java.io.File? =
         kotlinx.coroutines.withContext(io) {
             val out = java.io.File(src.parentFile, src.nameWithoutExtension + "-compressed.jpg")
+            val redressement = OrientationExif.redressementPour(OrientationExif.lire(src))
             for (maxDim in intArrayOf(1600, 1024, 800)) {
-                val scaled = decoderReduite(src, maxDim) ?: continue
+                val reduite = decoderReduite(src, maxDim) ?: continue
+                val scaled = redressement?.let { OrientationExif.redresser(reduite, it) } ?: reduite
                 try {
                     for (quality in intArrayOf(75, 60, 45, 30)) {
                         try {

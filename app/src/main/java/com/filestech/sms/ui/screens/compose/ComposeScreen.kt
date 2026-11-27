@@ -1,5 +1,9 @@
 package com.filestech.sms.ui.screens.compose
 
+import android.content.res.Resources
+import android.provider.ContactsContract.CommonDataKinds.Phone
+import android.text.BidiFormatter
+import android.text.TextDirectionHeuristics.LTR
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,6 +63,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.filestech.sms.R
+import com.filestech.sms.domain.model.ContactPhone
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.system.settings.ouvrirLaFicheDeLApplication
 import com.filestech.sms.ui.components.Avatar
@@ -232,7 +237,9 @@ fun ComposeScreen(
                 val input = viewModel.searchInput
                 // X-06 — un nom tapé n'est pas une adresse : la ligne n'apparaît que pour un
                 // numéro composable, cf. [ComposeViewModel.estComposable].
-                if (ComposeViewModel.estComposable(input) && filtered.none { c -> c.firstPhone?.raw == input }) {
+                // 2026-11-27 (issue #109) — pas de seconde ligne pour un numéro déjà proposé sous une autre écriture.
+                val saisie = PhoneAddress.of(input).normalized
+                if (ComposeViewModel.estComposable(input) && filtered.none { l -> saisie in l.numero.ecritures }) {
                     item {
                         ListItem(
                             headlineContent = { Text(input) },
@@ -279,11 +286,22 @@ fun ComposeScreen(
                         )
                     }
                 }
-                items(filtered, key = { it.id ?: it.hashCode().toLong() }) { contact ->
-                    val number = contact.firstPhone?.raw.orEmpty()
+                // 2026-11-27 (issue #109) — une ligne par NUMÉRO : un contact à plusieurs numéros en a plusieurs,
+                // chacune avec son nom, et le type du numéro devant lui quand le carnet le donne. Le numéro est isolé
+                // de gauche à droite : à côté d'un libellé en arabe ou en hébreu, ses groupes de chiffres
+                // s'inverseraient. Le type aussi est isolé, dans son propre sens : un libellé saisi dans le carnet
+                // peut porter n'importe quel texte (audit du 2026-11-27).
+                items(filtered, key = { it.cle }) { ligne ->
+                    val contact = ligne.contact
+                    val number = ligne.numero.address.raw
+                    val type = libelleDuType(resources, ligne.numero)
                     ListItem(
                         headlineContent = { Text(contact.displayName ?: number) },
-                        supportingContent = { Text(number) },
+                        supportingContent = {
+                            val bidi = BidiFormatter.getInstance()
+                            val avecType = type?.let { "${bidi.unicodeWrap(it)} · ${bidi.unicodeWrap(number, LTR)}" }
+                            Text(avecType ?: number)
+                        },
                         leadingContent = { Avatar(label = contact.displayName ?: number) },
                         // X-05 — meme bouton que sur la saisie libre : une puce, pas de navigation.
                         trailingContent = {
@@ -375,6 +393,19 @@ internal fun PucesDestinataires(
                 trailingIcon = { Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(16.dp)) },
             )
         }
+    }
+}
+
+/**
+ * 2026-11-27 (issue #109) — le type d'un numéro (« Mobile », « Travail », ou le libellé saisi par l'utilisateur),
+ * dans la langue de l'application ; `null` quand le carnet n'en donne pas. `Phone.getTypeLabel` rendrait
+ * « Personnalisé » pour un type absent, inconnu ou sans libellé : ce mot ne dirait rien, seul le numéro s'affiche.
+ */
+internal fun libelleDuType(res: Resources, numero: ContactPhone): String? {
+    val libre = numero.label?.takeIf { it.isNotBlank() }
+    return when (numero.type) {
+        in Phone.TYPE_HOME..Phone.TYPE_MMS -> Phone.getTypeLabel(res, numero.type, libre).toString()
+        else -> libre
     }
 }
 

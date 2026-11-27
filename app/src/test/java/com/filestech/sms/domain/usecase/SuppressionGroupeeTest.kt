@@ -28,7 +28,9 @@ class SuppressionGroupeeTest {
         coEvery { repo.delete(3L) } returns ConversationDeleteResult.KEPT_LOCAL_FAILURE
         coEvery { repo.delete(4L) } returns ConversationDeleteResult.DELETED
 
-        assertThat(cas.deleteAll(listOf(1L, 2L, 3L, 4L))).isEqualTo(BilanSuppression(supprimees = 2, conservees = 2))
+        // 2026-11-27 — et, parmi les conservées, celles que leur copie système a retenues (le Coffre le dit).
+        assertThat(cas.deleteAll(listOf(1L, 2L, 3L, 4L)))
+            .isEqualTo(BilanSuppression(supprimees = 2, conservees = 2, parCopieSysteme = 1))
     }
 
     @Test

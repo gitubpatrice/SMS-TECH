@@ -235,6 +235,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- 1 bis) 2026-11-27 (issue #98) — dans un profil SECONDAIRE, le SMS que le profil principal vient de
+             recevoir : SMS_RECEIVED va à tous les utilisateurs. Sans effet dans le profil principal. -->
+        <receiver
+            android:name=".system.receiver.SmsRecuAuProfilPrincipalReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
         <!-- 2) MMS WAP_PUSH receiver -->
         <receiver
             android:name=".system.receiver.MmsWapPushReceiver"
