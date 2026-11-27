@@ -20,11 +20,17 @@ data class Contact(
  * [type] : la valeur de `ContactsContract.CommonDataKinds.Phone.TYPE` (domicile, mobile, travail…) ; [TYPE_LIBRE]
  * pour un type personnalisé ou absent, auquel cas seul [label], le libellé saisi par l'utilisateur, a un sens. Le
  * texte affiché se résout dans l'écran, dans la langue de l'application.
+ *
+ * [ecritures] : les formes normalisées sous lesquelles le carnet connaît ce numéro — la sienne, sa forme
+ * internationale, et celles des lignes qui le répétaient autrement (`06 12…` et `+33 6 12…`). La recherche par
+ * chiffres les parcourt toutes : le numéro n'est affiché qu'une fois, mais se trouve sous chacune (relecture Claude
+ * du 2026-11-27 : seule l'écriture gardée restait cherchable).
  */
 data class ContactPhone(
     val address: PhoneAddress,
     val type: Int = TYPE_LIBRE,
     val label: String? = null,
+    val ecritures: Set<String> = setOf(address.normalized),
 ) {
     companion object {
         /** `Phone.TYPE_CUSTOM` d'Android, qui vaut aussi pour un type absent : rien d'autre que [label] à afficher. */

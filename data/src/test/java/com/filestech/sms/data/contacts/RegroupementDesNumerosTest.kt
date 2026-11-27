@@ -73,6 +73,27 @@ class RegroupementDesNumerosTest {
         assertThat(numeros.map { it.address.raw }).containsExactly("06 12 34 56 78", "07 12 34 56 78").inOrder()
         // La première écriture rencontrée est gardée, avec son type.
         assertThat(numeros.first().type).isEqualTo(MOBILE)
+        // Et le numéro se cherche sous chacune de ses écritures (relecture Claude du 2026-11-27).
+        assertThat(numeros.first().ecritures).containsExactly("0612345678", "+33612345678")
+    }
+
+    /**
+     * Relecture Claude du 2026-11-27 : une ligne écartée gardait ses clés pour elle. La troisième écriture ne partage
+     * rien avec la première, seulement ses chiffres avec la deuxième, déjà écartée : elle doit l'être aussi.
+     */
+    @Test
+    fun `un doublon de doublon est reconnu`() {
+        val contacts = regrouperParContact(
+            listOf(
+                ligne(1, "06 12 34 56 78", e164 = "+33612345678"),
+                ligne(1, "0033 6 12 34 56 78", e164 = "+33612345678"),
+                ligne(1, "0033612345678"),
+            ),
+        )
+
+        val numero = contacts.single().phones.single()
+        assertThat(numero.address.raw).isEqualTo("06 12 34 56 78")
+        assertThat(numero.ecritures).containsExactly("0612345678", "+33612345678", "0033612345678")
     }
 
     @Test
@@ -86,21 +107,27 @@ class RegroupementDesNumerosTest {
         )
 
         assertThat(contacts.map { it.id }).containsExactly(2L, 1L).inOrder()
-        assertThat(contacts.first().phones.map { it.address.raw }).containsExactly("0611111111", "0633333333")
+        assertThat(contacts.first().phones.map { it.address.raw }).containsExactly("0611111111", "0633333333").inOrder()
     }
 
+    /** Un « numéro » sans au moins deux chiffres ne se compose pas : sa ligne ouvrirait une conversation sans issue. */
     @Test
-    fun `un numero vide est ecarte, un contact sans numero utilisable disparait`() {
+    fun `un numero qui ne se compose pas est ecarte, un contact sans numero utilisable disparait`() {
         val contacts = regrouperParContact(
             listOf(
                 ligne(1, "  "),
+                ligne(1, "N/A"),
+                ligne(1, "voir mail"),
+                ligne(1, "7"),
                 ligne(2, ""),
                 ligne(2, "0611111111"),
+                // Un numéro court reste : deux chiffres suffisent (urgences, services).
+                ligne(2, "15"),
             ),
         )
 
         assertThat(contacts.map { it.id }).containsExactly(2L)
-        assertThat(contacts.single().phones.map { it.address.raw }).containsExactly("0611111111")
+        assertThat(contacts.single().phones.map { it.address.raw }).containsExactly("0611111111", "15").inOrder()
     }
 
     @Test

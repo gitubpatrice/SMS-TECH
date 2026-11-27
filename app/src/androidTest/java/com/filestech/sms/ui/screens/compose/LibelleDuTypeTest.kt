@@ -61,6 +61,7 @@ class LibelleDuTypeTest {
         val francais = libelleDuType(ressourcesEn(Locale.FRENCH), numero(Phone.TYPE_HOME))
 
         assertThat(anglais).isEqualTo("Home")
+        assertThat(libelleDuType(ressourcesEn(Locale.ENGLISH), numero(Phone.TYPE_MOBILE))).isEqualTo("Mobile")
         assertThat(francais).isNotEqualTo(anglais)
         assertThat(francais).isNotEmpty()
     }

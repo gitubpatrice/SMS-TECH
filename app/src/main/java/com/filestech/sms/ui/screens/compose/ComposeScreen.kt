@@ -2,6 +2,8 @@ package com.filestech.sms.ui.screens.compose
 
 import android.content.res.Resources
 import android.provider.ContactsContract.CommonDataKinds.Phone
+import android.text.BidiFormatter
+import android.text.TextDirectionHeuristics.LTR
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -235,7 +237,9 @@ fun ComposeScreen(
                 val input = viewModel.searchInput
                 // X-06 — un nom tapé n'est pas une adresse : la ligne n'apparaît que pour un
                 // numéro composable, cf. [ComposeViewModel.estComposable].
-                if (ComposeViewModel.estComposable(input) && filtered.none { l -> l.numero.address.raw == input }) {
+                // 2026-11-27 (issue #109) — pas de seconde ligne pour un numéro déjà proposé sous une autre écriture.
+                val saisie = PhoneAddress.of(input).normalized
+                if (ComposeViewModel.estComposable(input) && filtered.none { l -> saisie in l.numero.ecritures }) {
                     item {
                         ListItem(
                             headlineContent = { Text(input) },
@@ -283,14 +287,17 @@ fun ComposeScreen(
                     }
                 }
                 // 2026-11-27 (issue #109) — une ligne par NUMÉRO : un contact à plusieurs numéros en a plusieurs, chacune
-                // avec son nom, et le type du numéro devant lui quand le carnet le donne.
+                // avec son nom, et le type du numéro devant lui quand le carnet le donne. Le numéro est isolé de
+                // gauche à droite : à côté d'un libellé en arabe ou en hébreu, ses groupes de chiffres s'inverseraient.
                 items(filtered, key = { it.cle }) { ligne ->
                     val contact = ligne.contact
                     val number = ligne.numero.address.raw
                     val type = libelleDuType(resources, ligne.numero)
                     ListItem(
                         headlineContent = { Text(contact.displayName ?: number) },
-                        supportingContent = { Text(if (type == null) number else "$type · $number") },
+                        supportingContent = {
+                            Text(if (type == null) number else "$type · ${BidiFormatter.getInstance().unicodeWrap(number, LTR)}")
+                        },
                         leadingContent = { Avatar(label = contact.displayName ?: number) },
                         // X-05 — meme bouton que sur la saisie libre : une puce, pas de navigation.
                         trailingContent = {

@@ -12,7 +12,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   line with another number, which then received the message. Each number now has its own line, with the
   contact's name and, when the address book gives it, the number's type (Mobile, Work, or the user's own label),
   the default number first. A number stored twice for the same contact, by two linked accounts or in two
-  spellings, appears once. A search by digits shows only the matching number. Since v1.2.0.
+  spellings, appears once, and a search finds it under either spelling. A search by digits shows only the matching
+  number. An entry with fewer than two digits ("N/A", "see e-mail"), which opened a conversation where every send
+  failed, is no longer offered. Since v1.2.0.
 
 ## [1.31.0] — 2026-11-22
 

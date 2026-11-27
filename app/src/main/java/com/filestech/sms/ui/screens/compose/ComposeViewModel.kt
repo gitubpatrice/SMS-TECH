@@ -255,20 +255,24 @@ class ComposeViewModel @Inject constructor(
      */
     @androidx.compose.runtime.Immutable
     data class LigneContact(val contact: Contact, val numero: ContactPhone) {
-        /** Unique dans la liste : un numéro n'est repris qu'une fois par contact (`regrouperParContact`). */
-        val cle: String get() = "${contact.id}:${numero.address.normalized}"
+        /**
+         * La clé de la liste paresseuse, qui plante sur une clé en double. Un numéro n'est repris qu'une fois par
+         * contact (`regrouperParContact`), et [filtered] écarte de toute façon une ligne déjà vue, quelle que soit la
+         * source. Sans identifiant de contact, le même repli qu'avant (`hashCode`).
+         */
+        val cle: String get() = "${contact.id ?: contact.hashCode()}:${numero.address.normalized}"
     }
 
     /**
      * Ligne « pré-indexée » pour la recherche : le nom est **replié une seule fois**
-     * (casse + accents retirés via [foldForSearch]) et le numéro normalisé une seule
+     * (casse + accents retirés via [foldForSearch]) et les écritures du numéro lues une seule
      * fois, au moment où la liste de contacts change — et non à chaque frappe. Le filtrage
      * par requête ne fait alors que des `contains` sur ces chaînes déjà calculées.
      */
     private data class LigneIndexee(
         val ligne: LigneContact,
         val foldedName: String,
-        val chiffres: String,
+        val chiffres: Set<String>,
     )
 
     /**
@@ -279,8 +283,8 @@ class ComposeViewModel @Inject constructor(
      * « Maïté »), et par numéro si l'utilisateur tape des chiffres.
      *
      * 2026-11-27 (issue #109) — un nom trouvé donne tous les numéros du contact ; des chiffres ne donnent que le
-     * numéro qui les contient. Avant, taper le second numéro d'un contact affichait sa ligne avec le PREMIER, et la
-     * toucher écrivait à celui-là.
+     * numéro qui les contient, sous l'une quelconque de ses écritures ([ContactPhone.ecritures]). Avant, taper le
+     * second numéro d'un contact affichait sa ligne avec le PREMIER, et la toucher écrivait à celui-là.
      */
     val filtered: StateFlow<List<LigneContact>> = combine(
         // `snapshotFlow` fait le pont état Compose → Flow : le champ lit [searchInput] dans la frame
@@ -289,8 +293,8 @@ class ComposeViewModel @Inject constructor(
         _state.map { it.results }.distinctUntilChanged().map { list ->
             list.flatMap { c ->
                 val nom = c.displayName?.foldForSearch().orEmpty()
-                c.phones.map { p -> LigneIndexee(LigneContact(c, p), nom, p.address.normalized) }
-            }
+                c.phones.map { p -> LigneIndexee(LigneContact(c, p), nom, p.ecritures) }
+            }.distinctBy { it.ligne.cle }
         },
     ) { q, indexed ->
         if (q.isEmpty()) return@combine indexed.map { it.ligne }
@@ -300,7 +304,7 @@ class ComposeViewModel @Inject constructor(
         // contient réellement des chiffres (`n.isNotBlank()`).
         val n = q.normalizePhone()
         indexed.mapNotNull { idx ->
-            val match = idx.foldedName.contains(needle) || (n.isNotBlank() && idx.chiffres.contains(n))
+            val match = idx.foldedName.contains(needle) || (n.isNotBlank() && idx.chiffres.any { it.contains(n) })
             if (match) idx.ligne else null
         }
     }

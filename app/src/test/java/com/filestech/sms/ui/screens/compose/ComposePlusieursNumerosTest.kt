@@ -60,8 +60,8 @@ class ComposePlusieursNumerosTest {
         Dispatchers.resetMain()
     }
 
-    private fun composeur(groupe: Boolean = false): ComposeViewModel {
-        val contacts = mockk<ContactRepository> { coEvery { listAll() } returns listOf(alice, bruno) }
+    private fun composeur(groupe: Boolean = false, contacts: List<Contact> = listOf(alice, bruno)): ComposeViewModel {
+        val depot = mockk<ContactRepository> { coEvery { listAll() } returns contacts }
         val conversations = mockk<ConversationRepository> {
             coEvery { findOrCreate(any()) } answers {
                 val adresses = firstArg<List<PhoneAddress>>()
@@ -71,7 +71,7 @@ class ComposePlusieursNumerosTest {
         }
         return ComposeViewModel(
             savedStateHandle = SavedStateHandle(mapOf("groupe" to groupe)),
-            contactRepo = contacts,
+            contactRepo = depot,
             conversationRepo = conversations,
             io = dispatcher,
             blockedRepo = mockk(relaxed = true),
@@ -99,8 +99,6 @@ class ComposePlusieursNumerosTest {
             "Alice" to "+44 7700 900123",
             "Bruno" to "0633333333",
         ).inOrder()
-        // Les clés de la liste paresseuse sont uniques : une clé en double fait planter l'écran.
-        assertThat(lignes.map { it.cle }.toSet()).hasSize(lignes.size)
     }
 
     @Test
@@ -118,6 +116,41 @@ class ComposePlusieursNumerosTest {
 
         assertThat(lignes.map { it.contact.displayName to it.numero.address.raw })
             .containsExactly("Alice" to "01 22 22 22 22")
+    }
+
+    /**
+     * Relecture Claude du 2026-11-27 : le numéro enregistré `06 11…` et répété `+33 6 11…` par un compte lié n'est
+     * affiché qu'une fois ; il doit se trouver sous les deux écritures, comme avant.
+     */
+    @Test
+    fun `un numero se trouve sous chacune de ses ecritures`() = runTest(dispatcher) {
+        val chloe = Contact(
+            id = 3L,
+            displayName = "Chloé",
+            phones = listOf(
+                ContactPhone(PhoneAddress.of("06 44 44 44 44"), ecritures = setOf("0644444444", "+33644444444")),
+            ),
+        )
+        val vm = composeur(contacts = listOf(chloe))
+
+        assertThat(lignesPour(vm, "+33 6 44").map { it.numero.address.raw }).containsExactly("06 44 44 44 44")
+    }
+
+    /**
+     * La liste paresseuse plante sur une clé en double. `regrouperParContact` ne répète jamais un numéro, mais la liste
+     * ne s'y fie pas : un contact venu d'ailleurs avec deux fois le même numéro n'en donne qu'une ligne.
+     */
+    @Test
+    fun `un numero repete dans un contact ne donne qu'une ligne`() = runTest(dispatcher) {
+        val repete = Contact(
+            id = 4L,
+            displayName = "Denis",
+            phones = listOf(ContactPhone(PhoneAddress.of("0655555555")), ContactPhone(PhoneAddress.of("06 55 55 55 55"))),
+        )
+        val lignes = lignesPour(composeur(contacts = listOf(repete)), "")
+
+        assertThat(lignes).hasSize(1)
+        assertThat(lignes.map { it.cle }.toSet()).hasSize(lignes.size)
     }
 
     @Test
