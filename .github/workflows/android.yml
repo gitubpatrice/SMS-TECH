@@ -63,6 +63,17 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      # 2026-11-27 — Robolectric télécharge ses images d'Android (`android-all-instrumented`, une par niveau d'API
+      # des tests) depuis Maven Central au premier test, hors du cache de Gradle : dans `~/.m2`. Ce jour-là, Maven
+      # Central a répondu 429 (trop de requêtes) au build de `main` après la fusion de #111 : 17 classes en échec,
+      # aucune pour un défaut. La clé suit le catalogue des versions, où vit celle de Robolectric.
+      - name: Cache Robolectric
+        uses: actions/cache@v6
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: robolectric-${{ runner.os }}-
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
