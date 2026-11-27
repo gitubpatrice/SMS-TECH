@@ -90,13 +90,27 @@ class ToggleConversationStateUseCase @Inject constructor(
     suspend fun deleteAll(ids: List<Long>): BilanSuppression {
         var supprimees = 0
         var conservees = 0
+        var parCopieSysteme = 0
         for (id in ids) {
-            val resultat = runCatchingCancellable { repo.delete(id) }.getOrNull()
-            if (resultat == ConversationDeleteResult.DELETED) supprimees++ else conservees++
+            when (runCatchingCancellable { repo.delete(id) }.getOrNull()) {
+                ConversationDeleteResult.DELETED -> supprimees++
+                ConversationDeleteResult.KEPT_SYSTEM_COPY -> {
+                    conservees++
+                    parCopieSysteme++
+                }
+                else -> conservees++
+            }
         }
-        return BilanSuppression(supprimees = supprimees, conservees = conservees)
+        return BilanSuppression(supprimees = supprimees, conservees = conservees, parCopieSysteme = parCopieSysteme)
     }
 
-    /** Ce qu'il est advenu d'une sélection supprimée : [conservees] = toujours là, quelle qu'en soit la raison. */
-    data class BilanSuppression(val supprimees: Int, val conservees: Int)
+    /**
+     * Ce qu'il est advenu d'une sélection supprimée : [conservees] = toujours là, quelle qu'en soit la raison.
+     *
+     * 2026-11-27 (issue #108, le Coffre) — [parCopieSysteme] : celles de [conservees] gardées parce que leur copie dans
+     * la messagerie du téléphone a résisté (`KEPT_SYSTEM_COPY`). C'est l'échec ordinaire d'une conversation du Coffre
+     * quand SMS Tech n'est pas l'application SMS par défaut, et le seul que réessayer tel quel ne corrige pas : le
+     * Coffre le dit avec sa cause, comme le fil.
+     */
+    data class BilanSuppression(val supprimees: Int, val conservees: Int, val parCopieSysteme: Int = 0)
 }

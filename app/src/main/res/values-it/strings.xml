@@ -1075,6 +1075,11 @@
         <item quantity="many">%d conversazioni non sono state eliminate: una parte non è stata rimossa da questo telefono. Riprovi.</item>
         <item quantity="other">%d conversazioni non sono state eliminate: una parte non è stata rimossa da questo telefono. Riprovi.</item>
     </plurals>
+    <plurals name="vault_bulk_delete_kept_system">
+        <item quantity="one">%d conversazione della cassaforte non è stata eliminata: la sua copia nell\'archivio messaggi del telefono non è stata rimossa e sarebbe riapparsa fuori dalla cassaforte alla sincronizzazione successiva. Imposti SMS Tech come app SMS predefinita, poi riprovi. Se continua a fallire, la sposti prima fuori dalla cassaforte: potrà poi ricomparire nell\'elenco principale.</item>
+        <item quantity="many">%d conversazioni della cassaforte non sono state eliminate: la loro copia nell\'archivio messaggi del telefono non è stata rimossa e sarebbero riapparse fuori dalla cassaforte alla sincronizzazione successiva. Imposti SMS Tech come app SMS predefinita, poi riprovi. Se continua a fallire, le sposti prima fuori dalla cassaforte: potranno poi ricomparire nell\'elenco principale.</item>
+        <item quantity="other">%d conversazioni della cassaforte non sono state eliminate: la loro copia nell\'archivio messaggi del telefono non è stata rimossa e sarebbero riapparse fuori dalla cassaforte alla sincronizzazione successiva. Imposti SMS Tech come app SMS predefinita, poi riprovi. Se continua a fallire, le sposti prima fuori dalla cassaforte: potranno poi ricomparire nell\'elenco principale.</item>
+    </plurals>
     <plurals name="conversations_bulk_archived">
         <item quantity="one">%d conversazione archiviata</item>
         <item quantity="many">%d conversazioni archiviate</item>

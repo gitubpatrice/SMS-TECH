@@ -1061,6 +1061,10 @@
         <item quantity="one">%d conversation was not deleted: part of it could not be removed from this phone. Try again.</item>
         <item quantity="other">%d conversations were not deleted: part of them could not be removed from this phone. Try again.</item>
     </plurals>
+    <plurals name="vault_bulk_delete_kept_system">
+        <item quantity="one">%d vault conversation was not deleted: its copy in the phone’s message store could not be removed, and it would have come back outside the vault at the next sync. Make SMS Tech your default SMS app, then try again. If it keeps failing, move it out of the vault first: it may then come back in the main list.</item>
+        <item quantity="other">%d vault conversations were not deleted: their copy in the phone’s message store could not be removed, and they would have come back outside the vault at the next sync. Make SMS Tech your default SMS app, then try again. If it keeps failing, move them out of the vault first: they may then come back in the main list.</item>
+    </plurals>
     <plurals name="conversations_bulk_archived">
         <item quantity="one">%d conversation archived</item>
         <item quantity="other">%d conversations archived</item>

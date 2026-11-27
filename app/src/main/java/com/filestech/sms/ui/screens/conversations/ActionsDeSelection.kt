@@ -125,8 +125,9 @@ internal fun BarreActionsSelection(
     }
 }
 
+/** Une action de la barre : icône et libellé, un seul bouton pour TalkBack. 2026-11-27 — partagée avec le Coffre. */
 @Composable
-private fun ActionDeSelection(
+internal fun ActionDeSelection(
     icone: ImageVector,
     libelle: String,
     onClick: () -> Unit,

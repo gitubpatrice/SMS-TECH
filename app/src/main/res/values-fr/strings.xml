@@ -1060,6 +1060,11 @@
         <item quantity="many">%d conversations n’ont pas été supprimées : une partie n’a pas pu être retirée de ce téléphone. Réessayez.</item>
         <item quantity="other">%d conversations n’ont pas été supprimées : une partie n’a pas pu être retirée de ce téléphone. Réessayez.</item>
     </plurals>
+    <plurals name="vault_bulk_delete_kept_system">
+        <item quantity="one">%d conversation du coffre n’a pas été supprimée : sa copie dans la messagerie du téléphone n’a pas pu être retirée, et elle serait revenue hors du coffre à la prochaine synchronisation. Définissez SMS Tech comme application SMS par défaut, puis réessayez. Si l’échec persiste, sortez-la d’abord du coffre : elle pourra alors revenir dans la liste principale.</item>
+        <item quantity="many">%d conversations du coffre n’ont pas été supprimées : leur copie dans la messagerie du téléphone n’a pas pu être retirée, et elles seraient revenues hors du coffre à la prochaine synchronisation. Définissez SMS Tech comme application SMS par défaut, puis réessayez. Si l’échec persiste, sortez-les d’abord du coffre : elles pourront alors revenir dans la liste principale.</item>
+        <item quantity="other">%d conversations du coffre n’ont pas été supprimées : leur copie dans la messagerie du téléphone n’a pas pu être retirée, et elles seraient revenues hors du coffre à la prochaine synchronisation. Définissez SMS Tech comme application SMS par défaut, puis réessayez. Si l’échec persiste, sortez-les d’abord du coffre : elles pourront alors revenir dans la liste principale.</item>
+    </plurals>
     <plurals name="conversations_bulk_archived">
         <item quantity="one">%d conversation archivée</item>
         <item quantity="many">%d conversations archivées</item>

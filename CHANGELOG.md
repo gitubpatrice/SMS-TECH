@@ -3,6 +3,19 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- **A selection in the vault can be deleted** (issue #108). In the vault, a selection only offered an unlabelled
+  padlock at the top (move out of the vault) and no way to delete: the gap 1.31.0 closed in the main list, not in
+  its twin. A bar at the bottom now offers Move out of vault and Delete, each with its name, one button each for
+  TalkBack. Delete asks for a confirmation with the number of conversations, then deletes each one as deleting a
+  single vault conversation does: one whose copy in the phone's message store resists is kept, so that it never
+  comes back outside the vault. The result is said, and when the phone's copy kept them, the message says to make
+  SMS Tech the default SMS app. Nothing happens once the vault session is closed. Moving out now takes the
+  selection in one step: a quick second tap no longer moves the same conversations again and shows a red failure.
+
 ## [1.31.0] — 2026-11-22
 
 ### Added

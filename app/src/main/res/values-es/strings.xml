@@ -1075,6 +1075,11 @@
         <item quantity="many">%d conversaciones no se han eliminado: una parte no ha podido quitarse de este teléfono. Vuelva a intentarlo.</item>
         <item quantity="other">%d conversaciones no se han eliminado: una parte no ha podido quitarse de este teléfono. Vuelva a intentarlo.</item>
     </plurals>
+    <plurals name="vault_bulk_delete_kept_system">
+        <item quantity="one">%d conversación de la caja fuerte no se ha eliminado: no se ha podido quitar su copia del almacén de mensajes del teléfono, y habría vuelto fuera de la caja fuerte en la siguiente sincronización. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo. Si sigue fallando, sáquela antes de la caja fuerte: puede que entonces reaparezca en la lista principal.</item>
+        <item quantity="many">%d conversaciones de la caja fuerte no se han eliminado: no se ha podido quitar su copia del almacén de mensajes del teléfono, y habrían vuelto fuera de la caja fuerte en la siguiente sincronización. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo. Si sigue fallando, sáquelas antes de la caja fuerte: puede que entonces reaparezcan en la lista principal.</item>
+        <item quantity="other">%d conversaciones de la caja fuerte no se han eliminado: no se ha podido quitar su copia del almacén de mensajes del teléfono, y habrían vuelto fuera de la caja fuerte en la siguiente sincronización. Ponga SMS Tech como su app de SMS predeterminada y vuelva a intentarlo. Si sigue fallando, sáquelas antes de la caja fuerte: puede que entonces reaparezcan en la lista principal.</item>
+    </plurals>
     <plurals name="conversations_bulk_archived">
         <item quantity="one">%d conversación archivada</item>
         <item quantity="many">%d conversaciones archivadas</item>

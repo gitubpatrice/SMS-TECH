@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -60,6 +61,7 @@ import com.filestech.sms.ui.components.SmsTechSnackbarHost
 import com.filestech.sms.ui.components.showError
 import com.filestech.sms.ui.security.StrongBiometrics
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,8 +71,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -187,6 +191,17 @@ class VaultViewModel @Inject constructor(
     sealed interface Event {
         data class MovedOut(val count: Int) : Event
         data class MoveOutFailed(val count: Int) : Event
+
+        /**
+         * 2026-11-27 (issue #108) — le bilan d'une suppression groupée. Une seule branche dans l'écran : le texte est
+         * choisi par [texteDuBilanDuCoffre].
+         */
+        sealed interface Suppression : Event {
+            data class Supprimees(val nombre: Int) : Suppression
+
+            /** [copieSysteme] : TOUTES ont été retenues par leur copie dans la messagerie du téléphone. */
+            data class Conservees(val nombre: Int, val copieSysteme: Boolean) : Suppression
+        }
     }
 
     /**
@@ -241,10 +256,12 @@ class VaultViewModel @Inject constructor(
      * atomique. Garantit : soit tout passe, soit rien (rollback en cas de process-kill / erreur).
      */
     fun bulkMoveSelectedOut() = viewModelScope.launch {
-        val ids = _selectedIds.value.toList()
+        // 2026-11-27 — prise et vidée d'un seul geste, AVANT l'appel, comme la liste depuis la v1.31.0 : vidée après la
+        // transaction, la sélection laissait un second appui sortir les mêmes conversations, et ce second déplacement,
+        // qui n'en trouvait plus aucune au Coffre, s'affichait en échec rouge.
+        val ids = prendreSelection()
         if (ids.isEmpty()) return@launch
         val outcome = toggle.requestBulkMoveToVault(ids = ids, intoVault = false)
-        clearSelection()
         _events.trySend(
             when (outcome) {
                 is Outcome.Success<Int> -> {
@@ -254,6 +271,45 @@ class VaultViewModel @Inject constructor(
                 is Outcome.Failure -> Event.MoveOutFailed(count = ids.size)
             }
         )
+    }
+
+    /**
+     * 2026-11-27 (issue #108) — **supprime la sélection du Coffre**, après la confirmation de l'écran.
+     *
+     * Jusqu'ici une sélection du Coffre n'offrait qu'un cadenas sans libellé (sortir du Coffre) : rien pour la
+     * supprimer, le défaut que la v1.31.0 a corrigé dans la liste et pas ici. Même chemin que la liste : chaque
+     * conversation passe par la suppression d'une seule (`ToggleConversationStateUseCase.deleteAll`), donc par le mode
+     * du Coffre de `ConversationEraser`, qui la CONSERVE sur tout échec — une copie système laissée derrière la
+     * ramènerait hors du Coffre, en clair, à la synchronisation suivante. [confirmees] : ce que la fenêtre a compté ;
+     * la suppression ne peut que s'y restreindre. Rien si la session du Coffre est fermée — l'écran, qui la suit, ne
+     * montre alors plus rien —, et pas de bilan si elle s'est fermée pendant la suppression (verrouillage, panique).
+     * `NonCancellable` : commencée, elle va au bout même si l'écran se ferme entre deux conversations.
+     */
+    fun bulkDeleteSelected(confirmees: Collection<Long>) = viewModelScope.launch {
+        val ids = prendreSelection(limiteA = confirmees)
+        if (ids.isEmpty() || !vault.isVaultUnlockedInSession) return@launch
+        val bilan = withContext(NonCancellable) { toggle.deleteAll(ids) }
+        if (!vault.isVaultUnlockedInSession) return@launch
+        _events.trySend(
+            when {
+                bilan.conservees == 0 -> Event.Suppression.Supprimees(nombre = bilan.supprimees)
+                else -> Event.Suppression.Conservees(
+                    nombre = bilan.conservees,
+                    copieSysteme = bilan.parCopieSysteme == bilan.conservees,
+                )
+            },
+        )
+    }
+
+    /**
+     * 2026-11-27 — **prend la sélection et la vide d'un seul geste**, puis n'en garde que les conversations que le
+     * Coffre montre encore (une sortie ou une suppression faite ailleurs l'a pu changer) et, pour une suppression,
+     * celles que la fenêtre de confirmation a comptées. Jumeau de `ConversationsViewModel.prendreSelectionVisible`.
+     */
+    private fun prendreSelection(limiteA: Collection<Long>? = null): List<Long> {
+        val prises = _selectedIds.getAndUpdate { emptySet() }
+        val affichees = state.value.mapTo(HashSet()) { it.id }
+        return prises.filter { it in affichees && (limiteA == null || it in limiteA) }
     }
 }
 
@@ -370,6 +426,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
         }
     }
     val ctx = LocalContext.current
+    val resources = LocalResources.current
 
     // v1.13.0 — si le PIN/pass distinct coffre est ON, on attend la validation
     // du PinEntryDialog avant d'enchaîner sur le flow biométrique. Le PinDialog
@@ -588,9 +645,25 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                 }
                 is VaultViewModel.Event.MoveOutFailed ->
                     snackbarHost.showError(ctx.getString(R.string.vault_move_out_failed))
+                // 2026-11-27 (issue #108) — bilan d'une suppression groupée ; le texte est choisi hors de l'écran.
+                is VaultViewModel.Event.Suppression -> snackbarHost.afficherBilanDuCoffre(resources, event)
             }
         }
     }
+
+    // v1.25.4 — le dévoilement exige les TROIS conditions, et plus le seul `unlocked`.
+    //
+    // `pinGateOpen` ne commandait jusqu'ici que l'affichage du dialogue de PIN, pas le
+    // contenu : un `unlocked` passé à vrai par ailleurs laissait donc la liste du Coffre
+    // lisible **derrière** ce dialogue. Et tant que les réglages ne sont pas lus, on ne
+    // sait pas encore si un PIN sera exigé — afficher pendant cet intervalle reviendrait
+    // à parier que non.
+    //
+    // Deuxième barrière, volontairement redondante avec la garde de l'effet d'entrée :
+    // celle-ci décide de ne pas ouvrir, celle-là de ne rien montrer. Il faut que les deux
+    // cèdent pour que le contenu fuie.
+    // 2026-11-27 — calculé avant le `Scaffold` : la barre des actions d'une sélection en dépend aussi.
+    val revealContent = gateResolved && !pinGateOpen && unlocked == true
 
     Scaffold(
         topBar = topBar@{
@@ -613,14 +686,8 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
                             )
                         }
                     },
-                    actions = {
-                        IconButton(onClick = { viewModel.bulkMoveSelectedOut() }) {
-                            Icon(
-                                Icons.Outlined.LockOpen,
-                                contentDescription = stringResource(R.string.bulk_vault_move_out),
-                            )
-                        }
-                    },
+                    // 2026-11-27 (issue #108) — les actions sont en bas, avec leur libellé ([BasDeSelectionDuCoffre]),
+                    // comme dans la liste : le cadenas seul, ici, ne se comprenait pas et ne permettait pas de supprimer.
                 )
                 return@topBar
             }
@@ -634,20 +701,18 @@ fun VaultScreen(onBack: () -> Unit, onOpenThread: (Long) -> Unit, viewModel: Vau
             )
         },
         snackbarHost = { SmsTechSnackbarHost(snackbarHost) },
+        // 2026-11-27 (issue #108) — les actions d'une sélection, avec leur libellé ; rien tant que le contenu n'est pas
+        // dévoilé ([revealContent]).
+        bottomBar = {
+            BasDeSelectionDuCoffre(
+                selectionnees = selectedIds,
+                visible = revealContent,
+                onSortir = viewModel::bulkMoveSelectedOut,
+                onSupprimer = viewModel::bulkDeleteSelected,
+            )
+        },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // v1.25.4 — le dévoilement exige les TROIS conditions, et plus le seul `unlocked`.
-            //
-            // `pinGateOpen` ne commandait jusqu'ici que l'affichage du dialogue de PIN, pas le
-            // contenu : un `unlocked` passé à vrai par ailleurs laissait donc la liste du Coffre
-            // lisible **derrière** ce dialogue. Et tant que les réglages ne sont pas lus, on ne
-            // sait pas encore si un PIN sera exigé — afficher pendant cet intervalle reviendrait
-            // à parier que non.
-            //
-            // Deuxième barrière, volontairement redondante avec la garde de l'effet d'entrée :
-            // celle-ci décide de ne pas ouvrir, celle-là de ne rien montrer. Il faut que les deux
-            // cèdent pour que le contenu fuie.
-            val revealContent = gateResolved && !pinGateOpen && unlocked == true
             when {
                 !revealContent -> {
                     // Auth en cours, refusée, ou réglages pas encore lus : neutre, aucun contenu

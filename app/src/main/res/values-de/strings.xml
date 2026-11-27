@@ -1064,6 +1064,10 @@
         <item quantity="one">%d Unterhaltung wurde nicht gelöscht: ein Teil davon ließ sich nicht von diesem Telefon entfernen. Versuchen Sie es erneut.</item>
         <item quantity="other">%d Unterhaltungen wurden nicht gelöscht: ein Teil davon ließ sich nicht von diesem Telefon entfernen. Versuchen Sie es erneut.</item>
     </plurals>
+    <plurals name="vault_bulk_delete_kept_system">
+        <item quantity="one">%d Unterhaltung im Tresor wurde nicht gelöscht: Ihre Kopie im Nachrichtenspeicher des Telefons ließ sich nicht entfernen, und sie wäre bei der nächsten Synchronisierung außerhalb des Tresors wieder aufgetaucht. Machen Sie SMS Tech zu Ihrer Standard-SMS-App und versuchen Sie es erneut. Wenn es weiterhin fehlschlägt, verschieben Sie sie zuerst aus dem Tresor: sie kann dann in der Hauptliste wieder erscheinen.</item>
+        <item quantity="other">%d Unterhaltungen im Tresor wurden nicht gelöscht: Ihre Kopien im Nachrichtenspeicher des Telefons ließen sich nicht entfernen, und sie wären bei der nächsten Synchronisierung außerhalb des Tresors wieder aufgetaucht. Machen Sie SMS Tech zu Ihrer Standard-SMS-App und versuchen Sie es erneut. Wenn es weiterhin fehlschlägt, verschieben Sie sie zuerst aus dem Tresor: sie können dann in der Hauptliste wieder erscheinen.</item>
+    </plurals>
     <plurals name="conversations_bulk_archived">
         <item quantity="one">%d Unterhaltung archiviert</item>
         <item quantity="other">%d Unterhaltungen archiviert</item>
