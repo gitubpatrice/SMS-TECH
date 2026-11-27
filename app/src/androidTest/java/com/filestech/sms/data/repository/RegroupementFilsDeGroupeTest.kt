@@ -12,6 +12,7 @@ import com.filestech.sms.data.sms.PhoneIdentity
 import com.filestech.sms.data.sms.PhoneNumberWireFormatter
 import com.filestech.sms.data.sms.TelephonyReader
 import com.filestech.sms.domain.model.Contact
+import com.filestech.sms.domain.model.ContactPhone
 import com.filestech.sms.domain.model.MessageDirection
 import com.filestech.sms.domain.model.MessageStatus
 import com.filestech.sms.domain.model.MessageType
@@ -65,7 +66,7 @@ class RegroupementFilsDeGroupeTest {
     /** Chaque numéro a un nom : le titre d'un groupe n'est alors plus `null`. */
     private object AvecNoms : ContactRepository {
         override suspend fun lookupByPhone(rawPhone: String): Contact? =
-            Contact(id = 1L, displayName = "Nom de $rawPhone", phones = listOf(PhoneAddress.of(rawPhone)))
+            Contact(id = 1L, displayName = "Nom de $rawPhone", phones = listOf(ContactPhone(PhoneAddress.of(rawPhone))))
         override suspend fun listAll(): List<Contact> = emptyList()
     }
 

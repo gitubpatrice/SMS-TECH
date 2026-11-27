@@ -3,6 +3,17 @@
 All notable changes to SMS Tech will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- **"New message" offers every number of a contact** (issue #109). A contact with several phone numbers had one
+  line, with only one of its numbers: the others could not be chosen, and searching for one of them showed the
+  line with another number, which then received the message. Each number now has its own line, with the
+  contact's name and, when the address book gives it, the number's type (Mobile, Work, or the user's own label),
+  the default number first. A number stored twice for the same contact, by two linked accounts or in two
+  spellings, appears once. A search by digits shows only the matching number. Since v1.2.0.
+
 ## [1.31.0] — 2026-11-22
 
 ### Added
