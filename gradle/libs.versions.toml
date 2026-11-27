@@ -65,10 +65,10 @@ junit5 = "5.11.3"
 # sur « Failed to load JUnit Platform » AVANT le premier test. La plateforme garde sa propre
 # numerotation tant qu'on reste en JUnit 5 — Jupiter 5.11.3 <-> plateforme 1.11.3.
 junit-platform = "1.11.3"
-mockk = "1.14.11"
+mockk = "1.14.12"
 turbine = "1.2.1"
 truth = "1.4.5"
-robolectric = "4.17"
+robolectric = "4.18.1"
 androidx-test-ext = "1.2.1"
 androidx-test-runner = "1.7.0"
 espresso = "3.7.0"
