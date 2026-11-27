@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 
 ### Fixed
 
+- **"New message" offers every number of a contact** (issue #109). A contact with several phone numbers had one
+  line, with only one of its numbers: the others could not be chosen, and searching for one of them showed the
+  line with another number, which then received the message. Each number now has its own line, with the
+  contact's name and, when the address book gives it, the number's type (Mobile, Work, or the user's own label),
+  the default number first. A number stored twice for the same contact, by two linked accounts or in two
+  spellings, appears once, and a search finds it under either spelling. A search by digits shows only the matching
+  number. An entry with fewer than two digits ("N/A", "see e-mail"), which opened a conversation where every send
+  failed, is no longer offered. Since v1.2.0.
 - **A selection in the vault can be deleted** (issue #108). In the vault, a selection only offered an unlabelled
   padlock at the top (move out of the vault) and no way to delete: the gap 1.31.0 closed in the main list, not in
   its twin. A bar at the bottom now offers Move out of vault and Delete, each with its name, one button each for

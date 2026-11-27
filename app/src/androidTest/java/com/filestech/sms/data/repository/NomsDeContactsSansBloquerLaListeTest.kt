@@ -11,6 +11,7 @@ import com.filestech.sms.data.local.db.entity.ConversationEntity
 import com.filestech.sms.data.sms.PhoneIdentity
 import com.filestech.sms.data.sms.PhoneNumberWireFormatter
 import com.filestech.sms.domain.model.Contact
+import com.filestech.sms.domain.model.ContactPhone
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ContactRepository
 import com.google.common.truth.Truth.assertThat
@@ -74,11 +75,13 @@ class NomsDeContactsSansBloquerLaListeTest {
 
         override suspend fun lookupByPhone(rawPhone: String): Contact? {
             if (!retenir) {
-                return noms[rawPhone]?.let { Contact(id = 2L, displayName = it, phones = listOf(PhoneAddress.of(rawPhone))) }
+                return noms[rawPhone]?.let {
+                    Contact(id = 2L, displayName = it, phones = listOf(ContactPhone(PhoneAddress.of(rawPhone))))
+                }
             }
             entree.complete(Unit)
             porte.await()
-            return Contact(id = 1L, displayName = NOM_CONTACT, phones = listOf(PhoneAddress.of(rawPhone)))
+            return Contact(id = 1L, displayName = NOM_CONTACT, phones = listOf(ContactPhone(PhoneAddress.of(rawPhone))))
         }
 
         override suspend fun listAll(): List<Contact> = emptyList()

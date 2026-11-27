@@ -9,6 +9,7 @@ import com.filestech.sms.data.contacts.ContactsReader
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.data.repository.ContactRepositoryImpl
 import com.filestech.sms.domain.model.Contact
+import com.filestech.sms.domain.model.ContactPhone
 import com.filestech.sms.domain.model.Conversation
 import com.filestech.sms.domain.model.PhoneAddress
 import com.filestech.sms.domain.repository.ContactRepository
@@ -60,7 +61,7 @@ class ContactsRefusesTest {
     /** Dépôt de contacts dont la permission est retirée tant que [refuse] vaut `true`. */
     private class ContactsSansPermission : ContactRepository {
         var refuse = true
-        val alice = Contact(1L, "Alice", listOf(PhoneAddress.of("+33612345678")), null)
+        val alice = Contact(1L, "Alice", listOf(ContactPhone(PhoneAddress.of("+33612345678"))), null)
 
         override suspend fun lookupByPhone(rawPhone: String): Contact? {
             if (refuse) throw SecurityException("Permission Denial: requires android.permission.READ_CONTACTS")
