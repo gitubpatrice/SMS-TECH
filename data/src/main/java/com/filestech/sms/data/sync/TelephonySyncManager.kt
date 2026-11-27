@@ -21,6 +21,7 @@ import com.filestech.sms.domain.repository.BlockedNumberRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -180,7 +181,10 @@ class TelephonySyncManager @Inject constructor(
             Timber.i("synchroniserMaintenant(%s) skipped — no READ_SMS", reason)
             return
         }
-        runSync(reason = reason)
+        // Dans la portée de l'application, comme [requestSync] : l'arrêt du travail qui attend (WorkManager) ne coupe
+        // pas une synchronisation partagée en plein import, qui laissait l'état « en cours » affiché (relecture
+        // Claude, M3).
+        appScope.async(io) { runSync(reason = reason) }.await()
     }
 
     /**

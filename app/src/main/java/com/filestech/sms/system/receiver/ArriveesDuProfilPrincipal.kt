@@ -38,18 +38,20 @@ import javax.inject.Singleton
  *   `content://mms-sms/` se réveille quand le principal y recopie un MMS reçu.
  *
  * Une passe synchronise, puis notifie les messages REÇUS NON LUS que la synchronisation a apportés, par le même
- * notificateur que le profil principal (Coffre, sourdine, aperçu masqué, verrou, réglages des notifications) et
- * avec la même politique d'écartement (liste noire, numéros inconnus). Rien dans le profil principal, qui reçoit
- * les messages lui-même ([aEcouter]).
+ * notificateur que le profil principal (Coffre, sourdine, aperçu masqué, verrou, réglages des notifications) et la
+ * même politique d'écartement, appliquée avec la liste noire et les réglages de CE profil (Android ne laisse pas lire
+ * la liste noire du système hors du profil principal). Rien dans le profil principal, qui reçoit les messages
+ * lui-même ([aEcouter]).
  *
  * # Ce qui a déjà été regardé
  *
  * Un repère PERSISTANT (`AdvancedSettings.arriveesNotifieesJusqua`) : le plus grand identifiant de message déjà
  * regardé. Un relevé au début de chaque passe ne suffirait pas : le SMS démarre le processus, dont la
- * synchronisation de démarrage peut importer le message avant la passe qui doit le notifier. La première passe
+ * synchronisation de démarrage peut importer le message avant la passe qui doit le notifier. Une passe l'avance ;
+ * l'application au premier plan aussi ([marquerVu]) : ce que la liste montre n'est plus à notifier. La première passe
  * (repère jamais posé) ne regarde que les [PREMIERE_FENETRE_MS] dernières minutes : une mise à jour ne notifie pas
  * l'historique non lu. [FENETRE_MS] et [LIMITE] bornent une passe qui importerait d'un coup de vieux messages (une
- * sauvegarde restaurée par une autre application).
+ * sauvegarde restaurée par une autre application, un profil resté arrêté) : les plus récents seulement.
  */
 @Singleton
 class ArriveesDuProfilPrincipal @Inject constructor(
@@ -81,10 +83,26 @@ class ArriveesDuProfilPrincipal @Inject constructor(
                     conversationId = message.conversationId,
                 )
             },
-            poserRepere = { repere ->
-                settings.update { s -> s.copy(advanced = s.advanced.copy(arriveesNotifieesJusqua = repere)) }
-            },
+            poserRepere = ::poserRepere,
         )
+    }
+
+    /**
+     * 2026-11-27 (relecture Claude, M2) — l'application est au premier plan : synchroniser, puis compter comme vu ce
+     * que la liste montre désormais. Sans quoi la passe suivante (le prochain SMS) notifiait des messages que
+     * l'utilisateur venait de voir dans la liste.
+     */
+    suspend fun marquerVu(raison: String) = verrou.withLock {
+        marquerVuJusquAuPlafond(
+            repere = settings.flow.first().advanced.arriveesNotifieesJusqua,
+            synchroniser = { synchro.synchroniserMaintenant(raison) },
+            plusGrandId = messageDao::plusGrandId,
+            poserRepere = ::poserRepere,
+        )
+    }
+
+    private suspend fun poserRepere(repere: Long) {
+        settings.update { s -> s.copy(advanced = s.advanced.copy(arriveesNotifieesJusqua = repere)) }
     }
 
     private suspend fun corpsDeLaNotification(message: MessageEntity): String =
@@ -103,18 +121,31 @@ class ArriveesDuProfilPrincipal @Inject constructor(
         const val LIMITE: Int = 20
 
         /**
-         * Un profil où écouter : pas le profil principal (il reçoit lui-même), pas un profil de travail (Android ne
-         * lui écrit pas les MMS et peut lui remettre les SMS lui-même), et SMS Tech y est l'application SMS par défaut
-         * — sinon c'est l'autre application qui notifie.
+         * Un utilisateur où écouter : un utilisateur SECONDAIRE complet, où SMS Tech est l'application SMS par défaut
+         * (sinon c'est l'autre application qui notifie). Pas le profil principal, qui reçoit lui-même. Pas un profil
+         * (travail, clone, espace privé) : Android ne copie pas les MMS dans un profil de travail et peut lui remettre
+         * les SMS lui-même. Pas un appareil dont l'utilisateur système est sans interface (tablettes, voitures) : le
+         * profil principal y est un autre utilisateur, qu'aucune API publique ne désigne, et il recevrait deux fois
+         * (relectures : audit de sécurité S1, Claude L1).
          *
          * Le rôle par [DefaultSmsAppManager] : dans un utilisateur secondaire, `Telephony.Sms.getDefaultSmsPackage`
          * rend `null` alors que SMS Tech y détient le rôle (mesuré sur émulateur Android 16).
          */
         fun aEcouter(context: Context): Boolean {
             val utilisateurs = context.getSystemService(UserManager::class.java) ?: return false
-            if (utilisateurs.isSystemUser) return false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && utilisateurs.isManagedProfile) return false
-            return runCatching { DefaultSmsAppManager(context.applicationContext).isDefault() }.getOrDefault(false)
+            val secondaireComplet = !utilisateurs.isSystemUser && !systemeSansInterface() && !unProfil(utilisateurs)
+            // Le rôle en dernier : c'est le seul appel au système.
+            return secondaireComplet &&
+                runCatching { DefaultSmsAppManager(context.applicationContext).isDefault() }.getOrDefault(false)
+        }
+
+        private fun systemeSansInterface(): Boolean =
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && UserManager.isHeadlessSystemUserMode()
+
+        private fun unProfil(utilisateurs: UserManager): Boolean = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> utilisateurs.isProfile
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> utilisateurs.isManagedProfile
+            else -> false
         }
     }
 }
@@ -134,7 +165,8 @@ internal suspend fun corpsDeNotification(
  * La passe, sans Android (`PasseDesArriveesTest`). Synchronise, puis notifie les reçus non lus d'identifiant dans
  * `]repère, plafond]` — le plafond est relevé APRÈS la synchronisation et devient le nouveau repère, si bien qu'un
  * message importé ensuite par une autre passe reste au-dessus. Un repère au-delà du plafond (base recréée) compte
- * comme jamais posé. Une notification qui échoue n'arrête pas les autres.
+ * comme jamais posé, et une base vide ne le pose pas (relecture GPT : la première vraie passe garderait sinon la
+ * fenêtre d'une journée). Une notification qui échoue n'arrête pas les autres.
  *
  * @return le nombre de notifications posées.
  */
@@ -164,6 +196,22 @@ internal suspend fun passeDesArrivees(
                 .onFailure { Timber.w(it, "Arrivee au profil principal : notification non posee") }
         }
     }
-    if (plafond != repere) poserRepere(plafond)
+    if (plafond > 0L && plafond != repere) poserRepere(plafond)
     return notifiees
+}
+
+/**
+ * L'application au premier plan ([ArriveesDuProfilPrincipal.marquerVu]) : synchroniser, puis avancer le repère au
+ * plafond sans rien notifier. Même règle que la passe : jamais à zéro, et un repère au-delà du plafond (base recréée)
+ * redescend.
+ */
+internal suspend fun marquerVuJusquAuPlafond(
+    repere: Long,
+    synchroniser: suspend () -> Unit,
+    plusGrandId: suspend () -> Long,
+    poserRepere: suspend (Long) -> Unit,
+) {
+    synchroniser()
+    val plafond = plusGrandId()
+    if (plafond > 0L && plafond != repere) poserRepere(plafond)
 }

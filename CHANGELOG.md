@@ -12,8 +12,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
   the default SMS app of a secondary profile, it now imports and notifies a message as soon as the primary profile
   has received it: an SMS within seconds (Android tells every running profile), an MMS once the primary profile
   has copied it to the shared message store (the store tells every profile; in deep sleep, at the next wake-up).
-  Same rules as in the primary profile: vault, muted conversations, hidden previews, app lock, notification
-  settings, blocked and unknown numbers. Nothing changes in the primary profile.
+  A message received while the profile was stopped is notified when it starts; what the app has shown is not
+  notified later. Same rules as in the primary profile: vault, muted conversations, hidden previews, app lock,
+  notification settings, and this profile's own blocked numbers and unknown-number setting. Nothing changes in the
+  primary profile.
 
 ### Fixed
 

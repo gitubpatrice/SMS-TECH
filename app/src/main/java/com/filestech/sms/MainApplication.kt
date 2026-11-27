@@ -175,10 +175,7 @@ class MainApplication : Application(), Configuration.Provider {
         TelephonySyncWorker.schedulePeriodic(this)
         // 2026-11-27 (issue #98) — dans un profil secondaire, l'observation du stockage partagé qui notifie les MMS
         // reçus par le profil principal. Hors du fil principal : elle demande au système l'application SMS par défaut.
-        appScope.launch(ioDispatcher) {
-            runCatching { ArriveesDuProfilPrincipalWorker.observerLeStockage(this@MainApplication) }
-                .onFailure { Timber.w(it, "Observation du stockage partage non armee") }
-        }
+        appScope.launch(ioDispatcher) { ArriveesDuProfilPrincipalWorker.assurerLObservation(this@MainApplication) }
         // v1.9.0 — schedule du SafetyCall worker (idempotent KEEP policy).
         // Même si la config deadman est désactivée, le worker tourne en no-op
         // (1 lecture DataStore par heure, négligeable batterie). Avantage : un

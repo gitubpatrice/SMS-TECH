@@ -195,6 +195,52 @@ class PasseDesArriveesTest {
         assertThat(corpsDeNotification(MessageType.MMS, "") { null }).isEqualTo("[MMS]")
     }
 
+    /** Relecture GPT : une base vide posait le repère à zéro, et la vraie première passe prenait la fenêtre longue. */
+    @Test
+    fun uneBaseVide_nePosePasLeRepere() = runTest {
+        val r = passe(Base(), repere = -1L)
+
+        assertThat(r.notifies).isEmpty()
+        assertThat(r.repere).isNull()
+    }
+
+    /** Relecture Claude M2 : au premier plan, ce que la liste montre ne sera pas notifié à la passe suivante. */
+    @Test
+    fun auPremierPlan_leRepereAvanceApresLaSynchronisation_sansRienNotifier() = runTest {
+        val base = Base(listOf(recu(1)))
+        var pose: Long? = null
+
+        marquerVuJusquAuPlafond(
+            repere = 1L,
+            synchroniser = { base.messages = base.messages + recu(2) + recu(3) },
+            plusGrandId = { base.plusGrandId() },
+            poserRepere = { pose = it },
+        )
+        val ensuite = passe(base, repere = pose!!)
+
+        assertThat(pose).isEqualTo(3L)
+        assertThat(ensuite.notifies).isEmpty()
+    }
+
+    @Test
+    fun auPremierPlan_baseVide_ouRepereDejaAuPlafond_rienNEstEcrit() = runTest {
+        var ecritures = 0
+        marquerVuJusquAuPlafond(-1L, synchroniser = {}, plusGrandId = { 0L }, poserRepere = { ecritures++ })
+        marquerVuJusquAuPlafond(7L, synchroniser = {}, plusGrandId = { 7L }, poserRepere = { ecritures++ })
+
+        assertThat(ecritures).isEqualTo(0)
+    }
+
+    /** Base recréée : le repère redescend au plafond, sinon plus rien ne serait notifié avant de le repasser. */
+    @Test
+    fun auPremierPlan_unRepereAuDelaDuPlafond_redescend() = runTest {
+        var pose: Long? = null
+
+        marquerVuJusquAuPlafond(500L, synchroniser = {}, plusGrandId = { 4L }, poserRepere = { pose = it })
+
+        assertThat(pose).isEqualTo(4L)
+    }
+
     @Test
     fun rienDeNouveau_rienANotifier_etLeRepereNeBougePas() = runTest {
         val base = Base(listOf(recu(1)))

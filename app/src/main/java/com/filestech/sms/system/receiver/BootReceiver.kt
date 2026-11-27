@@ -3,9 +3,11 @@ package com.filestech.sms.system.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.filestech.sms.core.result.runCatchingCancellable
 import com.filestech.sms.data.local.datastore.SettingsRepository
 import com.filestech.sms.di.ApplicationScope
 import com.filestech.sms.system.notifications.EmergencyShortcutNotifier
+import com.filestech.sms.system.scheduler.ArriveesDuProfilPrincipalWorker
 import com.filestech.sms.system.scheduler.SafetyCallWorker
 import com.filestech.sms.system.scheduler.ScheduledMessageSchedulerImpl
 import com.filestech.sms.system.scheduler.TelephonySyncWorker
@@ -59,6 +61,9 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         scope.launch {
             try {
+                // 2026-11-27 (issue #98) — dans un profil secondaire, ce que le profil principal a reçu pendant que
+                // celui-ci était arrêté : aucun signal ne l'atteignait. Sans effet ailleurs ; n'arrête pas la suite.
+                runCatchingCancellable { ArriveesDuProfilPrincipalWorker.apresUnDemarrage(context) }
                 val scheduler = schedulerLazy.get()
                 scheduler.rescheduleAllPending()
                 // v1.3.10 — redémarre le foreground [KeepAliveService] au boot du device
