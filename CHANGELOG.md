@@ -64,6 +64,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), versions follow 
 
 ### Changed
 
+- **The conversation list shows the year of a date from an earlier year** (suggested by e-mail). A conversation
+  from March 2024 showed "27 Mar", like one from last March; it now shows "27 Mar 2024". Dates of the current year
+  are unchanged, and search results follow the same rule. The day dividers inside a conversation already gave the
+  year.
 - Lint cleanup: the baseline goes from 280 entries to 12 (launcher-icon artwork and the target SDK, both choices);
   the only warnings left are the "newer version available" notices, kept visible on purpose. Texts read when an
   event happens use `LocalResources`; version checks for Android older than 8 are gone; invisible characters written
